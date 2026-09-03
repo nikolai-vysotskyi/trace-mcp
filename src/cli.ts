@@ -118,9 +118,8 @@ import {
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
 import {
-  buildAmbiguousProjectError,
-  buildNoProjectsError,
   buildProjectNotFoundError,
+  buildResolutionFailureError,
   extractRpcId,
 } from './daemon/mcp-error-response.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
@@ -1111,14 +1110,10 @@ program
             'Ignored dangerous project hint from MCP client — resolved without it (TRA-286)',
           );
         }
-        if (resolution.kind === 'no-projects') {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(buildNoProjectsError(rpcId)));
-          return;
-        }
-        if (resolution.kind === 'ambiguous') {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(buildAmbiguousProjectError(resolution.registered, rpcId)));
+        if (resolution.kind === 'no-projects' || resolution.kind === 'ambiguous') {
+          const { status, body } = buildResolutionFailureError(resolution, rpcId);
+          res.writeHead(status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(body));
           return;
         }
         if (resolution.via === 'tracked-client') {
