@@ -61,11 +61,14 @@ else
   TEXT_PATH='.stdout'
 fi
 
+# jq's Windows build writes stdout in CRT text mode, which turns every LF it
+# emits into CRLF -- the CR never came from the tool output itself, so strip
+# it here rather than let it leak into the spill file and the compressed view.
 ORIGINAL=$(printf '%s' "$INPUT" | jq -r --arg p "$TEXT_PATH" '
   .tool_response
   | if type == "object" then getpath($p | ltrimstr(".") | split(".")) else empty end
   | if type == "string" then . else empty end
-' 2>/dev/null)
+' 2>/dev/null | tr -d '\r')
 [ -z "$ORIGINAL" ] && exit 0
 
 ORIG_CHARS=${#ORIGINAL}
