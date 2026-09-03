@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.4.0
+# trace-mcp-launcher v0.5.0
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -134,6 +134,27 @@ node_from_nvm_tree() {
   return 1
 }
 
+# Node shipped inside a prefix we only know about because our package lives
+# there: a bundled runtime (Hermes, Antigravity) or a corporate
+# `npm config set prefix`. pkg_roots() already enumerates those roots for the
+# cli.js lookup; the node beside one of them is exactly the pair
+# `trace-mcp init` recorded. Without this, a machine whose ONLY node is such a
+# runtime dies with "node binary not found" while a working node + cli.js sit
+# on disk — the mirror image of the prefix-pairing bug fixed in v0.4.0.
+node_from_pkg_roots() {
+  local root candidate
+  while IFS= read -r root; do
+    [ -n "$root" ] || continue
+    # <prefix>/lib/node_modules → <prefix>/bin/node
+    candidate="$root/../../bin/node"
+    if [ -x "$candidate" ]; then
+      normalise_path "$candidate"
+      return 0
+    fi
+  done <<< "$(pkg_roots)"
+  return 1
+}
+
 probe_node() {
   # 4a. System-wide stable paths (Homebrew, /usr/local)
   for candidate in /opt/homebrew/bin/node /usr/local/bin/node; do
@@ -165,6 +186,9 @@ probe_node() {
       return 0
     fi
   done
+
+  # 4f. Last resort: a prefix that only pkg_roots knows about.
+  if node_from_pkg_roots; then return 0; fi
 
   return 1
 }

@@ -352,6 +352,112 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     });
   });
 
+  // TRA-742: the mirror of TRA-701. `pkg_roots` learned about bundled runtimes
+  // and custom npm prefixes, but `probe_node` never did — so a machine whose
+  // ONLY node lives in such a prefix died with "node binary not found" while a
+  // working node and cli.js sat right next to each other on disk.
+  //
+  // The two system paths the probe tries before anything under HOME are
+  // absolute, so a runner that has Homebrew/system node installed resolves at
+  // step 4a and never reaches the fallback under test.
+  const HAS_SYSTEM_NODE =
+    fs.existsSync('/opt/homebrew/bin/node') || fs.existsSync('/usr/local/bin/node');
+
+  describe.skipIf(HAS_SYSTEM_NODE)('node resolves from a prefix only pkg_roots knows', () => {
+    /** Plants a working node + package inside `prefix`, returns both realpaths. */
+    function plantPrefix(prefix: string): { node: string; cli: string } {
+      fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+      const node = path.join(prefix, 'bin', 'node');
+      fs.writeFileSync(node, '#!/bin/bash\necho "NODE_ARGS:$*"\n', { mode: 0o755 });
+      const dist = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(dist, { recursive: true });
+      const cli = path.join(dist, 'cli.js');
+      fs.writeFileSync(cli, '// bundled cli\n');
+      return { node: fs.realpathSync(node), cli: fs.realpathSync(cli) };
+    }
+
+    it('uses the node recorded in pkg-roots when no standard node exists', () => {
+      const { home, traceHome } = setupFakeHome();
+      const prefix = path.join(home, 'some-bundled-runtime', 'node');
+      const { cli } = plantPrefix(prefix);
+      fs.writeFileSync(
+        path.join(traceHome, 'pkg-roots'),
+        `${path.join(prefix, 'lib', 'node_modules')}\n`,
+      );
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('uses the node bundled by Hermes when no standard node exists', () => {
+      const { home, traceHome } = setupFakeHome();
+      const { node, cli } = plantPrefix(path.join(home, '.hermes', 'node'));
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+      // And the healed config pins the pair, so the next start is a fast path.
+      const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+      expect(cfg).toContain(`TRACE_MCP_NODE="${node}"`);
+    });
+
+    it('uses the node under a custom npm prefix from ~/.npmrc', () => {
+      const { home, traceHome } = setupFakeHome();
+      const prefix = path.join(home, 'custom-prefix');
+      const { cli } = plantPrefix(prefix);
+      fs.writeFileSync(path.join(home, '.npmrc'), `prefix=${prefix}\n`);
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('still exits 127 when no prefix holds a node', () => {
+      const { home, traceHome } = setupFakeHome();
+      fs.writeFileSync(path.join(traceHome, 'pkg-roots'), `${path.join(home, 'gone')}\n`);
+      const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(127);
+      expect(stderr).toContain('node binary not found');
+    });
+  });
+
+  // A standard node must keep winning: the fallback is a last resort, not a
+  // reordering of the probe.
+  it('prefers an nvm default node over one found via pkg-roots', () => {
+    const { home, traceHome } = setupFakeHome();
+    const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
+    fs.mkdirSync(nvmBin, { recursive: true });
+    fs.writeFileSync(path.join(nvmBin, 'node'), '#!/bin/bash\necho "NVM_NODE:$*"\n', {
+      mode: 0o755,
+    });
+    fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v22.22.2\n');
+
+    const bundled = path.join(home, '.hermes', 'node');
+    fs.mkdirSync(path.join(bundled, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(bundled, 'bin', 'node'), '#!/bin/bash\necho "BUNDLED:$*"\n', {
+      mode: 0o755,
+    });
+    const dist = path.join(bundled, 'lib', 'node_modules', 'trace-mcp', 'dist');
+    fs.mkdirSync(dist, { recursive: true });
+    fs.writeFileSync(path.join(dist, 'cli.js'), '// bundled cli\n');
+    writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    // Whichever standard node the probe picked, it is not the bundled one.
+    expect(stdout).not.toContain('BUNDLED:');
+  });
+
   it('stale config (broken paths) falls through to probe and still errors cleanly', () => {
     const { home, traceHome } = setupFakeHome();
     writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
