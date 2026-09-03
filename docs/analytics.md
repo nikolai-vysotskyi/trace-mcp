@@ -149,6 +149,22 @@ benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown
 
 **5 scenarios:** symbol lookup, file exploration, search, impact analysis, call graph. Uses actual index data with seeded randomness for reproducibility.
 
+### `get_startup_context_audit`
+
+What the session startup block is made of and what it costs — the context every session pays for before your first message: the harness system prompt, tool schemas, MCP servers, the skill and agent listings, and SessionStart hook output.
+
+```
+get_startup_context_audit()
+```
+
+No parameters: the look-back window is fixed at 30 days. A parameter here would have to survive `compact_schemas`, which strips non-core params from the schema and so freezes them at their default without saying so.
+
+Returns: the block's size distribution across fresh sessions, a decomposition by source (hooks are named individually), the block's share of the input-side bill, the mid-session cache rebuilds that make it get paid twice and what each cost, MCP servers present at startup alongside how often they were actually called, the instruction files on disk, and `recommendations` — suggestions with a per-start token price and a cost over the window.
+
+Every recommendation rests on **evidence of non-use over a stated observation window**, never on size: an MCP server whose instructions loaded into N startups and whose tools were never called, a skill listed at every start and never invoked, text duplicated between the global and project instruction files. A tool that is missing from the startup block is a tool the agent will not call, so a suggestion made because something is *big* can cost its reader far more than it saves. SessionStart hooks are deliberately excluded from suggestions for the same reason — nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on. They stay in the decomposition, where the reader sees the cost and decides.
+
+Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+
 ### `get_coverage_report`
 
 Technology profile — which dependencies are covered by trace-mcp plugins and which are not.

@@ -31,4 +31,43 @@ export const insights = {
   rowScore: '得分 {{score}}',
   rowHotspot: '复杂度 {{complexity}} · {{commits}} 次提交',
   rowHotspotConfidence: '复杂度 {{complexity}} · {{commits}} 次提交 · {{confidence}}',
+
+  reportStartupTitle: '启动上下文',
+  reportStartupDescription:
+    '在你发出第一条消息之前，每个会话都在为什么付费、花了多少，以及是什么让这笔钱被付两遍。数据来自这台 Mac 上的会话日志，不会发送到任何地方。',
+  runningStartup: '正在从会话日志中测量启动块…',
+
+  startupBlockRow: '启动块 — {{tokens}} 个 token',
+  startupBlockDetail: '中位数 · p10 {{p10}} · p90 {{p90}} · {{days}} 天内 {{sessions}} 个会话',
+  startupCostRow: '启动成本 — {{usd}}',
+  startupCostDetail: '占 {{days}} 天内输入花费 {{total}} 的一部分',
+  startupSourceRow: '{{source}} — {{tokens}} 个 token',
+  startupSourceDetail: '在 {{sessions}} 个会话中测得',
+  startupResidualDetail: '无法细分 — 系统提示词、工具 schema 和 CLAUDE.md 从不写入会话日志',
+  startupRebuildRow: '缓存重建：{{cause}} — {{events}} 次',
+  startupRebuildDetail: '比从缓存读取同样的 token 多花 {{usd}}',
+  startupServerRow: '{{server}} — 出现在 {{sessions}} 个启动块中',
+  startupServerDetail: '被调用 {{calls}} 次',
+
+  sourceResidual: '系统提示词、工具 schema 与指令文件',
+  sourceSkills: '技能清单',
+  sourceDeferredTools: '延迟加载工具清单',
+  sourceAgentListing: '代理清单',
+  sourceMcpInstructions: 'MCP 服务器说明',
+  sourceMemory: '记忆文件',
+  sourceOther: '其他注入内容',
+  sourceHook: '钩子：{{name}}',
+
+  causeCompact: '上下文被压缩',
+  causeTtlExpiry: '两条消息之间缓存过期',
+  causeModelSwitch: '模型发生变化',
+  causeToolsChanged: '工具集合发生变化',
+  causeListingChanged: '技能或代理清单发生变化',
+  causeUnexplained: '原因未确定',
+
+  recUnusedMcpServer: 'MCP 服务器 {{target}} — 从未被调用',
+  recUnusedSkill: '技能 {{target}} — 从未被使用',
+  recDuplicateInstructions: '{{target}} 中存在重复的指令文本',
+  recDetail: '{{days}} 天内 {{total}} 次启动中出现 {{sessions}} 次 · 每次 {{tokens}} 个 token · {{usd}}',
+  recBadge: '未使用',
 } as const;

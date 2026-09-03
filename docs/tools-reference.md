@@ -179,6 +179,7 @@ See [Analytics](analytics.md) for full documentation.
 | `get_real_savings` | Analyze actual sessions: how much trace-mcp saves vs raw file reads |
 | `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
 | `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
+| `get_startup_context_audit` | What every session pays for before the first message, by source, what it costs, and what the logs prove went unused |
 | `get_usage_trends` | Daily token usage trends over time |
 | `get_session_stats` | Real-time token savings for the current session |
 | `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |
@@ -262,6 +263,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "Where am I wasting tokens?" | `get_optimization_report` — detects repeated reads, bash-grep, large files |
 | "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
 | "Quick efficiency benchmark" | `benchmark_project` — synthetic per-category estimate of the structured-task ceiling, not measured savings (use `get_real_savings` for those) |
+| "What am I paying before I even type?" | `get_startup_context_audit` — the startup block by source, its share of the bill, and what rebuilds it |
 | "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |
 
 ---

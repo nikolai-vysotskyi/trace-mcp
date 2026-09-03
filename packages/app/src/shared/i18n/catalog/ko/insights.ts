@@ -31,4 +31,45 @@ export const insights = {
   rowScore: '점수 {{score}}',
   rowHotspot: '복잡도 {{complexity}} · 커밋 {{commits}}',
   rowHotspotConfidence: '복잡도 {{complexity}} · 커밋 {{commits}} · {{confidence}}',
+
+  reportStartupTitle: '시작 컨텍스트',
+  reportStartupDescription:
+    '첫 메시지를 보내기도 전에 모든 세션이 무엇에 비용을 치르는지, 얼마인지, 무엇 때문에 두 번 치르게 되는지. 이 Mac의 세션 로그에서 읽으며 어디로도 전송하지 않습니다.',
+  runningStartup: '세션 로그에서 시작 블록을 측정하는 중…',
+
+  startupBlockRow: '시작 블록 — {{tokens}} 토큰',
+  startupBlockDetail: '중앙값 · p10 {{p10}} · p90 {{p90}} · {{days}}일 동안 {{sessions}}개 세션',
+  startupCostRow: '시작 비용 — {{usd}}',
+  startupCostDetail: '{{days}}일 동안 입력에 쓴 {{total}} 중',
+  startupSourceRow: '{{source}} — {{tokens}} 토큰',
+  startupSourceDetail: '{{sessions}}개 세션에서 측정',
+  startupResidualDetail:
+    '항목별로 나눌 수 없음 — 시스템 프롬프트, 도구 스키마, CLAUDE.md는 세션 로그에 남지 않습니다',
+  startupRebuildRow: '캐시 재생성: {{cause}} — {{events}}회',
+  startupRebuildDetail: '같은 토큰을 캐시에서 읽을 때보다 {{usd}} 더 듦',
+  startupServerRow: '{{server}} — {{sessions}}개 시작 블록에 포함',
+  startupServerDetail: '{{calls}}회 호출',
+
+  sourceResidual: '시스템 프롬프트, 도구 스키마, 지침 파일',
+  sourceSkills: '스킬 목록',
+  sourceDeferredTools: '지연 로드 도구 목록',
+  sourceAgentListing: '에이전트 목록',
+  sourceMcpInstructions: 'MCP 서버 지침',
+  sourceMemory: '메모리 파일',
+  sourceOther: '기타 삽입',
+  sourceHook: '훅: {{name}}',
+
+  causeCompact: '컨텍스트 압축',
+  causeTtlExpiry: '메시지 사이에 캐시 만료',
+  causeModelSwitch: '모델 변경',
+  causeToolsChanged: '도구 구성 변경',
+  causeListingChanged: '스킬 또는 에이전트 목록 변경',
+  causeUnexplained: '원인 미상',
+
+  recUnusedMcpServer: 'MCP 서버 {{target}} — 한 번도 호출되지 않음',
+  recUnusedSkill: '스킬 {{target}} — 한 번도 사용되지 않음',
+  recDuplicateInstructions: '{{target}}에 중복된 지침 텍스트',
+  recDetail:
+    '{{days}}일 동안 {{total}}번의 시작 중 {{sessions}}번에 포함 · 매번 {{tokens}} 토큰 · {{usd}}',
+  recBadge: '미사용',
 } as const;

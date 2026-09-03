@@ -235,7 +235,10 @@ describe('docs site numeric claims (TRA-174)', () => {
   const docs: Array<{ path: string; tolerance: number; skipLine?: RegExp }> = [
     { path: 'docs/index.html', tolerance: 2 },
     { path: 'docs/llms.txt', tolerance: 2 },
-    { path: 'docs/tools-reference.md', tolerance: 5 },
+    // `N → M tools` is a record of a past measurement ("TRA-239: 171 → 172
+    // tools"), not a claim about the surface today — it must not drift with
+    // the count, and it goes stale by definition as tools are added.
+    { path: 'docs/tools-reference.md', tolerance: 5, skipLine: /\d+ → \d+ tools/ },
     { path: 'docs/quality-gates.md', tolerance: 5 },
     { path: 'CLAUDE.md', tolerance: 5, skipLine: /output_format|preset/ },
     { path: 'AGENTS.md', tolerance: 5, skipLine: /output_format|preset/ },

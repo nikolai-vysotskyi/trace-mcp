@@ -34,10 +34,12 @@ export {
   REPORT_BY_ID,
   defaultInsightsClient,
   buildRpcCall,
+  buildLoadToolsCall,
   flattenReport,
   flattenDriftRows,
   flattenPagerankRows,
   flattenRiskHotspotRows,
+  flattenStartupContextRows,
 } from './insights-runtime';
 export type { InsightsClient, ReportId, ReportDef, InsightRow, InsightRows } from './insights-runtime';
 
@@ -87,6 +89,7 @@ const REPORT_ICON: Record<ReportId, string> = {
   claudemd_drift: 'difference',
   pagerank: 'hub',
   risk_hotspots: 'bolt',
+  startup_context: 'monitoring',
 };
 
 /* Severity badges carry a tone so "high" and "low" are not the same grey at a
@@ -104,6 +107,7 @@ const RUNNING_KEY: Record<ReportId, string> = {
   claudemd_drift: 'runningDrift',
   pagerank: 'runningPagerank',
   risk_hotspots: 'runningRisk',
+  startup_context: 'runningStartup',
 };
 
 // ── Component ────────────────────────────────────────────────────────
