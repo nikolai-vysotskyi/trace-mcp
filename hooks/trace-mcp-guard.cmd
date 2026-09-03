@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-guard v0.13.0
+REM trace-mcp-guard v0.15.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -328,9 +328,13 @@ REM single light navigation question at equal correctness, so the guard stays
 REM silent until the session is actually crawling. Sets NAV_BELOW=1 while the
 REM session is still under the threshold; callers allow the call when it is.
 REM
-REM This is the conservative half of the POSIX behaviour in trace-mcp-guard.sh:
-REM count only, with no rolling window and no relationship-question bypass,
-REM because Windows ships no UserPromptSubmit hook to reset the streak per prompt.
+REM Full parity with the POSIX gate in trace-mcp-guard.sh (TRA-757): the
+REM relationship-question bypass and the rolling window are both honoured here.
+REM Windows does ship a UserPromptSubmit hook (trace-mcp-user-prompt-submit.cmd)
+REM and it clears .nav-streak on every new prompt, so a count that only ever
+REM grew would have made the guard intervene on every navigation call for the
+REM rest of the session - exactly the light-question regression the gate exists
+REM to remove. State file format is shared with the POSIX hook: "count epoch".
 :nav_hit
 set "NAV_BELOW=0"
 set "NAV_MIN=3"
@@ -339,10 +343,32 @@ set /a NAV_MIN=NAV_MIN+0 >nul 2>&1
 if !NAV_MIN! LEQ 1 goto :eof
 set "NAV_DIR=%TEMP%\trace-mcp-reads-%SESSION_ID%"
 if not exist "!NAV_DIR!" mkdir "!NAV_DIR!" >nul 2>&1
+REM Relationship question in flight - intervene from the first call.
+if exist "!NAV_DIR!\.nav-force" goto :eof
+set "NAV_WINDOW=300"
+if defined TRACE_MCP_GUARD_NAV_WINDOW set "NAV_WINDOW=%TRACE_MCP_GUARD_NAV_WINDOW%"
+set /a NAV_WINDOW=NAV_WINDOW+0 >nul 2>&1
 set "NAV_COUNT=0"
-if exist "!NAV_DIR!\.nav-streak" set /p NAV_COUNT=<"!NAV_DIR!\.nav-streak"
+set "NAV_LAST=0"
+if exist "!NAV_DIR!\.nav-streak" (
+    for /f "usebackq tokens=1,2" %%a in ("!NAV_DIR!\.nav-streak") do (
+        set "NAV_COUNT=%%a"
+        set "NAV_LAST=%%b"
+    )
+)
+set /a NAV_COUNT=NAV_COUNT+0 >nul 2>&1
+set /a NAV_LAST=NAV_LAST+0 >nul 2>&1
+set "NAV_NOW=0"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()"`) do set "NAV_NOW=%%i"
+set /a NAV_NOW=NAV_NOW+0 >nul 2>&1
+if !NAV_LAST! EQU 0 (
+    set "NAV_COUNT=0"
+) else (
+    set /a NAV_GAP=NAV_NOW-NAV_LAST
+    if !NAV_GAP! GTR !NAV_WINDOW! set "NAV_COUNT=0"
+)
 set /a NAV_COUNT=NAV_COUNT+1 >nul 2>&1
-> "!NAV_DIR!\.nav-streak" echo !NAV_COUNT!
+> "!NAV_DIR!\.nav-streak" echo !NAV_COUNT! !NAV_NOW!
 if !NAV_COUNT! LSS !NAV_MIN! set "NAV_BELOW=1"
 goto :eof
 

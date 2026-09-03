@@ -4,3 +4,11 @@
 # calibrate-health-metrics.mjs imported by its test) — surfaces as
 # "SyntaxError: Invalid or unexpected token" on windows-latest CI only.
 * text=auto eol=lf
+
+# ...except batch files. cmd.exe cannot parse an LF-only .cmd reliably: caret
+# line continuations and parenthesised blocks come apart, and the guard hook
+# fails with "'e' is not recognized as an internal or external command" (seen
+# on windows-latest, TRA-757). These must reach disk — and the npm tarball —
+# with CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
