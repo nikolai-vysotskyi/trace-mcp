@@ -9,10 +9,35 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getLauncherPath, installLauncher } from '../../src/init/launcher.js';
+import {
+  getLauncherPath,
+  installLauncher,
+  legacyCompatCmdBody,
+} from '../../src/init/launcher.js';
 import { LAUNCHER_VERSION } from '../../src/init/types.js';
 
 const STALE_SHIM = '#!/bin/bash\n# trace-mcp-launcher v0.3.0\nexit 127\n';
+
+// Windows cannot use a symlink here without privileges the installer usually
+// lacks, so the legacy .cmd delegates by exec. Asserted on every platform:
+// the Windows CI job is conditional, and this is the shim clients would spawn.
+describe('windows legacy compat shim', () => {
+  const body = legacyCompatCmdBody('C:\\Users\\x\\.trace\\bin\\trace.cmd');
+
+  it('delegates to the current launcher and forwards all arguments', () => {
+    expect(body).toContain('"C:\\Users\\x\\.trace\\bin\\trace.cmd" %*');
+  });
+
+  it('carries the launcher header so a later run recognises it as ours', () => {
+    expect(body).toMatch(/trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/);
+    expect(body.split(/\r?\n/)[0]).toBe('@echo off');
+  });
+
+  it('uses CRLF line endings', () => {
+    expect(body).toContain('\r\n');
+    expect(body).not.toMatch(/[^\r]\n/);
+  });
+});
 
 describe.skipIf(process.platform === 'win32')('legacy bin compat', () => {
   let home: string;
@@ -83,6 +108,44 @@ describe.skipIf(process.platform === 'win32')('legacy bin compat', () => {
 
     expect(fs.lstatSync(legacyPath).isSymbolicLink()).toBe(false);
     expect(fs.readFileSync(legacyPath, 'utf-8')).toBe(foreign);
+  });
+
+  // The branch an ordinary `trace upgrade` takes once the current shim is
+  // already at LAUNCHER_VERSION. Passing force:true masks this entirely.
+  it('repairs the legacy path on the already-current upgrade path', () => {
+    installLauncher({ force: true }); // current shim in place, legacy dir absent
+    writeLegacy(STALE_SHIM); // client still pointed at a pre-rename shim
+
+    const step = installLauncher({});
+
+    expect(step.action).toBe('already_configured');
+    expect(fs.lstatSync(legacyPath).isSymbolicLink()).toBe(true);
+    expect(fs.realpathSync(legacyPath)).toBe(fs.realpathSync(getLauncherPath()));
+  });
+
+  it('leaves the legacy path untouched when a dry run reports it as current', () => {
+    installLauncher({ force: true });
+    writeLegacy(STALE_SHIM);
+
+    installLauncher({ dryRun: true });
+
+    expect(fs.lstatSync(legacyPath).isSymbolicLink()).toBe(false);
+  });
+
+  // The legacy path is what a registered client spawns. Removing it before the
+  // replacement exists would take the launcher away entirely on any failure —
+  // routine on Windows, where symlinks need privileges.
+  it('preserves the working shim when the replacement cannot be created', () => {
+    writeLegacy(STALE_SHIM);
+    vi.spyOn(fs, 'symlinkSync').mockImplementation(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+    });
+
+    installLauncher({ force: true });
+
+    expect(fs.existsSync(legacyPath)).toBe(true);
+    expect(fs.readFileSync(legacyPath, 'utf-8')).toBe(STALE_SHIM);
+    expect(fs.readdirSync(path.dirname(legacyPath))).toEqual(['trace-mcp']);
   });
 
   it('does not link the legacy path to itself when it is the launcher home', () => {
