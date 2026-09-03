@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-mirror v0.1.0 (TRA-725, experiment E1')
+# trace-mcp-mirror v0.2.0 (TRA-725 / TRA-750, experiment E1')
 #
 # PostToolUse mirror for Read and Bash. The native tool runs untouched; this
 # hook rewrites its output before it reaches the model via the harness field
@@ -18,14 +18,27 @@
 #   1. collapse runs of identical lines
 #   2. drop build/install progress noise
 #   3. head/tail window whatever is still oversized
+#   4. (opt-in) head/tail char cap for output the line window cannot reach
+#
+# The 24/12 line window is the configuration TRA-730 stage 2 validated: the
+# shipped 80/40 default compressed only 22.4% of the paid band because an
+# 80-line head barely fires below 16 KB, and the 2-16 KB buckets carry ~71% of
+# that band's mass. 24/12 measures 52.0% offline with 0 pp of solve-rate loss
+# across 108 live runs. The char cap closes what is left -- a Bash result is
+# typically few-lined and wide, so a LINE window never fires on it (32.5% for
+# Bash alone); capping by characters takes the band to 62.6%. That branch has
+# not been through a live solve-rate gate yet, so it stays behind
+# TRACE_MCP_MIRROR_CAP until one runs (TRA-750).
 #
 # Every rewrite appends one JSONL record to the measurement log so compression
 # and call counts can be read off a real session rather than estimated.
 #
 # Install (PostToolUse, matcher "Read|Bash"). Env knobs:
 #   TRACE_MCP_MIRROR_MIN_CHARS   below this, pass through untouched (default 2000)
-#   TRACE_MCP_MIRROR_KEEP_HEAD   lines kept from the top of a window (default 80)
-#   TRACE_MCP_MIRROR_KEEP_TAIL   lines kept from the bottom of a window (default 40)
+#   TRACE_MCP_MIRROR_KEEP_HEAD   lines kept from the top of a window (default 24)
+#   TRACE_MCP_MIRROR_KEEP_TAIL   lines kept from the bottom of a window (default 12)
+#   TRACE_MCP_MIRROR_CAP         any non-empty value: also cap by characters
+#   TRACE_MCP_MIRROR_MAX_CHARS   char budget for that cap (default 3000)
 #   TRACE_MCP_MIRROR_DISABLE     any non-empty value: pass through untouched
 #   TRACE_MCP_MIRROR_HOME        state dir (default ~/.trace-mcp/mirror)
 
@@ -36,8 +49,9 @@ INPUT=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
 
 MIN_CHARS="${TRACE_MCP_MIRROR_MIN_CHARS:-2000}"
-KEEP_HEAD="${TRACE_MCP_MIRROR_KEEP_HEAD:-80}"
-KEEP_TAIL="${TRACE_MCP_MIRROR_KEEP_TAIL:-40}"
+KEEP_HEAD="${TRACE_MCP_MIRROR_KEEP_HEAD:-24}"
+KEEP_TAIL="${TRACE_MCP_MIRROR_KEEP_TAIL:-12}"
+MAX_CHARS="${TRACE_MCP_MIRROR_MAX_CHARS:-3000}"
 HOME_DIR="${TRACE_MCP_MIRROR_HOME:-$HOME/.trace-mcp/mirror}"
 
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
@@ -118,6 +132,25 @@ if [ "$TOTAL_LINES" -gt "$WINDOW" ]; then
   COMPRESSED=$(printf '%s\n' "$COMPRESSED" | head -n "$KEEP_HEAD"
     printf '  … %d line(s) elided by trace-mcp mirror …\n' "$ELIDED"
     printf '%s\n' "$COMPRESSED" | tail -n "$KEEP_TAIL")
+fi
+
+# --- step 4: char cap (opt-in) -----------------------------------------------
+# The line window is blind to a result that is short in lines and wide in
+# characters -- a JSON blob, a minified bundle, a `grep -c` sweep printing one
+# 8 KB line. Those are most of Bash's mass, which is why Bash alone compresses
+# only 32.5% on the line window and 49.3% with this cap. Head keeps ~2/3 of the
+# budget because the useful part of a wide result is usually its beginning.
+# The budget is characters under a UTF-8 locale and bytes under LC_ALL=C, where
+# a cut can also land mid-codepoint; jq then writes one U+FFFD per boundary.
+# That is a truncated glyph at a cut point, not a broken envelope, so it is not
+# worth an iconv dependency to avoid.
+if [ -n "${TRACE_MCP_MIRROR_CAP:-}" ] && [ "${#COMPRESSED}" -gt "$MAX_CHARS" ]; then
+  CAP_HEAD=$((MAX_CHARS * 2 / 3))
+  CAP_TAIL=$((MAX_CHARS - CAP_HEAD))
+  CUT=$(( ${#COMPRESSED} - MAX_CHARS ))
+  COMPRESSED="${COMPRESSED:0:$CAP_HEAD}
+  … ${CUT} char(s) elided by trace-mcp mirror …
+${COMPRESSED: -$CAP_TAIL}"
 fi
 
 NEW_CHARS=${#COMPRESSED}

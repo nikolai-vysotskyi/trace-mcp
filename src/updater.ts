@@ -611,9 +611,11 @@ export async function runPostUpdateMigrations(): Promise<void> {
     { detectGuardHook },
     {
       installGuardHook,
+      installMirrorHook,
       installReindexHook,
       installPrecompactHook,
       installWorktreeHook,
+      isMirrorHookInstalled,
       migrateLegacyToolPrefix,
     },
     { updateClaudeMd },
@@ -644,6 +646,20 @@ export async function runPostUpdateMigrations(): Promise<void> {
       logger.info('Post-update: hooks upgraded');
     } catch (err) {
       logger.warn({ error: err }, 'Post-update: hook upgrade failed (non-fatal)');
+    }
+  }
+
+  // 2b. Refresh an opted-in mirror hook. Deliberately NOT gated on
+  // hasGuardHook: `init --mirror` can be taken together with --skip-hooks, so
+  // a mirror install can exist with no guard hook at all, and a shipped fix to
+  // the mirror script must still reach it. Never installs one that is absent —
+  // `--mirror` stays the only path that opts in.
+  if (isMirrorHookInstalled()) {
+    try {
+      installMirrorHook({ global: true });
+      logger.info('Post-update: mirror hook upgraded');
+    } catch (err) {
+      logger.warn({ error: err }, 'Post-update: mirror hook upgrade failed (non-fatal)');
     }
   }
 

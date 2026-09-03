@@ -72,6 +72,8 @@ vi.mock('../src/init/hooks.js', () => ({
   installReindexHook: vi.fn(() => ({ target: 'reindex', action: 'updated' })),
   installPrecompactHook: vi.fn(() => ({ target: 'precompact', action: 'updated' })),
   installWorktreeHook: vi.fn(() => [{ target: 'worktree', action: 'updated' }]),
+  installMirrorHook: vi.fn(() => ({ target: 'mirror', action: 'updated' })),
+  isMirrorHookInstalled: vi.fn(() => false),
   migrateLegacyToolPrefix: vi.fn(() => []),
 }));
 vi.mock('../src/init/claude-md.js', () => ({
@@ -224,6 +226,34 @@ describe('runPostUpdateMigrations', () => {
     // installed (TRA-650) — a permission allowlist entry can exist from a
     // user manually approving a tool call, with no guard hook at all.
     expect(migrateLegacyToolPrefix).toHaveBeenCalled();
+  });
+
+  // The mirror rewrites what the model sees, so an upgrade must never create
+  // one the user never asked for — but it must refresh one they did, or a fix
+  // to the hook script never reaches the machines running it (TRA-750 review).
+  it('leaves an absent mirror hook absent across an upgrade', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
+
+    await runPostUpdateMigrations();
+
+    const { installMirrorHook } = await import('../src/init/hooks.js');
+    expect(installMirrorHook).not.toHaveBeenCalled();
+  });
+
+  it('refreshes an existing mirror hook even with no guard hook installed', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
+
+    const detector = await import('../src/init/detector.js');
+    vi.mocked(detector.detectGuardHook).mockReturnValue({
+      hasGuardHook: false,
+      guardHookVersion: null,
+    });
+    const hooks = await import('../src/init/hooks.js');
+    vi.mocked(hooks.isMirrorHookInstalled).mockReturnValue(true);
+
+    await runPostUpdateMigrations();
+
+    expect(hooks.installMirrorHook).toHaveBeenCalledWith({ global: true });
   });
 
   it('continues on hook install failure', async () => {

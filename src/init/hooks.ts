@@ -13,6 +13,7 @@ import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
 import {
   GUARD_HOOK_VERSION,
+  MIRROR_HOOK_VERSION,
   PRECOMPACT_HOOK_VERSION,
   REINDEX_HOOK_VERSION,
   SESSION_END_HOOK_VERSION,
@@ -122,6 +123,20 @@ const REINDEX_HOOK: HookDescriptor = {
   matcher: 'Edit|Write|MultiEdit',
   version: REINDEX_HOOK_VERSION,
   dryRunLabel: 'Would install reindex hook',
+};
+
+/**
+ * Read/Bash output mirror (TRA-750). Unlike every other hook here it rewrites
+ * what the model sees, so it is opt-in: `trace-mcp init --mirror` installs it,
+ * a plain init never does.
+ */
+const MIRROR_HOOK: HookDescriptor = {
+  scriptName: 'trace-mcp-mirror',
+  settingsKey: 'PostToolUse',
+  matcher: 'Read|Bash',
+  version: MIRROR_HOOK_VERSION,
+  dryRunLabel: 'Would install Read/Bash mirror hook',
+  plainCommand: true,
 };
 
 const PRECOMPACT_HOOK: HookDescriptor = {
@@ -495,6 +510,55 @@ export function isHookOutdated(installedVersion: string | null): boolean {
 
 export function installReindexHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
   return installHook(REINDEX_HOOK, opts);
+}
+
+/**
+ * The mirror ships as a bash + jq pipeline only; there is no .cmd port yet, so
+ * on Windows we say that instead of failing init with "installation may be
+ * corrupted" from findHookSource.
+ */
+export function installMirrorHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
+  if (IS_WINDOWS) {
+    return {
+      target: hookDest(CLIENTS[0], MIRROR_HOOK),
+      action: 'skipped',
+      detail: 'Read/Bash mirror hook is not available on Windows yet',
+    };
+  }
+  return installHook(MIRROR_HOOK, opts);
+}
+
+export function uninstallMirrorHook(opts: { global?: boolean }): InitStepResult {
+  return uninstallHook(MIRROR_HOOK, opts);
+}
+
+/**
+ * Is the mirror hook already wired into a Claude-family client's global
+ * settings?
+ *
+ * `--mirror` is the only thing that CREATES an install. This is what lets a
+ * routine `init` or a post-update migration REFRESH one the user already opted
+ * into: without it, a copied hook script stays at whatever version it was
+ * installed at forever, and a later correctness fix to the script never reaches
+ * the machines actually running it.
+ */
+export function isMirrorHookInstalled(): boolean {
+  return CLIENTS.some((client) => {
+    let settings: Record<string, unknown>;
+    try {
+      settings = readSettings(settingsPath(client, true));
+    } catch {
+      return false; // malformed settings.json — treat as "no hook"
+    }
+    const hooks = settings.hooks as Record<string, unknown[]> | undefined;
+    const entries = hooks?.[MIRROR_HOOK.settingsKey];
+    if (!Array.isArray(entries)) return false;
+    return entries.some((h) =>
+      (h as { hooks?: { command?: string }[] }).hooks?.some((hh) =>
+        hh.command?.includes(MIRROR_HOOK.scriptName),
+      ),
+    );
+  });
 }
 
 export function installPrecompactHook(opts: {

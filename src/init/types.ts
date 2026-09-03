@@ -99,6 +99,10 @@ export const SESSION_START_HOOK_VERSION = '0.2.0';
 export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.3.0'; // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_username -- the constant name contains "USER", which the "username" secret heuristic matches; the value is a hook script version.
 export const STOP_HOOK_VERSION = '0.2.0';
 export const SESSION_END_HOOK_VERSION = '0.2.0';
+// Read/Bash output mirror. Opt-in only (`trace-mcp init --mirror`) — it
+// rewrites what the model sees, so it must never turn on silently for an
+// existing install.
+export const MIRROR_HOOK_VERSION = '0.2.0';
 // 0.5.0 (TRA-742): probe_node falls back to the node beside a recorded package
 // root, so a machine whose only node is a bundled runtime or a custom npm
 // prefix no longer dies with "node binary not found".
