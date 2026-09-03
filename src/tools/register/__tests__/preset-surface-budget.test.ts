@@ -34,19 +34,25 @@ function presetPayloadChars(preset: string): { chars: number; tools: number } {
 }
 
 /**
- * Measured 2026-09-01 against this reconstruction, with `load_tools`, the
+ * Measured 2026-09-03 against this reconstruction, with `load_tools`, the
  * widened `minimal` preset and the TRA-603 role presets in place. Token column
  * is gpt-tokenizer (o200k) over the same serialized payload:
  *
- *   design        21 tools /  21,911 chars /  5,042 tok  (-86.1% vs full)
- *   perf          31 tools /  32,295 chars /  7,506 tok  (-79.3%)
- *   minimal       28 tools /  34,041 chars /  7,806 tok  (-78.5%, shipped default)
- *   review        32 tools /  37,272 chars /  8,587 tok  (-76.3%)
- *   security      35 tools /  41,499 chars /  9,590 tok  (-73.6%)
- *   architecture  41 tools /  44,258 chars / 10,211 tok  (-71.9%)
- *   dev           42 tools /  51,325 chars / 11,853 tok  (-67.3%)
- *   standard      55 tools /  64,598 chars / 14,902 tok  (-58.9%, previous default)
- *   full         151 tools / 157,695 chars / 36,277 tok
+ *   router        10 tools /   7,120 chars /  1,604 tok  (-95.7% vs full)
+ *   state         20 tools /  16,338 chars /  3,727 tok  (-90.0%)
+ *   design        21 tools /  22,127 chars /  5,093 tok  (-86.3%)
+ *   perf          31 tools /  32,511 chars /  7,557 tok  (-79.7%)
+ *   minimal       28 tools /  34,257 chars /  7,857 tok  (-78.9%, shipped default)
+ *   review        32 tools /  37,488 chars /  8,638 tok  (-76.8%)
+ *   security      35 tools /  41,715 chars /  9,641 tok  (-74.1%)
+ *   architecture  41 tools /  44,474 chars / 10,262 tok  (-72.4%)
+ *   dev           42 tools /  51,541 chars / 11,904 tok  (-68.0%)
+ *   standard      55 tools /  64,814 chars / 14,953 tok  (-59.8%, previous default)
+ *   full         158 tools / 161,702 chars / 37,164 tok
+ *
+ * Two days on from the 2026-09-01 reading the presets are within 0.5% of
+ * themselves while `full` grew 151 → 158 tools; the published 67-86% band still
+ * holds because the presets held, not because the surface stopped growing.
  *
  * Counts exclude framework-gated tools, which `captureAllTools` does not
  * register — `design` and `standard` each name five of them, so a project with
@@ -68,6 +74,10 @@ const PRESET_CHAR_CEILINGS: Record<string, number> = {
   // (34,207 / 7,838). The ceiling leaves room for a meta-tool or two and none
   // for the preset quietly acquiring members.
   router: 8_000,
+  // TRA-596 shipped this preset without a ceiling and nothing failed, because
+  // the loop below used to iterate this map instead of TOOL_PRESETS — so the
+  // preset went unguarded from #715 until now. 16,338 chars / 3,727 tok today.
+  state: 19_000,
   minimal: 38_000,
   review: 42_000,
   dev: 58_000,
@@ -85,9 +95,20 @@ describe('per-preset tools/list budget (TRA-402)', () => {
     expect(full.tools).toBeGreaterThan(140);
   });
 
-  for (const [preset, ceiling] of Object.entries(PRESET_CHAR_CEILINGS)) {
-    it(`keeps the "${preset}" tools/list payload under ${ceiling} chars`, () => {
+  // Iterate the presets, not the ceilings: a preset added without a ceiling is
+  // exactly the case this file exists to catch, and iterating the ceilings made
+  // it invisible (TRA-596's `state` preset shipped unguarded that way).
+  for (const preset of Object.keys(TOOL_PRESETS)) {
+    if (preset === 'full') continue;
+    const ceiling = PRESET_CHAR_CEILINGS[preset];
+    it(`keeps the "${preset}" tools/list payload under ${ceiling ?? '<no ceiling>'} chars`, () => {
       const { chars, tools } = presetPayloadChars(preset);
+      expect(
+        ceiling,
+        `The "${preset}" preset has no entry in PRESET_CHAR_CEILINGS, so nothing stops it drifting ` +
+          `back toward the full surface. It is ${chars} chars across ${tools} tools today — add a ` +
+          'ceiling with ~10-15% headroom over that.',
+      ).toBeDefined();
       expect(
         chars,
         `The "${preset}" surface is ${chars} chars across ${tools} tools, past the ${ceiling} ceiling. ` +
