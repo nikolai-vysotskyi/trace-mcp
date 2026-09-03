@@ -115,6 +115,48 @@ export function buildAmbiguousProjectError(
   };
 }
 
+/**
+ * Pick the error for a resolution that produced no project, and the HTTP status
+ * to send it with.
+ *
+ * The branch that matters is the dangerous-hint one. TRA-286 made the resolver
+ * DROP an explicit `?project=` / header / `_meta` hint naming a home or system
+ * directory and fall through to the tracked-client and single-project steps —
+ * right, and unchanged here. But when that fall-through also came up empty, the
+ * client was handed the plain ambiguous error: "pass ?project=<absolute-path>",
+ * addressed to a client that had just passed exactly that. Our own stdio proxy
+ * is one of them — it always appends `?project=<cwd>`, so a session started with
+ * cwd=~ (or /, or /tmp) lost all of trace-mcp's tools behind advice it could not
+ * act on (TRA-720). Naming the dropped root turns that into the one instruction
+ * that actually helps: point the client at a real project directory.
+ */
+export function buildResolutionFailureError(
+  resolution: {
+    kind: 'no-projects' | 'ambiguous';
+    registered?: readonly string[];
+    ignoredDangerousHint?: { projectRoot: string; reason: string };
+  },
+  rpcId: unknown,
+): { status: number; body: JsonRpcErrorBody } {
+  const dropped = resolution.ignoredDangerousHint;
+  if (dropped) {
+    return {
+      status: 404,
+      body: buildProjectNotFoundError({
+        projectRoot: dropped.projectRoot,
+        folderMissing: false,
+        dangerReason: dropped.reason,
+        hasMarkers: false,
+        rpcId,
+      }),
+    };
+  }
+  if (resolution.kind === 'no-projects') {
+    return { status: 404, body: buildNoProjectsError(rpcId) };
+  }
+  return { status: 400, body: buildAmbiguousProjectError(resolution.registered ?? [], rpcId) };
+}
+
 /** Extract the `id` field from a parsed JSON-RPC body for echoing back. */
 export function extractRpcId(parsedBody: unknown): unknown {
   if (parsedBody && typeof parsedBody === 'object' && 'id' in parsedBody) {

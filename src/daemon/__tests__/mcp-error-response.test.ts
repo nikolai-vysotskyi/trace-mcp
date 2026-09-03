@@ -3,6 +3,7 @@ import {
   buildAmbiguousProjectError,
   buildNoProjectsError,
   buildProjectNotFoundError,
+  buildResolutionFailureError,
   extractRpcId,
 } from '../mcp-error-response.js';
 
@@ -59,6 +60,64 @@ describe('buildAmbiguousProjectError', () => {
     expect(body.error.message).toMatch(/X-Trace-Project/);
     expect(body.error.data.reason).toBe('ambiguous_project');
     expect(body.error.data.registered).toEqual(['/a', '/b']);
+  });
+});
+
+// TRA-720: `claude mcp list` reported trace-mcp as "Failed to connect" on a
+// machine with several registered projects whenever the client's cwd was a home
+// or system directory. Our stdio proxy had appended `?project=<cwd>`, the
+// resolver dropped that hint as a dangerous root (TRA-286), the fall-through
+// found no unique project, and the client was told to "pass ?project=" — the
+// exact thing it had just done. Every trace-mcp tool was gone for that session.
+describe('buildResolutionFailureError', () => {
+  it('names the dropped dangerous root instead of asking for a hint again', () => {
+    const { status, body } = buildResolutionFailureError(
+      {
+        kind: 'ambiguous',
+        registered: ['/work/a', '/work/b'],
+        ignoredDangerousHint: { projectRoot: '/Users/user', reason: 'home directory' },
+      },
+      1,
+    );
+
+    expect(status).toBe(404);
+    expect(body.error.data.reason).toBe('dangerous_root');
+    expect(body.error.message).toContain('/Users/user');
+    expect(body.error.message).toContain('home directory');
+    // The advice the client could not act on must be gone.
+    expect(body.error.message).not.toMatch(/\?project=/);
+  });
+
+  it('applies the same rule when nothing at all is registered', () => {
+    const { status, body } = buildResolutionFailureError(
+      {
+        kind: 'no-projects',
+        ignoredDangerousHint: { projectRoot: '/tmp', reason: 'system directory' },
+      },
+      null,
+    );
+
+    expect(status).toBe(404);
+    expect(body.error.data.reason).toBe('dangerous_root');
+    expect(body.error.message).toContain('/tmp');
+  });
+
+  it('keeps the ambiguous error when no hint was dropped', () => {
+    const { status, body } = buildResolutionFailureError(
+      { kind: 'ambiguous', registered: ['/work/a', '/work/b'] },
+      1,
+    );
+
+    expect(status).toBe(400);
+    expect(body.error.data.reason).toBe('ambiguous_project');
+    expect(body.error.message).toMatch(/\?project=/);
+  });
+
+  it('keeps the no-projects error when no hint was dropped', () => {
+    const { status, body } = buildResolutionFailureError({ kind: 'no-projects' }, 1);
+
+    expect(status).toBe(404);
+    expect(body.error.data.reason).toBe('no_projects_registered');
   });
 });
 
