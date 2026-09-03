@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "System Prompt Routing via tweakcc",
-  "description": "Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/tweakcc.html",
   "datePublished": "2026-04-07",
-  "dateModified": "2026-05-18",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

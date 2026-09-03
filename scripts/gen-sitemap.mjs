@@ -60,7 +60,10 @@ export function gitDate(file, cwd = join(DOCS, '..')) {
  * Same source, one command, so the visible date can't drift from <lastmod>.
  */
 export function stampUpdated(file, date) {
-  if (!file.endsWith('.md')) return;
+  // index.html is hand-written HTML, but it carries front matter for the
+  // {{ site.data.* }} tags — so it can take the same stamp, which is what lets
+  // its JSON-LD dateModified stop being a hardcoded date (TRA-419).
+  if (!file.endsWith('.md') && file !== 'index.html') return;
   const path = join(DOCS, file);
   const raw = readFileSync(path, 'utf-8');
   const fm = raw.match(/^---\n([\s\S]*?)\n---\n/);

@@ -1,6 +1,6 @@
 ---
 title: "Architecture — indexing pipeline, storage, and MCP server internals"
-description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server that serves it all."
+description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server on top."
 updated: 2026-09-02
 ---
 
@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Architecture",
-  "description": "The two-pass indexing pipeline and how the dependency graph is built and stored.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/architecture.html",
   "datePublished": "2026-04-05",
-  "dateModified": "2026-04-14",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

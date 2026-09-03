@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Supported frameworks & languages",
-  "description": "The {{ site.data.counts.languages }} supported languages and the frameworks each plugin understands.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/supported-frameworks.html",
   "datePublished": "2026-04-05",
-  "dateModified": "2026-04-05",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",
