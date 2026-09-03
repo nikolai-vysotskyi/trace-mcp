@@ -176,6 +176,19 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
   wide tool table scrolls itself instead of the page.
+- **A table cell is left-aligned unless it holds a number, and then it is
+  right-aligned. Never centred.** A centred cell that holds a phrase has two
+  ragged edges and no common start, and it sits beside a row label that is
+  left-aligned — a single row then reads left, centre, centre. This is not a
+  CSS decision and that is why it drifted: a Markdown `|:---:|` delimiter row
+  becomes an inline `style="text-align: center"` on every cell of the column,
+  which beats `.prose tbody td`'s `text-align: left` outright. Twelve tables
+  across eight files shipped that way — 321 of the 382 centred cells on
+  `comparisons.html` wrap to more than one line **at 1440px**, and the worst on
+  `/vs/serena.html` runs to six lines at 390px. `docs.css` now overrides the
+  inline centre rather than the Markdown being edited, so the next table
+  written with `:---:` is covered and the content files stay the SEO agent's.
+  A right-aligned numeric column (`toon-savings.md`) keeps its alignment.
 - **A scroll region says so.** A region with more to the right carries a
   `scroll →` label — Space Mono 10px caps at `--text-disabled`, right-aligned
   10px above the head row, the same instrument-label voice as the `thead`.
@@ -368,6 +381,9 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Service labels are Space Mono caps; nothing else is.
 - [ ] No emoji in any rendered page — `grep -c '✅\|❌\|⚠️' docs/*.md
       docs/vs/*.md` returns 0 for every file.
+- [ ] No table cell computes to `text-align: center` — read it off the cell,
+      not off the stylesheet. The alignment comes from the Markdown delimiter
+      row as an inline style, so `docs.css` saying `left` proves nothing.
 - [ ] Exactly one h1; section breaks are 80px, not ad hoc.
 - [ ] Exactly one deliberate pattern break on the page.
 

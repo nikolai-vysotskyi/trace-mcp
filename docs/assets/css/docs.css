@@ -479,6 +479,20 @@ main {
 .prose th:last-child {
   padding-right: 0;
 }
+/* A Markdown `|:---:|` delimiter row becomes an inline `text-align: center` on
+   every cell of that column, which beats the `text-align: left` above — so it
+   has never applied to a comparison table. A capability cell holds a phrase,
+   not a number: centred it has two ragged edges and no common start, next to a
+   row label that is left-aligned. 321 of the 382 centred cells on
+   comparisons.html wrap to more than one line at 1440px, and the worst on
+   /vs/serena.html runs to six. Overridden here rather than in the Markdown so
+   the next table written with `:---:` is covered too — the content files are
+   the SEO agent's. Right-aligned columns are untouched: toon-savings.md
+   right-aligns four numeric columns, which is what right alignment is for. */
+.prose tbody td[style*='center'],
+.prose thead th[style*='center'] {
+  text-align: left !important;
+}
 
 /* Capability marks. The comparison tables used ✅/❌ — emoji as UI, and a
    green that is a second accent colour. The mark is now plain ✓/✗ text, and
