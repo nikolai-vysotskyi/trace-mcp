@@ -9,7 +9,7 @@ export const memory = {
   typeArchitecture: 'アーキテクチャ',
   typeTechChoice: '技術選定',
   typeBugRootCause: '不具合の根本原因',
-  typePreference: '好み',
+  typePreference: '方針',
   typeTradeoff: 'トレードオフ',
   typeDiscovery: '発見',
   typeConvention: '規約',
@@ -82,7 +82,7 @@ export const memory = {
   corporaCount_other: '{{count}} 個のコーパス',
   noCorporaTitle: 'コーパスはまだありません',
   noCorporaSubtitle:
-    'コーパスとは、アシスタントが 1 回の呼び出しで取り込めるコードベースの保存済みスライスです。build_corpus ツールで作成できます。',
+    'コーパスとは、アシスタントが1回の呼び出しで取り込めるコードベースの保存済みスライスです。build_corpus ツールで作成できます。',
   corpusSize: 'シンボル {{symbols}} · ファイル {{files}}',
   corpusBudget: 'トークン上限 約 {{budget}}K',
   corpusKb: '{{size}} KB',

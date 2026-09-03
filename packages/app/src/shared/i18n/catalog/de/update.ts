@@ -8,7 +8,7 @@ export const update = {
   duplicateApp: '{{path}} · v{{version}}',
   duplicateAppRunning: '{{path}} · v{{version}} — läuft gerade',
   duplicateAppsTitle:
-    'Auf diesem Mac liegt mehr als eine Kopie von trace-mcp:\n\n{{list}}\n\nNur die Kopie, die Sie öffnen, wird aktualisiert — welche Sie als Nächstes starten, entscheidet also über Ihre Version. Behalten Sie die Kopie, die Sie nutzen, und verschieben Sie die andere in den Papierkorb — oder öffnen Sie die andere einmal und lassen Sie sie sich selbst aktualisieren.',
+    'Auf diesem Mac liegt mehr als eine Kopie von trace-mcp:\n\n{{list}}\n\nNur die Kopie, die du öffnest, wird aktualisiert — welche du als Nächstes startest, entscheidet also über deine Version. Behalte die Kopie, die du nutzt, und verschiebe die andere in den Papierkorb — oder öffne die andere einmal und lass sie sich selbst aktualisieren.',
   revealDuplicateApp: 'Andere Kopie im Finder zeigen',
 
   // ── The app menu's header (AppMenu.tsx) ─────────────────────────────────
