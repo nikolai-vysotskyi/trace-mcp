@@ -117,6 +117,25 @@ descIf('Windows launcher shim integration', () => {
     expect(result.stderr).toContain('npm i -g trace-mcp');
   });
 
+  // The two tests above are skipped, so nothing else here would catch a syntax
+  // error in the ps1 — and that one breaks the MCP connection for every Windows
+  // user at once. Parsing costs nothing and does not need the cmd shim to spawn.
+  it('ps1 backend parses without errors', () => {
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const script = `$errors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile('${ps1.replace(/'/g, "''")}', [ref]$null, [ref]$errors)
+if ($errors -and $errors.Count -gt 0) { $errors | ForEach-Object { Write-Output $_.Message }; exit 1 }
+exit 0`;
+    const result = spawnSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf-8', timeout: 30_000 },
+    );
+
+    expect(result.stdout.trim()).toBe('');
+    expect(result.status).toBe(0);
+  });
+
   it('injection attempt in config is not evaluated', () => {
     const { home, traceHome, shimDir } = setupFakeHome();
     const sentinel = path.join(home, 'PWNED');

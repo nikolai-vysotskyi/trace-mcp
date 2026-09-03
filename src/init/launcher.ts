@@ -151,6 +151,13 @@ export interface LauncherConfig {
   node: string;
   cli: string;
   version: string;
+  /**
+   * Major version of `node`. The shim refuses to exec a node older than
+   * `engines.node`, and reads this instead of spawning `node -v` on every
+   * start. Omitted only by configs written before the check existed — the
+   * shim fills those in itself on the next run.
+   */
+  nodeMajor?: string;
 }
 
 /**
@@ -164,6 +171,7 @@ export function writeLauncherConfig(cfg: LauncherConfig): void {
     `TRACE_MCP_NODE=${quoteEnvValue(cfg.node)}`,
     `TRACE_MCP_CLI=${quoteEnvValue(cfg.cli)}`,
     `TRACE_MCP_VERSION=${quoteEnvValue(cfg.version)}`,
+    ...(cfg.nodeMajor ? [`TRACE_MCP_NODE_MAJOR=${quoteEnvValue(cfg.nodeMajor)}`] : []),
     '',
   ];
   atomicWriteString(getLauncherConfigPath(), lines.join('\n'), {
@@ -194,6 +202,7 @@ export function readLauncherConfig(): Partial<LauncherConfig> {
     if (key === 'TRACE_MCP_NODE') result.node = value;
     else if (key === 'TRACE_MCP_CLI') result.cli = value;
     else if (key === 'TRACE_MCP_VERSION') result.version = value;
+    else if (key === 'TRACE_MCP_NODE_MAJOR') result.nodeMajor = value;
   }
   return result;
 }
@@ -460,11 +469,17 @@ export function setupLauncher(
       node: process.execPath,
       cli: resolveCurrentCliPath(),
       version: opts.pkgVersion,
+      // We are running on the node we are recording, so its major is known
+      // without spawning anything.
+      nodeMajor: process.versions.node.split('.')[0],
     };
     recordPkgRoot(cfg.cli);
     const existing = readLauncherConfig();
     const unchanged =
-      existing.node === cfg.node && existing.cli === cfg.cli && existing.version === cfg.version;
+      existing.node === cfg.node &&
+      existing.cli === cfg.cli &&
+      existing.version === cfg.version &&
+      existing.nodeMajor === cfg.nodeMajor;
     if (unchanged && !opts.force) {
       steps.push({
         target: getLauncherConfigPath(),

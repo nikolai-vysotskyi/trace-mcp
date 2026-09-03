@@ -22,14 +22,19 @@ function runLauncher(env: Record<string, string>, args: string[] = ['serve']): R
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
+function fakeNodeBody(version: string, marker = 'NODE_ARGS'): string {
+  return `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo "v${version}"; exit 0; fi\necho "${marker}:$*"\n`;
+}
+
 function setupFakeHome(): { home: string; traceHome: string; node: string; cli: string } {
   const home = fs.mkdtempSync(path.join(FIXTURES, 'home-'));
   const traceHome = path.join(home, '.trace-mcp');
   fs.mkdirSync(traceHome, { recursive: true });
 
-  // Fake node that echoes its args so we can assert what the launcher exec'd.
+  // Fake node that echoes its args so we can assert what the launcher exec'd,
+  // and answers `-v` like the real thing — the launcher version-gates node.
   const node = path.join(home, 'fake-node');
-  fs.writeFileSync(node, '#!/bin/bash\necho "NODE_ARGS:$*"\n', { mode: 0o755 });
+  fs.writeFileSync(node, fakeNodeBody('22.22.2'), { mode: 0o755 });
 
   // Fake cli.js (content irrelevant — fake node never actually runs it)
   const cli = path.join(home, 'fake-cli.js');
@@ -290,7 +295,11 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       const { home, traceHome, cli } = setupFakeHome();
       // The server itself needs the client's PATH to find git, LSP servers, npm.
       const node = path.join(home, 'path-echo-node');
-      fs.writeFileSync(node, '#!/bin/bash\necho "NODE_PATH_ENV:$PATH"\n', { mode: 0o755 });
+      fs.writeFileSync(
+        node,
+        '#!/bin/bash\nif [ "${1:-}" = "-v" ]; then echo "v22.22.2"; exit 0; fi\necho "NODE_PATH_ENV:$PATH"\n',
+        { mode: 0o755 },
+      );
       writeConfig(traceHome, node, cli);
 
       const result = spawnSync(LAUNCHER_SRC, ['serve'], {
@@ -300,6 +309,209 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       });
 
       expect(result.stdout.trim()).toBe('NODE_PATH_ENV:/client/bin:/usr/bin:/bin');
+    });
+
+    // TRA-755: cli.js needs the `engines.node` major. Under an older node it
+    // dies on a SyntaxError the client can only report as "failed to connect",
+    // and — worse — the launcher used to heal that node into launcher.env, so
+    // every later start repeated it with a clean `exec` line in the log.
+    describe('node version gate', () => {
+      // Plants an nvm tree whose default alias is `version`, holding the package.
+      function plantNvm(home: string, version: string): { node: string; cli: string } {
+        const prefix = path.join(home, '.nvm', 'versions', 'node', `v${version}`);
+        const bin = path.join(prefix, 'bin');
+        fs.mkdirSync(bin, { recursive: true });
+        const node = path.join(bin, 'node');
+        fs.writeFileSync(node, fakeNodeBody(version), { mode: 0o755 });
+        fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), `v${version}\n`);
+        const dist = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+        fs.mkdirSync(dist, { recursive: true });
+        fs.writeFileSync(path.join(dist, 'cli.js'), '// fake cli\n');
+        return { node, cli: fs.realpathSync(path.join(dist, 'cli.js')) };
+      }
+
+      // The probe also considers /opt/homebrew/bin/node and /usr/local/bin/node,
+      // which are absolute and so escape the fake HOME — CI runners have a real
+      // node there. Raising the required major above any real release is what
+      // makes the probe tests below hermetic: every system node is rejected too,
+      // and only the fake planted at v99 can win.
+      const ABOVE_ANY_REAL = { TRACE_MCP_NODE_MIN_MAJOR: '99' };
+
+      it('skips a too-old default node and fails loudly rather than silently', () => {
+        const { home, traceHome } = setupFakeHome();
+        plantNvm(home, '20.11.0');
+
+        const { status, stderr } = runLauncher({
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          ...ABOVE_ANY_REAL,
+        });
+
+        expect(status).toBe(127);
+        expect(stderr).toContain('no Node.js >= 99 found');
+        // Nothing may be pinned: the next start must be free to find a good node.
+        expect(fs.existsSync(path.join(traceHome, 'launcher.env'))).toBe(false);
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8')).toContain('ERROR');
+      });
+
+      it('prefers a supported node over an older one found first', () => {
+        const { home, traceHome } = setupFakeHome();
+        // Volta is probed before the nvm tree, and here it holds the old node.
+        const volta = path.join(home, '.volta', 'bin');
+        fs.mkdirSync(volta, { recursive: true });
+        fs.writeFileSync(path.join(volta, 'node'), fakeNodeBody('18.20.0'), { mode: 0o755 });
+        const { node, cli } = plantNvm(home, '99.0.0');
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+          `TRACE_MCP_NODE="${node}"`,
+        );
+      });
+
+      it('re-probes when launcher.env already pins an unsupported node', () => {
+        const { home, traceHome, cli } = setupFakeHome();
+        const old = path.join(home, 'old-node');
+        fs.writeFileSync(old, fakeNodeBody('20.11.0'), { mode: 0o755 });
+        writeConfig(traceHome, old, cli);
+        const good = plantNvm(home, '99.0.0');
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).toContain(`TRACE_MCP_NODE="${good.node}"`);
+        expect(cfg).not.toContain(old);
+      });
+
+      // Review of #831: the two override env vars shared one flag, so setting
+      // only TRACE_MCP_CLI_OVERRIDE — a legitimate debugging move — carried the
+      // configured node straight past the gate.
+      it('a CLI-only override does not waive the gate for the configured node', () => {
+        const { home, traceHome, cli } = setupFakeHome();
+        const old = path.join(home, 'old-node');
+        fs.writeFileSync(old, fakeNodeBody('20.11.0'), { mode: 0o755 });
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          [
+            `TRACE_MCP_NODE="${old}"`,
+            `TRACE_MCP_CLI="${cli}"`,
+            'TRACE_MCP_NODE_MAJOR="20"',
+            '',
+          ].join('\n'),
+        );
+
+        const { status, stdout } = runLauncher(
+          {
+            HOME: home,
+            TRACE_MCP_HOME: traceHome,
+            TRACE_MCP_CLI_OVERRIDE: cli,
+            ...ABOVE_ANY_REAL,
+          },
+          ['serve'],
+        );
+
+        // Nothing supported to fall back to, so it must refuse — never exec the
+        // Node 20 the config named.
+        expect(status).toBe(127);
+        expect(stdout).not.toContain('NODE_ARGS:');
+      });
+
+      // Review of #831: a digits-only but overflowing cached major made bash
+      // arithmetic abort, so the `-lt` test failed and the gate failed OPEN.
+      it.each([
+        ['overflowing', '999999999999999999999999999999999999'],
+        ['non-numeric', 'twenty'],
+      ])('treats a %s cached major as missing and re-verifies', (_label, value) => {
+        const { home, traceHome, cli } = setupFakeHome();
+        const old = path.join(home, 'old-node');
+        fs.writeFileSync(old, fakeNodeBody('20.11.0'), { mode: 0o755 });
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          [
+            `TRACE_MCP_NODE="${old}"`,
+            `TRACE_MCP_CLI="${cli}"`,
+            `TRACE_MCP_NODE_MAJOR="${value}"`,
+            '',
+          ].join('\n'),
+        );
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        expect(status).toBe(127);
+        expect(stdout).not.toContain('NODE_ARGS:');
+      });
+
+      // Same hazard from the other direction: the minimum itself is env input.
+      it('falls back to the default minimum when the env override is garbage', () => {
+        const { home, traceHome, node, cli } = setupFakeHome();
+        writeConfig(traceHome, node, cli);
+
+        const { status, stdout } = runLauncher(
+          {
+            HOME: home,
+            TRACE_MCP_HOME: traceHome,
+            TRACE_MCP_NODE_MIN_MAJOR: '99999999999999999999',
+          },
+          ['serve'],
+        );
+
+        // Default minimum is 22 and the fake node reports 22 — it must run,
+        // not abort on an unusable comparison.
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+      });
+
+      // Review of #831: the gate's own heal path skipped the "never persist an
+      // override" rule, so verifying a legacy config under a temporary
+      // TRACE_MCP_CLI_OVERRIDE baked that throwaway path into launcher.env and
+      // every later start without the override used it.
+      it('does not persist a CLI override while verifying a legacy config', () => {
+        const { home, traceHome, node, cli } = setupFakeHome();
+        writeConfig(traceHome, node, cli); // legacy: no recorded major
+        const debugCli = path.join(home, 'debug-cli.js');
+        fs.writeFileSync(debugCli, '// throwaway\n');
+
+        const { status } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_CLI_OVERRIDE: debugCli },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).not.toContain(debugCli);
+        expect(cfg).toContain(`TRACE_MCP_CLI="${cli}"`);
+      });
+
+      it('caches the verified major so the next start spawns nothing extra', () => {
+        const { home, traceHome, node, cli } = setupFakeHome();
+        writeConfig(traceHome, node, cli); // legacy config: no recorded major
+
+        runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+          'TRACE_MCP_NODE_MAJOR="22"',
+        );
+        // Second start takes the fast path on the cached value alone.
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+      });
     });
 
     it('finds the package in a bundled runtime prefix recorded by a past install', () => {
@@ -368,7 +580,7 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     function plantPrefix(prefix: string): { node: string; cli: string } {
       fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
       const node = path.join(prefix, 'bin', 'node');
-      fs.writeFileSync(node, '#!/bin/bash\necho "NODE_ARGS:$*"\n', { mode: 0o755 });
+      fs.writeFileSync(node, fakeNodeBody('22.22.2'), { mode: 0o755 });
       const dist = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
       fs.mkdirSync(dist, { recursive: true });
       const cli = path.join(dist, 'cli.js');
@@ -383,6 +595,35 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       fs.writeFileSync(
         path.join(traceHome, 'pkg-roots'),
         `${path.join(prefix, 'lib', 'node_modules')}\n`,
+      );
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    // Review of #831: node_from_pkg_roots returned after the first executable
+    // it found. Combined with the version gate that let an old runtime in the
+    // first root mask a supported node recorded in a later one.
+    it('keeps looking past a too-old node in an earlier pkg-roots entry', () => {
+      const { home, traceHome } = setupFakeHome();
+      const oldPrefix = path.join(home, 'old-runtime', 'node');
+      fs.mkdirSync(path.join(oldPrefix, 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(oldPrefix, 'bin', 'node'), fakeNodeBody('20.11.0'), {
+        mode: 0o755,
+      });
+      fs.mkdirSync(path.join(oldPrefix, 'lib', 'node_modules'), { recursive: true });
+      const goodPrefix = path.join(home, 'new-runtime', 'node');
+      const { cli } = plantPrefix(goodPrefix);
+      fs.writeFileSync(
+        path.join(traceHome, 'pkg-roots'),
+        [
+          path.join(oldPrefix, 'lib', 'node_modules'),
+          path.join(goodPrefix, 'lib', 'node_modules'),
+          '',
+        ].join('\n'),
       );
       writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
 
@@ -435,7 +676,7 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     const { home, traceHome } = setupFakeHome();
     const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
     fs.mkdirSync(nvmBin, { recursive: true });
-    fs.writeFileSync(path.join(nvmBin, 'node'), '#!/bin/bash\necho "NVM_NODE:$*"\n', {
+    fs.writeFileSync(path.join(nvmBin, 'node'), fakeNodeBody('22.22.2', 'NVM_NODE'), {
       mode: 0o755,
     });
     fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
@@ -443,7 +684,7 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
 
     const bundled = path.join(home, '.hermes', 'node');
     fs.mkdirSync(path.join(bundled, 'bin'), { recursive: true });
-    fs.writeFileSync(path.join(bundled, 'bin', 'node'), '#!/bin/bash\necho "BUNDLED:$*"\n', {
+    fs.writeFileSync(path.join(bundled, 'bin', 'node'), fakeNodeBody('22.22.2', 'BUNDLED'), {
       mode: 0o755,
     });
     const dist = path.join(bundled, 'lib', 'node_modules', 'trace-mcp', 'dist');
