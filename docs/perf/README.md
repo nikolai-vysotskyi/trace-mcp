@@ -187,7 +187,7 @@ processes; worker *threads* are counted inside their host process's RSS by `ps`)
 `workload.tree_series` keeps every fifth sample, so the shape over the run survives in
 `baseline.json` without carrying 500 rows.
 
-The harness ([`packages/app/scripts/perf-measure.mjs`](../../packages/app/scripts/perf-measure.mjs))
+The harness ([`packages/app/scripts/perf-measure.mjs`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/packages/app/scripts/perf-measure.mjs))
 launches the built app against a throwaway `--user-data-dir`, drives it over CDP, and
 prints a ready-to-paste `runs[]` entry. `cold_start_ms` is process spawn → `#root` has
 painted real content; `window_interactive_ms` is the renderer's own share of that.
@@ -197,7 +197,7 @@ painted real content; `window_interactive_ms` is the renderer's own share of tha
 The three workload metrics are only comparable if the scenario is byte-identical
 between runs, so the harness does not improvise one. It checks this repo out into a
 detached git worktree at the commit pinned in
-[`packages/app/scripts/perf-fixture.json`](../../packages/app/scripts/perf-fixture.json),
+[`packages/app/scripts/perf-fixture.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/packages/app/scripts/perf-fixture.json),
 indexes it with this checkout's own `dist/cli.js`, registers it with the daemon, drives
 it, and unregisters it again at the end. The worktree lives at
 `~/.trace/perf-fixture/<commit12>` — deliberately outside any checkout, because the
