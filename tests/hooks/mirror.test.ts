@@ -46,8 +46,10 @@ function runMirror(
     }),
     env: { ...process.env, TRACE_MCP_MIRROR_HOME: home, ...env },
     encoding: 'utf-8',
-    timeout: 10_000,
+    timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
   });
+  expect(result.stderr).toBe('');
   expect(result.status).toBe(0);
 
   const stdout = result.stdout.trim();
@@ -138,6 +140,75 @@ describe('trace-mcp mirror hook', () => {
       expect(row.new_chars).toBeLessThan(row.orig_chars);
       expect(fs.existsSync(row.spill)).toBe(true);
     }
+  });
+
+  // Source code is full of lines that package-manager noise patterns match.
+  // Filtering a Read through them deletes code, silently.
+  it('never applies noise filtering to a Read', () => {
+    const code = [
+      ...Array.from({ length: 200 }, () => 'const spread = { ...a, ...b };'),
+      '@keyframes fade { 0% { opacity: 0 } 100% { opacity: 1 } }',
+      '  50% { opacity: 0.5 }',
+      '/** Resolving the target before use. */',
+      'const ellipsis = ...;',
+      'UNIQUE_TAIL_MARKER',
+    ].join('\n');
+    const { output } = runMirror('Read', readResponse(code));
+
+    expect(output).toContain('{ ...a, ...b }');
+    expect(output).toContain('50% { opacity: 0.5 }');
+    expect(output).toContain('Resolving the target before use.');
+    expect(output).toContain('const ellipsis = ...;');
+    expect(output).toContain('UNIQUE_TAIL_MARKER');
+  });
+
+  it('still strips package-manager progress noise from Bash', () => {
+    const noisy = [
+      ...Array.from({ length: 200 }, (_, i) => `Progress: resolved ${i}, reused 0`),
+      '⠋ installing',
+      'npm WARN deprecated foo@1.0.0',
+      'Added 12 packages',
+      'BUILD OK',
+    ].join('\n');
+    const { output } = runMirror('Bash', bashResponse(noisy));
+
+    expect(output).not.toContain('Progress: resolved');
+    expect(output).not.toContain('npm WARN');
+    expect(output).toContain('BUILD OK');
+  });
+
+  it('keeps a leading blank line instead of reporting it as a repeat', () => {
+    const withBlankFirst = `\n${Array.from({ length: 400 }, () => 'copying asset').join('\n')}\nEND`;
+    const { output } = runMirror('Bash', bashResponse(withBlankFirst));
+
+    expect(output!.startsWith('\n')).toBe(true);
+    expect(output).not.toMatch(/^\s*… previous line repeated/);
+    expect(output).toContain('previous line repeated 399 more time(s)');
+  });
+
+  // The footer costs ~120 chars. A saving smaller than that would make the
+  // rewrite bigger than the original.
+  it('does not inflate when the saving is smaller than the footer', () => {
+    const lines = Array.from({ length: 40 }, (_, i) => `x${i} ${'y'.repeat(60)}`);
+    lines.splice(5, 0, lines[4]); // exactly one collapsible duplicate
+    expect(runMirror('Bash', bashResponse(lines.join('\n'))).rewritten).toBe(false);
+  });
+
+  // Passing the rewrite through argv dies with E2BIG past ARG_MAX (1 MB on
+  // macOS). Few enough lines to escape the window, wide enough to exceed it --
+  // a minified bundle or a single huge JSON blob has exactly this shape.
+  it('survives a rewrite larger than the argv limit', () => {
+    const wide = Array.from({ length: 50 }, (_, i) => `line${i} ${'z'.repeat(30_000)}`);
+    wide.splice(10, 0, wide[9], wide[9]); // something to collapse, so it still shrinks
+    const huge = wide.join('\n');
+    expect(huge.length).toBeGreaterThan(1_048_576);
+
+    const { rewritten, output } = runMirror('Read', readResponse(huge));
+
+    expect(rewritten).toBe(true);
+    expect(output!.length).toBeGreaterThan(1_048_576);
+    expect(output).toContain('line0 ');
+    expect(output).toContain('line49 ');
   });
 
   it('reaps stale spills but keeps the current one', () => {

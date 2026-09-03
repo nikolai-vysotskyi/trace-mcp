@@ -40,13 +40,13 @@ KEEP_HEAD="${TRACE_MCP_MIRROR_KEEP_HEAD:-80}"
 KEEP_TAIL="${TRACE_MCP_MIRROR_KEEP_TAIL:-40}"
 HOME_DIR="${TRACE_MCP_MIRROR_HOME:-$HOME/.trace-mcp/mirror}"
 
-TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty')
+TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 case "$TOOL_NAME" in
   Read|Bash) ;;
   *) exit 0 ;;
 esac
 
-SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"')
+SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null)
 
 # The harness validates that updatedToolOutput matches the tool's own output
 # shape and silently discards a rewrite that does not ("PostToolUse hook
@@ -65,7 +65,7 @@ ORIGINAL=$(printf '%s' "$INPUT" | jq -r --arg p "$TEXT_PATH" '
   .tool_response
   | if type == "object" then getpath($p | ltrimstr(".") | split(".")) else empty end
   | if type == "string" then . else empty end
-')
+' 2>/dev/null)
 [ -z "$ORIGINAL" ] && exit 0
 
 ORIG_CHARS=${#ORIGINAL}
@@ -80,16 +80,29 @@ find "$HOME_DIR" -name '*.txt' -type f -mtime +1 -delete 2>/dev/null
 SPILL="$SPILL_DIR/$(date +%s)-$$.txt"
 printf '%s' "$ORIGINAL" >"$SPILL" 2>/dev/null || exit 0
 
-# --- step 1+2: collapse identical runs, drop progress noise -------------------
-# NOISE_RE is intentionally conservative: only lines that carry no information a
-# later turn could need. Anything ambiguous stays.
-NOISE_RE='^[[:space:]]*(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏|[0-9]+%|Progress:|Downloading|Fetching|Resolving|Reused |Added [0-9]+ package|Packages: |Progress: resolved|npm (WARN|notice) |[.]{3,})'
+# --- step 1: drop progress noise (Bash only) ---------------------------------
+# NOISE_RE only ever runs against a shell command's output. It must never touch
+# a Read, because source code is full of lines these patterns would match --
+# `...spread`, a `50% {` keyframe selector, a docstring beginning "Resolving".
+# Filtering source through package-manager heuristics silently deletes code.
+# For the same reason the patterns anchor on progress-bar and package-manager
+# shapes rather than on leading words alone.
+NOISE_RE='^[[:space:]]*(⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)|^[[:space:]]*[0-9]+%[[:space:]]*[[|]|^(Progress: resolved|Packages: |Reused [0-9]|Added [0-9]+ package|npm (WARN|notice) )'
 
-COMPRESSED=$(printf '%s\n' "$ORIGINAL" \
-  | grep -Ev "$NOISE_RE" \
+if [ "$TOOL_NAME" = "Bash" ]; then
+  DENOISED=$(printf '%s\n' "$ORIGINAL" | grep -Ev "$NOISE_RE")
+else
+  DENOISED=$(printf '%s\n' "$ORIGINAL")
+fi
+
+# --- step 2: collapse identical runs -----------------------------------------
+# NR == 1 is handled on its own: awk's uninitialised `prev` is "", so a leading
+# blank line would otherwise be swallowed and reported as a repeat.
+COMPRESSED=$(printf '%s' "$DENOISED" \
   | awk '
-      { if ($0 == prev) { n++; next }
-        if (n > 0) { printf "  … previous line repeated %d more time(s)\n", n; n = 0 }
+      NR == 1 { prev = $0; print; next }
+      $0 == prev { n++; next }
+      { if (n > 0) { printf "  … previous line repeated %d more time(s)\n", n; n = 0 }
         print; prev = $0 }
       END { if (n > 0) printf "  … previous line repeated %d more time(s)\n", n }
     ')
@@ -105,15 +118,18 @@ if [ "$TOTAL_LINES" -gt "$WINDOW" ]; then
 fi
 
 NEW_CHARS=${#COMPRESSED}
-# A rewrite that does not actually shrink the payload is pure risk. Bail out.
-if [ "$NEW_CHARS" -ge "$ORIG_CHARS" ]; then
-  rm -f "$SPILL"
-  exit 0
-fi
-
 SAVED_PCT=$(( (ORIG_CHARS - NEW_CHARS) * 100 / ORIG_CHARS ))
 FOOTER=$(printf '\n[trace-mcp mirror] %s output compressed %d → %d chars (−%d%%). Full output: %s' \
   "$TOOL_NAME" "$ORIG_CHARS" "$NEW_CHARS" "$SAVED_PCT" "$SPILL")
+FINAL="$COMPRESSED$FOOTER"
+
+# A rewrite that does not actually shrink the payload is pure risk. The footer
+# costs ~120 chars, so a saving smaller than that would inflate the result --
+# measure what the model will actually receive, not the compressed body alone.
+if [ "${#FINAL}" -ge "$ORIG_CHARS" ]; then
+  rm -f "$SPILL"
+  exit 0
+fi
 
 # --- measurement log ---------------------------------------------------------
 printf '%s\n' "$(jq -nc \
@@ -122,12 +138,18 @@ printf '%s\n' "$(jq -nc \
   '{ts: (now|todate), session: $s, tool: $t, orig_chars: $o, new_chars: $n, spill: $f}')" \
   >>"$HOME_DIR/metrics.jsonl" 2>/dev/null
 
+# The rewritten text goes to jq through a file, not through argv: a large Read
+# would otherwise blow MAX_ARG_STRLEN and kill the hook with E2BIG.
+FINAL_FILE="$SPILL.compressed"
+printf '%s' "$FINAL" >"$FINAL_FILE" 2>/dev/null || exit 0
+trap 'rm -f "$FINAL_FILE"' EXIT
+
 printf '%s' "$INPUT" | jq -c \
-  --arg p "$TEXT_PATH" --arg out "$COMPRESSED$FOOTER" '
+  --arg p "$TEXT_PATH" --rawfile out "$FINAL_FILE" '
   ($p | ltrimstr(".") | split(".")) as $path
   | (.tool_response | setpath($path; $out)) as $resp
   | (if ($resp | has("file")) then
        $resp | .file.numLines = ($out | split("\n") | length)
      else $resp end) as $resp
   | {hookSpecificOutput: {hookEventName: "PostToolUse", updatedToolOutput: $resp}}
-'
+' 2>/dev/null

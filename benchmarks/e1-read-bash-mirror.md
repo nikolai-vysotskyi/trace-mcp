@@ -66,11 +66,16 @@ is the only thing that catches it — the failure mode is invisible by eye.
 
 1. spill the full result to `~/.trace-mcp/mirror/<session>/`, referenced by
    path in the compressed view so the agent can pull it back;
-2. drop build/install progress noise (spinners, percentages, `Progress:`,
-   `Downloading`, npm notices);
+2. **Bash only** — drop package-manager progress noise (spinners, progress
+   bars, `Progress: resolved`, npm notices);
 3. collapse runs of identical lines into `… previous line repeated N more time(s)`;
 4. head/tail window (80/40 lines) whatever is still oversized;
-5. bail out unchanged if the result would not actually shrink.
+5. bail out unchanged if the rewrite, footer included, would not shrink.
+
+Noise filtering never runs on a `Read`. Source code is full of lines those
+patterns match — `...spread`, a `50% {` keyframe selector, a docstring that
+begins "Resolving" — and filtering source through package-manager heuristics
+deletes code silently. Spills older than a day are reaped on each write.
 
 Outputs under 2000 chars pass through untouched. Every rewrite appends a row to
 `metrics.jsonl` (`orig_chars`, `new_chars`, `spill`), so compression and call
@@ -86,7 +91,7 @@ is not justified until the deterministic pass is shown to be the bottleneck.
 
 | tool | orig | compressed | saving | reached the model? |
 |---|---|---|---|---|
-| `Read` (30 KB) | 30140 | 2391 | −92% | yes, mirror note quoted verbatim |
+| `Read` (30 KB) | 30140 | 2459 | −91% | yes, mirror note quoted verbatim |
 | `Bash` (3.9 KB) | 3952 | 1212 | −69% | yes |
 | `Bash` (30 KB) | 30000 | 2371 | −92% | **no** — superseded, see below |
 
