@@ -15,7 +15,7 @@ layout: null
        155 characters, and the previous wording shared its first 133 with the old
        one, so the number was cut mid-word in the snippet. The 155-char cut now
        lands after "we don't own". -->
-  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
+  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -79,14 +79,14 @@ layout: null
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
     "applicationSubCategory": "Code Intelligence",
     "operatingSystem": "macOS, Linux, Windows",
     "softwareRequirements": "Node.js 20+",
-    "downloadUrl": "https://www.npmjs.com/package/trace-mcp",
+    "downloadUrl": "https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest",
     "installUrl": "https://www.npmjs.com/package/trace-mcp",
     "codeRepository": "https://github.com/nikolai-vysotskyi/trace-mcp",
     "programmingLanguage": "TypeScript",
@@ -109,7 +109,7 @@ layout: null
     },
     "featureList": [
       "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
-      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
+      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
@@ -521,15 +521,16 @@ layout: null
     .btn:hover .arrow { transform: translateX(3px); }
 
     /* ── Hero ── */
+    /* Centred, four elements deep (TRA-738). The asymmetric left-aligned stack this
+       replaces is the composition §2.7 prefers, and it is the wrong one for a first
+       screen whose whole job is one sentence and one button — with nothing in the
+       right half to balance it, the page read as a paragraph the visitor had to
+       finish before finding the download. */
     .hero {
-      padding: 128px 0 80px;
+      padding: 112px 0 64px;
       position: relative;
+      text-align: center;
     }
-    .hero-meta {
-      display: flex; align-items: center; gap: 16px;
-      margin-bottom: 56px;
-    }
-    .hero-meta .divider { flex: 1; height: 1px; background: var(--border-visible); }
     .hero-headline {
       font-family: var(--font-body);
       /* 60/900 is the pair that breaks this headline after "intelligence" and
@@ -541,10 +542,11 @@ layout: null
       letter-spacing: -0.025em;
       color: var(--text-display);
       max-width: 900px;
+      margin: 0 auto;
       overflow-wrap: break-word;
     }
     .hero-desc {
-      margin-top: 28px;
+      margin: 28px auto 0;
       max-width: 660px;
       font-size: 19px;
       line-height: 1.55;
@@ -554,17 +556,47 @@ layout: null
     /* The payoff half of the subtitle separates on colour, not weight — a second
        weight here would spend a budget slot on what one shade already says. */
     .hero-desc .accent-text { color: var(--text-display); }
-    .hero-cta {
-      margin-top: 56px;
-      display: flex; gap: 12px; flex-wrap: wrap;
-      align-items: center;
+    /* The three mono caps rows of the hero — eyebrow above the headline, the
+       alternative platforms under the button, the trust line at the fold — are one
+       treatment at three opacities, not three components. Only the distance from the
+       button and the grey level separate them. */
+    .hero-eyebrow, .hero-alt, .hero-trust {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: flex; flex-wrap: wrap; gap: 12px;
+      align-items: center; justify-content: center;
     }
-    /* The second install path, and the only one off macOS. A technical 8px box,
-       not a pill: it reads as a terminal line, and the pill next to it is the
-       one thing on this row that should read as a button. */
+    .hero-eyebrow .dot, .hero-alt .dot, .hero-trust .dot {
+      width: 3px; height: 3px; border-radius: 50%;
+      background: var(--border-visible);
+      display: inline-block;
+    }
+    .hero-eyebrow { color: var(--text-secondary); margin-bottom: 40px; }
+    .hero-alt { color: var(--text-secondary); margin-top: 20px; }
+    .hero-alt a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .hero-alt a:hover { color: var(--text-display); border-color: var(--text-display); }
+    /* At the fold, a step quieter than the row above it: it is reassurance the visitor
+       reads after deciding, not part of the decision. */
+    .hero-trust { color: var(--text-disabled); margin-top: 40px; }
+    .hero-cta {
+      margin-top: 44px;
+      display: flex; gap: 12px;
+      justify-content: center;
+    }
+    /* The second install path, and the only one off macOS and Windows. A technical 8px
+       box, not a pill, and a full row below the button rather than beside it: side by
+       side the two read as two buttons of equal weight, which is what this hero keeps
+       being pulled back into. */
     .hero-install {
+      margin-top: 24px;
       display: inline-flex; align-items: center; gap: 14px;
-      min-height: 56px;
+      min-height: 52px;
       padding: 0 20px;
       background: var(--surface);
       border: 1px solid var(--border-visible);
@@ -577,7 +609,7 @@ layout: null
       transition: border-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .hero-install:hover { border-color: var(--text-display); }
-    /* Off macOS the DMG button is removed and this is the hero's only action. */
+    /* Off macOS and Windows the button is removed and this is the hero's only action. */
     .hero-install.is-primary { border-color: var(--text-display); }
     .hero-install .prompt { color: var(--text-secondary); }
     .hero-install code { color: var(--text-display); font-size: inherit; }
@@ -595,82 +627,27 @@ layout: null
       color: var(--text-secondary);
     }
     .hero-install:hover .copy { color: var(--text-display); }
-    .hero-alt-arch {
-      margin-top: 14px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .hero-alt-arch a {
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--border-visible);
-      transition: color 200ms ease-out, border-color 200ms ease-out;
-    }
-    .hero-alt-arch a:hover { color: var(--text-display); border-color: var(--text-display); }
-    .hero-trust {
-      /* Far enough from the architecture link above that the two mono caps rows
-         do not read as one paragraph. */
-      margin-top: 28px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      display: flex; flex-wrap: wrap; gap: 10px;
-      align-items: center;
-    }
-    .hero-trust .dot {
-      width: 3px; height: 3px; border-radius: 50%;
-      background: var(--border-visible);
-      display: inline-block;
-    }
-    .hero-trust .ok {
-      color: var(--text-display);
-      font-weight: 500;
-    }
     @media (max-width: 700px) {
-      .hero { padding: 88px 0 40px; }
-      .hero-meta { margin-bottom: 28px; }
+      .hero { padding: 64px 0 40px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
-      /* One column, both full width: on a phone the two actions stack rather
-         than compete for a row 390px wide. The install line used to be
-         display:none here, which left a phone with no copyable command at all. */
-      .hero-cta { margin-top: 28px; gap: 10px; flex-direction: column; align-items: stretch; }
-      .hero-cta .btn { padding: 14px 22px; font-size: 11px; justify-content: center; }
-      .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
-      .hero-alt-arch { font-size: 11px; margin-top: 12px; }
-      /* One item per line, no dots. As a wrapped row a separator ends a line at
-         every tested width from 660px down — measured, not assumed: the last box
-         on the first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320.
-         Stacking removes that at a cost of 20px at 390px (58px → 78px), all of
-         it below the two actions. */
-      .hero-trust {
-        font-size: 11px;
-        margin-top: 14px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
-      }
-      .hero-trust .dot { display: none; }
-      /* Stacked, the row's one emphasised item stops reading as the strongest of
-         three peers and starts reading as a heading over the two below it — a
-         hierarchy that is not there. Inline (≥700px) the emphasis still works,
-         so it is dropped here only. */
-      .hero-trust .ok { color: inherit; font-weight: inherit; }
-      /* Both labels on their own line rather than two columns fighting over 390px.
-         The row stops fitting at 520px (17px → 33px) and takes three lines at
-         320px; the divider has no width left to draw by then, so it goes. This
-         reuses the hero's 700px breakpoint instead of adding a second one 180px
-         away — the cost is 17px of height between 520px and 700px. */
-      .hero-meta {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
-      }
-      .hero-meta .divider { display: none; }
+      /* Full width, one button: on a phone the download is a target, not a pill
+         floating in the middle of a 390px row. */
+      .hero-cta { margin-top: 28px; }
+      .hero-cta .btn { flex: 1; padding: 16px 22px; font-size: 11px; justify-content: center; }
+      /* `width: 100%` and not `display: flex` alone — a <button> sizes to its content
+         even as a flex container, so without it the box stops 76px short of the
+         full-width button above it (measured at 390px: 274 vs 350). */
+      .hero-install { display: flex; width: 100%; margin-top: 16px; font-size: 12px; padding: 0 14px; gap: 10px; }
+      /* Wrapped, a mono caps row ends a line on a `.dot` at every tested width below
+         the breakpoint (TRA-607), so on a phone these stay rows but lose their
+         separators and tighten up. The eyebrow and the trust line still fit two
+         items per line at 390px; only the dots have to go. */
+      .hero-eyebrow, .hero-alt, .hero-trust { font-size: 11px; gap: 10px 14px; }
+      .hero-eyebrow { margin-bottom: 24px; }
+      .hero-alt { margin-top: 16px; }
+      .hero-trust { margin-top: 28px; }
+      .hero-eyebrow .dot, .hero-alt .dot, .hero-trust .dot { display: none; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
@@ -2088,57 +2065,76 @@ layout: null
   <section class="hero" style="border-top: none;">
     <div class="container">
 
-      <div class="hero-meta">
-        <span class="label">/ Recomputation &rarr; Reuse · AI Execution Layer</span>
-        <span class="divider"></span>
-        <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
-      </div>
+      <!-- Centred, one column, and this order (TRA-738, to Nikolai's mock): eyebrow →
+           headline → one line of what it is → one button → the two quiet rows →
+           the trust line at the fold. It replaces eight left-aligned blocks: a service
+           label, a version/licence row, a two-sentence description, two actions of
+           different natures, an alt-architecture link and a three-item trust row.
+           The eyebrow is the old service label and the old version/licence row folded
+           into the single line the mock has. -->
+      <p class="hero-eyebrow">
+        <span>Recomputation &rarr; Reuse</span>
+        <span class="dot"></span>
+        <span>v<span data-version>&hellip;</span></span>
+        <span class="dot"></span>
+        <span>MIT</span>
+      </p>
 
       <h1 class="hero-headline">
         Precomputed code intelligence for AI coding agents
       </h1>
 
+      <!-- Same verbatim wording as README.md's first screen and as the metrics tile
+           below: two paraphrases of one number read as two claims to anything
+           extracting them. -->
       <p class="hero-desc">
-        trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
-        <!-- Same verbatim claim wording as the metrics tile below: two paraphrases
-             of one number read as two claims to anything extracting them. -->
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, 100% local.</span>
+        trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash;
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request.</span>
       </p>
 
-      <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
-           same thing without one. The two buttons that used to sit here both had a
-           second home already — the header links to the repo and to #install, which
-           is where "Analyze your AI system" pointed. Both survive on a phone. -->
       <div class="hero-cta">
         <!-- Rendered for everyone and pointed at the releases page, not hidden behind
              JS (TRA-440): a visitor without JavaScript gets a button that works, one
-             click further from the file. detectMac() below removes it off macOS and
-             rewrites the href to the DMG for the architecture it detects. -->
+             click further from the file. resolveDownload() below narrows it to a single
+             file and names the exact platform and architecture it found. -->
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"
            rel="noopener" class="btn btn-primary btn-lg" data-dmg>
-          Download for macOS <span class="arrow">&darr;</span>
+          <span data-dmg-label>Download</span> <span class="arrow">&darr;</span>
         </a>
-        <!-- A real <button>, not the <span onclick> this used to be: the only way to
-             copy the install command was a mouse click, and it took no focus ring. -->
-        <button type="button" class="hero-install" onclick="copyInstall(this)">
-          <span class="prompt" aria-hidden="true">$</span>
-          <code>npm install -g trace-mcp</code>
-          <span class="copy" aria-live="polite">copy</span>
-        </button>
       </div>
 
-      <!-- The other architecture stays a quiet link, never a question the visitor has
-           to answer before downloading (TRA-440). Shown only once JS knows the Mac. -->
-      <p class="hero-alt-arch" data-dmg-alt hidden>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-dmg-other></a>
+      <!-- The platforms the button is not offering, as links rather than a question in
+           front of it (TRA-440). JS rewrites both labels and both hrefs to the files
+           the detected machine is not getting; without JS they are honest generic
+           links to the releases page. -->
+      <p class="hero-alt">
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-alt-1>macOS</a>
+        <span class="dot"></span>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-alt-2>Windows</a>
+        <span class="dot"></span>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener">all downloads</a>
       </p>
 
+      <!-- A real <button>, not the <span onclick> this used to be: the only way to
+           copy the install command was a mouse click, and it took no focus ring. -->
+      <button type="button" class="hero-install" onclick="copyInstall(this)">
+        <span class="prompt" aria-hidden="true">$</span>
+        <code>npm install -g trace-mcp</code>
+        <span class="copy" aria-live="polite">copy</span>
+      </button>
+
       <p class="hero-trust">
-        <span class="ok">Open source (MIT)</span>
+        <span>Open source</span>
         <span class="dot"></span>
-        <span>Local-first</span>
+        <span>100% local</span>
         <span class="dot"></span>
-        <span>Works with Claude Code, Cursor, Windsurf, Codex</span>
+        <span>Claude Code</span>
+        <span class="dot"></span>
+        <span>Cursor</span>
+        <span class="dot"></span>
+        <span>Codex</span>
+        <span class="dot"></span>
+        <span>Windsurf</span>
       </p>
 
     </div>
@@ -3082,26 +3078,36 @@ layout: null
       });
   })();
 
-  // Resolve the macOS download (TRA-440). The button ships pointing at the
-  // releases page so it works without JS; everything here only ever narrows it
-  // to one file, or removes it on a machine that cannot run a .dmg.
-  (function macDownload() {
+  // Resolve the download for the visitor's machine (TRA-440, TRA-738). The button
+  // ships labelled "Download" and pointing at the releases page so it works without
+  // JS; everything here only ever narrows it to one file and names the platform, or
+  // removes it on a machine that has no installer to offer.
+  (function resolveDownload() {
     const btn = document.querySelector('[data-dmg]');
-    const altBox = document.querySelector('[data-dmg-alt]');
-    const altLink = document.querySelector('[data-dmg-other]');
+    const btnLabel = document.querySelector('[data-dmg-label]');
     if (!btn) return;
 
     // iPadOS reports "MacIntel" too, and has no use for a .dmg — the touch-point
     // count is what separates it from a real Mac.
     const isMac = /Mac/i.test(navigator.platform || navigator.userAgent) && navigator.maxTouchPoints <= 1;
-    if (!isMac) {
+    const isWin = /Win/i.test(navigator.platform || navigator.userAgent);
+    const alt1 = document.querySelector('[data-alt-1]');
+    const alt2 = document.querySelector('[data-alt-2]');
+    if (!isMac && !isWin) {
+      // Linux, and anything else the release has no installer for: the npm box below
+      // is the whole install path there, so it becomes the hero's primary action. A
+      // button to a releases page full of .dmg and .exe is not an offer.
       btn.remove();
-      // Leaves the hero without a primary action otherwise. The install command
-      // is the right one to promote here: it is the only path that works off a Mac.
       const install = document.querySelector('.hero-install');
       if (install) install.classList.add('is-primary');
       return;
     }
+
+    // The platform is known synchronously, so name it now and let the release fetch
+    // append only " (Apple Silicon)" later. Waiting for the network to write the whole
+    // label shifted a centred button from "Download" to "Download for Mac (Apple
+    // Silicon)" — roughly double the width, at the top of the screen, on a delay.
+    if (btnLabel) btnLabel.textContent = isWin ? 'Download for Windows' : 'Download for Mac';
 
     // ponytail: arm64 unless something positively says Intel. Apple stopped
     // selling Intel Macs in 2023, and an inconclusive guess that sends an Apple
@@ -3127,31 +3133,44 @@ layout: null
       return 'arm64';
     };
 
-    const label = { arm64: 'Apple Silicon', x64: 'Intel' };
-
     Promise.all([
-      detectArch(),
+      isMac ? detectArch() : Promise.resolve('x64'),
       fetch('https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest')
         .then(r => r.ok ? r.json() : Promise.reject())
     ]).then(([arch, release]) => {
-      // Asset names carry the version (trace-mcp-<version>-arm64.dmg), so there is no
-      // version-free permalink to hardcode — match on the suffix instead and let
-      // the release be the only place a version number exists.
-      const dmg = (a) => (release.assets || []).find(x => x.name.endsWith('-' + a + '.dmg'));
-      const mine = dmg(arch);
-      const other = arch === 'arm64' ? 'x64' : 'arm64';
-      const theirs = dmg(other);
-      if (!mine) return; // No DMG in the latest release: leave the releases-page fallback.
+      // Asset names carry the version (trace-mcp-<version>-arm64.dmg,
+      // trace-mcp.Setup.<version>.exe), so there is no version-free permalink to
+      // hardcode — match on the shape instead and let the release be the only place
+      // a version number exists.
+      const assets = release.assets || [];
+      const dmg = (a) => assets.find(x => x.name.endsWith('-' + a + '.dmg'));
+      const exe = () => assets.find(x => /\.exe$/i.test(x.name));
+      const mine = isWin ? exe() : dmg(arch);
+      if (!mine) return; // Nothing for this platform in the latest release: leave the fallback.
 
       btn.href = mine.browser_download_url;
       btn.setAttribute('download', '');
       btn.title = mine.name;
-      if (theirs && altLink && altBox) {
-        altLink.href = theirs.browser_download_url;
-        altLink.setAttribute('download', '');
-        altLink.textContent = label[other] + ' Mac?';
-        altBox.hidden = false;
+      // Only the architecture is appended here — the platform half of the label was
+      // written synchronously above, so this adds ~15 characters rather than swapping
+      // the whole label once the network answers.
+      if (btnLabel && !isWin) {
+        btnLabel.textContent = 'Download for Mac (' + (arch === 'arm64' ? 'Apple Silicon' : 'Intel') + ')';
       }
+
+      // The two platforms the button is not offering, in the row below it.
+      const others = isWin
+        ? [['Mac (Apple Silicon)', dmg('arm64')], ['Mac (Intel)', dmg('x64')]]
+        : [[arch === 'arm64' ? 'Intel Mac' : 'Apple Silicon Mac', dmg(arch === 'arm64' ? 'x64' : 'arm64')],
+           ['Windows', exe()]];
+      [alt1, alt2].forEach((el, i) => {
+        const [label, asset] = others[i];
+        if (!el || !asset) return;
+        el.textContent = label;
+        el.href = asset.browser_download_url;
+        el.setAttribute('download', '');
+        el.title = asset.name;
+      });
     }).catch(() => {}); // Rate-limited or offline: the releases-page href still works.
   })();
 

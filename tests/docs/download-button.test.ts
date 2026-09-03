@@ -38,11 +38,32 @@ describe('docs landing page — macOS download button', () => {
     expect(html).not.toMatch(/trace-mcp-\d+\.\d+\.\d+[-\w]*\.(dmg|zip)/);
   });
 
-  it('offers the other architecture as a link rather than a required choice', () => {
-    expect(html).toMatch(/\bdata-dmg-other\b/);
-    // Hidden until JS confirms a Mac and finds the asset — an empty link is worse
-    // than none.
-    expect(html).toMatch(/<p class="hero-alt-arch"[^>]*\bhidden\b/);
+  it('offers the other platforms under the button, not as a choice in front of it', () => {
+    // The alternatives are a quiet row below the single button (TRA-738), and they
+    // are links, so a visitor without JS still reaches every build.
+    const alt = html.match(/<p class="hero-alt">[\s\S]*?<\/p>/)?.[0];
+    expect(alt, 'no .hero-alt row in docs/index.html').toBeDefined();
+    expect(alt!).toMatch(/data-alt-1/);
+    expect(alt!).toMatch(/data-alt-2/);
+    expect(alt!).toMatch(/all downloads/);
+    // Every one of them points somewhere real without JavaScript.
+    expect(alt!.match(/href="https:\/\/github\.com[^"]+"/g)?.length).toBe(3);
+  });
+
+  it('resolves a Windows installer too, not only a DMG (TRA-738)', () => {
+    // `btn.remove()` on every non-Mac left Windows visitors with no button at all,
+    // while the release has shipped an .exe since v3.14.0.
+    expect(html).toMatch(/const isWin = /);
+    expect(html).toMatch(/\\\.exe\$/);
+    expect(html).toMatch(/Download for Windows/);
+  });
+
+  it('names the architecture on the button, not just the platform', () => {
+    // "Download for macOS" sends an Intel Mac a file it cannot tell apart from the
+    // arm64 one until it has downloaded it.
+    expect(html).toMatch(/Download for Mac \(/);
+    expect(html).toMatch(/Apple Silicon/);
+    expect(html).toMatch(/Intel/);
   });
 
   it('defaults to arm64 when architecture detection is inconclusive', () => {
