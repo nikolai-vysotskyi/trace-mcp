@@ -236,27 +236,69 @@ export interface InstallLauncherOpts {
   force?: boolean;
 }
 
+/** Header line every shim we ship carries — `# trace-mcp-launcher v0.4.0`. */
+const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
+
+/** True only for a shim this project wrote, so we never clobber a user's file. */
+function isOwnedShim(file: string): boolean {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      fs.readSync(fd, buf, 0, 256, 0);
+      return LAUNCHER_HEADER_RE.test(buf.toString('utf-8'));
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Preserve `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) as a
- * symlink to the new `~/.trace/bin/trace` shim, so a client or script still
- * pointed at the pre-TRA-611 absolute path keeps working after the rename.
- * Gated on LEGACY_MIGRATION_MARKER (a durable file left in the new home the
- * moment the rename succeeds) rather than the one-shot
- * TRACE_MCP_HOME_MIGRATED flag: that flag is only true for the single process
- * that performed the rename, so a symlink failure there (permissions,
- * dry-run) would otherwise never get a second chance. The marker survives
- * restarts, so every later `trace init`/`upgrade` retries until it succeeds.
+ * Keep `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) pointing at the
+ * current `~/.trace/bin/trace` shim, so a client still registered at the
+ * pre-TRA-611 absolute path keeps working after the rename.
+ *
+ * The legacy path must be a *symlink*, not a copy. A pre-rename install left a
+ * real shim file there, and `installLauncher` only ever writes into the current
+ * launcher dir — so a client spawning the legacy path stayed frozen on whatever
+ * launcher version happened to be on disk at migration time, and no later
+ * launcher fix could reach it (TRA-716). Replacing that stale file with a
+ * symlink is what makes the legacy path track every future upgrade.
+ *
+ * Acts when either signal says a legacy path may still be registered:
+ * LEGACY_MIGRATION_MARKER (a durable file left in the new home the moment the
+ * rename succeeds — durable rather than the one-shot TRACE_MCP_HOME_MIGRATED
+ * flag, so a failure here gets retried by every later `trace init`), or a
+ * surviving `~/.trace-mcp/bin` directory, which only a pre-rename install has.
+ * Without either we create nothing: a fresh install has no legacy path to
+ * preserve, and inventing one would just be litter.
  */
 function installLegacyBinCompat(): void {
-  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
   const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  // When the legacy home *is* the launcher home, the real shim already lives at
+  // this path; symlinking it would point it at itself.
+  if (path.resolve(legacyPath) === path.resolve(getLauncherPath())) return;
   try {
-    if (isSymlink(legacyPath) || fs.existsSync(legacyPath)) return;
+    if (isSymlink(legacyPath)) return; // already delegating to the current shim
+    const exists = fs.existsSync(legacyPath);
+    if (
+      !exists &&
+      !fs.existsSync(legacyDir) &&
+      !fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))
+    ) {
+      return;
+    }
+    if (exists) {
+      if (!isOwnedShim(legacyPath)) return;
+      fs.unlinkSync(legacyPath);
+    }
     ensureDir(legacyDir);
     fs.symlinkSync(getLauncherPath(), legacyPath);
   } catch {
-    /* best-effort — the durable marker means the next `trace init` retries */
+    /* best-effort — the durable signals mean the next `trace init` retries */
   }
 }
 
