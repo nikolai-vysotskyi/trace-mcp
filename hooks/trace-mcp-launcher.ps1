@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.4.0 (Windows)
+# trace-mcp-launcher v0.5.0 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -143,6 +143,20 @@ function Get-NodeCandidates {
 function Find-Node {
     $candidates = @(Get-NodeCandidates)
     if ($candidates.Count -gt 0) { return $candidates[0] }
+    # Last resort: node shipped inside a prefix we only know about because our
+    # package lives there - a bundled runtime, or a corporate
+    # `npm config set prefix`. Get-PkgRoots already enumerates those roots for
+    # the cli.js lookup; the node beside one of them is the pair
+    # `trace-mcp init` recorded. Without this a machine whose ONLY node is such
+    # a runtime dies with "node binary not found" while a working node.exe and
+    # cli.js sit on disk.
+    foreach ($r in @(Get-PkgRoots $null)) {
+        # <prefix>\node_modules and <prefix>\lib\node_modules are both in use.
+        foreach ($rel in @('..\node.exe', '..\..\node.exe')) {
+            $c = Join-Path $r $rel
+            if (Test-NodeBinary $c) { return (Resolve-Path -LiteralPath $c).Path }
+        }
+    }
     return $null
 }
 
