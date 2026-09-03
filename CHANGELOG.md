@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.15.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.14.0...v3.15.0) (2026-09-03)
+
+
+### Features
+
+* **app:** detect a second installed trace-mcp.app bundle (TRA-692) ([#798](https://github.com/nikolai-vysotskyi/trace-mcp/issues/798)) ([04cfd79](https://github.com/nikolai-vysotskyi/trace-mcp/commit/04cfd797a8e7192e2263c4bc8c4b68787ecd0a2c))
+* **app:** surface a second installed app copy in the app menu (TRA-692) ([d4c3f25](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4c3f252e1ed1f294e87fbbd7bc79e619f0b0f8d))
+* **app:** WindowTabBar becomes a real tab bar (TRA-700) ([#807](https://github.com/nikolai-vysotskyi/trace-mcp/issues/807)) ([e996dc2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e996dc261bdda77395ff07bd97b4f5a45a3dc957))
+* **guard:** guard v2 — intervene only where the win is measured (TRA-711) ([#810](https://github.com/nikolai-vysotskyi/trace-mcp/issues/810)) ([f80bedd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f80beddb4d1d5c5a39f252f46b0418c2cd2b143a))
+* **hooks:** Read/Bash output mirror prototype (TRA-725, E1') ([#815](https://github.com/nikolai-vysotskyi/trace-mcp/issues/815)) ([40d5b32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/40d5b327d716bb907b04acc4b8bff6a15e130034))
+* **plugins:** add Agent Plugins v1.0.0 root manifest and MCP config (TRA-634) ([#791](https://github.com/nikolai-vysotskyi/trace-mcp/issues/791)) ([ea5c285](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ea5c28591b991b6b30ed34448156ce1d72ba7db5))
+
+
+### Bug Fixes
+
+* **analytics:** keep session ingestion current and make staleness visible (TRA-695) ([#802](https://github.com/nikolai-vysotskyi/trace-mcp/issues/802)) ([26ae439](https://github.com/nikolai-vysotskyi/trace-mcp/commit/26ae439d0d9c4da09637e5a7195c2d1bfd1dbf90))
+* collect ~/.trace-mcp state that nothing ever swept (TRA-702) ([#804](https://github.com/nikolai-vysotskyi/trace-mcp/issues/804)) ([fc4d12e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fc4d12e46e39095f96a625c9720c307d7bb305ae))
+* **daemon:** name the dropped dangerous root instead of re-asking for a hint (TRA-720) ([#814](https://github.com/nikolai-vysotskyi/trace-mcp/issues/814)) ([f1b0ec9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f1b0ec988319db3eda42db2c61b2e80917dc66af))
+* **daemon:** report cleanup-tier failures on project removal (TRA-559) ([#797](https://github.com/nikolai-vysotskyi/trace-mcp/issues/797)) ([17a3f12](https://github.com/nikolai-vysotskyi/trace-mcp/commit/17a3f1229ee4e0196e647f0807c222a4a944cd9e))
+* **hooks:** strip CRLF from mirror hook output on Windows (TRA-743) ([#822](https://github.com/nikolai-vysotskyi/trace-mcp/issues/822)) ([cb03a86](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cb03a86be59ae6291fd18313b20123a8329e6e4e))
+* **indexer:** stop mangling hyphenated CMake targets and add_subdirectory edges (TRA-622) ([#750](https://github.com/nikolai-vysotskyi/trace-mcp/issues/750)) ([d7667ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d7667ba868132060f457bebd26267b6df36fbf17))
+* **launcher:** resolve cli.js independently of the selected node (TRA-701) ([#806](https://github.com/nikolai-vysotskyi/trace-mcp/issues/806)) ([e9df75d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e9df75d0aaf18efe006084c7691a9b533506f196))
+* **launcher:** stop the legacy bin path freezing at its install-time shim (TRA-716) ([#809](https://github.com/nikolai-vysotskyi/trace-mcp/issues/809)) ([2a37a19](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a37a192600fa2ff77a8a6bbad79a6f165f8ee04))
+* **migration:** copy files byte-for-byte, not through a UTF-8 string (TRA-732) ([#816](https://github.com/nikolai-vysotskyi/trace-mcp/issues/816)) ([a4897c8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a4897c81a2787e4385a3f66cccee893afeb18475))
+* **navigation:** resolve cwd-relative paths to the indexed file (TRA-693) ([#800](https://github.com/nikolai-vysotskyi/trace-mcp/issues/800)) ([833206a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/833206a822a17888dede22ecade2e5f745414cc9))
+* **serve:** keep daemon auto-spawn off the stdio handshake path ([#805](https://github.com/nikolai-vysotskyi/trace-mcp/issues/805)) ([e6f3b67](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6f3b6743d04490c3b0418847855d400e12ad509))
+* **serve:** move auto-update off the MCP initialize path (TRA-703) ([#808](https://github.com/nikolai-vysotskyi/trace-mcp/issues/808)) ([ff2ebd7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ff2ebd7cb4c99be93760ecf2781957060b013b78))
+* **web:** sweep the scroll hint, the one label nothing measured (TRA-564) ([#794](https://github.com/nikolai-vysotskyi/trace-mcp/issues/794)) ([478cdfe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/478cdfe4d0d22dd0b9903cca5d1ea14ab0273361))
+
+
+### Performance
+
+* **app:** code-split the four secondary project tabs out of startup (TRA-593) ([#792](https://github.com/nikolai-vysotskyi/trace-mcp/issues/792)) ([39b3376](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39b33760074224fd47f2d76b1b575e7014414fa8))
+* **hooks:** detach the reindex dispatch so an edit never waits on the daemon ([#801](https://github.com/nikolai-vysotskyi/trace-mcp/issues/801)) ([5d7b516](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5d7b5160fe91807acd6eeb2f66ad212800f8ccac))
+
+
+### Documentation
+
+* **comparisons:** refresh peer facts and record this pass's source reads ([#777](https://github.com/nikolai-vysotskyi/trace-mcp/issues/777)) ([a7d08f1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7d08f1fd2044992b16351b06fca010c2b138d61))
+* competitor-vs-competitor page — Repomix vs codegraph ([#795](https://github.com/nikolai-vysotskyi/trace-mcp/issues/795)) ([34ffdf8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/34ffdf885d3e8dd628d9051c4e0bee495dcd13e0))
+* **migration:** update docs, generators, and distribution ledger for the trace transition (TRA-615) ([#717](https://github.com/nikolai-vysotskyi/trace-mcp/issues/717)) ([40d1623](https://github.com/nikolai-vysotskyi/trace-mcp/commit/40d162310d7ce9b182c2d883a3f83414014d19fc))
+* **seo:** link source files by GitHub URL instead of paths that 404 on the site ([#793](https://github.com/nikolai-vysotskyi/trace-mcp/issues/793)) ([85fbfde](https://github.com/nikolai-vysotskyi/trace-mcp/commit/85fbfde6db2b8be3b10181cbe6069d6949cc1551))
+* **state:** say that trace_state_* is off the default surface (TRA-723) ([#811](https://github.com/nikolai-vysotskyi/trace-mcp/issues/811)) ([6db8777](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6db87772a9bedd9f7af9c0f8dc836ac2024e1f87))
+
+
+### Tests
+
+* **presets:** guard every preset's tools/list budget, not just the listed ones (TRA-719) ([#812](https://github.com/nikolai-vysotskyi/trace-mcp/issues/812)) ([039b64b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/039b64b2a8f928651f71eb514fef144eb661867e))
+
+
+### CI/CD
+
+* verify the Windows update path on a real install ([#775](https://github.com/nikolai-vysotskyi/trace-mcp/issues/775)) ([460ef4d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/460ef4d7b6b8fb47c19ea7796c4d735111aa6ea7))
+
 ## [3.14.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.13.0...v3.14.0) (2026-09-02)
 
 
