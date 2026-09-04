@@ -308,7 +308,11 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
               total_cycles: cycles.length,
               cycles,
               ...guard.marker(),
-              ...(cycles.length === 0
+              // Negative evidence is an authoritative "we looked everywhere
+              // and found nothing". A truncated scan looked at part of the
+              // graph, so it cannot make that claim — `_budget_exceeded`
+              // stands alone rather than contradicting a `not_found` verdict.
+              ...(cycles.length === 0 && !guard.aborted
                 ? {
                     evidence: buildNegativeEvidence(
                       stats.totalFiles,
@@ -343,15 +347,16 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
       const results = getPageRank(store, { includeMarkdown: include_markdown }, guard);
       const sliced = results.slice(0, limit ?? 50);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
-      // The array payload has nowhere to carry a marker, so an aborted run
-      // returns the object form instead: on a call that did not finish, the
-      // truncation reason is worth more than shape stability.
-      if (guard.aborted) {
-        const text = jh('get_pagerank', { results: sliced, ...guard.marker() });
-        return { content: [{ type: 'text', text }] };
-      }
       const text = encodeResponse(sliced, fmt);
-      return { content: [{ type: 'text', text }] };
+      // The advertised payload is a bare array in every case — making the
+      // schema conditional on resource pressure would break clients exactly
+      // when the guard is meant to keep the answer usable. The truncation
+      // marker rides the MCP result's own `_meta` channel instead, so it stays
+      // structured and machine-readable without touching the array contract.
+      return {
+        content: [{ type: 'text', text }],
+        ...(guard.aborted ? { _meta: guard.marker() } : {}),
+      };
     },
   );
 

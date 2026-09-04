@@ -9,10 +9,15 @@
  *      graph, proving an abort returns a partial result with the marker rather
  *      than throwing.
  */
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { BudgetGuard, forTool } from '../../src/compute-guard.js';
 import type { Store } from '../../src/db/store.js';
+import type { ServerContext } from '../../src/server/types.js';
+import { getPageRank } from '../../src/tools/analysis/graph-analysis.js';
 import { getCallGraph } from '../../src/tools/framework/call-graph.js';
+import { findReferences } from '../../src/tools/framework/references.js';
+import { registerAnalysisTools } from '../../src/tools/register/analysis.js';
 import { createTestStore } from '../test-utils.js';
 
 const CEILINGS = { timeout_ms: 1000, rss_mb: 500, iterations: 100 };
@@ -209,5 +214,173 @@ describe('getCallGraph under a compute ceiling', () => {
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap()._budget_exceeded).toBeUndefined();
     expect(guard.aborted).toBe(false);
+  });
+});
+
+// ── Review follow-ups (PR #894) ────────────────────────────────────────────
+// Three properties an abort must hold beyond "it stopped": the response schema
+// must not change shape under resource pressure, a truncated scan must not
+// claim authoritative negative evidence, and PageRank must actually consume
+// the iteration ceiling instead of only sampling between sweeps.
+
+interface RegisteredTool {
+  handler: (
+    args: Record<string, unknown>,
+    extra: unknown,
+  ) => Promise<{ content: Array<{ type: string; text: string }>; _meta?: unknown }>;
+}
+
+function makeCtx(store: Store): ServerContext {
+  return {
+    store,
+    projectRoot: '/tmp',
+    config: {},
+    registry: { getAllFrameworkPlugins: () => [] },
+    topoStore: null,
+    j: (v: unknown) => JSON.stringify(v),
+    jh: (_tool: string, v: unknown) => JSON.stringify(v),
+    guardPath: () => null,
+  } as unknown as ServerContext;
+}
+
+/** Run `fn` with the iteration ceiling pinned, restoring the previous value. */
+async function withIterationCeiling<T>(limit: number, fn: () => Promise<T> | T): Promise<T> {
+  const prev = process.env.TRACE_MCP_COMPUTE_MAX_ITERATIONS;
+  process.env.TRACE_MCP_COMPUTE_MAX_ITERATIONS = String(limit);
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.TRACE_MCP_COMPUTE_MAX_ITERATIONS;
+    else process.env.TRACE_MCP_COMPUTE_MAX_ITERATIONS = prev;
+  }
+}
+
+describe('abort does not change what a tool promises', () => {
+  let store: Store;
+  let tools: Record<string, RegisteredTool>;
+
+  beforeEach(() => {
+    store = createTestStore();
+    store.ensureEdgeType('imports', 'code', 'Module import');
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    registerAnalysisTools(server, makeCtx(store));
+    tools = (server as unknown as { _registeredTools: Record<string, RegisteredTool> })
+      ._registeredTools;
+  });
+
+  /** Two files importing each other — a real, findable cycle. */
+  function buildCycle(): void {
+    const a = store.insertFile('src/a.ts', 'typescript', null, null);
+    const b = store.insertFile('src/b.ts', 'typescript', null, null);
+    const aNode = store.getNodeId('file', a)!;
+    const bNode = store.getNodeId('file', b)!;
+    store.insertEdge(aNode, bNode, 'imports');
+    store.insertEdge(bNode, aNode, 'imports');
+  }
+
+  it('get_pagerank keeps its array payload when the guard trips', async () => {
+    buildCycle();
+    const result = await withIterationCeiling(1, () => tools.get_pagerank.handler({}, {}));
+
+    // The advertised contract is a bare array — conditioning the schema on
+    // resource pressure would break clients exactly when the partial answer
+    // is supposed to stay usable.
+    expect(Array.isArray(JSON.parse(result.content[0].text))).toBe(true);
+    // The reason rides the MCP result's own metadata channel instead.
+    expect(
+      (result._meta as { _budget_exceeded?: { reason: string } })._budget_exceeded?.reason,
+    ).toBe('iterations');
+  });
+
+  it('an aborted cycle scan does not claim the graph is acyclic', async () => {
+    buildCycle();
+    const result = await withIterationCeiling(1, () => tools.get_circular_imports.handler({}, {}));
+    const payload = JSON.parse(result.content[0].text) as {
+      total_cycles: number;
+      evidence?: unknown;
+      _budget_exceeded?: { reason: string };
+    };
+
+    expect(payload._budget_exceeded?.reason).toBe('iterations');
+    // The cycle is real; a truncated scan that reports zero must not also
+    // report "we looked and found nothing".
+    expect(payload.evidence).toBeUndefined();
+  });
+
+  it('a completed cycle scan still emits negative evidence', async () => {
+    store.insertFile('src/lonely.ts', 'typescript', null, null);
+    const result = await tools.get_circular_imports.handler({}, {});
+    const payload = JSON.parse(result.content[0].text) as {
+      total_cycles: number;
+      evidence?: unknown;
+      _budget_exceeded?: unknown;
+    };
+
+    expect(payload.total_cycles).toBe(0);
+    expect(payload._budget_exceeded).toBeUndefined();
+    expect(payload.evidence).toBeDefined();
+  });
+});
+
+describe('PageRank consumes the iteration ceiling', () => {
+  it('ticks inside the sweep and returns the last converged vector', () => {
+    const store = createTestStore();
+    store.ensureEdgeType('imports', 'code', 'Module import');
+    const ids = ['src/p0.ts', 'src/p1.ts', 'src/p2.ts'].map(
+      (p) => store.getNodeId('file', store.insertFile(p, 'typescript', null, null))!,
+    );
+    store.insertEdge(ids[0], ids[1], 'imports');
+    store.insertEdge(ids[1], ids[2], 'imports');
+    store.insertEdge(ids[2], ids[0], 'imports');
+
+    const guard = testGuard({ iterations: 1 });
+    const results = getPageRank(store, { tolerance: 0 }, guard);
+
+    expect(guard.aborted).toBe(true);
+    expect(guard.consumed).toBeGreaterThan(0);
+    // Scores come from the last fully completed sweep, so they are still a
+    // valid (just less converged) ranking rather than a half-filled buffer.
+    expect(results.length).toBeGreaterThan(0);
+    for (const r of results) expect(Number.isFinite(r.score)).toBe(true);
+  });
+});
+
+describe('find_usages under a ceiling', () => {
+  it('marks a truncated scan so the caller cannot read zero as absence', () => {
+    const store = createTestStore();
+    store.ensureEdgeType('calls', 'code', 'Function calls');
+    const fileId = store.insertFile('src/u.ts', 'typescript', null, null);
+    const target = store.insertSymbol(fileId, {
+      symbolId: 'src/u.ts::target#function',
+      name: 'target',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 10,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+    const targetNode = store.getNodeId('symbol', target)!;
+    for (let i = 0; i < 5; i++) {
+      const caller = store.insertSymbol(fileId, {
+        symbolId: `src/u.ts::caller${i}#function`,
+        name: `caller${i}`,
+        kind: 'function',
+        byteStart: 0,
+        byteEnd: 10,
+        lineStart: i + 2,
+        lineEnd: i + 2,
+      });
+      store.insertEdge(store.getNodeId('symbol', caller)!, targetNode, 'calls');
+    }
+
+    const guard = testGuard({ iterations: 1 });
+    const result = findReferences(store, { symbolId: 'src/u.ts::target#function' }, guard);
+
+    expect(result.isOk()).toBe(true);
+    const value = result._unsafeUnwrap();
+    expect(value._budget_exceeded?.reason).toBe('iterations');
+    // The register layer keys its `indexed_no_edges` verdict off the absence
+    // of this field, so a truncated scan can never produce that claim.
+    expect(value._budget_exceeded).toBeDefined();
   });
 });

@@ -406,16 +406,20 @@ function buildFileGraph(
   let frontier = new Set(allSeedNodeIds);
   const allCollectedEdges: typeof filteredEdges = [...filteredEdges];
 
-  const guard = opts.guard ?? forTool('get_dependency_diagram');
+  // Opt-in: only a caller that can surface `_budget_exceeded` passes a guard.
+  // `visualizeGraph()` and the CLI share this builder and have nowhere to
+  // report an abort, so they run unguarded rather than truncating silently
+  // under another tool's name.
+  const guard = opts.guard;
   for (let d = 0; d < depth && frontier.size > 0; d++) {
-    if (!guard.check()) break;
+    if (guard && !guard.check()) break;
     const nextFrontier = new Set<number>();
     const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) allCollectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
-      if (!guard.tick()) break;
+      if (guard && !guard.tick()) break;
       const otherNode =
         edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
@@ -559,16 +563,20 @@ function buildSymbolGraph(
   // Collect ALL edges we encounter during traversal
   const collectedEdges: typeof filteredEdges = [...filteredEdges];
 
-  const guard = opts.guard ?? forTool('get_dependency_diagram');
+  // Opt-in: only a caller that can surface `_budget_exceeded` passes a guard.
+  // `visualizeGraph()` and the CLI share this builder and have nowhere to
+  // report an abort, so they run unguarded rather than truncating silently
+  // under another tool's name.
+  const guard = opts.guard;
   for (let d = 0; d < depth && frontier.size > 0; d++) {
-    if (!guard.check()) break;
+    if (guard && !guard.check()) break;
     const nextFrontier = new Set<number>();
     const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) collectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
-      if (!guard.tick()) break;
+      if (guard && !guard.tick()) break;
       const otherNode =
         edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 

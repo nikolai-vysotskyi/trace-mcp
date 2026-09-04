@@ -537,9 +537,11 @@ export function getPageRank(
     outDegree[i] = graph.forward.get(nodes[i])?.size ?? 0;
   }
 
-  for (let iter = 0; iter < maxIterations; iter++) {
-    // One full sweep over N nodes per iteration — check the clock/RSS
-    // ceilings once per sweep rather than per node.
+  // A sweep is O(V+E). The guard is ticked inside the edge distribution so a
+  // single enormous sweep cannot outrun the ceilings, and an abort leaves the
+  // loop via `sweeps` WITHOUT swapping the half-filled `newScores` buffer in —
+  // the caller then gets the last fully converged vector, never a partial one.
+  sweeps: for (let iter = 0; iter < maxIterations; iter++) {
     if (!guard.check()) break;
     // Dangling mass: nodes with no outlinks redistribute uniformly
     let danglingMass = 0;
@@ -552,6 +554,7 @@ export function getPageRank(
 
     // Distribute scores along edges
     for (let i = 0; i < N; i++) {
+      if (!guard.tick()) break sweeps;
       const neighbors = graph.forward.get(nodes[i]);
       if (!neighbors || neighbors.size === 0) continue;
       const share = (damping * scores[i]) / neighbors.size;
@@ -569,6 +572,9 @@ export function getPageRank(
     [scores, newScores] = [newScores, scores];
     if (diff < tolerance) break;
   }
+  // A long final sweep can cross the wall clock after the last in-loop sample;
+  // one closing check makes sure that run is still reported as truncated.
+  guard.check();
 
   // Build results. E10 — apply user-supplied pin weights as a final
   // multiplicative pass. Precedence rules:
