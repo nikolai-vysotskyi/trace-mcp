@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   activation,
   clientReporting,
+  daysObserved,
   monthWindowFull,
   retention,
   share,
@@ -197,26 +198,51 @@ describe('share', () => {
   });
 });
 
+describe('daysObserved', () => {
+  const on = (iso: string) => new Date(`${iso}T12:00:00Z`);
+
+  it('counts the first and last day inclusively', () => {
+    // The ping reached published builds on 2026-08-23 (#336).
+    expect(daysObserved('20260823', on('2026-09-05'))).toBe(14);
+    expect(daysObserved('20260905', on('2026-09-05'))).toBe(1);
+  });
+
+  it('withholds rather than guesses when there is no usable first date', () => {
+    // No rows at all, an unparseable value, and a first date in the future —
+    // the last is a broken read, not a young property. All three withhold the
+    // numbers this gates instead of publishing an invented age.
+    for (const bad of ['', '(not set)', undefined, null, '20260930']) {
+      expect(daysObserved(bad, on('2026-09-05'))).toBeNull();
+    }
+  });
+});
+
 describe('monthWindowFull / retention', () => {
-  it('reads month == week as a window that has not filled yet', () => {
-    // Both snapshots on `adoption-data` are in this state: 39 / 90 / 90, then
-    // 39 / 102 / 102 the next day.
-    expect(monthWindowFull(90, 90)).toBe(false);
-    expect(monthWindowFull(102, 102)).toBe(false);
-    expect(monthWindowFull(90, 91)).toBe(true);
+  it('gates on the age of the data, not on week-vs-month', () => {
+    expect(monthWindowFull(daysObserved('20260823', new Date('2026-09-05T12:00:00Z')))).toBe(false);
+    expect(monthWindowFull(27)).toBe(false);
+    expect(monthWindowFull(28)).toBe(true);
+    expect(monthWindowFull(null)).toBe(false);
   });
 
-  it('withholds DAU/MAU while the month window is really a week window', () => {
-    // 39 / 90 is day-over-week. Published as `retention_dau_mau_pct` it invites
-    // a comparison against other products' DAU/MAU that it cannot survive.
-    expect(retention(39, 90, 90)).toBeNull();
+  it('withholds DAU/MAU while the month window has a fortnight in it', () => {
+    // 39 / 90 off the 2026-09-03 snapshot. Published as `retention_dau_mau_pct`
+    // it invites a comparison against other products' DAU/MAU it cannot survive.
+    expect(retention(39, 90, false)).toBeNull();
   });
 
-  it('publishes DAU/MAU once the two windows diverge', () => {
-    expect(retention(39, 90, 130)).toBe(30);
+  it('is not unlocked by one non-returning user on a young property', () => {
+    // The counterexample that sank the first version of this gate: it read
+    // `month > week` as "the window filled", so a single day-8 user who did not
+    // return published a ten-day ratio as DAU/MAU.
+    expect(retention(39, 91, monthWindowFull(10))).toBeNull();
+  });
+
+  it('publishes DAU/MAU once the property has a month of history', () => {
+    expect(retention(39, 130, true)).toBe(30);
   });
 
   it('reports an empty property as null, never as 0% retention', () => {
-    expect(retention(0, 0, 0)).toBeNull();
+    expect(retention(0, 0, true)).toBeNull();
   });
 });

@@ -36,8 +36,14 @@ export function clientReporting(
   floor?: string,
 ): ClientReporting;
 
-/** Whether the 28-day window holds anything the 7-day one does not (TRA-843). */
-export function monthWindowFull(week: number, month: number): boolean;
+/** Days of history the 28-day window needs before `month` covers a month. */
+export const MONTH_WINDOW_DAYS: number;
 
-/** DAU/MAU, or null while the month window is not yet a month (TRA-843). */
-export function retention(day: number, week: number, month: number): number | null;
+/** Inclusive days of data from GA4's `YYYYMMDD` first-ping date (TRA-843). */
+export function daysObserved(firstDate: string | undefined | null, today?: Date): number | null;
+
+/** Whether the property has enough history for a 28-day window to be one. */
+export function monthWindowFull(observed: number | null): boolean;
+
+/** DAU/MAU, or null until the month window covers a month (TRA-843). */
+export function retention(day: number, month: number, windowFull: boolean): number | null;

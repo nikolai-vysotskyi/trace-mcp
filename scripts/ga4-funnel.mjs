@@ -166,35 +166,61 @@ export function share(part, whole) {
   return whole > 0 ? Math.round((part / whole) * 100) : null;
 }
 
+/** Days of history the 28-day window needs before `month` covers a month. */
+export const MONTH_WINDOW_DAYS = 28;
+
 /**
- * Has the 28-day window seen anything the 7-day one has not? (TRA-843)
+ * How many days of data the property actually holds (TRA-843), from the first
+ * date it has a ping on.
  *
- * `activeUsers` cannot shrink as the window widens, so `month === week` means no
- * install appeared in days 8-28 that did not also appear in days 1-7 — in
- * practice, that the property holds no rows older than a week. Every snapshot we
- * have is in that state (the ping only reached published builds on 2026-08-23),
- * and while it holds, `active_users.month` carries no information `week` does
- * not: the 61 → 90 → 102 climb is a window still filling, not adoption.
+ * This is the gate on reading `active_users.month` as a month, and it is
+ * deliberately measured from the data's age rather than inferred from the
+ * numbers. `week == month` in every snapshot we have — 90/90, then 102/102 —
+ * and the tempting reading is "nothing appeared in days 8-28, so the window is
+ * still filling". That reading does not hold: `activeUsers` counts *distinct*
+ * users, so equality only says the older period's users are a subset of this
+ * week's, which a mature property whose whole audience returned weekly would
+ * also satisfy. The converse is worse — one non-returning day-8 user makes
+ * `month > week` on a ten-day-old property and would have unlocked a ten-day
+ * ratio published as DAU/MAU.
  *
- * Published as a field rather than left to be re-derived, because the caveat has
- * to travel with the number — the reading that produced this function was made
- * two weeks after the numbers it corrects were first quoted as growth.
+ * The independent evidence for the young-property reading is here instead: the
+ * savings query starts at 2025-01-01 and comes back with six days of rows,
+ * because the ping only reached published builds on 2026-08-23.
+ *
+ * @param firstDate GA4's `date` dimension value, `YYYYMMDD`.
+ * @returns inclusive day count, or null when there is no usable first date —
+ *   which withholds the gated numbers rather than guessing at them.
  */
-export function monthWindowFull(week, month) {
-  return month > week;
+export function daysObserved(firstDate, today = new Date()) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(String(firstDate ?? ''));
+  if (!m) return null;
+  const start = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  // UTC on both sides, while GA4 reports in the property's timezone: worth at
+  // most a day at the boundary, against a 28-day threshold that is itself a
+  // convention. A first date in the future is not a young property, it is a
+  // broken read — withhold rather than publish a negative age as an age.
+  if (end < start) return null;
+  return Math.floor((end - start) / 86_400_000) + 1;
+}
+
+/** Whether the property has enough history for a 28-day window to be one. */
+export function monthWindowFull(observed) {
+  return observed !== null && observed >= MONTH_WINDOW_DAYS;
 }
 
 /**
- * DAU/MAU, but only while `month` is actually a month (TRA-843).
+ * DAU/MAU, but only once `month` covers a month (TRA-843).
  *
- * `day / month` over a month window that equals the week window is
- * day-over-week, which is a different and much larger ratio — 38% of it is not
- * comparable to any published DAU/MAU figure. Null rather than the raw division:
- * the number is not merely uncertain, it is a different measurement wearing this
+ * `day / month` over a window with a fortnight of data in it is a much larger
+ * ratio than DAU/MAU and not comparable to anyone's published figure — the 38%
+ * read off the first snapshots was that. Null rather than the raw division: the
+ * number is not merely uncertain, it is a different measurement wearing this
  * one's name.
  */
-export function retention(day, week, month) {
-  return monthWindowFull(week, month) ? share(day, month) : null;
+export function retention(day, month, windowFull) {
+  return windowFull ? share(day, month) : null;
 }
 
 /**

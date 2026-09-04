@@ -104,17 +104,23 @@ today ("(not set)" is 54 of 120) and `repos_indexed` is unregistered, which is
 the same console session as above.
 
 **Amended 2026-09-05 (TRA-843): most of that step is the window, not a
-population.** `active_users.week` equals `active_users.month` exactly in both
-snapshots — 90/90, then 102/102. `activeUsers` cannot shrink as the window
-widens, so nothing has appeared in days 8–28 that was not already in days 1–7;
-the property simply holds no rows that old (the ping reached published builds on
-2026-08-23, and the savings query returns six days of rows against a
-2025-01-01 start). A month figure that is still a week figure climbs as the
-window fills. The `retention_dau_mau_pct: 43` quoted above was `day / week` and
-not a DAU/MAU at all; the snapshot now publishes `null` there and an
-`active_users.month_window_full` flag, so the caveat travels with the number.
-The scanner question above is unaffected and still open — this says the *shape*
-of the climb is explained, not that the new installs are human.
+population.** The property holds about a fortnight of pings — it reached
+published builds on 2026-08-23, and the savings query returns six days of rows
+against a 2025-01-01 start — so a 28-day window is still filling, and a month
+figure computed over two weeks of data climbs as it does. The
+`retention_dau_mau_pct: 43` quoted above was day-over-fortnight, not a DAU/MAU;
+the snapshot now publishes `null` there until `active_users.month_window_full`,
+so the caveat travels with the number. The scanner question above is unaffected
+and still open — this says the *shape* of the climb is explained, not that the
+new installs are human.
+
+Do not re-derive this from `week == month`. Both snapshots have it (90/90, then
+102/102) and it looks like proof, but `activeUsers` counts distinct users:
+equality only says the older period's users are a subset of this week's, which a
+mature property whose audience all returned would satisfy too. The first version
+of the fix gated on it and was caught in review — one non-returning day-8 user
+would have unlocked a ten-day ratio published as DAU/MAU. Gate on the age of the
+data.
 
 **3.9.0 is still invisible in the field** (2026-09-03, second window). It
 appears nowhere in `by_version` while 3.8.0 holds 19 installs and 3.10.0 holds

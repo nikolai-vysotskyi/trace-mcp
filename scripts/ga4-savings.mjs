@@ -99,10 +99,16 @@ function median(values) {
  */
 export function sanitizedTokens(days) {
   const r = trim(days);
-  // Rounded to two places so a day-to-day move is legible in a diff of the
-  // published file, which is where anyone reads this from.
-  const ratio = r.tokens > 0 ? Math.round((r.raw / r.tokens) * 100) / 100 : null;
-  return { ...r, raw_ratio: ratio, inflation_suspected: ratio !== null && ratio > INFLATION_RATIO };
+  const ratio = r.tokens > 0 ? r.raw / r.tokens : null;
+  return {
+    ...r,
+    // Rounded to two places so a day-to-day move is legible in a diff of the
+    // published file, which is where anyone reads this from — but the threshold
+    // is tested against the exact ratio, or 2.0004 would round to a displayed
+    // `2` and report itself as under a rule it is over.
+    raw_ratio: ratio === null ? null : Math.round(ratio * 100) / 100,
+    inflation_suspected: ratio !== null && ratio > INFLATION_RATIO,
+  };
 }
 
 function trim(days) {

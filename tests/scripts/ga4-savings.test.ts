@@ -96,6 +96,16 @@ describe('sanitizedTokens', () => {
     expect(flooded.inflation_suspected).toBe(true);
   });
 
+  it('tests the threshold against the exact ratio, not the rounded one', () => {
+    // 9,000 sanitized against 18,001 raw is 2.0001x — over the rule, and it
+    // displays as a flat `2`. Rounding before the comparison silenced it.
+    const days = [...flat(4, 1000, 1), { tokens: 14_001, users: 1 }];
+    const result = sanitizedTokens(days);
+
+    expect(result).toMatchObject({ tokens: 9000, raw: 18_001, raw_ratio: 2 });
+    expect(result.inflation_suspected).toBe(true);
+  });
+
   it('reports no ratio at all when there is no sanitized total to divide into', () => {
     // Null, not Infinity and not a 1 that reads as "healthy".
     expect(sanitizedTokens([])).toMatchObject({
