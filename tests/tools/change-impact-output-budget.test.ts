@@ -47,7 +47,6 @@ describe('get_change_impact output budget', () => {
       root: tmpDir,
       include: ['src/**/*.ts'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
     const pipeline = new IndexingPipeline(store, registry, config, tmpDir);

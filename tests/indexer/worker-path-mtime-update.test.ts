@@ -40,7 +40,6 @@ describe('FileExtractor — worker-path hash-hit emits mtime_updated', () => {
       root: tmpRoot,
       include: ['src/**/*.ts'],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
     };
   }

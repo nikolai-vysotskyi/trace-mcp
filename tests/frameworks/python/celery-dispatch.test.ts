@@ -55,7 +55,6 @@ describe('Celery .delay() / .apply_async() dispatch resolution', () => {
       root: tmpDir,
       include: ['**/*.py'],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
     const pipeline = new IndexingPipeline(store, registry, config, tmpDir);

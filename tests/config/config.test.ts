@@ -10,7 +10,7 @@ describe('config', () => {
 
   afterEach(() => {
     if (tmpDir) removeTmpDir(tmpDir);
-    delete process.env.TRACE_MCP_DB_PATH;
+    delete process.env.TRACE_MCP_PRESET;
   });
 
   it('loads defaults when no config file exists', async () => {
@@ -20,7 +20,6 @@ describe('config', () => {
     expect(result.isOk()).toBe(true);
     const config = result._unsafeUnwrap();
     expect(config.root).toBe('.');
-    expect(config.db.path).toBe('.trace-mcp/index.db');
     expect(config.include.length).toBeGreaterThan(0);
     expect(config.exclude.length).toBeGreaterThan(0);
     expect(config.plugins).toEqual([]);
@@ -127,7 +126,6 @@ describe('config', () => {
       configFile,
       JSON.stringify({
         root: './src',
-        db: { path: 'custom/index.db' },
         include: ['src/**/*.ts'],
         exclude: ['dist/**'],
       }),
@@ -138,7 +136,6 @@ describe('config', () => {
 
     const config = result._unsafeUnwrap();
     expect(config.root).toBe('./src');
-    expect(config.db.path).toBe('custom/index.db');
     expect(config.include).toEqual(['src/**/*.ts']);
   });
 
@@ -148,22 +145,30 @@ describe('config', () => {
     fs.writeFileSync(
       configFile,
       JSON.stringify({
-        db: { path: 'file-path.db' },
+        tools: { preset: 'core' },
       }),
     );
 
-    process.env.TRACE_MCP_DB_PATH = '/custom/env-path.db';
+    process.env.TRACE_MCP_PRESET = 'full';
 
     const result = await loadConfig(tmpDir);
     expect(result.isOk()).toBe(true);
 
     const config = result._unsafeUnwrap();
-    expect(config.db.path).toBe('/custom/env-path.db');
+    expect(config.tools.preset).toBe('full');
+  });
+
+  it('accepts the deprecated db.path key without acting on it (TRA-802)', () => {
+    // The index location is not configurable — `getDbPath()` decides it. The
+    // key stays parseable so old config files keep loading; nothing reads it.
+    const result = TraceMcpConfigSchema.safeParse({ db: { path: 'legacy.db' } });
+
+    expect(result.success).toBe(true);
   });
 
   it('Zod validation rejects invalid config', () => {
     const result = TraceMcpConfigSchema.safeParse({
-      db: { path: 123 }, // path should be string
+      root: 123, // root should be string
     });
 
     expect(result.success).toBe(false);

@@ -97,7 +97,6 @@ describe('Rust import resolution E2E', () => {
       root: fixtureDir,
       include: ['**/*.rs'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
 

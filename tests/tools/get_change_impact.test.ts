@@ -17,7 +17,6 @@ function makeConfig(): TraceMcpConfig {
     root: FIXTURE_DIR,
     include: ['src/**/*.vue', 'src/**/*.ts'],
     exclude: ['node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   };
 }

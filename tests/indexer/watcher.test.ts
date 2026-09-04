@@ -14,7 +14,6 @@ const mockConfig: TraceMcpConfig = {
   root: '/project',
   include: ['src/**/*.ts'],
   exclude: [],
-  db: { path: ':memory:' },
   plugins: [],
 };
 

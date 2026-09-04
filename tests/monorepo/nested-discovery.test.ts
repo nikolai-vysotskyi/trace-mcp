@@ -43,7 +43,6 @@ describe('monorepo nested file discovery', () => {
       // The repo's real default globs are directory-rooted (src/**, app/**).
       include: ['src/**/*.ts', 'app/**/*.ts', '**/*.md'],
       exclude: ['**/node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
 

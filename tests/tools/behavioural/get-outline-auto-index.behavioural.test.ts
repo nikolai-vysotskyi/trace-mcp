@@ -67,7 +67,6 @@ describe('get_outline — auto-index on NOT_FOUND (TRA-4)', () => {
         root: tmpDir,
         include: ['src/**/*.ts'],
         exclude: [],
-        db: { path: ':memory:' },
         plugins: [],
       },
       projectRoot: tmpDir,

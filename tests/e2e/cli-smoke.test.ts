@@ -57,7 +57,6 @@ describe('CLI smoke tests', () => {
       root: FIXTURE_DIR,
       include: ['app/**/*.php', 'src/**/*.ts'],
       exclude: ['vendor/**', 'node_modules/**'],
-      db: { path: dbPath },
       plugins: [],
     };
 
