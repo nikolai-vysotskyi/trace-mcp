@@ -26,7 +26,7 @@ Rules for keeping it honest:
 | Surface | Listed | Arrivals | What it shows | How to change it | Verified |
 |---|---|---|---|---|---|
 | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | None | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest` | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
-| [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | None | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows | 2026-08-29 |
+| [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | None | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows. Renders 31 links to `trace-mcp.com` and rewrites every one to `rel="ugc nofollow"` — see TRA-792 below | 2026-09-04 |
 | [pulsemcp.com](https://www.pulsemcp.com/servers/nikolai-vysotskyi-trace) | Yes | None | **Stale: "44+ tools"** — their hand-written `server.json`, kept "until the maintainer publishes to the official registry" | Their submissions are **paused**; their own submit page says publishing to the official registry is the fix. Done 2026-08-29 — waiting on their next sync | 2026-08-29 |
 | [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | None | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h — but it said "80 languages … up to 99% fewer tokens", and master has since moved to 81 languages and a 40–50% claim, so re-submit once it lands. Premium $39 — declined | 2026-08-29 |
 | [mcpmarket.com](https://mcpmarket.com/server/trace) | Yes, as **"Trace"** | None | Same stale "53 frameworks / 68 languages" copy | No self-serve edit. $29 paid listing, or email support@mcpmarket.com. Free queue re-submit answers "already listed" | 2026-08-29 |
@@ -47,6 +47,7 @@ Rules for keeping it honest:
 | Continue.dev Hub | — | None | — | **Dead product, not a gap.** Continue was acquired by Cursor (June 2026), the final release shipped 2026-06-19, cloud data was deleted after 2026-07-15, `hub.continue.dev` no longer resolves. The GitHub repo is **not** archived and is still public — do not describe it as read-only — but it has shipped nothing since (last commit 2026-07-21). Re-check only if Cursor stands a successor up | 2026-08-29 |
 | [LobeHub](https://lobehub.com/mcp) | **No** — the `trace-mcp` listing there is `Mnehmos/trace-mcp`, an unrelated project with the same name | None | — | Publishing is `npx @lobehub/market-cli`, and it requires `lhm login` (browser OIDC) plus `lhm github connect` (browser ownership check). There is no token-only path: verified in `@lobehub/market-cli@0.0.41` itself, because their docs pages under `lobehub.com/docs/market/*` are content-free stubs. `plugin publish` and `plugin claim` both go through `createUserSDK()`, which aborts with "Not logged in. Run `lhm login` first" unless a user OAuth token is on disk; the `MARKET_CLIENT_ID`/`MARKET_CLIENT_SECRET` env pair is never used for publishing. Human-only, like Smithery | 2026-08-29 |
 | [skillsllm.com](https://skillsllm.com/skill/trace-mcp) | **Yes** — found while checking it as a "roundup" (see below); it is a directory, and we were already in it | None | Accurate and live: 177 tools / 81 languages / 102 stars, matching `docs/_data/counts.yml` on the day it was read. Passed their Semgrep + dependency scan | Nothing to submit. Their `/about` says a scraper "searches GitHub daily for repositories containing SKILL.md files or tagged with relevant topics like `claude-code`, `ai-agent`, `mcp-server`" — we carry all three, so the topics row below is what put us here and what keeps the numbers current. A `/submit` form and a paid "Featured Listing" also exist; neither is needed | 2026-09-02 |
+| `trace-mcp.vi.softonic.com/mcp` | **Yes — scraped, not submitted** | None | Unknown — all of `*.softonic.com` answers HTTP 412 to a scripted fetch (four UA/header variants, 2026-09-04) | **Nothing to do, and do not open this door.** Found because Search Console names it as one of exactly two external URLs linking `trace-mcp.com` (TRA-792). A download portal that wraps third-party installers in its own; we control nothing on that page. Do not submit, do not link, do not chase the other locales | 2026-09-04 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | `github.com` 25/8 — indistinguishable from any other in-GitHub link | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
 
 The repo's own `description` and `homepage` are part of that surface and were
@@ -115,6 +116,60 @@ numbers into the daily snapshot on the
 branch under `acquisition:`, which is the durable record. Re-read this column
 against that history before adding a surface, and update the cell in the same
 change that touches one.
+
+### Does the listing actually link the site — external domains linking trace-mcp.com (TRA-792)
+
+**Tracked figure: 2 distinct external domains link `trace-mcp.com` (baseline 2026-09-04).**
+Measured by the SEO agent with the Search Console URL Inspection API over all 24
+sitemap URLs: the only referring URLs Google knows for the homepage are
+`trace-mcp.vi.softonic.com` and `mcpmarket.com`; every other indexed page's only
+referrer is our own `sitemap.xml`. Eleven of the 24 pages have no index entry at
+all. Full per-URL table in [`ops/index-coverage.md`](index-coverage.md).
+
+Re-read it the same way when this row is next touched, and record the domain
+count here — it is the figure that says whether listings work does anything for
+the site, the way the Arrivals column says whether it does anything for the repo.
+
+**What the listings emit, read from their served HTML on 2026-09-04.** Nobody had
+checked; the answer is that the ones we can read pass nothing.
+
+| Surface | Links `trace-mcp.com`? | `rel` | Read how |
+|---|---|---|---|
+| glama.ai | Yes — **31 anchors**, deep pages included (`/comparisons.html`, `/configuration.html#cli`, `/supported-frameworks.html`) | `ugc nofollow` on every one | Fetched the page, parsed the anchors |
+| mcpservers.org | **No.** It renders our README but rewrites the doc links to `github.com/.../blob/HEAD/…`; the string `trace-mcp.com` appears zero times | GitHub links are `nofollow noopener noreferrer` | Same |
+| skillsllm.com | **No.** Three outbound links, all `github.com` | `noopener noreferrer` | Same |
+| pulsemcp.com (403), mcpmarket.com (429), softonic (412) | **Unknown — bot-blocked from a run** | — | Four UA/header variants, all refused |
+
+So of the surfaces readable at all, glama is the only one that names the domain,
+and it nofollows all 31. That settles ask 2 for three of the ~10 listings: link
+equity is not what these are for. The two Google *does* know about are a scraped
+mirror and a listing we cannot read — neither is a submission we could repeat.
+
+**The one lever this leaves, and it is now pulled.** `server.json` had no
+`websiteUrl`, and `package.json` had no `homepage` — the two places in the repo
+that hand a directory the site URL *as data* rather than as prose it may or may
+not rewrite. Both now carry `https://trace-mcp.com`, guarded by
+`tests/plugin/manifest-sync.test.ts`. `websiteUrl` is in the published
+`ServerDetail` schema (`format: uri`, optional) and republishes to the official
+registry on every release, which is what mcp.so, Smithery, PulseMCP and goose's
+retired directory ingest — so it reaches more surfaces than any single
+submission would, at zero cost per run. By the rule further down this file, it
+lands on those surfaces **with the next release, not with the merge**.
+
+Ask 3 (point listings at `/comparisons.html` rather than `/`) has no target
+today: `websiteUrl` and npm `homepage` both mean the project's front door, and
+the surfaces that do render deep links — glama — take them from the README
+automatically and nofollow them anyway. Revisit if a submission form ever offers
+a free-text URL field.
+
+**Softonic is a mirror we did not submit to.** `trace-mcp.vi.softonic.com/mcp`
+is one of the two external URLs Google attributes to us and was absent from this
+ledger. It is a scraped download-portal page on a Vietnamese locale subdomain;
+all of `*.softonic.com` returns HTTP 412 to a scripted fetch, so its contents
+cannot be verified from a run. Recorded because it exists and because a future
+run will otherwise treat it as a door worth opening — it is not one. Softonic
+wraps third-party downloads in its own installer, and we have no control over
+what that page offers. Do not submit anything there, and do not link it.
 
 ### Third-party roundups and comparison articles (TRA-682)
 
