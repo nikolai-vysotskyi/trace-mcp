@@ -76,10 +76,14 @@ describe('docs/_data/competitors.yml', () => {
     const offenders: string[] = [];
     for (const page of pages) {
       const raw = readFileSync(join(DOCS, page), 'utf-8');
+      let inLog = false;
       for (const line of raw.split('\n')) {
-        // Dated verification prose records what a figure used to be ("41.1K ->
-        // 41.2K this pass"). That is history, not a live claim.
-        if (line.trimStart().startsWith('- **Star re-check')) continue;
+        // The profiling depth tracker and the star re-check bullets are a dated
+        // log of what each pass read ("41.1K -> 41.2K this pass"). That is
+        // history, not a live claim, so it keeps its literals.
+        if (line.startsWith('## Profiling depth tracker')) inLog = true;
+        else if (line.startsWith('## ')) inLog = false;
+        if (inLog || line.trimStart().startsWith('- **Star re-check')) continue;
         for (const [stars, key] of tracked) {
           if (line.includes(stars) && !line.includes(`competitors.${key}.stars`)) {
             offenders.push(`${page}: "${stars}" (${key})`);
