@@ -134,6 +134,13 @@ mirrors) over 10–15 live tasks with repeats. Nothing here says what compressio
 costs in correctness, re-asks, or call-count inflation — and the issue's own
 threat note is right that cheaper reads may simply buy more reads.
 
+## Does the rewrite break the prompt cache?
+
+No — it cuts cache writes by 95%. `updatedToolOutput` only ever alters the
+message being appended, never one already in the prefix, so no cached prefix can
+be invalidated by it. Measured on 113,501 requests of corpus and a live A/B:
+`benchmarks/mirror-prompt-cache.md` (TRA-860).
+
 ## Revised gate
 
 - ~~Death: adoption < 30%~~ — retired. Adoption is structural under the hook
