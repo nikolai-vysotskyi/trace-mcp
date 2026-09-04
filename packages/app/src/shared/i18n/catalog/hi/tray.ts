@@ -1,7 +1,7 @@
 export const tray = {
   daemonRunning: 'डेमन चल रहा है',
   daemonStopped: 'डेमन रुका हुआ है',
-  workspace: 'Workspace',
+  workspace: 'वर्कस्पेस',
   clients: 'MCP क्लाइंट',
   settings: 'सेटिंग्स',
   quit: 'trace-mcp बंद करें',

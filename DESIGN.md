@@ -1020,7 +1020,7 @@ labels, titles, `placeholder`, `aria-label`, empty states, errors — is authore
 surface that was already extracted; how to add a string or a language is in
 `docs/development.md`.
 
-Three consequences for layout, all of them the usual way a translated UI breaks:
+Five consequences for layout, all of them the usual way a translated UI breaks:
 
 - **Assume +30% width.** German and Russian run long against English. A control sized
   to its English label — a segmented pill, a button with the label baked into a fixed
@@ -1033,6 +1033,16 @@ Three consequences for layout, all of them the usual way a translated UI breaks:
   `Intl`, which knows that a Russian relative time is "2 часа назад" but "5 часов
   назад" and that a German date is `29.8.2026`. Note that `Intl`'s `narrow` style is
   not offered: it gives English "2h ago" and Russian "-2 ч".
+- **A number never breaks across two lines.** Wrap the value — sign, digits, unit,
+  currency — in `whitespace-nowrap`, wherever it sits next to a caption that can push
+  it onto a second line. A `word-break: break-word` container will otherwise split it
+  mid-digit, and "+22.3" over "k" is not a wrapped number, it is a different number
+  (TRA-803, seen in English, Hindi and Korean on the workspace KPI strip).
+- **`word-break: break-word` is a German rule and a Korean bug.** It exists so a
+  compound can break inside a fixed box; applied to Hangul it breaks between any two
+  syllables, so "항목" comes back as "항" over "목". Put the wrapping label in
+  `.wrap-label` rather than an inline `wordBreak` — the class carries
+  `:lang(ko) { word-break: keep-all }`, and an inline style would win over it.
 
 **The Language control** follows "a choice in a menu is one row" above, and the option
 count decides the shape: a segmented pill for two to four values, a pop-up button on

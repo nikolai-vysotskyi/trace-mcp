@@ -83,8 +83,15 @@ function DeltaChip({ delta, caption }: { delta: number; caption?: string }): Rea
       {/* Arrow glyph as well as colour — the direction must survive a
           colour-blind reading and a greyscale screenshot. */}
       <span aria-hidden="true">{up ? '↑' : '↓'}</span>
-      {up ? '+' : '−'}
-      {formatCompact(Math.abs(delta))}
+      {/* The number is one token, never two lines. The caption beside it runs
+          long enough in Hindi and Korean to push the value onto a second line,
+          and the caption's `break-word` then split it mid-digit: "+22.3k"
+          rendered as "+22.3" over "k", which reads as a different number
+          (TRA-803). English hit it too, on the Symbols tile at 1280pt. */}
+      <span className="whitespace-nowrap">
+        {up ? '+' : '−'}
+        {formatCompact(Math.abs(delta))}
+      </span>
       {caption ? <span style={{ color: 'var(--label-secondary)' }}> {caption}</span> : null}
     </span>
   );
@@ -195,7 +202,7 @@ export function KpiTile({
           (TRA-492). */}
       {dense ? null : (
         <span
-          className="text-[11px] leading-[13px] line-clamp-2"
+          className="wrap-label text-[11px] leading-[13px] line-clamp-2"
           style={{
             color: 'var(--label-secondary)',
             height: 26,
@@ -205,7 +212,6 @@ export function KpiTile({
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
-            wordBreak: 'break-word',
           }}
         >
           {/* `unavailable` outranks `pending`: a fetch that finished and failed

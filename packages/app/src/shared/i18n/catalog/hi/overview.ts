@@ -55,9 +55,9 @@ export const overview = {
   needsNo: 'नहीं',
 
   sectionQuality: 'क्वालिटी',
-  findings_one: '{{n}} finding',
-  findings_other: '{{n}} findings',
-  smellCategoryLabel: 'Finding श्रेणी',
+  findings_one: '{{n}} निष्कर्ष',
+  findings_other: '{{n}} निष्कर्ष',
+  smellCategoryLabel: 'निष्कर्ष श्रेणी',
   smellDebug: 'Debug',
   smellTodo: 'TODO',
   smellHardcoded: 'हार्डकोडेड',

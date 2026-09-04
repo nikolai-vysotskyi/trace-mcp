@@ -15,9 +15,9 @@ export const clients = {
   sessionIdle: 'निष्क्रिय',
   sessionStale: 'पुराना',
 
-  connected: 'जुड़ा हुआ',
-  connect: 'जोड़ें',
-  connecting: 'जुड़ रहे हैं…',
+  connected: 'कनेक्टेड',
+  connect: 'कनेक्ट करें',
+  connecting: 'कनेक्ट हो रहा है…',
   updateAvailable: 'अपडेट उपलब्ध',
   update: 'अपडेट',
   updating: 'अपडेट हो रहा है…',

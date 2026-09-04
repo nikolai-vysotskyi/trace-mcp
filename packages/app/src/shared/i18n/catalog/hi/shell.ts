@@ -1,5 +1,5 @@
 export const shell = {
-  navWorkspace: 'Workspace',
+  navWorkspace: 'वर्कस्पेस',
   navClients: 'MCP क्लाइंट',
   navOverview: 'ओवरव्यू',
   navAsk: 'Ask',
