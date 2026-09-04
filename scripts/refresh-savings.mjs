@@ -37,7 +37,7 @@
  * runs this and opens the PR with a PAT (GITHUB_TOKEN cannot, see above).
  */
 import fs from 'node:fs';
-import { MIN_DAYS_FOR_TRIM } from './ga4-savings.mjs';
+import { INFLATION_RATIO, MIN_DAYS_FOR_TRIM } from './ga4-savings.mjs';
 
 const SRC =
   'https://raw.githubusercontent.com/nikolai-vysotskyi/trace-mcp/adoption-data/adoption.yml';
@@ -101,6 +101,20 @@ if (!Number.isFinite(days) || days < MIN_DAYS_FOR_TRIM) {
   process.exit(1);
 }
 
+// The gap between raw and sanitized, said out loud at the moment the number is
+// about to become a public claim (TRA-843). Not a refusal: the sanitizer is what
+// makes the figure publishable, and it is still doing that — refusing here would
+// freeze the site's counter at a stale value in response to someone else's
+// flood. But whoever runs this and opens the PR is the last human-shaped step
+// before the number is quoted, and they should know what it took to get it.
+if (Number.isFinite(raw) && tokens > 0 && raw / tokens > INFLATION_RATIO) {
+  console.error(
+    `Warning: the endpoint received ${(raw / tokens).toFixed(2)}x what this publishes ` +
+      `(over ${INFLATION_RATIO}x). The figure below is sanitized and safe to quote; ` +
+      `the input is not. Check ops/user-signal.md for a harvest overlapping this window.`,
+  );
+}
+
 const body = `# The saved-token counter quoted on the homepage and in the README (TRA-533).
 # Generated — do not edit by hand:
 #
@@ -132,8 +146,10 @@ usd: ${usd}
 usd_display: "$${Math.floor(usd)}+"
 price_model: "${model}"
 price_usd_per_mtok: ${perMtok}
-# Window the figure covers, and the unsanitized sum beside it. A widening gap
-# between \`tokens\` and \`tokens_raw\` is the flooding signal.
+# Window the figure covers, and the unsanitized sum beside it. Past
+# ${INFLATION_RATIO}x between \`tokens_raw\` and \`tokens\`, this script warns on stderr
+# and the daily snapshot annotates its workflow run — the gap is a tripwire with
+# somewhere to fire, not a subtraction someone has to remember to do.
 days: ${days}
 tokens_raw: ${raw}
 refreshed: "${new Date().toISOString().slice(0, 10)}"

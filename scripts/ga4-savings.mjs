@@ -62,6 +62,24 @@ const OUTLIER_FACTOR = 5;
  */
 export const MIN_DAYS_FOR_TRIM = 5;
 
+/**
+ * `raw / tokens` above which the run says so out loud (TRA-843).
+ *
+ * The gap between the raw and the sanitized total was described as "the signal
+ * that someone is flooding the endpoint" while being written to a file nobody
+ * diffs — it went 4.95x → 5.21x in a day, on a day that overlaps a documented
+ * npm/clone harvest (`ops/user-signal.md`), and no run noticed. 2x is the point
+ * where more than half of what the endpoint received was capped away, so the
+ * published figure has stopped being a measurement of anything and become the
+ * ceiling the sanitizer chose.
+ *
+ * Deliberately a warning and not a failure: the snapshot file is the only
+ * durable record of the trend (GA4 retains 14 months), so failing the workflow
+ * would answer a flood by throwing away the day's evidence of it. The sanitizer
+ * is what protects the number; this only makes the firing visible.
+ */
+export const INFLATION_RATIO = 2;
+
 function median(values) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -74,9 +92,20 @@ function median(values) {
  *
  * Capped, not dropped: an inflated day still had real users on it, and
  * discarding it would under-count them. Returns the total plus how many days
- * were capped, so the caller can publish that alongside the number.
+ * were capped, so the caller can publish that alongside the number, and
+ * `raw_ratio` / `inflation_suspected` (TRA-843) so the gap the header calls a
+ * tripwire is a value someone can act on rather than a subtraction they have to
+ * remember to do across two snapshots.
  */
 export function sanitizedTokens(days) {
+  const r = trim(days);
+  // Rounded to two places so a day-to-day move is legible in a diff of the
+  // published file, which is where anyone reads this from.
+  const ratio = r.tokens > 0 ? Math.round((r.raw / r.tokens) * 100) / 100 : null;
+  return { ...r, raw_ratio: ratio, inflation_suspected: ratio !== null && ratio > INFLATION_RATIO };
+}
+
+function trim(days) {
   const clean = days
     .map((d) => ({
       tokens: Math.max(0, Number(d.tokens) || 0),

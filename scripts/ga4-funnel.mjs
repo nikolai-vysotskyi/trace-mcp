@@ -167,6 +167,37 @@ export function share(part, whole) {
 }
 
 /**
+ * Has the 28-day window seen anything the 7-day one has not? (TRA-843)
+ *
+ * `activeUsers` cannot shrink as the window widens, so `month === week` means no
+ * install appeared in days 8-28 that did not also appear in days 1-7 — in
+ * practice, that the property holds no rows older than a week. Every snapshot we
+ * have is in that state (the ping only reached published builds on 2026-08-23),
+ * and while it holds, `active_users.month` carries no information `week` does
+ * not: the 61 → 90 → 102 climb is a window still filling, not adoption.
+ *
+ * Published as a field rather than left to be re-derived, because the caveat has
+ * to travel with the number — the reading that produced this function was made
+ * two weeks after the numbers it corrects were first quoted as growth.
+ */
+export function monthWindowFull(week, month) {
+  return month > week;
+}
+
+/**
+ * DAU/MAU, but only while `month` is actually a month (TRA-843).
+ *
+ * `day / month` over a month window that equals the week window is
+ * day-over-week, which is a different and much larger ratio — 38% of it is not
+ * comparable to any published DAU/MAU figure. Null rather than the raw division:
+ * the number is not merely uncertain, it is a different measurement wearing this
+ * one's name.
+ */
+export function retention(day, week, month) {
+  return monthWindowFull(week, month) ? share(day, month) : null;
+}
+
+/**
  * First version whose ping reports its client correctly (TRA-643, `be1fb536`).
  * Before it, the ping's final `saveState` wrote a snapshot taken before the HTTP
  * request and erased the client name the request had just recorded, so those

@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { PRICE_MODEL, PRICE_PER_TOKEN, sanitizedTokens, usd } from '../../scripts/ga4-savings.mjs';
+import {
+  INFLATION_RATIO,
+  PRICE_MODEL,
+  PRICE_PER_TOKEN,
+  sanitizedTokens,
+  usd,
+} from '../../scripts/ga4-savings.mjs';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
@@ -77,6 +83,25 @@ describe('sanitizedTokens', () => {
 
   it('reports nothing for an empty series', () => {
     expect(sanitizedTokens([])).toMatchObject({ tokens: 0, raw: 0, days: 0 });
+  });
+
+  it('states the raw-to-sanitized gap as a number, and fires past the threshold', () => {
+    // The two published snapshots ran 4.95x and 5.21x and nobody noticed,
+    // because seeing it meant subtracting two fields across two files.
+    const quiet = sanitizedTokens(flat(30, 1000));
+    expect(quiet).toMatchObject({ raw_ratio: 1, inflation_suspected: false });
+
+    const flooded = sanitizedTokens([...flat(29, 1000), { tokens: 50_000_000, users: 10 }]);
+    expect(flooded.raw_ratio).toBeGreaterThan(INFLATION_RATIO);
+    expect(flooded.inflation_suspected).toBe(true);
+  });
+
+  it('reports no ratio at all when there is no sanitized total to divide into', () => {
+    // Null, not Infinity and not a 1 that reads as "healthy".
+    expect(sanitizedTokens([])).toMatchObject({
+      raw_ratio: null,
+      inflation_suspected: false,
+    });
   });
 });
 

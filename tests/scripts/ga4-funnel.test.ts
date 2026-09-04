@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   activation,
   clientReporting,
+  monthWindowFull,
+  retention,
   share,
   usage,
   usageByClient,
@@ -192,5 +194,29 @@ describe('share', () => {
 
   it('returns null rather than dividing by zero', () => {
     expect(share(0, 0)).toBeNull();
+  });
+});
+
+describe('monthWindowFull / retention', () => {
+  it('reads month == week as a window that has not filled yet', () => {
+    // Both snapshots on `adoption-data` are in this state: 39 / 90 / 90, then
+    // 39 / 102 / 102 the next day.
+    expect(monthWindowFull(90, 90)).toBe(false);
+    expect(monthWindowFull(102, 102)).toBe(false);
+    expect(monthWindowFull(90, 91)).toBe(true);
+  });
+
+  it('withholds DAU/MAU while the month window is really a week window', () => {
+    // 39 / 90 is day-over-week. Published as `retention_dau_mau_pct` it invites
+    // a comparison against other products' DAU/MAU that it cannot survive.
+    expect(retention(39, 90, 90)).toBeNull();
+  });
+
+  it('publishes DAU/MAU once the two windows diverge', () => {
+    expect(retention(39, 90, 130)).toBe(30);
+  });
+
+  it('reports an empty property as null, never as 0% retention', () => {
+    expect(retention(0, 0, 0)).toBeNull();
   });
 });

@@ -35,3 +35,9 @@ export function clientReporting(
   rows: FunnelRow[] | undefined | null,
   floor?: string,
 ): ClientReporting;
+
+/** Whether the 28-day window holds anything the 7-day one does not (TRA-843). */
+export function monthWindowFull(week: number, month: number): boolean;
+
+/** DAU/MAU, or null while the month window is not yet a month (TRA-843). */
+export function retention(day: number, week: number, month: number): number | null;

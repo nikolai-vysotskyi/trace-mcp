@@ -144,8 +144,23 @@ suspect until corroborated.
 | --- | --- | --- |
 | 2026-08-28 | _pending GA4 read access_ | Ping verified end to end against the Measurement Protocol debug endpoint. |
 | 2026-09-01 | **54 / 61 / 61** | First real read. 310 events in 28 days; 15 new installs, 8 returning, 5 upgrades, 31 unattributed. 11 countries. Clients: 25 unknown, 8 claude-code, 2 codex, 1 grok. Versions seen: 3.8.0 (17), 3.10.0 (13), 3.7.0 (2), 3.6.0 (1), 3.5.2 (1). |
+| 2026-09-03 | **39 / 90 / 90** | |
+| 2026-09-04 | **39 / 102 / 102** | |
 
-Two things that number is already telling us, both actionable and both
+**The month column has never carried information the week column did not**
+(TRA-843). Week equals month in every snapshot taken so far, and `activeUsers`
+cannot shrink as the window widens — so nothing has appeared in days 8–28 that
+was not already in days 1–7. The property holds no rows that old: the ping only
+reached published builds on 2026-08-23 (#336), and the savings query, whose
+start date is 2025-01-01, comes back with six days of rows. So **61 → 90 → 102
+is a 28-day window still filling, not a step change in adoption** — do not grade
+it as growth. `active_users.month_window_full` in the snapshot is now `false`
+while this holds, and `active_users.prior_21d` is the number to watch: the day
+it goes non-zero, the month column starts meaning something. If it goes non-zero
+while week still equals month, the equality is an artefact of the report and not
+of the property's age, and that is a different bug.
+
+Two things the first read is already telling us, both actionable and both
 picked up as items below:
 
 - **Client attribution was broken, and the "41%" that named it was not a
@@ -191,6 +206,11 @@ is graded on taste. Five numbers fix it, one per stage:
 | Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
 | Use | % of active installs that called a tool at all | `usage.used_pct` | 28 d |
 | Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+Retention publishes as `null` until the month window actually spans a month
+(TRA-843). Over a 28-day window that equals the 7-day one, day ÷ month is
+day-over-week — a materially larger ratio that is not comparable to anyone
+else's DAU/MAU, and the 38% read off the first snapshots was that.
 
 **Activation and use are two stages, not two readings of one** (TRA-673).
 `repos_indexed` says an install completed *setup*; an install that indexed a
