@@ -5,6 +5,7 @@
  * that the AI agent can use as context for its response.
  */
 
+import { createHash } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
@@ -457,7 +458,9 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
     'state',
     'SKILL.state protocol: seed a linear-context task state and run the action/patch loop',
     {
-      goal: z.string().describe('What the task has to achieve'),
+      // `AgentExecutionStateSchema.goal` is `min(1)`, so an empty goal would
+      // render an init call that is guaranteed to be rejected downstream.
+      goal: z.string().trim().min(1).describe('What the task has to achieve'),
       task_id: z
         .string()
         .optional()
@@ -485,12 +488,20 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
   );
 }
 
-/** Derives a stable, non-empty `task_id` from a free-text goal. */
+/**
+ * Derives a stable, ASCII-safe, non-empty `task_id` from a free-text goal.
+ *
+ * The slug alone is not enough as an id: it drops every non-ASCII character, so
+ * two different Cyrillic goals both slugify to nothing, and `trace_state_init`
+ * upserts on `task_id` — the second task would silently overwrite the first.
+ * A hash of the full goal is always appended so distinct goals stay distinct.
+ */
 function taskIdFromGoal(goal: string): string {
   const slug = goal
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 48);
-  return slug || 'task';
+    .slice(0, 40);
+  const hash = createHash('sha256').update(goal).digest('hex').slice(0, 8);
+  return slug ? `${slug}-${hash}` : `task-${hash}`;
 }

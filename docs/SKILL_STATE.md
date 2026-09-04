@@ -89,6 +89,11 @@ it. The `state` prompt is that instruction: it returns the execution protocol
 below plus a seeded `trace_state_init` call, so a client can enter state mode in
 one step (`/state` in clients that surface MCP prompts as slash commands).
 
+Every state call it emits is wrapped in `batch` — on the default `minimal`
+preset the `trace_state_*` tools are not in `tools/list`, so a prompt naming
+them directly would ask the agent to call tools it cannot see. `batch` is on
+every preset and dispatches any registered tool by name.
+
 | Argument | Required | Meaning |
 |----------|----------|---------|
 | `goal` | yes | What the task has to achieve |
