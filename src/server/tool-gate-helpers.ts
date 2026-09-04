@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
-import { allSiblings } from '../tools/tool-families.js';
+import { allSiblings, routesTo } from '../tools/tool-families.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
@@ -90,7 +90,7 @@ function applyVerbosity(name: string, description: string, verbosity: string): s
   const routing = description
     .slice(first.length)
     .split(/(?<=\.)\s+/)
-    .find((sentence) => siblings.some((s) => sentence.includes(s)));
+    .find((sentence) => siblings.some((s) => routesTo(sentence, s)));
   return routing ? `${first} ${routing.trim()}` : first;
 }
 

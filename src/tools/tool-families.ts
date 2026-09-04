@@ -36,3 +36,22 @@ export function familySiblings(tool: string): string[][] {
 export function allSiblings(tool: string): string[] {
   return [...new Set(familySiblings(tool).flat())];
 }
+
+/**
+ * Does `text` route the reader to `sibling`, as opposed to merely containing
+ * its name?
+ *
+ * A bare substring test is not enough in either direction. `search_text`'s own
+ * first sentence — "Full-text search across all indexed files" — contains the
+ * word "search", which would let the drift gate pass a description that lost
+ * its routing clause. And `get_task_context` mentions `get_symbol` mid-sentence
+ * while narrating what it replaces ("replaces manual chaining of search →
+ * get_symbol → Read"), which is not the sentence a collapsed description should
+ * keep.
+ *
+ * So the convention is the imperative the existing hints already use: a routing
+ * clause reads "… use / prefer / with <tool>". Write new hints that way.
+ */
+export function routesTo(text: string, sibling: string): boolean {
+  return new RegExp(`\\b(?:use|prefer|with)\\s+${sibling}\\b`, 'i').test(text);
+}

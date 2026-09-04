@@ -7,7 +7,7 @@
  * Modelled on toon-drift.test.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { TOOL_FAMILIES, familySiblings } from '../../tool-families.js';
+import { TOOL_FAMILIES, familySiblings, routesTo } from '../../tool-families.js';
 import { captureAllTools } from './_capture-tools.js';
 
 describe('cross-tool routing hint drift guardrail', () => {
@@ -28,7 +28,7 @@ describe('cross-tool routing hint drift guardrail', () => {
         const description = byName.get(member);
         if (!description) continue;
         const siblings = members.filter((m) => m !== member);
-        if (!siblings.some((s) => description.includes(s))) {
+        if (!siblings.some((s) => routesTo(description, s))) {
           gaps.push(`  - ${member} (family "${family}") names none of: ${siblings.join(', ')}`);
         }
       }
@@ -38,6 +38,7 @@ describe('cross-tool routing hint drift guardrail', () => {
         `Routing hint drift — a tool description lost (or never had) its sibling pointer:\n${gaps.join('\n')}\n\n` +
           'Fix by adding a natural routing clause to the description, e.g.\n' +
           '  "For raw text/comment search use search_text; for references to a known symbol use find_usages."\n' +
+          'It must read "use / prefer / with <tool>" — see routesTo() for why a bare mention is not enough.\n' +
           'Keep it prose, not a mechanical list — and keep net description bytes flat by trimming elsewhere.\n' +
           'If the tool genuinely does not overlap, remove it from TOOL_FAMILIES in src/tools/tool-families.ts.',
       );
