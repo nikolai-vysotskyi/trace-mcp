@@ -169,7 +169,6 @@ metadata:
       root: fixtureDir,
       include: ['**/*.yaml', '**/*.yml', '**/Dockerfile'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
     await new IndexingPipeline(store, registry, config, fixtureDir).indexAll();

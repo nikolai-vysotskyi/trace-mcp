@@ -60,7 +60,9 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
     stats,
     schemaVersion: versionRow ? Number(versionRow.value) : 0,
     config: {
-      dbPath: config.db.path,
+      // The path this store was actually opened at, not a config default —
+      // an agent that stats or deletes this path must hit the real DB (TRA-802).
+      dbPath: store.db.name,
       includePatterns: config.include,
       excludePatterns: config.exclude,
     },

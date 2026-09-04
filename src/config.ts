@@ -857,11 +857,11 @@ const SOURCE_FILENAMES = [
 
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
-  db: z
-    .object({
-      path: z.string().default('.trace-mcp/index.db'),
-    })
-    .prefault({}),
+  // No `db` section: the index location is not configurable. Every project's
+  // database is resolved by `getDbPath()` in global.ts into `~/.trace/index/`.
+  // The old `db.path` key (and `TRACE_MCP_DB_PATH`) fed nothing but the
+  // `dbPath` field of `get_index_health`, which therefore reported a path no
+  // database was ever at (TRA-802).
   // Every pattern here is global (`**/`) on purpose. The previous defaults
   // anchored most languages to `src/ lib/ app/ test/ tests/ routes/ ...`, which
   // made coverage depend on repo layout and needed a per-framework glob for
@@ -1236,10 +1236,6 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     if (process.env.TRACE_MCP_PRESET) {
       merged.tools = (merged.tools as Record<string, unknown>) ?? {};
       (merged.tools as Record<string, unknown>).preset = process.env.TRACE_MCP_PRESET;
-    }
-    if (process.env.TRACE_MCP_DB_PATH) {
-      merged.db = merged.db ?? {};
-      (merged.db as Record<string, unknown>).path = process.env.TRACE_MCP_DB_PATH;
     }
     if (process.env.TRACE_MCP_LOG_LEVEL) {
       // Log level is handled by pino directly

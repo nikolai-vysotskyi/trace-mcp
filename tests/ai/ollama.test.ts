@@ -53,7 +53,6 @@ describe('createAIProvider', () => {
     root: '.',
     include: [],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 

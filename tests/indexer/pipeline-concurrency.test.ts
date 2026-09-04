@@ -27,7 +27,6 @@ function makeSetup() {
     root: FIXTURE_DIR,
     include: ['src/**/*.ts'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 

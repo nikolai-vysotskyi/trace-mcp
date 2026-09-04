@@ -130,7 +130,6 @@ describe('createAIProvider — anthropic wiring', () => {
     root: '.',
     include: [],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 
