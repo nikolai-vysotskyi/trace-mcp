@@ -12,29 +12,46 @@
  * measurement decided it. On real instruction files the compressible mass is
  * not verbose prose; it is restatement across sources: a CLAUDE.md section
  * that repeats, in the author's own words, a rule an MCP server already sends
- * in its instructions, or a rule the global file already carries. Paraphrasing
- * that text saves a little and risks a lot; dropping the second copy saves the
- * same tokens with the instruction still present, verbatim, in the block.
+ * in its instructions. Paraphrasing that text saves a little and risks a lot;
+ * dropping the second copy saves the same tokens with the instruction still
+ * present, verbatim, in the block.
  *
- * That gives the meaning-preservation criterion the issue asked for, as an
- * invariant rather than a sampling exercise:
- *
- *   nothing is reworded, and nothing is removed unless the same instruction is
+ * The invariant
+ * ─────────────
+ *   nothing is reworded, and no text is removed unless the same instruction is
  *   still delivered by another source in the same startup block.
  *
- * Every removal therefore carries the surviving text and the source that
- * delivers it — `saidBy` / `saidAs` — so the reader checks the claim rather
- * than trusting it. `assertInvariant` enforces it in code.
+ * It is enforced UNIVERSALLY, at the smallest unit of meaning:
+ *
+ * - a line is removed only when EVERY sentence on it has its own surviving
+ *   match. Not "most of it", not "60% of its characters";
+ * - a heading is removed only when EVERY non-blank line of its body has
+ *   already been removed on its own evidence;
+ * - each removal carries one evidence entry per sentence, so the reader can
+ *   check every clause rather than the strongest one.
+ *
+ * The universal rule is the correction that PR #845's review forced. The first
+ * implementation removed a line at 60% coverage and validated it with a
+ * `.some()` check — which is the same fractional deletion this module already
+ * refused at section level, one level down, and it silently deleted the
+ * unmatched 40%. Both reviewers reproduced it independently. Any threshold
+ * below "every unit" reintroduces the bug: prefer proposing less.
+ *
+ * Matching is bag-of-words with two guards the same review demanded. Polarity
+ * is compared before anything else, because "Do not run tests in parallel" and
+ * "Run tests in parallel" share every content word and are opposite
+ * instructions. Digits and short tokens are kept, because `Node 22` and
+ * `Node 18` are otherwise the same sentence.
  *
  * What this module will and will not touch
  * ────────────────────────────────────────
- * It proposes edits ONLY to files the user owns and can edit: CLAUDE.md,
- * AGENTS.md, and a project's MEMORY.md. The rest of the startup block — a
- * third party's skill descriptions, another server's instruction text, a
- * plugin hook's output — is the reference corpus: read to prove duplication,
- * never rewritten, because we cannot edit it and a local rewrite would not
- * survive the next update of the thing that emits it. Those sources are
- * reported in `notCompressible` with the reason, not silently dropped.
+ * It proposes edits ONLY to files the user owns: CLAUDE.md, AGENTS.md, and a
+ * project's MEMORY.md. The rest of the startup block — a third party's skill
+ * descriptions, another server's instruction text, a plugin hook's output — is
+ * the reference corpus: read to prove duplication, never rewritten, because we
+ * cannot edit it and a local rewrite would not survive the next update of
+ * whatever emits it. Those sources are reported in `notCompressible` with the
+ * reason, not silently dropped.
  *
  * Nothing is written. This is a proposal with a diff and a token delta;
  * applying it is TRA-769.
@@ -43,7 +60,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 
-import { listAllSessions } from './log-parser.js';
+import { encodeDirName, listAllSessions } from './log-parser.js';
 import { claudeHome } from '../shared/paths.js';
 
 const CHARS_PER_TOKEN = 4;
@@ -51,17 +68,7 @@ const CHARS_PER_TOKEN = 4;
 /** Files below this are handshakes and aborted runs, not sessions. */
 const MIN_SESSION_BYTES = 20_000;
 
-/**
- * How many recent sessions supply the reference corpus.
- *
- * The startup block is near-identical from session to session, so this is a
- * recency question, not a sample-size one: what matters is that the corpus
- * reflects the servers, skills and hooks configured *now*. Reading the whole
- * corpus would make a report the user waits on out of one they do not.
- */
-const CORPUS_SESSIONS = 25;
-
-/** Below this many content words a unit is a heading or a fragment that collides by accident. */
+/** Below this many content words a unit is a fragment that collides by accident. */
 const UNIT_MIN_WORDS = 5;
 
 /**
@@ -75,25 +82,77 @@ const UNIT_MIN_WORDS = 5;
  */
 const UNIT_MATCH_MIN = 0.5;
 
-/** A line goes when this much of it is restatement. */
-const LINE_REDUNDANT_AT = 0.6;
+/**
+ * The same, for a sentence too short for partial overlap to carry meaning.
+ *
+ * Near-identity, because at three or four words the difference between a rule
+ * and its opposite is one token: `Never push to main` vs `Never push to prod`
+ * scores 0.6 against each other. A short rule is deleted only when the block
+ * says essentially the same words.
+ */
+const SHORT_UNIT_MATCH_MIN = 0.9;
 
 /** Context lines around a hunk in the emitted diff. */
 const DIFF_CONTEXT = 2;
 
-export interface Removal {
-  /** `restatedLine` — restated text; `emptiedHeading` — a heading whose whole body went with it. */
-  rule: string;
-  /** 1-based, inclusive, in the original file. */
-  startLine: number;
-  endLine: number;
-  tokens: number;
-  /** What would go, clipped. */
-  text: string;
+/**
+ * Ceiling on the diff this payload carries, in lines.
+ *
+ * The report rides on the startup audit's response, so it has to be bounded:
+ * a tool that measures token cost must not become one. Measured payloads on
+ * real projects are 200-1400 tokens; this keeps a pathological file from
+ * turning that into a wall of diff. The file path and line numbers are enough
+ * to read the rest locally.
+ */
+const MAX_DIFF_LINES = 200;
+
+/**
+ * Words that flip an instruction's meaning without changing its vocabulary.
+ *
+ * "Do not run tests in parallel" and "Run tests in parallel" share every
+ * content word. Without this check the compressor deletes the user's
+ * constraint and cites its opposite as proof — the single worst thing a tool
+ * like this can do.
+ */
+const NEGATIONS = new Set([
+  'not',
+  'never',
+  'no',
+  'dont',
+  'doesnt',
+  'cannot',
+  'cant',
+  'avoid',
+  'forbid',
+  'forbidden',
+  'without',
+  'except',
+  'stop',
+  'refuse',
+  'skip',
+  'unless',
+]);
+
+export interface Evidence {
   /** The startup source that still delivers this — `mcp:<server>`, `skills`, `hook:<name>`. */
   saidBy: string;
   /** How that source says it, verbatim: the proof, not the claim. */
   saidAs: string;
+}
+
+export interface Removal {
+  /** `restatedLine` — every sentence on it is said elsewhere; `emptiedHeading` — its whole body has gone. */
+  rule: string;
+  /** 1-based, in the original file. One removal is one line. */
+  line: number;
+  tokens: number;
+  /** What would go, clipped. */
+  text: string;
+  /**
+   * One entry per sentence on the line, in order — the universal proof.
+   * Empty only for `emptiedHeading`, which removes a label, not an instruction.
+   */
+  evidence: Evidence[];
 }
 
 export interface CompressionCandidate {
@@ -117,15 +176,15 @@ export interface StartupTextCompression {
   candidates: CompressionCandidate[];
   /**
    * Startup text we read to prove duplication but will not rewrite, and why.
-   * Sized from the logs, so the reader sees what it costs even though this
-   * tool does not offer to touch it.
+   * Sized from the log, so the reader sees what it costs even though this tool
+   * does not offer to touch it.
    */
   notCompressible: UntouchableSource[];
   totalSavedTokens: number;
   /** The rule every removal satisfies, said out loud rather than implied. */
   invariant: string;
-  /** How many recent sessions the reference corpus came from. */
-  corpusSessions: number;
+  /** Which session's startup block the evidence came from, and when it ran. */
+  evidenceFrom: string;
   notes: string[];
   scanMs: number;
 }
@@ -133,12 +192,16 @@ export interface StartupTextCompression {
 // --- Text units ---
 
 /**
- * Compare on content words only.
+ * Compare on content words.
  *
  * Markdown punctuation is how the same rule looks different in two files — one
  * writes it as a table row, the other as a bullet — so it is stripped before
- * comparing. Short words are dropped for the same reason a search engine drops
- * them: they carry no evidence of sameness.
+ * comparing.
+ *
+ * Digits and short tokens are KEPT. Dropping them, as the first version did,
+ * made `Require Node 22` and `Require Node 18` identical, and `v1`/`v2`/`CI`
+ * vanish the same way. A version number is usually the whole point of the
+ * sentence it appears in.
  */
 function contentWords(text: string): Set<string> {
   const normalized = text
@@ -147,7 +210,16 @@ function contentWords(text: string): Set<string> {
     .replace(/[^\p{L}\p{N} ]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return new Set(normalized.split(' ').filter((w) => w.length > 2));
+  return new Set(normalized.split(' ').filter((w) => w.length > 2 || /\d/.test(w)));
+}
+
+/** Whether a unit states a prohibition, on the same normalisation as the words. */
+function isNegated(text: string): boolean {
+  const words = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} ]/gu, '')
+    .split(/\s+/);
+  return words.some((w) => NEGATIONS.has(w));
 }
 
 function jaccard(a: Set<string>, b: Set<string>): number {
@@ -164,36 +236,82 @@ function jaccard(a: Set<string>, b: Set<string>): number {
  * and MCP servers send several rules on one, so comparing whole lines makes
  * the same rule look different on both counts. Em-dash clauses split too —
  * that is a sentence boundary in this kind of writing.
+ *
+ * A colon is NOT a boundary. It introduces a list rather than ending a
+ * thought, so splitting on it turns "Skip openers:" into a two-word fragment
+ * that no evidence can ever prove — which, under the universal rule, silently
+ * freezes every list in the file.
  */
 function units(text: string): string[] {
   return text
     .split('\n')
-    .flatMap((line) => line.split(/(?<=[.!?;:])\s+|\s+—\s+/))
+    .flatMap((line) => line.split(/(?<=[.!?;])\s+|\s+—\s+/))
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * A unit with no content words at all — a stray bullet, a lone bracket.
+ *
+ * This is the ONLY thing a line may carry without proof. "Short" is not on
+ * that list: `Never push to main.` is three words and an instruction, and
+ * treating brevity as triviality is how the first version deleted it.
+ */
+function isEmptyUnit(text: string): boolean {
+  return contentWords(text).size === 0;
+}
+
+/**
+ * How close a match must be to authorise deleting a unit.
+ *
+ * A short sentence has too few words for partial overlap to mean anything —
+ * `Never push to main.` and `Never push to prod.` are 3/4 alike and opposite
+ * in effect — so it has to be near-identical to its evidence. Longer sentences
+ * can be recognised through rewording at the usual threshold.
+ */
+function thresholdFor(words: Set<string>): number {
+  return words.size < UNIT_MIN_WORDS ? SHORT_UNIT_MATCH_MIN : UNIT_MATCH_MIN;
+}
+
+/** The digits a unit commits to: `Node 22` is not `Node 18`. */
+function numbers(words: Set<string>): Set<string> {
+  return new Set([...words].filter((w) => /\d/.test(w)));
+}
+
+function sameNumbers(a: Set<string>, b: Set<string>): boolean {
+  const na = numbers(a);
+  const nb = numbers(b);
+  if (na.size !== nb.size) return false;
+  for (const n of na) if (!nb.has(n)) return false;
+  return true;
 }
 
 interface RefUnit {
   source: string;
   text: string;
   words: Set<string>;
+  negated: boolean;
 }
 
-interface Match {
-  source: string;
-  text: string;
+interface Match extends Evidence {
   score: number;
 }
 
 /** The strongest thing in the corpus that says what `text` says, if anything does. */
 function bestMatch(text: string, ref: RefUnit[]): Match | null {
   const words = contentWords(text);
-  if (words.size < UNIT_MIN_WORDS) return null;
+  if (words.size === 0) return null;
+  const negated = isNegated(text);
+  const floor = thresholdFor(words);
   let best: Match | null = null;
   for (const unit of ref) {
+    // Polarity and numbers are checked before the score, so no amount of shared
+    // vocabulary can outvote them: they are what the sentence commits to.
+    if (unit.negated !== negated) continue;
+    if (!sameNumbers(words, unit.words)) continue;
     const score = jaccard(words, unit.words);
-    if (score >= UNIT_MATCH_MIN && (!best || score > best.score)) {
-      best = { source: unit.source, text: unit.text, score };
+    if (score >= floor && (!best || score > best.score)) {
+      best = { saidBy: unit.source, saidAs: unit.text, score };
     }
   }
   return best;
@@ -207,19 +325,31 @@ export interface CorpusEntry {
   text: string;
 }
 
+export interface StartupCorpus {
+  entries: CorpusEntry[];
+  /** The session the block was read from — provenance for every claim made from it. */
+  sessionPath: string;
+  sessionMtime: number;
+}
+
 /**
- * The startup texts as they were actually delivered, from the most recent
- * sessions.
+ * The startup texts of ONE session: the most recent one in this project.
  *
- * Reading them from the log rather than reconstructing them from config is the
- * point: it is the text the model saw, including the parts that come from
- * servers and plugins we have no other way to see.
+ * One session, not a union of many. Unioning sources across sessions was a
+ * review finding and a real defect: a server that was configured last month
+ * and removed since would still "prove" that today's CLAUDE.md repeats it,
+ * and the user would delete a rule nothing delivers any more. A single startup
+ * block is the only thing that can honestly stand behind "another source in
+ * the same startup block still says this".
+ *
+ * Scoped to the project for the same reason: another project's servers and
+ * hooks are not evidence about this project's session.
  */
 export async function collectStartupCorpus(
   listSessions: typeof listAllSessions = listAllSessions,
-  limit = CORPUS_SESSIONS,
-): Promise<{ entries: CorpusEntry[]; sessionsRead: number }> {
-  const files = listSessions()
+  projectRoot?: string,
+): Promise<StartupCorpus | null> {
+  const files = listSessions(projectRoot)
     .filter((s) => {
       try {
         return fs.statSync(s.filePath).size >= MIN_SESSION_BYTES;
@@ -227,26 +357,34 @@ export async function collectStartupCorpus(
         return false;
       }
     })
-    .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, limit);
+    .sort((a, b) => b.mtime - a.mtime);
 
-  /* Same source across sessions is the same text; keep one copy. Later
-     sessions are older, so the first write — the most recent session — wins. */
-  const bySource = new Map<string, string>();
   for (const file of files) {
     try {
-      await readStartupTexts(file.filePath, bySource);
+      const texts = new Map<string, string>();
+      await readStartupTexts(file.filePath, texts);
+      if (texts.size === 0) continue;
+      return {
+        entries: [...texts].map(([source, text]) => ({ source, text })),
+        sessionPath: file.filePath,
+        sessionMtime: file.mtime,
+      };
     } catch {
-      /* an unreadable session is one less corpus entry, not a failed report */
+      /* an unreadable session is one less candidate, not a failed report */
     }
   }
-  return {
-    entries: [...bySource].map(([source, text]) => ({ source, text })),
-    sessionsRead: files.length,
-  };
+  return null;
 }
 
-/** Attachments before the first API call, which is where the startup block ends. */
+/**
+ * Attachments before the first assistant record, which is where the startup
+ * block ends.
+ *
+ * The cheap substring pre-filter must admit `"assistant"` itself. Filtering on
+ * `"usage"` — as the first version did — skipped assistant records that carry
+ * no usage block, so the boundary never fired and mid-session hook output was
+ * collected as startup evidence. Found in review, reproduced from a log.
+ */
 async function readStartupTexts(filePath: string, out: Map<string, string>): Promise<void> {
   const rl = readline.createInterface({
     input: fs.createReadStream(filePath, { encoding: 'utf8' }),
@@ -254,15 +392,15 @@ async function readStartupTexts(filePath: string, out: Map<string, string>): Pro
   });
   try {
     for await (const line of rl) {
-      if (!line.includes('"attachment"') && !line.includes('"usage"')) continue;
+      if (!line.includes('"attachment"') && !line.includes('"assistant"')) continue;
       let rec: Record<string, unknown>;
       try {
         rec = JSON.parse(line) as Record<string, unknown>;
       } catch {
         continue;
       }
-      // The first assistant call closes the startup block: everything after it
-      // is the conversation, which is not text anyone can rewrite in advance.
+      // Everything after the first call is conversation, not text anyone can
+      // rewrite in advance.
       if (rec.type === 'assistant') return;
       if (rec.type !== 'attachment') continue;
 
@@ -311,7 +449,7 @@ function isHeading(line: string): boolean {
   return /^#{1,6}\s+\S/.test(line);
 }
 
-/** Markdown sections, so a fully restated one can go with its heading. */
+/** Markdown sections, so a fully removed one can drop its heading too. */
 function sections(lines: string[]): Section[] {
   const out: Section[] = [];
   let current: Section = { heading: -1, body: [] };
@@ -327,26 +465,32 @@ function sections(lines: string[]): Section[] {
   return out;
 }
 
-/** How much of one line is restatement, and the strongest evidence for it. */
-function lineRedundancy(line: string, ref: RefUnit[]): { fraction: number; match: Match | null } {
+/**
+ * Evidence for a line, or null if any part of it is unaccounted for.
+ *
+ * Universal by construction: one entry per non-trivial sentence, and a single
+ * unmatched sentence rejects the whole line. A line whose sentences are all
+ * trivial is rejected too — there is nothing to prove about it.
+ */
+function lineEvidence(line: string, ref: RefUnit[]): Evidence[] | null {
   const trimmed = line.trim();
-  if (contentWords(trimmed).size < UNIT_MIN_WORDS) return { fraction: 0, match: null };
-  let matchedChars = 0;
-  let best: Match | null = null;
+  if (!trimmed) return null;
+  const out: Evidence[] = [];
   for (const unit of units(trimmed)) {
+    // Only a unit with no words at all rides along unproven.
+    if (isEmptyUnit(unit)) continue;
     const match = bestMatch(unit, ref);
-    if (!match) continue;
-    matchedChars += unit.length;
-    if (!best || match.score > best.score) best = match;
+    if (!match) return null;
+    out.push({ saidBy: match.saidBy, saidAs: match.saidAs });
   }
-  return { fraction: matchedChars / Math.max(1, trimmed.length), match: best };
+  return out.length > 0 ? out : null;
 }
 
 function tokensOf(text: string): number {
   return Math.round(text.length / CHARS_PER_TOKEN);
 }
 
-function clip(text: string, max = 200): string {
+function clip(text: string, max = 160): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
 }
@@ -354,15 +498,10 @@ function clip(text: string, max = 200): string {
 /**
  * Propose deletions for one file against the corpus.
  *
- * One rule does the work: a line whose content is restatement goes, and it
- * goes on the evidence of its own match — never on its neighbours'. A section
- * is not rolled up at a fraction, however tempting the token count: rolling up
- * at 60% deletes the other 40%, which is text nothing else in the block says,
- * and that is precisely the invariant this module exists to keep.
- *
- * The one structural removal that IS safe: a heading whose entire body has
- * gone. A heading standing over nothing is not an instruction, and dropping it
- * removes no claim the file was making.
+ * Two rules, both universal. A line goes when every sentence on it is said
+ * elsewhere. A heading goes when every non-blank line of its body has already
+ * gone on its own evidence — never by bulk-adding the body, which is how the
+ * first version deleted short instructions that nothing else said.
  */
 function compressAgainstCorpus(
   filePath: string,
@@ -370,42 +509,62 @@ function compressAgainstCorpus(
   ref: RefUnit[],
 ): CompressionCandidate | null {
   const lines = original.split('\n');
-  const redundancy = lines.map((line) => lineRedundancy(line, ref));
 
-  const removed = new Map<number, Match>();
-  redundancy.forEach((r, i) => {
+  const removed = new Map<number, Removal>();
+  lines.forEach((line, i) => {
     /* A heading is never removed on its own evidence, however well it matches:
        "### Disagree when the premise is wrong" restates the rule it labels, and
-       cutting it leaves the body it introduced hanging under the heading above.
-       Headings go only when their whole body has gone. */
-    if (isHeading(lines[i])) return;
-    if (r.match && r.fraction >= LINE_REDUNDANT_AT) removed.set(i, r.match);
+       cutting it leaves the body it introduced under the heading above. */
+    if (isHeading(line)) return;
+    const evidence = lineEvidence(line, ref);
+    if (!evidence) return;
+    removed.set(i, {
+      rule: 'restatedLine',
+      line: i + 1,
+      tokens: tokensOf(line),
+      text: clip(line),
+      evidence,
+    });
   });
   if (removed.size === 0) return null;
 
-  const emptied = new Set<number>();
   for (const section of sections(lines)) {
     if (section.heading < 0) continue;
-    let content = 0;
-    let gone = 0;
-    let best: Match | null = null;
-    for (const i of section.body) {
-      if (contentWords(lines[i].trim()).size < UNIT_MIN_WORDS) continue;
-      content++;
-      const match = removed.get(i);
-      if (!match) continue;
-      gone++;
-      if (!best || match.score > best.score) best = match;
-    }
-    if (content === 0 || gone < content || !best) continue;
-    emptied.add(section.heading);
-    removed.set(section.heading, best);
-    // Blank lines left inside a fully emptied section have nothing to space.
-    for (const i of section.body) removed.set(i, removed.get(i) ?? best);
+    const nonBlank = section.body.filter((i) => lines[i].trim() !== '');
+    if (nonBlank.length === 0 || !nonBlank.every((i) => removed.has(i))) continue;
+    removed.set(section.heading, {
+      rule: 'emptiedHeading',
+      line: section.heading + 1,
+      tokens: tokensOf(lines[section.heading]),
+      text: clip(lines[section.heading]),
+      // A heading whose body has gone is a label over nothing; it makes no
+      // claim of its own, so there is nothing to cite for it.
+      evidence: [],
+    });
   }
 
-  const removals = groupRemovals(lines, removed, emptied);
-  const compressed = collapseBlankRuns(lines.filter((_, i) => !removed.has(i))).join('\n');
+  /* Blank lines stranded between removals are folded into the removal set
+     rather than collapsed afterwards, so the diff the reader checks and the
+     `savedTokens` they are quoted describe the same file. */
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() !== '' || removed.has(i)) continue;
+    const prevRemoved = removed.has(i - 1);
+    const nextBlankOrRemoved = i + 1 >= lines.length || removed.has(i + 1);
+    if (prevRemoved && nextBlankOrRemoved) {
+      removed.set(i, {
+        rule: 'strandedBlank',
+        line: i + 1,
+        tokens: 0,
+        text: '',
+        evidence: [],
+      });
+    }
+  }
+
+  const compressed = lines.filter((_, i) => !removed.has(i)).join('\n');
+  const removals = [...removed.values()]
+    .filter((r) => r.rule !== 'strandedBlank')
+    .sort((a, b) => b.tokens - a.tokens);
 
   return {
     path: filePath,
@@ -413,67 +572,13 @@ function compressAgainstCorpus(
     compressedTokens: tokensOf(compressed),
     savedTokens: tokensOf(original) - tokensOf(compressed),
     removals,
-    diff: unifiedDiff(filePath, lines, removed),
+    diff: unifiedDiff(filePath, lines, new Set(removed.keys())),
   };
-}
-
-/** Consecutive removed lines are one removal — a per-line list of a dropped section is noise. */
-function groupRemovals(
-  lines: string[],
-  removed: Map<number, Match>,
-  emptied: Set<number>,
-): Removal[] {
-  const indices = [...removed.keys()].sort((a, b) => a - b);
-  const out: Removal[] = [];
-  let start = -1;
-  let previous = -2;
-
-  const flush = (end: number) => {
-    if (start < 0) return;
-    const block = lines.slice(start, end + 1);
-    /* The evidence is the strongest match anywhere in the block, not the one
-       for its first line: a rolled-up section starts at a heading, and a
-       heading's own match is the weakest thing in it. */
-    let match = removed.get(start) as Match;
-    for (let i = start; i <= end; i++) {
-      const candidate = removed.get(i);
-      if (candidate && candidate.score > match.score) match = candidate;
-    }
-    out.push({
-      rule: emptied.has(start) ? 'emptiedHeading' : 'restatedLine',
-      startLine: start + 1,
-      endLine: end + 1,
-      tokens: tokensOf(block.join('\n')),
-      text: clip(block.join(' ')),
-      saidBy: match.source,
-      saidAs: clip(match.text),
-    });
-  };
-
-  for (const i of indices) {
-    if (i !== previous + 1) {
-      flush(previous);
-      start = i;
-    }
-    previous = i;
-  }
-  flush(previous);
-  return out.sort((a, b) => b.tokens - a.tokens);
-}
-
-/** Deleting a block leaves a hole; a run of blanks is not a saving worth a confusing diff. */
-function collapseBlankRuns(lines: string[]): string[] {
-  const out: string[] = [];
-  for (const line of lines) {
-    if (line.trim() === '' && out.length > 0 && out[out.length - 1].trim() === '') continue;
-    out.push(line);
-  }
-  return out;
 }
 
 /** Deletion-only unified diff — enough for a human to check the proposal line by line. */
-function unifiedDiff(filePath: string, lines: string[], removed: Map<number, Match>): string {
-  const indices = [...removed.keys()].sort((a, b) => a - b);
+function unifiedDiff(filePath: string, lines: string[], removed: Set<number>): string {
+  const indices = [...removed].sort((a, b) => a - b);
   const hunks: Array<[number, number]> = [];
   for (const i of indices) {
     const last = hunks[hunks.length - 1];
@@ -488,6 +593,12 @@ function unifiedDiff(filePath: string, lines: string[], removed: Map<number, Mat
     const kept = lines.slice(start, end + 1).filter((_, k) => !removed.has(start + k)).length;
     out.push(`@@ -${start + 1},${end - start + 1} +${start + 1},${kept} @@`);
     for (let i = start; i <= end; i++) out.push(`${removed.has(i) ? '-' : ' '}${lines[i]}`);
+    if (out.length > MAX_DIFF_LINES) {
+      out.push(
+        `… diff truncated at ${MAX_DIFF_LINES} lines; every removal is listed in \`removals\``,
+      );
+      break;
+    }
   }
   return out.join('\n');
 }
@@ -509,10 +620,12 @@ function editableFiles(projectRoot?: string): string[] {
       ? [
           path.join(projectRoot, 'CLAUDE.md'),
           path.join(projectRoot, 'AGENTS.md'),
-          // The memory index is re-read into every session, in both layouts
-          // the harness has used for it.
-          path.join(home, 'projects', encodeProject(projectRoot), 'MEMORY.md'),
-          path.join(home, 'projects', encodeProject(projectRoot), 'memory', 'MEMORY.md'),
+          // The memory index is re-read into every session. `encodeDirName` is
+          // the harness's own encoder, reused rather than reimplemented — a
+          // hand-rolled one dropped underscores and dots and never found the
+          // file for a project path containing either.
+          path.join(home, 'projects', encodeDirName(projectRoot), 'MEMORY.md'),
+          path.join(home, 'projects', encodeDirName(projectRoot), 'memory', 'MEMORY.md'),
         ]
       : []),
   ];
@@ -525,21 +638,16 @@ function editableFiles(projectRoot?: string): string[] {
   });
 }
 
-/** How the harness names a project's session directory. */
-function encodeProject(projectRoot: string): string {
-  return projectRoot.replace(/[^a-zA-Z0-9]/g, '-');
-}
-
 /** Why each corpus source is read but not rewritten. */
 function reasonFor(source: string): string {
   if (source.startsWith('mcp:')) {
-    return 'Sent by the MCP server itself. It is not a file on this machine, and a local edit would be replaced the next time the server starts.';
+    return 'Sent by the MCP server itself. Not a file on this machine, and a local edit would be replaced the next time the server starts.';
   }
   if (source.startsWith('hook:')) {
-    return "Printed by a hook at every session start. The text belongs to whatever plugin owns the hook; what it costs is worth knowing, but shortening it is that plugin's change, not this file's.";
+    return "Printed by a hook at every session start. The text belongs to whichever plugin owns the hook; shortening it is that plugin's change, not this file's.";
   }
   if (source === 'skills') {
-    return "Built from the description in each skill's own SKILL.md, most of them installed from elsewhere. `get_startup_context_audit` prices the skills that are listed at every start and never invoked — that is the evidence-backed lever here.";
+    return "Built from each skill's own SKILL.md, most of them installed from elsewhere. `recommendations` prices the skills listed at every start and never invoked — that is the evidence-backed lever here.";
   }
   return 'Not a file this machine owns.';
 }
@@ -547,27 +655,30 @@ function reasonFor(source: string): string {
 // --- Entry point ---
 
 export interface StartupTextOptions {
-  /** Which project's instruction and memory files to examine. */
+  /** Which project's instruction and memory files to examine, and whose sessions to read. */
   projectRoot?: string;
   /** Session discovery, injectable so tests can point at a fixture directory. */
   listSessions?: typeof listAllSessions;
 }
 
 const COMPRESSION_INVARIANT =
-  'Nothing is reworded. A passage is only proposed for removal when another source in the same startup block still delivers it — each removal names that source and quotes it.';
+  'Nothing is reworded. A line is only proposed for removal when EVERY sentence on it is still delivered by another source in the same startup block, and each removal cites that source per sentence. A heading goes only once its whole body has.';
 
 export async function analyzeStartupText(
   opts: StartupTextOptions = {},
 ): Promise<StartupTextCompression> {
   const startedAt = Date.now();
-  const { entries: corpus, sessionsRead } = await collectStartupCorpus(
-    opts.listSessions ?? listAllSessions,
-  );
+  const corpus = await collectStartupCorpus(opts.listSessions ?? listAllSessions, opts.projectRoot);
+
   const ref: RefUnit[] = [];
-  for (const entry of corpus) {
+  for (const entry of corpus?.entries ?? []) {
     for (const text of units(entry.text)) {
       const words = contentWords(text);
-      if (words.size >= UNIT_MIN_WORDS) ref.push({ source: entry.source, text, words });
+      // Short corpus units are kept: they are the only thing that can prove a
+      // short rule, and the stricter threshold is what keeps that honest.
+      if (words.size > 0) {
+        ref.push({ source: entry.source, text, words, negated: isNegated(text) });
+      }
     }
   }
 
@@ -584,7 +695,7 @@ export async function analyzeStartupText(
   }
   candidates.sort((a, b) => b.savedTokens - a.savedTokens);
 
-  const notCompressible: UntouchableSource[] = corpus
+  const notCompressible: UntouchableSource[] = (corpus?.entries ?? [])
     .map((entry) => ({
       source: entry.source,
       tokens: tokensOf(entry.text),
@@ -595,10 +706,11 @@ export async function analyzeStartupText(
   const notes = [
     'Nothing is written. This is a proposal: read the diff, keep what you agree with.',
     'The saving is per session — this text is re-read on every start, so the delta repeats for as long as the file stays as it is.',
+    "Evidence comes from ONE startup block, the most recent in this project. Sources are not unioned across sessions: a server configured last month and removed since must not prove that today's file repeats it.",
   ];
-  if (corpus.length === 0) {
+  if (!corpus) {
     notes.push(
-      'No startup texts were found in the recent session logs, so there was nothing to compare against and no proposal could be made.',
+      "No startup block was found in this project's recent session logs, so there was nothing to compare against and no proposal could be made.",
     );
   }
   if (!opts.projectRoot) {
@@ -610,7 +722,9 @@ export async function analyzeStartupText(
     notCompressible,
     totalSavedTokens: candidates.reduce((n, c) => n + c.savedTokens, 0),
     invariant: COMPRESSION_INVARIANT,
-    corpusSessions: sessionsRead,
+    evidenceFrom: corpus
+      ? `${corpus.sessionPath} (${new Date(corpus.sessionMtime).toISOString()})`
+      : 'no startup block found',
     notes,
     scanMs: Date.now() - startedAt,
   };
@@ -619,40 +733,52 @@ export async function analyzeStartupText(
 /**
  * The invariant, checked rather than asserted in prose.
  *
- * Every removal must name a source that still delivers the same instruction,
- * and the surviving text must actually overlap the lines that would go —
- * otherwise the evidence quoted to the reader is decoration.
+ * Universal, and deliberately so: EVERY non-trivial sentence of EVERY removed
+ * line must carry evidence that overlaps it and agrees with it in polarity.
+ * The first version used `.some()` — one matching sentence vouching for a whole
+ * block — and both reviewers used exactly that hole to delete text nothing
+ * else said. `.some()` cannot establish this claim; only `.every()` can.
  *
- * Checked against the file on disk, not against the payload's own `text`,
- * which is clipped for display: verifying a proposal against its own summary
- * of itself would pass whatever the proposal did.
- *
- * Tests run this over the whole result; a caller that wants the guarantee at
- * runtime can too.
+ * Checked against the file on disk, not the payload's own clipped `text`:
+ * verifying a proposal against its own summary of itself would pass whatever
+ * the proposal did.
  */
 export function assertInvariant(result: StartupTextCompression): void {
   for (const candidate of result.candidates) {
     const lines = fs.readFileSync(candidate.path, 'utf8').split('\n');
     for (const removal of candidate.removals) {
-      if (!removal.saidBy || !removal.saidAs) {
+      const line = lines[removal.line - 1] ?? '';
+      const at = `${candidate.path}:${removal.line}`;
+
+      if (removal.rule === 'emptiedHeading') {
+        if (!isHeading(line)) throw new Error(`${at} removed as a heading but is not one`);
+        continue;
+      }
+
+      const claims = units(line.trim()).filter((u) => !isEmptyUnit(u));
+      if (claims.length === 0) throw new Error(`${at} removed with nothing to prove about it`);
+      if (removal.evidence.length !== claims.length) {
         throw new Error(
-          `${candidate.path}:${removal.startLine} removed without a surviving source`,
+          `${at} removes ${claims.length} sentences but cites ${removal.evidence.length}`,
         );
       }
-      /* Per sentence of the removed block, not per block: the block may be
-         several lines, each restated by a different unit of the same source,
-         and one blended bag of words would dilute every one of them below any
-         threshold worth setting. */
-      const block = lines.slice(removal.startLine - 1, removal.endLine).join('\n');
-      const evidence = contentWords(removal.saidAs);
-      const overlaps = units(block).some(
-        (unit) => jaccard(contentWords(unit), evidence) >= UNIT_MATCH_MIN,
-      );
-      if (!overlaps) {
-        throw new Error(
-          `${candidate.path}:${removal.startLine} cites ${removal.saidBy}, which does not say what it says`,
-        );
-      }
+      claims.forEach((claim, i) => {
+        const cited = removal.evidence[i];
+        if (!cited?.saidBy || !cited.saidAs) {
+          throw new Error(`${at} removes a sentence with no surviving source`);
+        }
+        if (isNegated(claim) !== isNegated(cited.saidAs)) {
+          throw new Error(`${at} cites ${cited.saidBy}, which states the opposite`);
+        }
+        const claimWords = contentWords(claim);
+        const citedWords = contentWords(cited.saidAs);
+        if (!sameNumbers(claimWords, citedWords)) {
+          throw new Error(`${at} cites ${cited.saidBy}, which names different values`);
+        }
+        if (jaccard(claimWords, citedWords) < thresholdFor(claimWords)) {
+          throw new Error(`${at} cites ${cited.saidBy}, which does not say what it says`);
+        }
+      });
     }
   }
 }

@@ -3063,17 +3063,27 @@ The audit answers "what does the block cost and what in it went unused". The `te
 
 It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
 
-It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from your recent session logs, not reconstructed from config — and proposes deletions with a unified diff and a per-session token delta.
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
 
 **Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
 
-> a passage is only proposed for removal when another source in the same startup block still delivers it — and each removal names that source and quotes it.
+> a line is only proposed for removal when **every sentence on it** is still delivered by another source in the same startup block, and each removal cites that source per sentence. A heading goes only once its whole body has.
 
-That is deliberately not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Paraphrasing that saves a little and risks a lot; dropping the second copy saves the same tokens with the instruction still present, verbatim, in the block. It is also what makes "the meaning survived" checkable instead of a matter of taste.
+The word doing the work is *every*. An earlier version removed a line once 60% of its characters were matched and validated that with a "some sentence matched" check — which deletes the other 40%, text nothing else says. Two independent reviews reproduced it. Any threshold below "every unit" reintroduces it, so the rule is universal and the report proposes less rather than guessing.
 
-Matching is on sentences and word overlap, so a rule counts as restated even when the two wordings share no exact line — which is the normal case, and the reason exact-duplicate detection finds nothing.
+That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
 
-Two things it will not do. A section is never rolled up at a fraction, however large the token count: rolling up at 60% deletes the other 40%, which is text nothing else says. And it never proposes edits to text it does not own — a third party's skill descriptions, another server's instructions, a plugin hook's output. Those are the reference corpus: read to prove duplication, reported in `notCompressible` with their size and the reason, never rewritten.
+Matching is on sentences and word overlap, with three guards:
+
+- **Polarity.** "Do not run tests in parallel" and "Run tests in parallel" share every content word and are opposite instructions. A prohibition is never removed on the evidence of a permission.
+- **Values.** Digits are kept and compared, so `Node 22` does not prove `Node 18`.
+- **Short sentences.** Below five content words, partial overlap means nothing — `Never push to main` and `Never push to prod` are mostly alike — so a short rule must be near-identical to its evidence.
+
+Evidence comes from **one** startup block, not a union across sessions: a server configured last month and removed since must not prove that today's file repeats it. It is scoped to the project, because another project's servers and hooks are not evidence about this one's session.
+
+Text it does not own is never edited — a third party's skill descriptions, another server's instructions, a plugin hook's output. Those are the reference corpus: read to prove duplication, reported in `notCompressible` with their size and the reason.
+
+Measured payload on real projects: 200–1400 tokens, with the diff capped at 200 lines; every removal is listed in `removals` regardless.
 
 Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
 

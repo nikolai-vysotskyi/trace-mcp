@@ -123,7 +123,8 @@ describe('analyzeStartupContext', () => {
      The compressor's own behaviour is covered in startup-text.test.ts. */
   it('carries the text-compression proposal and its invariant', async () => {
     const audit = await run();
-    expect(audit.textCompression.invariant).toContain('still delivers it');
+    // The universal wording is the point: "EVERY sentence", not most of a line.
+    expect(audit.textCompression.invariant).toContain('EVERY sentence');
     // Sized from the same startup attachments the decomposition above measured.
     expect(audit.textCompression.notCompressible.map((n) => n.source)).toContain('skills');
     expect(audit.textCompression.totalSavedTokens).toBeGreaterThanOrEqual(0);
