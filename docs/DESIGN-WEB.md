@@ -884,9 +884,13 @@ both — a `<source>` swaps the file, never the box. So the buttons carry **no
 exactly 250; the 2000px phone art is declared `4x` and lays out at 500, wider
 than any phone column, so `max-width: 100%` clamps it to the full width and the
 empty margin either side of a 250px plate disappears. Keep a density on the
-`<img>` srcset as well — it is the fallback for a renderer that drops
-`<picture>`, and a bare `src` lays out at the full 1600px. npm keeps `<picture>`,
-`<source>` and `srcset`, checked on the live package page.
+last `<source>`, the one that carries **no `media` at all** and therefore always
+matches — because GitHub strips `srcset` from `<img>` while keeping it on
+`<source>`. Measured on a live PR page: with the density only on the `<img>`,
+the default dark view fell through to the bare `src` and laid the buttons out
+at 1012px. The `<img>` is now only reached by a renderer that drops `<picture>`
+entirely. npm keeps `<picture>`, `<source>` and `srcset`, checked on the live
+package page.
 
 Mind the render scale when computing a density: a shot comes out at **4x, not
 2x** — `deviceScaleFactor` and the capture clip scale both apply, so a 400 CSS px

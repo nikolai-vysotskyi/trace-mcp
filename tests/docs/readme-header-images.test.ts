@@ -102,11 +102,12 @@ describe('README header images', () => {
       expect(pic.lastIndexOf('max-width: 500px')).toBeLessThan(
         pic.indexOf(`srcset="docs/images/readme/btn-${name}-light.png`),
       );
-      // The <img> keeps a density too: it is the fallback for a renderer that
-      // drops <picture>, and a bare src would lay out at the full 1600px.
-      expect(pic).toMatch(
-        new RegExp(`<img src="docs/images/readme/btn-${name}-dark\\.png" srcset=`),
-      );
+      // GitHub strips srcset from <img> but keeps it on <source>, so the size
+      // has to live on a source that always matches — hence a last source with
+      // no media at all. Without it the default dark view falls through to the
+      // bare <img> and lays out at the full 1600px.
+      expect(pic).toContain(`<source srcset="docs/images/readme/btn-${name}-dark.png 6.4x" />`);
+      expect(pic).toMatch(new RegExp(`<img src="docs/images/readme/btn-${name}-dark\\.png" alt=`));
     }
   });
 });
