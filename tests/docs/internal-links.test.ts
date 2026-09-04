@@ -88,7 +88,9 @@ describe('docs footer nav covers every indexed page', () => {
    * Google under an April date. `pnpm docs:sitemap` refreshes them from git.
    */
   it('every lastmod is at least the source page last commit date', async () => {
-    const { sourceFor, gitDate, isShallow } = await import('../../scripts/gen-sitemap.mjs');
+    const { sourceFor, gitDate, isShallow, refresh } = await import(
+      '../../scripts/gen-sitemap.mjs'
+    );
     // A shallow clone dates every file to the single fetched commit, which would
     // flag untouched pages — so skip there. The CI `test` job checks out with
     // fetch-depth: 0 precisely so this guard runs before a docs PR merges.
@@ -98,7 +100,10 @@ describe('docs footer nav covers every indexed page', () => {
       ...xml.matchAll(/<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>\s*<lastmod>([^<]*)<\/lastmod>/g),
     ]
       .map(([, path, lastmod]) => ({ path, lastmod, git: gitDate(sourceFor(path)) }))
-      .filter((e) => e.lastmod < e.git);
+      // Not `lastmod < git`: a squash-merge dates every page in the PR by its
+      // LAST commit, so a one-day-old sitemap is the normal, unavoidable state
+      // of a freshly merged docs PR. Stale is what the generator would rewrite.
+      .filter((e) => refresh(e.lastmod, e.git) !== e.lastmod);
     expect(
       stale,
       `sitemap lastmod older than the page's last commit — run \`pnpm docs:sitemap\`: ${stale
@@ -150,6 +155,60 @@ describe('docs footer nav covers every indexed page', () => {
   });
 
   /**
+   * The author date only survives a squash intact when the PR is one commit.
+   * GitHub stamps a multi-commit squash with the author date of the LAST
+   * commit, so a page edited (and the sitemap regenerated) on 09-03 in a PR
+   * whose review fixup lands 09-04 is dated 09-04 on master against a sitemap
+   * that says 09-03 — green on the PR, red on master. That is what #841 did to
+   * 18 pages at once and what the repo has been regenerating by hand since
+   * (TRA-795). The date the guard wants does not exist until merge time, so
+   * the tolerance is what closes it, not a stricter generator (TRA-800).
+   */
+  it('stays quiet when a multi-commit squash dates a page after the sitemap', async () => {
+    const { gitDate, refresh } = await import('../../scripts/gen-sitemap.mjs');
+    const repo = mkdtempSync(join(tmpdir(), 'sitemap-multisquash-'));
+    const env = { ...process.env, GIT_AUTHOR_DATE: '', GIT_COMMITTER_DATE: '' };
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd: repo, env });
+    const at = (date: string, ...args: string[]) => {
+      env.GIT_AUTHOR_DATE = date;
+      env.GIT_COMMITTER_DATE = date;
+      git(...args);
+    };
+
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    mkdirSync(join(repo, 'docs'));
+    // Master before the PR branched.
+    writeFileSync(join(repo, 'README.md'), 'base\n');
+    at('2026-09-01T10:00:00Z', 'add', '-A');
+    at('2026-09-01T10:00:00Z', 'commit', '-qm', 'base');
+    // The docs edit, and the `pnpm docs:sitemap` run that dated it 09-03.
+    writeFileSync(join(repo, 'docs', 'page.md'), 'body\n');
+    at('2026-09-03T20:33:00Z', 'add', '-A');
+    at('2026-09-03T20:33:00Z', 'commit', '-qm', 'docs edit');
+    // A review fixup the next day, touching nothing under docs/.
+    writeFileSync(join(repo, 'unrelated.ts'), 'export {};\n');
+    at('2026-09-04T04:31:00Z', 'add', '-A');
+    at('2026-09-04T04:31:00Z', 'commit', '-qm', 'review fixup');
+    // What GitHub's "Squash and merge" produces: one commit carrying both
+    // trees, authored at the last commit's date.
+    git('reset', '-q', '--soft', 'HEAD~2');
+    at('2026-09-04T04:31:00Z', 'commit', '-qm', 'docs(seo): squashed (#841)');
+
+    const afterMerge = gitDate('page.md', repo);
+    rmSync(repo, { recursive: true, force: true });
+
+    expect(afterMerge, 'the squash carries the last commit date, not the edit date').toBe(
+      '2026-09-04',
+    );
+    expect(refresh('2026-09-03', afterMerge), 'merge-date residue must not read as stale').toBe(
+      '2026-09-03',
+    );
+  });
+
+  /**
    * `%cs` renders each commit's date in *its own* timezone, so a GitHub squash
    * commit (-07:00) and the same commit read from Dubai (+04:00) disagree by a
    * day. Re-running the generator therefore revised ten untouched pages from
@@ -158,10 +217,14 @@ describe('docs footer nav covers every indexed page', () => {
    * on pages nobody edited.
    */
   it('regenerating never moves a committed date backwards', async () => {
-    const { keepLater, rewrite, isShallow } = await import('../../scripts/gen-sitemap.mjs');
-    expect(keepLater('2026-08-30', '2026-08-29')).toBe('2026-08-30');
-    expect(keepLater('2026-08-29', '2026-08-30')).toBe('2026-08-30');
-    expect(keepLater(undefined, '2026-08-30')).toBe('2026-08-30');
+    const { refresh, rewrite, isShallow } = await import('../../scripts/gen-sitemap.mjs');
+    expect(refresh('2026-08-30', '2026-08-29')).toBe('2026-08-30');
+    expect(refresh(undefined, '2026-08-30')).toBe('2026-08-30');
+    // Within the drift window the committed date stands; past it, git wins.
+    expect(refresh('2026-08-29', '2026-08-30')).toBe('2026-08-29');
+    expect(refresh('2026-08-29', '2026-09-05')).toBe('2026-08-29');
+    expect(refresh('2026-08-29', '2026-09-06')).toBe('2026-09-06');
+    expect(refresh('2026-04-01', '2026-08-30')).toBe('2026-08-30');
 
     if (isShallow()) return; // gitDate is meaningless on one fetched commit
     const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');

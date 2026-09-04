@@ -96,7 +96,6 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
       root: workDir,
       include: ['**/*.ts'],
       exclude: [],
-      db: { path: ':memory:' },
     });
     return new IndexingPipeline(store, registry, config, workDir);
   }

@@ -20,7 +20,6 @@ function makeConfig(): TraceMcpConfig {
     root: FIXTURE,
     include: ['src/**/*.ts', '.github/workflows/**/*.yml'],
     exclude: ['node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   };
 }

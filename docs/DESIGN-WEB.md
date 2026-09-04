@@ -434,6 +434,21 @@ appearances render stacked — which is exactly how the pair shipped and how
 TRA-390 was reported. Check `display` in the browser, in both themes; the
 markup alone does not tell you which rule won.
 
+**Every app screenshot needs a pair — the rule above is not opt-in.** A shot
+with no counterpart does not fall back to something neutral: it renders in
+both themes, so one of the two themes gets the wrong appearance of the app.
+That is worse than the stacked-pair bug it is easy to mistake for a milder
+version of, because nothing about it looks broken — it looks like the product
+only has a light mode. Dark is the site's default (`prefers-color-scheme` is
+only consulted for light), so the un-paired case is the majority case, not
+the edge case.
+
+`app-overview` and `app-projects` shipped light-only for months for exactly
+this reason: §3 said how to write a pair and never said a single image was a
+finding. Measure it, do not read the markup — count `.app-frame img` and count
+the ones carrying a `theme-*-only` class; the two numbers must be equal, in
+both themes.
+
 **Content.** Shot from the real Electron window — traffic lights and rounded
 window corners must be present. No traffic lights means it came from a
 browser: reject it. No visible errors, skeletons, scratch directories, or
@@ -493,6 +508,20 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Dark and light both screenshotted, no unstyled flash on load.
 - [ ] Exactly one image of a light/dark pair has computed `display: block` —
       read it off the element, in each theme.
+- [ ] **Every** app screenshot is in a pair — no shot renders in both themes
+      (§3). Not a claim, a measurement, run on the landing:
+
+      ```
+      const imgs = [...document.querySelectorAll('.app-frame img')];
+      imgs.length - imgs.filter(i =>
+        i.classList.contains('theme-light-only') ||
+        i.classList.contains('theme-dark-only')).length
+      ```
+
+      Must be 0. It is 2 today — `app-overview` and `app-projects` have no
+      dark counterpart, so a dark reader gets two light app windows on OLED
+      black (TRA-851). The un-paired shot is the failure this line exists to
+      catch; the stacked pair above is the other one.
 - [ ] Theme choice survives landing → doc page navigation.
 - [ ] Contrast sweep is green. Not a claim — a command:
 
@@ -825,6 +854,30 @@ load the fonts and will tell you it is fine when it is not.
 **Both appearances, one `<picture>`.** Each image ships as
 `<source media="(prefers-color-scheme: light)">` plus a dark `<img>`. GitHub
 honours it. Never stack the two.
+
+**Two cuts of the banner, one for the phone.** GitHub scales README images to
+the column, and on a phone that column is about 390 CSS px — the 1200px banner
+arrives at 0.33 scale, which puts its 25px tagline at 8px and the receipt below
+legibility. So the banner also ships at 480 CSS px in one column, selected with
+`<source media="(max-width: 500px)">` (plus the light pair) placed **above** the
+theme source: the first matching source wins, so a theme source above them takes
+the phone back to the wide cut. `media` is the only responsive lever GitHub's
+sanitiser leaves in a README, and it takes any media query, not just
+`prefers-color-scheme`. One catch, and it is not cosmetic: GitHub wraps every
+README `<picture>` in a `<themed-picture>` element that substring-matches
+`(prefers-color-scheme: light)` and, for a reader who pinned Light in Appearance,
+rewrites that source's media to match every viewport. Written with the space, the
+compound narrow source is classified as themed and wins on a 1440px desktop — the
+phone cut at 750px. So the narrow one is spelled `(prefers-color-scheme:light)`,
+no space: still valid CSS, still preserved by the sanitiser, invisible to that
+match. The wide source keeps the spaced form, where the rewrite is what a pinned
+reader wants. The narrow cut is a CSS modifier in the generator
+(`.banner.narrow`) overriding only the sizes that break — palette and copy stay
+shared, so a wording change lands in both. `tests/docs/readme-header-images.test.ts`
+guards the files, both cuts, and that ordering.
+
+**The buttons need no narrow cut.** At `width="250"` a button plate is already
+narrower than a phone column, so the three simply stack at full size.
 
 **Every number is generated.** The banner reads `docs/_data/counts.yml` and
 `docs/_data/pr_context_bench.json` — the same sources the site uses. A hand-

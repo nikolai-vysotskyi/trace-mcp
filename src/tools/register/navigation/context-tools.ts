@@ -27,7 +27,7 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
 
   server.tool(
     'get_context_bundle',
-    "Get a symbol's source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication. Use instead of chaining get_symbol calls — deduplicates shared imports across symbols. For a single symbol without imports, get_symbol is lighter. Read-only. Returns JSON: { primary: [{ symbol_id, file, source }], imports: [{ file, source }], token_usage }.",
+    "Get a symbol's source code + its import dependencies + optional callers, packed within a token budget. Supports batch queries with shared-import deduplication. Use instead of chaining get_symbol calls. For a single symbol without imports, use get_symbol — lighter. Read-only. Returns JSON: { primary: [{ symbol_id, file, source }], imports: [{ file, source }], token_usage }.",
     {
       symbol_id: optionalNonEmptyString(512).describe('Single symbol ID'),
       symbol_ids: z

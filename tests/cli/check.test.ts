@@ -123,7 +123,6 @@ beforeEach(() => {
       root: '/proj/current',
       include: ['**/*'],
       exclude: [],
-      db: { path: '' },
       plugins: [],
     },
     // biome-ignore lint/suspicious/noExplicitAny: minimal Result stub

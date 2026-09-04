@@ -1,7 +1,7 @@
 ---
 title: "Configuration Reference — all config options (works with none)"
-description: "Every trace-mcp option in .trace-mcp.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-03
+description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
+updated: 2026-09-04
 ---
 
 # Configuration
@@ -34,11 +34,15 @@ updated: 2026-09-03
 Configuration is optional — trace-mcp works out of the box for standard projects.
 
 This page is the reference for the file itself: where it lives, how the layers
-merge, and every key. Several sections of it are big enough to have their own
-page — the [quality gates](quality-gates.md) thresholds, the
-[telemetry](telemetry.md) span exporter, the memory knobs that bound the
-[daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement tier that
-`trace-mcp init` writes here on your behalf.
+merge, and what the keys you reach for actually do. Several sections of it are
+big enough to have their own page — the [quality gates](quality-gates.md)
+thresholds, the [telemetry](telemetry.md) span exporter, the memory knobs that
+bound the [daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement
+tier that `trace-mcp init` writes here on your behalf.
+
+For the exhaustive list — every key the schema accepts, with its type, allowed
+values and real default, generated from the schema itself — see the
+[config index](config-index.md).
 
 ---
 
@@ -809,7 +813,7 @@ with `mcp__trace__`.
 
 ### Multica workspace agents
 
-Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. An agent with no `mcp_config` inherits the machine's own MCP setup, so its preset is whatever `tools.preset` says in `~/.trace-mcp/.config.json` (`standard` unless you changed it).
+Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. An agent with no `mcp_config` inherits the machine's own MCP setup, so its preset is whatever `tools.preset` says in `~/.trace/.config.json` (`minimal` unless you changed it).
 
 Setting `mcp_config` does **not** override the inherited `trace-mcp` entry by name — Multica launches that agent with `--strict-mcp-config`, so it gets *only* the servers you list. Everything else the machine provides (user-scope servers, plugin servers, hosted connectors) disappears for that agent. List every server the role still needs, not just `trace-mcp`:
 
@@ -931,6 +935,25 @@ With `enabled: "auto"` the provider is registered at boot; discovery returns an 
 |---|---|
 | `TRACE_MCP_LOG_LEVEL` | Log level (debug, info, warn, error) |
 | `HERMES_HOME` | Override for Hermes Agent storage root (default `~/.hermes`). Read by `discover_hermes_sessions` and the Hermes session provider. |
+| `TRACE_MCP_COMPUTE_TIMEOUT_MS` | Wall-clock ceiling for one heavy graph traversal (default `15000`). |
+| `TRACE_MCP_COMPUTE_RSS_MB` | Resident-memory ceiling checked during a traversal (default `3000`). |
+| `TRACE_MCP_COMPUTE_MAX_ITERATIONS` | Iteration ceiling for one traversal (default `2000000`). |
+| `TRACE_MCP_NO_COMPUTE_GUARD` | Set to `1` to disable all compute ceilings (debugging). |
+
+### Compute ceilings
+
+`get_call_graph`, `get_change_impact`, `get_dependency_diagram`,
+`get_circular_imports`, `find_usages` and `get_pagerank` tick a per-call guard
+inside their traversal loops. When a ceiling is hit the tool returns the
+**partial** result with a `_budget_exceeded` field naming the ceiling, the
+limit, and the elapsed time — never a tool-call error — and the daemon log
+gets one `Compute budget exceeded` line with the tool name.
+
+The defaults come from `scripts/bench-compute-guard.ts`: a deliberately heavy
+`get_call_graph` (37,449 symbols, depth 5) consumes 79,577 ticks in ~85 ms, so
+every ceiling sits one to two orders of magnitude above anything a real query
+reaches. Measured tick overhead on that same query is within run-to-run noise
+(−2.7% … +2.1% across five runs).
 
 ---
 

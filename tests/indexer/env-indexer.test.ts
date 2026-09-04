@@ -25,7 +25,6 @@ function makeConfig(overrides: Partial<TraceMcpConfig> = {}): TraceMcpConfig {
     root: '.',
     include: [],
     exclude: DEFAULT_LIKE_EXCLUDE,
-    db: { path: ':memory:' },
     plugins: [],
     ...overrides,
   } as TraceMcpConfig;

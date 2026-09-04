@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "3.16.0",
+  "version": "3.17.1",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 40–50% fewer tokens on average",
   "type": "module",
@@ -33,6 +33,7 @@
     "docs:sitemap": "node scripts/gen-sitemap.mjs && node scripts/gen-llms-full.mjs",
     "docs:language-matrix": "tsx scripts/language-matrix.ts",
     "docs:tools-index": "tsx scripts/tools-index.ts",
+    "docs:config-index": "tsx scripts/config-index.ts",
     "gen:tz-country": "node scripts/gen-tz-country.mjs"
   },
   "simple-git-hooks": {
@@ -53,6 +54,7 @@
     "type": "git",
     "url": "https://github.com/nikolai-vysotskyi/trace-mcp"
   },
+  "homepage": "https://trace-mcp.com",
   "keywords": [
     "mcp-server",
     "claude-code",

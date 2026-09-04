@@ -49,7 +49,6 @@ function createMockRegistry(): PluginRegistry {
 
 const defaultConfig: TraceMcpConfig = {
   root: '.',
-  db: { path: ':memory:' },
   include: [],
   exclude: [],
   plugins: [],

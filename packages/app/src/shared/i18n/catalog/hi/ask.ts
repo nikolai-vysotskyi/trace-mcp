@@ -27,7 +27,7 @@ export const ask = {
   slashCommands: 'स्लैश कमांड',
   slashFind: 'नाम से सिंबल खोजें',
   slashImpact: 'किसी सिंबल का change impact दिखाएँ',
-  slashScan: 'सिक्योरिटी स्कैन चलाएँ (OWASP मुख्य findings)',
+  slashScan: 'सिक्योरिटी स्कैन चलाएँ (OWASP मुख्य निष्कर्ष)',
   suggestionAuth: 'auth कैसे काम करता है?',
   suggestionPlugins: 'प्लगइन सिस्टम समझाएँ',
   suggestionRoutes: 'API रूट कहाँ हैं?',

@@ -58,7 +58,6 @@ describe('get_dead_code { mode: "exports_only" } (TRA-199)', () => {
       root: tmpDir,
       include: ['src/**/*.ts'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
     const pipeline = new IndexingPipeline(store, registry, config, tmpDir);

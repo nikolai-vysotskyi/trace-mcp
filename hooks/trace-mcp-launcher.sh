@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.0
+# trace-mcp-launcher v0.6.2
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -43,8 +43,11 @@ rotate_log() {
 rotate_log
 
 log() {
-  # Best-effort append; never abort on log failure.
-  printf '[%s] %s\n' "$(date -u +%FT%TZ 2>/dev/null || echo '-')" "$1" >> "$LOG" 2>/dev/null || true
+  # Best-effort append; never abort on log failure. `2>/dev/null` precedes the
+  # append for the same reason it does in heal_config: redirections are applied
+  # left to right, so an unwritable state home is silent instead of printing a
+  # shell error into the MCP client's stderr on every start (TRA-797).
+  printf '[%s] %s\n' "$(date -u +%FT%TZ 2>/dev/null || echo '-')" "$1" 2>/dev/null >> "$LOG" || true
 }
 
 die() {
@@ -71,11 +74,19 @@ NODE_PATH=""
 CLI_PATH=""
 NODE_MAJOR=""
 
-if [ -r "$CONFIG" ]; then
+# `-f` as well as `-r`: `-r` is true for a directory too, and reading one is
+# an error, not an empty config (TRA-797).
+if [ -f "$CONFIG" ] && [ -r "$CONFIG" ]; then
   # Read line by line, split on first `=`, whitelist allowed keys, strip one
   # layer of surrounding quotes. Unknown keys and shell metacharacters in
   # values are never evaluated — values are treated as opaque strings.
-  while IFS='=' read -r key value || [ -n "$key" ]; do
+  #
+  # `${key:-}`, not `$key`: when the very first `read` fails — an I/O error on
+  # a network mount, a config that turned into a directory — `key` was never
+  # assigned, and under `set -u` a bare `$key` aborts the shim with exit 1 and
+  # a raw bash error. The client sees neither the recovery message nor the
+  # probe fallback: an unreadable config becomes a dead server (TRA-797).
+  while IFS='=' read -r key value || [ -n "${key:-}" ]; do
     # Skip comments and blank lines
     case "$key" in
       ''|\#*) continue ;;
@@ -284,8 +295,10 @@ pkg_roots() {
   # advance — a bundled runtime, a corporate `npm config set prefix` — becomes
   # findable, without asking npm at runtime. Values are opaque paths, never
   # evaluated; same trust model as launcher.env.
-  if [ -r "$PKG_ROOTS_FILE" ]; then
-    while IFS= read -r root || [ -n "$root" ]; do
+  # Same `-f` + `${root:-}` guards as the config parser above, for the same
+  # reason: a failed first `read` under `set -u` would abort the shim.
+  if [ -f "$PKG_ROOTS_FILE" ] && [ -r "$PKG_ROOTS_FILE" ]; then
+    while IFS= read -r root || [ -n "${root:-}" ]; do
       case "$root" in ''|\#*) continue ;; esac
       [ -d "$root" ] && echo "$root"
     done < "$PKG_ROOTS_FILE"
@@ -368,11 +381,27 @@ heal_config() {
   case "$cli" in
     *trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
   esac
+  # A config path that is not a regular file — a directory left by a botched
+  # restore or a stray `mkdir`, a socket, a device node — cannot be replaced by
+  # `mv`: POSIX `mv` moves the tmp INSIDE a directory rather than over it. The
+  # heal never lands, so every later start deposits another orphan there, and
+  # nothing collects them: sweepOrphanTmpFilesUnderHome only reads the state
+  # dirs it knows by name, and this one is not among them (TRA-829). Refuse,
+  # and log it as an error — the shim cannot fix this, a human has to.
+  if [ -e "$CONFIG" ] && [ ! -f "$CONFIG" ]; then
+    log "ERROR: $CONFIG is not a regular file — cannot persist the probed pair; remove it and run: trace-mcp init"
+    return 0
+  fi
   if [ ! -d "$TRACE_HOME" ]; then
     mkdir -p "$TRACE_HOME" 2>/dev/null || return 0
     chmod 700 "$TRACE_HOME" 2>/dev/null || true
   fi
-  tmp="$CONFIG.tmp.$$"
+  # `.tmp.<pid>.<12 hex>` is the shape sweepOrphanTmpFiles collects
+  # (src/utils/atomic-write.ts) — its pattern requires the trailing hex. A shim
+  # killed between the write and the rename leaks this file, and without the
+  # suffix the sweeper would never match it, so it would sit in the state home
+  # forever (TRA-797). $RANDOM is 0..32767, so %04x is always four digits.
+  tmp="$CONFIG.tmp.$$.$(printf '%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM")"
   # launcher.env is a 0600 file by contract (src/init/launcher.ts). The
   # process umask must not be allowed to widen it during a heal.
   old_umask=$(umask)
@@ -390,7 +419,12 @@ heal_config() {
     # TRACE_MCP_VERSION is deliberately dropped: the probed cli.js may be a
     # different build than the one the stale config described, and a wrong
     # version is worse than none. `trace-mcp init` restores it.
-  } > "$tmp" 2>/dev/null && mv -f "$tmp" "$CONFIG" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  # `2>/dev/null` comes BEFORE `> "$tmp"` on purpose: redirections are applied
+  # left to right, so stderr is already discarded by the time the shell tries
+  # to open the tmp. The other order lets a read-only or root-owned state home
+  # print "Permission denied" into the MCP client's stderr on every single
+  # start — a healthy server that looks broken in the client's log (TRA-797).
+  } 2>/dev/null > "$tmp" && mv -f "$tmp" "$CONFIG" 2>/dev/null || rm -f "$tmp" 2>/dev/null
   umask "$old_umask"
   return 0
 }

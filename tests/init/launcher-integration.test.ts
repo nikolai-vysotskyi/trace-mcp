@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { sweepOrphanTmpFiles } from '../../src/utils/atomic-write.js';
 
 const LAUNCHER_SRC = path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.sh');
 const FIXTURES = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-it-'));
@@ -707,5 +708,103 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
 
     expect(status).toBe(127);
     expect(stderr).toMatch(/node binary not found|trace-mcp package not found/);
+  });
+
+  // Anything bash itself prints when the shim mishandles a failure: the
+  // `set -u` abort, the failed read, the failed redirection. The launcher's
+  // own `die` message is not in here — that one is deliberate output.
+  const SHELL_DIAGNOSTIC = /unbound variable|read error|Permission denied|Is a directory/;
+
+  // Both TRA-797 cases below need a run that actually reaches heal_config: an
+  // empty config, and a prefix the probe can find node + cli.js in.
+  function setupHealingHome(): { home: string; traceHome: string } {
+    const home = fs.mkdtempSync(path.join(FIXTURES, 'heal-'));
+    const traceHome = path.join(home, '.trace-mcp');
+    const pkgDist = path.join(home, 'prefix', 'lib', 'node_modules', 'trace-mcp', 'dist');
+    fs.mkdirSync(traceHome, { recursive: true });
+    fs.mkdirSync(pkgDist, { recursive: true });
+    fs.mkdirSync(path.join(home, 'prefix', 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'prefix', 'bin', 'node'), fakeNodeBody('22.22.2'), {
+      mode: 0o755,
+    });
+    fs.writeFileSync(path.join(pkgDist, 'cli.js'), '// fake cli\n');
+    fs.writeFileSync(
+      path.join(traceHome, 'pkg-roots'),
+      `${path.join(home, 'prefix', 'lib', 'node_modules')}\n`,
+    );
+    return { home, traceHome };
+  }
+
+  // A config the shim cannot read is not an empty config: the first `read`
+  // fails, and under `set -u` a bare `$key` in the loop condition used to
+  // abort the shim with exit 1 and a raw bash error — no recovery message,
+  // no probe fallback, a dead server for the rest of the session (TRA-797).
+  // A directory at the config path is the reproducible stand-in for the I/O
+  // errors (network mounts, half-written files) that trip the same path.
+  it('an unreadable config falls through to the probe instead of aborting', () => {
+    const { home, traceHome } = setupHealingHome();
+    fs.mkdirSync(path.join(traceHome, 'launcher.env'));
+
+    const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+
+    // Which node the probe lands on depends on the machine (a CI runner has a
+    // system node the planted prefix cannot outrank), so assert the behaviour
+    // that is the point: the shim reaches an exec instead of aborting, and
+    // says nothing the client would read as a crash.
+    expect(status).toBe(0);
+    expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
+  });
+
+  // The heal writes launcher.env through a tmp + rename, and `mv` onto a
+  // DIRECTORY moves the tmp inside it rather than over it. So a directory at
+  // the config path used to make every single start deposit another orphan
+  // there — unbounded, and collected by nothing: the state sweeper only reads
+  // the directories it knows by name, and `launcher.env/` is not one of them
+  // (TRA-829). The heal has to refuse instead, loudly enough to be found by
+  // the one diagnostic a user is told to run: grep ERROR launcher.log.
+  it('refuses to heal onto a config path that is not a regular file', () => {
+    const { home, traceHome } = setupHealingHome();
+    const configDir = path.join(traceHome, 'launcher.env');
+    fs.mkdirSync(configDir);
+
+    for (let i = 0; i < 3; i++) runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+
+    expect(fs.readdirSync(configDir)).toEqual([]);
+    expect(sweepOrphanTmpFiles(configDir, 0)).toEqual([]);
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toContain(`ERROR: ${configDir} is not a regular file`);
+  });
+
+  // A shim killed between the heal's write and its rename still leaks its tmp
+  // into the state home, where only sweepOrphanTmpFiles collects it — so the
+  // name has to carry the `.tmp.<pid>.<12 hex>` suffix that sweeper matches on.
+  // Before TRA-797 it was `.tmp.<pid>`, which never matched. The window is too
+  // narrow to hit from a test, so the name is asserted where it is built.
+  it('builds its heal tmp with a name the orphan sweeper collects', () => {
+    expect(fs.readFileSync(LAUNCHER_SRC, 'utf-8')).toContain(
+      `tmp="$CONFIG.tmp.$$.$(printf '%04x%04x%04x'`,
+    );
+    // The same shape, resolved — this is what the sweeper is handed on disk.
+    const dir = fs.mkdtempSync(path.join(FIXTURES, 'tmpname-'));
+    const sample = path.join(dir, `launcher.env.tmp.${process.pid}.0123456789ab`);
+    fs.writeFileSync(sample, '');
+    // Negative age: cutoff in the future, so a file written a moment ago counts.
+    expect(sweepOrphanTmpFiles(dir, -1000)).toEqual([sample]);
+  });
+
+  // A state home the shim cannot write to (read-only volume, root-owned
+  // ~/.trace after a sudo install) used to make the log append and the heal's
+  // failed redirection print raw shell errors into the client's stderr on
+  // EVERY start — a healthy server that reads as broken in the client's log.
+  it('an unwritable state home does not leak shell errors into client stderr', () => {
+    const { home, traceHome } = setupHealingHome();
+    fs.chmodSync(traceHome, 0o500);
+    try {
+      const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+      expect(status).toBe(0);
+      expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
+    } finally {
+      fs.chmodSync(traceHome, 0o700);
+    }
   });
 });

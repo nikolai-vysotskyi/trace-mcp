@@ -1020,7 +1020,7 @@ labels, titles, `placeholder`, `aria-label`, empty states, errors — is authore
 surface that was already extracted; how to add a string or a language is in
 `docs/development.md`.
 
-Three consequences for layout, all of them the usual way a translated UI breaks:
+Five consequences for layout, all of them the usual way a translated UI breaks:
 
 - **Assume +30% width.** German and Russian run long against English. A control sized
   to its English label — a segmented pill, a button with the label baked into a fixed
@@ -1033,6 +1033,16 @@ Three consequences for layout, all of them the usual way a translated UI breaks:
   `Intl`, which knows that a Russian relative time is "2 часа назад" but "5 часов
   назад" and that a German date is `29.8.2026`. Note that `Intl`'s `narrow` style is
   not offered: it gives English "2h ago" and Russian "-2 ч".
+- **A number never breaks across two lines.** Wrap the value — sign, digits, unit,
+  currency — in `whitespace-nowrap`, wherever it sits next to a caption that can push
+  it onto a second line. A `word-break: break-word` container will otherwise split it
+  mid-digit, and "+22.3" over "k" is not a wrapped number, it is a different number
+  (TRA-803, seen in English, Hindi and Korean on the workspace KPI strip).
+- **`word-break: break-word` is a German rule and a Korean bug.** It exists so a
+  compound can break inside a fixed box; applied to Hangul it breaks between any two
+  syllables, so "항목" comes back as "항" over "목". Put the wrapping label in
+  `.wrap-label` rather than an inline `wordBreak` — the class carries
+  `:lang(ko) { word-break: keep-all }`, and an inline style would win over it.
 
 **The Language control** follows "a choice in a menu is one row" above, and the option
 count decides the shape: a segmented pill for two to four values, a pop-up button on
@@ -1181,6 +1191,26 @@ belongs to the window: the application menu, a context menu at the cursor.
 
 Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
 different pane boxes. Check the overlay in all of them, not just the one you developed in.
+
+### A sheet is clamped by the window, and the unbounded thing inside it is what scrolls
+
+The scrim is `position: fixed; inset: 0`, which is a box that cannot scroll. So a sheet
+without a height ceiling is not a tall sheet — it is a sheet whose bottom is **cut off and
+unreachable**, by the pointer and by the keyboard alike. `.lx-sheet` caps at
+`calc(100vh - 24px)` and is a flex column; `.lx-sheet-body` carries `min-height: 0;
+overflow-y: auto` as the floor no step can fall through.
+
+That floor is the fallback, not the design. A step with one unbounded region — a list, a
+log, a diff — names *that* region as the scroller (`flex-1 min-h-0` down the chain,
+`overflow-y-auto` on the list itself) so the title, the explanation and the buttons never
+move. One scroll container, and the primary action is never something you have to go
+looking for.
+
+TRA-794 is what this is written from: the setup wizard's clients step measured 753px in the
+700px default window with fifteen clients detected, and the 53px it lost were `Skip for now`
+and `Connect selected` — the entire first-run flow, with no way forward and no way back
+except an `Esc` nobody was told about. **A sheet's action row is the one part of it that may
+never depend on how much content is above it.**
 
 ---
 
@@ -1596,6 +1626,7 @@ new evidence.
 | The last tile still hand-rolling its material is the one nobody looks at | The sidebar's update card kept `--fill-tertiary` at an 8px radius and a private `.btn-prominent` through the whole TRA-290 migration, because it only appears when there is an update — so every review of the sidebar was a review of a sidebar without it. When a migration says "every surface", enumerate the surfaces that are conditionally rendered too. |
 | A seam you cannot see is a seam you do not have | The workspace table's frozen columns declared a `-1px 0 0 var(--separator)` hairline on the pinned cells from the day they landed, and Chromium had been discarding it the whole time — `box-shadow` does not paint on cells under `border-collapse: collapse`. Nobody noticed, because the failure mode of a missing seam is a table that looks finished. Check a decorative declaration renders; only a screenshot or `getComputedStyle` on the running renderer can tell you it did. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
+| A layer with no ceiling does not overflow — it truncates, silently | `.lx-sheet` had `width: min(440px, 100vw - 32px)` and nothing at all on the vertical axis, for as long as the sheet has existed. It never showed, because every sheet in the app is short — until `detectMcpClients` returned fifteen on a real machine and the first-run wizard grew to 753px inside a 700px window. A `position: fixed` scrim does not scroll, so the missing 53px were not below the fold, they were gone: the two buttons that are the entire point of the step. The tell is that the failure mode looks like a finished screen. Any axis a layer does not constrain, check against the window minimum with the most content the data can actually produce, not with the fixture. |
 | A baseline is taken from a reading the app **has**, and never from an empty one | The KPI effect guarded on `metricsLoading` alone, which `Workspace.tsx` passes as `false` the moment the request *fails* and which says nothing about the project list two tiles are derived from. One launch with the daemon down stored all zeros, and the dashboard then reported the whole workspace — "↑ +53 projects, ↑ +656.2k symbols vs 5 hours ago" — as this afternoon's growth for the next 24 hours. A comparison drawn against zero is the value repeated with an arrow on it, which is the bare number §7 asks a comparison line to replace — so an empty snapshot is refused on the way in *and* on the way out, which is also what heals the users already carrying one. When a component distinguishes four data states, a side effect that writes persistent state has to respect all four. |
 
 ---

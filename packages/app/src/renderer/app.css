@@ -191,9 +191,19 @@ body {
   }
 }
 
+/* A sheet is clamped by the window it hangs from (TRA-794). Without the
+   ceiling its height is whatever its content is, and the scrim is
+   `position: fixed` — so the overflow is not scrolled, it is cut off. The
+   clients step of the setup wizard was 753px in the 700px default window, and
+   the 53px that went missing were its two buttons: a first-run user saw a list
+   and no way forward. The 24px it gives back keeps the bottom edge and its 12px
+   corners clear of the window sill, so it still reads as a sheet. */
 .lx-sheet {
   box-sizing: border-box;
   width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
   padding: 20px;
   background: var(--surface);
   border: 0.5px solid var(--separator);
@@ -216,10 +226,16 @@ body {
   font: var(--weight-semibold) var(--text-title-2) / var(--leading-title-2) var(--font-ui);
   color: var(--label);
 }
+/* `min-height: 0` so the body can shrink below its content inside the clamped
+   sheet, and `overflow-y: auto` as the last resort for a step that has no
+   scroll region of its own — long copy at the 640x420 window minimum. A step
+   that names its own scroller (the clients list) never reaches this. */
 .lx-sheet-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .lx-sheet-text {
   margin: 0;

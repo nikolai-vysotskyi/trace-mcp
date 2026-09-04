@@ -428,6 +428,41 @@ export interface EnsureResult {
 }
 
 /**
+ * Record in daemon.log that the app is about to stop the running daemon (TRA-850).
+ *
+ * `bootout` on a loaded job and `kickstart -k` both SIGTERM the daemon, and the
+ * app's own `log()` goes to the Electron console — from daemon.log's side the
+ * stop showed up as a bare `reason: SIGTERM` with no initiator. Writes the same
+ * pino-shaped NDJSON record `src/daemon/lifecycle.ts` and the postinstall
+ * scripts write, so the lines read alike whoever produced them. The three
+ * copies of this shape exist because the daemon, the install scripts and the
+ * Electron main process share no runtime.
+ *
+ * Best-effort: a failed append must never break the install.
+ */
+function logDaemonStopAttribution(home: string, action: 'bootout' | 'kickstart', via: string): void {
+  try {
+    fs.appendFileSync(
+      path.join(home, 'daemon.log'),
+      `${JSON.stringify({
+        level: 30,
+        time: Date.now(),
+        pid: process.pid,
+        name: 'trace-mcp',
+        action,
+        via,
+        requesterPid: process.pid,
+        requesterPpid: process.ppid,
+        managedBy: 'desktop-app',
+        msg: `Daemon ${action} requested`,
+      })}\n`,
+    );
+  } catch {
+    /* attribution is best-effort */
+  }
+}
+
+/**
  * Install or repair the daemon. Safe to call on every launch; on a machine
  * that is already set up it reads four files, writes none, and returns.
  */
@@ -527,6 +562,7 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
     // Boot out whatever is there before replacing the file — launchd keeps
     // serving the loaded copy otherwise.
     if (fs.existsSync(plist)) {
+      logDaemonStopAttribution(home, 'bootout', 'desktop-app: plist refresh');
       runLaunchctl(['bootout', domain, plist]);
       runLaunchctl(['unload', plist]);
     }
@@ -550,6 +586,7 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
   } else if (changed) {
     // Same label, new binary underneath: restart so the running daemon is the
     // one we just installed. `-k` also resets launchd's throttle.
+    logDaemonStopAttribution(home, 'kickstart', 'desktop-app: bundled daemon upgrade');
     runLaunchctl(['kickstart', '-k', `${domain}/${PLIST_LABEL}`]);
   }
 

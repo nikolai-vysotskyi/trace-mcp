@@ -113,4 +113,23 @@ describe('translation catalogues', () => {
       }
     }
   });
+
+  /* Parity guarantees the key exists, not that anyone translated it. The way
+     that shows up is a Latin word marooned in a Devanagari sentence: the Hindi
+     workspace read "कोई सिक्योरिटी findings नहीं" on the KPI strip and
+     "Workspace" in the sidebar, both of which parity called fine (TRA-803).
+
+     Scoped to the two words this pass settled, and to the surfaces they appear
+     on, rather than to every Latin word in `hi` — the catalogue still leaves
+     "decisions", "corpus" and the nav labels in English, which is a translation
+     backlog, not a regression. */
+  it('keeps the settled Hindi terms out of English (TRA-803)', () => {
+    const surfaces = ['workspace', 'shell', 'tray', 'overview', 'ask'] as const;
+    for (const ns of surfaces) {
+      for (const [key, value] of Object.entries(CATALOGS.hi[ns])) {
+        expect(/findings?\b/i.test(value), `hi/${ns}:${key} — "${value}"`).toBe(false);
+        expect(/\bworkspace\b/i.test(value), `hi/${ns}:${key} — "${value}"`).toBe(false);
+      }
+    }
+  });
 });
