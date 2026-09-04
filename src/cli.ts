@@ -291,8 +291,17 @@ function softGcSweep(): void {
   // TRA-702: atomic writes unlink their own tmp on error, but a process killed
   // between open and rename never runs that handler — so every crash leaked one
   // file into the state dir, permanently.
+  //
+  // TRA-783: the sweep is one readdir per directory, and it only ever ran on
+  // the state root — a June orphan was still sitting in `sessions/` in
+  // September. Session ledgers and pid-locks are the two subdirectories written
+  // atomically; `index/` is not swept because it holds 700+ per-project
+  // directories and no leftover has ever been observed there, so recursing it
+  // would cost every start something for nothing.
   try {
-    const removedTmps = sweepOrphanTmpFiles(TRACE_MCP_HOME);
+    const removedTmps = [TRACE_MCP_HOME, 'sessions', 'locks'].flatMap((d) =>
+      sweepOrphanTmpFiles(path.resolve(TRACE_MCP_HOME, d)),
+    );
     if (removedTmps.length > 0) {
       logger.info(
         { removedTmps: removedTmps.length },

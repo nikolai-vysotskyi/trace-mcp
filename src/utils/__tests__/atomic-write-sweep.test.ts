@@ -72,4 +72,27 @@ describe('sweepOrphanTmpFiles (TRA-702)', () => {
     expect(sweepOrphanTmpFiles(dir, DAY_MS)).toEqual([]);
     expect(fs.existsSync(d)).toBe(true);
   });
+
+  // TRA-783: the sweep only ever ran on ~/.trace-mcp itself, and the pattern
+  // required a leading dot — so pid-lock's `<name>.tmp.<pid>.<rand>` leftovers
+  // could never be collected anywhere. A June orphan was still in
+  // ~/.trace-mcp/sessions three months later.
+  it('collects pid-lock leftovers, which carry no leading dot', () => {
+    const lock = makeFile('4531cea08e4d-reindex.pid.tmp.65657.4eb982e9ac9d', 3 * DAY_MS);
+
+    expect(sweepOrphanTmpFiles(dir, DAY_MS)).toEqual([lock]);
+    expect(fs.existsSync(lock)).toBe(false);
+  });
+
+  it('sweeps the given directory only, not its children', () => {
+    const sub = path.join(dir, 'sessions');
+    fs.mkdirSync(sub);
+    const nested = path.join(sub, '.9c8b895c63b7.json.tmp.65657.4eb982e9ac9d');
+    fs.writeFileSync(nested, 'x');
+    const t = new Date(Date.now() - 90 * DAY_MS);
+    fs.utimesSync(nested, t, t);
+
+    expect(sweepOrphanTmpFiles(dir, DAY_MS)).toEqual([]);
+    expect(sweepOrphanTmpFiles(sub, DAY_MS)).toEqual([nested]);
+  });
 });

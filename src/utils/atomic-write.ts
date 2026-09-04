@@ -134,11 +134,12 @@ export function atomicWriteBuffer(
 }
 
 /**
- * Tmp files written by {@link atomicWriteString}: `.<basename>.tmp.<pid>.<rand>`.
- * The trailing hex is what keeps this from matching a user file that merely has
- * ".tmp." in its name.
+ * Tmp files written by {@link atomicWriteString} (`.<basename>.tmp.<pid>.<rand>`)
+ * and by `acquireLock` in pid-lock.ts, which writes the same shape without the
+ * leading dot (TRA-783). The trailing hex is what keeps this from matching a
+ * user file that merely has ".tmp." in its name.
  */
-const ORPHAN_TMP_PATTERN = /^\..+\.tmp\.\d+\.[0-9a-f]{12}$/;
+const ORPHAN_TMP_PATTERN = /^\.?.+\.tmp\.\d+\.[0-9a-f]{12}$/;
 
 /** Default age before a leftover tmp is assumed orphaned rather than in flight. */
 const ORPHAN_TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
