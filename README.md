@@ -129,13 +129,15 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
 
 <p align="center">
-  <img src="docs/images/app-projects.webp" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-projects.webp#gh-light-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-projects.webp#gh-dark-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
 <p align="center">
-  <img src="docs/images/app-overview.webp" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-overview.webp#gh-light-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-overview.webp#gh-dark-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.
