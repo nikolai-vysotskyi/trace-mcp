@@ -32,6 +32,24 @@ export function isReleasePr(pr) {
 }
 
 /**
+ * Issues a PR *claims* — the ones it says it implements — as opposed to ones it
+ * merely references.
+ *
+ * TRA-856: sibling fixes explain how they relate ("the daemon restarts
+ * constantly (TRA-809) and never reaches the window there"), which is the
+ * writing the PR template asks for. Reading every key in the body as a claim
+ * made #871/#874/#875 collide with each other and #882 with #854 — four PRs
+ * red for citing context. A claim is the title, or an explicit closing keyword.
+ *
+ * @param {{title?: string, body?: string}} pr
+ */
+export function claimedKeys(pr) {
+  const closes = [...`${pr.body ?? ''}`.matchAll(/\b(?:close[sd]?|fixe?[sd]?|resolve[sd]?)\s+(TRA-\d+)\b/gi)]
+    .map((m) => m[1].toUpperCase());
+  return [...new Set([...issueKeys(pr.title), ...closes])];
+}
+
+/**
  * Open PRs that claim the same TRA issue as `pr` and that `pr` does not cite.
  *
  * @param {{number: number, title: string, body?: string}} pr
@@ -39,7 +57,7 @@ export function isReleasePr(pr) {
  */
 export function findDuplicatePrs(pr, openPrs) {
   if (isReleasePr(pr)) return [];
-  const keys = issueKeys(`${pr.title}\n${pr.body ?? ''}`);
+  const keys = claimedKeys(pr);
   if (keys.length === 0) return [];
   const cited = new Set(
     [...`${pr.body ?? ''}`.matchAll(/#(\d+)/g)].map((m) => Number.parseInt(m[1], 10)),
@@ -49,7 +67,7 @@ export function findDuplicatePrs(pr, openPrs) {
       other.number !== pr.number &&
       !cited.has(other.number) &&
       !isReleasePr(other) &&
-      issueKeys(`${other.title}\n${other.body ?? ''}`).some((k) => keys.includes(k)),
+      claimedKeys(other).some((k) => keys.includes(k)),
   );
 }
 

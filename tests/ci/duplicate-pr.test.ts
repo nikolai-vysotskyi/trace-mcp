@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain .mjs script, no type declarations
 import {
+  claimedKeys,
   findDuplicatePrs,
   formatReport,
   isReleasePr,
@@ -48,6 +49,40 @@ const PR_723 = {
   title: 'chore(master): release 3.12.0',
   body: '## 3.12.0\n\n### Features\n\n* first-run setup flow (TRA-439)\n* price the default tool surface (TRA-448)\n* dead-daemon pane (TRA-469)',
 };
+
+// TRA-856: four open PRs on 2026-09-04 whose bodies name a sibling issue to
+// explain how the fixes relate. None claims the other's issue; the guard read
+// the prose mention as a claim and went red on all four.
+const PR_871 = {
+  number: 871,
+  title: 'Attribute daemon shutdowns: log exit context on SIGTERM (TRA-809)',
+  body: 'TRA-809: the daemon restarted 137 times in 40 h and the log could not say who killed it.\n\nCloses TRA-809.',
+};
+const PR_874 = {
+  number: 874,
+  title: 'perf(daemon): release idle extract workers instead of holding ~420 MB forever (TRA-811)',
+  body: 'Closes TRA-811.\n\nThe daemon restarts constantly (TRA-809) and never reaches the 5-minute window there.',
+};
+const PR_875 = {
+  number: 875,
+  title: 'fix(indexer): re-scan when the watcher tells us it dropped events (TRA-813)',
+  body: 'Closes TRA-813.\n\nA restart (TRA-809) does a full pass, accidentally papering over the gap.',
+};
+
+describe('claimedKeys', () => {
+  it('takes the issue from the title and from a closing keyword', () => {
+    expect(claimedKeys(PR_874)).toEqual(['TRA-811']);
+    expect(claimedKeys({ title: 'fix: something', body: 'Fixes TRA-500' })).toEqual(['TRA-500']);
+    expect(claimedKeys({ title: 'fix: something', body: 'resolves tra-501' })).toEqual(['TRA-501']);
+  });
+
+  it('does not treat a prose reference to another issue as a claim', () => {
+    expect(claimedKeys(PR_875)).toEqual(['TRA-813']);
+    expect(claimedKeys({ title: 'fix: x', body: 'Blocked behind TRA-809, see also TRA-802.' })).toEqual(
+      [],
+    );
+  });
+});
 
 describe('isReleasePr', () => {
   it('recognises the release-please title and nothing else', () => {
@@ -98,6 +133,17 @@ describe('findDuplicatePrs', () => {
 
   it('never flags a PR against the release PR either', () => {
     expect(findDuplicatePrs(PR_597, [PR_723])).toEqual([]);
+  });
+
+  it('passes sibling fixes that reference each other’s issue as context', () => {
+    expect(findDuplicatePrs(PR_874, [PR_871, PR_875])).toEqual([]);
+    expect(findDuplicatePrs(PR_875, [PR_871, PR_874])).toEqual([]);
+    expect(findDuplicatePrs(PR_871, [PR_874, PR_875])).toEqual([]);
+  });
+
+  it('still flags a duplicate when the other PR claims the issue only via Closes', () => {
+    const titleOnly = { number: 900, title: 'fix(daemon): log exit context (TRA-809)', body: '' };
+    expect(findDuplicatePrs(titleOnly, [PR_871]).map((p) => p.number)).toEqual([871]);
   });
 });
 
