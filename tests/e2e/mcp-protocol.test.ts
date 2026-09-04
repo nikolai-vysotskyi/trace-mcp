@@ -11,7 +11,6 @@ function makeConfig(): TraceMcpConfig {
     root: '.',
     include: ['**/*.php', '**/*.ts'],
     exclude: ['vendor/**', 'node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   };
 }

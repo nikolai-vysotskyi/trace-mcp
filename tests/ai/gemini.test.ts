@@ -184,7 +184,6 @@ describe('createAIProvider — gemini wiring', () => {
     root: '.',
     include: [],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 

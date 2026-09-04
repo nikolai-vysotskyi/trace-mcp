@@ -46,7 +46,6 @@ function makeConfig(overrides: Partial<TraceMcpConfig> = {}): TraceMcpConfig {
     root: '.',
     include: [],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
     ...overrides,
   };
@@ -404,7 +403,6 @@ describe('gatherContext / gatherContextWithEnvelope — the privacy boundary', (
       root: FIXTURE_DIR,
       include: ['src/**/*.ts'],
       exclude: ['vendor/**', 'node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     };
     const pipeline = new IndexingPipeline(store, registry, config, FIXTURE_DIR);

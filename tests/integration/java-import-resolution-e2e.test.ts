@@ -100,7 +100,6 @@ describe('Java import resolution E2E', () => {
       root: fixtureDir,
       include: ['**/*.java'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
 

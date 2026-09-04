@@ -47,7 +47,6 @@ describe('get_model_context for SQLModel', () => {
       root: tmpDir,
       include: ['**/*.py'],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
     const pipeline = new IndexingPipeline(store, registry, config, tmpDir);

@@ -51,7 +51,6 @@ describe('get_untested_symbols { scope: "exports_only" } (TRA-203)', () => {
       root: tmpDir,
       include: ['src/**/*.ts'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as never;
     const pipeline = new IndexingPipeline(store, registry, config, tmpDir);

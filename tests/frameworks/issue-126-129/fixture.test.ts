@@ -163,7 +163,6 @@ describe('issue-126-129 fixture — end-to-end', () => {
         root: FIXTURE,
         include: ['src/**/*.{ts,tsx}'],
         exclude: [],
-        db: { path: ':memory:' },
         plugins: [],
         ignore: { directories: [], patterns: [] },
         watch: { enabled: false, debounceMs: 2000 },

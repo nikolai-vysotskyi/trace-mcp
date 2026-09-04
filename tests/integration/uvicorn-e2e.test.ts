@@ -22,7 +22,6 @@ function makeConfig(): TraceMcpConfig {
     root: FIXTURE,
     include: ['**/*.py'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 }

@@ -31,7 +31,6 @@ beforeAll(async () => {
     root: FIXTURE_DIR,
     include: ['app/**/*.php', 'src/**/*.ts', 'components/**/*.vue'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
   await new IndexingPipeline(store, registry, config, FIXTURE_DIR).indexAll();

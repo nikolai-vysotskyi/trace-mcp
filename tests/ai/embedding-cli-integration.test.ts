@@ -22,7 +22,6 @@ function makeConfig(): TraceMcpConfig {
     root: FIXTURE_DIR,
     include: ['src/**/*.ts'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
     ignore: { directories: [], patterns: [] },
     watch: { enabled: false, debounceMs: 2000 },

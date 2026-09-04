@@ -158,7 +158,6 @@ describe('createAIProvider — onnx wiring', () => {
       root: '.',
       include: [],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
       ai: { enabled: true, provider: 'onnx' },
     });
@@ -172,7 +171,6 @@ describe('createAIProvider — onnx wiring', () => {
       root: '.',
       include: [],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
       ai: {
         enabled: true,

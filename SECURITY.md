@@ -146,8 +146,7 @@ A regex-based content scanner can detect secrets in source files:
 
 ## Storage Safety
 
-* The SQLite database lives outside the project, at `~/.trace/index/<name>-<hash>.db`.
-* Configurable via `db.path` in config or `TRACE_MCP_DB_PATH` environment variable.
+* The SQLite database lives outside the project, at `~/.trace/index/<name>-<hash>.db`. The location is not configurable.
 * **WAL mode** enabled for safe concurrent reads during indexing + tool queries.
 * **Foreign key constraints** enforced to maintain referential integrity.
 * **Busy timeout** set to 5 seconds to handle lock contention gracefully.

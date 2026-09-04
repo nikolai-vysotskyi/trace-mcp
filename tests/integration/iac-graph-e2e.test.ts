@@ -80,7 +80,6 @@ describe('IaC graph E2E', () => {
       root: fixtureDir,
       include: ['**/*.yaml', '**/*.yml', '**/Dockerfile'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
 

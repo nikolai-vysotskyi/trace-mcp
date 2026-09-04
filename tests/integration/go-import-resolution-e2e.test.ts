@@ -80,7 +80,6 @@ describe('Go import resolution E2E', () => {
       root: fixtureDir,
       include: ['**/*.go'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
 

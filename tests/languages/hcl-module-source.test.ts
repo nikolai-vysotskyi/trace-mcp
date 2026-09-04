@@ -54,7 +54,6 @@ describe('HCL module source edge (pipeline)', () => {
       root: fixtureDir,
       include: ['**/*.tf'],
       exclude: ['node_modules/**'],
-      db: { path: ':memory:' },
       plugins: [],
     } as TraceMcpConfig;
     await new IndexingPipeline(store, registry, config, fixtureDir).indexAll();

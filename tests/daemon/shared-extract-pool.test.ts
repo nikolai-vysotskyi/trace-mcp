@@ -22,7 +22,6 @@ function makePipeline(pool: ExtractPool | null = null): IndexingPipeline {
     root: FIXTURE_DIR,
     include: ['src/**/*.ts'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
   return new IndexingPipeline(store, registry, config, FIXTURE_DIR, undefined, {

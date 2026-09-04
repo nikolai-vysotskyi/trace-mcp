@@ -34,7 +34,6 @@ describe('FileExtractor — content-hash gate after mtime fast-path', () => {
       root: tmpRoot,
       include: ['src/**/*.ts'],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
     };
     return { store, pipeline: new IndexingPipeline(store, registry, config, tmpRoot) };

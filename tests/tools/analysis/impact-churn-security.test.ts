@@ -50,7 +50,6 @@ function makeConfig(): TraceMcpConfig {
     root: FIXTURE_DIR,
     include: ['src/**/*.ts'],
     exclude: ['node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   };
 }

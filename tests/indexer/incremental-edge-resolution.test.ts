@@ -39,7 +39,6 @@ function makeConfig(root: string): TraceMcpConfig {
     root,
     include: ['**/*.ts'],
     exclude: ['node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   } as unknown as TraceMcpConfig;
 }

@@ -40,7 +40,6 @@ function setupFixture(opts: { mainBytes: number }) {
     root: tmpDir,
     include: ['*.js'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 

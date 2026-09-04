@@ -4,8 +4,12 @@
  * indicates linker failure, and the output shape.
  */
 
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../../src/config.js';
+import { initializeDatabase } from '../../../src/db/schema.js';
 import { Store } from '../../../src/db/store.js';
 import { getIndexHealth } from '../../../src/tools/project/project.js';
 import { createTestStore } from '../../test-utils.js';
@@ -15,7 +19,6 @@ function makeConfig(): TraceMcpConfig {
     root: '.',
     include: ['**/*.ts'],
     exclude: ['node_modules/**'],
-    db: { path: ':memory:' },
     plugins: [],
   } as unknown as TraceMcpConfig;
 }
@@ -67,6 +70,19 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(Array.isArray(result.config.includePatterns)).toBe(true);
     expect(Array.isArray(result.config.excludePatterns)).toBe(true);
     expect(Array.isArray(result.warnings)).toBe(true);
+  });
+
+  it('dbPath is the file the store was opened at, not a config default (TRA-802)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-health-'));
+    const dbPath = path.join(dir, 'index.db');
+    const store = new Store(initializeDatabase(dbPath));
+
+    try {
+      expect(getIndexHealth(store, makeConfig()).config.dbPath).toBe(dbPath);
+    } finally {
+      store.db.close();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('symbols indexed but zero edges → status="degraded" with linker-failure warning', () => {

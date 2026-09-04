@@ -34,7 +34,6 @@ describe('IndexingPipeline — rename detection by content hash', () => {
       root: tmpRoot,
       include: ['src/**/*.ts'],
       exclude: [],
-      db: { path: ':memory:' },
       plugins: [],
     };
 

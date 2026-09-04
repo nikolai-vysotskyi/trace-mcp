@@ -37,7 +37,6 @@ function makeSetup(rootDir: string) {
     root: rootDir,
     include: ['src/**/*.ts'],
     exclude: [],
-    db: { path: ':memory:' },
     plugins: [],
   };
 
