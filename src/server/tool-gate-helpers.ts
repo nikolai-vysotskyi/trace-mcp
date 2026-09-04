@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
+import { allSiblings, routesTo } from '../tools/tool-families.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
@@ -70,12 +71,27 @@ export interface SchemaTransformConfig {
   sharedParamOverrides: Record<string, string>;
 }
 
-/** Collapse a tool description according to the configured verbosity level. */
-function applyVerbosity(description: string, verbosity: string): string {
+/**
+ * Collapse a tool description according to the configured verbosity level.
+ *
+ * `minimal` keeps the first sentence — plus, for members of a declared tool
+ * family, the sentence that names a sibling. That clause is the only routing
+ * mechanism that reaches every MCP client (TRA-842), so it is a protected
+ * region rather than trailing prose the collapse is free to drop.
+ */
+function applyVerbosity(name: string, description: string, verbosity: string): string {
   if (verbosity === 'full') return description;
   if (verbosity === 'none') return '';
   const match = description.match(/^[^.]*\./);
-  return match ? match[0] : description.split('\n')[0];
+  const first = match ? match[0] : description.split('\n')[0];
+
+  const siblings = allSiblings(name);
+  if (siblings.length === 0) return first;
+  const routing = description
+    .slice(first.length)
+    .split(/(?<=\.)\s+/)
+    .find((sentence) => siblings.some((s) => routesTo(sentence, s)));
+  return routing ? `${first} ${routing.trim()}` : first;
 }
 
 /** Rewrite the description argument (index 1) with any configured override. */
@@ -159,7 +175,7 @@ export function applySchemaTransforms(args: unknown[], cfg: SchemaTransformConfi
   applyDescriptionOverrides(args, cfg);
 
   if (cfg.descriptionVerbosity !== 'full' && typeof args[1] === 'string') {
-    args[1] = applyVerbosity(args[1] as string, cfg.descriptionVerbosity);
+    args[1] = applyVerbosity(args[0] as string, args[1] as string, cfg.descriptionVerbosity);
   }
 
   if (cfg.descriptionVerbosity === 'minimal' || cfg.descriptionVerbosity === 'none') {

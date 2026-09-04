@@ -265,7 +265,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'find_usages',
-    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
+    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — semantic, not text matches. For raw text use search_text; for a bidirectional call graph use get_call_graph. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find references for'),
       fqn: optionalNonEmptyString(512).describe('Fully qualified name to find references for'),
