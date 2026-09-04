@@ -1,7 +1,7 @@
 ---
 title: "How to Reduce Claude Code Token Usage — 7 measured tactics"
-description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the right output format. With real numbers and honest caveats."
-updated: 2026-09-02
+description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the output format."
+updated: 2026-09-03
 ---
 
 # How to reduce Claude Code token usage
@@ -12,11 +12,11 @@ updated: 2026-09-02
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "How to reduce Claude Code token usage",
-      "description": "Seven measured tactics for cutting token usage in Claude Code and other MCP-based coding agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/reduce-claude-code-token-usage.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-29",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",

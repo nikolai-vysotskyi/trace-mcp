@@ -2,7 +2,7 @@
 layout: default
 title: "Daemon memory: what it costs and what caps it"
 description: Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.
-updated: 2026-09-02
+updated: 2026-09-03
 ---
 
 # Daemon memory: what it costs and what caps it
@@ -11,11 +11,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Daemon memory: what it costs and what caps it",
-  "description": "Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/daemon-memory.html",
   "datePublished": "2026-08-29",
-  "dateModified": "{{ page.updated }}",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

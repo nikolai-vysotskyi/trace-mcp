@@ -10,11 +10,11 @@ updated: 2026-09-04
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Session Analytics & Coverage Intelligence",
-  "description": "The built-in engine that parses agent session logs and tracks token savings and waste.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/analytics.html",
   "datePublished": "2026-04-05",
-  "dateModified": "2026-08-10",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

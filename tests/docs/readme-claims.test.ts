@@ -637,4 +637,64 @@ describe('docs site numeric claims (TRA-174)', () => {
       }
     }
   });
+
+  it('docs/_data/release.json tracks package.json (TRA-419)', () => {
+    // The homepage renders this as SoftwareApplication.softwareVersion, and
+    // release-please bumps it with every other version file — this fails if
+    // that wiring is ever removed and the schema starts advertising an old
+    // release.
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf-8')) as {
+      version: string;
+    };
+    const release = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'docs/_data/release.json'), 'utf-8'),
+    ) as { version: string };
+    expect(release.version, 'add docs/_data/release.json to release-please-config.json').toBe(
+      pkg.version,
+    );
+  });
+
+  it('docs/_data/counts.yml resource count matches the registrations exactly (TRA-419)', () => {
+    // The ±2 check above passed while both pages said 9 and the code had 10.
+    // Derived numbers get an exact receipt, same as languages / frameworks.
+    expect(
+      lookupCount('resources'),
+      'update `resources:` in docs/_data/counts.yml — a server.resource(...) registration was added or removed',
+    ).toBe(resourceCount);
+  });
+
+  it('no front-matter title or description hardcodes a counted number (TRA-419)', () => {
+    // Front matter cannot take Liquid, so `title: "... 81 languages ..."` is the
+    // one place a count can go stale while every rendered page updates — and it
+    // goes stale inside a <title> tag, which is the worst place for it.
+    const NUMBERED = /(\d+)\s+(?:supported\s+)?(languages?|frameworks?|tools?)\b/gi;
+    const KEY: Record<string, string> = {
+      language: 'languages',
+      framework: 'frameworks',
+      tool: 'tools',
+    };
+    const stale: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith('.md')) continue;
+        const fm = readFileSync(full, 'utf-8').match(/^---\n([\s\S]*?)\n---\n/)?.[1];
+        if (!fm) continue;
+        for (const [raw, count, noun] of fm.matchAll(NUMBERED)) {
+          const key = KEY[noun.toLowerCase().replace(/s$/, '')];
+          const expected = lookupCount(key);
+          if (Number.parseInt(count, 10) !== expected) {
+            stale.push(`${full}: "${raw}" — counts.yml says ${key}: ${expected}`);
+          }
+        }
+      }
+    };
+    walk(join(REPO_ROOT, 'docs'));
+    expect(stale, 'front-matter counts disagree with docs/_data/counts.yml').toEqual([]);
+  });
 });

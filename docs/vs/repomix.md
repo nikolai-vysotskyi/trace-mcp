@@ -1,7 +1,7 @@
 ---
 title: "Repomix Alternative: trace-mcp vs Repomix for AI code context"
-description: "Repomix packs your repository into one prompt. trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, and refactoring — plus when Repomix is still the right pick."
-updated: 2026-09-02
+description: "Repomix packs your repository into one prompt; trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, refactoring."
+updated: 2026-09-03
 ---
 
 # Repomix alternative: trace-mcp vs Repomix
@@ -12,11 +12,11 @@ updated: 2026-09-02
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "Repomix alternative: trace-mcp vs Repomix",
-      "description": "Head-to-head comparison of trace-mcp and Repomix for feeding codebase context to AI coding agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/repomix.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-29",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -89,7 +89,7 @@ If you are picking between them, the question is not "which is better" — it is
 
 | Capability | trace-mcp | Repomix |
 |---|:---:|:---:|
-| **GitHub stars** | 100 | 28.1K |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.repomix.stars }} |
 | Model | live index (SQLite + FTS5) | one-shot pack |
 | Tree-sitter AST parsing | ✓ {{ site.data.counts.languages }} languages | ✓ `--compress` only (~20) |
 | Token-efficient symbol lookup | ✓ outlines, symbols, bundles | ✗ packs entire files |
@@ -129,6 +129,8 @@ Honest version, and it is a real list:
 ## The honest caveat on token cost
 
 trace-mcp's per-query cost is small, but its *advertised* cost is not free: on the shipped default path, `tools/list` is 28 tools and roughly 11.6K tokens, paid by every client that does not support deferred tool loading. That is down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`; everything outside it is one `load_tools` call away. A short session on a small repo can still genuinely cost less through Repomix. We would rather say that here than have you discover it yourself.
+
+**Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
 ## FAQ
 

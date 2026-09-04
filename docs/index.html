@@ -1,7 +1,10 @@
 ---
 # Empty front matter only so Jekyll renders the {{ site.data.counts.* }} tags
 # below (TRA-263). No layout — the page keeps its own hand-written head/OG tags.
+# `updated:` is stamped from git by `pnpm docs:sitemap`, same as the doc pages,
+# and feeds the SoftwareApplication dateModified (TRA-419).
 layout: null
+updated: 2026-09-04
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -78,7 +81,7 @@ layout: null
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
-    "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
+    "alternateName": "trace-mcp — precomputed code intelligence for AI coding agents",
     "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
@@ -90,6 +93,9 @@ layout: null
     "installUrl": "https://www.npmjs.com/package/trace-mcp",
     "codeRepository": "https://github.com/nikolai-vysotskyi/trace-mcp",
     "programmingLanguage": "TypeScript",
+    "softwareVersion": {{ site.data.release.version | jsonify }},
+    "releaseNotes": "https://github.com/nikolai-vysotskyi/trace-mcp/releases/tag/v{{ site.data.release.version }}",
+    "dateModified": {{ page.updated | jsonify }},
     "license": "https://opensource.org/licenses/MIT",
     "offers": {
       "@type": "Offer",
@@ -117,6 +123,45 @@ layout: null
       "{{ site.data.counts.tools }} MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
       "Native Model Context Protocol integration"
+    ]
+  }
+  </script>
+
+  <!-- ── Structured Data (entity anchor: Organization + WebSite) ── -->
+  <!-- Mirrors the graph in _layouts/default.html so the homepage and the doc
+       pages resolve to the same @id nodes instead of each page declaring its
+       own author from scratch (TRA-419). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://trace-mcp.com/#organization",
+        "name": "trace-mcp",
+        "url": "https://trace-mcp.com/",
+        "logo": "https://trace-mcp.com/icon-512x512.png",
+        "description": {{ site.description | jsonify }},
+        "founder": {
+          "@type": "Person",
+          "@id": "https://trace-mcp.com/#author",
+          "name": "Nikolai Vysotskyi",
+          "url": "https://github.com/nikolai-vysotskyi"
+        },
+        "sameAs": [
+          "https://github.com/nikolai-vysotskyi/trace-mcp",
+          "https://www.npmjs.com/package/trace-mcp"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://trace-mcp.com/#website",
+        "url": "https://trace-mcp.com/",
+        "name": "trace-mcp",
+        "description": {{ site.description | jsonify }},
+        "publisher": { "@id": "https://trace-mcp.com/#organization" },
+        "inLanguage": "en"
+      }
     ]
   }
   </script>
@@ -1369,7 +1414,8 @@ layout: null
       gap: 32px;
       margin-bottom: 64px;
     }
-    .footer-col h5 {
+    .footer-col .col-label {
+      display: block;
       font-family: var(--font-mono);
       font-size: 10px;
       letter-spacing: 0.1em;
@@ -2160,7 +2206,7 @@ layout: null
       <!-- TRA-647: the first tile is the only figure here taken on code we do not
            own, so it leads and it says where it came from. The other two are our
            own instrumentation and are labelled as such rather than dropped. -->
-      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation, measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
+      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation, measured against baseline agent runs that re-read files and re-traverse dependencies on every turn &mdash; <a href="/reduce-claude-code-token-usage.html#what-we-claim-and-what-we-have-measured">what that figure covers, and where it is roughly zero</a>.</p>
     </div>
   </section>
 
@@ -2861,7 +2907,7 @@ layout: null
       <div class="category-tag"><span class="label">/ The Category</span></div>
       <h2 class="category-headline">
         Recomputation &rarr; Reuse.<br>
-        <span class="em">The execution layer for AI systems.</span>
+        <span class="em">Precomputed code intelligence for AI coding agents.</span>
       </h2>
       <p class="category-sub">
         AI systems pay repeatedly for work they have already done: every turn re-derives structure the agent held a few steps earlier. trace-mcp precomputes that structure once and serves it over MCP. Code is where the repetition is most expensive today, which is where we started.
@@ -2898,7 +2944,7 @@ layout: null
   <div class="container">
     <div class="footer-grid">
       <div class="footer-col">
-        <h5>/ Product</h5>
+        <span class="col-label">/ Product</span>
         <a href="#problem">Problem</a>
         <a href="#product">Product view</a>
         <a href="#capabilities">Capabilities</a>
@@ -2918,7 +2964,7 @@ layout: null
         is the only decision made here.
       {%- endcomment -%}
       <div class="footer-col footer-col-docs">
-        <h5>/ Docs</h5>
+        <span class="col-label">/ Docs</span>
         <div class="footer-doc-links">
         {%- for item in site.data.docs_nav -%}
           <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
@@ -2926,14 +2972,14 @@ layout: null
         </div>
       </div>
       <div class="footer-col">
-        <h5>/ Source</h5>
+        <span class="col-label">/ Source</span>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank">Github</a>
         <a href="https://www.npmjs.com/package/trace-mcp" target="_blank">npm</a>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues" target="_blank">Issues</a>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases" target="_blank">Releases</a>
       </div>
       <div class="footer-col">
-        <h5>/ Contact</h5>
+        <span class="col-label">/ Contact</span>
         <a href="https://github.com/nikolai-vysotskyi" target="_blank">@nikolai-vysotskyi</a>
       </div>
     </div>
@@ -2944,7 +2990,7 @@ layout: null
         <span class="item">mit</span>
         <span class="item">2026</span>
       </div>
-      <div>The optimization layer for LLM applications</div>
+      <div>Precomputed code intelligence for AI coding agents</div>
     </div>
   </div>
 </footer>

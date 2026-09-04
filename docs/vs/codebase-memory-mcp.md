@@ -1,7 +1,7 @@
 ---
 title: "codebase-memory-mcp Alternative: trace-mcp vs codebase-memory-mcp"
-description: "Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, advertised tool cost, framework awareness, refactoring and security — including the two places codebase-memory-mcp is clearly ahead."
-updated: 2026-08-30
+description: "Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, tool cost, framework awareness, refactoring and security."
+updated: 2026-09-03
 ---
 
 # codebase-memory-mcp alternative: trace-mcp vs codebase-memory-mcp
@@ -12,11 +12,11 @@ updated: 2026-08-30
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "codebase-memory-mcp alternative: trace-mcp vs codebase-memory-mcp",
-      "description": "Head-to-head comparison of trace-mcp and DeusData's codebase-memory-mcp as persistent code knowledge graphs for AI agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/codebase-memory-mcp.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-29",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -89,7 +89,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 
 | Capability | trace-mcp | codebase-memory-mcp |
 |---|:---:|:---:|
-| **GitHub stars** | 100 | 41.0K |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} |
 | Languages | {{ site.data.counts.languages }} | 161 |
 | Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✗ (partial REST routes) |
 | Persistent knowledge graph | ✓ SQLite + FTS5 | ✓ |
@@ -127,7 +127,11 @@ This is the peer where the honest list is longest, so here it is in full:
 - **You want the agent to change code.** Rename across files with import rewriting, symbol and file moves, signature changes that update call sites, AST-based codemods with metavariable substitution, dead-code removal with orphan-import detection. codebase-memory-mcp is read-only.
 - **Security is part of the job.** OWASP Top-10 rules, taint analysis with type-aware pruning, and OASIS-schema-validated SARIF 2.1.0 for CI ingestion.
 - **Memory should be code-linked and verified.** `manage_adr` writes flat markdown documents. trace-mcp binds decisions to symbol IDs, checks at recall time that the linked code still resolves and is unchanged, and surfaces them inside `get_change_impact` — so a decision about code that was deleted stops being served.
-- **Gates, not just reports.** Quality gates with configurable complexity, security and coverage thresholds, plus SARIF output, make the graph a CI participant rather than a chat aid.
+- **Gates, not just reports.** Quality gates with configurable complexity, security and tech-debt thresholds, plus SARIF output, make the graph a CI participant rather than a chat aid.
+
+## The honest caveat on security scanning
+
+**Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
 ## FAQ
 

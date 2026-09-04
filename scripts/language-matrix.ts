@@ -152,8 +152,8 @@ export function renderMatrix(): string {
 
   return `---
 layout: default
-title: Language capability matrix
-description: What each of the ${counts.total} supported languages actually extracts — parser, edges, and test coverage.
+title: "Language capability matrix: what ${counts.total} languages extract"
+description: "What each of the ${counts.total} languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language."
 updated: ${new Date().toISOString().slice(0, 10)}
 ---
 
@@ -165,11 +165,11 @@ updated: ${new Date().toISOString().slice(0, 10)}
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Language capability matrix",
-  "description": "What each of the ${counts.total} supported languages actually extracts — parser, edges, and test coverage.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/language-matrix.html",
   "datePublished": "2026-08-29",
-  "dateModified": "{{ page.updated }}",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

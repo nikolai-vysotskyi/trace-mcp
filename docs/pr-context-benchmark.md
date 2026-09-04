@@ -1,7 +1,7 @@
 ---
 title: "PR Review Context Benchmark — Measured Input-Token Cost on Real Pull Requests"
-description: "Reproducible measurement of how many input tokens trace-mcp context saves over naive file loading when reviewing real merged pull requests across open-source repositories."
-updated: 2026-09-02
+description: "Reproducible measurement of the input tokens trace-mcp context saves over naive file loading when reviewing real merged pull requests in open-source repos."
+updated: 2026-09-03
 ---
 
 # PR Review Context Benchmark
@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "PR Review Context Benchmark",
-  "description": "Reproducible measurement of input-token cost for AI code review context, trace-mcp versus naive file loading, on real merged pull requests.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/pr-context-benchmark.html",
   "datePublished": "2026-08-30",
-  "dateModified": "2026-08-30",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

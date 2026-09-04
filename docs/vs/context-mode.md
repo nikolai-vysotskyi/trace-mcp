@@ -1,7 +1,7 @@
 ---
 title: "Context Mode alternative? trace-mcp vs Context Mode for AI coding agents"
-description: "Context Mode keeps raw tool output out of the context window; trace-mcp makes the questions about your code cheap to ask. Head-to-head on tool surface, code parsing, benchmarks, licence — and why running both is the honest answer."
-updated: 2026-08-30
+description: "Context Mode keeps raw tool output out of the context window; trace-mcp makes questions about your code cheap to ask. Head-to-head — and why run both."
+updated: 2026-09-03
 ---
 
 # trace-mcp vs Context Mode
@@ -12,11 +12,11 @@ updated: 2026-08-30
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "trace-mcp vs Context Mode",
-      "description": "Head-to-head comparison of trace-mcp and Context Mode as context-efficiency MCP servers for AI coding agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/context-mode.html",
       "datePublished": "2026-08-30",
-      "dateModified": "2026-08-30",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -93,7 +93,7 @@ If your agent is drowning in tool output, Context Mode is aimed at your problem 
 
 | Capability | trace-mcp | Context Mode |
 |---|:---:|:---:|
-| **GitHub stars** | 102 | ~20.2K |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.context_mode.stars }} |
 | Licence | MIT | Elastic License 2.0 (source-available, not OSI) |
 | Written in | TypeScript | TypeScript |
 | MCP tools defined | {{ site.data.counts.tools }} | 11 |
@@ -151,6 +151,8 @@ Four things are worth stating precisely, because the marketing word "context" co
 **Their measurement is published and ours is not, again.** This is the third head-to-head page where we have to write that sentence. We publish a conservative 40-50% and ship `get_real_savings` so you can measure your own repository, which is a defensible choice and not a substitute for a benchmark with named fixtures you can re-run.
 
 **They are 200 times our size, and it is not only marketing.** A tool that reaches 20K stars in six months has found something people wanted. The "think in code" framing is a genuinely good idea that we do not have an equivalent of.
+
+**Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
 If you maintain Context Mode and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 

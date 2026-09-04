@@ -1,7 +1,7 @@
 ---
 title: "Serena MCP Alternative: trace-mcp vs Serena for agent code navigation"
-description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, security and memory — plus where Serena is clearly ahead."
-updated: 2026-08-30
+description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, memory."
+updated: 2026-09-03
 ---
 
 # Serena MCP alternative: trace-mcp vs Serena
@@ -12,11 +12,11 @@ updated: 2026-08-30
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "Serena MCP alternative: trace-mcp vs Serena",
-      "description": "Head-to-head comparison of trace-mcp and Serena as code-navigation MCP servers for AI coding agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/serena.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-30",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -89,7 +89,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 
 | Capability | trace-mcp | Serena |
 |---|:---:|:---:|
-| **GitHub stars** | 102 | ~28.6K |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.serena.stars }} |
 | Languages | {{ site.data.counts.languages }} (tree-sitter) | 40+ (73 LSP backends) |
 | Requires a language server | ✗ optional enrichment | ✓ core premise |
 | Reference precision by default | AST-resolved (tiered) | compiler-grade (LSP) |
@@ -141,6 +141,8 @@ Two rows moved the other way, and we state the evidence rather than the verdict.
 If you maintain Serena and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 
 Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
+
+**Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
 ## FAQ
 
