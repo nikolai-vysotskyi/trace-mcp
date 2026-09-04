@@ -47,10 +47,11 @@ describe('perf driver: measure()', () => {
     const layer = document.createElement('div');
     layer.className = 'cosmos-gpu-label';
     document.body.appendChild(layer);
+    let id: ReturnType<typeof setInterval> | undefined;
     const ms = await loadMeasure()(() => {
-      const id = setInterval(() => layer.appendChild(document.createElement('i')), 16);
-      setTimeout(() => clearInterval(id), 1000);
+      id = setInterval(() => layer.appendChild(document.createElement('i')), 16);
     });
+    clearInterval(id);
     // The ignored layer alone must not hold the measurement open to the 5 s cap.
     expect(ms).toBeLessThan(1000);
   });
