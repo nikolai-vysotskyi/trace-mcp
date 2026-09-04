@@ -22,12 +22,27 @@
       "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics"
     },
     {
+      "name": "app-dark-projects",
+      "view": "menu",
+      "tab": "workspace",
+      "theme": "dark",
+      "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance"
+    },
+    {
       "name": "app-overview",
       "view": "project",
       "project": "trace-mcp",
       "clicks": ["Overview"],
       "theme": "light",
       "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage"
+    },
+    {
+      "name": "app-dark-overview",
+      "view": "project",
+      "project": "trace-mcp",
+      "clicks": ["Overview"],
+      "theme": "dark",
+      "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage, dark appearance"
     },
     {
       "name": "app-graph",
