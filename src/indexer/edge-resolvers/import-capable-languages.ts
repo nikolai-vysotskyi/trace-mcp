@@ -44,6 +44,8 @@ export const IMPORT_EDGE_LANGUAGES: ReadonlySet<string> = new Set([
   'go', // resolveGoImportEdges
   'java', // resolveJavaImportEdges
   'rust', // resolveRustImportEdges
+  'c', // resolveCImportEdges
+  'cpp', // resolveCImportEdges
   'yaml', // resolveIacImportEdges — kustomize / docker-compose refs
   'hcl', // resolveIacImportEdges — local terraform module sources
   'markdown', // resolveMarkdownWikilinkEdges

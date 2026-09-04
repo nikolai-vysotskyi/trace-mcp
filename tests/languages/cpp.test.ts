@@ -89,6 +89,32 @@ int main() { return 0; }
     expect(imports.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('extracts #include edges behind header guards and #if/#elifdef/#else chains', async () => {
+    // Nearly every real C++ header wraps its includes in a guard; TRA-832
+    // found that a scan of only root.namedChildren missed all of them.
+    const result = await extract(`
+#ifndef APP_HPP
+#define APP_HPP
+
+#include "always.hpp"
+
+#if defined(WINDOWS)
+#include "win.hpp"
+#elifdef POSIX
+#include "posix.hpp"
+#else
+#include "fallback.hpp"
+#endif
+
+#endif
+    `);
+    const imports = result.edges!.filter((e) => e.edgeType === 'imports');
+    const modules = imports.map((e) => (e.metadata as { module: string }).module);
+    expect(modules).toEqual(
+      expect.arrayContaining(['always.hpp', 'win.hpp', 'posix.hpp', 'fallback.hpp']),
+    );
+  });
+
   it('extracts structs', async () => {
     const result = await extract(`
 struct Point {

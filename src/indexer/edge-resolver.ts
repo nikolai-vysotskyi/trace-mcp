@@ -12,6 +12,7 @@ import {
   purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
   resolveFileProjectionEdges as _resolveFileProjection,
 } from './edge-resolvers/file-projection.js';
+import { resolveCImportEdges as _resolveCImports } from './edge-resolvers/c-imports.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/iac-imports.js';
 import { resolveGoImportEdges as _resolveGoImports } from './edge-resolvers/go-imports.js';
@@ -152,6 +153,11 @@ export class EdgeResolver {
   /** Pass 2e5: Rust import edges (module path → module file). */
   resolveRustImportEdges(scope?: ChangeScope): void {
     timed('rust-imports', () => _resolveRustImports(this.state, scope));
+  }
+
+  /** Pass 2e6: C/C++ import edges (`#include` path → header/source file). */
+  resolveCImportEdges(scope?: ChangeScope): void {
+    timed('c-imports', () => _resolveCImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */

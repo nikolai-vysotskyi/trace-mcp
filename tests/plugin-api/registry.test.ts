@@ -55,6 +55,14 @@ describe('plugin registry', () => {
     expect(registry.getLanguagePluginForFile('readme.md')).toBeUndefined();
   });
 
+  it('routes .h to the C plugin, not FORM (TRA-832 regression)', () => {
+    // Both plugins used to declare `.h`; FORM's lower priority number won the
+    // shared extension, so every C/C++ header in every repo was silently
+    // indexed as the FORM symbolic-computation language instead of C.
+    const registry = PluginRegistry.createWithDefaults();
+    expect(registry.getLanguagePluginForFile('src/server.h')?.manifest.name).toBe('c-language');
+  });
+
   it('topological sorts framework plugins by dependencies', () => {
     const registry = new PluginRegistry();
     registry.registerFrameworkPlugin(
