@@ -710,6 +710,9 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
       'cat src/foo.ts',
       'ls src/',
       'git diff src/foo.ts',
+      'git show HEAD:src/foo.ts',
+      'git blame src/foo.ts',
+      'git log -p src/foo.ts',
       'wc -l < src/foo.ts',
     ]) {
       const decision = runGuard('Bash', { command }, sessionId, projectDir);
