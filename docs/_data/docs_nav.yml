@@ -31,6 +31,8 @@
   url: /architecture.html
 - title: Configuration
   url: /configuration.html
+- title: Config index
+  url: /config-index.html
 - title: Quality gates
   url: /quality-gates.html
 - title: Decision memory

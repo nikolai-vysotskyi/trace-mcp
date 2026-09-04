@@ -20,7 +20,8 @@ layout: null
 - [Repomix vs codegraph](https://trace-mcp.com/vs/repomix-vs-codegraph.html): The two other tools compared to each other — packing a repository into one file vs indexing it into a queryable graph, and where trace-mcp sits between them.
 - [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html): Input-token cost of AI code-review context measured on 60 merged pull requests across six open-source repositories — trace-mcp versus loading the changed files.
 - [How to reduce Claude Code token usage](https://trace-mcp.com/reduce-claude-code-token-usage.html): Seven measured tactics for cutting agent token cost, including the ones that have nothing to do with trace-mcp.
-- [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.
+- [Configuration](https://trace-mcp.com/configuration.html): The config file options you reach for, explained; trace-mcp works out of the box without one.
+- [Config index](https://trace-mcp.com/config-index.html): Every key the config schema accepts, with its type, allowed values and real default, generated from the schema.
 - [Architecture](https://trace-mcp.com/architecture.html): The two-pass indexing pipeline and how the dependency graph is built and stored.
 - [Supported frameworks & languages](https://trace-mcp.com/supported-frameworks.html): The {{ site.data.counts.languages }} supported languages and the frameworks each plugin understands.
 - [Language capability matrix](https://trace-mcp.com/language-matrix.html): What each of the {{ site.data.counts.languages }} supported languages actually extracts — parser, edge types, and test coverage.
