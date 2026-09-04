@@ -158,6 +158,14 @@ describe('config', () => {
     expect(config.tools.preset).toBe('full');
   });
 
+  it('accepts the deprecated db.path key without acting on it (TRA-802)', () => {
+    // The index location is not configurable — `getDbPath()` decides it. The
+    // key stays parseable so old config files keep loading; nothing reads it.
+    const result = TraceMcpConfigSchema.safeParse({ db: { path: 'legacy.db' } });
+
+    expect(result.success).toBe(true);
+  });
+
   it('Zod validation rejects invalid config', () => {
     const result = TraceMcpConfigSchema.safeParse({
       root: 123, // root should be string

@@ -857,11 +857,16 @@ const SOURCE_FILENAMES = [
 
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
-  // No `db` section: the index location is not configurable. Every project's
-  // database is resolved by `getDbPath()` in global.ts into `~/.trace/index/`.
-  // The old `db.path` key (and `TRACE_MCP_DB_PATH`) fed nothing but the
-  // `dbPath` field of `get_index_health`, which therefore reported a path no
-  // database was ever at (TRA-802).
+  /**
+   * @deprecated Ignored. The index location is not configurable: every
+   * project's database is resolved by `getDbPath()` in global.ts into
+   * `~/.trace/index/`. This key (and the `TRACE_MCP_DB_PATH` env override, now
+   * gone) fed nothing but the `dbPath` field of `get_index_health`, which
+   * therefore reported a path no database was ever at (TRA-802). Kept as an
+   * accepted-and-ignored key so existing config files and downstream
+   * `TraceMcpConfig` literals keep compiling; drop it in the next major.
+   */
+  db: z.object({ path: z.string().optional() }).optional(),
   // Every pattern here is global (`**/`) on purpose. The previous defaults
   // anchored most languages to `src/ lib/ app/ test/ tests/ routes/ ...`, which
   // made coverage depend on repo layout and needed a per-framework glob for
