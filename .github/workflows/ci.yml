@@ -216,8 +216,10 @@ jobs:
     # On 2026-09-04 the registry slowed down and the job was cancelled without
     # ever running the audit, on master, on release-please and on two agent
     # branches inside an hour. This is a network step start to finish; size the
-    # budget for a slow registry, not a fast one.
-    timeout-minutes: 10
+    # budget for a slow registry, not a fast one: a 6m28s setup (observed on
+    # this PR's own run) plus the 5m the audit step below is now allowed to
+    # spend does not fit in 10.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
