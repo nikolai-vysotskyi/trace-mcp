@@ -159,3 +159,78 @@ describe('StateEngine SQLite Storage and Lifecycle', () => {
     expect(engine.listStates().length).toBe(1);
   });
 });
+
+describe('StateEngine retention', () => {
+  it('caps revision history per task', () => {
+    const db = new Database(':memory:');
+    const engine = new StateEngine(db);
+    engine.initState('TRA-1', 'long running task');
+
+    for (let i = 0; i < 250; i++) {
+      engine.patchState('TRA-1', { next_action: `step ${i}` });
+    }
+
+    const { count, max } = db
+      .prepare(
+        'SELECT COUNT(*) AS count, MAX(version) AS max FROM agent_state_revisions WHERE task_id = ?',
+      )
+      .get('TRA-1') as { count: number; max: number };
+
+    expect(max).toBe(251);
+    expect(count).toBe(200);
+    // Current state is untouched by the trim
+    expect(engine.getState('TRA-1')?.state.next_action).toBe('step 249');
+  });
+
+  it('caps revision history under repeated re-initialization of the same task', () => {
+    const db = new Database(':memory:');
+    const engine = new StateEngine(db);
+
+    for (let i = 0; i < 250; i++) {
+      engine.initState('TRA-2', `retried goal ${i}`);
+    }
+    engine.initState('TRA-3', 'other task');
+
+    const counts = db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM agent_state_revisions WHERE task_id = 'TRA-2') AS retried,
+           (SELECT COUNT(*) FROM agent_state_revisions WHERE task_id = 'TRA-3') AS other`,
+      )
+      .get() as { retried: number; other: number };
+
+    expect(counts).toEqual({ retried: 200, other: 1 });
+    expect(engine.getState('TRA-2')?.state.goal).toBe('retried goal 249');
+  });
+
+  it('drops finished states untouched past the retention window, keeps the rest', () => {
+    const db = new Database(':memory:');
+    const engine = new StateEngine(db);
+    engine.initState('OLD-DONE', 'finished long ago');
+    engine.initState('OLD-PAUSED', 'parked long ago');
+    engine.initState('NEW-DONE', 'finished today');
+    engine.patchState('OLD-DONE', { status: 'completed' });
+    engine.patchState('OLD-PAUSED', { status: 'paused' });
+    engine.patchState('NEW-DONE', { status: 'completed' });
+    engine.createCheckpoint('OLD-DONE', 'before-refactor');
+
+    const ancient = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare("UPDATE agent_states SET updated_at = ? WHERE task_id LIKE 'OLD-%'").run(ancient);
+
+    // Reopening the same db runs the retention sweep
+    const reopened = new StateEngine(db);
+
+    expect(reopened.getState('OLD-DONE')).toBeNull();
+    expect(reopened.getState('OLD-PAUSED')).not.toBeNull();
+    expect(reopened.getState('NEW-DONE')).not.toBeNull();
+
+    const orphans = db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM agent_state_revisions WHERE task_id = 'OLD-DONE') AS revisions,
+           (SELECT COUNT(*) FROM agent_state_checkpoints WHERE task_id = 'OLD-DONE') AS checkpoints`,
+      )
+      .get() as { revisions: number; checkpoints: number };
+    expect(orphans).toEqual({ revisions: 0, checkpoints: 0 });
+  });
+});
