@@ -210,7 +210,14 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # 3 minutes was never enough: the last green run spent 84s in
+    # pnpm/action-setup's self-installer and 71s in `pnpm audit` — 155s of a
+    # 180s budget, with the whole margin sitting on two npm-registry round
+    # trips. On 2026-09-04 the registry slowed down and the job was cancelled
+    # mid-installer on master, on release-please and on two agent branches
+    # inside an hour, blocking every merge. This is a network step; size the
+    # budget for a slow registry, not a fast one.
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
