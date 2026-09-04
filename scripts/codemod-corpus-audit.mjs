@@ -1,0 +1,364 @@
+#!/usr/bin/env node
+/**
+ * Measure what share of real agent edits a deterministic codemod could have made
+ * (TRA-862 gate).
+ *
+ * Why this exists
+ * ---------------
+ * TRA-705 estimated "30% of agent work is mechanical" from the SHARE OF EDIT
+ * PAYLOADS among tool calls, and flagged the number as unproven — it counted
+ * that an edit happened, never what the edit WAS. TRA-862 wants to spend ~2.5
+ * weeks on codemods on the strength of that number, so it has to be earned:
+ * classify the actual old_string -> new_string transformation of every recorded
+ * edit and count how many are expressible as an exact tree transform.
+ *
+ * The measurement is deliberately structured to be able to FAIL. Two numbers
+ * are reported, and the second is the one that decides:
+ *
+ *   expressible  — the edit's token diff IS a deterministic transform (a
+ *                  consistent identifier substitution, a literal swap, a small
+ *                  argument insert/removal inside a call, a pure deletion).
+ *                  Generous upper bound: it does not ask whether a codemod
+ *                  would have been WORTH invoking.
+ *
+ *   payoff       — expressible AND part of a repeated group: >= MIN_GROUP edits
+ *                  of the same shape spanning >= MIN_FILES files in one session.
+ *                  A one-off rename in one file saves nothing — the agent still
+ *                  has to reason about it once, and one Edit is cheaper than
+ *                  one codemod call. The value claim is only ever about the
+ *                  repetition, so this is the honest denominator.
+ *
+ * Classification is conservative by construction: anything the token differ
+ * cannot prove is a clean transform lands in `novel`. Errors therefore push the
+ * result DOWN, not up, which is the direction that protects against talking
+ * ourselves into the feature.
+ *
+ * Usage:
+ *   node scripts/codemod-corpus-audit.mjs [--logs <dir>] [--json]
+ *                                         [--min-group 3] [--min-files 2]
+ *                                         [--samples 0]
+ */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const args = process.argv.slice(2);
+const flag = (name, fallback) => {
+  const i = args.indexOf(`--${name}`);
+  return i === -1 ? fallback : args[i + 1];
+};
+const has = (name) => args.includes(`--${name}`);
+
+const LOGS_DIR = flag('logs', path.join(os.homedir(), '.claude', 'projects'));
+const MIN_GROUP = Number(flag('min-group', 3));
+const MIN_FILES = Number(flag('min-files', 2));
+const SAMPLES = Number(flag('samples', 0));
+const AS_JSON = has('json');
+
+// --- tokenizer -------------------------------------------------------------
+// Whitespace is dropped: reindentation is not a semantic edit, and a codemod
+// reprints anyway. Strings and numbers stay whole so a literal swap is one
+// token pair rather than a diff of its characters.
+const TOKEN_RE =
+  /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|===|!==|=>|\?\?|\.\.\.|::|->|==|!=|<=|>=|&&|\|\||\S/g;
+
+const tokenize = (s) => s.match(TOKEN_RE) ?? [];
+const isIdent = (t) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(t);
+const isLiteral = (t) => /^["'`]/.test(t) || /^\d/.test(t);
+
+// --- classifier ------------------------------------------------------------
+// Returns { cls, key } — `key` identifies the transform so identical transforms
+// across files can be grouped (that is what makes a codemod pay for itself).
+
+const MAX_ARG_TOKENS = 12; // an inserted run longer than this is new code, not a parameter
+
+/**
+ * Is an inserted token run structurally an argument/parameter added to a list?
+ *
+ * Tested on the token stream, not on what precedes the insertion point: an
+ * argument appended after a NESTED call (`f(g(a))` -> `f(g(a), b)`) is preceded
+ * by `)`, and a parameter added across a line break is preceded by an
+ * identifier. Sampling the `novel` bucket showed both shapes being missed by a
+ * preceding-token test, so the test is on the run's own delimiters instead.
+ */
+function isArgRun(run, before, after) {
+  if (run.length === 0 || run.length > MAX_ARG_TOKENS) return false;
+  // Any delimited list, not just a call: arrays, object literals, named import
+  // clauses and generic parameter lists take the same one-element edit.
+  const closes =
+    after === ')' ||
+    after === '}' ||
+    after === ']' ||
+    after === '>' ||
+    after === ',' ||
+    after === undefined;
+  // ", x" appended or inserted before the close / next element
+  if (run[0] === ',' && closes) return true;
+  // "x, " inserted at the head of an existing list
+  if (run[run.length - 1] === ',') return true;
+  // first element into an EMPTY list — there is no comma to key on
+  if (
+    (before === '(' && after === ')') ||
+    (before === '[' && after === ']') ||
+    (before === '{' && after === '}') ||
+    (before === '<' && after === '>')
+  )
+    return true;
+  return false;
+}
+
+export function classify(oldStr, newStr) {
+  const O = tokenize(oldStr);
+  const N = tokenize(newStr);
+
+  if (O.length === 0 && N.length === 0) return { cls: 'formatting', key: 'ws' };
+
+  // common prefix / suffix
+  let p = 0;
+  while (p < O.length && p < N.length && O[p] === N[p]) p++;
+  let s = 0;
+  while (s < O.length - p && s < N.length - p && O[O.length - 1 - s] === N[N.length - 1 - s]) s++;
+
+  const oMid = O.slice(p, O.length - s);
+  const nMid = N.slice(p, N.length - s);
+
+  // identical token streams => whitespace/comment reflow only
+  if (oMid.length === 0 && nMid.length === 0) return { cls: 'formatting', key: 'ws' };
+
+  // ---- pure deletion: text removed, nothing put back
+  if (nMid.length === 0) {
+    if (isArgRun(oMid, N[p - 1], N[p])) {
+      return { cls: 'arg-delete', key: `arg-:${oMid.join(' ')}` };
+    }
+    // key on the deleted CONTENT, not its length: grouping by length alone
+    // merges unrelated deletions into one fake "repeated transform".
+    return { cls: 'pure-delete', key: `del:${oMid.join(' ').slice(0, 200)}` };
+  }
+
+  // ---- pure insertion: only mechanical if it is small and sits inside a
+  // parenthesised list (argument / parameter added). Anything larger is the
+  // agent writing new code.
+  if (oMid.length === 0) {
+    if (isArgRun(nMid, O[p - 1], O[p])) {
+      return { cls: 'arg-insert', key: `arg+:${nMid.join(' ')}` };
+    }
+    return { cls: 'novel', key: null };
+  }
+
+  // ---- consistent substitution: same shape, differing positions all carry the
+  // SAME old->new pair. This is exactly what apply_rename / apply_codemod do.
+  if (oMid.length === nMid.length) {
+    const pairs = new Set();
+    for (let i = 0; i < oMid.length; i++) {
+      if (oMid[i] !== nMid[i]) pairs.add(`${oMid[i]}\0${nMid[i]}`);
+    }
+    if (pairs.size === 1) {
+      const [from, to] = [...pairs][0].split('\0');
+      // The substitution must be total across the WHOLE edit window, not just
+      // the changed span: in `f(x, x)` -> `f(y, x)` the surviving `x` is eaten
+      // by the common suffix, so a window-local check calls a judgement call
+      // ("which occurrence?") a rename. Checking O/N in full is what makes
+      // `rename` mean apply_rename.
+      const total =
+        O.length === N.length && O.every((t, i) => (t === from ? N[i] === to : N[i] === t));
+      if (total) {
+        if (isIdent(from) && isIdent(to)) return { cls: 'rename', key: `ren:${from}>${to}` };
+        if (isLiteral(from) && isLiteral(to))
+          return { cls: 'literal-swap', key: `lit:${from}>${to}` };
+        return { cls: 'token-swap', key: `tok:${from}>${to}` };
+      }
+    }
+  }
+
+  return { cls: 'novel', key: null };
+}
+
+const EXPRESSIBLE = new Set([
+  'rename',
+  'literal-swap',
+  'token-swap',
+  'arg-insert',
+  'arg-delete',
+  'pure-delete',
+]);
+
+// --- corpus walk -----------------------------------------------------------
+function* jsonlFiles(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) yield* jsonlFiles(full);
+    else if (e.name.endsWith('.jsonl')) yield full;
+  }
+}
+
+/** Pull every Edit/MultiEdit old->new pair out of one session transcript. */
+function editsInSession(file) {
+  const out = [];
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch {
+    return out;
+  }
+  for (const line of raw.split('\n')) {
+    if (!line || line.indexOf('"tool_use"') === -1) continue;
+    let rec;
+    try {
+      rec = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const content = rec?.message?.content;
+    if (!Array.isArray(content)) continue;
+    for (const block of content) {
+      if (block?.type !== 'tool_use') continue;
+      const name = block.name;
+      const input = block.input ?? {};
+      if (name === 'Edit' && typeof input.old_string === 'string') {
+        out.push({
+          file: input.file_path ?? '?',
+          old: input.old_string,
+          new: input.new_string ?? '',
+        });
+      } else if (name === 'MultiEdit' && Array.isArray(input.edits)) {
+        for (const e of input.edits) {
+          if (typeof e?.old_string === 'string') {
+            out.push({ file: input.file_path ?? '?', old: e.old_string, new: e.new_string ?? '' });
+          }
+        }
+      } else if (name === 'Write') {
+        out.push({ file: input.file_path ?? '?', write: true });
+      }
+    }
+  }
+  return out;
+}
+
+// --- run -------------------------------------------------------------------
+// Importing this module (the classifier test does) must not walk the 2 GB corpus.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // HOME is redirected in some agent runtimes, so the default path can be absent.
+  // Say what to pass instead of throwing a readdir stack trace.
+  if (!fs.existsSync(LOGS_DIR)) {
+    console.error(
+      `[codemod-corpus-audit] no session transcripts at ${LOGS_DIR}\n` +
+        'Pass the transcript directory explicitly: --logs <path> ' +
+        '(Claude Code stores them in ~/.claude/projects).',
+    );
+    process.exit(1);
+  }
+  const counts = Object.create(null);
+  const bump = (k, n = 1) => {
+    counts[k] = (counts[k] ?? 0) + n;
+  };
+
+  let sessions = 0;
+  let writes = 0;
+  let totalEdits = 0;
+  let payoffEdits = 0;
+  let sessionsWithPayoff = 0;
+  const payoffGroups = [];
+  const samples = { rename: [], 'literal-swap': [], 'arg-insert': [], novel: [] };
+
+  for (const f of jsonlFiles(LOGS_DIR)) {
+    const edits = editsInSession(f);
+    if (edits.length === 0) continue;
+    sessions++;
+
+    // key -> { files:Set, n }
+    const groups = new Map();
+    const classified = [];
+
+    for (const e of edits) {
+      if (e.write) {
+        writes++;
+        continue;
+      }
+      totalEdits++;
+      const { cls, key } = classify(e.old, e.new);
+      bump(cls);
+      classified.push({ cls, key, file: e.file });
+      if (key && EXPRESSIBLE.has(cls)) {
+        let g = groups.get(key);
+        if (!g) groups.set(key, (g = { files: new Set(), n: 0, cls }));
+        g.files.add(e.file);
+        g.n++;
+      }
+      if (SAMPLES && samples[cls] && samples[cls].length < SAMPLES) {
+        samples[cls].push({ old: e.old.slice(0, 160), new: (e.new ?? '').slice(0, 160) });
+      }
+    }
+
+    // payoff = repeated same-shape transform spanning several files
+    let sessionPayoff = 0;
+    for (const [key, g] of groups) {
+      if (g.n >= MIN_GROUP && g.files.size >= MIN_FILES) {
+        sessionPayoff += g.n;
+        payoffGroups.push({
+          key,
+          cls: g.cls,
+          n: g.n,
+          files: g.files.size,
+          session: path.basename(f),
+        });
+      }
+    }
+    payoffEdits += sessionPayoff;
+    if (sessionPayoff > 0) sessionsWithPayoff++;
+  }
+
+  const expressible = [...EXPRESSIBLE].reduce((a, c) => a + (counts[c] ?? 0), 0);
+  const pct = (n, d) => (d === 0 ? 0 : Math.round((n / d) * 1000) / 10);
+
+  const report = {
+    corpus: { logs: LOGS_DIR, sessions_with_edits: sessions, edits: totalEdits, writes },
+    classes: Object.fromEntries(
+      Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => [k, { n: v, pct: pct(v, totalEdits) }]),
+    ),
+    expressible: { n: expressible, pct: pct(expressible, totalEdits) },
+    payoff: {
+      n: payoffEdits,
+      pct: pct(payoffEdits, totalEdits),
+      min_group: MIN_GROUP,
+      min_files: MIN_FILES,
+      sessions: sessionsWithPayoff,
+      sessions_pct: pct(sessionsWithPayoff, sessions),
+      groups: payoffGroups.length,
+    },
+    top_payoff_groups: payoffGroups.sort((a, b) => b.n - a.n).slice(0, 15),
+  };
+  if (SAMPLES) report.samples = samples;
+
+  if (AS_JSON) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    const r = report;
+    console.log(
+      `corpus            ${r.corpus.sessions_with_edits} sessions, ${r.corpus.edits} edits (+${r.corpus.writes} Write calls, excluded)`,
+    );
+    console.log('');
+    for (const [k, v] of Object.entries(r.classes)) {
+      console.log(`  ${k.padEnd(14)} ${String(v.n).padStart(7)}  ${String(v.pct).padStart(5)}%`);
+    }
+    console.log('');
+    console.log(
+      `expressible       ${r.expressible.n} (${r.expressible.pct}%)  — generous upper bound`,
+    );
+    console.log(
+      `payoff            ${r.payoff.n} (${r.payoff.pct}%)  — >=${MIN_GROUP} same-shape edits across >=${MIN_FILES} files`,
+    );
+    console.log(
+      `sessions w/payoff ${r.payoff.sessions} of ${r.corpus.sessions_with_edits} (${r.payoff.sessions_pct}%), ${r.payoff.groups} groups`,
+    );
+    console.log('');
+    console.log('top repeated transforms:');
+    for (const g of r.top_payoff_groups) {
+      console.log(
+        `  ${String(g.n).padStart(4)}x ${String(g.files).padStart(3)}f  ${g.cls.padEnd(13)} ${g.key.slice(0, 70)}`,
+      );
+    }
+  }
+}
