@@ -43,7 +43,9 @@ const PLIST_VERSION = 4;
  * shutdown closes DBs, tears down watchers and flushes indexes for every
  * registered project; on a machine with O(40) projects that does not fit in
  * launchd's 5s default. Must exceed the daemon's own bounded hard-exit
- * (src/server/bounded-shutdown.ts) so *we* decide when to give up, not launchd.
+ * (`DAEMON_SHUTDOWN_DEADLINE_MS`, src/server/bounded-shutdown.ts) so *we*
+ * decide when to give up, not launchd — asserted by
+ * tests/scripts/postinstall-control-plane.test.ts.
  */
 const PLIST_EXIT_TIMEOUT_SEC = 30;
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
