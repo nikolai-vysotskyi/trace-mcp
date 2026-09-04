@@ -142,7 +142,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
-import { atomicWriteJson, sweepOrphanTmpFiles } from './utils/atomic-write.js';
+import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
 /**
@@ -292,16 +292,11 @@ function softGcSweep(): void {
   // between open and rename never runs that handler — so every crash leaked one
   // file into the state dir, permanently.
   //
-  // TRA-783: the sweep is one readdir per directory, and it only ever ran on
-  // the state root — a June orphan was still sitting in `sessions/` in
-  // September. Session ledgers and pid-locks are the two subdirectories written
-  // atomically; `index/` is not swept because it holds 700+ per-project
-  // directories and no leftover has ever been observed there, so recursing it
-  // would cost every start something for nothing.
+  // TRA-783: the sweep is shallow, and it only ever ran on the state root — a
+  // June orphan was still sitting in `sessions/` in September. The full set of
+  // atomically-written state directories lives in atomic-write.ts.
   try {
-    const removedTmps = [TRACE_MCP_HOME, 'sessions', 'locks'].flatMap((d) =>
-      sweepOrphanTmpFiles(path.resolve(TRACE_MCP_HOME, d)),
-    );
+    const removedTmps = sweepOrphanTmpFilesUnderHome(TRACE_MCP_HOME);
     if (removedTmps.length > 0) {
       logger.info(
         { removedTmps: removedTmps.length },

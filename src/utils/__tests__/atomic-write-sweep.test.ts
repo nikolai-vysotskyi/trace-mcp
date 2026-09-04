@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { sweepOrphanTmpFiles } from '../atomic-write.js';
+import { sweepOrphanTmpFiles, sweepOrphanTmpFilesUnderHome } from '../atomic-write.js';
 
 let dir: string;
 
@@ -44,7 +44,7 @@ describe('sweepOrphanTmpFiles (TRA-702)', () => {
   it('leaves a tmp file young enough to belong to a write still in flight', () => {
     // A concurrent writer's tmp must survive — deleting it would turn another
     // process's atomic write into a spurious failure.
-    const fresh = makeFile('.registry.json.tmp.999.abcdef', 60_000);
+    const fresh = makeFile('.registry.json.tmp.999.abcdef012345', 60_000);
 
     expect(sweepOrphanTmpFiles(dir, DAY_MS)).toEqual([]);
     expect(fs.existsSync(fresh)).toBe(true);
@@ -87,12 +87,39 @@ describe('sweepOrphanTmpFiles (TRA-702)', () => {
   it('sweeps the given directory only, not its children', () => {
     const sub = path.join(dir, 'sessions');
     fs.mkdirSync(sub);
-    const nested = path.join(sub, '.9c8b895c63b7.json.tmp.65657.4eb982e9ac9d');
-    fs.writeFileSync(nested, 'x');
-    const t = new Date(Date.now() - 90 * DAY_MS);
-    fs.utimesSync(nested, t, t);
+    const nested = makeFile(
+      path.join('sessions', '.9c8b895c63b7.json.tmp.65657.4eb982e9ac9d'),
+      90 * DAY_MS,
+    );
 
     expect(sweepOrphanTmpFiles(dir, DAY_MS)).toEqual([]);
-    expect(sweepOrphanTmpFiles(sub, DAY_MS)).toEqual([nested]);
+    expect(fs.existsSync(nested)).toBe(true);
+  });
+});
+
+describe('sweepOrphanTmpFilesUnderHome (TRA-783)', () => {
+  // The startup path is what regressed, so assert on the directory set it
+  // covers — a shallow sweep of the root alone would fail every case here.
+  it.each(['sessions', 'locks', 'bundles', 'bin', 'index'])('collects orphans under %s/', (sub) => {
+    fs.mkdirSync(path.join(dir, sub));
+    const orphan = makeFile(path.join(sub, '.state.json.tmp.4242.4eb982e9ac9d'), 3 * DAY_MS);
+
+    expect(sweepOrphanTmpFilesUnderHome(dir, DAY_MS)).toEqual([orphan]);
+    expect(fs.existsSync(orphan)).toBe(false);
+  });
+
+  it('still collects orphans in the state root itself', () => {
+    const orphan = makeFile('.registry.json.tmp.11.4eb982e9ac9d', 3 * DAY_MS);
+
+    expect(sweepOrphanTmpFilesUnderHome(dir, DAY_MS)).toEqual([orphan]);
+  });
+
+  it('does not recurse past one level, and tolerates absent directories', () => {
+    fs.mkdirSync(path.join(dir, 'index', 'ephemeral'), { recursive: true });
+    const deep = makeFile(path.join('index', 'ephemeral', '.x.db.tmp.7.4eb982e9ac9d'), 9 * DAY_MS);
+
+    // sessions/, locks/, bundles/, bin/ do not exist here — that must not throw.
+    expect(sweepOrphanTmpFilesUnderHome(dir, DAY_MS)).toEqual([]);
+    expect(fs.existsSync(deep)).toBe(true);
   });
 });
