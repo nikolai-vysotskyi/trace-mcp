@@ -37,6 +37,17 @@ describe('codemod corpus audit classifier', () => {
     ).toBe('arg-insert');
   });
 
+  it('detects the first argument added to an empty call', () => {
+    // No comma exists to key on when the list starts empty.
+    expect(classify('f()', 'f(x)').cls).toBe('arg-insert');
+  });
+
+  it('detects an element added to an array, object or import clause', () => {
+    expect(classify('const a = [x];', 'const a = [x, y];').cls).toBe('arg-insert');
+    expect(classify('const o = { x };', 'const o = { x, y };').cls).toBe('arg-insert');
+    expect(classify("import { A } from 'm';", "import { A, B } from 'm';").cls).toBe('arg-insert');
+  });
+
   it('detects a pure deletion', () => {
     expect(classify('a();\nb();\nc();', 'a();\nc();').cls).toBe('pure-delete');
   });
