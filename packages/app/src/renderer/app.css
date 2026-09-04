@@ -193,7 +193,13 @@ body {
 
 .lx-sheet {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   width: min(440px, calc(100vw - 32px));
+  /* The scrim is `position: fixed` and cannot scroll, so a sheet taller than the
+     window loses its bottom — which is where the actions are (TRA-794). Clamp it
+     to the window and let the body scroll instead. */
+  max-height: calc(100vh - 24px);
   padding: 20px;
   background: var(--surface);
   border: 0.5px solid var(--separator);
@@ -218,8 +224,13 @@ body {
 }
 .lx-sheet-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
+  /* Safety net: a step whose content outgrows the window scrolls here. Steps
+     with a long list scroll inside the list instead, so their actions stay put. */
+  min-height: 0;
+  overflow-y: auto;
 }
 .lx-sheet-text {
   margin: 0;
@@ -276,6 +287,7 @@ body {
 
 .lx-sheet-actions {
   display: flex;
+  flex: none;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;

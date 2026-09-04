@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SetupWizard, isOnboardingDone } from '../SetupWizard';
@@ -233,6 +234,32 @@ it('dismisses on Escape and remembers completion', async () => {
 
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(isOnboardingDone()).toBe(true);
+});
+
+// TRA-794: the sheet used to be as tall as its content, so 15 detected clients
+// pushed "Skip for now" / "Connect selected" below the window edge — with a
+// fixed, unscrollable scrim there was no way forward left on screen. jsdom does
+// not apply app.css, so this checks both halves of the chain by source: the
+// sheet's ceiling in CSS, and the shrink/scroll classes on the list.
+it('keeps the client list scrolling inside the sheet, not past the window', async () => {
+  const css = readFileSync('src/renderer/app.css', 'utf8');
+  const sheetRule = css.slice(css.indexOf('.lx-sheet {'), css.indexOf('@keyframes lx-sheet-in'));
+  expect(sheetRule).toMatch(/max-height:/);
+  const bodyRule = css.slice(css.indexOf('.lx-sheet-body {'));
+  expect(bodyRule.slice(0, bodyRule.indexOf('}'))).toMatch(/overflow-y:\s*auto/);
+
+  stubElectronApi();
+  render(<SetupWizard onClose={() => {}} initialStep="clients" />);
+  await screen.findByText('Connect coding assistants');
+
+  const list = document.querySelector('[data-scroll="clients"]') as HTMLElement;
+  expect(list.className).toContain('overflow-y-auto');
+
+  // Every box between the scroll area and the sheet body must be allowed to
+  // shrink, or the list just grows and takes the actions off screen again.
+  for (let el = list.parentElement; el && !el.classList.contains('lx-sheet-body'); el = el.parentElement) {
+    expect(el.className).toContain('min-h-0');
+  }
 });
 
 it('traps Tab focus inside the sheet', async () => {

@@ -419,7 +419,11 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   } else if (step === 'clients') {
     title = t('guard:wizard.clients.title');
     body = (
-      <div className="flex flex-col gap-4">
+      // The list is the only unbounded content in the wizard: with 15 detected
+      // clients it used to push the actions past the window (TRA-794). It takes
+      // the leftover height and scrolls inside itself, so the subtitle and the
+      // two buttons stay where they are.
+      <div className="flex flex-col gap-4 flex-1 min-h-0">
         <p className="lx-sheet-text" style={{ margin: 0 }}>
           {t('guard:wizard.clients.subtitle')}
         </p>
@@ -436,8 +440,11 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
             {t('guard:wizard.clients.none')}
           </p>
         ) : (
-          <Card>
-            <div className="flex flex-col divide-y divide-[var(--separator)]">
+          <Card className="flex-1 min-h-0 flex flex-col">
+            <div
+              data-scroll="clients"
+              className="flex flex-col divide-y divide-[var(--separator)] min-h-0 overflow-y-auto"
+            >
               {clients.map((row) => {
                 const displayName = MCP_CLIENT_DISPLAY_NAMES[row.client.name] ?? row.client.name;
                 const isManual = row.client.name === 'warp' || row.client.name === 'jetbrains-ai';

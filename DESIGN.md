@@ -1182,6 +1182,25 @@ belongs to the window: the application menu, a context menu at the cursor.
 Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
 different pane boxes. Check the overlay in all of them, not just the one you developed in.
 
+### A sheet is clamped by the window, and its list scrolls — not the sheet
+
+`.lx-sheet-scrim` is `position: fixed`, so it cannot scroll: whatever part of a sheet falls
+past the window edge is gone, not merely below the fold. And the part that falls off is
+always the bottom, which is where the actions are. TRA-794 shipped that — with ten MCP
+clients detected, the first-run wizard's sheet measured 753px in a 700px window and both
+`Skip for now` and `Connect selected` sat at y 732. A new user got a list and no way
+forward; only Esc, which means "skip".
+
+So: `.lx-sheet` is `max-height: calc(100vh - 24px)` and a flex column, and `.lx-sheet-body`
+is `min-height: 0; overflow-y: auto` — the safety net that no step can outgrow. A step whose
+content is a list does better than the net: the list takes the leftover height
+(`flex-1 min-h-0` on the card, `overflow-y-auto` on the rows) so the title, the subtitle and
+the actions never move. One scroll container, and it is the list.
+
+Any content whose length comes from the user's machine — detected clients, projects,
+sessions — is unbounded. Check the sheet at the 640×420 window minimum with that content at
+its longest, not with the two rows your dev machine happens to have.
+
 ---
 
 ## 7. Accessibility
