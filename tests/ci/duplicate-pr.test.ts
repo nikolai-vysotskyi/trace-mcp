@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain .mjs script, no type declarations
 import {
+  claimedKeys,
   findDuplicatePrs,
   formatReport,
   isReleasePr,
@@ -49,6 +50,35 @@ const PR_723 = {
   body: '## 3.12.0\n\n### Features\n\n* first-run setup flow (TRA-439)\n* price the default tool surface (TRA-448)\n* dead-daemon pane (TRA-469)',
 };
 
+// TRA-856: four real open PRs from 2026-09-04 that the guard flagged against
+// each other for citing a sibling issue as context. Bodies trimmed to the
+// sentences that carry the TRA keys.
+const PR_871 = {
+  number: 871,
+  title: 'Attribute daemon shutdowns: log exit context on SIGTERM (TRA-809)',
+  body: 'Fixes the diagnosability half of TRA-809: the daemon restarted 137 times in 40 h.',
+};
+const PR_874 = {
+  number: 874,
+  title: 'perf(daemon): release idle extract workers (TRA-811)',
+  body: 'The daemon on the measuring machine restarts every ~3 min (TRA-809) and never reaches the 5-minute window there.\n\nCloses TRA-811.',
+};
+const PR_875 = {
+  number: 875,
+  title: 'fix(indexer): re-scan when the watcher tells us it dropped events (TRA-813)',
+  body: 'Closes TRA-813.\n\nThere the daemon restarts every few minutes (TRA-809) and a start does a full pass.',
+};
+const PR_882 = {
+  number: 882,
+  title: 'docs(ops): user-signal run 2026-09-05 — code search as a channel',
+  body: 'Ledger update for the run of 2026-09-05 (TRA-837). Records TRA-845, TRA-846 and TRA-843, and the index-coverage work in TRA-791.',
+};
+const PR_854 = {
+  number: 854,
+  title: 'ops: index-coverage ledger — 11 of 24 pages unindexed (TRA-791)',
+  body: 'Records what Google actually has for trace-mcp.com, so a run stops re-deriving it by hand.',
+};
+
 describe('isReleasePr', () => {
   it('recognises the release-please title and nothing else', () => {
     expect(isReleasePr(PR_723)).toBe(true);
@@ -67,6 +97,74 @@ describe('issueKeys', () => {
 
   it('is empty for a PR that names no issue', () => {
     expect(issueKeys(PR_612.title)).toEqual([]);
+  });
+});
+
+describe('claimedKeys', () => {
+  it('claims the title key and the closing-keyword keys only', () => {
+    expect(claimedKeys(PR_874)).toEqual(['TRA-811']);
+    expect(claimedKeys(PR_875)).toEqual(['TRA-813']);
+    expect(claimedKeys(PR_871)).toEqual(['TRA-809']);
+  });
+
+  it('claims nothing when a body only references issues', () => {
+    expect(claimedKeys(PR_882)).toEqual([]);
+  });
+
+  // A real body from this repo's history: `Closes TRA-596, TRA-597, TRA-598,
+  // TRA-599, TRA-600`. Reading only the first key would hide four claims.
+  it('reads a closing keyword that names several issues', () => {
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1, TRA-2 and TRA-3.' })).toEqual([
+      'TRA-1',
+      'TRA-2',
+      'TRA-3',
+    ]);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes: TRA-596, TRA-597' })).toEqual([
+      'TRA-596',
+      'TRA-597',
+    ]);
+  });
+
+  // Review finding on #897: `, and` made the separator match `,`, leaving `and`
+  // in the way of the next key — so the last issue of an Oxford-comma list was
+  // dropped and a duplicate on it slipped through.
+  it('reads the last key of an Oxford-comma or ampersand list', () => {
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1, TRA-2, and TRA-3.' })).toEqual([
+      'TRA-1',
+      'TRA-2',
+      'TRA-3',
+    ]);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1 & TRA-2' })).toEqual([
+      'TRA-1',
+      'TRA-2',
+    ]);
+  });
+
+  // Same finding, second half: a key wrapped in a markdown link or backticks
+  // bypassed the closing keyword entirely.
+  it('reads a key wrapped in a markdown link, brackets or backticks', () => {
+    const link = { title: 'docs: update pricing', body: 'Closes [TRA-448](https://x/448)' };
+    expect(claimedKeys(link)).toEqual(['TRA-448']);
+    expect(claimedKeys({ title: 'docs: x', body: 'Closes [TRA-448]' })).toEqual(['TRA-448']);
+    expect(claimedKeys({ title: 'docs: x', body: 'Closes `TRA-448`' })).toEqual(['TRA-448']);
+  });
+
+  it('does not read a closing keyword separated from the key by prose', () => {
+    expect(claimedKeys({ title: 'fix: x', body: 'Fixes the reporting half of TRA-9.' })).toEqual(
+      [],
+    );
+    expect(
+      claimedKeys({ title: 'fix: x', body: 'This closes the gap TRA-809 left behind.' }),
+    ).toEqual([]);
+  });
+
+  it('stops the claim list at prose that follows a key', () => {
+    expect(
+      claimedKeys({ title: 'fix: x', body: 'Closes TRA-1 and reduces the daemon footprint.' }),
+    ).toEqual(['TRA-1']);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-809 (found by Nikolai).' })).toEqual([
+      'TRA-809',
+    ]);
   });
 });
 
@@ -98,6 +196,18 @@ describe('findDuplicatePrs', () => {
 
   it('never flags a PR against the release PR either', () => {
     expect(findDuplicatePrs(PR_597, [PR_723])).toEqual([]);
+  });
+
+  it('still flags a PR whose rival claims the issue in its title alone', () => {
+    const titleOnly = { number: 900, title: 'fix(daemon): log exit context (TRA-809)', body: '' };
+    expect(findDuplicatePrs(titleOnly, [PR_871]).map((p) => p.number)).toEqual([871]);
+  });
+
+  it('passes the four PRs that only cite a sibling issue as context (TRA-856)', () => {
+    const open = [PR_871, PR_874, PR_875, PR_882, PR_854];
+    for (const pr of open) {
+      expect(findDuplicatePrs(pr, open)).toEqual([]);
+    }
   });
 });
 
