@@ -434,6 +434,21 @@ appearances render stacked — which is exactly how the pair shipped and how
 TRA-390 was reported. Check `display` in the browser, in both themes; the
 markup alone does not tell you which rule won.
 
+**Every app screenshot needs a pair — the rule above is not opt-in.** A shot
+with no counterpart does not fall back to something neutral: it renders in
+both themes, so one of the two themes gets the wrong appearance of the app.
+That is worse than the stacked-pair bug it is easy to mistake for a milder
+version of, because nothing about it looks broken — it looks like the product
+only has a light mode. Dark is the site's default (`prefers-color-scheme` is
+only consulted for light), so the un-paired case is the majority case, not
+the edge case.
+
+`app-overview` and `app-projects` shipped light-only for months for exactly
+this reason: §3 said how to write a pair and never said a single image was a
+finding. Measure it, do not read the markup — count `.app-frame img` and count
+the ones carrying a `theme-*-only` class; the two numbers must be equal, in
+both themes.
+
 **Content.** Shot from the real Electron window — traffic lights and rounded
 window corners must be present. No traffic lights means it came from a
 browser: reject it. No visible errors, skeletons, scratch directories, or
@@ -493,6 +508,20 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Dark and light both screenshotted, no unstyled flash on load.
 - [ ] Exactly one image of a light/dark pair has computed `display: block` —
       read it off the element, in each theme.
+- [ ] **Every** app screenshot is in a pair — no shot renders in both themes
+      (§3). Not a claim, a measurement, run on the landing:
+
+      ```
+      const imgs = [...document.querySelectorAll('.app-frame img')];
+      imgs.length - imgs.filter(i =>
+        i.classList.contains('theme-light-only') ||
+        i.classList.contains('theme-dark-only')).length
+      ```
+
+      Must be 0. It is 2 today — `app-overview` and `app-projects` have no
+      dark counterpart, so a dark reader gets two light app windows on OLED
+      black (TRA-851). The un-paired shot is the failure this line exists to
+      catch; the stacked pair above is the other one.
 - [ ] Theme choice survives landing → doc page navigation.
 - [ ] Contrast sweep is green. Not a claim — a command:
 
