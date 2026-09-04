@@ -22,8 +22,17 @@
 
 <!-- The three buttons carry their own background plate and sit flush against each
      other, so they continue the banner instead of floating on GitHub's canvas.
-     Keep the anchors on one line: any whitespace between them paints a seam. -->
-<p align="center"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-macos-light.png" /><img src="docs/images/readme/btn-macos-dark.png" width="250" alt="Download for macOS — Apple Silicon, Intel, .dmg" /></picture></a><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-windows-light.png" /><img src="docs/images/readme/btn-windows-dark.png" width="250" alt="Download for Windows — .exe installer" /></picture></a><a href="https://www.npmjs.com/package/trace-mcp"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-npm-light.png" /><img src="docs/images/readme/btn-npm-dark.png" width="250" alt="Install via npm — npm install -g trace-mcp" /></picture></a></p>
+     Keep the anchors on one line: any whitespace between them paints a seam.
+     There is no `width` attribute here on purpose. One `width` serves every
+     viewport, so it can pin the desktop row (3 x 250 = 750, the banner's width)
+     or let the phone cut fill the column, never both. The size therefore comes
+     from srcset density instead: the 1600px desktop art declared `6.4x` lays out
+     at exactly 250, and the 2000px phone art declared `4x` lays out at 500 —
+     wider than any phone column, so `max-width: 100%` clamps it to the full
+     width and the empty margin either side of the plate disappears.
+     Keep a density on the <img> srcset too: it is the fallback for a renderer
+     that drops <picture>, and without it the bare src lays out at 800px. -->
+<p align="center"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-macos-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-macos-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-macos-light.png 6.4x" /><img src="docs/images/readme/btn-macos-dark.png" srcset="docs/images/readme/btn-macos-dark.png 6.4x" alt="Download for macOS — Apple Silicon, Intel, .dmg" /></picture></a><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-windows-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-windows-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-windows-light.png 6.4x" /><img src="docs/images/readme/btn-windows-dark.png" srcset="docs/images/readme/btn-windows-dark.png 6.4x" alt="Download for Windows — .exe installer" /></picture></a><a href="https://www.npmjs.com/package/trace-mcp"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-npm-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-npm-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-npm-light.png 6.4x" /><img src="docs/images/readme/btn-npm-dark.png" srcset="docs/images/readme/btn-npm-dark.png 6.4x" alt="Install via npm — npm install -g trace-mcp" /></picture></a></p>
 
 <p align="center">
   <sub><b>WORKS WITH</b> &nbsp;&middot;&nbsp; Claude Code &nbsp;&middot;&nbsp; Cursor &nbsp;&middot;&nbsp; Codex &nbsp;&middot;&nbsp; Windsurf &nbsp;&middot;&nbsp; Zed &nbsp;&middot;&nbsp; any MCP client</sub>

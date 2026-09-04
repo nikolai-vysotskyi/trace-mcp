@@ -17,6 +17,11 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..');
 const README = readFileSync(join(REPO_ROOT, 'README.md'), 'utf-8');
 
 const banner = README.match(/<picture>[\s\S]*?banner-dark\.png[\s\S]*?<\/picture>/)?.[0];
+const BUTTONS = ['macos', 'windows', 'npm'] as const;
+const button = (name: string) =>
+  README.match(
+    new RegExp(`<picture>(?:(?!</picture>)[\\s\\S])*?btn-${name}-dark\\.png[\\s\\S]*?</picture>`),
+  )?.[0];
 
 describe('README header images', () => {
   it('every referenced header image exists', () => {
@@ -64,5 +69,44 @@ describe('README header images', () => {
     expect(banner).toMatch(
       /media="\(prefers-color-scheme: light\)" srcset="docs\/images\/readme\/banner-light\.png"/,
     );
+  });
+
+  /**
+   * The buttons are sized by srcset density, not by `width`, because one
+   * `width` attribute serves every viewport: it can hold the desktop row at
+   * 3 x 250 = 750 or let the phone cut fill the column, never both. A `width`
+   * reintroduced here would pin every viewport to 250 again — and it would look
+   * like a harmless tidy-up, so it gets a test rather than only a comment.
+   */
+  it('sizes the buttons by srcset density instead of a width attribute', () => {
+    for (const name of BUTTONS) {
+      const pic = button(name);
+      expect(pic, `README has no <picture> for btn-${name}`).toBeDefined();
+      expect(pic, `btn-${name} must not carry a width attribute`).not.toContain('width=');
+      // 1600px art laid out at 250 CSS px — the desktop row, unchanged.
+      expect(pic).toContain(`srcset="docs/images/readme/btn-${name}-light.png 6.4x"`);
+      expect(pic).toContain(`srcset="docs/images/readme/btn-${name}-dark.png 6.4x"`);
+      // 2000px art laid out at 500, wider than any phone column, so
+      // max-width: 100% clamps it to the full width.
+      expect(pic).toContain(`srcset="docs/images/readme/btn-${name}-narrow-light.png 4x"`);
+      expect(pic).toContain(`srcset="docs/images/readme/btn-${name}-narrow-dark.png 4x"`);
+    }
+  });
+
+  it('gives every button the same source order and spelling as the banner', () => {
+    for (const name of BUTTONS) {
+      const pic = button(name)!;
+      // Same first-match-wins ordering, same themed-picture escape hatch.
+      expect(pic).toContain('(max-width: 500px) and (prefers-color-scheme:light)');
+      expect(pic).not.toContain('(max-width: 500px) and (prefers-color-scheme: light)');
+      expect(pic.lastIndexOf('max-width: 500px')).toBeLessThan(
+        pic.indexOf(`srcset="docs/images/readme/btn-${name}-light.png`),
+      );
+      // The <img> keeps a density too: it is the fallback for a renderer that
+      // drops <picture>, and a bare src would lay out at the full 1600px.
+      expect(pic).toMatch(
+        new RegExp(`<img src="docs/images/readme/btn-${name}-dark\\.png" srcset=`),
+      );
+    }
   });
 });
