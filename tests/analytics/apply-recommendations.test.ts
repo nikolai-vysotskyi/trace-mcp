@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { STARTUP_BACKUPS_DIR } from '../../src/shared/paths.js';
 import {
   applyStartupRecommendations,
   rollbackStartupRecommendations,
@@ -358,3 +359,40 @@ describe.skipIf(!realSettingsRaw || !realServerName)(
     });
   },
 );
+
+describe('backup manifest durability', () => {
+  it('a batch that throws part-way still leaves a manifest that rolls back what landed', () => {
+    const settings = writeSettings({ mcpServers: { 'idle-server': { command: 'x' } } });
+    const before = fs.readFileSync(settings, 'utf8');
+
+    // Second request is rigged to throw: a FILE sits where the holding
+    // directory for a disabled skill has to be created, so mkdirSync fails
+    // after the first request has already rewritten settings.json.
+    const skills = path.join(home, '.claude', 'skills');
+    fs.mkdirSync(path.join(skills, 'idle-skill'), { recursive: true });
+    fs.writeFileSync(path.join(skills, '.trace-mcp-disabled'), 'not a directory', 'utf8');
+
+    const idsBefore = new Set(
+      fs.existsSync(STARTUP_BACKUPS_DIR) ? fs.readdirSync(STARTUP_BACKUPS_DIR) : [],
+    );
+    expect(() =>
+      applyStartupRecommendations(
+        [
+          { kind: 'unusedMcpServer', target: 'idle-server' },
+          { kind: 'unusedSkill', target: 'idle-skill' },
+        ],
+        { dryRun: false },
+      ),
+    ).toThrow();
+
+    // The write happened, so a manifest covering it must exist on disk even
+    // though the call never returned a backupId.
+    expect(fs.readFileSync(settings, 'utf8')).not.toBe(before);
+    const newId = fs.readdirSync(STARTUP_BACKUPS_DIR).find((id) => !idsBefore.has(id));
+    expect(newId).toBeTruthy();
+
+    const rollback = rollbackStartupRecommendations(newId);
+    expect(rollback.errors).toEqual([]);
+    expect(fs.readFileSync(settings, 'utf8')).toBe(before);
+  });
+});

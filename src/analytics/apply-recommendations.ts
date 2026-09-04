@@ -14,8 +14,9 @@
  *    what it WOULD do, so a dry run is a real preview, not a guess.
  *  - Every write is preceded by capturing enough to undo it byte-for-byte —
  *    the original file content, or the original path a moved directory came
- *    from — into one manifest per `applyStartupRecommendations` call.
- *    `rollbackStartupRecommendations` replays that manifest in reverse.
+ *    from — into one manifest per `applyStartupRecommendations` call, and that
+ *    manifest is flushed to disk before the write it covers, not after the
+ *    batch. `rollbackStartupRecommendations` replays it in reverse.
  */
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
@@ -60,6 +61,13 @@ interface BackupManifest {
   entries: ManifestEntry[];
 }
 
+/**
+ * Records one undo entry AND flushes the manifest to disk before the write it
+ * describes happens. An in-memory array flushed at the end of the call would
+ * leave a killed run with changed files and no manifest to roll them back.
+ */
+type Recorder = (entry: ManifestEntry) => void;
+
 export interface ApplyOptions {
   projectRoot?: string;
   /** No writes happen when true (default at the tool layer). Every outcome is still computed. */
@@ -92,11 +100,7 @@ function mcpConfigCandidates(projectRoot?: string): string[] {
   ];
 }
 
-function applyUnusedMcpServer(
-  target: string,
-  opts: ApplyOptions,
-  entries: ManifestEntry[],
-): ApplyOutcome {
+function applyUnusedMcpServer(target: string, opts: ApplyOptions, record: Recorder): ApplyOutcome {
   const touched: string[] = [];
   for (const file of mcpConfigCandidates(opts.projectRoot)) {
     let raw: string;
@@ -117,7 +121,7 @@ function applyUnusedMcpServer(
 
     touched.push(file);
     if (opts.dryRun) continue;
-    entries.push({ type: 'file', path: file, existed: true, content: raw });
+    record({ type: 'file', path: file, existed: true, content: raw });
     delete (servers as Record<string, unknown>)[target];
     fs.writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
   }
@@ -152,11 +156,7 @@ function disabledSkillPath(skillPath: string): string {
   return path.join(path.dirname(skillPath), '.trace-mcp-disabled', path.basename(skillPath));
 }
 
-function applyUnusedSkill(
-  target: string,
-  opts: ApplyOptions,
-  entries: ManifestEntry[],
-): ApplyOutcome {
+function applyUnusedSkill(target: string, opts: ApplyOptions, record: Recorder): ApplyOutcome {
   if (target.includes(':')) {
     return {
       kind: 'unusedSkill',
@@ -199,8 +199,10 @@ function applyUnusedSkill(
     };
   }
   fs.mkdirSync(path.dirname(dest), { recursive: true });
+  // Recorded before the rename: rollback already no-ops on a move that never
+  // landed, so an entry ahead of its write is safe and a missing one is not.
+  record({ type: 'move', from: src, to: dest });
   fs.renameSync(src, dest);
-  entries.push({ type: 'move', from: src, to: dest });
   return { kind: 'unusedSkill', target, status: 'applied', filesTouched: [src] };
 }
 
@@ -228,7 +230,7 @@ function unifiedDiff(filePath: string, lines: string[], removed: Set<number>): s
 
 function applyDuplicateInstructions(
   target: string,
-  entries: ManifestEntry[],
+  record: Recorder,
   dryRun: boolean,
 ): ApplyOutcome {
   const globalFile = path.join(claudeHome(), path.basename(target));
@@ -270,7 +272,7 @@ function applyDuplicateInstructions(
     };
   }
 
-  entries.push({ type: 'file', path: target, existed: true, content: raw });
+  record({ type: 'file', path: target, existed: true, content: raw });
   const newContent = lines.filter((_, i) => !removed.has(i)).join('\n');
   fs.writeFileSync(target, newContent, 'utf8');
   return {
@@ -295,27 +297,33 @@ export function applyStartupRecommendations(
   requests: ApplyRequest[],
   opts: ApplyOptions,
 ): ApplyResult {
-  const entries: ManifestEntry[] = [];
+  const manifest: BackupManifest = {
+    id: backupId(),
+    createdAt: new Date().toISOString(),
+    entries: [],
+  };
+  const dir = path.join(STARTUP_BACKUPS_DIR, manifest.id);
+  const record: Recorder = (entry) => {
+    manifest.entries.push(entry);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  };
+
   const outcomes = requests.map((req) => {
     switch (req.kind) {
       case 'unusedMcpServer':
-        return applyUnusedMcpServer(req.target, opts, entries);
+        return applyUnusedMcpServer(req.target, opts, record);
       case 'unusedSkill':
-        return applyUnusedSkill(req.target, opts, entries);
+        return applyUnusedSkill(req.target, opts, record);
       case 'duplicateInstructions':
-        return applyDuplicateInstructions(req.target, entries, opts.dryRun);
+        return applyDuplicateInstructions(req.target, record, opts.dryRun);
     }
   });
 
-  if (opts.dryRun || entries.length === 0) {
+  // A dry run never calls `record`, so no directory was created for it either.
+  if (opts.dryRun || manifest.entries.length === 0) {
     return { dryRun: opts.dryRun, backupId: null, outcomes };
   }
-
-  const manifest: BackupManifest = { id: backupId(), createdAt: new Date().toISOString(), entries };
-  const dir = path.join(STARTUP_BACKUPS_DIR, manifest.id);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
-
   return { dryRun: false, backupId: manifest.id, outcomes };
 }
 
