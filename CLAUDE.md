@@ -279,8 +279,8 @@ hand-type a tool/language/framework count into a listing, a form, or `server.jso
 
 `ops/index-coverage.md` is the companion ledger for the site itself: per-URL
 Search Console coverage and last-crawl dates. **Read it before any SEO or docs
-work aimed at Google, and update it in the same change** — it is what stops a run
-shipping on-page fixes to pages Google has no index entry for.
+work aimed at Google, and update it in the same change** — it is what tells a run
+whether Google has even fetched the pages it is about to change.
 
 ## Client start-block token costs
 

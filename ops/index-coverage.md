@@ -12,15 +12,22 @@ Rules, same shape as `ops/distribution.md` and `ops/user-signal.md`:
 
 - Record what the API **returned**, with the date it was asked. `coverageState`
   is Google's wording, copied verbatim, not a paraphrase.
-- `URL is unknown to Google` means **no index entry**. It does not mean
-  Googlebot never fetched the page — on 2026-09-04 `/development.html` listed
-  `/reduce-claude-code-token-usage.html` as a referring URL while that page
-  itself came back "unknown", so it had plainly been fetched. Do not report
-  "unknown" as "never crawled".
-- A page that is technically clean and still unindexed is a **crawl-demand**
-  problem, not an on-page one. Check serving first (200, self-canonical, no
-  `noindex`, in the sitemap, linked from an indexed page); if all five hold,
-  stop shipping on-page fixes for it and say so.
+- `URL is unknown to Google` means **no index entry**, and nothing more. It is
+  not evidence that Googlebot never fetched the page: on 2026-09-04
+  `/development.html` listed `/reduce-claude-code-token-usage.html` among its
+  referring URLs while that page itself came back "unknown". The API defines
+  `referringUrls` as URLs that link to the inspected one directly or
+  indirectly, so that is a reason not to read "unknown" as "never known" — it
+  is not proof of a fetch either. Do not report "unknown" as "never crawled",
+  and do not report it as "crawled".
+- The serving checks below rule out four specific technical blockers, and the
+  internal-link check is per-URL rather than per-cluster. None of them
+  identifies a cause. A page that passes them and is still unindexed is
+  **consistent with low crawl demand**, which is where to look first — but
+  Google names perceived inventory, update frequency, page quality and
+  relevance, and serving capacity alongside popularity, so external links are
+  one controllable lever rather than the explanation. Say which one you
+  checked; do not close the others by assertion.
 
 ## Coverage as of 2026-09-04
 
@@ -64,7 +71,7 @@ TechArticle schema (TRA-419, 09-03).
 13 indexed, 11 not. The 11 are the newest pages and the whole `/vs/` cluster —
 the two groups carrying every non-branded keyword the site targets.
 
-## Why they are not indexed — checked, not assumed
+## What has been ruled out, and what has not
 
 Every one of the 11 was verified serving-clean on 2026-09-04:
 
@@ -72,14 +79,35 @@ Every one of the 11 was verified serving-clean on 2026-09-04:
 - Each has a **self-referencing canonical** and its own `<title>`.
 - `docs/robots.txt` allows everything except `/*.md$`; none of the 11 is a `.md` URL.
 - All 11 are in the sitemap Google downloaded on 09-02.
-- The `/vs/` pages are linked in-body from `/comparisons.html`, which is indexed
-  and was crawled 2026-08-29 — after those links landed on 2026-08-28.
 
-So the on-page layer is not the blocker. What is thin is crawl demand: the URL
-Inspection API reports exactly **two external referring URLs** for the homepage,
-`https://trace-mcp.vi.softonic.com/mcp` and `https://mcpmarket.com/server/trace`.
-Every other indexed page's only referring URL is our own sitemap. Growing that
-list is `ops/distribution.md`'s job, and it is the prerequisite for the rest.
+Internal linking is the check that does **not** apply cluster-wide, and the
+dates matter. `/comparisons.html` links all six `/vs/` pages in body text and
+was last crawled 2026-08-29T15:09Z. Only three of those links existed by then:
+
+| `/vs/` page | Link added to `/comparisons.html` | Present at the 08-29 crawl |
+|---|---|---|
+| `/vs/repomix.html` | 2026-08-28 | yes |
+| `/vs/serena.html` | 2026-08-28 | yes |
+| `/vs/codebase-memory-mcp.html` | 2026-08-28 | yes |
+| `/vs/codegraph.html` | 2026-08-29T17:42Z (`7343bf04`) | no — 2.5 h after the crawl |
+| `/vs/context-mode.html` | 2026-08-30 (`1932c80d`) | no |
+| `/vs/repomix-vs-codegraph.html` | 2026-09-02 (`34ffdf88`) | no |
+
+So the observation "linked from an indexed page and still unindexed" holds for
+three URLs. For the other three, no crawl has happened since the link appeared,
+and their absence from the index is not yet evidence of anything. Do not cite
+the whole cluster as one result.
+
+What the ruled-out list leaves is a page set that is reachable and serving
+correctly, and a site Google has not fetched since 2026-08-29 — evidence
+consistent with low crawl demand. One input to that is measurable and ours to
+move: the URL Inspection API reports exactly **two external referring URLs**
+for the homepage, `https://trace-mcp.vi.softonic.com/mcp` and
+`https://mcpmarket.com/server/trace`, and every other indexed page's only
+referring URL is our own sitemap. Growing that list is `ops/distribution.md`'s
+job. It is the lever we can pull, not a diagnosis — page quality, update
+frequency and perceived inventory are equally named by Google and have not
+been measured here.
 
 ## Search performance, 2026-08-07 → 2026-09-03
 
