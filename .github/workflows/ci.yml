@@ -212,10 +212,10 @@ jobs:
     runs-on: ubuntu-latest
     # 3 minutes was never enough: the last green run spent 84s in
     # pnpm/action-setup's self-installer and 71s in `pnpm audit` — 155s of a
-    # 180s budget, with the whole margin sitting on two npm-registry round
-    # trips. On 2026-09-04 the registry slowed down and the job was cancelled
-    # mid-installer on master, on release-please and on two agent branches
-    # inside an hour, blocking every merge. This is a network step; size the
+    # 180s budget, with the whole margin sitting on npm-registry round trips.
+    # On 2026-09-04 the registry slowed down and the job was cancelled without
+    # ever running the audit, on master, on release-please and on two agent
+    # branches inside an hour. This is a network step start to finish; size the
     # budget for a slow registry, not a fast one.
     timeout-minutes: 10
     permissions:
@@ -232,7 +232,15 @@ jobs:
           node-version: '22'
 
       # Audits the lockfile; no install needed.
+      #
+      # `fetch-timeout` is raised from pnpm's 60s default because the advisory
+      # endpoint regularly takes longer than that for a tree this size. At 60s
+      # pnpm kills its own request and retries: 60s + 10s + 60s + 60s ~= 190s,
+      # measured, which alone overran the job. Three slow attempts are strictly
+      # worse than one patient one — the answer is the same either way.
       - name: pnpm audit (production dependencies)
+        env:
+          npm_config_fetch_timeout: '300000'
         run: pnpm audit --prod --audit-level=moderate
 
   no-ai-marks:
