@@ -710,6 +710,11 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     expect(stderr).toMatch(/node binary not found|trace-mcp package not found/);
   });
 
+  // Anything bash itself prints when the shim mishandles a failure: the
+  // `set -u` abort, the failed read, the failed redirection. The launcher's
+  // own `die` message is not in here — that one is deliberate output.
+  const SHELL_DIAGNOSTIC = /unbound variable|read error|Permission denied|Is a directory/;
+
   // Both TRA-797 cases below need a run that actually reaches heal_config: an
   // empty config, and a prefix the probe can find node + cli.js in.
   function setupHealingHome(): { home: string; traceHome: string } {
@@ -740,11 +745,14 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     const { home, traceHome } = setupHealingHome();
     fs.mkdirSync(path.join(traceHome, 'launcher.env'));
 
-    const { status, stdout, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
 
+    // Which node the probe lands on depends on the machine (a CI runner has a
+    // system node the planted prefix cannot outrank), so assert the behaviour
+    // that is the point: the shim reaches an exec instead of aborting, and
+    // says nothing the client would read as a crash.
     expect(status).toBe(0);
-    expect(stdout).toContain('NODE_ARGS:');
-    expect(stderr).toBe('');
+    expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
   });
 
   // The heal writes launcher.env through a tmp + rename. A shim killed between
@@ -774,10 +782,9 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     const { home, traceHome } = setupHealingHome();
     fs.chmodSync(traceHome, 0o500);
     try {
-      const { status, stdout, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+      const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
       expect(status).toBe(0);
-      expect(stdout).toContain('NODE_ARGS:');
-      expect(stderr).toBe('');
+      expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
     } finally {
       fs.chmodSync(traceHome, 0o700);
     }

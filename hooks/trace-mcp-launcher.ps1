@@ -72,14 +72,19 @@ $NodeMajor = ''
 $UsingOverride = $false
 $UsingNodeOverride = $false
 
-# Wrapped: under $ErrorActionPreference = 'Stop' an unreadable config (locked
-# by another writer, an I/O error on a mapped drive) throws out of the whole
-# launcher, so the client gets neither the recovery message nor the probe
-# fallback. An unreadable config must degrade to "no config" (TRA-797).
-$configLines = @()
-if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
-    try { $configLines = [System.IO.File]::ReadAllLines($ConfigPath) } catch { $configLines = @() }
+# Every file this shim reads is a hint, never a requirement: launcher.env,
+# pkg-roots, .npmrc. Under $ErrorActionPreference = 'Stop' a read that throws -
+# a file locked by another writer, an I/O error on a mapped drive - escapes the
+# whole launcher, so the client gets neither the recovery message nor the probe
+# fallback and loses trace-mcp for the session. An unreadable hint must degrade
+# to "no hint" (TRA-797).
+function Read-LauncherLines {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    try { return @([System.IO.File]::ReadAllLines($Path)) } catch { return @() }
 }
+
+$configLines = Read-LauncherLines $ConfigPath
 if ($configLines.Count -gt 0) {
     foreach ($line in $configLines) {
         $trimmed = $line.TrimStart()
@@ -318,12 +323,9 @@ function Get-PkgRoots {
     # Roots recorded by past installs (mirrors src/init/launcher.ts::recordPkgRoot).
     # This is how a prefix we cannot name in advance becomes findable without
     # asking npm at runtime. Values are opaque paths, never evaluated.
-    $rootsFile = Join-Path $TraceHome 'pkg-roots'
-    if (Test-Path -LiteralPath $rootsFile -PathType Leaf) {
-        foreach ($line in [System.IO.File]::ReadAllLines($rootsFile)) {
-            $t = $line.Trim()
-            if ($t -and -not $t.StartsWith('#')) { $roots += $t }
-        }
+    foreach ($line in (Read-LauncherLines (Join-Path $TraceHome 'pkg-roots'))) {
+        $t = $line.Trim()
+        if ($t -and -not $t.StartsWith('#')) { $roots += $t }
     }
     # Volta keeps each global package under its own image directory.
     if ($env:LOCALAPPDATA) {
@@ -336,12 +338,9 @@ function Get-PkgRoots {
     # execution from the opened repository.
     $prefix = $env:NPM_CONFIG_PREFIX
     if (-not $prefix -and $env:USERPROFILE) {
-        $npmrc = Join-Path $env:USERPROFILE '.npmrc'
-        if (Test-Path -LiteralPath $npmrc -PathType Leaf) {
-            foreach ($line in [System.IO.File]::ReadAllLines($npmrc)) {
-                if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
-                    $prefix = $Matches[1].Trim('"').Trim("'")
-                }
+        foreach ($line in (Read-LauncherLines (Join-Path $env:USERPROFILE '.npmrc'))) {
+            if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
+                $prefix = $Matches[1].Trim('"').Trim("'")
             }
         }
     }
