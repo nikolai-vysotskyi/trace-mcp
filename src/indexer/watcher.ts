@@ -138,6 +138,14 @@ export class FileWatcher {
    * settled state left by the previous call.
    */
   private opQueue: Promise<void> = Promise.resolve();
+  /**
+   * The handler run currently executing, if any. Unsubscribing stops future
+   * events and clearing the debounce timer stops a scheduled run, but neither
+   * touches a run whose timer has already fired — that one is mid-`onChanges`,
+   * indexing into a Store the caller is about to close (TRA-834). `stop()`
+   * awaits this so "the watcher is stopped" means no handler is still running.
+   */
+  private activeHandler: Promise<void> | null = null;
 
   constructor(
     private readonly _setTimeout: typeof setTimeout = setTimeout,
@@ -258,16 +266,22 @@ export class FileWatcher {
         for (const p of changed) this.pendingPaths.add(p);
 
         if (this.debounceTimer) this._clearTimeout(this.debounceTimer);
-        this.debounceTimer = this._setTimeout(async () => {
+        this.debounceTimer = this._setTimeout(() => {
           const paths = Array.from(this.pendingPaths);
           this.pendingPaths.clear();
           this.debounceTimer = null;
           logger.debug({ count: paths.length }, 'File changes detected');
-          try {
-            await onChanges(paths);
-          } catch (e) {
-            logger.error({ error: e }, 'File change handler failed');
-          }
+          const run = (async () => {
+            try {
+              await onChanges(paths);
+            } catch (e) {
+              logger.error({ error: e }, 'File change handler failed');
+            }
+          })();
+          const tracked: Promise<void> = run.finally(() => {
+            if (this.activeHandler === tracked) this.activeHandler = null;
+          });
+          this.activeHandler = tracked;
         }, debounceMs);
       },
       {
@@ -368,5 +382,10 @@ export class FileWatcher {
     // pass rather than letting it resume against a closed DB.
     this.rescanPending = false;
     if (this.activeRescan) await this.activeRescan;
+    // Same for a handler whose debounce timer had already fired before we got
+    // here. Without this the caller closes the DB out from under a running
+    // indexing pass (TRA-834). `run` swallows its own errors, so this can only
+    // wait, never throw.
+    await this.activeHandler;
   }
 }
