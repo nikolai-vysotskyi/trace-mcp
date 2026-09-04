@@ -42,13 +42,22 @@ function addTo(map: Map<string, number[]>, key: string, id: number): void {
   else map.set(key, [id]);
 }
 
-/** Collapse `.` and `..` segments in a posix-style relative path. */
+/**
+ * Collapse `.` and `..` segments in a posix-style relative path. A `..` that
+ * pops past an empty prefix is kept rather than dropped — otherwise
+ * `src/../../config.h` would collapse to `config.h` and could wrongly match a
+ * same-named file at the repo root, when the include actually escapes the repo.
+ */
 function normalizePath(p: string): string {
   const out: string[] = [];
   for (const part of p.split('/')) {
     if (part === '' || part === '.') continue;
-    if (part === '..') out.pop();
-    else out.push(part);
+    if (part === '..') {
+      if (out.length > 0 && out[out.length - 1] !== '..') out.pop();
+      else out.push('..');
+    } else {
+      out.push(part);
+    }
   }
   return out.join('/');
 }
@@ -110,6 +119,11 @@ export function resolveCImportEdges(state: PipelineState, _scope?: ChangeScope):
     return candidates?.length === 1 ? candidates[0] : undefined;
   };
 
+  // MSVC accepts `#include "sub\header.h"`; `byPath`/`bySuffix` keys are
+  // forward-slash only (see the file-path normalization above), so a
+  // backslash specifier must be normalized before either lookup.
+  const normalizeSpecifier = (s: string): string => s.split('\\').join('/');
+
   let created = 0;
   let external = 0;
   let ambiguous = 0;
@@ -126,19 +140,26 @@ export function resolveCImportEdges(state: PipelineState, _scope?: ChangeScope):
 
       const seen = new Set<string>();
       for (const { from } of imports) {
-        if (!from || seen.has(from)) continue;
-        seen.add(from);
+        if (!from) continue;
+        const specifier = normalizeSpecifier(from);
+        if (seen.has(specifier)) continue;
+        seen.add(specifier);
 
-        const targetId = resolve(from, fromDir);
+        const targetId = resolve(specifier, fromDir);
         if (targetId == null) {
-          const candidates = bySuffix.get(from);
+          const candidates = bySuffix.get(specifier);
           if (candidates && candidates.length > 1) ambiguous++;
           else external++;
           continue;
         }
         const targetNodeId = nodeIds.get(targetId);
         if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-        insertStmt.run(sourceNodeId, targetNodeId, importsEdgeType.id, JSON.stringify({ from }));
+        insertStmt.run(
+          sourceNodeId,
+          targetNodeId,
+          importsEdgeType.id,
+          JSON.stringify({ from: specifier }),
+        );
         created++;
       }
     }

@@ -7,8 +7,10 @@
  * (confirmed on redis: 191 files, 0 edges). These tests pin the shapes an
  * include comes in — same-directory quoted, `../` relative, an angle-bracket
  * path resolved by suffix, a cross-language C header included from a `.cpp`
- * file — plus the rules that a system header resolves to nothing and an
- * ambiguous bare filename is left unresolved rather than guessed.
+ * file, one nested inside a header guard, backslash-separated (MSVC) — plus
+ * the rules that a system header resolves to nothing, an ambiguous bare
+ * filename is left unresolved rather than guessed, and a `..` that escapes
+ * the repo root does not collapse onto an unrelated same-named file.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -27,8 +29,11 @@ int main(void) { return 0; }
 `,
   'src/app.h': `#ifndef APP_H
 #define APP_H
+#include "types.h"
 void app_init(void);
 #endif
+`,
+  'src/types.h': `typedef int app_int_t;
 `,
   'src/utils/helper.c': `#include "../app.h"
 
@@ -49,6 +54,20 @@ void wrap() {}
   'src/moduleC/user2.c': `#include "common.h"
 
 void use(void) {}
+`,
+  // A file literally named outside.h at the fixture root — deliberately
+  // placed so a `..`-past-root normalization bug would wrongly match it.
+  'outside.h': `/* not the file src/deep/escape.c means to include */
+`,
+  'src/deep/escape.c': `#include "../../../outside.h"
+
+void escape(void) {}
+`,
+  'src/sub/win.h': `#define WIN 1
+`,
+  'src/winstyle.c': `#include "sub\\win.h"
+
+void winstyle(void) {}
 `,
 };
 
@@ -119,5 +138,23 @@ describe('C/C++ import resolution E2E', () => {
     // directory has neither, so the suffix match is ambiguous and no edge
     // is created for either candidate.
     expect(importTargets(store, 'src/moduleC/user2.c').size).toBe(0);
+  });
+
+  it('resolves an include nested inside a header guard', () => {
+    // app.h's own #include "types.h" sits inside #ifndef APP_H — only
+    // reachable if extraction recurses into the guard.
+    expect(importTargets(store, 'src/app.h')).toContain('src/types.h');
+  });
+
+  it('does not let a `..` past repo root collapse onto an unrelated same-named file', () => {
+    // `../../../outside.h` from src/deep/ has one `..` more than the path is
+    // deep, so it escapes the repo. A buggy normalizer that drops the extra
+    // `..` instead of keeping it would collapse this to `outside.h` and
+    // wrongly match the unrelated file at the fixture root.
+    expect(importTargets(store, 'src/deep/escape.c').size).toBe(0);
+  });
+
+  it('resolves a backslash-separated include (MSVC style)', () => {
+    expect(importTargets(store, 'src/winstyle.c')).toContain('src/sub/win.h');
   });
 });

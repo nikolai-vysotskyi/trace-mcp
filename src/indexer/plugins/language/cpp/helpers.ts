@@ -111,6 +111,7 @@ const PREPROC_CONDITIONAL_TYPES = new Set([
   'preproc_ifdef',
   'preproc_if',
   'preproc_elif',
+  'preproc_elifdef', // C++23 #elifdef / #elifndef
   'preproc_else',
 ]);
 
