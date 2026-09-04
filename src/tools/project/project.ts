@@ -1,3 +1,4 @@
+import { readEmbeddingBreakerState } from '../../ai/embedding-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { IndexStats, Store } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
@@ -15,6 +16,22 @@ interface IndexHealthResult {
   };
   warnings: string[];
   progress?: ProgressSnapshot;
+  /**
+   * Embedding backlog state. Present only when embeddings are configured or a
+   * previous run failed — otherwise the extra COUNT isn't worth paying for.
+   * Without this, semantic search silently degrades with nothing to look at
+   * (TRA-812).
+   */
+  embedding?: {
+    /** Indexed symbols with no vector yet. */
+    queued: number;
+    /** Epoch ms until which background embedding is paused, if it is. */
+    pausedUntil?: number;
+    /** Epoch ms of the last failed batch. */
+    lastFailureAt?: number;
+    /** Message from the last failed batch. */
+    lastError?: string;
+  };
 }
 
 export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealthResult {
@@ -55,9 +72,32 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
     .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
     .get() as { value: string } | undefined;
 
+  const breaker = readEmbeddingBreakerState(store.db);
+  let embedding: IndexHealthResult['embedding'];
+  if (config.ai?.enabled || breaker) {
+    const queued = store.countUnembeddedSymbols();
+    const paused = breaker && breaker.disabledUntilMs > Date.now();
+    embedding = {
+      queued,
+      pausedUntil: paused ? breaker.disabledUntilMs : undefined,
+      lastFailureAt: breaker?.lastFailureAt || undefined,
+      lastError: breaker?.lastError,
+    };
+    if (paused && queued > 0) {
+      if (status === 'ok') status = 'degraded';
+      warnings.push(
+        `${queued} symbols are queued for embedding but background embedding is paused until ` +
+          `${new Date(breaker.disabledUntilMs).toISOString()} after repeated failures ` +
+          `(${breaker.lastError ?? 'unknown error'}). Semantic and hybrid search results are ` +
+          `incomplete until the embedding provider is reachable; call embed_repo to retry now.`,
+      );
+    }
+  }
+
   return {
     status,
     stats,
+    embedding,
     schemaVersion: versionRow ? Number(versionRow.value) : 0,
     config: {
       // The path this store was actually opened at, not a config default —

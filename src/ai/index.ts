@@ -503,6 +503,7 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
           inferenceModel: pick(config.ai.inference_model, defaults.inferenceModel),
           fastModel: pick(config.ai.fast_model, defaults.fastModel),
           extraBody,
+          providerLabel: provider,
         }),
         provider,
         url,

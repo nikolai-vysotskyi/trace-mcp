@@ -384,6 +384,19 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 
+> **When the embedding endpoint is unreachable:** background embedding trips a
+> circuit breaker after 2 consecutive failed batches and then pauses for 10
+> minutes. The pause is stored in the project DB, so it survives a daemon
+> restart instead of re-attempting the whole backlog on every start. While it is
+> open, `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
+> and adds a warning — semantic and hybrid search results are incomplete until
+> the provider is reachable. `embed_repo` ignores the pause and retries
+> immediately.
+
+> **`ai.enabled` takes effect per project start.** A project already open in the
+> daemon keeps the config it was started with, so flipping `ai.enabled` off stops
+> embedding for that project only after it restarts.
+
 > **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
 
 > **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
