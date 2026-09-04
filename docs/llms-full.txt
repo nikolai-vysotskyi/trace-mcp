@@ -4350,7 +4350,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 13
+- **import edges:** 15
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 68
@@ -4406,12 +4406,12 @@ second thing, so it is much shorter than the language list — see
 | autohotkey | .ahk .ah2 | regex | yes | — | — | — | yes |
 | bash | .sh .bash .zsh | tree-sitter | yes | — | — | — | yes |
 | blade | .blade.php | regex | yes | — | — | — | yes |
-| c | .c .h | tree-sitter | yes | — | — | — | yes |
+| c | .c .h | tree-sitter | yes | yes | — | — | yes |
 | clojure | .clj .cljs .cljc .edn | regex | yes | — | — | — | — |
 | cmake | .cmake CMakeLists.txt | regex | yes | — | — | — | yes |
 | cobol | .cob .cbl .cpy .cobol | regex (multi-pass) | yes | — | — | — | yes |
 | common-lisp | .lisp .lsp .cl .asd | regex (multi-pass) | yes | — | — | — | yes |
-| cpp | .cpp .cxx .cc .hpp | tree-sitter | yes | — | — | — | yes |
+| cpp | .cpp .cxx .cc .hpp | tree-sitter | yes | yes | — | — | yes |
 | csharp | .cs | tree-sitter | yes | — | — | — | yes |
 | css | .css .scss .sass .less | tree-sitter | yes | yes | — | — | yes |
 | cuda | .cu .cuh | regex | yes | — | — | — | — |
@@ -4423,7 +4423,7 @@ second thing, so it is much shorter than the language list — see
 | elixir | .ex .exs | tree-sitter | yes | — | — | — | yes |
 | elm | .elm | tree-sitter | yes | — | — | — | — |
 | erlang | .erl .hrl | regex | yes | — | — | — | yes |
-| form | .frm .prc .h | regex | yes | — | — | — | — |
+| form | .frm .prc | regex | yes | — | — | — | — |
 | fortran | .f .f90 .f95 .f03 | regex | yes | — | — | — | yes |
 | fsharp | .fs .fsi .fsx | regex (multi-pass) | yes | — | — | — | — |
 | gdscript | .gd | regex | yes | — | — | — | yes |
