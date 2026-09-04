@@ -21,26 +21,68 @@ Same three rules as the distribution ledger:
 
 ## Channels
 
-| Channel | Signal as of 2026-09-03 | How to read it | Verified |
+| Channel | Signal as of 2026-09-05 | How to read it | Verified |
 |---|---|---|---|
-| GitHub issues | **Zero open issues.** #199 closed on its merits 2026-09-03 (the relay from #357 covers the ask) — the last external thread is now shut. No new external reporter since `zerocodefast` (#536) on 2026-08-29. Last real ones: `drguptavivek` (#381/#382, plugin requests, shipped same day), `cerebrotecnologico` (#199/#334, repeat power user) | `gh issue list --state all` | 2026-09-03 |
+| GitHub issues | **Still zero open.** No external author since `zerocodefast` (#536) on 2026-08-29 — seven days silent. Everything since is dependabot / release-please / our own agents. Last real ones: `drguptavivek` (#381/#382, plugin requests, shipped same day), `cerebrotecnologico` (#199/#334) | `gh api search/issues -f q="repo:… -author:nikolai-vysotskyi"` — cheaper than `gh issue list` and separates humans from bots in one call | 2026-09-05 |
 | GitHub discussions | **Not enabled on the repo** — the GraphQL `discussions` node returns nothing. Don't keep "checking discussions"; there is no such surface | — | 2026-08-30 |
-| GitHub traffic — views | Still flat and still the one honest adoption number: 721 views / 185 uniques over 14 days, 13-23 uniques/day (was 568 / 175). Three 14-day windows now agree on ~13-23 uniques/day | `gh api repos/:r/traffic/views` (owner-only) | 2026-09-03 |
-| GitHub traffic — referrers | **reddit.com still #1** (87 views / 33 uniques), Google #2 (77/34), trace-mcp.com #3 (40/19), github.com, then `my.feishu.cn` (8/1 — a link inside a Lark/Feishu workspace, so a Chinese-language team doc; login-walled the same way Reddit is), `l.threads.com` (7/2), Bing, yandex, DuckDuckGo, `chatgpt.com` (1/1). Not one MCP directory appears — third window agreeing, see `ops/distribution.md` | `gh api repos/:r/traffic/popular/referrers` | 2026-09-03 |
-| GitHub traffic — clones | **Not a metric**, and still running. 31,518 clones / 1,245 uniques in the trailing 14 days (was 16,006 / 928 on 08-30), peaking 8,736 on 08-29, dipping to 1,019 on 08-31, back to 4,627 on 09-02 — while human views stayed at ~20 uniques/day throughout. Unique cloners inflate too (49 → 360) | same API, `/traffic/clones` | 2026-09-03 |
-| npm downloads | **Dead as an adoption metric** — settled three times now, don't re-derive. See `docs/ROADMAP.md` and the note in `docs/comparisons.md`. 2026-09-03 added the cheapest possible proof and a real baseline: the *daily* curve. August ran at **10-48 downloads/day**, then 08-27 → 09-01 went 1322 / 1555 / 2000 / 1583 / 507 / 427 and fell back. So the "5,033 weekly" figure this row carried on 08-30 was ~90% a six-day burst inside the same window as the clone ramp below, not a level. Peer control over the same days: `codebase-memory-mcp` holds a flat **830-1591/day** with no burst at all | `api.npmjs.org/downloads/range/<from>:<to>/<pkg>` — the daily range, never `point/last-week`, which averages the burst into the baseline | 2026-09-03 |
+| GitHub traffic — views | Flat, fourth window running: 796 views / 192 uniques over 14 days (was 721/185, 568/175). ~14 uniques/day. Top path is the repo root 399/161; `/issues` 38/9, `/releases` 33/7 | `gh api repos/:r/traffic/views` (owner-only) | 2026-09-05 |
+| GitHub traffic — referrers | **Google overtook reddit** for the first time: Google 72/36, reddit.com 64/33, trace-mcp.com 44/19, github.com 33/10, `my.feishu.cn` 8/1, `l.threads.com` 7/2, Bing 4/4, yandex 2/1, DuckDuckGo 1/1, chatgpt.com 1/1. Read the swap as noise until a second window agrees — both moved by single digits. Still **not one MCP directory**, fourth window running, and that now includes a 30k-star listing we are actually on (TRA-846) | `gh api repos/:r/traffic/popular/referrers` | 2026-09-05 |
+| GitHub traffic — clones | **Not a metric**, and the ramp has stopped. 34,638 / 1,307 uniques trailing 14 days (was 31,518 / 1,245 on 09-03) — a +3,120 increment over two days against +15,512 over the three before it, i.e. back near the pre-burst level while the 14-day total stays inflated. It will decay out of the window on its own by ~09-12 | same API, `/traffic/clones` | 2026-09-05 |
+| npm downloads | **Dead as an adoption metric** — settled four times, do not re-derive. The burst ended: 08-27→09-01 ran 1322 / 1555 / 2000 / 1583 / 507 / 427 against an August baseline of 10-48/day. **And from 09-02 the API returns `0` for us, which is backfill lag, not a collapse** — `codebase-memory-mcp`, `repomix` and `mcp-server-git` all read `0` over the same days while `react` and `@modelcontextprotocol/server-filesystem` have data through 09-02. Always confirm a zero against a high-volume control before reporting it | `api.npmjs.org/downloads/range/<from>:<to>/<pkg>` — the daily range, never `point/last-week` | 2026-09-05 |
 | Reddit | Our largest referrer, and **we cannot read it** — see the dead-end note below | Human with a browser | 2026-08-30 |
 | Threads (`l.threads.com`) | Small but real referral (7 views / 2 uniques). Source post never identified; Threads search is login-walled the same way Reddit is | Human with an account | 2026-08-30 |
-| Hacker News | No mention, and now checked at the source rather than through a search engine: `hn.algolia.com/api/v1/search?query="trace-mcp"` returns `nbHits: 0`, as does `search_by_date` for `"trace mcp"`. `ops/launch-hn.md` is drafted and unposted — posting is Nikolai's call | `curl hn.algolia.com/api/v1/search?query=%22trace-mcp%22` — no key, no rate limit, answers in one call. Use this, not WebSearch | 2026-09-03 |
+| Hacker News | Still no mention. `nbHits: 0` for `"trace-mcp"` and for `search_by_date` on `"trace mcp"`. `ops/launch-hn.md` drafted and unposted — Nikolai's call | `curl hn.algolia.com/api/v1/search?query=%22trace-mcp%22` — no key, no rate limit, one call. Use this, not WebSearch | 2026-09-05 |
 | Blogs / dev.to / Zenn / Qiita | No mention of trace-mcp found on any of them | WebSearch | 2026-08-30 |
 | Desktop app (`packages/app`) | **Zero public feedback, ever** — no issue, review or mention has been about the Electron app specifically. Every reported bug to date is server/daemon/indexing. Read "no complaints" here as "no observed users", not as "it works" | — | 2026-08-30 |
 | The daily ping (`adoption.yml`) | **The richest channel we have, and the one this ledger was missing.** Every install describes itself once a UTC day: `client`, `model`, `version`, `country`, `install_type`, `repos_indexed`, `calls`, `preset`, `tools_advertised`, `daemon_starts`. Read as *shape of the installed base*, never as an audited count — the credentials ship in the published bundle. See the two findings below | `git show origin/adoption-data:adoption.yml`. Written daily by `.github/workflows/ga4-snapshot.yml` | 2026-09-03 |
-| GitHub forks | **18 forks, and not one carries a single commit of its own.** Every fork's `pushed_at` equals its `created_at` except `vitaly-z/trace-mcp`, and comparing that one gives `ahead_by: 0, behind_by: 449` — it synced our commits, it did not change anything. Forks here are bookmarks and mirrors, not adaptation, so this channel carries no "what users had to patch" signal. Two forks are ecosystem mirrors, not users: `iflow-mcp/nikolai-vysotskyi-trace-mcp` (Chinese MCP tooling account, already noted in `docs/development.md`) and `bradparks/trace-mcp___jcodemunch-mcp_fork`, renamed by its owner to sit beside `jgravelle/jcodemunch-mcp` — someone comparing the two | `gh api repos/:r/forks` and compare each fork's `created_at` with its `pushed_at`; for any where `pushed_at` is later, `gh api repos/:r/compare/master...<owner>:<repo>:<branch>` and read `ahead_by` | 2026-09-03 |
+| GitHub forks | **18 → 15 forks**; three were deleted between 09-03 and 09-05. Still not one fork carries a commit of its own, so the channel carries no "what users had to patch" signal and the count is the only thing that moves. Two are ecosystem mirrors, not users: `iflow-mcp/nikolai-vysotskyi-trace-mcp` and `bradparks/trace-mcp___jcodemunch-mcp_fork` | `gh api repos/:r/forks`, compare each `created_at` with `pushed_at`; where later, `gh api repos/:r/compare/master...<owner>:<repo>:<branch>` and read `ahead_by` | 2026-09-05 |
 | GitHub dependents | **Structurally dead, don't re-check.** `network/dependents` reads 0 repositories and 0 packages. That is correct rather than surprising: trace-mcp is run as an MCP server via `npx`/global install, so it never appears in anyone's `package.json`, and the dependents graph only sees declared dependencies. It cannot ever carry signal for a product shaped like ours | `network/dependents` page | 2026-09-03 |
 | Chinese-language dev web | No mention found (searched 代码索引 / MCP 服务器 / 节省 token phrasings). Worth re-checking now that `my.feishu.cn` shows as a referrer, but the referrer is a private workspace doc, not a public post — expect nothing findable | WebSearch in Chinese | 2026-09-03 |
+| GitHub code search | **New channel, and the only one that produced a finding this week.** Others' repos that name us in committed files. Signal is thin but real; noise is heavy — `trace-mcp` collides with dynatrace-mcp, playwright-trace-mcp, retrace-mcp, bpftrace-mcp and an in-house `trace-mcp-server.ts` at `semaj90/deeds_web_app`, so every hit needs opening before it counts. Verified ours as of 09-05: `mattbutlerengineering/ai-tooling` (a full evaluation of us — TRA-845), `davila7/claude-code-templates` + 7 of its forks (our own listing — TRA-846), `QuesmaOrg/awesome-ai-tokenomics`, `Chat2AnyLLM/awesome-claude-plugins`, `Arnon-hs/open-source`, `SAIRAMANALADI/vybe-intelligence-vault` (an agent-run digest that has stamped us daily since 08-05), `aibot88/sec_skill_store` (a third-party Claude skill wrapping us). **Zero** real hits for `filename:.mcp.json` or `filename:claude_desktop_config.json` — every one was a dynatrace collision, so no public repo commits a trace-mcp client config | `gh api -X GET search/code -f q='"trace-mcp" -repo:nikolai-vysotskyi/trace-mcp'`, then the `filename:` and `"npx trace-mcp"` variants. Needs a token with code-search scope | 2026-09-05 |
+| Third-party comparison blogs | One found, and it omits us: `saurabhsharma.dev/blogs/code-graph-mcp-tools-comparison/` (2026-07-02) ranks code-review-graph vs Graphify vs codebase-memory-mcp on token efficiency, language coverage and Claude Code integration — our exact three closest competitors and our exact criteria, with no mention of trace-mcp. July, so predates most of what we would want cited | WebSearch on the category, not on our name — searching our name only returns our own pages and directory mirrors | 2026-09-05 |
 | Directory listings | Tracked in `ops/distribution.md`, not here | — | — |
 
 ## Findings that should not be re-derived
+
+**Someone outside evaluated us, and we were one tier below `codegraph`**
+(2026-09-05). `mattbutlerengineering/ai-tooling` holds
+`evaluations/trace-mcp.md` — the first substantive third-party read of the
+project any run has found. Verdict `discovery-log — tentative read`, against
+codegraph's ADOPT. Source-grounded but hands-off, stamped `Last verified:
+2026-06-22` against v1.43.1 at 88 stars. What it praises is unprompted and
+therefore informative: framework-aware cross-language edges as the
+differentiator, and `benchmark.ts` self-labelling as a synthetic estimator —
+"the transparency is better than most". What blocks the upgrade is, in their
+words, that the headline "~42 minutes" is "marketing, not a measured or even
+computed figure"; they grepped for it and found one README hit with nothing
+deriving it. Their stated re-evaluation trigger is a hands-on benchmark on a
+real polyglot project, which is exactly `pr-context-benchmark` — the thing
+TRA-647 says appears zero times in `README.md` and `docs/index.html`. Full read
+and what to do about it: TRA-845. **Do not re-open the evaluation looking for
+more; it has been read line by line.** Re-check only if the file's git history
+moves. One correction it makes about us in public is now wrong: it says "no
+telemetry", read off the June source, while the ping shipped 2026-08-23.
+
+**The biggest surface we are listed on was never in the distribution ledger**
+(2026-09-05). `davila7/claude-code-templates` (30,531 stars, 3,459 forks) ships
+`cli-tool/components/mcps/devtools/trace-mcp.json`. Both commits are Nikolai's
+(#553 on 2026-04-29, #844 refreshing the counts on 2026-08-29), so it is our
+own placement that the ledger built to prevent re-discovery never recorded —
+including a refresh a week ago. It also sends no measurable traffic, fourth
+window running. TRA-846.
+
+**`active_users.week` has equalled `active_users.month` in every snapshot that
+exists** (2026-09-05). 90/90 on 09-03, 102/102 on 09-04, and
+`scripts/ga4-snapshot.mjs` genuinely queries different ranges, so the month
+figure carries no information the week figure does not. The 61 → 90 → 102 climb
+is therefore consistent with a 28-day window still filling — the ping only
+reached published builds on 2026-08-23, and `savings.days` reads `6` on a query
+starting 2025-01-01 — rather than with growth. `retention_dau_mau_pct` is
+`day / month`, so while month equals week it is day-over-week, not DAU/MAU.
+**Do not grade the metric of record until week and month diverge.** TRA-843,
+which also covers the savings tripwire: `tokens_saved_raw` ran 5.21× the
+sanitized figure on 09-04 and `capped_days` is 2 of 6 — the flooding signal
+this file defines, fired, into a file nobody reads.
 
 **`by_client` on 2026-09-03 is 90% pre-fix data and must not be interpreted
 yet** (2026-09-03). Today's snapshot reads `unknown: 55`, `(not set): 36`,
