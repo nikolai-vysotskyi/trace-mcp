@@ -11,6 +11,7 @@ import { startParentDeathWatch } from './server/parent-death-watch.js';
 import { armBoundedExit } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
+  describeDaemonExitContext,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -2891,8 +2892,15 @@ program
       // shutdowns left no trace of WHO asked. Always say why we're going down.
       // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
       // programmatic callers pass their own reason string.
+      // TRA-809: `reason` is just the signal name for every SIGTERM, so it never
+      // answered "who asked". The exit context does: launchd cycling us, an
+      // external kill, or a racing spawn that stole daemon.pid.
       logger.info(
-        { reason: reason ?? 'unknown', uptimeSec: Math.floor((Date.now() - startedAt) / 1000) },
+        {
+          reason: reason ?? 'unknown',
+          uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+          ...describeDaemonExitContext(),
+        },
         'Daemon shutting down',
       );
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits

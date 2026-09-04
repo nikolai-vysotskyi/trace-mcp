@@ -634,10 +634,79 @@ function logLifecycleRequest(action: 'stop' | 'restart'): void {
     action,
     requesterPid: process.pid,
     requesterPpid: process.ppid,
+    // TRA-809: argv says WHAT was run, the parent's comm says WHO ran it —
+    // `trace-mcp daemon restart` looks identical whether a human typed it, the
+    // desktop app's watchdog spawned it, or a Claude Code hook did.
+    requesterParentComm: processComm(process.ppid),
     // argv[0] is node and argv[1] the cli.js path — the subcommand is what matters.
     requesterArgs: process.argv.slice(2, 6),
     managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
   });
+}
+
+/**
+ * Best-effort executable name of a PID (TRA-809). `null` when unavailable
+ * (Windows, dead process, `ps` failure) — never throws, never blocks long.
+ */
+export function processComm(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 0 || isWin) return null;
+  try {
+    if (process.platform === 'linux') {
+      return fs.readFileSync(`/proc/${pid}/comm`, 'utf-8').trim() || null;
+    }
+    const out = execFileSync('ps', ['-p', String(pid), '-o', 'comm='], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    }).trim();
+    return out ? path.basename(out) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What the daemon can say about its own death at SIGTERM time (TRA-809). */
+export interface DaemonExitContext {
+  /** Our parent: 1 under launchd, the shell/app that spawned us otherwise. */
+  ppid: number;
+  parentComm: string | null;
+  /** `launchd` | `spawn` | `cli` — how this daemon was started. */
+  managedBy: string;
+  /**
+   * Who daemon.pid names right now: `self` (normal), `missing` (someone
+   * unlinked it), or another PID — meaning a racing spawn took the
+   * registration from under us and this shutdown is a lost port race.
+   */
+  pidFileOwner: number | 'self' | 'missing';
+}
+
+/**
+ * Describe the dying daemon's own context (TRA-809).
+ *
+ * A SIGTERM carries no sender, so 104 of 132 shutdowns in a 40 h window had no
+ * recorded origin at all. These four fields separate the three causes that look
+ * identical in today's log: launchd cycling us (`managedBy: launchd`, ppid 1),
+ * an external kill inherited from a CLI (`managedBy: cli` + parent comm), and a
+ * racing spawn that won the port (`pidFileOwner` naming someone else).
+ *
+ * Reads the pid file raw — `readDaemonPid()` unlinks files naming a dead
+ * process, which is exactly the evidence we want to report here.
+ */
+export function describeDaemonExitContext(): DaemonExitContext {
+  let pidFileOwner: DaemonExitContext['pidFileOwner'] = 'missing';
+  try {
+    const raw = readIfExists(getPidFilePath());
+    const owner = raw === null ? null : parsePidFile(raw)?.pid;
+    if (owner != null) pidFileOwner = owner === process.pid ? 'self' : owner;
+  } catch {
+    /* best-effort — attribution must never block shutdown */
+  }
+  return {
+    ppid: process.ppid,
+    parentComm: processComm(process.ppid),
+    managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
+    pidFileOwner,
+  };
 }
 
 /**
