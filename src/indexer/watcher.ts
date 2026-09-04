@@ -119,11 +119,12 @@ export class FileWatcher {
     onDeletes?: (paths: string[]) => Promise<void>;
     onRescan?: () => Promise<void>;
   } | null = null;
-  /** Guards against a rescan stampede: FSEvents drops arrive in bursts, and a
-   *  reconcile pass walks the whole root. At most one runs at a time; drops
-   *  seen while one is in flight collapse into a single follow-up pass (the
-   *  in-flight walk may have already passed the files they touched). */
-  private rescanInFlight = false;
+  /** The reconcile pass currently running, or null. Guards against a rescan
+   *  stampede (FSEvents drops arrive in bursts and each pass walks the whole
+   *  root): at most one runs at a time, and drops seen while one is in flight
+   *  collapse into a single follow-up pass. Also what `stop()` awaits — the
+   *  pass holds a pipeline the caller disposes right after stop() returns. */
+  private activeRescan: Promise<void> | null = null;
   private rescanPending = false;
   /**
    * Serializes start()/stop()/restartWithExcludes() on this instance. Without
@@ -293,17 +294,16 @@ export class FileWatcher {
 
   private runRescan(onRescan: (() => Promise<void>) | undefined, rootPath: string): void {
     if (!onRescan) return;
-    if (this.rescanInFlight) {
+    if (this.activeRescan) {
       this.rescanPending = true;
       return;
     }
-    this.rescanInFlight = true;
-    void onRescan()
+    this.activeRescan = onRescan()
       .catch((e) => {
         logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');
       })
       .finally(() => {
-        this.rescanInFlight = false;
+        this.activeRescan = null;
         if (this.rescanPending) {
           this.rescanPending = false;
           this.runRescan(onRescan, rootPath);
@@ -362,9 +362,11 @@ export class FileWatcher {
       this.debounceTimer = null;
     }
     this.pendingPaths.clear();
-    // Don't let a queued follow-up reconcile fire after stop() — it would run
-    // against torn-down state (closed DB). An already in-flight one can't be
-    // cancelled; callers guard it with their own stopping flag.
+    // A reconcile pass holds the caller's pipeline, and callers dispose it as
+    // soon as stop() returns. Drop any queued follow-up (cleared first, so the
+    // in-flight pass's `finally` doesn't start one) and wait out the active
+    // pass rather than letting it resume against a closed DB.
     this.rescanPending = false;
+    if (this.activeRescan) await this.activeRescan;
   }
 }

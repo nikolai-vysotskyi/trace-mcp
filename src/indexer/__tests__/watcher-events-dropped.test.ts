@@ -72,4 +72,27 @@ describe('FileWatcher — dropped fs events', () => {
     release();
     await watcher.stop();
   });
+
+  it('stop() waits for an in-flight reconcile — callers dispose the pipeline right after', async () => {
+    let release: () => void = () => {};
+    const onRescan = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const watcher = await startWatcher(onRescan);
+    await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+
+    let stopped = false;
+    const stopping = watcher.stop().then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    release();
+    await stopping;
+    expect(stopped).toBe(true);
+  });
 });
