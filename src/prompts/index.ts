@@ -5,6 +5,7 @@
  * that the AI agent can use as context for its response.
  */
 
+import { createHash } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
@@ -23,6 +24,7 @@ import { getHotspots } from '../tools/git/git-analysis.js';
 import { getFeatureContext } from '../tools/navigation/context.js';
 import { getProjectMap } from '../tools/project/project.js';
 import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
+import { STATE_AGENT_SYSTEM_PROMPT, generateInitialStatePrompt } from './state-agent.js';
 
 interface PromptContext {
   store: Store;
@@ -446,4 +448,60 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       };
     },
   );
+
+  // --- 6. SKILL.state Prompt ---
+  // The state engine (TRA-596) shipped its tools, its serializer and its
+  // benchmark, but the protocol that tells an agent to run the two-phase loop
+  // had no call site — so nothing ever started a task in state mode. This is
+  // that call site.
+  server.prompt(
+    'state',
+    'SKILL.state protocol: seed a linear-context task state and run the action/patch loop',
+    {
+      // `AgentExecutionStateSchema.goal` is `min(1)`, so an empty goal would
+      // render an init call that is guaranteed to be rejected downstream.
+      goal: z.string().trim().min(1).describe('What the task has to achieve'),
+      task_id: z
+        .string()
+        .optional()
+        .describe('State id to write under (default: derived from goal)'),
+      steps: z.string().optional().describe('Comma-separated initial plan steps'),
+    },
+    async ({ goal, task_id, steps }) => {
+      const planSteps = (steps ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const id = task_id?.trim() || taskIdFromGoal(goal);
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${STATE_AGENT_SYSTEM_PROMPT}\n${generateInitialStatePrompt(id, goal, planSteps)}`,
+            },
+          },
+        ],
+      };
+    },
+  );
+}
+
+/**
+ * Derives a stable, ASCII-safe, non-empty `task_id` from a free-text goal.
+ *
+ * The slug alone is not enough as an id: it drops every non-ASCII character, so
+ * two different Cyrillic goals both slugify to nothing, and `trace_state_init`
+ * upserts on `task_id` — the second task would silently overwrite the first.
+ * A hash of the full goal is always appended so distinct goals stay distinct.
+ */
+function taskIdFromGoal(goal: string): string {
+  const slug = goal
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  const hash = createHash('sha256').update(goal).digest('hex').slice(0, 8);
+  return slug ? `${slug}-${hash}` : `task-${hash}`;
 }
