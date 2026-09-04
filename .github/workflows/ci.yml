@@ -179,7 +179,11 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   biome:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -287,7 +291,11 @@ jobs:
     if: needs.changes.outputs.core == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     # Safety cap. Cold cache build is ~90s; warm ~30s. 6 min absorbs npm/registry slowdowns.
-    timeout-minutes: 6
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     outputs:
@@ -638,7 +646,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -691,7 +703,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.vscode == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
