@@ -97,6 +97,21 @@ const BANNER_W = 1200;
 const BANNER_NARROW_W = 480;
 const BUTTON_W = 400;
 const BUTTON_H = 108;
+// The phone cut of the buttons. `width="250"` cannot be varied per breakpoint —
+// one attribute serves every viewport — so the desktop row is sized by an srcset
+// density descriptor instead, and the phone cut is simply drawn wider than any
+// phone column: 500 CSS px, which `max-width: 100%` then clamps to the full
+// column. That clamp is the whole point — it removes the empty margin either
+// side of a 250px plate.
+//
+// Densities for README.md, and mind that a shot comes out at 4x, not 2x:
+// deviceScaleFactor and the capture clip scale both apply.
+//   desktop  400 CSS x 4 = 1600 px, laid out at 250 -> `6.4x`
+//   phone    500 CSS x 4 = 2000 px, laid out at 500 -> `4x`
+const BUTTON_NARROW_W = 500;
+const BUTTON_NARROW_H = 110;
+// Everything below 500 CSS px is clamped, so the art is always scaled down by
+// roughly 0.72. Type is drawn that much larger to land at the desktop size.
 
 function css(t) {
   return `
@@ -192,6 +207,13 @@ function css(t) {
     .btn.ghost { border: 1px solid ${t.border}; background: ${t.surface}; }
     .btn.ghost .t { color: ${t.display}; }
     .btn.ghost .s { color: ${t.disabled}; }
+
+    /* Phone cut: the plate runs the full width it will be clamped to, so the
+       pill sits on colour edge to edge instead of on a 250px island. */
+    .plate.narrow { width: ${BUTTON_NARROW_W}px; height: ${BUTTON_NARROW_H}px; }
+    .plate.narrow .btn { width: ${BUTTON_NARROW_W - 24}px; height: 88px; gap: 6px; }
+    .plate.narrow .btn .t { font-size: 24px; }
+    .plate.narrow .btn .s { font-size: 14px; }
   `;
 }
 
@@ -240,8 +262,8 @@ const BUTTONS = [
   },
 ];
 
-function buttonHtml(b) {
-  return `<div class="plate" id="shot"><div class="btn ${b.style}">
+function buttonHtml(b, narrow = false) {
+  return `<div class="plate${narrow ? ' narrow' : ''}" id="shot"><div class="btn ${b.style}">
     <span class="t">${b.title}</span><span class="s${b.subIsCommand ? ' cmd' : ''}">${b.sub}</span>
   </div></div>`;
 }
@@ -404,6 +426,13 @@ await withChrome(async (send) => {
         theme,
         width: BUTTON_W,
         height: BUTTON_H,
+      });
+      await shoot(send, {
+        file: path.join(OUT_DIR, `btn-${b.name}-narrow-${theme}.png`),
+        body: buttonHtml(b, true),
+        theme,
+        width: BUTTON_NARROW_W,
+        height: BUTTON_NARROW_H,
       });
     }
   }
