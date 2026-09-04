@@ -431,7 +431,7 @@ function listSessionFiles(projectDirName: string): { filePath: string; mtime: nu
  * the drive suffix at position 1), so leaving it in would make the encoded
  * name itself impossible to mkdir/lookup on Windows.
  */
-function encodeDirName(projectPath: string): string {
+export function encodeDirName(projectPath: string): string {
   return projectPath.replace(/[\\/:]+/g, '-');
 }
 

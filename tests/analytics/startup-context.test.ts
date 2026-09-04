@@ -118,6 +118,18 @@ function run(count = 1) {
 }
 
 describe('analyzeStartupContext', () => {
+  /* TRA-770 folded the text compressor into this payload rather than giving it
+     a tool of its own, so the audit is where "did it get wired up" is checked.
+     The compressor's own behaviour is covered in startup-text.test.ts. */
+  it('carries the text-compression proposal and its invariant', async () => {
+    const audit = await run();
+    // The universal wording is the point: "EVERY sentence", not most of a line.
+    expect(audit.textCompression.invariant).toContain('EVERY sentence');
+    // Sized from the same startup attachments the decomposition above measured.
+    expect(audit.textCompression.notCompressible.map((n) => n.source)).toContain('skills');
+    expect(audit.textCompression.totalSavedTokens).toBeGreaterThanOrEqual(0);
+  });
+
   it('measures the block and itemises it without losing or inventing tokens', async () => {
     const audit = await run();
     expect(audit.sessions).toEqual({ scanned: 1, fresh: 1 });
