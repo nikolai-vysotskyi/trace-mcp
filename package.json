@@ -53,6 +53,7 @@
     "type": "git",
     "url": "https://github.com/nikolai-vysotskyi/trace-mcp"
   },
+  "homepage": "https://trace-mcp.com",
   "keywords": [
     "mcp-server",
     "claude-code",
