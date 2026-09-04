@@ -80,6 +80,22 @@ declare global {
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
       }>;
+      /** The daemon's own version, checked and updated independently of the
+       *  app bundle above — the two can drift apart in either direction (TRA-686). */
+      checkForDaemonUpdate: () => Promise<{
+        available: boolean;
+        current?: string;
+        latest?: string;
+        lastChecked?: number;
+        error?: string;
+      }>;
+      applyDaemonUpdate: () => Promise<{
+        ok: boolean;
+        version?: string;
+        error?: string;
+        /** Present when the install could not run automatically — a command to copy and run by hand. */
+        command?: string;
+      }>;
       /** electron-updater's `download-progress`, forwarded verbatim. */
       onUpdateProgress: (
         callback: (p: {

@@ -9,7 +9,40 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOCALES, LOCALE_KEY } from '../../../shared/i18n/locales.js';
 import { setLocale } from '../../i18n';
+import type { DaemonUpdateCheck, UpdateCheck } from '../../update-check.js';
 import { Settings } from '../Settings';
+
+/* This screen has nothing to do with update state — the fixtures below just
+   satisfy the props App.tsx's single poller normally supplies. */
+const update: UpdateCheck = {
+  state: { available: false },
+  pendingVersion: null,
+  checking: false,
+  updating: false,
+  progress: null,
+  check: () => {},
+  apply: () => {},
+  restart: () => {},
+};
+const daemonUpdate: DaemonUpdateCheck = {
+  state: { available: false },
+  checking: false,
+  updating: false,
+  check: () => {},
+  apply: () => {},
+};
+
+function renderSettings(props: Partial<Parameters<typeof Settings>[0]> = {}) {
+  return render(
+    <Settings
+      appearance="auto"
+      onAppearanceChange={() => {}}
+      update={update}
+      daemonUpdate={daemonUpdate}
+      {...props}
+    />,
+  );
+}
 
 beforeEach(() => {
   const makeApiProxy = (name = ''): unknown =>
@@ -37,7 +70,7 @@ afterEach(() => {
 
 describe('Settings — app preferences', () => {
   it('offers Auto / Light / Dark even with no daemon', () => {
-    render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
+    renderSettings();
     const select = screen.getByLabelText('Theme') as HTMLSelectElement;
     expect([...select.options].map((o) => o.text)).toEqual(['Auto', 'Light', 'Dark']);
     expect(select.value).toBe('auto');
@@ -45,7 +78,7 @@ describe('Settings — app preferences', () => {
 
   it('reports the picked appearance upwards', () => {
     const onChange = vi.fn();
-    render(<Settings appearance="auto" onAppearanceChange={onChange} />);
+    renderSettings({ onAppearanceChange: onChange });
     const select = screen.getByLabelText('Theme') as HTMLSelectElement;
     select.value = 'dark';
     select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -58,7 +91,7 @@ describe('Settings — app preferences', () => {
      Written in their own language: someone hunting for Russian is looking for
      "Русский", with the English name after it for everyone else. */
   it('offers Language beside Theme, in the languages own names', () => {
-    render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
+    renderSettings();
     const select = screen.getByLabelText('Language') as HTMLSelectElement;
     expect([...select.options].map((o) => o.value)).toEqual(LOCALES.map((l) => l.code));
     expect([...select.options].map((o) => o.text)).toEqual(
@@ -68,7 +101,7 @@ describe('Settings — app preferences', () => {
   });
 
   it('switches the surface at runtime and persists the choice', () => {
-    render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
+    renderSettings();
     fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'ru' } });
 
     // No prop to report upwards to and no restart: the screen is already Russian.

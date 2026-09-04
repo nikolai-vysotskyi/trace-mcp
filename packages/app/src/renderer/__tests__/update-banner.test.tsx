@@ -12,7 +12,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UpdateCard } from '../App';
 import { AppMenu } from '../components/AppMenu';
-import { useUpdateCheck } from '../update-check';
+import { useDaemonUpdateCheck, useUpdateCheck } from '../update-check';
 
 type CheckResult = {
   available: boolean;
@@ -23,19 +23,43 @@ type CheckResult = {
   duplicateApps?: { path: string; version: string; running: boolean }[];
 };
 
+type DaemonCheckResult = {
+  available: boolean;
+  current?: string;
+  latest?: string;
+  lastChecked?: number;
+  error?: string;
+};
+
 /** Set by mockApi so a test can drive electron-updater's progress events. */
 let emitProgress: ((percent: number) => void) | null = null;
+
+/* Defaults to "up to date" so a test that only cares about the app row does
+   not have to know the daemon row exists — see mockApi's `daemon` param. */
+const DAEMON_UP_TO_DATE: DaemonCheckResult = {
+  available: false,
+  current: '3.1.1',
+  lastChecked: Date.now(),
+};
 
 /** Set by mockApi so a test can assert what the Finder item was pointed at. */
 let showInFolder = vi.fn();
 
-function mockApi(check: CheckResult, openExternal = vi.fn(), applyUpdate = vi.fn()) {
+function mockApi(
+  check: CheckResult,
+  openExternal = vi.fn(),
+  applyUpdate = vi.fn(),
+  daemon: DaemonCheckResult = DAEMON_UP_TO_DATE,
+  applyDaemonUpdate = vi.fn(),
+) {
   emitProgress = null;
   showInFolder = vi.fn();
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     checkForUpdate: vi.fn().mockResolvedValue(check),
     checkPendingUpdate: vi.fn().mockResolvedValue({ pending: false }),
     applyUpdate,
+    checkForDaemonUpdate: vi.fn().mockResolvedValue(daemon),
+    applyDaemonUpdate,
     restartApp: vi.fn(),
     openExternal,
     showInFolder,
@@ -54,13 +78,16 @@ function Card() {
   return <UpdateCard update={useUpdateCheck()} />;
 }
 
-/** The app menu, on the same hook — the other reader of that state. */
+/** The app menu, on the same hooks — the other reader of that state. */
 function Menu() {
   const update = useUpdateCheck();
+  const daemonUpdate = useDaemonUpdateCheck();
   return (
     <AppMenu
       update={update.state}
       checking={update.checking}
+      daemonUpdate={daemonUpdate.state}
+      daemonChecking={daemonUpdate.checking}
       onCheckForUpdate={update.check}
       appearance="auto"
       onAppearanceChange={() => {}}
@@ -234,5 +261,61 @@ describe('update card presentation', () => {
 
     await screen.findByRole('button', { name: 'Update' });
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
+  });
+});
+
+/* TRA-686: the daemon gets its own state, split from the app-row state above
+   — a separate artifact (npm-installed, restarted independently), checked
+   against a separate source (the daemon's own /health, not the app bundle).
+   Exercised through the app menu, the same way useUpdateCheck's state is
+   above, rather than via a private test-only harness. */
+describe('daemon update state', () => {
+  it('polls the daemon check independently of the app check', async () => {
+    mockApi(
+      { available: false, current: '3.1.1', lastChecked: Date.now() },
+      vi.fn(),
+      vi.fn(),
+      { available: true, current: '3.10.0', latest: '3.13.0' },
+    );
+
+    render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+    const status = document.querySelector('.ws-ctx-header .status');
+    await waitFor(() => expect(status?.textContent).toContain('Daemon update available'));
+    expect(status?.textContent).toContain('3.13.0');
+  });
+
+  it('a daemon check failure does not blank out a healthy app row', async () => {
+    mockApi(
+      { available: false, current: '3.1.1', lastChecked: Date.now() },
+      vi.fn(),
+      vi.fn(),
+      { available: false, error: 'daemon unreachable' },
+    );
+
+    render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+    const status = document.querySelector('.ws-ctx-header .status');
+    // The app row is current and the daemon row is broken — the header still
+    // has to say SOMETHING is wrong rather than reporting "Up to date".
+    await waitFor(() => expect(status?.textContent).toContain('daemon unreachable'));
+    expect(status?.className).toContain('is-warn');
+  });
+
+  it('an app check failure does not blank out a working daemon row', async () => {
+    mockApi(
+      { available: false, current: '3.1.1', error: 'offline' },
+      vi.fn(),
+      vi.fn(),
+      { available: true, current: '3.10.0', latest: '3.13.0' },
+    );
+
+    render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+    const status = document.querySelector('.ws-ctx-header .status');
+    // App row's own error still takes the header — but the daemon check
+    // itself must have run and resolved, not been skipped because the app
+    // check failed (that's what "independent" means).
+    await waitFor(() => expect(status?.textContent).toBe('offline'));
   });
 });

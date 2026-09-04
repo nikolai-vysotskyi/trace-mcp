@@ -16,6 +16,8 @@ export const update = {
   headerChecking: 'Wird geprüft…',
   headerAvailable: 'Version {{version}} verfügbar',
   headerUpToDate: 'Aktuell · geprüft {{when}}',
+  headerDaemonAvailable: 'Daemon-Update verfügbar · v{{version}}',
+  headerBothAvailable: 'App- und Daemon-Updates verfügbar',
 
   // ── The update card in the sidebar (App.tsx) ────────────────────────────
   cardReadyTitle: 'v{{version}} bereit',
@@ -25,4 +27,10 @@ export const update = {
   cardAvailableSubtitle: 'Aktuell v{{current}} · geprüft {{when}}',
   cardUpdate: 'Aktualisieren',
   cardUpdating: 'Wird aktualisiert…',
+
+  // ── Settings → Updates (Settings.tsx, TRA-686) ──────────────────────────
+  settingsTitle: 'Updates',
+  settingsAppRow: 'App',
+  settingsDaemonRow: 'Daemon',
+  settingsCheck: 'Nach Updates suchen',
 } as const;

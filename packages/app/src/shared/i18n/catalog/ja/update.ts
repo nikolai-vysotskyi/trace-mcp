@@ -15,6 +15,8 @@ export const update = {
   headerChecking: '確認中…',
   headerAvailable: 'バージョン {{version}} が利用できます',
   headerUpToDate: '最新です · {{when}}に確認',
+  headerDaemonAvailable: 'デーモンのアップデートが利用できます · v{{version}}',
+  headerBothAvailable: 'アプリとデーモンの両方にアップデートがあります',
 
   cardReadyTitle: 'v{{version}} の準備ができました',
   cardReadySubtitle: '再起動でインストール · v{{current}}',
@@ -23,4 +25,9 @@ export const update = {
   cardAvailableSubtitle: '現在は v{{current}} · {{when}}に確認',
   cardUpdate: 'アップデート',
   cardUpdating: 'アップデート中…',
+
+  settingsTitle: 'アップデート',
+  settingsAppRow: 'アプリ',
+  settingsDaemonRow: 'デーモン',
+  settingsCheck: 'アップデートを確認',
 } as const;

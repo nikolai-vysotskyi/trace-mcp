@@ -15,6 +15,8 @@ export const update = {
   headerChecking: '检查中…',
   headerAvailable: '有新版本 {{version}}',
   headerUpToDate: '已是最新 · {{when}}检查过',
+  headerDaemonAvailable: '守护进程有更新 · v{{version}}',
+  headerBothAvailable: '应用和守护进程都有更新',
 
   cardReadyTitle: 'v{{version}} 已就绪',
   cardReadySubtitle: '重启以安装 · v{{current}}',
@@ -23,4 +25,9 @@ export const update = {
   cardAvailableSubtitle: '当前 v{{current}} · {{when}}检查过',
   cardUpdate: '更新',
   cardUpdating: '更新中…',
+
+  settingsTitle: '更新',
+  settingsAppRow: '应用',
+  settingsDaemonRow: '守护进程',
+  settingsCheck: '检查更新',
 } as const;

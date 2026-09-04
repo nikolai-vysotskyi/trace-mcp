@@ -9,7 +9,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  cliPathOwnedByRoot,
+  cmpSemver,
+  daemonUpdateDegradeToCommand,
+  dedupeInFlight,
+  evaluateDaemonUpdate,
   findStaleRoots,
+  GENERIC_NPM_UPDATE_COMMAND,
   type GlobalInstall,
   readAppLocationMarker,
   readLauncherCliPath,
@@ -18,16 +24,6 @@ import {
   scanGlobalInstalls,
   staleRootInUse,
 } from '../update-state';
-
-// Enough for the version pairs under test; mirrors the main-process helper.
-function cmpSemver(a: string, b: string): number {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
-  }
-  return 0;
-}
 
 describe('scanGlobalInstalls', () => {
   let tmp: string;
@@ -287,5 +283,174 @@ describe('readAppLocationMarker', () => {
     const broken = path.join(tmp, 'broken.json');
     fs.writeFileSync(broken, '{ not json');
     expect(readAppLocationMarker(broken)).toBeNull();
+  });
+});
+
+/* TRA-686 code review (PR #790): `apply-daemon-update` used to run `npm
+   install -g` through whatever npm it could resolve, without checking that
+   the npm root it resolved is the one actually running the daemon. On a
+   DMG-only install (TRA-438) the control plane is the app's own bundled
+   runtime — `launcher.env` points at a staged server, not at any npm global
+   root — so a Homebrew/system npm merely existing on the machine is not
+   permission to install through it. */
+describe('cliPathOwnedByRoot', () => {
+  let tmp: string;
+
+  const makeNpmRoot = (name: string): string => {
+    const root = path.join(tmp, name);
+    const pkgDir = path.join(root, 'trace-mcp');
+    fs.mkdirSync(path.join(pkgDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ version: '3.10.0' }));
+    fs.writeFileSync(path.join(pkgDir, 'dist', 'cli.js'), '');
+    return root;
+  };
+  const cli = (root: string): string => path.join(root, 'trace-mcp', 'dist', 'cli.js');
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-cli-owned-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('is owned when the launcher CLI lives inside the npm root', () => {
+    const npmRoot = makeNpmRoot('nvm');
+    expect(cliPathOwnedByRoot(cli(npmRoot), npmRoot)).toBe(true);
+  });
+
+  it('is NOT owned when the running CLI is the app-bundled runtime, even though an unrelated npm root resolves', () => {
+    // The exact scenario the review flagged: a DMG-only install whose
+    // launcher.env points at the app's own staged server, on a machine where
+    // Homebrew npm happens to also exist and resolve fine.
+    const bundledCli = path.join(tmp, 'trace-mcp.app', 'Contents', 'Resources', 'server', 'cli.js');
+    fs.mkdirSync(path.dirname(bundledCli), { recursive: true });
+    fs.writeFileSync(bundledCli, '');
+    const unrelatedNpmRoot = makeNpmRoot('homebrew');
+
+    expect(cliPathOwnedByRoot(bundledCli, unrelatedNpmRoot)).toBe(false);
+  });
+
+  it('is not owned when the CLI path does not exist', () => {
+    const npmRoot = makeNpmRoot('nvm');
+    expect(cliPathOwnedByRoot(path.join(tmp, 'gone.js'), npmRoot)).toBe(false);
+  });
+
+  it('is not owned when the root does not exist', () => {
+    expect(cliPathOwnedByRoot(cli(makeNpmRoot('nvm')), path.join(tmp, 'no-such-root'))).toBe(false);
+  });
+
+  it('is not owned when either input is null', () => {
+    const npmRoot = makeNpmRoot('nvm');
+    expect(cliPathOwnedByRoot(null, npmRoot)).toBe(false);
+    expect(cliPathOwnedByRoot(cli(npmRoot), null)).toBe(false);
+  });
+
+  it('matches through symlinks — the shim resolves to the real package dir', () => {
+    const real = makeNpmRoot('nvm');
+    const linkRoot = path.join(tmp, 'linked');
+    fs.mkdirSync(linkRoot);
+    fs.symlinkSync(path.join(real, 'trace-mcp'), path.join(linkRoot, 'trace-mcp'), 'dir');
+    expect(cliPathOwnedByRoot(cli(linkRoot), real)).toBe(true);
+  });
+});
+
+describe('evaluateDaemonUpdate', () => {
+  it('reports available when the running daemon is behind the registry', () => {
+    expect(evaluateDaemonUpdate('3.10.0', '3.13.0', 1000)).toEqual({
+      available: true,
+      current: '3.10.0',
+      latest: '3.13.0',
+      lastChecked: 1000,
+    });
+  });
+
+  it('reports up to date when the daemon already matches the registry', () => {
+    expect(evaluateDaemonUpdate('3.13.0', '3.13.0', 1000)).toEqual({
+      available: false,
+      current: '3.13.0',
+      latest: '3.13.0',
+      lastChecked: 1000,
+    });
+  });
+
+  it('is never available when the daemon version is unknown', () => {
+    // A daemon /health miss should not flip to "available" just because a
+    // registry version came back — an app-vs-daemon mismatch is a different
+    // question than "is the daemon current".
+    expect(evaluateDaemonUpdate(undefined, '3.13.0', 1000)).toEqual({
+      available: false,
+      current: undefined,
+      latest: '3.13.0',
+      lastChecked: 1000,
+    });
+  });
+
+  it('is never available when the registry lookup failed', () => {
+    expect(evaluateDaemonUpdate('3.10.0', undefined, 1000)).toEqual({
+      available: false,
+      current: '3.10.0',
+      lastChecked: 1000,
+    });
+  });
+});
+
+describe('daemonUpdateDegradeToCommand', () => {
+  it('hands back the generic copyable command alongside the error', () => {
+    expect(daemonUpdateDegradeToCommand('could not locate npm')).toEqual({
+      ok: false,
+      error: 'could not locate npm',
+      command: GENERIC_NPM_UPDATE_COMMAND,
+    });
+  });
+});
+
+describe('dedupeInFlight', () => {
+  it('gives a concurrent caller the same in-flight promise instead of starting a second run', async () => {
+    let calls = 0;
+    let resolveFirst: (value: string) => void = () => {};
+    const first = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const ref: { current: Promise<string> | null } = { current: null };
+    const run = () => {
+      calls += 1;
+      return first;
+    };
+
+    const a = dedupeInFlight(ref, run);
+    const b = dedupeInFlight(ref, run);
+
+    expect(calls).toBe(1);
+    expect(a).toBe(b);
+
+    resolveFirst('done');
+    await expect(a).resolves.toBe('done');
+  });
+
+  it('lets a new call start its own run once the in-flight one has settled', async () => {
+    let calls = 0;
+    const ref: { current: Promise<number> | null } = { current: null };
+    const run = () => {
+      calls += 1;
+      return Promise.resolve(calls);
+    };
+
+    await dedupeInFlight(ref, run);
+    await dedupeInFlight(ref, run);
+
+    expect(calls).toBe(2);
+  });
+
+  it('clears the slot on rejection too, so a failed run does not wedge every later caller', async () => {
+    const ref: { current: Promise<void> | null } = { current: null };
+    let attempt = 0;
+    const run = () => {
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(new Error('boom')) : Promise.resolve();
+    };
+
+    await expect(dedupeInFlight(ref, run)).rejects.toThrow('boom');
+    await expect(dedupeInFlight(ref, run)).resolves.toBeUndefined();
+    expect(attempt).toBe(2);
   });
 });

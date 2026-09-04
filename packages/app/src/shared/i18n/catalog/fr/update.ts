@@ -15,6 +15,8 @@ export const update = {
   headerChecking: 'Vérification…',
   headerAvailable: 'Version {{version}} disponible',
   headerUpToDate: 'À jour · vérifié {{when}}',
+  headerDaemonAvailable: 'Mise à jour du daemon disponible · v{{version}}',
+  headerBothAvailable: 'Mises à jour de l’app et du daemon disponibles',
 
   cardReadyTitle: 'v{{version}} prête',
   cardReadySubtitle: 'Redémarrer pour installer · v{{current}}',
@@ -23,4 +25,9 @@ export const update = {
   cardAvailableSubtitle: 'Actuellement v{{current}} · vérifié {{when}}',
   cardUpdate: 'Mettre à jour',
   cardUpdating: 'Mise à jour…',
+
+  settingsTitle: 'Mises à jour',
+  settingsAppRow: 'App',
+  settingsDaemonRow: 'Daemon',
+  settingsCheck: 'Rechercher des mises à jour',
 } as const;

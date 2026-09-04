@@ -251,3 +251,125 @@ export function scanAppBundles(
   }
   return found;
 }
+
+/**
+ * Whether the CLI actually in use is owned by the given global npm root — i.e.
+ * whether `npm install -g` through that root's npm would touch the code that
+ * is really running.
+ *
+ * The daemon update action must not silently create or repoint a global npm
+ * install on a machine whose control plane is the app's own bundled runtime
+ * (TRA-438: a DMG-only install adopts no npm and writes `launcher.env` to
+ * point at its own staged server). A resolvable Homebrew/system npm existing
+ * on that machine is not evidence that npm owns the daemon — only the
+ * launcher CLI path says that. Same realpath-prefix check as
+ * `staleRootInUse`, against one candidate root instead of a scanned list.
+ */
+export function cliPathOwnedByRoot(cliPath: string | null, root: string | null): boolean {
+  if (!cliPath || !root) return false;
+  try {
+    const cli = fs.realpathSync(cliPath);
+    const pkgDir = fs.realpathSync(path.join(root, 'trace-mcp'));
+    return cli === pkgDir || cli.startsWith(pkgDir + path.sep);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Compares two semver-ish strings. Returns 1 if `a` > `b`, -1 if `a` < `b`, 0
+ * if equal. A pre-release suffix (`-rc.1`) sorts lower than its bare release.
+ *
+ * Shared by the app-bundle check, the daemon check, and the stale-root scan —
+ * one comparison, three consumers, so a version-ordering bug only needs
+ * fixing once (TRA-686).
+ */
+export function cmpSemver(a: string, b: string): number {
+  const norm = (v: string) => {
+    const [main, pre] = v.replace(/^v/, '').split('-');
+    return { parts: main.split('.').map((n) => Number(n) || 0), pre: pre || '' };
+  };
+  const A = norm(a);
+  const B = norm(b);
+  for (let i = 0; i < Math.max(A.parts.length, B.parts.length); i++) {
+    const x = A.parts[i] || 0;
+    const y = B.parts[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  if (A.pre === B.pre) return 0;
+  if (!A.pre) return 1; // 1.2.3 > 1.2.3-rc.1
+  if (!B.pre) return -1;
+  return A.pre > B.pre ? 1 : -1;
+}
+
+export interface DaemonUpdateCheckResult {
+  available: boolean;
+  current?: string;
+  latest?: string;
+  lastChecked: number;
+  error?: string;
+}
+
+/**
+ * The daemon row's version comparison, split out from the npm-registry fetch
+ * that feeds it (TRA-686). The daemon reports its own version over `/health`
+ * independently of the app bundle, so "available" here answers a different
+ * question than the app-row check: is the *running daemon* behind the latest
+ * published package — not behind the app that happens to be asking.
+ */
+export function evaluateDaemonUpdate(
+  current: string | undefined,
+  latest: string | undefined,
+  now: number,
+  cmp: (a: string, b: string) => number = cmpSemver,
+): DaemonUpdateCheckResult {
+  if (!latest) return { available: false, current, lastChecked: now };
+  return {
+    available: current !== undefined && cmp(latest, current) > 0,
+    current,
+    latest,
+    lastChecked: now,
+  };
+}
+
+/** The command a user can run by hand when the app cannot resolve which npm
+ *  binary owns the daemon's install — no specific root to target, so this is
+ *  the same command the docs already tell people to run. */
+export const GENERIC_NPM_UPDATE_COMMAND = 'npm install -g trace-mcp@latest';
+
+/**
+ * The daemon update's fallback when it cannot run the install itself
+ * (unresolvable npm, no permission, a non-npm runtime). Rather than fail
+ * silently, it hands back the same copyable-command shape the stale-root
+ * warning already uses (TRA-377) instead of inventing a second affordance.
+ */
+export function daemonUpdateDegradeToCommand(error: string): {
+  ok: false;
+  error: string;
+  command: string;
+} {
+  return { ok: false, error, command: GENERIC_NPM_UPDATE_COMMAND };
+}
+
+/**
+ * Shares one in-flight run across concurrent callers instead of starting a
+ * second one. The App and Daemon rows are independent in the UI (TRA-686),
+ * but both fall back to the same `npm install -g trace-mcp@latest --force`
+ * against the same global root — clicking both Update buttons at once raced
+ * two npm installs against each other, colliding on file locks and on the
+ * ENOTEMPTY recovery's directory removal.
+ */
+export function dedupeInFlight<T>(ref: { current: Promise<T> | null }, run: () => Promise<T>): Promise<T> {
+  if (ref.current) return ref.current;
+  const started = run();
+  ref.current = started;
+  // A second `.finally` chain off the same promise, not the returned one —
+  // its own rejection (finally() re-throws) needs its own catch, or Node
+  // reports it unhandled even though the caller's `started` is handled.
+  started
+    .finally(() => {
+      if (ref.current === started) ref.current = null;
+    })
+    .catch(() => {});
+  return started;
+}

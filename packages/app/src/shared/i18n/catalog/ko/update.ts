@@ -15,6 +15,8 @@ export const update = {
   headerChecking: '확인하는 중…',
   headerAvailable: '버전 {{version}} 사용 가능',
   headerUpToDate: '최신 상태 · {{when}} 확인',
+  headerDaemonAvailable: '데몬 업데이트 사용 가능 · v{{version}}',
+  headerBothAvailable: '앱과 데몬 업데이트가 모두 있습니다',
 
   cardReadyTitle: 'v{{version}} 준비됨',
   cardReadySubtitle: '다시 시작하면 설치 · 현재 v{{current}}',
@@ -23,4 +25,9 @@ export const update = {
   cardAvailableSubtitle: '현재 v{{current}} · {{when}} 확인',
   cardUpdate: '업데이트',
   cardUpdating: '업데이트 중…',
+
+  settingsTitle: '업데이트',
+  settingsAppRow: '앱',
+  settingsDaemonRow: '데몬',
+  settingsCheck: '업데이트 확인',
 } as const;

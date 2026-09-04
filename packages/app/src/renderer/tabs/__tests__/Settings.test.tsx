@@ -12,8 +12,40 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { t } from '../../i18n';
+import type { DaemonUpdateCheck, UpdateCheck } from '../../update-check.js';
 import { CONFIG_SCHEMA, countModifiedFields, type SectionDef } from '../configSchema';
 import { Settings } from '../Settings';
+
+/* This file's assertions are about the config/daemon screen, not update
+   state — the fixtures below just satisfy the props App.tsx's single poller
+   normally supplies. */
+const update: UpdateCheck = {
+  state: { available: false },
+  pendingVersion: null,
+  checking: false,
+  updating: false,
+  progress: null,
+  check: () => {},
+  apply: () => {},
+  restart: () => {},
+};
+const daemonUpdate: DaemonUpdateCheck = {
+  state: { available: false },
+  checking: false,
+  updating: false,
+  check: () => {},
+  apply: () => {},
+};
+function renderSettings() {
+  return render(
+    <Settings
+      appearance="auto"
+      onAppearanceChange={() => {}}
+      update={update}
+      daemonUpdate={daemonUpdate}
+    />,
+  );
+}
 
 const SETTINGS = {
   path: '/Users/x/.trace-mcp/.config.json',
@@ -42,7 +74,7 @@ afterEach(() => {
 });
 
 it('gives every group a title', () => {
-  render(<Settings />);
+  renderSettings();
   for (const title of [
     'General',
     'Intelligence',
@@ -59,7 +91,7 @@ it('gives every group a title', () => {
 /* `lsp` was in the schema and in no group, and groups are what the list
    renders — so a whole settings section was unreachable. */
 it('renders every schema section, including LSP enrichment', () => {
-  render(<Settings />);
+  renderSettings();
   for (const section of CONFIG_SCHEMA) {
     // The schema carries catalogue keys since TRA-383; the rendered row is
     // still the English label, which is what this asserts.
@@ -73,7 +105,7 @@ it('renders every schema section, including LSP enrichment', () => {
    on the screen. It is a menu item now, and the list has no prominent control
    at all. */
 it('keeps the raw-config escape hatch out of the toolbar', async () => {
-  const { container } = render(<Settings />);
+  const { container } = renderSettings();
   expect(screen.queryByRole('button', { name: 'Edit JSON' })).toBeNull();
   expect(container.querySelectorAll('.v-prominent').length).toBe(0);
 
@@ -85,7 +117,7 @@ it('keeps the raw-config escape hatch out of the toolbar', async () => {
 /* The dot had no legend anywhere in the app, so its colour was the whole
    message. The word is the message now. */
 it('names the modified state instead of signalling it with colour alone', () => {
-  const { container } = render(<Settings />);
+  const { container } = renderSettings();
   expect(screen.getAllByText('Modified').length).toBeGreaterThan(0);
   // No bare accent-filled dot spans left in the rows.
   const dots = [...container.querySelectorAll('span')].filter(
@@ -96,7 +128,7 @@ it('names the modified state instead of signalling it with colour alone', () => 
 
 /* PID is diagnostic detail, not a headline. */
 it('leads the daemon card with its state and hides the PID behind a copy action', async () => {
-  render(<Settings />);
+  renderSettings();
   expect(screen.getByText(/Running · port/)).toBeTruthy();
   expect(screen.queryByText(/PID/)).toBeNull();
 
@@ -106,7 +138,7 @@ it('leads the daemon card with its state and hides the PID behind a copy action'
 });
 
 it('titles the screen and its sections in sentence case', () => {
-  render(<Settings />);
+  renderSettings();
   expect(screen.getByRole('heading', { name: 'Settings', level: 2 })).toBeTruthy();
   for (const wrong of [
     'Quality Gates',
@@ -121,7 +153,7 @@ it('titles the screen and its sections in sentence case', () => {
 });
 
 it('searches from the toolbar with the SearchField primitive', async () => {
-  const { container } = render(<Settings />);
+  const { container } = renderSettings();
   const search = screen.getByRole('textbox', { name: 'Search settings' });
   expect(search.closest('.lx-search')).not.toBeNull();
 
@@ -133,7 +165,7 @@ it('searches from the toolbar with the SearchField primitive', async () => {
 });
 
 it('navigates into a section and back from the toolbar', async () => {
-  render(<Settings />);
+  renderSettings();
   fireEvent.click(screen.getByRole('button', { name: /^AI and embeddings/ }));
   expect(screen.getByRole('heading', { name: 'AI and embeddings', level: 2 })).toBeTruthy();
 
@@ -153,7 +185,7 @@ it('aborts the in-flight model fetch when the settings tab unmounts', async () =
   });
   vi.stubGlobal('fetch', fetchMock);
 
-  const { unmount } = render(<Settings />);
+  const { unmount } = renderSettings();
   fireEvent.click(screen.getByRole('button', { name: /^AI and embeddings/ }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 

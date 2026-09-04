@@ -210,3 +210,91 @@ export function useUpdateCheck(): UpdateCheck {
     restart,
   };
 }
+
+/**
+ * The daemon's own update state — separate from `UpdateState` above, because
+ * it is a separate check against a separate artifact (TRA-686). The daemon
+ * has no "downloaded, restart to install" phase: `apply` runs the npm install
+ * and restarts the daemon process in one main-process round trip, so there is
+ * no `pendingVersion`/`restart` pair to carry here.
+ */
+export type DaemonUpdateState = {
+  available: boolean;
+  current?: string;
+  latest?: string;
+  lastChecked?: number;
+  error?: string;
+  /** Present when the update could not run automatically — offer it as a copyable command instead. */
+  command?: string;
+};
+
+export interface DaemonUpdateCheck {
+  state: DaemonUpdateState;
+  checking: boolean;
+  updating: boolean;
+  check: () => void;
+  apply: () => void;
+}
+
+export function useDaemonUpdateCheck(): DaemonUpdateCheck {
+  const [state, setState] = useState<DaemonUpdateState>({ available: false });
+  const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const cancelledRef = useRef(false);
+
+  const check = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.checkForDaemonUpdate) return;
+    setChecking(true);
+    try {
+      const result = await api.checkForDaemonUpdate();
+      if (!cancelledRef.current && result) setState(result);
+    } catch (err) {
+      if (!cancelledRef.current) setState((s) => ({ ...s, error: (err as Error).message }));
+    } finally {
+      if (!cancelledRef.current) setChecking(false);
+    }
+  }, []);
+
+  const checkRef = useRef(check);
+  checkRef.current = check;
+
+  useEffect(() => {
+    cancelledRef.current = false;
+    void checkRef.current();
+    const poll = setInterval(() => void checkRef.current(), 600_000);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(poll);
+    };
+  }, []);
+
+  const apply = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.applyDaemonUpdate) return;
+    setUpdating(true);
+    setState((s) => ({ ...s, error: undefined, command: undefined }));
+    try {
+      const result = await api.applyDaemonUpdate();
+      if (result?.ok) {
+        void checkRef.current();
+      } else {
+        setState((s) => ({
+          ...s,
+          error: result?.error || 'update failed',
+          command: result?.command,
+        }));
+      }
+    } finally {
+      setUpdating(false);
+    }
+  }, []);
+
+  return {
+    state,
+    checking,
+    updating,
+    check: useCallback(() => void checkRef.current(), []),
+    apply: useCallback(() => void apply(), [apply]),
+  };
+}

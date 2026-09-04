@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GLOBAL_ACTIONS } from '../../../shared/global-actions.js';
 import { LOCALES, LOCALE_KEY } from '../../../shared/i18n/locales.js';
 import { setLocale, t } from '../../i18n';
-import type { UpdateState } from '../../update-check.js';
+import type { DaemonUpdateState, UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
 
 const openExternal = vi.fn();
@@ -24,10 +24,17 @@ function renderMenu(props: Partial<AppMenuProps> = {}) {
   const onCheckForUpdate = vi.fn();
   const onSettings = vi.fn();
   const update: UpdateState = { available: false, current: '3.1.1', lastChecked: Date.now() };
+  const daemonUpdate: DaemonUpdateState = {
+    available: false,
+    current: '3.1.1',
+    lastChecked: Date.now(),
+  };
   render(
     <AppMenu
       update={update}
       checking={false}
+      daemonUpdate={daemonUpdate}
+      daemonChecking={false}
       onCheckForUpdate={onCheckForUpdate}
       appearance="auto"
       onAppearanceChange={onAppearanceChange}
@@ -102,6 +109,29 @@ describe('sidebar app menu', () => {
     const header = openMenu(trigger).querySelector('.ws-ctx-header');
     expect(header?.querySelector('.status')?.textContent).toContain('Version 3.2.0 available');
     expect(header?.querySelector('.status')?.className).toContain('is-info');
+  });
+
+  /* TRA-686: one button drives both checks now, so the header has to be able
+     to name either one — or both — as the thing that is behind, not just
+     report on the app bundle it used to be the only reader of. */
+  it('names the daemon specifically when only the daemon is behind', () => {
+    const { trigger } = renderMenu({
+      update: { available: false, current: '3.10.0', lastChecked: Date.now() },
+      daemonUpdate: { available: true, current: '3.10.0', latest: '3.13.0' },
+    });
+    const header = openMenu(trigger).querySelector('.ws-ctx-header');
+    expect(header?.querySelector('.status')?.textContent).toContain('Daemon update available');
+    expect(header?.querySelector('.status')?.textContent).toContain('3.13.0');
+    expect(header?.querySelector('.status')?.className).toContain('is-info');
+  });
+
+  it('names both when the app and the daemon are each behind', () => {
+    const { trigger } = renderMenu({
+      update: { available: true, current: '3.10.0', latest: '3.11.0' },
+      daemonUpdate: { available: true, current: '3.10.0', latest: '3.13.0' },
+    });
+    const header = openMenu(trigger).querySelector('.ws-ctx-header');
+    expect(header?.querySelector('.status')?.textContent).toContain('App and daemon updates');
   });
 
   it('renders long status text cleanly in the header without breaking structure', () => {
