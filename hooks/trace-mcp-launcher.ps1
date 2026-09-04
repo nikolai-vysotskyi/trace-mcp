@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.0 (Windows)
+# trace-mcp-launcher v0.6.1 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -72,8 +72,16 @@ $NodeMajor = ''
 $UsingOverride = $false
 $UsingNodeOverride = $false
 
+# Wrapped: under $ErrorActionPreference = 'Stop' an unreadable config (locked
+# by another writer, an I/O error on a mapped drive) throws out of the whole
+# launcher, so the client gets neither the recovery message nor the probe
+# fallback. An unreadable config must degrade to "no config" (TRA-797).
+$configLines = @()
 if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
-    foreach ($line in [System.IO.File]::ReadAllLines($ConfigPath)) {
+    try { $configLines = [System.IO.File]::ReadAllLines($ConfigPath) } catch { $configLines = @() }
+}
+if ($configLines.Count -gt 0) {
+    foreach ($line in $configLines) {
         $trimmed = $line.TrimStart()
         if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
         $idx = $trimmed.IndexOf('=')
@@ -143,7 +151,12 @@ function Save-LauncherConfig {
         )
         # Cache the verified major so the fast path stays a pure file check.
         if ($Major -match '^\d+$') { $lines += ('TRACE_MCP_NODE_MAJOR="{0}"' -f $Major) }
-        $tmp = "$ConfigPath.tmp.$PID"
+        # `.tmp.<pid>.<12 hex>` is the shape sweepOrphanTmpFiles collects
+        # (src/utils/atomic-write.ts) - its pattern requires the trailing hex.
+        # The catch below only runs for a caught failure; a process killed
+        # between the write and the move leaks this file, and without the
+        # suffix the sweeper would never match it (TRA-797).
+        $tmp = '{0}.tmp.{1}.{2}' -f $ConfigPath, $PID, ((1..12 | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }) -join '')
         [System.IO.File]::WriteAllLines($tmp, $lines)
         Move-Item -LiteralPath $tmp -Destination $ConfigPath -Force -ErrorAction Stop
     } catch {
