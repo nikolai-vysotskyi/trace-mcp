@@ -2094,6 +2094,988 @@
         ]
       },
       "notes": "Reconciliation run: this entry supersedes nothing, it adds to the 2026-09-01 entry measured by the same autopilot on a harness that had not yet landed. The two pieces of work were done in parallel and are merged here rather than one being thrown away (PR #744 closed into this one). Numbers line up with that entry where they overlap \u2014 ui_p95_ms 690 vs 668, heap_growth 0.19 vs 1.39 MB/h, rss_after_index_settle 316 vs 383 MB \u2014 which is the first time two independent passes have agreed on the workload metrics at all. 30 min, 521 cycles, 3 recovered cycle errors, 0 open retries. Two additions this run. (1) The app is launched with TRACE_MCP_AGENT_RUN=1 so the window is never mapped: a 55-minute pass runs on the machine somebody is working on and must not steal their screen. The cost is that renderer_fcp_ms is structurally null \u2014 Chromium only emits a paint entry for a frame the compositor presented \u2014 so it is replaced by renderer_first_content_ms, a mark the renderer sets itself when React commits the first content under #root (97 ms here). New series: not comparable to the 136 ms renderer_fcp_ms of the 2026-09-01 entry, which ran with a visible window. (2) New metric renderer_cpu_idle_pct \u2014 renderer CPU over a 60 s window with no input, per view, from cputime deltas rather than ps %cpu, which is a decaying lifetime average. Overview 2.9% of a core, Graph 29.3%. Measured three times across two harness versions today: 27.0, 27.7, 29.3. The Graph tab never idles; filed as TRA-683. The .cosmos-gpu-label layer the 2026-09-01 run had to exclude from the settle detector is the same root cause seen from the other side \u2014 that run proved the DOM never goes quiet, this one prices it. heap_idle_mb 15.4 against 9.5 in earlier runs is not a leak: earlier runs idled against no daemon at all, this one against a served fixture. artifact_mb not sampled (no pack); no dependency changed."
+    },
+    {
+      "date": "2026-09-04T21:31:08.380Z",
+      "app_version": "3.17.0",
+      "commit": "121e3e9b",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 415,
+        "window_interactive_ms": 141,
+        "renderer_first_content_ms": 93,
+        "renderer_fcp_ms": null,
+        "ui_p95_ms": 667,
+        "renderer_cpu_idle_pct": {
+          "overview": 0.1,
+          "graph": 6.8
+        },
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": 7.65,
+        "heap_growth_mb_per_hour": 1.56,
+        "tree_rss_peak_mb": 1512,
+        "tree_rss_idle_mb": 878,
+        "tree_cpu_peak_pct": 132.8,
+        "rss_after_index_settle_mb": 196,
+        "main_cpu_idle_pct": 0.1,
+        "renderer_bundle_kb": 2346,
+        "renderer_eager_kb": 2084,
+        "artifact_mb": {
+          "mac_app_unpacked": 350,
+          "mac_asar": 7,
+          "mac_server_payload": 80
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 3119,
+          "window_interactive_ms": 174,
+          "renderer_first_content_ms": 98,
+          "renderer_fcp_ms": 156
+        },
+        {
+          "cold_start_ms": 372,
+          "window_interactive_ms": 119,
+          "renderer_first_content_ms": 88,
+          "renderer_fcp_ms": null
+        },
+        {
+          "cold_start_ms": 415,
+          "window_interactive_ms": 141,
+          "renderer_first_content_ms": 93,
+          "renderer_fcp_ms": null,
+          "heap_idle_mb": 9.5,
+          "main_cpu_idle_pct": 0.1
+        }
+      ],
+      "workload": {
+        "fixture": {
+          "commit": "fc47c10f44eb539cbb01b0bb2e4ff633c59b7151",
+          "revision": 2,
+          "files": 1817,
+          "symbols": 9705
+        },
+        "minutes": 30,
+        "index_s": 7.9,
+        "settle_minutes": 10,
+        "cycles": 574,
+        "cycle_errors": 0,
+        "open_warmup_ms": 68,
+        "open_retries": 0,
+        "open_project_ms": [40, 42, 73, 39, 42, 39, 41, 40, 43, 64, 55],
+        "actions": {
+          "open_project": {
+            "n": 11,
+            "median_ms": 42,
+            "p95_ms": 73
+          },
+          "search": {
+            "n": 5740,
+            "median_ms": 0,
+            "p95_ms": 667
+          },
+          "switch_view": {
+            "n": 1723,
+            "median_ms": 9,
+            "p95_ms": 189
+          }
+        },
+        "heap_series": [
+          {
+            "t_min": 0.05,
+            "heap_mb": 7.65
+          },
+          {
+            "t_min": 0.64,
+            "heap_mb": 8.96
+          },
+          {
+            "t_min": 1.22,
+            "heap_mb": 9.13
+          },
+          {
+            "t_min": 1.78,
+            "heap_mb": 9.21
+          },
+          {
+            "t_min": 2.35,
+            "heap_mb": 9.23
+          },
+          {
+            "t_min": 2.9,
+            "heap_mb": 9.29
+          },
+          {
+            "t_min": 3.5,
+            "heap_mb": 9.4
+          },
+          {
+            "t_min": 3.98,
+            "heap_mb": 9.32
+          },
+          {
+            "t_min": 4.6,
+            "heap_mb": 9.36
+          },
+          {
+            "t_min": 4.96,
+            "heap_mb": 9.34
+          },
+          {
+            "t_min": 5.35,
+            "heap_mb": 9.38
+          },
+          {
+            "t_min": 5.7,
+            "heap_mb": 9.34
+          },
+          {
+            "t_min": 6.11,
+            "heap_mb": 9.37
+          },
+          {
+            "t_min": 6.48,
+            "heap_mb": 9.37
+          },
+          {
+            "t_min": 6.84,
+            "heap_mb": 9.5
+          },
+          {
+            "t_min": 7.22,
+            "heap_mb": 9.41
+          },
+          {
+            "t_min": 7.56,
+            "heap_mb": 9.42
+          },
+          {
+            "t_min": 7.9,
+            "heap_mb": 9.6
+          },
+          {
+            "t_min": 8.4,
+            "heap_mb": 9.58
+          },
+          {
+            "t_min": 9,
+            "heap_mb": 9.59
+          },
+          {
+            "t_min": 9.55,
+            "heap_mb": 9.61
+          },
+          {
+            "t_min": 10.1,
+            "heap_mb": 9.65
+          },
+          {
+            "t_min": 10.52,
+            "heap_mb": 9.64
+          },
+          {
+            "t_min": 11.1,
+            "heap_mb": 9.63
+          },
+          {
+            "t_min": 11.67,
+            "heap_mb": 9.64
+          },
+          {
+            "t_min": 12.28,
+            "heap_mb": 9.76
+          },
+          {
+            "t_min": 12.87,
+            "heap_mb": 12.14
+          },
+          {
+            "t_min": 13.44,
+            "heap_mb": 9.64
+          },
+          {
+            "t_min": 14,
+            "heap_mb": 9.65
+          },
+          {
+            "t_min": 14.53,
+            "heap_mb": 9.69
+          },
+          {
+            "t_min": 15.07,
+            "heap_mb": 9.66
+          },
+          {
+            "t_min": 15.55,
+            "heap_mb": 9.69
+          },
+          {
+            "t_min": 15.94,
+            "heap_mb": 12.14
+          },
+          {
+            "t_min": 16.31,
+            "heap_mb": 9.69
+          },
+          {
+            "t_min": 16.84,
+            "heap_mb": 9.68
+          },
+          {
+            "t_min": 17.35,
+            "heap_mb": 9.67
+          },
+          {
+            "t_min": 17.93,
+            "heap_mb": 9.67
+          },
+          {
+            "t_min": 18.53,
+            "heap_mb": 9.68
+          },
+          {
+            "t_min": 19.11,
+            "heap_mb": 9.67
+          },
+          {
+            "t_min": 19.68,
+            "heap_mb": 9.67
+          },
+          {
+            "t_min": 20.28,
+            "heap_mb": 9.68
+          },
+          {
+            "t_min": 20.91,
+            "heap_mb": 9.69
+          },
+          {
+            "t_min": 21.51,
+            "heap_mb": 9.7
+          },
+          {
+            "t_min": 22.04,
+            "heap_mb": 12.17
+          },
+          {
+            "t_min": 22.65,
+            "heap_mb": 9.69
+          },
+          {
+            "t_min": 23.25,
+            "heap_mb": 12.15
+          },
+          {
+            "t_min": 23.74,
+            "heap_mb": 9.73
+          },
+          {
+            "t_min": 24.1,
+            "heap_mb": 9.74
+          },
+          {
+            "t_min": 24.52,
+            "heap_mb": 12.17
+          },
+          {
+            "t_min": 25.13,
+            "heap_mb": 9.73
+          },
+          {
+            "t_min": 25.64,
+            "heap_mb": 9.72
+          },
+          {
+            "t_min": 26.25,
+            "heap_mb": 9.74
+          },
+          {
+            "t_min": 26.88,
+            "heap_mb": 9.71
+          },
+          {
+            "t_min": 27.49,
+            "heap_mb": 9.71
+          },
+          {
+            "t_min": 28.05,
+            "heap_mb": 9.72
+          },
+          {
+            "t_min": 28.69,
+            "heap_mb": 9.73
+          },
+          {
+            "t_min": 29.31,
+            "heap_mb": 11.06
+          },
+          {
+            "t_min": 29.88,
+            "heap_mb": 9.83
+          },
+          {
+            "t_min": 30.05,
+            "heap_mb": 9.75
+          }
+        ],
+        "tree_series": [
+          {
+            "t": 1788554869443,
+            "app_rss_mb": 483,
+            "app_cpu_pct": 13.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 554,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1037,
+            "cpu_pct": 13.2
+          },
+          {
+            "t": 1788554914269,
+            "app_rss_mb": 475,
+            "app_cpu_pct": 0.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 403,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 878,
+            "cpu_pct": 0.1
+          },
+          {
+            "t": 1788554959222,
+            "app_rss_mb": 608,
+            "app_cpu_pct": 47.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 518,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1126,
+            "cpu_pct": 47.9
+          },
+          {
+            "t": 1788555004252,
+            "app_rss_mb": 615,
+            "app_cpu_pct": 54.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 528,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1143,
+            "cpu_pct": 54.6
+          },
+          {
+            "t": 1788555049262,
+            "app_rss_mb": 620,
+            "app_cpu_pct": 54.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 599,
+            "daemon_cpu_pct": 19.5,
+            "daemon_procs": 1,
+            "rss_mb": 1220,
+            "cpu_pct": 74.2
+          },
+          {
+            "t": 1788555094282,
+            "app_rss_mb": 621,
+            "app_cpu_pct": 50.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 600,
+            "daemon_cpu_pct": 0.1,
+            "daemon_procs": 1,
+            "rss_mb": 1221,
+            "cpu_pct": 50.6
+          },
+          {
+            "t": 1788555139328,
+            "app_rss_mb": 621,
+            "app_cpu_pct": 60.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 601,
+            "daemon_cpu_pct": 5,
+            "daemon_procs": 1,
+            "rss_mb": 1222,
+            "cpu_pct": 65.9
+          },
+          {
+            "t": 1788555184319,
+            "app_rss_mb": 624,
+            "app_cpu_pct": 61.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 851,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1475,
+            "cpu_pct": 61.9
+          },
+          {
+            "t": 1788555229528,
+            "app_rss_mb": 620,
+            "app_cpu_pct": 32.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 881,
+            "daemon_cpu_pct": 27.5,
+            "daemon_procs": 1,
+            "rss_mb": 1500,
+            "cpu_pct": 60
+          },
+          {
+            "t": 1788555274562,
+            "app_rss_mb": 632,
+            "app_cpu_pct": 25.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 857,
+            "daemon_cpu_pct": 22.4,
+            "daemon_procs": 1,
+            "rss_mb": 1489,
+            "cpu_pct": 47.6
+          },
+          {
+            "t": 1788555319651,
+            "app_rss_mb": 624,
+            "app_cpu_pct": 62.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 865,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1489,
+            "cpu_pct": 62.1
+          },
+          {
+            "t": 1788555364688,
+            "app_rss_mb": 624,
+            "app_cpu_pct": 27.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 871,
+            "daemon_cpu_pct": 23.3,
+            "daemon_procs": 1,
+            "rss_mb": 1495,
+            "cpu_pct": 50.9
+          },
+          {
+            "t": 1788555409420,
+            "app_rss_mb": 638,
+            "app_cpu_pct": 39.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 855,
+            "daemon_cpu_pct": 20.8,
+            "daemon_procs": 1,
+            "rss_mb": 1493,
+            "cpu_pct": 60
+          },
+          {
+            "t": 1788555454387,
+            "app_rss_mb": 627,
+            "app_cpu_pct": 56.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 856,
+            "daemon_cpu_pct": 6.1,
+            "daemon_procs": 1,
+            "rss_mb": 1483,
+            "cpu_pct": 62.5
+          },
+          {
+            "t": 1788555499411,
+            "app_rss_mb": 630,
+            "app_cpu_pct": 57.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 865,
+            "daemon_cpu_pct": 1.7,
+            "daemon_procs": 1,
+            "rss_mb": 1495,
+            "cpu_pct": 58.8
+          },
+          {
+            "t": 1788555544613,
+            "app_rss_mb": 631,
+            "app_cpu_pct": 62.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 875,
+            "daemon_cpu_pct": 0.7,
+            "daemon_procs": 1,
+            "rss_mb": 1506,
+            "cpu_pct": 62.9
+          },
+          {
+            "t": 1788555589431,
+            "app_rss_mb": 611,
+            "app_cpu_pct": 51.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 828,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1439,
+            "cpu_pct": 51.9
+          },
+          {
+            "t": 1788555634454,
+            "app_rss_mb": 616,
+            "app_cpu_pct": 58.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 834,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1450,
+            "cpu_pct": 58.5
+          },
+          {
+            "t": 1788555679484,
+            "app_rss_mb": 614,
+            "app_cpu_pct": 60.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 835,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1450,
+            "cpu_pct": 60.2
+          },
+          {
+            "t": 1788555724482,
+            "app_rss_mb": 613,
+            "app_cpu_pct": 62.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 830,
+            "daemon_cpu_pct": 20.9,
+            "daemon_procs": 1,
+            "rss_mb": 1443,
+            "cpu_pct": 83.8
+          },
+          {
+            "t": 1788555769509,
+            "app_rss_mb": 614,
+            "app_cpu_pct": 69.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 828,
+            "daemon_cpu_pct": 4.5,
+            "daemon_procs": 1,
+            "rss_mb": 1442,
+            "cpu_pct": 73.8
+          },
+          {
+            "t": 1788555814550,
+            "app_rss_mb": 574,
+            "app_cpu_pct": 74.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 786,
+            "daemon_cpu_pct": 0.5,
+            "daemon_procs": 1,
+            "rss_mb": 1360,
+            "cpu_pct": 75.2
+          },
+          {
+            "t": 1788555860010,
+            "app_rss_mb": 572,
+            "app_cpu_pct": 67.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 787,
+            "daemon_cpu_pct": 2.6,
+            "daemon_procs": 1,
+            "rss_mb": 1359,
+            "cpu_pct": 70.5
+          },
+          {
+            "t": 1788555904571,
+            "app_rss_mb": 574,
+            "app_cpu_pct": 61.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 794,
+            "daemon_cpu_pct": 0.1,
+            "daemon_procs": 1,
+            "rss_mb": 1368,
+            "cpu_pct": 61.8
+          },
+          {
+            "t": 1788555949961,
+            "app_rss_mb": 553,
+            "app_cpu_pct": 60.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 777,
+            "daemon_cpu_pct": 0.7,
+            "daemon_procs": 1,
+            "rss_mb": 1330,
+            "cpu_pct": 60.9
+          },
+          {
+            "t": 1788555996241,
+            "app_rss_mb": 559,
+            "app_cpu_pct": 57.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 772,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1330,
+            "cpu_pct": 57.6
+          },
+          {
+            "t": 1788556039579,
+            "app_rss_mb": 567,
+            "app_cpu_pct": 61.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 773,
+            "daemon_cpu_pct": 27.3,
+            "daemon_procs": 1,
+            "rss_mb": 1339,
+            "cpu_pct": 89.1
+          },
+          {
+            "t": 1788556084615,
+            "app_rss_mb": 567,
+            "app_cpu_pct": 58.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 773,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1341,
+            "cpu_pct": 58.1
+          },
+          {
+            "t": 1788556129608,
+            "app_rss_mb": 570,
+            "app_cpu_pct": 57.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 773,
+            "daemon_cpu_pct": 0.3,
+            "daemon_procs": 1,
+            "rss_mb": 1342,
+            "cpu_pct": 57.5
+          },
+          {
+            "t": 1788556174648,
+            "app_rss_mb": 580,
+            "app_cpu_pct": 60.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 773,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1353,
+            "cpu_pct": 60.3
+          },
+          {
+            "t": 1788556219743,
+            "app_rss_mb": 566,
+            "app_cpu_pct": 74.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 785,
+            "daemon_cpu_pct": 4.4,
+            "daemon_procs": 1,
+            "rss_mb": 1351,
+            "cpu_pct": 78.8
+          },
+          {
+            "t": 1788556264655,
+            "app_rss_mb": 568,
+            "app_cpu_pct": 30.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 798,
+            "daemon_cpu_pct": 14.9,
+            "daemon_procs": 1,
+            "rss_mb": 1365,
+            "cpu_pct": 45.1
+          },
+          {
+            "t": 1788556309701,
+            "app_rss_mb": 572,
+            "app_cpu_pct": 64.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 770,
+            "daemon_cpu_pct": 23.5,
+            "daemon_procs": 1,
+            "rss_mb": 1342,
+            "cpu_pct": 88.2
+          },
+          {
+            "t": 1788556355361,
+            "app_rss_mb": 572,
+            "app_cpu_pct": 27.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 776,
+            "daemon_cpu_pct": 31.9,
+            "daemon_procs": 1,
+            "rss_mb": 1349,
+            "cpu_pct": 59.4
+          },
+          {
+            "t": 1788556399932,
+            "app_rss_mb": 558,
+            "app_cpu_pct": 31.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 782,
+            "daemon_cpu_pct": 38.3,
+            "daemon_procs": 1,
+            "rss_mb": 1340,
+            "cpu_pct": 69.8
+          },
+          {
+            "t": 1788556444856,
+            "app_rss_mb": 576,
+            "app_cpu_pct": 73.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 795,
+            "daemon_cpu_pct": 3.9,
+            "daemon_procs": 1,
+            "rss_mb": 1371,
+            "cpu_pct": 77.7
+          },
+          {
+            "t": 1788556489759,
+            "app_rss_mb": 537,
+            "app_cpu_pct": 63.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 780,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1317,
+            "cpu_pct": 63.4
+          },
+          {
+            "t": 1788556534745,
+            "app_rss_mb": 543,
+            "app_cpu_pct": 63,
+            "app_procs": 4,
+            "daemon_rss_mb": 772,
+            "daemon_cpu_pct": 23.5,
+            "daemon_procs": 1,
+            "rss_mb": 1315,
+            "cpu_pct": 86.5
+          },
+          {
+            "t": 1788556579757,
+            "app_rss_mb": 547,
+            "app_cpu_pct": 47.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 777,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1324,
+            "cpu_pct": 47.4
+          },
+          {
+            "t": 1788556624771,
+            "app_rss_mb": 551,
+            "app_cpu_pct": 44.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 792,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1343,
+            "cpu_pct": 44.9
+          },
+          {
+            "t": 1788556669797,
+            "app_rss_mb": 561,
+            "app_cpu_pct": 55.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 780,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1341,
+            "cpu_pct": 55.8
+          },
+          {
+            "t": 1788556714850,
+            "app_rss_mb": 551,
+            "app_cpu_pct": 58.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 779,
+            "daemon_cpu_pct": 56.3,
+            "daemon_procs": 1,
+            "rss_mb": 1329,
+            "cpu_pct": 114.8
+          },
+          {
+            "t": 1788556759863,
+            "app_rss_mb": 535,
+            "app_cpu_pct": 0,
+            "app_procs": 4,
+            "daemon_rss_mb": 304,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 839,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788556804831,
+            "app_rss_mb": 597,
+            "app_cpu_pct": 47.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 390,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 986,
+            "cpu_pct": 47.6
+          },
+          {
+            "t": 1788556849902,
+            "app_rss_mb": 572,
+            "app_cpu_pct": 3.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 304,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 876,
+            "cpu_pct": 3.5
+          },
+          {
+            "t": 1788556894974,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 304,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 304,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788556940429,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 304,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 304,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788556985795,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557031245,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557077445,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557123305,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557168672,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557214108,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557259656,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557305136,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557350614,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557396572,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557442834,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788557462939,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 196,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 196,
+            "cpu_pct": 0
+          }
+        ]
+      },
+      "notes": "Manual run (TRA-835), first pass since the Multica claude-runtime fix and the first at 3.17.0 \u2014 six app-visible releases after the 3.11.0 series. 30 min, 574 cycles, 0 cycle errors, 0 open retries, offscreen (TRACE_MCP_AGENT_RUN=1) so renderer_fcp_ms stays structurally null. No regression against the median of the last five runs on any metric; four improved. renderer_cpu_idle_pct.graph 29.3 -> 6.8% of a core (-77%): TRA-683 (0c79f0e2, 'let the Graph tab go quiet when nobody is watching') landed after the previous entry and this is its field number \u2014 the finding filed on 2026-09-02 is closed by measurement, not by inspection. rss_after_index_settle_mb 316 -> 196 and tree_rss_idle_mb 920 -> 878, both below their ceilings. heap_idle_mb back to 9.5 from 15.4. heap_growth_mb_per_hour 1.56 against a median of 0.79 is +98% on a metric whose ceiling is 50 and which has only two prior samples: noise, not a leak \u2014 the 574-cycle series is flat between 9.3 and 9.8 MB. renderer_bundle_kb 2346 (+3.3%) with renderer_eager_kb 2084 (-0.9%): the growth is all in lazy chunks, which is what the eager metric exists to separate. artifact_mb re-measured on this commit: 350 MB unpacked (+1.1% vs the 346.2 re-anchor), server payload 80 MB against its 100 MB absolute ceiling. KNOWN-BAD METRIC, read ui_p95_ms with care: this run was measured with the completion detector that armed its MutationObserver after firing the action, so any DOM work React committed synchronously inside the event was invisible. 42.5% of 360 search actions in a controlled 2-minute repeat measured exactly 0 ms, and two of the ten fixture queries measured 0 ms on all 36 of their occurrences. Fixed in this same change; on matched 2-minute runs the zero rate goes 42.5% -> 0.0% and search p95 592 -> 758. This entry keeps the old detector's numbers so it stays comparable with the 3.11.0 series; ui_p95_ms and the per-action p95s start a NEW SERIES from the next run and will read higher for that reason alone."
     }
   ]
 }

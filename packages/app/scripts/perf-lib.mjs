@@ -153,3 +153,73 @@ export function pidOnPort(port) {
     return null;
   }
 }
+
+/**
+ * The completion detector the CDP driver runs inside the renderer (TRA-835).
+ *
+ * It lives here, as source text, for one reason: it is the only part of
+ * `scripts/perf-measure.mjs` whose correctness is not obvious by reading it, and
+ * the harness itself takes 55 minutes so nothing in CI ever runs it. Exported as
+ * a string because it is injected into the page, not imported by it —
+ * `__tests__/perf-driver.test.ts` evaluates this same text against jsdom.
+ */
+export const MEASURE_SRC = String.raw`
+  const QUIET_MS = 120;
+  const SETTLE_CAP_MS = 5000;
+  // An action is done when the DOM stops changing, not when React returns:
+  // switching to the Graph tab paints an empty canvas in a few ms and then
+  // spends real time loading the graph. Measuring only the first paint would
+  // report single-digit milliseconds for every action and catch no regression.
+  //
+  // Except for one layer. The GPU graph repaints its HTML label overlay every
+  // animation frame — measured at ~730 mutations/second, unbroken, with no input
+  // at all — so a whole-document observer never sees 120 ms of quiet and every
+  // action in the Graph tab burns the cap instead of being timed. That is how
+  // ui_p95_ms first read as exactly 5000 ms (TRA-617). An animation that never
+  // stops cannot be a completion signal, so its mutations are not one.
+  const IGNORED = '.cosmos-gpu-label';
+  const ignorable = (rec) => {
+    const el = rec.target.nodeType === 1 ? rec.target : rec.target.parentElement;
+    return !!(el && el.closest && el.closest(IGNORED));
+  };
+  // The observer is armed BEFORE the action fires, not after. React dispatches
+  // discrete events (a click, an input) synchronously: by the time an
+  // 'act(); settled(t)' sequence gets to attach an observer, the whole render
+  // that the action caused has already been committed and there is nothing left
+  // to see. That is why 42.5% of searches measured exactly 0 ms on 2026-09-04
+  // while the same query measured 500 ms on the next cycle — the metric was
+  // timing only the part of the update React happened to defer.
+  const measure = (act) =>
+    new Promise((resolve, reject) => {
+      let last = null;
+      const obs = new MutationObserver((recs) => {
+        if (recs.every(ignorable)) return;
+        last = performance.now();
+      });
+      obs.observe(document.documentElement, {
+        subtree: true, childList: true, characterData: true, attributes: true,
+      });
+      let start;
+      try {
+        start = performance.now();
+        act();
+      } catch (e) {
+        obs.disconnect();
+        return reject(e);
+      }
+      // Nothing can have observed yet — MutationObserver callbacks are
+      // microtasks and this is still the same synchronous block — so the
+      // quiet window starts at the action, and a synchronous commit lands on
+      // 'last' before the first tick 16 ms from now.
+      last = start;
+      const tick = () => {
+        const now = performance.now();
+        if (now - last >= QUIET_MS || now - start >= SETTLE_CAP_MS) {
+          obs.disconnect();
+          return resolve(Math.min(last - start, SETTLE_CAP_MS));
+        }
+        setTimeout(tick, 16);
+      };
+      setTimeout(tick, 16);
+    });
+`;
