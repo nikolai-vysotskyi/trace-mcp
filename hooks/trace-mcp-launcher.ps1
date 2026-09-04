@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.0 (Windows)
+# trace-mcp-launcher v0.6.1 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -72,8 +72,21 @@ $NodeMajor = ''
 $UsingOverride = $false
 $UsingNodeOverride = $false
 
-if (Test-Path -LiteralPath $ConfigPath -PathType Leaf) {
-    foreach ($line in [System.IO.File]::ReadAllLines($ConfigPath)) {
+# Every file this shim reads is a hint, never a requirement: launcher.env,
+# pkg-roots, .npmrc. Under $ErrorActionPreference = 'Stop' a read that throws -
+# a file locked by another writer, an I/O error on a mapped drive - escapes the
+# whole launcher, so the client gets neither the recovery message nor the probe
+# fallback and loses trace-mcp for the session. An unreadable hint must degrade
+# to "no hint" (TRA-797).
+function Read-LauncherLines {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    try { return @([System.IO.File]::ReadAllLines($Path)) } catch { return @() }
+}
+
+$configLines = Read-LauncherLines $ConfigPath
+if ($configLines.Count -gt 0) {
+    foreach ($line in $configLines) {
         $trimmed = $line.TrimStart()
         if (-not $trimmed -or $trimmed.StartsWith('#')) { continue }
         $idx = $trimmed.IndexOf('=')
@@ -143,7 +156,12 @@ function Save-LauncherConfig {
         )
         # Cache the verified major so the fast path stays a pure file check.
         if ($Major -match '^\d+$') { $lines += ('TRACE_MCP_NODE_MAJOR="{0}"' -f $Major) }
-        $tmp = "$ConfigPath.tmp.$PID"
+        # `.tmp.<pid>.<12 hex>` is the shape sweepOrphanTmpFiles collects
+        # (src/utils/atomic-write.ts) - its pattern requires the trailing hex.
+        # The catch below only runs for a caught failure; a process killed
+        # between the write and the move leaks this file, and without the
+        # suffix the sweeper would never match it (TRA-797).
+        $tmp = '{0}.tmp.{1}.{2}' -f $ConfigPath, $PID, ((1..12 | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }) -join '')
         [System.IO.File]::WriteAllLines($tmp, $lines)
         Move-Item -LiteralPath $tmp -Destination $ConfigPath -Force -ErrorAction Stop
     } catch {
@@ -305,12 +323,9 @@ function Get-PkgRoots {
     # Roots recorded by past installs (mirrors src/init/launcher.ts::recordPkgRoot).
     # This is how a prefix we cannot name in advance becomes findable without
     # asking npm at runtime. Values are opaque paths, never evaluated.
-    $rootsFile = Join-Path $TraceHome 'pkg-roots'
-    if (Test-Path -LiteralPath $rootsFile -PathType Leaf) {
-        foreach ($line in [System.IO.File]::ReadAllLines($rootsFile)) {
-            $t = $line.Trim()
-            if ($t -and -not $t.StartsWith('#')) { $roots += $t }
-        }
+    foreach ($line in (Read-LauncherLines (Join-Path $TraceHome 'pkg-roots'))) {
+        $t = $line.Trim()
+        if ($t -and -not $t.StartsWith('#')) { $roots += $t }
     }
     # Volta keeps each global package under its own image directory.
     if ($env:LOCALAPPDATA) {
@@ -323,12 +338,9 @@ function Get-PkgRoots {
     # execution from the opened repository.
     $prefix = $env:NPM_CONFIG_PREFIX
     if (-not $prefix -and $env:USERPROFILE) {
-        $npmrc = Join-Path $env:USERPROFILE '.npmrc'
-        if (Test-Path -LiteralPath $npmrc -PathType Leaf) {
-            foreach ($line in [System.IO.File]::ReadAllLines($npmrc)) {
-                if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
-                    $prefix = $Matches[1].Trim('"').Trim("'")
-                }
+        foreach ($line in (Read-LauncherLines (Join-Path $env:USERPROFILE '.npmrc'))) {
+            if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
+                $prefix = $Matches[1].Trim('"').Trim("'")
             }
         }
     }

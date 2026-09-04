@@ -136,6 +136,41 @@ exit 0`;
     expect(result.status).toBe(0);
   });
 
+  // Every file the ps1 reads is a hint, and under $ErrorActionPreference =
+  // 'Stop' a read that throws escapes the whole launcher — so an auxiliary
+  // file locked by another writer used to cost the client its MCP session
+  // even though a working node + cli.js were sitting on disk (TRA-797).
+  // Driven through powershell.exe directly: the cmd shim does not spawn on
+  // the windows-latest runner (see the skipped tests above), but the parse
+  // test proves powershell.exe itself does.
+  it('a locked pkg-roots does not abort the ps1 backend', () => {
+    const { home, traceHome } = setupFakeHome();
+    const roots = path.join(traceHome, 'pkg-roots');
+    fs.writeFileSync(roots, 'C:\\nowhere\\lib\\node_modules\r\n');
+
+    // Hold pkg-roots open with FileShare::None, then run the launcher as a
+    // child: its ReadAllLines is guaranteed to fail. With no config and no
+    // discoverable node the run must still reach the launcher's own `die`.
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+$handle = [System.IO.File]::Open('${q(roots)}', 'Open', 'Read', 'None')
+try {
+  & powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+  Write-Output "EXIT:$LASTEXITCODE"
+} finally { $handle.Dispose() }`;
+    const result = spawnSync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf-8', timeout: 30_000 },
+    );
+
+    expect(result.stdout).toContain('EXIT:127');
+    expect(result.stderr).toContain('npm i -g trace-mcp');
+  });
+
   it('injection attempt in config is not evaluated', () => {
     const { home, traceHome, shimDir } = setupFakeHome();
     const sentinel = path.join(home, 'PWNED');
