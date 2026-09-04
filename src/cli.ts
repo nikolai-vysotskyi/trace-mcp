@@ -2887,6 +2887,18 @@ program
       // cleanup once.
       if (daemonShuttingDown) return;
       daemonShuttingDown = true;
+      // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
+      // async cleanup and only exits from httpServer.close()'s callback. If a
+      // close hangs or the event loop is starved, the daemon would never die on
+      // a legitimate SIGTERM. Arm a bounded hard-exit so termination is
+      // guaranteed within a bounded time. Unref'd — never keeps the process up.
+      //
+      // Armed before anything else runs, including the diagnostic below: the
+      // deadline is meant to be measured from the signal, and `launchctl print`
+      // can burn its own 2s timeout first. (A JS timer still cannot interrupt a
+      // synchronous call in progress — this bounds when the clock starts, not
+      // that call.)
+      armBoundedExit(reason ?? 'unknown');
       // Field debugging of the 60s restart loop (desktop-app /health watchdog
       // firing `daemon restart` against a warming daemon) was blind because
       // shutdowns left no trace of WHO asked. Always say why we're going down.
@@ -2904,12 +2916,6 @@ program
         },
         'Daemon shutting down',
       );
-      // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
-      // async cleanup and only exits from httpServer.close()'s callback. If a
-      // close hangs or the event loop is starved, the daemon would never die on
-      // a legitimate SIGTERM. Arm a bounded hard-exit so termination is
-      // guaranteed within a bounded time. Unref'd — never keeps the process up.
-      armBoundedExit(reason ?? 'unknown');
       // Close SSE connections
       for (const res of sseConnections) {
         try {
