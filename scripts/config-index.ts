@@ -11,15 +11,22 @@
  * reader could set a real option and find no confirmation it existed, or
  * conclude it did not.
  *
- * Nothing here is hand-maintained: the rows are walked off the schema itself,
- * so a new key cannot ship without appearing here. tests/docs/config-index.test.ts
- * fails CI when the page goes stale.
+ * The rows are read off `z.toJSONSchema()` — zod's *public* projection of the
+ * schema — not off `_def` internals. An earlier draft walked the internals and
+ * failed open: a zod release that renamed a private field would have produced
+ * an empty table with every test still green. The public API throws on a shape
+ * it cannot represent, and `assertRepresentative()` below refuses to write a
+ * page that lost its keys.
+ *
+ * Nothing here is hand-maintained, so a new key cannot ship without appearing
+ * here; tests/docs/config-index.test.ts fails CI when the page goes stale.
  *
  * Usage: pnpm run docs:config-index [--check]
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 import { TraceMcpConfigSchema } from '../src/config.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,80 +35,91 @@ const OUT = path.join(ROOT, 'docs/config-index.md');
 /** Keys whose default is a long generated list — quoting it here would be noise. */
 const ELIDED_DEFAULTS = new Set(['include', 'exclude', 'security.secret_patterns']);
 
+/** `root` and `children` are internal plumbing, not options a user sets. */
+const INTERNAL = new Set(['root', 'children']);
+
+/**
+ * A floor, not a count: the page is meant to grow. It exists so a future zod
+ * release that changes the projection cannot quietly empty the table — the
+ * generator refuses to write, rather than publishing a page that says the
+ * schema accepts nothing.
+ */
+const MIN_KEYS = 200;
+
 export interface ConfigRow {
   key: string;
   type: string;
   default: string;
 }
 
+interface JsonSchemaNode {
+  type?: string | string[];
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode;
+  anyOf?: JsonSchemaNode[];
+  enum?: unknown[];
+  const?: unknown;
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+}
+
+function jsonSchema(): JsonSchemaNode {
+  // `io: 'input'` is what a user writes into the file — the side defaults live
+  // on. `unrepresentable: 'any'` keeps a `z.custom()` from aborting the page.
+  return z.toJSONSchema(TraceMcpConfigSchema, {
+    io: 'input',
+    unrepresentable: 'any',
+  }) as JsonSchemaNode;
+}
+
 /**
- * Peels `.optional()` / `.default()` / `.prefault()` wrappers off a schema,
- * keeping the outermost default it saw on the way down.
+ * `minimum: 1, maximum: 1024` → ` (≥ 1, ≤ 1024)`.
+ *
+ * `z.int()` projects as ±`MAX_SAFE_INTEGER`, which is a statement about doubles
+ * rather than about the option — dropped, so a real ceiling stands out.
  */
-function unwrap(schema: unknown): { node: any; def: unknown } {
-  let node = schema as any;
-  let def: unknown;
-  for (let i = 0; i < 30; i++) {
-    const d = node?._def;
-    if (!d) break;
-    if (d.defaultValue !== undefined && def === undefined) {
-      def = typeof d.defaultValue === 'function' ? d.defaultValue() : d.defaultValue;
-    }
-    if (d.innerType) {
-      node = d.innerType;
-      continue;
-    }
-    if (d.schema) {
-      node = d.schema;
-      continue;
-    }
-    break;
-  }
-  return { node, def };
+function bounds(node: JsonSchemaNode): string {
+  const parts: string[] = [];
+  const real = (v: number | undefined): boolean =>
+    v !== undefined && Math.abs(v) !== Number.MAX_SAFE_INTEGER;
+  if (real(node.minimum)) parts.push(`≥ ${node.minimum}`);
+  if (real(node.exclusiveMinimum)) parts.push(`> ${node.exclusiveMinimum}`);
+  if (real(node.maximum)) parts.push(`≤ ${node.maximum}`);
+  if (real(node.exclusiveMaximum)) parts.push(`< ${node.exclusiveMaximum}`);
+  return parts.length ? ` (${parts.join(', ')})` : '';
 }
 
-/** `z.number().min(1).max(1024)` → `1–1024`, read off the checks zod keeps. */
-function range(node: any): string {
-  let min: string | undefined;
-  let max: string | undefined;
-  for (const check of node?._def?.checks ?? []) {
-    const d = check?._zod?.def ?? check?._def;
-    if (d?.check === 'greater_than') min = `${d.inclusive ? '≥' : '>'} ${d.value}`;
-    if (d?.check === 'less_than') max = `${d.inclusive ? '≤' : '<'} ${d.value}`;
-  }
-  const bounds = [min, max].filter(Boolean);
-  return bounds.length ? ` (${bounds.join(', ')})` : '';
-}
+const literal = (v: unknown): string => `\`${typeof v === 'string' ? v : JSON.stringify(v)}\``;
 
-function describeType(node: any): string {
-  const d = node?._def;
-  const t = d?.typeName ?? d?.type;
-  switch (t) {
-    case 'enum':
-      return Object.keys(d.entries ?? {})
-        .map((v) => `\`${v}\``)
-        .join(' \\| ');
-    case 'number':
-      return `number${range(node)}`;
+export function describeType(node: JsonSchemaNode): string {
+  if (node.enum) return node.enum.map(literal).join(' \\| ');
+  if (node.const !== undefined) return literal(node.const);
+  if (node.anyOf) return node.anyOf.map(describeType).join(' \\| ');
+  const type = Array.isArray(node.type) ? node.type.join(' \\| ') : node.type;
+  switch (type) {
     case 'array': {
-      const inner = unwrap(d.element).node;
-      const it = inner?._def?.typeName ?? inner?._def?.type;
-      return `${it === 'string' || it === 'enum' ? 'string' : it === 'number' ? 'number' : 'object'}[]`;
+      const item = node.items ? describeType(node.items) : 'any';
+      // `(a | b)[]` — without the parens a union of members reads as a union
+      // whose last member happens to be an array.
+      return item.includes('\\|') ? `(${item})[]` : `${item}[]`;
     }
-    case 'record':
-      return 'object';
-    case 'union':
-      return (d.options ?? []).map((o: any) => describeType(unwrap(o).node)).join(' \\| ');
+    case 'number':
+    case 'integer':
+      return `number${bounds(node)}`;
+    case undefined:
+      return 'any';
     default:
-      return String(t ?? 'unknown');
+      return type;
   }
 }
 
-function describeDefault(key: string, def: unknown, node: any): string {
-  const t = node?._def?.typeName ?? node?._def?.type;
-  if (def === undefined) return t === 'object' ? '—' : '_unset_';
+function describeDefault(key: string, node: JsonSchemaNode): string {
+  if (!('default' in node)) return node.properties ? '—' : '_unset_';
   if (ELIDED_DEFAULTS.has(key)) return '_built-in list_';
-  const json = JSON.stringify(def);
+  const json = JSON.stringify(node.default);
   if (json === undefined) return '_unset_';
   if (json.length > 60) return `\`${json.slice(0, 57)}…\``;
   return `\`${json.replace(/\|/g, '\\|')}\``;
@@ -109,23 +127,26 @@ function describeDefault(key: string, def: unknown, node: any): string {
 
 export function buildRows(): ConfigRow[] {
   const rows: ConfigRow[] = [];
-  const walk = (schema: unknown, prefix: string): void => {
-    const { node, def } = unwrap(schema);
-    const t = node?._def?.typeName ?? node?._def?.type;
-    if (prefix) {
-      rows.push({
-        key: prefix,
-        type: describeType(node),
-        default: describeDefault(prefix, def, node),
-      });
+  const walk = (node: JsonSchemaNode, prefix: string): void => {
+    for (const [key, child] of Object.entries(node.properties ?? {})) {
+      const full = prefix ? `${prefix}.${key}` : key;
+      if (INTERNAL.has(full)) continue;
+      rows.push({ key: full, type: describeType(child), default: describeDefault(full, child) });
+      walk(child, full);
     }
-    if (t !== 'object') return;
-    const shape = typeof node.shape === 'function' ? node.shape() : node.shape;
-    for (const k of Object.keys(shape ?? {})) walk(shape[k], prefix ? `${prefix}.${k}` : k);
   };
-  walk(TraceMcpConfigSchema, '');
-  // `root` and `children` are internal plumbing, not options a user sets.
-  return rows.filter((r) => r.key !== 'root' && r.key !== 'children');
+  walk(jsonSchema(), '');
+  return rows;
+}
+
+/** Refuses to publish a page that lost the schema — see MIN_KEYS. */
+export function assertRepresentative(rows: ConfigRow[]): void {
+  if (rows.length < MIN_KEYS) {
+    throw new Error(
+      `config-index: only ${rows.length} keys came back from z.toJSONSchema (expected at least ${MIN_KEYS}). ` +
+        `The schema shrank, or zod's JSON Schema projection changed — do not publish this page.`,
+    );
+  }
 }
 
 /**
@@ -134,6 +155,7 @@ export function buildRows(): ConfigRow[] {
  */
 export function renderIndex(): string {
   const rows = buildRows();
+  assertRepresentative(rows);
   const table = rows.map((r) => `| \`${r.key}\` | ${r.type} | ${r.default} |`).join('\n');
 
   return `---
@@ -199,11 +221,18 @@ under \`~/.trace/index/\` — and its only reader is the \`config.dbPath\` field
 `;
 }
 
+/**
+ * `updated:` is owned by `pnpm docs:sitemap`, which stamps the page's git date
+ * over the one rendered here — so a byte-for-byte comparison would start
+ * failing the day after the page was generated. Compare the rest.
+ */
+export const withoutStamp = (page: string): string => page.replace(/^updated:.*\n/m, '');
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const page = renderIndex();
   if (process.argv.includes('--check')) {
     const current = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
-    if (current !== page) {
+    if (withoutStamp(current) !== withoutStamp(page)) {
       process.stderr.write('docs/config-index.md is stale. Run: pnpm run docs:config-index\n');
       process.exit(1);
     }

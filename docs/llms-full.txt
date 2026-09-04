@@ -2829,7 +2829,7 @@ supply it.
 | `tools.instructions_verbosity` | `full` \| `minimal` \| `none` | `"full"` |
 | `tools.client_profile` | `auto` \| `off` \| `claude-code` \| `codex` \| `cursor` \| `vscode` \| `generic` | `"auto"` |
 | `tools.agent_behavior` | `strict` \| `minimal` \| `off` | `"off"` |
-| `tools.meta_fields` | boolean \| string[] | `true` |
+| `tools.meta_fields` | boolean \| (`_hints` \| `_budget_warning` \| `_budget_level` \| `_duplicate_warning` \| `_dedup` \| `_optimization_hint` \| `_meta` \| `_duplication_warnings` \| `_methodology` \| `_warnings`)[] | `true` |
 | `tools.compact_schemas` | boolean | `false` |
 | `tools.default_format` | `json` \| `compact` \| `auto` | `"json"` |
 | `tools.default_detail_level` | `minimal` \| `default` \| `full` | _unset_ |
@@ -2854,7 +2854,7 @@ supply it.
 | `index_cache_mb` | number (≥ 1, ≤ 1024) | `16` |
 | `index_mmap_mb` | number (≥ 0, ≤ 4096) | `64` |
 | `hermes` | object | `{}` |
-| `hermes.enabled` | literal \| boolean | `"auto"` |
+| `hermes.enabled` | `auto` \| boolean | `"auto"` |
 | `hermes.home_override` | string | _unset_ |
 | `hermes.profile` | string | _unset_ |
 
