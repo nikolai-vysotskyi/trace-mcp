@@ -103,6 +103,25 @@ one arch, `repos_indexed: 0`, no second-day ping. `by_country` cannot answer it
 today ("(not set)" is 54 of 120) and `repos_indexed` is unregistered, which is
 the same console session as above.
 
+**Amended 2026-09-05 (TRA-843): most of that step is the window, not a
+population.** The property holds about a fortnight of pings — it reached
+published builds on 2026-08-23, and the savings query returns six days of rows
+against a 2025-01-01 start — so a 28-day window is still filling, and a month
+figure computed over two weeks of data climbs as it does. The
+`retention_dau_mau_pct: 43` quoted above was day-over-fortnight, not a DAU/MAU;
+the snapshot now publishes `null` there until `active_users.month_window_full`,
+so the caveat travels with the number. The scanner question above is unaffected
+and still open — this says the *shape* of the climb is explained, not that the
+new installs are human.
+
+Do not re-derive this from `week == month`. Both snapshots have it (90/90, then
+102/102) and it looks like proof, but `activeUsers` counts distinct users:
+equality only says the older period's users are a subset of this week's, which a
+mature property whose audience all returned would satisfy too. The first version
+of the fix gated on it and was caught in review — one non-returning day-8 user
+would have unlocked a ten-day ratio published as DAU/MAU. Gate on the age of the
+data.
+
 **3.9.0 is still invisible in the field** (2026-09-03, second window). It
 appears nowhere in `by_version` while 3.8.0 holds 19 installs and 3.10.0 holds
 26. Consistent with TRA-566 (v3.9.0 shipped with no Windows assets and no
@@ -139,6 +158,24 @@ mirror. It is broader than that: repo clones ramped ~50× over the same days
 the project across both distribution surfaces at once. Nothing to fix — but any
 future "our numbers exploded" report leaning on clones or downloads is reading
 this, and both were already known to be junk before it started.
+
+**The savings tripwire has fired, and it now fires somewhere** (2026-09-05,
+TRA-843). `adoption.yml` described a widening gap between `tokens_saved` and
+`tokens_saved_raw` as "the signal that someone is flooding the endpoint", while
+writing it to a file nobody diffs. It went 4.95× → 5.21× in a day — raw grew 68M
+on a base of 77M — with `capped_days` reaching 2 of 6, over a window that
+overlaps the Aug-2026 harvest above. No published number was ever wrong: the
+sanitizer capped every one of those days, and `usd_saved` is not rendered on the
+site. What was wrong was that the signal had no receiver.
+
+Settled: past 2× (`INFLATION_RATIO` in `scripts/ga4-savings.mjs`), the snapshot
+emits `raw_ratio` and `inflation_suspected` into the file and a `::warning` onto
+its workflow run, and `refresh-savings.mjs` warns on stderr before anyone
+publishes the number. **Deliberately not a failure** — this file's whole premise
+is that the snapshot is the only durable record of the trend, so failing the run
+would answer a flood by discarding the day's evidence of it. Do not re-open that
+as "the threshold should be blocking"; the sanitizer is the protection, this is
+only the notification.
 
 **The plugin-request template is the healthiest channel we have** (2026-08-30).
 Four requests across three unrelated users (`marshmallow`, `click`,
