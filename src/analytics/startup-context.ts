@@ -46,8 +46,8 @@ const USD_PER_MTOK_CACHE_READ = 0.3;
 const CHARS_PER_TOKEN = 4;
 /** cache_creation big enough mid-session to mean the prefix was rebuilt, not grown. */
 const PREFIX_REBUILD_MIN_TOKENS = 20_000;
-/** Files below this are handshakes and aborted runs, not sessions. */
-const MIN_SESSION_BYTES = 20_000;
+/** Files below this are handshakes and aborted runs, not sessions. Exported for startup-watch.ts, which scans the same logs for a single latest sample rather than the full window. */
+export const MIN_SESSION_BYTES = 20_000;
 /** A gap longer than the longest cache TTL explains a rebuild on its own. */
 const CACHE_TTL_SECONDS = 3600;
 
@@ -300,7 +300,8 @@ interface ApiCall {
   events: Set<string>;
 }
 
-interface FreshSession {
+/** Exported for startup-watch.ts (TRA-865), which needs a single session's startup size. */
+export interface FreshSession {
   projectPath: string;
   startupTokens: number;
   cacheCreate: number;
@@ -333,8 +334,11 @@ function timestampSeconds(ts: unknown): number {
  * parsed — a substring test first, `JSON.parse` second. On a 45-day corpus
  * that is the difference between parsing every line and parsing half of them,
  * and the report is one the user waits on.
+ *
+ * Exported for startup-watch.ts, which calls this on one file at a time
+ * rather than the whole corpus this module scans.
  */
-async function scanSessionFile(filePath: string, projectPath: string): Promise<FileScan> {
+export async function scanSessionFile(filePath: string, projectPath: string): Promise<FileScan> {
   const calls: ApiCall[] = [];
   const mcpToolCalls = new Map<string, number>();
   const skillInvocations = new Set<string>();
