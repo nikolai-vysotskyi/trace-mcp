@@ -778,9 +778,22 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-ctx-header .status .text {
   min-width: 0;
+  white-space: normal;
+}
+
+/* A label that has to wrap inside a fixed box. German compounds must be
+   breakable there or they overflow; Korean words must not be. `break-word`
+   splits 한글 at any syllable, so "항목" came back as "항" over "목" and
+   "있음" as "있" over "음" — two syllables, not a word (TRA-803). `keep-all`
+   is the only value that holds a Hangul word together. */
+.wrap-label,
+.ws-ctx-header .status .text {
   word-break: break-word;
   overflow-wrap: break-word;
-  white-space: normal;
+}
+:lang(ko) .wrap-label,
+:lang(ko) .ws-ctx-header .status .text {
+  word-break: keep-all;
 }
 /* Never colour alone: the dot repeats what the sentence beside it already
    says, it does not replace it. */

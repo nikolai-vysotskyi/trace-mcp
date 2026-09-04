@@ -48,6 +48,23 @@ describe('KpiTile (TRA-492)', () => {
     expect(comparison?.className).toContain('line-clamp-2');
   });
 
+  it('keeps the delta value on one line and lets the caption break (TRA-803)', () => {
+    const { container } = render(
+      <KpiTile label="Symbols" value={166_100} delta={22_300} deltaCaption="2 시간 전 대비" />,
+    );
+
+    // The number is one token: a break-word caption beside it split "+22.3k"
+    // into "+22.3" and "k", which reads as a different number.
+    const value = container.querySelector('.whitespace-nowrap');
+    expect(value?.textContent).toBe('+22.3k');
+
+    // The caption's wrapping is a class, not an inline style, so
+    // `:lang(ko) .wrap-label { word-break: keep-all }` can win over it.
+    const comparison = container.querySelector('span.line-clamp-2');
+    expect(comparison?.className).toContain('wrap-label');
+    expect(comparison?.getAttribute('style') ?? '').not.toContain('word-break');
+  });
+
   it('reserves 26px even when footnote or delta is absent', () => {
     const { container } = render(
       <KpiTile
