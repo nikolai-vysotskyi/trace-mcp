@@ -185,10 +185,9 @@ export function retargetInstructions(instructions: string, profile: ClientProfil
  * version spelled out `load_tools({ tools: ["search_text"] })`, and sessions
  * ran that call on sight: over 2026-08-31..09-04, 18 of 22 `load_tools` calls
  * across 371 mined sessions asked for exactly `search_text`, and 12 of those 18
- * never called it afterwards. Each one fires `tools/list_changed`, so a
- * compliant host re-reads the whole surface — thousands of tokens to reinstate
- * a 442-token tool the host already covers. Naming the escalation path without
- * pasting the call keeps it discoverable to a session that actually needs it.
+ * never called it afterwards. Naming the escalation path without pasting the
+ * call keeps it discoverable to a session that actually needs it, and stops the
+ * ones that do not from spending a round trip plus a surface refresh on it.
  */
 export function suppressionNotice(profile: ClientProfile, hidden: readonly string[]): string {
   if (hidden.length === 0) return '';
@@ -236,24 +235,35 @@ export class ClientProfileGate {
     return this.lastHidden;
   }
 
-  /** Inbound: learn who the client is, and honour explicit escalation. */
-  observeFromClient(msg: unknown): void {
+  /**
+   * Inbound: learn who the client is, and honour explicit escalation.
+   *
+   * Returns true when this frame un-hid a tool that was still being suppressed,
+   * which the caller owes the client one `notifications/tools/list_changed`
+   * for. A profile-suppressed tool is registered on the server — the gate only
+   * hides it on the wire — so `load_tools` answers `already_loaded` and fires
+   * nothing itself. Without a notification from here a compliant host never
+   * re-reads `tools/list`, and the tool the session just asked for by name
+   * stays invisible to it (TRA-796).
+   */
+  observeFromClient(msg: unknown): boolean {
     const m = msg as Frame;
     if (m.method === 'initialize') {
       const info = (m.params as Frame | undefined)?.clientInfo as Frame | undefined;
       const clientName = typeof info?.name === 'string' ? info.name : undefined;
       this.profile = resolveClientProfile(clientName, this.config);
-      return;
+      return false;
     }
-    if (m.method !== 'tools/call') return;
+    if (m.method !== 'tools/call') return false;
     const params = m.params as Frame | undefined;
-    if (params?.name !== 'load_tools') return;
+    if (params?.name !== 'load_tools') return false;
+    const before = this.suppressed().length;
     const args = params.arguments as { preset?: string; tools?: string[] } | undefined;
     for (const t of args?.tools ?? []) this.reinstated.add(t);
-    if (!args?.preset) return;
-    const resolved = resolvePreset(args.preset);
+    const resolved = args?.preset ? resolvePreset(args.preset) : null;
     if (resolved === 'all') for (const t of this.profile?.suppress ?? []) this.reinstated.add(t);
     else if (resolved) for (const t of resolved) this.reinstated.add(t);
+    return this.suppressed().length < before;
   }
 
   /** Outbound: retarget the instructions and thin the advertised surface. */

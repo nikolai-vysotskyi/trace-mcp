@@ -155,7 +155,15 @@ export class StdioSession {
       // Cache the handshake so a later swapped-in proxy backend can re-establish
       // the daemon session (the client only sends `initialize` once).
       if (isInitializeRequest(msg as JSONRPCMessage)) this.cachedInitialize = msg as JSONRPCMessage;
-      this.clientProfile.observeFromClient(msg);
+      // Reinstating a profile-suppressed tool changes what tools/list would
+      // answer, and nothing below this layer knows that — the tool was never
+      // deregistered, only hidden here. Tell the client to re-read (TRA-796).
+      if (this.clientProfile.observeFromClient(msg)) {
+        void this.stdio.send({
+          jsonrpc: '2.0',
+          method: 'notifications/tools/list_changed',
+        } as JSONRPCMessage);
+      }
       if (isInitializeRequest(msg as JSONRPCMessage)) {
         logger.info({ profile: this.clientProfile.name }, 'StdioSession: resolved client profile');
         this.armInitializeWatchdog((msg as unknown as { id: string | number }).id);
