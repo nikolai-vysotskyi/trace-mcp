@@ -229,6 +229,87 @@ structurally identical rows, and for the h2 section rule.
 
 ---
 
+## 1a. The logo is the word
+
+Nikolai's decision, 2026-09-04 (TRA-777): **the wordmark is the logo.** There
+is no emblem standing beside it. The square surfaces macOS, Windows and the
+browser force on us are served by a *fragment of the wordmark*, never by a
+second mark drawn on its own.
+
+### What it is
+
+`trace-mcp` drawn, not set: monolinear lowercase letterforms on one grid, with
+**the hyphen redrawn as a step that climbs**. The step is the whole idea — the
+word carries the product's meaning in the one place nobody looks — so it is the
+only coloured thing in the logo and it is drawn with the same pen as the
+letters.
+
+Grid, in units of a 100-unit em:
+
+| | Value |
+|---|---|
+| ascender / x-height top / baseline / descender | `22` / `48` / `100` / `124` |
+| stem weight | `13` |
+| corner radius | `14` |
+| step rise | `26` — exactly two stem weights, centred on the x-height middle (`74`) |
+| step path | `M6 87 H30 V61 H56` — **one path, one subpath** |
+
+The step is a single path on purpose: it survives conversion to outlines and
+small-size rasterisation as one shape. If it ever becomes two paths, it will
+break at the join before anything else does.
+
+### Colour
+
+| | Ink | Step |
+|---|---|---|
+| Light | `#000000` | `--accent-solid` `#2B5FE3` |
+| Dark | `#F2F2F2` | `--accent` `#5B8CFF` |
+
+The step is the **only** colour in the logo. No second accent, ever — the
+contrast between one monochrome word and one coloured connector is what makes
+the step read as a trace instead of a hyphen. Red is out here as everywhere
+(§0).
+
+### Minimum size, and when the fragment takes over
+
+Measured on a 1× raster, not a retina screenshot — the wordmark is 474 units
+wide, so the stroke is `width × 0.0274`:
+
+| Width | Stroke | Verdict |
+|---|---|---|
+| 520px | 14.3px | display — README banner, social preview |
+| 200px | 5.5px | header, docs |
+| **104px** | **2.9px** | **minimum — the last size the word survives** |
+| 84px | 2.3px | the `e` bar and the `a`/`c` counters start to close |
+| 72px | 2.0px | grey mush; do not ship |
+
+**Below 104px wide the word is not used.** What runs there is the step alone,
+lifted out of the word — favicon, app icon, GitHub avatar. That fragment is a
+crop of the logo, not a logo of its own, and it is never placed next to the
+wordmark: if the word is on screen, the fragment is redundant.
+
+### Lockups
+
+- **Site header** — the word alone at 132px. No mark beside it.
+- **README banner** — the word alone, centred, on `--black`.
+- **Social preview** — the word is the subject of the frame; the domain and the
+  line of copy are Space Mono caps at `--text-disabled`. Nothing else in frame.
+- **Square surfaces** (`.icns`, `.ico`, favicons, `apple-touch-icon`, avatar) —
+  the step fragment on a near-black plate. The craft of that square — squircle,
+  optical sizing, stroke weight at 16px — is TRA-780, owned by the Design/UX
+  Agent, and it works from this file.
+
+### Never
+
+- Do not set the wordmark in Space Mono or Space Grotesk with tracking and call
+  it the logo — the drawn outlines are the logo.
+- Do not put the brackets back around it.
+- Do not colour anything in it but the step.
+- Do not place the fragment next to the word.
+- Do not use the word below 104px wide.
+
+---
+
 ## 2. Documentation page anatomy
 
 Doc pages are Markdown rendered by kramdown through `_layouts/default.html`.
@@ -378,6 +459,8 @@ WebP conversion.
   no red CTA, dot, chip, bullet, outline, underline, hover, icon, banner or
   social preview. This overrides the old "red is the single accent" rule.
 - Reintroducing a **red** `--accent-solid`, or any red fill.
+- Setting the wordmark in a system font instead of its drawn outlines,
+  bracketing it, or giving it a second accent colour (§1a).
 - A second accent colour. Cobalt is the only one; `--accent` and
   `--accent-solid` are two lightnesses of it for two jobs (§1), not two
   accents. `--negative` is not an accent — it is the danger colour, §0.
