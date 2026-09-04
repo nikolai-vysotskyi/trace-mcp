@@ -12,8 +12,9 @@
 //
 //   node scripts/gen-readme-banner.mjs
 //
-// Output: docs/images/readme/*.png, two themes, referenced from README.md
-// through <picture media="(prefers-color-scheme: light)">.
+// Output: docs/images/readme/*.png — two themes x two widths, referenced from
+// README.md through <picture media="...">: prefers-color-scheme picks the theme,
+// max-width picks the wide or the narrow cut.
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -93,6 +94,12 @@ const BANNER_W = 1200;
 const BUTTON_W = 400;
 const BUTTON_H = 108;
 
+// A phone renders the 1200px banner at ~390 CSS px — a 0.33 scale that drops
+// the 25px tagline to 8px. The narrow variant carries the same content at a
+// width close to the phone's own, so the scale stays near 1:1 and the type
+// stays readable. README picks between them with `media="(max-width: 500px)"`.
+const NARROW_W = 480;
+
 function css(t) {
   return `
     @font-face { font-family: 'Space Grotesk'; src: url('../fonts/space-grotesk-variable-latin.woff2') format('woff2'); font-weight: 300 700; font-display: block; }
@@ -170,11 +177,29 @@ function css(t) {
     .btn.ghost { border: 1px solid ${t.border}; background: ${t.surface}; }
     .btn.ghost .t { color: ${t.display}; }
     .btn.ghost .s { color: ${t.disabled}; }
+
+    /* ── Narrow variant ───────────────────────────────────────────────────
+       Same content, one column. Only the sizes that stop working at 480px
+       are restated; everything else is inherited from the wide rules above,
+       so a change to the palette or the copy lands in both. */
+    .banner.narrow { width: ${NARROW_W}px; height: auto; padding: 32px 28px 26px; }
+    .banner.narrow .top { flex-direction: column; gap: 24px; }
+    .banner.narrow .lockup { gap: 12px; margin-bottom: 16px; }
+    .banner.narrow .lockup img { width: 40px; height: 40px; }
+    .banner.narrow .wordmark { font-size: 30px; }
+    .banner.narrow .tagline { font-size: 20px; max-width: none; }
+    .banner.narrow .receipt { flex: 0 0 auto; width: 100%; padding: 18px 20px 16px; }
+    /* Five stat pairs on one 480px line would set them at ~7px. Two lines —
+       and the dots go, because a wrap puts one at the head of the second line
+       where it reads as a bullet for nothing. Wider gaps do the separating. */
+    .banner.narrow .stats { flex-wrap: wrap; row-gap: 8px; gap: 22px; margin-top: 26px; }
+    .banner.narrow .stats .sep { display: none; }
+
   `;
 }
 
-function bannerHtml(t) {
-  return `<div class="banner" id="shot">
+function bannerHtml(t, narrow = false) {
+  return `<div class="banner${narrow ? ' narrow' : ''}" id="shot">
     <div class="top">
       <div class="brandcol">
         <div class="lockup">
@@ -368,6 +393,17 @@ await withChrome(async (send) => {
       width: BANNER_W,
       height: 400,
     });
+    await shoot(send, {
+      file: path.join(OUT_DIR, `banner-narrow-${theme}.png`),
+      body: bannerHtml(THEMES[theme], true),
+      theme,
+      width: NARROW_W,
+      // Auto-height: give the viewport room so nothing is clipped before the
+      // element's own box is measured.
+      height: 700,
+    });
+    // The buttons need no narrow cut: `width="250"` already holds them well
+    // under a phone's column, so they wrap into a stack at their desktop size.
     for (const b of BUTTONS) {
       await shoot(send, {
         file: path.join(OUT_DIR, `btn-${b.name}-${theme}.png`),

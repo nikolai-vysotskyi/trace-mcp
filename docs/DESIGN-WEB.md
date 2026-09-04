@@ -826,6 +826,17 @@ load the fonts and will tell you it is fine when it is not.
 `<source media="(prefers-color-scheme: light)">` plus a dark `<img>`. GitHub
 honours it. Never stack the two.
 
+**Two widths for the banner, one for the buttons.** `<source media>` is the
+only responsive lever GitHub's markdown sanitiser leaves us, and it takes any
+media query — so the banner also ships a narrow cut behind
+`(max-width: 500px)`, listed **above** the theme-only source because the first
+match wins. It exists because a phone renders the 1200px banner at ~390 CSS px
+and a 0.33 scale puts the 25px tagline at 8px; the narrow cut is 480 CSS px
+wide, one column, so the scale stays near 1:1. The buttons need no narrow cut —
+at `width="250"` they are already under a phone's column and wrap into a stack
+at full size. Desktop must come out of any such change byte-identical; check
+with `git diff origin/master -- docs/images/readme/`.
+
 **Every number is generated.** The banner reads `docs/_data/counts.yml` and
 `docs/_data/pr_context_bench.json` — the same sources the site uses. A hand-
 retouched PNG turns "177 tools" into a silent lie two releases later. This is
