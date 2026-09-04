@@ -96,6 +96,20 @@ which are short — is not justified by anything measured.
 
 ---
 
+## Storage and retention
+
+State lives in `state.db` under `TRACE_MCP_HOME`, shared by every project and
+every task the install has ever run. Two limits keep it bounded:
+
+- Patch history is capped at the newest **200 revisions per task**. The current
+  state and all checkpoints are unaffected; only the older audit rows are dropped.
+- Task states in a terminal status (`completed`, `failed`) that have not been
+  updated for **30 days** are deleted on server start, along with their revisions
+  and checkpoints. `in_progress`, `paused` and `blocked` states are never swept,
+  however old they are.
+
+---
+
 ## MCP Resource: `trace://state/{task_id}`
 
 Clients subscribing to MCP resources receive live updates whenever `trace_state_patch` or `trace_state_rollback` mutates a task state.
