@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
-# trace-mcp-mirror v0.2.0 (TRA-725 / TRA-750, experiment E1')
+# trace-mcp-mirror v0.3.0 (TRA-725 / TRA-750 / TRA-860, experiment E1')
 #
 # PostToolUse mirror for Read and Bash. The native tool runs untouched; this
 # hook rewrites its output before it reaches the model via the harness field
 # `hookSpecificOutput.updatedToolOutput` ("Replaces the tool output before it
 # is sent to the model", Claude Code >= 2.1.x). The full result is spilled to
 # disk and referenced by path, so the agent can pull it back when the
-# compressed view is not enough.
+# compressed view is not enough -- a Read of that path is exempt from the hook,
+# or the escape hatch would just hand back the same window again.
+#
+# The rewrite is byte-deterministic: the same tool output always produces the
+# same replacement, spill path included. It also only ever touches the message
+# being appended, never one already in the prompt prefix, so it cannot
+# invalidate a cached prefix (measured in benchmarks/mirror-prompt-cache.md).
 #
 # This is deliberately a hook and not a pair of mirror TOOLS. A mirror tool
 # competes with the native one for the model's choice, and TRA-705 measured
@@ -62,6 +68,16 @@ esac
 
 SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null)
 
+# The footer tells the agent the full result is at <spill>. Mirroring a Read of
+# that path would hand back the same window it already has, plus a wasted turn
+# and a second spill -- the escape hatch has to be exempt from the hook or it
+# is not an escape hatch. TRA-860 confirmed this live: a Read of a 41 KB spill
+# came back as the same 1669-char view.
+READ_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_response.file.filePath // empty' 2>/dev/null)
+case "$READ_PATH" in
+  "$HOME_DIR"/*) exit 0 ;;
+esac
+
 # The harness validates that updatedToolOutput matches the tool's own output
 # shape and silently discards a rewrite that does not ("PostToolUse hook
 # returned updatedToolOutput that does not match <tool>'s output shape; using
@@ -94,7 +110,16 @@ mkdir -p "$SPILL_DIR" 2>/dev/null || exit 0
 # day is garbage. Without this the directory grows for as long as the hook is
 # installed.
 find "$HOME_DIR" -name '*.txt' -type f -mtime +1 -delete 2>/dev/null
-SPILL="$SPILL_DIR/$(date +%s)-$$.txt"
+# The spill path is the one part of the rewrite the model sees, so it must be a
+# function of the content and nothing else. A clock- or pid-derived name makes
+# two identical reads produce two different byte strings, which is exactly the
+# non-determinism TRA-858 is removing from our own tool outputs; it also spills
+# the same file twice. Content-addressed: same output, same name, written once.
+SPILL_KEY=$(printf '%s' "$ORIGINAL" \
+  | { shasum -a 256 2>/dev/null || sha256sum 2>/dev/null || cksum; } \
+  | awk '{print $1}' | cut -c1-16)
+[ -z "$SPILL_KEY" ] && exit 0
+SPILL="$SPILL_DIR/$SPILL_KEY.txt"
 printf '%s' "$ORIGINAL" >"$SPILL" 2>/dev/null || exit 0
 
 # --- step 1: drop progress noise (Bash only) ---------------------------------
