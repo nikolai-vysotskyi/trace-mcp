@@ -318,6 +318,53 @@ describe('ensureDaemonInstalled', () => {
     },
   );
 
+  // TRA-850: both branches below SIGTERM a running daemon. Without a record in
+  // daemon.log the stop reads as an anonymous `reason: SIGTERM` — the app's own
+  // log() goes to the Electron console, which nobody correlates with it.
+  const stopRecords = () => {
+    const log = path.join(home, 'daemon.log');
+    if (!fs.existsSync(log)) return [];
+    return fs
+      .readFileSync(log, 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  };
+
+  it.runIf(process.platform === 'darwin')(
+    'records who booted out the daemon when the plist is replaced',
+    async () => {
+      // A plist from before the current marker: forces the bootout branch.
+      fs.writeFileSync(launchAgent, '<plist><dict></dict></plist>');
+      await run('3.7.0');
+
+      expect(calls.some((c) => c[0] === 'bootout')).toBe(true);
+      const record = stopRecords().find((r) => r.action === 'bootout');
+      expect(record?.msg).toBe('Daemon bootout requested');
+      expect(record?.via).toBe('desktop-app: plist refresh');
+      expect(record?.managedBy).toBe('desktop-app');
+      expect(record?.requesterPid).toBe(process.pid);
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')(
+    'records who kickstarted the daemon on a bundled upgrade',
+    async () => {
+      await run('3.7.0');
+      fs.writeFileSync(
+        path.join(home, 'launcher.env'),
+        launcherEnvContent(path.join(home, 'bin', 'node-runtime'), path.join(resources, 'server', 'dist', 'cli.js'), '3.2.0'),
+      );
+      await run('3.7.0');
+
+      expect(calls.some((c) => c[0] === 'kickstart')).toBe(true);
+      const record = stopRecords().find((r) => r.action === 'kickstart');
+      expect(record?.msg).toBe('Daemon kickstart requested');
+      expect(record?.via).toBe('desktop-app: bundled daemon upgrade');
+      expect(record?.managedBy).toBe('desktop-app');
+    },
+  );
+
   it.runIf(process.platform === 'darwin')('does nothing at all when the daemon is opted out', async () => {
     fs.mkdirSync(home, { recursive: true });
     fs.writeFileSync(path.join(home, 'daemon.disabled'), '{}');
