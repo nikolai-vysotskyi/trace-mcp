@@ -692,8 +692,24 @@ function buildRecommendations(input: RecommendationInputs): Recommendation[] {
   return out.sort((a, b) => b.usdOverWindow - a.usdOverWindow);
 }
 
-/** Tokens worth of non-trivial lines present in both instruction files. */
-function sharedLineTokens(a: string, b: string): number {
+export interface SharedLine {
+  /** 0-based index into `projectFile` split on '\n' — where apply-recommendations.ts cuts. */
+  index: number;
+  /** The line's trimmed text — what matched the global file. */
+  text: string;
+}
+
+/**
+ * Lines in `projectFile` whose trimmed text also appears, trimmed, in
+ * `globalFile`. This is the exact evidence `sharedLineTokens` prices AND the
+ * exact set TRA-769's applier deletes for a `duplicateInstructions`
+ * recommendation — both stay locked to one definition of "duplicate" by
+ * calling through here rather than each keeping their own copy.
+ *
+ * Short lines are headings, bullets and blanks that collide by accident;
+ * counting them would invent duplication that is not there.
+ */
+export function findSharedLines(globalFile: string, projectFile: string): SharedLine[] {
   const linesOf = (file: string): string[] => {
     try {
       return fs.readFileSync(file, 'utf8').split('\n');
@@ -701,19 +717,23 @@ function sharedLineTokens(a: string, b: string): number {
       return [];
     }
   };
-  // Short lines are headings, bullets and blanks that collide by accident;
-  // counting them would invent duplication that is not there.
   const meaningful = (line: string) => line.trim().length >= 40;
-  const first = new Set(
-    linesOf(a)
+  const globalLines = new Set(
+    linesOf(globalFile)
       .filter(meaningful)
       .map((l) => l.trim()),
   );
-  let chars = 0;
-  for (const line of linesOf(b)) {
+  const shared: SharedLine[] = [];
+  linesOf(projectFile).forEach((line, index) => {
     const t = line.trim();
-    if (meaningful(t) && first.has(t)) chars += t.length + 1;
-  }
+    if (meaningful(t) && globalLines.has(t)) shared.push({ index, text: t });
+  });
+  return shared;
+}
+
+/** Tokens worth of non-trivial lines present in both instruction files. */
+function sharedLineTokens(a: string, b: string): number {
+  const chars = findSharedLines(a, b).reduce((n, s) => n + s.text.length + 1, 0);
   return Math.round(chars / CHARS_PER_TOKEN);
 }
 
