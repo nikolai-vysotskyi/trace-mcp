@@ -111,11 +111,17 @@ describe('claimedKeys', () => {
     expect(claimedKeys(PR_882)).toEqual([]);
   });
 
+  // A real body from this repo's history: `Closes TRA-596, TRA-597, TRA-598,
+  // TRA-599, TRA-600`. Reading only the first key would hide four claims.
   it('reads a closing keyword that names several issues', () => {
     expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1, TRA-2 and TRA-3.' })).toEqual([
       'TRA-1',
       'TRA-2',
       'TRA-3',
+    ]);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes: TRA-596, TRA-597' })).toEqual([
+      'TRA-596',
+      'TRA-597',
     ]);
   });
 
@@ -154,6 +160,11 @@ describe('findDuplicatePrs', () => {
 
   it('never flags a PR against the release PR either', () => {
     expect(findDuplicatePrs(PR_597, [PR_723])).toEqual([]);
+  });
+
+  it('still flags a PR whose rival claims the issue in its title alone', () => {
+    const titleOnly = { number: 900, title: 'fix(daemon): log exit context (TRA-809)', body: '' };
+    expect(findDuplicatePrs(titleOnly, [PR_871]).map((p) => p.number)).toEqual([871]);
   });
 
   it('passes the four PRs that only cite a sibling issue as context (TRA-856)', () => {
