@@ -22,6 +22,7 @@
  * read, compared, and rewritten — never uploaded.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { STARTUP_WATCH_PATH } from '../shared/paths.js';
 import { atomicWriteJson } from '../utils/atomic-write.js';
 import { listAllSessions } from './log-parser.js';
@@ -53,7 +54,7 @@ const LOOKBACK_DAYS = 14;
  */
 const GROWTH_ABS_FLOOR_TOKENS = 2000;
 
-/** ...or a smaller absolute jump if it's still a big relative move for a small block. */
+/** ...or a larger threshold if 10% of the baseline exceeds 2,000 tokens. */
 const GROWTH_REL_FLOOR = 0.1;
 
 export interface StartupSample {
@@ -70,7 +71,7 @@ export interface StartupWatchEntry {
 
 interface StartupWatchState {
   version: 1;
-  /** Project root (or 'global' when unscoped) → history, oldest first. */
+  /** Resolved project root → history, oldest first. Unscoped callers key by the sampled session's own project rather than a shared bucket. */
   perProject: Record<string, StartupWatchEntry[]>;
 }
 
@@ -175,7 +176,7 @@ export function evaluateStartupGrowth(
     previousTokens: baseline.startupTokens,
     currentTokens: sample.startupTokens,
     sinceDays,
-    message: `trace-mcp: startup block grew by +${delta.toLocaleString()} tokens. Run get_startup_context_audit for details.`,
+    message: `trace-mcp: startup block grew by +${delta.toLocaleString('en-US')} tokens. Run get_startup_context_audit for details.`,
   };
 }
 
@@ -199,7 +200,13 @@ export async function checkStartupWatch(
   if (!sample) return null;
 
   const statePath = opts.statePath ?? STARTUP_WATCH_PATH;
-  const key = opts.projectRoot ?? 'global';
+  // Key by the sampled session's own project, not a shared 'global' bucket —
+  // an unscoped caller (no projectRoot) can pick up a different project's
+  // latest session between calls, and comparing across two projects would
+  // read as "grew" on nothing but a `cd` (see the module doc above).
+  // path.resolve normalizes trailing slashes / relative input so the same
+  // project always lands on the same key.
+  const key = path.resolve(opts.projectRoot ?? sample.projectPath);
   const state = loadState(statePath);
   const history = state.perProject[key] ?? [];
 

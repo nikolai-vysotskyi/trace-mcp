@@ -273,4 +273,28 @@ describe('checkStartupWatch (end-to-end)', () => {
     });
     expect(notice).toBeNull();
   });
+
+  it("keys an unscoped call by the sampled session's own project, not a shared bucket", async () => {
+    // No `projectRoot` passed — the caller relies on machine-wide scanning.
+    // Project A's baseline must not leak into project B's comparison just
+    // because both calls omitted projectRoot (review finding, TRA-865 PR).
+    const fileA = path.join(dir, 'a.jsonl');
+    writeSessionFile(fileA, 15_000, '2026-01-01T00:00:00Z');
+    await checkStartupWatch({
+      listSessions: () => [
+        { filePath: fileA, projectPath: '/project-a', client: 'claude-code' as const, mtime: 1 },
+      ],
+      statePath,
+    });
+
+    const fileB = path.join(dir, 'b.jsonl');
+    writeSessionFile(fileB, 60_000, '2026-01-01T00:00:00Z');
+    const notice = await checkStartupWatch({
+      listSessions: () => [
+        { filePath: fileB, projectPath: '/project-b', client: 'claude-code' as const, mtime: 1 },
+      ],
+      statePath,
+    });
+    expect(notice).toBeNull();
+  });
 });
