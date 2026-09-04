@@ -1,4 +1,5 @@
 import { err, ok } from 'neverthrow';
+import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import { expandMethodViaCha } from '../shared/cha.js';
@@ -45,6 +46,8 @@ interface FindReferencesResult {
    * name is shared with many other symbols (graphify #543 phantom-god-node
    * fix). Lets callers know the result was tightened. */
   ambiguous_filtered?: { dropped: number; nameCollisions: number };
+  /** Present only when a compute ceiling stopped the scan (TRA-841) */
+  _budget_exceeded?: BudgetExceeded;
 }
 
 /**
@@ -67,6 +70,7 @@ export function findReferences(
     includeAmbiguousTextMatched?: boolean;
     ambiguityThreshold?: number;
   },
+  guard: BudgetGuard = forTool('find_usages'),
 ): TraceMcpResult<FindReferencesResult> {
   let nodeId: number | undefined;
   const targetMeta: FindReferencesResult['target'] = {};
@@ -130,6 +134,9 @@ export function findReferences(
     const edges = store.getIncomingEdges(targetNid);
     const isChaTarget = targetNid !== nodeId;
     for (const edge of edges) {
+      // A god-node can have six figures of incoming edges; this loop is the
+      // one place find_usages can run unbounded on a large graph.
+      if (!guard.tick()) break;
       // Dedup by (source, target, type) to avoid duplicates when CHA overlaps
       const key = `${edge.source_node_id}:${edge.target_node_id}:${edge.edge_type_id}`;
       if (seenEdgeKeys.has(key)) continue;
@@ -168,6 +175,7 @@ export function findReferences(
   const references: ReferenceItem[] = [];
 
   for (const { edge, via_cha } of allIncomingEdges) {
+    if (!guard.tick()) break;
     const sourceRef = nodeRefs.get(edge.source_node_id);
     if (!sourceRef) continue;
 
@@ -234,6 +242,7 @@ export function findReferences(
     references: kept,
     total: kept.length,
     resolution_tiers: tiers,
+    ...guard.marker(),
   };
   if (chaExpansion && chaExpansion.length > 0) result.cha_expansion = chaExpansion;
   if (ambiguousFiltered) result.ambiguous_filtered = ambiguousFiltered;

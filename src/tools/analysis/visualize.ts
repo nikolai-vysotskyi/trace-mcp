@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import picomatch from 'picomatch';
+import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { type FileRow, Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
@@ -36,6 +37,7 @@ export interface VisualizeGraphOptions {
   projectRoot?: string; // current project root — used to scope subprojects to connected repos only
   highlightDepth?: number; // BFS depth for click-highlight (default: 1)
   includeBottlenecks?: boolean; // annotate edges/nodes with bottleneck scores, bridges, and articulation points (file granularity only)
+  guard?: BudgetGuard; // per-call compute ceiling ticked inside the frontier expansions (TRA-841)
 }
 
 interface VizNode {
@@ -78,6 +80,7 @@ interface MermaidDiagramOptions {
   depth?: number;
   maxNodes?: number;
   format?: 'mermaid' | 'dot';
+  guard?: BudgetGuard;
 }
 
 interface MermaidDiagramResult {
@@ -85,6 +88,8 @@ interface MermaidDiagramResult {
   format: string;
   nodes: number;
   edges: number;
+  /** Present only when a compute ceiling stopped the expansion (TRA-841) */
+  _budget_exceeded?: BudgetExceeded;
 }
 
 // ── Community Detection (simple label propagation) ─────────────────────
@@ -401,13 +406,20 @@ function buildFileGraph(
   let frontier = new Set(allSeedNodeIds);
   const allCollectedEdges: typeof filteredEdges = [...filteredEdges];
 
+  // Opt-in: only a caller that can surface `_budget_exceeded` passes a guard.
+  // `visualizeGraph()` and the CLI share this builder and have nowhere to
+  // report an abort, so they run unguarded rather than truncating silently
+  // under another tool's name.
+  const guard = opts.guard;
   for (let d = 0; d < depth && frontier.size > 0; d++) {
+    if (guard && !guard.check()) break;
     const nextFrontier = new Set<number>();
     const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) allCollectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
+      if (guard && !guard.tick()) break;
       const otherNode =
         edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
@@ -551,13 +563,20 @@ function buildSymbolGraph(
   // Collect ALL edges we encounter during traversal
   const collectedEdges: typeof filteredEdges = [...filteredEdges];
 
+  // Opt-in: only a caller that can surface `_budget_exceeded` passes a guard.
+  // `visualizeGraph()` and the CLI share this builder and have nowhere to
+  // report an abort, so they run unguarded rather than truncating silently
+  // under another tool's name.
+  const guard = opts.guard;
   for (let d = 0; d < depth && frontier.size > 0; d++) {
+    if (guard && !guard.check()) break;
     const nextFrontier = new Set<number>();
     const batchEdges = d === 0 ? filteredEdges : store.getEdgesForNodesBatch([...frontier]);
 
     if (d > 0) collectedEdges.push(...batchEdges);
 
     for (const edge of batchEdges) {
+      if (guard && !guard.tick()) break;
       const otherNode =
         edge.pivot_node_id === edge.source_node_id ? edge.target_node_id : edge.source_node_id;
 
@@ -2095,9 +2114,11 @@ export function getDependencyDiagram(
   store: Store,
   opts: MermaidDiagramOptions,
 ): TraceMcpResult<MermaidDiagramResult> {
+  const guard = opts.guard ?? forTool('get_dependency_diagram');
   const { nodes, edges } = buildGraphData(store, {
     scope: opts.scope,
     depth: opts.depth ?? 2,
+    guard,
   });
 
   const maxNodes = opts.maxNodes ?? 30;
@@ -2126,6 +2147,7 @@ export function getDependencyDiagram(
       format: 'dot',
       nodes: topNodes.length,
       edges: filteredEdges.length,
+      ...guard.marker(),
     });
   }
 
@@ -2144,5 +2166,6 @@ export function getDependencyDiagram(
     format: 'mermaid',
     nodes: topNodes.length,
     edges: filteredEdges.length,
+    ...guard.marker(),
   });
 }

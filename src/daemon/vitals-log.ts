@@ -31,6 +31,15 @@ export interface ProjectCounts {
 
 const toMb = (bytes: number): number => Math.round(bytes / 1024 / 1024);
 
+/**
+ * Resident set size in MB. The single measurement path for RSS — `buildVitals`
+ * below and the per-call compute guard (`src/compute-guard.ts`, TRA-841) both
+ * read memory through here so the log line and the ceiling can never disagree.
+ */
+export function readRssMb(): number {
+  return toMb(process.memoryUsage.rss());
+}
+
 /** Snapshot process memory + project counts. Pure apart from two cheap syscalls. */
 export function buildVitals(counts: ProjectCounts): DaemonVitals {
   const mem = process.memoryUsage();

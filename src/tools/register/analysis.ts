@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { forTool } from '../../compute-guard.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
@@ -296,7 +297,8 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         ),
     },
     async ({ include_tests }) => {
-      const cycles = getDependencyCycles(store, { includeTests: include_tests === true });
+      const guard = forTool('get_circular_imports');
+      const cycles = getDependencyCycles(store, { includeTests: include_tests === true }, guard);
       const stats = store.getStats();
       return {
         content: [
@@ -305,7 +307,12 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
             text: jh('get_circular_imports', {
               total_cycles: cycles.length,
               cycles,
-              ...(cycles.length === 0
+              ...guard.marker(),
+              // Negative evidence is an authoritative "we looked everywhere
+              // and found nothing". A truncated scan looked at part of the
+              // graph, so it cannot make that claim — `_budget_exceeded`
+              // stands alone rather than contradicting a `not_found` verdict.
+              ...(cycles.length === 0 && !guard.aborted
                 ? {
                     evidence: buildNegativeEvidence(
                       stats.totalFiles,
@@ -336,11 +343,20 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
       output_format: OutputFormatSchema,
     },
     async ({ limit, include_markdown, output_format }) => {
-      const results = getPageRank(store, { includeMarkdown: include_markdown });
+      const guard = forTool('get_pagerank');
+      const results = getPageRank(store, { includeMarkdown: include_markdown }, guard);
       const sliced = results.slice(0, limit ?? 50);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
       const text = encodeResponse(sliced, fmt);
-      return { content: [{ type: 'text', text }] };
+      // The advertised payload is a bare array in every case — making the
+      // schema conditional on resource pressure would break clients exactly
+      // when the guard is meant to keep the answer usable. The truncation
+      // marker rides the MCP result's own `_meta` channel instead, so it stays
+      // structured and machine-readable without touching the array contract.
+      return {
+        content: [{ type: 'text', text }],
+        ...(guard.aborted ? { _meta: guard.marker() } : {}),
+      };
     },
   );
 

@@ -935,6 +935,25 @@ With `enabled: "auto"` the provider is registered at boot; discovery returns an 
 |---|---|
 | `TRACE_MCP_LOG_LEVEL` | Log level (debug, info, warn, error) |
 | `HERMES_HOME` | Override for Hermes Agent storage root (default `~/.hermes`). Read by `discover_hermes_sessions` and the Hermes session provider. |
+| `TRACE_MCP_COMPUTE_TIMEOUT_MS` | Wall-clock ceiling for one heavy graph traversal (default `15000`). |
+| `TRACE_MCP_COMPUTE_RSS_MB` | Resident-memory ceiling checked during a traversal (default `3000`). |
+| `TRACE_MCP_COMPUTE_MAX_ITERATIONS` | Iteration ceiling for one traversal (default `2000000`). |
+| `TRACE_MCP_NO_COMPUTE_GUARD` | Set to `1` to disable all compute ceilings (debugging). |
+
+### Compute ceilings
+
+`get_call_graph`, `get_change_impact`, `get_dependency_diagram`,
+`get_circular_imports`, `find_usages` and `get_pagerank` tick a per-call guard
+inside their traversal loops. When a ceiling is hit the tool returns the
+**partial** result with a `_budget_exceeded` field naming the ceiling, the
+limit, and the elapsed time — never a tool-call error — and the daemon log
+gets one `Compute budget exceeded` line with the tool name.
+
+The defaults come from `scripts/bench-compute-guard.ts`: a deliberately heavy
+`get_call_graph` (37,449 symbols, depth 5) consumes 79,577 ticks in ~85 ms, so
+every ceiling sits one to two orders of magnitude above anything a real query
+reaches. Measured tick overhead on that same query is within run-to-run noise
+(−2.7% … +2.1% across five runs).
 
 ---
 
