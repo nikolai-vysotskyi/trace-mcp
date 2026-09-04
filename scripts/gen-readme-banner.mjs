@@ -12,8 +12,9 @@
 //
 //   node scripts/gen-readme-banner.mjs
 //
-// Output: docs/images/readme/*.png, two themes, referenced from README.md
-// through <picture media="(prefers-color-scheme: light)">.
+// Output: docs/images/readme/*.png, two themes — and for the banner also a
+// narrow cut for phones. README.md picks between them inside one <picture>,
+// through <source media="(max-width: 500px)"> and "(prefers-color-scheme: light)".
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -90,6 +91,10 @@ const LOGO = fs
   .toString('base64');
 
 const BANNER_W = 1200;
+// The phone cut. GitHub scales the banner to the README column (~390 CSS px on
+// a phone), so the 1200px cut arrives at 0.33 scale and its 25px tagline lands
+// at 8px. Rendering the same copy at 480 makes that scale ~0.8 instead.
+const BANNER_NARROW_W = 480;
 const BUTTON_W = 400;
 const BUTTON_H = 108;
 
@@ -137,6 +142,23 @@ function css(t) {
     .stats b { color: ${t.primary}; font-weight: 700; }
     .stats .sep { width: 3px; height: 3px; border-radius: 50%; background: ${t.border}; }
 
+    /* The narrow cut: one column, and only the sizes that break at 480px are
+       overridden — palette and copy stay shared, so a colour or wording change
+       lands in both cuts at once. */
+    .banner.narrow {
+      width: ${BANNER_NARROW_W}px; height: auto;
+      padding: 32px 32px 28px; gap: 26px;
+    }
+    .banner.narrow .top { flex-direction: column; gap: 24px; }
+    .banner.narrow .lockup { gap: 14px; margin-bottom: 18px; }
+    .banner.narrow .lockup img { width: 46px; height: 46px; }
+    .banner.narrow .wordmark { font-size: 34px; }
+    .banner.narrow .tagline { font-size: 22px; max-width: none; }
+    .banner.narrow .receipt { flex: 0 0 auto; width: 100%; padding: 20px 22px 16px; }
+    .banner.narrow .foot { font-size: 11px; }
+    /* Two lines at this width — wrapping beats shrinking the type further. */
+    .banner.narrow .stats { flex-wrap: wrap; row-gap: 8px; font-size: 12px; }
+
     /* One plate per button so the three sit flush against each other and the
        banner above, instead of floating on GitHub's own canvas. */
     .plate {
@@ -173,8 +195,8 @@ function css(t) {
   `;
 }
 
-function bannerHtml(t) {
-  return `<div class="banner" id="shot">
+function bannerHtml(t, narrow = false) {
+  return `<div class="banner${narrow ? ' narrow' : ''}" id="shot">
     <div class="top">
       <div class="brandcol">
         <div class="lockup">
@@ -367,6 +389,13 @@ await withChrome(async (send) => {
       theme,
       width: BANNER_W,
       height: 400,
+    });
+    await shoot(send, {
+      file: path.join(OUT_DIR, `banner-narrow-${theme}.png`),
+      body: bannerHtml(THEMES[theme], true),
+      theme,
+      width: BANNER_NARROW_W,
+      height: 900,
     });
     for (const b of BUTTONS) {
       await shoot(send, {
