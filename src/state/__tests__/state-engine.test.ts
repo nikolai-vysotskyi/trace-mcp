@@ -182,6 +182,27 @@ describe('StateEngine retention', () => {
     expect(engine.getState('TRA-1')?.state.next_action).toBe('step 249');
   });
 
+  it('caps revision history under repeated re-initialization of the same task', () => {
+    const db = new Database(':memory:');
+    const engine = new StateEngine(db);
+
+    for (let i = 0; i < 250; i++) {
+      engine.initState('TRA-2', `retried goal ${i}`);
+    }
+    engine.initState('TRA-3', 'other task');
+
+    const counts = db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM agent_state_revisions WHERE task_id = 'TRA-2') AS retried,
+           (SELECT COUNT(*) FROM agent_state_revisions WHERE task_id = 'TRA-3') AS other`,
+      )
+      .get() as { retried: number; other: number };
+
+    expect(counts).toEqual({ retried: 200, other: 1 });
+    expect(engine.getState('TRA-2')?.state.goal).toBe('retried goal 249');
+  });
+
   it('drops finished states untouched past the retention window, keeps the rest', () => {
     const db = new Database(':memory:');
     const engine = new StateEngine(db);

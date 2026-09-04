@@ -125,17 +125,22 @@ export class StateEngine {
 
   /**
    * Keep only the newest REVISION_HISTORY_LIMIT patch rows for a task.
-   * ponytail: called after each revision insert; if the write rate ever makes
-   * that delete hot, move it behind a modulo counter.
+   * "Newest" is insertion order, not version: re-initializing a task writes
+   * another revision numbered 1, so version arithmetic would let those rows
+   * accumulate without bound. Must be called from every transaction that
+   * inserts a revision.
    */
   private trimRevisions(taskId: string): void {
     this.db
       .prepare(
         `DELETE FROM agent_state_revisions
          WHERE task_id = ?
-           AND version <= (
-             SELECT MAX(version) FROM agent_state_revisions WHERE task_id = ?
-           ) - ?`,
+           AND id NOT IN (
+             SELECT id FROM agent_state_revisions
+             WHERE task_id = ?
+             ORDER BY id DESC
+             LIMIT ?
+           )`,
       )
       .run(taskId, taskId, REVISION_HISTORY_LIMIT);
   }
@@ -243,6 +248,8 @@ export class StateEngine {
       `,
         )
         .run(taskId, JSON.stringify({ init: true, state: validatedState }), now);
+
+      this.trimRevisions(taskId);
     });
 
     initTx();
