@@ -1341,7 +1341,7 @@ ipcMain.handle('apply-daemon-update', async () => {
   const result = await dedupeInFlight(inFlightNpmUpdate, () => performNpmGlobalUpdate(npmBin));
   if (!result.ok) return daemonUpdateDegradeToCommand(result.error);
 
-  const restart = restartDaemon();
+  const restart = await restartDaemon();
   if (!restart.ok) {
     appendUpdateLog({ event: 'apply-daemon-update:restart-failed', error: restart.error });
     return {
