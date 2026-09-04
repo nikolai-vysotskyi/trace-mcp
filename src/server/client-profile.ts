@@ -176,18 +176,27 @@ export function retargetInstructions(instructions: string, profile: ClientProfil
 }
 
 /**
- * One line telling the session what the profile took away and how to get it
- * back. Without it a suppressed tool is invisible: `load_tools` with no
- * arguments lists what the *preset* deferred, and a profile-suppressed tool is
- * inside the preset, so it shows up in neither list.
+ * One line telling the session what the profile took away. Without it a
+ * suppressed tool is invisible: `load_tools` with no arguments lists what the
+ * *preset* deferred, and a profile-suppressed tool is inside the preset, so it
+ * shows up in neither list.
+ *
+ * It states the names and stops there, deliberately (TRA-796). The first
+ * version spelled out `load_tools({ tools: ["search_text"] })`, and sessions
+ * ran that call on sight: over 2026-08-31..09-04, 18 of 22 `load_tools` calls
+ * across 371 mined sessions asked for exactly `search_text`, and 12 of those 18
+ * never called it afterwards. Each one fires `tools/list_changed`, so a
+ * compliant host re-reads the whole surface — thousands of tokens to reinstate
+ * a 442-token tool the host already covers. Naming the escalation path without
+ * pasting the call keeps it discoverable to a session that actually needs it.
  */
 export function suppressionNotice(profile: ClientProfile, hidden: readonly string[]): string {
   if (hidden.length === 0) return '';
   return (
     `Client profile "${profile.name}": ${hidden.length} tool(s) your host already covers ` +
-    `are hidden from tools/list — ${hidden.join(', ')}. ` +
-    `Call load_tools({ tools: ["${hidden[0]}"] }) to advertise them anyway, or set ` +
-    'tools.client_profile to "off" to disable this layer.'
+    `are hidden from tools/list — ${hidden.join(', ')}. Use your host's equivalent. ` +
+    'They remain reachable through load_tools, which re-sends the entire tool list, so ' +
+    'escalate only if the host tool is genuinely unavailable.'
   );
 }
 

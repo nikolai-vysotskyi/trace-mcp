@@ -206,6 +206,16 @@ describe('instructions retargeting', () => {
     expect(instructions).toContain('load_tools');
   });
 
+  // TRA-796: the notice used to spell the escalation call out in full, and
+  // sessions ran it on sight — 18 of 22 `load_tools` calls over 371 mined
+  // sessions asked for `search_text` back, 12 of them never using it. Naming
+  // the path is discoverability; pasting the call is an instruction.
+  it('does not hand the session a ready-to-run load_tools call', () => {
+    const { instructions } = runSession('claude-code');
+    const notice = instructions.slice(instructions.indexOf('Client profile "claude-code"'));
+    expect(notice).not.toMatch(/load_tools\s*\(/);
+  });
+
   // The retarget is a substring swap against the exact lines buildInstructions
   // emitted. If the two drift apart the swap silently no-ops, so pin it here.
   it('keeps every generic host-tool line present in the built instructions', () => {
