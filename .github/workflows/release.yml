@@ -298,17 +298,64 @@ jobs:
           ROOT_VERSION=$(node -p "require('../../package.json').version")
           npm pkg set version="$ROOT_VERSION"
 
-      # Sign + notarize (TRA-436). The certificate never leaves this step's
-      # environment; it reaches the job only because the job declares
-      # `environment: apple-signing` above, and only on a protected branch.
-      # electron-builder reads CSC_* for the Developer ID identity and APPLE_*
-      # for notarytool; it prints neither.
+      # TRA-844: import the Developer ID certificate ourselves instead of letting
+      # electron-builder do it. Given CSC_LINK it builds a temp keychain and then
+      # calls `security set-key-partition-list -k <p12 password>` — the
+      # certificate's password where the *keychain's* password belongs
+      # (app-builder-lib 26.15.7, out/codeSign/macCodeSign.js `importCerts`).
+      # That only ever worked because `security` skipped the unlock on an already
+      # unlocked keychain; macOS 26.6 (Darwin 25.6.0, the runner image since
+      # 2026-09-03) unlocks unconditionally, so the wrong password is now fatal:
+      #
+      #   security: SecKeychainUnlock: The user name or passphrase you entered is not correct.
+      #
+      # v3.16.0 and v3.17.0 both died there and never produced a mac asset, which
+      # failed verify-release-assets and silently skipped `publish` — npm sat on
+      # 3.15.0 for two releases. Nothing about the certificate changed.
+      #
+      # With CSC_LINK unset electron-builder signs out of `CSC_KEYCHAIN` instead
+      # (out/macPackager.js) and never runs the broken sequence. The DMG step
+      # below needed its own import anyway, so this is one keychain for the job
+      # rather than two, and the upstream bug is simply not on our path.
+      - name: Import the Developer ID certificate
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          # Keychain and the decoded .p12 both live in RUNNER_TEMP, which the
+          # runner discards, and the .p12 is deleted as soon as it is imported.
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          P12="$RUNNER_TEMP/signing.p12"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          printenv CSC_LINK | base64 --decode > "$P12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"  # no auto-lock mid-notarization
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$P12" -k "$KEYCHAIN" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          rm -f "$P12"
+          # Without this, codesign blocks on an "allow access" prompt that no one
+          # can answer on a runner. `-k` is the KEYCHAIN password here — passing
+          # the .p12 password instead is the upstream bug described above.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          # Fail here rather than let electron-builder fall back to an ad-hoc
+          # signature and report it as a warning.
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -q 'Developer ID Application'; then
+            echo "::error::no Developer ID Application identity in the imported certificate"
+            exit 1
+          fi
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      # Sign + notarize (TRA-436). The certificate never leaves this job; it
+      # reaches the job only because the job declares `environment: apple-signing`
+      # above, and only on a protected branch. electron-builder reads
+      # CSC_KEYCHAIN for the Developer ID identity and APPLE_* for notarytool;
+      # it prints neither.
       # Do not add `--debug` here: it dumps the resolved env.
       - name: Package with electron-builder
         working-directory: packages/app
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          CSC_KEYCHAIN: ${{ env.SIGNING_KEYCHAIN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -328,29 +375,11 @@ jobs:
       - name: Sign, notarize and staple the DMGs
         working-directory: packages/app
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          # electron-builder signs out of a temp keychain it deletes on exit, so
-          # the certificate has to be imported once more here. Keychain and the
-          # decoded .p12 both live in RUNNER_TEMP, which the runner discards, and
-          # the .p12 is deleted as soon as it is imported.
-          KEYCHAIN="$RUNNER_TEMP/dmg-signing.keychain-db"
-          P12="$RUNNER_TEMP/dmg-signing.p12"
-          KEYCHAIN_PASSWORD=$(uuidgen)
-          printenv CSC_LINK | base64 --decode > "$P12"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings "$KEYCHAIN"  # no auto-lock mid-notarization
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$P12" -k "$KEYCHAIN" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
-          rm -f "$P12"
-          # Without this, codesign blocks on an "allow access" prompt that no one
-          # can answer on a runner.
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          KEYCHAIN="$SIGNING_KEYCHAIN"
 
           # By hash, not by name: the certificate's common name is not one of the
           # secrets, and a near-miss name would silently pick the wrong identity.
@@ -370,8 +399,6 @@ jobs:
             xcrun stapler staple "$DMG"
           done
 
-          security delete-keychain "$KEYCHAIN"
-
       # electron-builder reports a skipped signature as a warning and exits 0,
       # so a missing or expired certificate would publish an ad-hoc build that
       # Gatekeeper rejects — the exact TRA-436 symptom — with a green release.
@@ -389,7 +416,7 @@ jobs:
           echo "$APPS" | while read -r APP; do
             codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier'
             if codesign -dv "$APP" 2>&1 | grep -q 'TeamIdentifier=not set'; then
-              echo "::error::$APP is ad-hoc signed — CSC_LINK/CSC_KEY_PASSWORD did not reach electron-builder"
+              echo "::error::$APP is ad-hoc signed — the signing keychain did not reach electron-builder"
               exit 1
             fi
             codesign --verify --deep --strict --verbose=2 "$APP"
@@ -452,6 +479,13 @@ jobs:
             packages/app/release/*.dmg.sha256 \
             packages/app/release/latest-mac.yml \
             --clobber
+
+      # RUNNER_TEMP is discarded anyway; this also drops the keychain out of the
+      # search list on a self-hosted runner, and runs even when a step above
+      # failed with the certificate still imported.
+      - name: Remove the signing keychain
+        if: always() && env.SIGNING_KEYCHAIN != ''
+        run: security delete-keychain "$SIGNING_KEYCHAIN" || true
 
   build-app-win:
     needs: release-please

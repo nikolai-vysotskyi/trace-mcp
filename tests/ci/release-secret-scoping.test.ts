@@ -49,3 +49,38 @@ describe('release workflow secret scoping', () => {
     }
   });
 });
+
+// TRA-844: given CSC_LINK, electron-builder builds its own temp keychain and
+// then calls `security set-key-partition-list -k <p12 password>` — the
+// certificate's password where the keychain's belongs (app-builder-lib 26.15.7,
+// out/codeSign/macCodeSign.js `importCerts`). It passed only while `security`
+// skipped the unlock on an already unlocked keychain; macOS 26.6 unlocks
+// unconditionally and v3.16.0 and v3.17.0 both died there, produced no mac
+// asset, and silently skipped `publish`. Handing electron-builder a keychain we
+// imported ourselves keeps that call off our path — putting CSC_LINK back on
+// the step puts it back on.
+describe('mac packaging keychain', () => {
+  const macSteps = jobsOf('release.yml')['build-app-mac'].steps as any[];
+  const step = (name: string) => {
+    const found = macSteps.find((s) => s.name === name);
+    expect(found, `step "${name}" is gone — this guard now checks nothing`).toBeTruthy();
+    return found;
+  };
+
+  it('imports the certificate itself before packaging', () => {
+    const names = macSteps.map((s) => s.name);
+    expect(names.indexOf('Import the Developer ID certificate')).toBeLessThan(
+      names.indexOf('Package with electron-builder'),
+    );
+    expect(step('Import the Developer ID certificate').run).toContain(
+      'set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD"',
+    );
+  });
+
+  it('never hands CSC_LINK to electron-builder', () => {
+    const env = step('Package with electron-builder').env ?? {};
+    expect(Object.keys(env)).not.toContain('CSC_LINK');
+    expect(Object.keys(env)).not.toContain('CSC_KEY_PASSWORD');
+    expect(env.CSC_KEYCHAIN).toBe('${{ env.SIGNING_KEYCHAIN }}');
+  });
+});
