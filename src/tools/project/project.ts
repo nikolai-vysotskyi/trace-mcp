@@ -77,7 +77,8 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
   if (drops > 0) {
     warnings.push(
       `The OS dropped file-system events ${drops} time(s) since this process started; ` +
-        `${reconciles} index reconcile pass(es) ran in response. ` +
+        `${reconciles} index reconcile pass(es) were started in response ` +
+        `(started, not necessarily finished — a pass that failed is logged, not subtracted). ` +
         `Results served between a drop and its reconcile may have been stale.`,
     );
   }
