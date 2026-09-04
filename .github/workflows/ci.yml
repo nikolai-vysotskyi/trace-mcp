@@ -244,10 +244,26 @@ jobs:
       # pnpm kills its own request and retries: 60s + 10s + 60s + 60s ~= 190s,
       # measured, which alone overran the job. Three slow attempts are strictly
       # worse than one patient one — the answer is the same either way.
+      #
+      # `fetch-retries: 0` is what actually makes it one attempt. pnpm keeps its
+      # default of 2 retries unless this is set separately, so the timeout alone
+      # bought a worst case of 3 x 300s plus 10s and 60s of backoff — about
+      # 16m10s, which does not fit the 15-minute job cap the timeout was sized
+      # against. Retrying an advisory lookup does not change its answer.
+      #
+      # An unreachable advisory endpoint is not an advisory. On 2026-09-04 npm
+      # answered both audit endpoints with `503 Service Unavailable` for over an
+      # hour; because `audit` is a required check on master, every PR in the repo
+      # was unmergeable for as long as somebody else's service was down. The gate
+      # promises "0 known vulnerabilities in prod", and a 503 says nothing about
+      # that either way. `--ignore-registry-errors` is pnpm's own switch for
+      # exactly this — it decides on the response, not on the report text, so an
+      # advisory that happens to mention ECONNRESET in its title still fails.
       - name: pnpm audit (production dependencies)
         env:
           npm_config_fetch_timeout: '300000'
-        run: pnpm audit --prod --audit-level=moderate
+          npm_config_fetch_retries: '0'
+        run: pnpm audit --prod --audit-level=moderate --ignore-registry-errors
 
   no-ai-marks:
     runs-on: ubuntu-latest
