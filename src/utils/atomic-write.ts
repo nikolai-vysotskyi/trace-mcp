@@ -134,11 +134,12 @@ export function atomicWriteBuffer(
 }
 
 /**
- * Tmp files written by {@link atomicWriteString}: `.<basename>.tmp.<pid>.<rand>`.
- * The trailing hex is what keeps this from matching a user file that merely has
- * ".tmp." in its name.
+ * Tmp files written by {@link atomicWriteString} (`.<basename>.tmp.<pid>.<rand>`)
+ * and by `acquireLock` in pid-lock.ts, which writes the same shape without the
+ * leading dot (TRA-783). The trailing hex is what keeps this from matching a
+ * user file that merely has ".tmp." in its name.
  */
-const ORPHAN_TMP_PATTERN = /^\..+\.tmp\.\d+\.[0-9a-f]{12}$/;
+const ORPHAN_TMP_PATTERN = /^\.?.+\.tmp\.\d+\.[0-9a-f]{12}$/;
 
 /** Default age before a leftover tmp is assumed orphaned rather than in flight. */
 const ORPHAN_TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -179,6 +180,36 @@ export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_M
     }
   }
   return removed;
+}
+
+/**
+ * Directories under the state home that receive atomic writes, relative to it.
+ * `''` is the home itself. Every one of these is flat, so a sweep is one
+ * `readdir` each — no walk, and nothing here grows a subtree we would have to
+ * recurse into.
+ */
+const SWEPT_STATE_DIRS = [
+  '', // registry.json, savings.json, daemon.pid, .config.json, ...
+  'sessions', // per-session ledgers
+  'locks', // pid-lock.ts
+  'bundles', // manifest.json (src/bundles.ts)
+  'bin', // launcher shim + artifacts (src/init/launcher.ts)
+  'index', // per-project DBs are flat files directly under it
+];
+
+/**
+ * Sweep every state directory trace-mcp writes atomically (TRA-783).
+ *
+ * {@link sweepOrphanTmpFiles} is shallow by design, and the startup path used
+ * to call it on the state root alone — so an orphan under `sessions/` from
+ * 2026-06-04 was still on disk three months later. Returns the paths removed
+ * across all of them.
+ */
+export function sweepOrphanTmpFilesUnderHome(
+  home: string,
+  maxAgeMs = ORPHAN_TMP_MAX_AGE_MS,
+): string[] {
+  return SWEPT_STATE_DIRS.flatMap((d) => sweepOrphanTmpFiles(path.resolve(home, d), maxAgeMs));
 }
 
 /**
