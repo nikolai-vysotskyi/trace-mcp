@@ -10,11 +10,11 @@ updated: 2026-09-03
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "TOON Token Savings \u2014 Measured",
-  "description": "Real-world token measurements for the TOON output format across trace-mcp tools.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/toon-savings.html",
   "datePublished": "2026-05-15",
-  "dateModified": "2026-05-15",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

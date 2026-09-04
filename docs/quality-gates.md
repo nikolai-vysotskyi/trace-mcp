@@ -1,20 +1,20 @@
 ---
-title: "Quality Gates Reference — complexity, security, and coverage thresholds"
-description: "How trace-mcp's quality_gates.rules in .trace.json override CLI defaults for cyclomatic complexity, security findings, and coverage — with this project's own thresholds as a worked example."
-updated: 2026-09-02
+title: "Quality Gates — configure trace-mcp's thresholds"
+description: "The eight quality_gates.rules keys trace-mcp checks, which three run by default, and how this project calibrated its own thresholds as a worked example."
+updated: 2026-09-03
 ---
 
-# Quality gates — this project's thresholds
+# Quality gates — configuring thresholds
 
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Quality gates \u2014 this project's thresholds",
-  "description": "How .trace.json quality-gate thresholds are configured and calibrated.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/quality-gates.html",
   "datePublished": "2026-07-02",
-  "dateModified": "2026-07-02",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",
@@ -31,12 +31,72 @@ updated: 2026-09-02
   }
 }
 </script>
-The `quality_gates.rules` section of [`.trace.json`](configuration.md) overrides the CLI's generic defaults
-(`max_cyclomatic_complexity: 30`, `max_security_critical_findings: 0`) with
-numbers calibrated against this codebase's actual, reviewed state. Re-derive
-these after any large refactor round — don't treat them as permanent.
+`check_quality_gates` reads the `quality_gates` section of
+[`.trace-mcp.json`](configuration.md). Configure nothing and three rules still
+run; name a rule and your threshold replaces the built-in one for that rule
+only. The second half of this page is this repo's own configuration as a worked
+example of how the numbers get chosen.
 
-## max_cyclomatic_complexity: 130 (warning)
+## What runs when you configure nothing
+
+Three rules ship on by default:
+
+| Rule | Threshold | Severity |
+|---|---|---|
+| `max_cyclomatic_complexity` | 30 | error |
+| `max_circular_import_chains` | 0 | error |
+| `max_coupling_instability` | 0.9 | warning |
+
+The other five are only checked once you name them — an absent rule is not a
+zero threshold, it is no check at all. There is no coverage rule: coverage is
+not one of the signals this gate reads.
+
+## Configuring your own
+
+```json
+{
+  "quality_gates": {
+    "enabled": true,
+    "fail_on": "error",
+    "rules": {
+      "max_cyclomatic_complexity": { "threshold": 60, "severity": "warning" },
+      "max_dead_exports_percent": { "threshold": 10, "severity": "warning" },
+      "max_security_critical_findings": { "threshold": 0, "severity": "error" }
+    }
+  }
+}
+```
+
+The eight rule keys:
+
+| Key | Threshold means |
+|---|---|
+| `max_cyclomatic_complexity` | highest cyclomatic complexity of any indexed symbol |
+| `max_coupling_instability` | highest instability (0–1) of any module |
+| `max_circular_import_chains` | number of circular import chains |
+| `max_dead_exports_percent` | share of exports nothing imports |
+| `max_tech_debt_grade` | worst module grade allowed, `A`–`F` |
+| `max_security_critical_findings` | critical findings from `scan_security` |
+| `max_antipattern_count` | findings from `detect_antipatterns` |
+| `max_code_smell_count` | findings from the code-smell scan |
+
+Every rule takes the same fields: `threshold` (a number, or a letter for the
+grade), `severity` (`error` or `warning`) and an optional `message` shown when
+it trips. `fail_on` decides what turns into a failing run — `error` (default), `warning`
+to fail on both, or `none` to report without failing. `enabled: false` turns the
+whole gate off.
+
+Start by running `check_quality_gates` with the defaults, then raise only the
+rules your codebase legitimately trips — the worked example below is that
+process on this repo.
+
+## Worked example: this repo's own thresholds
+
+The values below live in this repository's `.trace-mcp.json`. They are
+calibrated against the codebase's actual, reviewed state — re-derive them after
+any large refactor round rather than treating them as permanent.
+
+### max_cyclomatic_complexity: 130 (warning)
 
 The generic default of 30 fires on nearly every language/framework plugin in
 this repo — dispatch tables for {{ site.data.counts.languages }} languages and {{ site.data.counts.frameworks }} frameworks are
@@ -50,7 +110,7 @@ complexity is domain-necessary, not accidental: `DartLanguagePlugin` (123),
 accepted ceiling — today's classes pass silently, but a genuinely new outlier
 above it still trips the warning.
 
-## max_security_critical_findings: 2 (error)
+### max_security_critical_findings: 2 (error)
 
 `scan_security` is a regex-based scanner with no data-flow analysis (a full
 taint/dataflow rewrite was explicitly scoped out — see [comparisons](comparisons.md)).
@@ -73,9 +133,11 @@ otherwise — still fails the gate and forces review. If either of these two
 findings' code changes such that the value could become externally
 influenced, re-audit before assuming the finding is still a false positive.
 
-## max_circular_import_chains: 0 (error), max_tech_debt_grade: D (warning)
+### max_circular_import_chains: 0 (error), max_tech_debt_grade: D (warning)
 
-Unchanged from the CLI defaults — no evidence-based reason to relax either.
+The circular-import rule is left at its default of 0 — no evidence-based reason
+to relax it. The tech-debt grade is not on by default at all; `D` is this repo's
+own ceiling, set so a module sliding to `F` fails the run.
 
 The gates are read by `check_quality_gates`, `get_tech_debt` and
 `get_circular_imports` ([tools reference](tools-reference.md)); where the file

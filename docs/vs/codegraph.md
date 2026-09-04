@@ -1,7 +1,7 @@
 ---
 title: "CodeGraph MCP Alternative: trace-mcp vs codegraph for AI coding agents"
-description: "codegraph advertises one tool and optimises for orienting an agent in an unfamiliar repo; trace-mcp ships a broad graph with refactoring, security scanning and code-linked memory. Head-to-head on tool surface, language and framework coverage, benchmarks — plus where codegraph is clearly ahead."
-updated: 2026-09-02
+description: "codegraph ships one orientation tool; trace-mcp ships a broad graph with refactoring, security and memory. Head-to-head on tools, coverage, benchmarks."
+updated: 2026-09-03
 ---
 
 # CodeGraph MCP alternative: trace-mcp vs codegraph
@@ -12,11 +12,11 @@ updated: 2026-09-02
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "CodeGraph MCP alternative: trace-mcp vs codegraph",
-      "description": "Head-to-head comparison of trace-mcp and codegraph as code-graph MCP servers for AI coding agents.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/codegraph.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-29",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -91,7 +91,7 @@ Pick codegraph if the job is *orient an agent in a repository it has never seen*
 
 | Capability | trace-mcp | codegraph |
 |---|:---:|:---:|
-| **GitHub stars** | 102 | ~68.6K |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.codegraph.stars }} |
 | License | MIT | MIT |
 | Languages | {{ site.data.counts.languages }} (tree-sitter) | 34 (tree-sitter, Rust kernel + WASM fallback) |
 | Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✓ 17 (route → handler) |
@@ -134,13 +134,15 @@ Verified on August 29, 2026 against codegraph's source and README at commit `6a0
 
 ## Where we are not being smug
 
-Three honest points.
+Four honest points.
 
 **Their default surface is cheaper than ours and it is not close.** One advertised tool against our 28 and ~11.6K tokens. Our number is down from ~50K after the preset bypass on the daemon path was fixed and the default preset moved to `minimal`, and everything outside it is one call away — but "much better than we were" is not "as cheap as theirs."
 
 **Their benchmark is better than ours.** We publish a conservative 40-50% typical token reduction and ship `get_real_savings` so you can measure your own repository instead of trusting a number from ours. That is a defensible choice, but it is not a substitute for a published A/B across named repositories with a disclosed harness, and codegraph has one.
 
 **They publish their own downside, so we will repeat it rather than quietly use it.** codegraph's README states that its responses leave roughly 80% more retrieval context resident at the end of a multi-turn session than a file-reading agent's do — 67K tokens against 18K on VS Code. That is a genuine cost of returning rich graph answers, it is a cost trace-mcp pays in its own form, and the fact that they printed it is a point in their favour.
+
+**Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
 If you maintain codegraph and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 

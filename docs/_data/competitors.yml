@@ -1,0 +1,42 @@
+# Single source of truth for the GitHub star counts quoted in the comparison
+# tables (TRA-419). The same metric used to carry three values inside one site —
+# codebase-memory-mcp was 41.0K on its own /vs/ page and 41.2K in two tables on
+# comparisons.md — because every table kept its own copy and a verification pass
+# updated some of them.
+#
+# `stars` is the display string the tables render; `stars_exact` is what the
+# GitHub API returned on `verified`. tests/docs/competitor-stars.test.ts checks
+# the two agree, so a hand-edited display string cannot drift from its receipt.
+#
+# Dated prose elsewhere on the page ("41.1K -> 41.2K this pass") is a historical
+# record of a verification pass, not a live figure: leave those alone.
+verified: 2026-09-04
+
+trace_mcp:
+  repo: nikolai-vysotskyi/trace-mcp
+  stars_exact: 103
+  stars: "103"
+repomix:
+  repo: yamadashy/repomix
+  stars_exact: 28180
+  stars: "28.2K"
+serena:
+  repo: oraios/serena
+  stars_exact: 28781
+  stars: "28.8K"
+codebase_memory_mcp:
+  repo: DeusData/codebase-memory-mcp
+  stars_exact: 42058
+  stars: "42.1K"
+code_review_graph:
+  repo: tirth8205/code-review-graph
+  stars_exact: 31151
+  stars: "31.2K"
+codegraph:
+  repo: colbymchenry/codegraph
+  stars_exact: 69443
+  stars: "69.4K"
+context_mode:
+  repo: mksglu/context-mode
+  stars_exact: 20335
+  stars: "20.3K"

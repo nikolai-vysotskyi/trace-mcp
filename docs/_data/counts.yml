@@ -28,3 +28,8 @@ tools: 178
 # keep prose numbers and stay on the ±tolerance guard.
 languages: 81
 frameworks: 87
+
+# TRA-419: `server.resource(...)` registrations under src/tools/register/. Two
+# pages typed "9" while the code registered 10 — the ±2 tolerance the old guard
+# used never noticed. readme-claims.test.ts now asserts this one exactly.
+resources: 10

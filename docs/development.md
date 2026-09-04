@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-09-02
+updated: 2026-09-03
 ---
 
 # Development
@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Development",
-  "description": "Local setup, build, and test instructions for contributing to trace-mcp.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/development.html",
   "datePublished": "2026-04-05",
-  "dateModified": "2026-05-08",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

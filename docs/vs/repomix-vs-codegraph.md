@@ -1,7 +1,7 @@
 ---
 title: "Repomix vs codegraph: packing a repo vs indexing it for AI agents"
-description: "Repomix packs a repository into one file an agent reads; codegraph indexes it into a queryable graph an agent asks. Head-to-head on model, token cost, freshness, tool surface and published benchmarks — verified against both projects' public docs on September 2, 2026."
-updated: 2026-09-02
+description: "Repomix packs a repo into one file an agent reads; codegraph indexes it into a graph an agent queries. Head-to-head on cost, freshness and benchmarks."
+updated: 2026-09-03
 ---
 
 # Repomix vs codegraph
@@ -12,11 +12,11 @@ updated: 2026-09-02
   "@graph": [
     {
       "@type": "TechArticle",
-      "headline": "Repomix vs codegraph: packing a repository vs indexing it",
-      "description": "Head-to-head comparison of Repomix and codegraph as ways to give an AI coding agent context about a codebase.",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
       "url": "https://trace-mcp.com/vs/repomix-vs-codegraph.html",
       "datePublished": "2026-09-02",
-      "dateModified": "2026-09-02",
+      "dateModified": {{ page.updated | jsonify }},
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -91,7 +91,7 @@ Everything below was verified against both projects' public README and docs on *
 
 | | Repomix | codegraph |
 |---|:---:|:---:|
-| **GitHub stars** | 28.1K | 69.2K |
+| **GitHub stars** | {{ site.data.competitors.repomix.stars }} | {{ site.data.competitors.codegraph.stars }} |
 | License | MIT | MIT |
 | Model | one-shot pack | live index (SQLite) |
 | What the agent receives | file content | resolved symbols, call paths, blast radius |

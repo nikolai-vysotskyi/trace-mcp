@@ -39,6 +39,11 @@
         },
         {
           "type": "json",
+          "path": "docs/_data/release.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
           "path": "server.json",
           "jsonpath": "$.version"
         },

@@ -52,10 +52,24 @@ export function pageBody(file) {
     .trim();
 }
 
+/**
+ * A `Source:` line under the page's own `#` heading, so a model quoting a
+ * passage out of the concatenated dump can attribute it back to a citable URL
+ * (TRA-419). Without it every section is a bare heading and the whole file
+ * cites as one page.
+ */
+export function withSource(file, body) {
+  const url = `https://trace-mcp.com/${file.replace(/\.md$/, '.html')}`;
+  const heading = body.match(/^#[ \t].*$/m);
+  if (!heading) return `Source: ${url}\n\n${body}`;
+  const end = heading.index + heading[0].length;
+  return `${body.slice(0, end)}\n\nSource: ${url}\n${body.slice(end)}`;
+}
+
 export function build() {
   const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
   const pages = sitemapSources(xml).filter((f) => f.endsWith('.md'));
-  const out = [HEADER, ...pages.map((f) => `\n---\n\n${pageBody(f)}\n`)].join('');
+  const out = [HEADER, ...pages.map((f) => `\n---\n\n${withSource(f, pageBody(f))}\n`)].join('');
   // Any other `page.*` tag would resolve against llms-full's own front matter
   // and describe every page as this one — silently, which is the failure mode
   // this whole file is being generated to stop. Fail loudly instead.

@@ -1,6 +1,6 @@
 ---
 title: "MCP Tools Reference — code-intelligence tools by task and framework"
-description: "The trace-mcp MCP tools you reach for most, grouped by task — navigation, refactoring, impact analysis, security, and framework-aware queries. Every tool is listed in the tool index."
+description: "The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries."
 updated: 2026-09-04
 ---
 
@@ -10,11 +10,11 @@ updated: 2026-09-04
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Tools reference",
-  "description": "The most-used of the {{ site.data.counts.tools }} MCP tools and 9 resources trace-mcp exposes, grouped by task and registered dynamically per detected framework.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/tools-reference.html",
   "datePublished": "2026-04-05",
-  "dateModified": "2026-04-15",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",
@@ -31,7 +31,7 @@ updated: 2026-09-04
   }
 }
 </script>
-trace-mcp exposes {{ site.data.counts.tools }} MCP tools and 9 resources.
+trace-mcp exposes {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources.
 
 This page groups the ones you reach for by hand. For the complete list —
 every registered tool with its one-line description, generated from the

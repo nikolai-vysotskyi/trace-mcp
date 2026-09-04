@@ -1,7 +1,7 @@
 ---
 title: "Telemetry & Observability — OpenTelemetry spans for every MCP tool call"
 description: "trace-mcp's pluggable observability bridge emits OpenTelemetry-compatible spans for every AI provider call and every MCP tool call."
-updated: 2026-09-02
+updated: 2026-09-03
 ---
 
 # Telemetry & Observability
@@ -10,11 +10,11 @@ updated: 2026-09-02
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "Telemetry & Observability",
-  "description": "The OpenTelemetry-compatible span emitter for AI provider calls and MCP tool invocations.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/telemetry.html",
   "datePublished": "2026-05-13",
-  "dateModified": "2026-05-13",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

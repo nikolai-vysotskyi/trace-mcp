@@ -61,6 +61,38 @@ describe('docs pages show a reader-visible date', () => {
     ).toEqual([]);
   });
 
+  it('no page hardcodes its JSON-LD dateModified (TRA-419)', () => {
+    // `updated:` was stamped from git while the hand-written JSON-LD beside it
+    // kept its April date — 11 of 16 pages told a reader one date and a crawler
+    // another. Both now read the same front-matter key.
+    const hardcoded = markdownPages
+      .map((e) => e.path.replace(/^\//, '').replace(/\.html$/, '.md'))
+      .filter((source) => /"dateModified":\s*"/.test(readFileSync(join(DOCS, source), 'utf-8')));
+    expect(
+      hardcoded,
+      'use `"dateModified": {{ page.updated | jsonify }}` so the date cannot drift from `updated:`',
+    ).toEqual([]);
+  });
+
+  it('JSON-LD headline and description come from the front matter (TRA-419)', () => {
+    // Two competing summaries per page — the <title> said one thing and the
+    // TechArticle headline another — is an entity signal an AI engine has to
+    // pick between. Render the front matter into both.
+    const diverged = markdownPages
+      .map((e) => e.path.replace(/^\//, '').replace(/\.html$/, '.md'))
+      .filter((source) => {
+        const ld = readFileSync(join(DOCS, source), 'utf-8').match(
+          /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+        )?.[1];
+        if (!ld) return false;
+        return !/"headline":\s*{{\s*page\.title/.test(ld);
+      });
+    expect(
+      diverged,
+      'use `"headline": {{ page.title | jsonify }}` / `"description": {{ page.description | jsonify }}`',
+    ).toEqual([]);
+  });
+
   it('the layout renders the date from front matter', () => {
     const layout = readFileSync(join(DOCS, '_layouts', 'default.html'), 'utf-8');
     expect(layout).toMatch(/page\.updated/);
