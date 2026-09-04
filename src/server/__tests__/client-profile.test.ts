@@ -20,6 +20,7 @@ import {
   getClientProfile,
   resolveClientProfile,
   retargetInstructions,
+  suppressionNotice,
 } from '../client-profile.js';
 import { HOST_TOOLS_GENERIC, buildInstructions, hostToolLines } from '../instructions.js';
 import { UNGATED_META_TOOLS } from '../tool-filter.js';
@@ -136,6 +137,28 @@ describe('resolved tool surface, per profile', () => {
     expect(list.result.tools.map((t) => t.name)).toContain('search_text');
   });
 
+  // TRA-796: reachable is not the same as re-advertised. The tool was never
+  // deregistered, so `load_tools` answers `already_loaded` and fires nothing —
+  // the notification a host needs to re-read `tools/list` can only come from
+  // this gate, and only when the escalation actually un-hid something.
+  it('reports that a reinstatement needs a tools/list_changed, once', () => {
+    process.env.TRACE_MCP_CLIENT_PROFILE = 'claude-code';
+    const gate = new ClientProfileGate(cfg());
+    const load = {
+      method: 'tools/call',
+      params: { name: 'load_tools', arguments: { tools: ['search_text'] } },
+    };
+    expect(gate.observeFromClient({ method: 'initialize', params: {} })).toBe(false);
+    expect(gate.observeFromClient(load)).toBe(true);
+    expect(gate.observeFromClient(load)).toBe(false);
+    expect(
+      gate.observeFromClient({
+        method: 'tools/call',
+        params: { name: 'search', arguments: {} },
+      }),
+    ).toBe(false);
+  });
+
   it('composes after the preset rather than replacing it', () => {
     process.env.TRACE_MCP_CLIENT_PROFILE = 'claude-code';
     // A surface the preset already narrowed to two tools stays narrowed; the
@@ -204,6 +227,17 @@ describe('instructions retargeting', () => {
     const { instructions } = runSession('claude-code');
     expect(instructions).toContain('search_text');
     expect(instructions).toContain('load_tools');
+  });
+
+  // TRA-796: the notice used to spell the escalation call out in full, and
+  // sessions ran it on sight — 18 of 22 `load_tools` calls over 371 mined
+  // sessions asked for `search_text` back, 12 of them never using it. Naming
+  // the path is discoverability; pasting the call is an instruction.
+  it('does not hand the session a ready-to-run load_tools call', () => {
+    const notice = suppressionNotice(getClientProfile('claude-code'), ['search_text']);
+    expect(notice).toContain('search_text');
+    expect(notice).toContain('load_tools');
+    expect(notice).not.toMatch(/load_tools\s*\(/);
   });
 
   // The retarget is a substring swap against the exact lines buildInstructions
