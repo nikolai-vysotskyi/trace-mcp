@@ -144,8 +144,32 @@ suspect until corroborated.
 | --- | --- | --- |
 | 2026-08-28 | _pending GA4 read access_ | Ping verified end to end against the Measurement Protocol debug endpoint. |
 | 2026-09-01 | **54 / 61 / 61** | First real read. 310 events in 28 days; 15 new installs, 8 returning, 5 upgrades, 31 unattributed. 11 countries. Clients: 25 unknown, 8 claude-code, 2 codex, 1 grok. Versions seen: 3.8.0 (17), 3.10.0 (13), 3.7.0 (2), 3.6.0 (1), 3.5.2 (1). |
+| 2026-09-03 | **39 / 90 / 90** | |
+| 2026-09-04 | **39 / 102 / 102** | |
 
-Two things that number is already telling us, both actionable and both
+**The month column does not yet cover a month** (TRA-843). The property holds
+about two weeks of pings: the ping only reached published builds on 2026-08-23
+(#336), and the savings query, whose start date is 2025-01-01, comes back with
+six days of rows. A 28-day window over a fortnight of data climbs as it fills,
+so **61 → 90 → 102 is not a step change in adoption** — do not grade it as
+growth. The snapshot now publishes `active_users.first_ping_date`,
+`days_observed` and `month_window_full`, and withholds
+`funnel.retention_dau_mau_pct` until the last is true; the 38–43% quoted before
+that was day-over-fortnight, not DAU/MAU.
+
+Note what does *not* prove this, because the first attempt at the fix used it
+and was wrong: `week == month` in both snapshots is **not** evidence that the
+window is unfilled. `activeUsers` is a distinct-user count, so equality only
+says the older period's users are a subset of this week's — a mature property
+whose whole audience returned weekly reads the same, and a single non-returning
+day-8 user makes `month > week` on a ten-day-old property. The age of the data
+is the only thing that answers it, which is why the gate reads that directly.
+
+Also corrected there: GA4 date ranges are inclusive at both ends, so every
+window in the snapshot was a day longer than its label — `day` was two days and
+the "28-day" month was 29. Figures published before 2026-09-05 carry that.
+
+Two things the first read is already telling us, both actionable and both
 picked up as items below:
 
 - **Client attribution was broken, and the "41%" that named it was not a
@@ -191,6 +215,11 @@ is graded on taste. Five numbers fix it, one per stage:
 | Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
 | Use | % of active installs that called a tool at all | `usage.used_pct` | 28 d |
 | Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+Retention publishes as `null` until the property holds 28 days of pings
+(TRA-843). Over a window with a fortnight of data in it, day ÷ month is a much
+larger ratio than DAU/MAU and not comparable to anyone else's; the 38–43% read
+off the first snapshots was that.
 
 **Activation and use are two stages, not two readings of one** (TRA-673).
 `repos_indexed` says an install completed *setup*; an install that indexed a

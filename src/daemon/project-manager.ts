@@ -715,7 +715,15 @@ export class ProjectManager {
         async (deleted) => {
           pipeline.deleteFiles(deleted);
         },
-        { descendantExcludeGlobs: descendantExcludeGlobs(projectRoot) },
+        {
+          descendantExcludeGlobs: descendantExcludeGlobs(projectRoot),
+          // Dropped fs events (bulk checkout, install, wake from sleep) leave
+          // the index silently stale. indexAll() re-walks the root and is
+          // hash-gated, so unchanged files cost a stat+hash, not a reparse.
+          onRescan: async () => {
+            await pipeline.indexAll();
+          },
+        },
       );
     }
 

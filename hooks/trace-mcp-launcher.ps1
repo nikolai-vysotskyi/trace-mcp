@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.1 (Windows)
+# trace-mcp-launcher v0.6.2 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -141,6 +141,13 @@ function Save-LauncherConfig {
     # Never pin the config to a swap-window backup: that directory is about to
     # be deleted, so the "fast path" it buys would be a dangling one.
     if ($Cli -match 'trace-mcp\.tmcp-bak-' -or $Cli -match '[\\/]\.trace-mcp-') { return }
+    # A directory at the config path cannot be replaced by a move: Move-Item
+    # drops the tmp INSIDE it instead, so the heal never lands and every later
+    # start leaves another orphan there that nothing collects (TRA-829).
+    if (Test-Path -LiteralPath $ConfigPath -PathType Container) {
+        Write-LauncherLog ("ERROR: {0} is not a regular file - cannot persist the probed pair; remove it and run: trace-mcp init" -f $ConfigPath)
+        return
+    }
     try {
         if (-not (Test-Path -LiteralPath $TraceHome -PathType Container)) {
             New-Item -ItemType Directory -Path $TraceHome -Force -ErrorAction Stop | Out-Null

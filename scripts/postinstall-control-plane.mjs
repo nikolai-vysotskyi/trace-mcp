@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { logDaemonStopAttribution } from './daemon-attribution.mjs';
 
 // MUST match src/daemon/lifecycle.ts::PLIST_VERSION — keep in sync.
 // Bump there → also bump here. Tested by tests/scripts/postinstall-plist-version.test.ts.
@@ -365,6 +366,7 @@ function isPlistLoaded() {
 }
 
 function bootoutPlist(domain) {
+  logDaemonStopAttribution(DAEMON_LOG_PATH, 'bootout', 'postinstall-control-plane: plist refresh');
   // Modern replacement for `launchctl unload`. Errors ignored — plist may not
   // currently be bootstrapped, which is fine.
   runQuiet('/bin/launchctl', ['bootout', domain, LAUNCHD_PLIST_PATH]);
@@ -400,6 +402,11 @@ function bootstrapPlist(domain) {
 }
 
 function kickstartPlist(domain) {
+  logDaemonStopAttribution(
+    DAEMON_LOG_PATH,
+    'kickstart',
+    'postinstall-control-plane: pick up new binary',
+  );
   // -k kills the running instance first and resets the throttle so the new
   // binary is picked up.
   return runQuiet('/bin/launchctl', ['kickstart', '-k', `${domain}/${PLIST_LABEL}`]);

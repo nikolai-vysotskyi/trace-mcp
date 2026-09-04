@@ -2,9 +2,19 @@
      them from docs/_data/counts.yml and docs/_data/pr_context_bench.json. Never
      retouch a PNG by hand: the numbers in it would stop tracking the data.
      PNG @2x rather than SVG because GitHub renders README images in an isolated
-     context where an SVG's @font-face never loads and Space Grotesk falls back. -->
+     context where an SVG's @font-face never loads and Space Grotesk falls back.
+     The narrow cut is for phones: GitHub scales the 1200px banner into a ~390px
+     column, which drops the tagline to 8px. Order matters — the first matching
+     <source> wins, so the max-width pair has to stay above the theme source.
+     The missing space in `(prefers-color-scheme:light)` on the narrow source is
+     deliberate: GitHub's <themed-picture> substring-matches the spaced form and,
+     for a reader who pinned Light in Appearance, rewrites that source's media to
+     match every viewport — which would put the phone cut on a 750px desktop. -->
+
 <p align="center">
   <picture>
+    <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
+    <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
     <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp — precomputed code intelligence for AI coding agents. Index the repo once so the agent stops re-reading the same files. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 177 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
   </picture>
@@ -119,13 +129,15 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
 
 <p align="center">
-  <img src="docs/images/app-projects.webp" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-projects.webp#gh-light-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-projects.webp#gh-dark-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
 <p align="center">
-  <img src="docs/images/app-overview.webp" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-overview.webp#gh-light-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-overview.webp#gh-dark-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.

@@ -64,4 +64,28 @@ describe('description_verbosity strips param prose from the emitted schema', () 
     applySchemaTransforms(args, cfg('minimal'));
     expect(args[1]).toBe('First sentence.');
   });
+
+  it('keeps the cross-tool routing sentence at minimal for a family member', () => {
+    // TRA-842: the description is the only routing mechanism that reaches every
+    // client, so the collapse must not drop the sibling pointer.
+    const args: unknown[] = [
+      'search',
+      'Search symbols by name. Padding sentence. For raw text use search_text. Returns JSON.',
+      {},
+      () => undefined,
+    ];
+    applySchemaTransforms(args, cfg('minimal'));
+    expect(args[1]).toBe('Search symbols by name. For raw text use search_text.');
+  });
+
+  it('drops trailing prose at minimal for a tool in no family', () => {
+    const args: unknown[] = [
+      'demo_tool',
+      'First sentence. For raw text use search_text.',
+      {},
+      () => undefined,
+    ];
+    applySchemaTransforms(args, cfg('minimal'));
+    expect(args[1]).toBe('First sentence.');
+  });
 });

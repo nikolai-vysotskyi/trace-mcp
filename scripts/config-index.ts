@@ -214,10 +214,10 @@ supply it.
 | --- | --- | --- |
 ${table}
 
-One default is worth reading with care: \`db.path\` is vestigial. Nothing derives
-the index location from it — \`getDbPath()\` in \`src/global.ts\` puts every index
-under \`~/.trace/index/\` — and its only reader is the \`config.dbPath\` field of
-\`get_project_status\`, which therefore reports a path the database is not at.
+One key is worth reading with care: \`db.path\` is vestigial. Nothing reads it.
+The index location is not configurable — \`getDbPath()\` in \`src/global.ts\` puts
+every project's database under \`~/.trace/index/\`. The key is still accepted so
+existing config files keep validating, and will be dropped in the next major.
 `;
 }
 

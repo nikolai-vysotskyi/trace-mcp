@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { armBoundedExit } from '../bounded-shutdown.js';
+import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from '../bounded-shutdown.js';
 
 // Issue #236 defect 2 (and #237 daemon path): SIGTERM'd sessions/daemons
 // survived because graceful shutdown could hang (a drain that never resolves,
@@ -51,5 +51,58 @@ describe('armBoundedExit', () => {
       },
     });
     expect(capturedMs).toBe(5_000);
+  });
+
+  // TRA-849: the forced exit reported code 1 on stops the user asked for. On a
+  // real machine 15 of 27 SIGTERM stops with a launchd post-mortem exited 1 —
+  // launchd logged a failed exit and `daemon status` said `last exit: 1` for a
+  // daemon that was simply told to stop.
+  it('exits with the caller-chosen code, and runs onTimeout before exiting', () => {
+    const exitFn = vi.fn();
+    const onTimeout = vi.fn();
+    const driver: { fire: () => void } = { fire: () => {} };
+    armBoundedExit('SIGTERM', {
+      exitFn,
+      exitCode: 0,
+      onTimeout,
+      setTimeoutFn: (handler) => {
+        driver.fire = handler;
+        return { unref: () => {} } as unknown as NodeJS.Timeout;
+      },
+    });
+
+    driver.fire();
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(exitFn).toHaveBeenCalledWith(0);
+    // Order matters: the hook records the clean stop and drops the PID file,
+    // which is pointless after the process is gone.
+    expect(onTimeout.mock.invocationCallOrder[0]).toBeLessThan(exitFn.mock.invocationCallOrder[0]);
+  });
+
+  it('still exits when onTimeout throws', () => {
+    const exitFn = vi.fn();
+    const driver: { fire: () => void } = { fire: () => {} };
+    armBoundedExit('SIGTERM', {
+      exitFn,
+      exitCode: 0,
+      onTimeout: () => {
+        throw new Error('telemetry write failed');
+      },
+      setTimeoutFn: (handler) => {
+        driver.fire = handler;
+        return { unref: () => {} } as unknown as NodeJS.Timeout;
+      },
+    });
+
+    expect(() => driver.fire()).not.toThrow();
+    expect(exitFn).toHaveBeenCalledWith(0);
+  });
+
+  it('keeps the daemon deadline under launchd ExitTimeOut, and above the old 5s', () => {
+    // Below 30s (PLIST_EXIT_TIMEOUT_SEC) so we decide when to give up rather
+    // than taking a SIGKILL mid-cleanup; well above 5s, which cut off cleanup
+    // runs that legitimately took 5-27s.
+    expect(DAEMON_SHUTDOWN_DEADLINE_MS).toBeLessThan(30_000);
+    expect(DAEMON_SHUTDOWN_DEADLINE_MS).toBeGreaterThan(5_000);
   });
 });
