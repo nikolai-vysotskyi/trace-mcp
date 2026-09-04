@@ -23,6 +23,19 @@ const MAC_LOAD_RETRY_DELAYS_MS = [300, 900, 2000];
 
 let cachedWatcher: ParcelWatcherModule | null = null;
 
+/**
+ * The OS event queue overflowed and events were discarded before reaching us
+ * (macOS FSEvents: "Events were dropped by the FSEvents client. File system
+ * must be re-scanned."; the inotify/Windows backends word it the same way).
+ * Happens on bulk changes — branch checkout, `pnpm install`, wake from sleep.
+ * Every change in the lost window is invisible to the watcher forever, so the
+ * index silently diverges from disk unless we re-walk the root.
+ */
+function isEventsDroppedError(err: unknown): boolean {
+  const msg = (err as { message?: string })?.message;
+  return typeof msg === 'string' && msg.toLowerCase().includes('events were dropped');
+}
+
 function isMacSystemPolicyError(e: unknown): boolean {
   if (process.platform !== 'darwin') return false;
   const err = e as NodeJS.ErrnoException & { message?: string };
@@ -82,6 +95,14 @@ interface StartOpts {
    * descendants.
    */
   descendantExcludeGlobs?: string[];
+  /**
+   * Repair pass for dropped fs events (see `isEventsDroppedError`). Must
+   * re-walk the project root and reconcile against the index — i.e.
+   * `pipeline.indexAll()`, which is hash-gated (unchanged files are skipped,
+   * not re-parsed) and drops rows for files that vanished. Optional: a caller
+   * that doesn't own a pipeline just keeps the old log-and-ignore behaviour.
+   */
+  onRescan?: () => Promise<void>;
 }
 
 export class FileWatcher {
@@ -96,7 +117,14 @@ export class FileWatcher {
     onChanges: (paths: string[]) => Promise<void>;
     debounceMs: number;
     onDeletes?: (paths: string[]) => Promise<void>;
+    onRescan?: () => Promise<void>;
   } | null = null;
+  /** Guards against a rescan stampede: FSEvents drops arrive in bursts, and a
+   *  reconcile pass walks the whole root. At most one runs at a time; drops
+   *  seen while one is in flight collapse into a single follow-up pass (the
+   *  in-flight walk may have already passed the files they touched). */
+  private rescanInFlight = false;
+  private rescanPending = false;
   /**
    * Serializes start()/stop()/restartWithExcludes() on this instance. Without
    * this, two overlapping calls (e.g. ProjectManager.restartManagedAncestorWatchers
@@ -140,7 +168,14 @@ export class FileWatcher {
     onDeletes: ((paths: string[]) => Promise<void>) | undefined,
     opts: StartOpts | undefined,
   ): Promise<void> {
-    this.lastStartArgs = { rootPath, config, onChanges, debounceMs, onDeletes };
+    this.lastStartArgs = {
+      rootPath,
+      config,
+      onChanges,
+      debounceMs,
+      onDeletes,
+      onRescan: opts?.onRescan,
+    };
     // Re-entry guard: if start() is invoked again while a prior subscription is
     // live, the old AsyncSubscription (native fs-event handle + the registered
     // callback closure capturing onChanges/pipeline/traceignore) would leak.
@@ -178,6 +213,16 @@ export class FileWatcher {
       rootPath,
       async (err, events) => {
         if (err) {
+          if (isEventsDroppedError(err)) {
+            // Don't just log: the events are gone, so nothing else will ever
+            // reindex what changed in the lost window (TRA-852).
+            logger.warn(
+              { rootPath, error: String(err) },
+              'File system events were dropped — reconciling index with disk',
+            );
+            this.runRescan(opts?.onRescan, rootPath);
+            return;
+          }
           logger.error({ error: err }, 'Watcher error');
           return;
         }
@@ -246,6 +291,26 @@ export class FileWatcher {
     logger.info({ rootPath }, 'File watcher started');
   }
 
+  private runRescan(onRescan: (() => Promise<void>) | undefined, rootPath: string): void {
+    if (!onRescan) return;
+    if (this.rescanInFlight) {
+      this.rescanPending = true;
+      return;
+    }
+    this.rescanInFlight = true;
+    void onRescan()
+      .catch((e) => {
+        logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');
+      })
+      .finally(() => {
+        this.rescanInFlight = false;
+        if (this.rescanPending) {
+          this.rescanPending = false;
+          this.runRescan(onRescan, rootPath);
+        }
+      });
+  }
+
   /**
    * Re-subscribe with a fresh `descendantExcludeGlobs` list, reusing every
    * other argument from the most recent `start()` call. Used by
@@ -260,9 +325,10 @@ export class FileWatcher {
       logger.debug('restartWithExcludes called before start() — ignoring');
       return;
     }
-    const { rootPath, config, onChanges, debounceMs, onDeletes } = this.lastStartArgs;
+    const { rootPath, config, onChanges, debounceMs, onDeletes, onRescan } = this.lastStartArgs;
     await this.start(rootPath, config, onChanges, debounceMs, onDeletes, {
       descendantExcludeGlobs,
+      onRescan,
     });
   }
 
@@ -296,5 +362,9 @@ export class FileWatcher {
       this.debounceTimer = null;
     }
     this.pendingPaths.clear();
+    // Don't let a queued follow-up reconcile fire after stop() — it would run
+    // against torn-down state (closed DB). An already in-flight one can't be
+    // cancelled; callers guard it with their own stopping flag.
+    this.rescanPending = false;
   }
 }
