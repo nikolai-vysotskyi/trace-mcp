@@ -10,6 +10,14 @@
 //
 // A PR that cites the other one in its body is a follow-up, not a duplicate
 // (#614 → #611, the healthy version), and passes.
+//
+// TRA-856: only a *claim* collides. A PR claims the issue named in its title or
+// in a `Closes/Fixes/Resolves TRA-NNN` line; any other TRA-NNN in the body is a
+// reference to a sibling issue for context, which is exactly what the PR
+// template asks for. Treating those as claims flagged four unrelated daemon
+// fixes against each other (#871/#874/#875, #882/#854) on 2026-09-04. Both real
+// incidents named the issue in the title *and* in a `Closes` line, so the guard
+// still catches them.
 
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -18,6 +26,23 @@ import { fileURLToPath } from 'node:url';
 /** Distinct TRA issue keys mentioned in a blob of text, uppercased. */
 export function issueKeys(text) {
   return [...new Set((text ?? '').match(/\bTRA-\d+\b/gi)?.map((k) => k.toUpperCase()) ?? [])];
+}
+
+/**
+ * Issue keys a PR *claims*: the ones in its title, plus the ones a closing
+ * keyword names in the body. Everything else in the body is a reference.
+ *
+ * @param {{title?: string, body?: string}} pr
+ */
+export function claimedKeys(pr) {
+  const closing = [
+    ...`${pr.body ?? ''}`.matchAll(
+      /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*((?:TRA-\d+\b(?:\s*(?:,|and)\s*)?)+)/gi,
+    ),
+  ]
+    .map((m) => m[1])
+    .join(' ');
+  return issueKeys(`${pr.title ?? ''}\n${closing}`);
 }
 
 /**
@@ -39,7 +64,7 @@ export function isReleasePr(pr) {
  */
 export function findDuplicatePrs(pr, openPrs) {
   if (isReleasePr(pr)) return [];
-  const keys = issueKeys(`${pr.title}\n${pr.body ?? ''}`);
+  const keys = claimedKeys(pr);
   if (keys.length === 0) return [];
   const cited = new Set(
     [...`${pr.body ?? ''}`.matchAll(/#(\d+)/g)].map((m) => Number.parseInt(m[1], 10)),
@@ -49,7 +74,7 @@ export function findDuplicatePrs(pr, openPrs) {
       other.number !== pr.number &&
       !cited.has(other.number) &&
       !isReleasePr(other) &&
-      issueKeys(`${other.title}\n${other.body ?? ''}`).some((k) => keys.includes(k)),
+      claimedKeys(other).some((k) => keys.includes(k)),
   );
 }
 
