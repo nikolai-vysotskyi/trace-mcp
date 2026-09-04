@@ -755,23 +755,41 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
   });
 
-  // The heal writes launcher.env through a tmp + rename. A shim killed between
-  // the two leaks that tmp, and only the state sweeper ever collects it — so
-  // the name has to carry the `.tmp.<pid>.<12 hex>` suffix the sweeper matches
-  // on. Before TRA-797 it was `.tmp.<pid>`, which the sweeper never matched.
-  it('the tmp a heal writes is a name the orphan sweeper collects', () => {
+  // The heal writes launcher.env through a tmp + rename, and `mv` onto a
+  // DIRECTORY moves the tmp inside it rather than over it. So a directory at
+  // the config path used to make every single start deposit another orphan
+  // there — unbounded, and collected by nothing: the state sweeper only reads
+  // the directories it knows by name, and `launcher.env/` is not one of them
+  // (TRA-829). The heal has to refuse instead, loudly enough to be found by
+  // the one diagnostic a user is told to run: grep ERROR launcher.log.
+  it('refuses to heal onto a config path that is not a regular file', () => {
     const { home, traceHome } = setupHealingHome();
-    // A directory at the config path makes the rename land INSIDE it instead
-    // of replacing it, which is what exposes the tmp's generated name.
     const configDir = path.join(traceHome, 'launcher.env');
     fs.mkdirSync(configDir);
 
-    runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+    for (let i = 0; i < 3; i++) runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
 
-    const leaked = fs.readdirSync(configDir);
-    expect(leaked).toHaveLength(1);
-    // The real assertion: the sweeper that exists to collect these does.
-    expect(sweepOrphanTmpFiles(configDir, 0)).toEqual([path.join(configDir, leaked[0])]);
+    expect(fs.readdirSync(configDir)).toEqual([]);
+    expect(sweepOrphanTmpFiles(configDir, 0)).toEqual([]);
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toContain(`ERROR: ${configDir} is not a regular file`);
+  });
+
+  // A shim killed between the heal's write and its rename still leaks its tmp
+  // into the state home, where only sweepOrphanTmpFiles collects it — so the
+  // name has to carry the `.tmp.<pid>.<12 hex>` suffix that sweeper matches on.
+  // Before TRA-797 it was `.tmp.<pid>`, which never matched. The window is too
+  // narrow to hit from a test, so the name is asserted where it is built.
+  it('builds its heal tmp with a name the orphan sweeper collects', () => {
+    expect(fs.readFileSync(LAUNCHER_SRC, 'utf-8')).toContain(
+      `tmp="$CONFIG.tmp.$$.$(printf '%04x%04x%04x'`,
+    );
+    // The same shape, resolved — this is what the sweeper is handed on disk.
+    const dir = fs.mkdtempSync(path.join(FIXTURES, 'tmpname-'));
+    const sample = path.join(dir, `launcher.env.tmp.${process.pid}.0123456789ab`);
+    fs.writeFileSync(sample, '');
+    // Negative age: cutoff in the future, so a file written a moment ago counts.
+    expect(sweepOrphanTmpFiles(dir, -1000)).toEqual([sample]);
   });
 
   // A state home the shim cannot write to (read-only volume, root-owned

@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.1
+# trace-mcp-launcher v0.6.2
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -381,6 +381,17 @@ heal_config() {
   case "$cli" in
     *trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
   esac
+  # A config path that is not a regular file — a directory left by a botched
+  # restore or a stray `mkdir`, a socket, a device node — cannot be replaced by
+  # `mv`: POSIX `mv` moves the tmp INSIDE a directory rather than over it. The
+  # heal never lands, so every later start deposits another orphan there, and
+  # nothing collects them: sweepOrphanTmpFilesUnderHome only reads the state
+  # dirs it knows by name, and this one is not among them (TRA-829). Refuse,
+  # and log it as an error — the shim cannot fix this, a human has to.
+  if [ -e "$CONFIG" ] && [ ! -f "$CONFIG" ]; then
+    log "ERROR: $CONFIG is not a regular file — cannot persist the probed pair; remove it and run: trace-mcp init"
+    return 0
+  fi
   if [ ! -d "$TRACE_HOME" ]; then
     mkdir -p "$TRACE_HOME" 2>/dev/null || return 0
     chmod 700 "$TRACE_HOME" 2>/dev/null || true
