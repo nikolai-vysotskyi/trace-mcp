@@ -201,6 +201,50 @@ describe.skipIf(process.platform === 'win32')('lifecycle hook scripts (POSIX)', 
       expect(status).toBe(0);
       expect(stdout.trim()).toBe('');
     });
+
+    it('appends the startup-watch notice when the CLI reports growth (TRA-865)', () => {
+      const wakeUpJson = JSON.stringify({
+        project: { name: 'demo', root: projectDir },
+        decisions: { total_active: 0, recent: [] },
+        memory: { total_decisions: 0, sessions_mined: 0, sessions_indexed: 0, by_type: {} },
+        estimated_tokens: 40,
+        startupWatch: {
+          deltaTokens: 4300,
+          previousTokens: 18000,
+          currentTokens: 22300,
+          sinceDays: 12,
+          message:
+            'trace-mcp: startup block grew by +4,300 tokens. Run get_startup_context_audit for details.',
+        },
+      });
+      makeStub(stubDir, wakeUpJson, 0);
+
+      const { stdout, status } = runHook(SESSION_START, '{}', { stubDir, cwd: projectDir });
+      expect(status).toBe(0);
+      const envelope = JSON.parse(stdout.trim());
+      expect(envelope.hookSpecificOutput.additionalContext).toContain(
+        'trace-mcp: startup block grew by +4,300 tokens. Run get_startup_context_audit for details.',
+      );
+    });
+
+    it('omits the startup-watch line when the CLI reports no growth', () => {
+      const wakeUpJson = JSON.stringify({
+        project: { name: 'demo', root: projectDir },
+        decisions: { total_active: 0, recent: [] },
+        memory: { total_decisions: 0, sessions_mined: 0, sessions_indexed: 0, by_type: {} },
+        estimated_tokens: 40,
+        startupWatch: null,
+      });
+      makeStub(stubDir, wakeUpJson, 0);
+
+      const { stdout, status } = runHook(SESSION_START, '{}', { stubDir, cwd: projectDir });
+      expect(status).toBe(0);
+      const envelope = JSON.parse(stdout.trim());
+      expect(envelope.hookSpecificOutput.additionalContext).not.toContain('startup block grew');
+      expect(envelope.hookSpecificOutput.additionalContext.trim().endsWith('richer context.')).toBe(
+        true,
+      );
+    });
   });
 
   describe('trace-mcp-user-prompt-submit.sh', () => {
