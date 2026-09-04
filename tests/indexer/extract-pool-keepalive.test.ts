@@ -1,9 +1,9 @@
 /**
- * ExtractPool keepAlive flag — daemon mode skips idle teardown so workers
- * stay warm across bursty edits. Covers Phase 2.2.
+ * ExtractPool keepAlive flag — daemon mode keeps workers warm across bursty
+ * edits, but releases them after a long idle window (TRA-811). Covers Phase 2.2.
  */
-import { describe, expect, it } from 'vitest';
-import { ExtractPool } from '../../src/indexer/extract-pool.js';
+import { describe, expect, it, vi } from 'vitest';
+import { ExtractPool, KEEPALIVE_IDLE_TERMINATE_MS } from '../../src/indexer/extract-pool.js';
 
 describe('ExtractPool — keepAlive option', () => {
   it('defaults to keepAlive=false (legacy behavior)', () => {
@@ -35,29 +35,44 @@ describe('ExtractPool — keepAlive option', () => {
     expect(p.keepAlive).toBe(false);
   });
 
-  it('keepAlive=true skips scheduleIdleTeardown — pool survives idle window', async () => {
+  it('keepAlive=true still schedules teardown, just on a much longer delay (TRA-811)', async () => {
     type WithPrivate = ExtractPool & {
       idleTimer: NodeJS.Timeout | null;
       scheduleIdleTeardown: () => void;
+      idleTeardown: () => Promise<void>;
     };
-    const daemon = new ExtractPool({ keepAlive: true }) as WithPrivate;
-    const cli = new ExtractPool({ keepAlive: false }) as WithPrivate;
+    vi.useFakeTimers();
+    try {
+      const daemon = new ExtractPool({ keepAlive: true }) as WithPrivate;
+      const cli = new ExtractPool({ keepAlive: false }) as WithPrivate;
+      const daemonTeardown = vi.spyOn(daemon, 'idleTeardown').mockResolvedValue();
+      const cliTeardown = vi.spyOn(cli, 'idleTeardown').mockResolvedValue();
+      // idleTeardown only fires when workers exist — fake one slot each.
+      const fakeWorker = (): unknown => ({ terminate: async () => 0 });
+      (daemon as unknown as { workers: unknown[] }).workers = [fakeWorker()];
+      (cli as unknown as { workers: unknown[] }).workers = [fakeWorker()];
 
-    // Direct invocation — we don't need real worker threads to verify the
-    // teardown gate; the public idleTimer is set only when keepAlive is false.
-    daemon.scheduleIdleTeardown();
-    cli.scheduleIdleTeardown();
+      // Direct invocation — we don't need real worker threads to verify the
+      // teardown gate, only that both pools arm a timer with the right delay.
+      daemon.scheduleIdleTeardown();
+      cli.scheduleIdleTeardown();
+      expect(daemon.idleTimer).not.toBeNull();
+      expect(cli.idleTimer).not.toBeNull();
 
-    expect(daemon.idleTimer).toBeNull();
-    expect(cli.idleTimer).not.toBeNull();
+      // Short window: CLI has already released, the daemon has not.
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(cliTeardown).toHaveBeenCalledTimes(1);
+      expect(daemonTeardown).not.toHaveBeenCalled();
 
-    // Cleanup CLI timer so vitest doesn't see a dangling handle.
-    if (cli.idleTimer) {
-      clearTimeout(cli.idleTimer);
-      cli.idleTimer = null;
+      // The daemon releases once the long idle window elapses — this is the
+      // behavior change: keepAlive no longer means "hold the workers forever".
+      await vi.advanceTimersByTimeAsync(KEEPALIVE_IDLE_TERMINATE_MS);
+      expect(daemonTeardown).toHaveBeenCalledTimes(1);
+
+      await daemon.terminate();
+      await cli.terminate();
+    } finally {
+      vi.useRealTimers();
     }
-
-    await daemon.terminate();
-    await cli.terminate();
   });
 });
