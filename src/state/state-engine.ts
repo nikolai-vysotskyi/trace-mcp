@@ -59,6 +59,14 @@ CREATE INDEX IF NOT EXISTS idx_state_checkpoints_task
     ON agent_state_checkpoints(task_id);
 `;
 
+/**
+ * Retention limits for the global state.db. Nothing else ever deletes from it:
+ * `state.db` lives in TRACE_MCP_HOME and is shared by every project and every
+ * task an install has ever run, so without these it only ever grows.
+ */
+const REVISION_HISTORY_LIMIT = 200;
+const FINISHED_STATE_RETENTION_DAYS = 30;
+
 export type StateChangeListener = (event: {
   taskId: string;
   version: number;
@@ -81,6 +89,55 @@ export class StateEngine {
     }
 
     this.db.exec(STATE_ENGINE_DDL);
+    this.pruneFinishedStates();
+  }
+
+  /**
+   * Drop finished task states (and their revisions/checkpoints) that nobody has
+   * touched for FINISHED_STATE_RETENTION_DAYS. Only terminal statuses are
+   * eligible, so a paused or blocked task survives however long it takes.
+   */
+  private pruneFinishedStates(): void {
+    const cutoff = new Date(
+      Date.now() - FINISHED_STATE_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    try {
+      this.db.transaction(() => {
+        const stale = this.db
+          .prepare(
+            `SELECT task_id FROM agent_states
+             WHERE status IN ('completed', 'failed') AND updated_at < ?`,
+          )
+          .all(cutoff) as Array<{ task_id: string }>;
+
+        for (const { task_id } of stale) {
+          this.db.prepare('DELETE FROM agent_state_checkpoints WHERE task_id = ?').run(task_id);
+          this.db.prepare('DELETE FROM agent_state_revisions WHERE task_id = ?').run(task_id);
+          this.db.prepare('DELETE FROM agent_states WHERE task_id = ?').run(task_id);
+        }
+      })();
+    } catch (err) {
+      // ponytail: retention is best-effort — a locked db must not break startup.
+      logger.warn({ err }, 'StateEngine retention sweep failed');
+    }
+  }
+
+  /**
+   * Keep only the newest REVISION_HISTORY_LIMIT patch rows for a task.
+   * ponytail: called after each revision insert; if the write rate ever makes
+   * that delete hot, move it behind a modulo counter.
+   */
+  private trimRevisions(taskId: string): void {
+    this.db
+      .prepare(
+        `DELETE FROM agent_state_revisions
+         WHERE task_id = ?
+           AND version <= (
+             SELECT MAX(version) FROM agent_state_revisions WHERE task_id = ?
+           ) - ?`,
+      )
+      .run(taskId, taskId, REVISION_HISTORY_LIMIT);
   }
 
   /**
@@ -274,6 +331,8 @@ export class StateEngine {
       `,
         )
         .run(taskId, nextVersion, patchJson, now);
+
+      this.trimRevisions(taskId);
     });
 
     patchTx();
@@ -382,6 +441,8 @@ export class StateEngine {
           JSON.stringify({ rollback_to_checkpoint: row?.label, checkpoint_id: row?.id }),
           now,
         );
+
+      this.trimRevisions(taskId);
     });
 
     rollbackTx();
