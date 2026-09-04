@@ -3,6 +3,11 @@
 Every external surface that lists trace-mcp, what it currently shows, and how it
 can be changed. Not a public page: `ops/` is outside the Jekyll site in `docs/`.
 
+Every listing here is also a link, and links are the only thing that moves
+Google's crawl rate on trace-mcp.com — as of 2026-09-04 it knows exactly two
+external referring URLs for the homepage, and 11 of 24 pages are unindexed as a
+result. `ops/index-coverage.md` carries that measurement.
+
 **Read this before any distribution / directory / listing work. Update it in the
 same change that touched a surface.** Without it every run re-discovers the same
 things — that mcp.so dropped free submissions, that PulseMCP submissions are

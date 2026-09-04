@@ -273,6 +273,11 @@ the same closed doors and sometimes decides the opposite of the last one.
 Numbers quoted to the outside world come from `docs/_data/counts.yml`. Never
 hand-type a tool/language/framework count into a listing, a form, or `server.json`.
 
+`ops/index-coverage.md` is the companion ledger for the site itself: per-URL
+Search Console coverage and last-crawl dates. **Read it before any SEO or docs
+work aimed at Google, and update it in the same change** — it is what stops a run
+shipping on-page fixes to pages Google has no index entry for.
+
 ## Client start-block token costs
 
 `ops/context-block-levers.md` is the measured ledger of what a user can switch
