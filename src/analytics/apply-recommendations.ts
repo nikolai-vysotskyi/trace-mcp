@@ -26,6 +26,26 @@ import { claudeHome, STARTUP_BACKUPS_DIR } from '../shared/paths.js';
 import { findSharedLines } from './startup-context.js';
 
 const CHARS_PER_TOKEN = 4;
+
+/**
+ * `target` and `backup_id` arrive from a tool call, so they are input, not
+ * trusted names: a single `..` segment turns `path.join(dir, name)` into a
+ * write anywhere on the machine. Everything this module joins onto a directory
+ * must be one plain path segment, and this is the only place that decides it.
+ */
+function isPathSegment(name: string): boolean {
+  return (
+    name.length > 0 &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    name !== '.' &&
+    name !== '..' &&
+    !path.isAbsolute(name)
+  );
+}
+
+/** Instruction files the audit can name — mirrors the pairing in startup-context.ts. */
+const INSTRUCTION_BASENAMES = ['CLAUDE.md', 'AGENTS.md'];
 /** Context lines around a hunk in the emitted diff — matches startup-text.ts. */
 const DIFF_CONTEXT = 2;
 
@@ -117,7 +137,11 @@ function applyUnusedMcpServer(target: string, opts: ApplyOptions, record: Record
     }
     if (typeof parsed !== 'object' || parsed === null) continue;
     const servers = (parsed as Record<string, unknown>).mcpServers;
-    if (typeof servers !== 'object' || servers === null || !(target in servers)) continue;
+    // Object.hasOwn, not `in`: "constructor" and "toString" are `in` every
+    // object, and would make this rewrite a config that has no such server.
+    if (typeof servers !== 'object' || servers === null || !Object.hasOwn(servers, target)) {
+      continue;
+    }
 
     touched.push(file);
     if (opts.dryRun) continue;
@@ -151,9 +175,16 @@ function skillCandidates(target: string, projectRoot?: string): string[] {
   ];
 }
 
-/** Holding directory a disabled skill moves into — sibling of `skills/`, so the move stays on one filesystem. */
+/**
+ * Holding directory a disabled skill moves into: a real sibling of `skills/`,
+ * so the move stays on one filesystem AND the holding directory itself is not
+ * inside `skills/`, where every skill scanner — Claude Code's and our own
+ * `scanInstalledSkills` — would list it as an installed skill named
+ * `.trace-mcp-disabled`.
+ */
 function disabledSkillPath(skillPath: string): string {
-  return path.join(path.dirname(skillPath), '.trace-mcp-disabled', path.basename(skillPath));
+  const skillsDir = path.dirname(skillPath);
+  return path.join(path.dirname(skillsDir), '.trace-mcp-disabled-skills', path.basename(skillPath));
 }
 
 function applyUnusedSkill(target: string, opts: ApplyOptions, record: Recorder): ApplyOutcome {
@@ -164,6 +195,14 @@ function applyUnusedSkill(target: string, opts: ApplyOptions, record: Recorder):
       status: 'skipped',
       reason:
         'Plugin-provided skill — disabling it would disable the whole plugin, which one unused skill is not evidence for. Turn the plugin off yourself if that is what you want.',
+    };
+  }
+  if (!isPathSegment(target)) {
+    return {
+      kind: 'unusedSkill',
+      target,
+      status: 'skipped',
+      reason: `"${target}" is not a skill name — a skill is one directory name under skills/, never a path. Nothing was moved.`,
     };
   }
 
@@ -233,7 +272,26 @@ function applyDuplicateInstructions(
   record: Recorder,
   dryRun: boolean,
 ): ApplyOutcome {
-  const globalFile = path.join(claudeHome(), path.basename(target));
+  // The audit only ever names a PROJECT instruction file, paired against its
+  // global namesake. Given the global file itself, findSharedLines would
+  // compare it with itself, call every substantial line a duplicate, and empty
+  // the user's global instructions — so the applier enforces that contract
+  // rather than trusting the caller to have come from the audit.
+  const resolvedTarget = path.resolve(target);
+  const homePrefix = path.resolve(claudeHome()) + path.sep;
+  if (
+    !INSTRUCTION_BASENAMES.includes(path.basename(resolvedTarget)) ||
+    resolvedTarget.startsWith(homePrefix)
+  ) {
+    return {
+      kind: 'duplicateInstructions',
+      target,
+      status: 'skipped',
+      reason: `Target must be a project ${INSTRUCTION_BASENAMES.join(' or ')} outside ${claudeHome()} — the global file is the copy this keeps, never the one it edits.`,
+    };
+  }
+
+  const globalFile = path.join(claudeHome(), path.basename(resolvedTarget));
   if (!fs.existsSync(target) || !fs.existsSync(globalFile)) {
     return {
       kind: 'duplicateInstructions',
@@ -347,6 +405,17 @@ export function rollbackStartupRecommendations(id?: string): RollbackResult {
   const targetId = id ?? latestBackupId();
   if (!targetId) {
     return { backupId: '', restored: [], errors: ['No backups found — nothing to roll back.'] };
+  }
+  if (!isPathSegment(targetId)) {
+    // A manifest read from outside STARTUP_BACKUPS_DIR is a list of files this
+    // would overwrite or delete on someone else's say-so.
+    return {
+      backupId: targetId,
+      restored: [],
+      errors: [
+        `"${targetId}" is not a backup id — a backup id is one directory name, never a path.`,
+      ],
+    };
   }
 
   let manifest: BackupManifest;

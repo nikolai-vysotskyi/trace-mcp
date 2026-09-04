@@ -145,7 +145,10 @@ describe('applyStartupRecommendations — unusedSkill', () => {
 
     expect(result.outcomes[0].status).toBe('applied');
     expect(fs.existsSync(skillDir)).toBe(false);
-    const moved = path.join(home, '.claude', 'skills', '.trace-mcp-disabled', 'idle-skill');
+    const moved = path.join(home, '.claude', '.trace-mcp-disabled-skills', 'idle-skill');
+    // Sibling of skills/, not inside it: a holding directory under skills/
+    // gets listed as an installed skill by every scanner that reads that dir.
+    expect(fs.readdirSync(path.join(home, '.claude', 'skills'))).toEqual([]);
     expect(fs.existsSync(moved)).toBe(true);
     expect(fs.readFileSync(path.join(moved, 'SKILL.md'), 'utf8')).toContain('idle-skill');
 
@@ -370,7 +373,11 @@ describe('backup manifest durability', () => {
     // after the first request has already rewritten settings.json.
     const skills = path.join(home, '.claude', 'skills');
     fs.mkdirSync(path.join(skills, 'idle-skill'), { recursive: true });
-    fs.writeFileSync(path.join(skills, '.trace-mcp-disabled'), 'not a directory', 'utf8');
+    fs.writeFileSync(
+      path.join(home, '.claude', '.trace-mcp-disabled-skills'),
+      'not a directory',
+      'utf8',
+    );
 
     const idsBefore = new Set(
       fs.existsSync(STARTUP_BACKUPS_DIR) ? fs.readdirSync(STARTUP_BACKUPS_DIR) : [],
@@ -394,5 +401,75 @@ describe('backup manifest durability', () => {
     const rollback = rollbackStartupRecommendations(newId);
     expect(rollback.errors).toEqual([]);
     expect(fs.readFileSync(settings, 'utf8')).toBe(before);
+  });
+});
+
+/**
+ * Reviewer B's findings on PR #869: `target` and `backup_id` reach these
+ * functions straight from a tool call, so each one is a path segment that used
+ * to be joined onto a directory unchecked.
+ */
+describe('untrusted target and backup_id', () => {
+  it('refuses a skill target that escapes skills/', () => {
+    const outside = path.join(home, 'secret-user-data');
+    fs.mkdirSync(outside, { recursive: true });
+
+    const result = applyStartupRecommendations(
+      [{ kind: 'unusedSkill', target: '../../secret-user-data' }],
+      { dryRun: false },
+    );
+
+    expect(result.outcomes[0].status).toBe('skipped');
+    expect(result.backupId).toBeNull();
+    expect(fs.existsSync(outside)).toBe(true);
+  });
+
+  it('refuses a backup id that escapes the backups directory', () => {
+    const evil = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-apply-evil-'));
+    const victim = path.join(evil, 'victim.txt');
+    fs.writeFileSync(victim, 'untouched', 'utf8');
+    fs.writeFileSync(
+      path.join(evil, 'manifest.json'),
+      JSON.stringify({
+        id: 'x',
+        createdAt: new Date().toISOString(),
+        entries: [{ type: 'file', path: victim, existed: true, content: 'overwritten' }],
+      }),
+      'utf8',
+    );
+
+    const result = rollbackStartupRecommendations(path.join('..', '..', evil));
+
+    expect(result.restored).toEqual([]);
+    expect(result.errors[0]).toContain('not a backup id');
+    expect(fs.readFileSync(victim, 'utf8')).toBe('untouched');
+    fs.rmSync(evil, { recursive: true, force: true });
+  });
+
+  it('refuses to edit the global instruction file as its own duplicate', () => {
+    const globalFile = path.join(home, '.claude', 'CLAUDE.md');
+    const body = `${'a line long enough to count as duplicated text '.repeat(2)}\nsecond such line, also long enough to be counted here\n`;
+    fs.writeFileSync(globalFile, body, 'utf8');
+
+    const result = applyStartupRecommendations(
+      [{ kind: 'duplicateInstructions', target: globalFile }],
+      { dryRun: false },
+    );
+
+    expect(result.outcomes[0].status).toBe('skipped');
+    expect(fs.readFileSync(globalFile, 'utf8')).toBe(body);
+  });
+
+  it('does not treat an inherited Object property as a configured server', () => {
+    const file = writeSettings({ mcpServers: {} });
+    const before = fs.readFileSync(file, 'utf8');
+
+    const result = applyStartupRecommendations(
+      [{ kind: 'unusedMcpServer', target: 'constructor' }],
+      { dryRun: false },
+    );
+
+    expect(result.outcomes[0].status).toBe('skipped');
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
 });
