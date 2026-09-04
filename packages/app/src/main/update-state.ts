@@ -350,3 +350,26 @@ export function daemonUpdateDegradeToCommand(error: string): {
 } {
   return { ok: false, error, command: GENERIC_NPM_UPDATE_COMMAND };
 }
+
+/**
+ * Shares one in-flight run across concurrent callers instead of starting a
+ * second one. The App and Daemon rows are independent in the UI (TRA-686),
+ * but both fall back to the same `npm install -g trace-mcp@latest --force`
+ * against the same global root — clicking both Update buttons at once raced
+ * two npm installs against each other, colliding on file locks and on the
+ * ENOTEMPTY recovery's directory removal.
+ */
+export function dedupeInFlight<T>(ref: { current: Promise<T> | null }, run: () => Promise<T>): Promise<T> {
+  if (ref.current) return ref.current;
+  const started = run();
+  ref.current = started;
+  // A second `.finally` chain off the same promise, not the returned one —
+  // its own rejection (finally() re-throws) needs its own catch, or Node
+  // reports it unhandled even though the caller's `started` is handled.
+  started
+    .finally(() => {
+      if (ref.current === started) ref.current = null;
+    })
+    .catch(() => {});
+  return started;
+}

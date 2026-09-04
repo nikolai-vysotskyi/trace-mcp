@@ -110,3 +110,25 @@ it('keeps the daemon row readable when the app check has failed', () => {
   expect(screen.getByText('network unreachable')).toBeTruthy();
   expect(screen.getByText('v3.13.0 available')).toBeTruthy();
 });
+
+/* Both rows fall back to the same `npm install -g` when there is no
+   electron-updater channel. Main serializes the install itself, but a
+   button left clickable would still queue a click silently instead of
+   visibly waiting — so an install in flight on either row has to disable
+   both (TRA-686 follow-up). */
+it('disables the daemon Update button while the app row is installing, and vice versa', () => {
+  renderSettings({
+    update: update({
+      state: { available: true, current: '3.10.0', latest: '3.13.0' },
+      updating: true,
+    }),
+    daemonUpdate: daemonUpdate({
+      state: { available: true, current: '3.10.0', latest: '3.13.0' },
+    }),
+  });
+  const updatingButtons = screen.getAllByRole('button', { name: 'Updating…' });
+  expect(updatingButtons).toHaveLength(2);
+  for (const button of updatingButtons) {
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  }
+});

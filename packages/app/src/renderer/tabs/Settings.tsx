@@ -1654,7 +1654,11 @@ function UpdatesCard({
           statusTitle={app.error}
           warn={Boolean(app.error)}
           checking={update.checking}
-          updating={update.updating}
+          // Main serializes the npm-fallback install behind one in-flight
+          // slot, but the buttons should read as blocked together too — an
+          // enabled Daemon button while the App row is mid-install invites a
+          // click that queues silently instead of visibly waiting (TRA-686).
+          updating={update.updating || daemonUpdate.updating}
           onCheck={update.check}
           onUpdate={
             update.pendingVersion ? update.restart : app.available ? update.apply : undefined
@@ -1668,7 +1672,7 @@ function UpdatesCard({
           statusTitle={daemon.error}
           warn={Boolean(daemon.error)}
           checking={daemonUpdate.checking}
-          updating={daemonUpdate.updating}
+          updating={update.updating || daemonUpdate.updating}
           onCheck={daemonUpdate.check}
           onUpdate={daemon.available ? daemonUpdate.apply : undefined}
           command={daemon.command}

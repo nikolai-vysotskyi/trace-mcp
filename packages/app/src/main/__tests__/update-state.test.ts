@@ -12,6 +12,7 @@ import {
   cliPathOwnedByRoot,
   cmpSemver,
   daemonUpdateDegradeToCommand,
+  dedupeInFlight,
   evaluateDaemonUpdate,
   findStaleRoots,
   GENERIC_NPM_UPDATE_COMMAND,
@@ -400,5 +401,56 @@ describe('daemonUpdateDegradeToCommand', () => {
       error: 'could not locate npm',
       command: GENERIC_NPM_UPDATE_COMMAND,
     });
+  });
+});
+
+describe('dedupeInFlight', () => {
+  it('gives a concurrent caller the same in-flight promise instead of starting a second run', async () => {
+    let calls = 0;
+    let resolveFirst: (value: string) => void = () => {};
+    const first = new Promise<string>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const ref: { current: Promise<string> | null } = { current: null };
+    const run = () => {
+      calls += 1;
+      return first;
+    };
+
+    const a = dedupeInFlight(ref, run);
+    const b = dedupeInFlight(ref, run);
+
+    expect(calls).toBe(1);
+    expect(a).toBe(b);
+
+    resolveFirst('done');
+    await expect(a).resolves.toBe('done');
+  });
+
+  it('lets a new call start its own run once the in-flight one has settled', async () => {
+    let calls = 0;
+    const ref: { current: Promise<number> | null } = { current: null };
+    const run = () => {
+      calls += 1;
+      return Promise.resolve(calls);
+    };
+
+    await dedupeInFlight(ref, run);
+    await dedupeInFlight(ref, run);
+
+    expect(calls).toBe(2);
+  });
+
+  it('clears the slot on rejection too, so a failed run does not wedge every later caller', async () => {
+    const ref: { current: Promise<void> | null } = { current: null };
+    let attempt = 0;
+    const run = () => {
+      attempt += 1;
+      return attempt === 1 ? Promise.reject(new Error('boom')) : Promise.resolve();
+    };
+
+    await expect(dedupeInFlight(ref, run)).rejects.toThrow('boom');
+    await expect(dedupeInFlight(ref, run)).resolves.toBeUndefined();
+    expect(attempt).toBe(2);
   });
 });

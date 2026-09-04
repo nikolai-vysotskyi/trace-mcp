@@ -194,6 +194,7 @@ import {
   cliPathOwnedByRoot,
   cmpSemver,
   daemonUpdateDegradeToCommand,
+  dedupeInFlight,
   evaluateDaemonUpdate,
   findStaleRoots,
   type GlobalInstall,
@@ -1242,6 +1243,14 @@ async function performNpmGlobalUpdate(npmBin: string): Promise<
   return { ok: true, installedVersion, npmRoots };
 }
 
+// The App and Daemon Update buttons both fall back to this same npm install
+// when there is no electron-updater channel — sharing the in-flight run
+// keeps a double-click (or one row's click racing the other's) from
+// starting two `npm install -g` processes against the same global root.
+const inFlightNpmUpdate: { current: ReturnType<typeof performNpmGlobalUpdate> | null } = {
+  current: null,
+};
+
 ipcMain.handle('apply-update', async () => {
   if (UPDATE_CHANNEL === 'electron-updater') {
     // No npm involvement: electron-updater downloads the artifact described by
@@ -1275,7 +1284,7 @@ ipcMain.handle('apply-update', async () => {
     return { ok: false, error: `${msg}\n\nFull log: ${updateLogPath()}` };
   }
 
-  const result = await performNpmGlobalUpdate(npmBin);
+  const result = await dedupeInFlight(inFlightNpmUpdate, () => performNpmGlobalUpdate(npmBin));
   if (!result.ok) return result;
 
   // `npm install -g` writes into exactly one global root. On a machine with
@@ -1329,7 +1338,7 @@ ipcMain.handle('apply-daemon-update', async () => {
     );
   }
 
-  const result = await performNpmGlobalUpdate(npmBin);
+  const result = await dedupeInFlight(inFlightNpmUpdate, () => performNpmGlobalUpdate(npmBin));
   if (!result.ok) return daemonUpdateDegradeToCommand(result.error);
 
   const restart = restartDaemon();
