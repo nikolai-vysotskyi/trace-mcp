@@ -876,8 +876,25 @@ reader wants. The narrow cut is a CSS modifier in the generator
 shared, so a wording change lands in both. `tests/docs/readme-header-images.test.ts`
 guards the files, both cuts, and that ordering.
 
-**The buttons need no narrow cut.** At `width="250"` a button plate is already
-narrower than a phone column, so the three simply stack at full size.
+**The buttons get a narrow cut too, and are sized by density, not `width`.**
+One `width` attribute serves every viewport: it can hold the desktop row at
+3 x 250 = 750, the banner's width, or let the phone cut fill the column, never
+both — a `<source>` swaps the file, never the box. So the buttons carry **no
+`width` at all**. The 1600px desktop art is declared `6.4x` and lays out at
+exactly 250; the 2000px phone art is declared `4x` and lays out at 500, wider
+than any phone column, so `max-width: 100%` clamps it to the full width and the
+empty margin either side of a 250px plate disappears. Keep a density on the
+last `<source>`, the one that carries **no `media` at all** and therefore always
+matches — because GitHub strips `srcset` from `<img>` while keeping it on
+`<source>`. Measured on a live PR page: with the density only on the `<img>`,
+the default dark view fell through to the bare `src` and laid the buttons out
+at 1012px. The `<img>` is now only reached by a renderer that drops `<picture>`
+entirely. npm keeps `<picture>`, `<source>` and `srcset`, checked on the live
+package page.
+
+Mind the render scale when computing a density: a shot comes out at **4x, not
+2x** — `deviceScaleFactor` and the capture clip scale both apply, so a 400 CSS px
+plate is a 1600px file.
 
 **Every number is generated.** The banner reads `docs/_data/counts.yml` and
 `docs/_data/pr_context_bench.json` — the same sources the site uses. A hand-
@@ -890,7 +907,8 @@ the description sentence kept as a real paragraph below the buttons. The two
 say the same thing; change them together.
 
 **Geometry.** Banner 1200×340 CSS px, rendered at 2×, shown at `width="750"`.
-Three button plates of 400×108, shown at `width="250"` each — 750 total, so
+Three button plates of 400×108, laid out at 250 each by their `6.4x` density —
+750 total, so
 they line up under the banner and do not wrap: GitHub's README column is about
 807px on a wide window and narrower on the readme tab, and a 900px strip wraps
 the third button onto its own line. Each plate carries its own background so the
