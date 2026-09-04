@@ -419,7 +419,12 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   } else if (step === 'clients') {
     title = t('guard:wizard.clients.title');
     body = (
-      <div className="flex flex-col gap-4">
+      /* The list is the one thing here without a ceiling — fifteen detected
+         clients is 600px of rows — so it is the one that scrolls, and the
+         subtitle and the two buttons stay where they are (TRA-794). `min-h-0`
+         on every link of the chain, or a flex item refuses to shrink below its
+         content and the sheet grows past the window again. */
+      <div className="flex flex-col gap-4 flex-1 min-h-0">
         <p className="lx-sheet-text" style={{ margin: 0 }}>
           {t('guard:wizard.clients.subtitle')}
         </p>
@@ -436,8 +441,8 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
             {t('guard:wizard.clients.none')}
           </p>
         ) : (
-          <Card>
-            <div className="flex flex-col divide-y divide-[var(--separator)]">
+          <Card className="flex flex-col min-h-0">
+            <div className="flex flex-col divide-y divide-[var(--separator)] min-h-0 overflow-y-auto">
               {clients.map((row) => {
                 const displayName = MCP_CLIENT_DISPLAY_NAMES[row.client.name] ?? row.client.name;
                 const isManual = row.client.name === 'warp' || row.client.name === 'jetbrains-ai';

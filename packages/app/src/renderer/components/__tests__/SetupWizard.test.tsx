@@ -112,6 +112,26 @@ it('renders pre-checked checkboxes for detected MCP clients with config paths', 
   expect(screen.getByText('/Users/test/.cursor/mcp.json')).toBeTruthy();
 });
 
+/* TRA-794. jsdom has no layout, so what is asserted here is the structure that
+   makes the layout possible: the client list is the one scroll container, and
+   the buttons sit outside it. With fifteen clients detected the sheet was 753px
+   in a 700px window and the action row was at y=704 — off screen, and with no
+   scrollable ancestor to bring it back. */
+it('scrolls the client list, not the sheet, so the actions stay in view', async () => {
+  stubElectronApi();
+  const { container } = render(<SetupWizard onClose={() => {}} initialStep="clients" />);
+
+  await screen.findByText('Connect coding assistants');
+
+  const scroller = container.querySelector('.overflow-y-auto');
+  expect(scroller).toBeTruthy();
+  expect(scroller!.textContent).toContain('Cursor');
+
+  const actions = container.querySelector('.lx-sheet-actions');
+  expect(actions).toBeTruthy();
+  expect(scroller!.contains(actions!)).toBe(false);
+});
+
 it('connects selected clients and advances to project step on confirmation', async () => {
   stubElectronApi();
   render(<SetupWizard onClose={() => {}} initialStep="clients" />);
