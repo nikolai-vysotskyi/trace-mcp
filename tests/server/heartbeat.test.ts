@@ -46,6 +46,17 @@ describe('status sentinel (heartbeat)', () => {
       expect(status.last_successful_tool_call_at).toBeNull();
       expect(status.tool_calls_total).toBe(0);
       expect(status.tool_calls_failed).toBe(0);
+      // stdio: the client spawned this process and holds its pipes.
+      expect(status.mcp_sessions_active).toBe(1);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  it('reports no attached session for a transport that tracks its own', () => {
+    const handle = startHeartbeat(projectDir, 'http');
+    try {
+      const status = JSON.parse(fs.readFileSync(handle.path, 'utf-8'));
       expect(status.mcp_sessions_active).toBe(0);
     } finally {
       handle.stop();
