@@ -3,6 +3,7 @@ import { createAIProvider } from '../../src/ai/index.js';
 import {
   OpenAIProvider,
   parseOpenAIExtraBodyEnv,
+  redactBaseUrlForLogs,
   resolveOpenAIExtraBody,
 } from '../../src/ai/openai.js';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -111,8 +112,29 @@ describe('OpenAIProvider', () => {
       );
       const provider = new OpenAIProvider(baseConfig);
       await expect(provider.embedding().embedBatch(['a'])).rejects.toThrow(
-        /OpenAI embeddings failed/,
+        /openai embeddings @ .+ failed: 429/,
       );
+    });
+
+    // TRA-812: this class serves every OpenAI-compatible endpoint, so the
+    // message has to name the *configured* provider and its URL. "OpenAI
+    // embeddings: transient failure" while `lmstudio` was configured sent
+    // diagnosis after an API-key problem instead of a dead local process.
+    it('names the configured provider and base URL, not "OpenAI"', async () => {
+      (globalThis.fetch as any).mockResolvedValue(
+        new Response('nope', { status: 500, statusText: 'Internal Server Error' }),
+      );
+      const provider = new OpenAIProvider({ ...baseConfig, providerLabel: 'lmstudio' });
+      await expect(provider.embedding().embedBatch(['a'])).rejects.toThrow(
+        `lmstudio embeddings @ ${baseConfig.baseUrl} failed: 500`,
+      );
+    });
+
+    it('keeps userinfo and query credentials out of the logged base URL', () => {
+      expect(redactBaseUrlForLogs('https://user:s3cret@gw.example.com/v1?key=abc123')).toBe(
+        'https://gw.example.com/v1',
+      );
+      expect(redactBaseUrlForLogs('not a url')).toBe('<invalid base_url>');
     });
   });
 

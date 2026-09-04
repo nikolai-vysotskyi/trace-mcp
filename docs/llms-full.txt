@@ -459,7 +459,7 @@ which excludes the framework-specific rows.
 | `get_health_trends` | Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. | always |
 | `get_implementations` | Find all classes that implement or extend a given interface or base class. | always |
 | `get_import_graph` | Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). | always |
-| `get_index_health` | Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). | always |
+| `get_index_health` | Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). | always |
 | `get_livewire_context` | Get full context for a Livewire component: properties, actions, events, view, child components. | framework |
 | `get_middleware_chain` | Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask). | framework |
 | `get_minimal_context` | Single-call orientation context (~150 tokens). | always |
@@ -1946,6 +1946,19 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
+
+> **When the embedding endpoint is unreachable:** background embedding trips a
+> circuit breaker after 2 consecutive failed batches and then pauses for 10
+> minutes. The pause is stored in the project DB, so it survives a daemon
+> restart instead of re-attempting the whole backlog on every start. While it is
+> open, `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
+> and adds a warning — semantic and hybrid search results are incomplete until
+> the provider is reachable. `embed_repo` ignores the pause and retries
+> immediately.
+
+> **`ai.enabled` takes effect per project start.** A project already open in the
+> daemon keeps the config it was started with, so flipping `ai.enabled` off stops
+> embedding for that project only after it restarts.
 
 > **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
 
