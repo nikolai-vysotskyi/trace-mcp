@@ -858,7 +858,17 @@ export class ProjectManager {
   private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
     if (!managed) return;
-    // Abort in-flight AI fetches FIRST so any pending summarization /
+    // Unsubscribe the file watcher BEFORE anything we await below (TRA-834).
+    // `await managed.initialIndexPromise` can run for tens of seconds on a cold
+    // project, and a still-subscribed watcher keeps firing debounced
+    // `onChanges` handlers throughout it — each one starting a fresh indexing
+    // run against a Store that a sibling stopProject() is closing. Field logs
+    // showed 12 "The database connection is not open" failures, every one of
+    // them after "Daemon shutting down", one project logging five of them over
+    // 27 seconds. Stopping the source of new work first is what makes the
+    // teardown below finite.
+    await managed.watcher.stop();
+    // Abort in-flight AI fetches next so any pending summarization /
     // embedding fetch tears its socket down before we start disposing the
     // store. Without this, a long-running summarize batch can return after
     // the DB has already closed and write into stale references.
@@ -886,7 +896,6 @@ export class ProjectManager {
         'initialIndexPromise rejected during stopProject (non-fatal)',
       );
     }
-    await managed.watcher.stop();
     clearServerPid(managed.db);
     managed.serverHandle.dispose();
     await managed.server.close();
