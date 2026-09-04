@@ -31,6 +31,40 @@ const PKG_VERSION =
  */
 const PROXY_INITIALIZE_TIMEOUT_MS = 1_000;
 
+const LIST_CHANGED = 'notifications/tools/list_changed';
+
+/**
+ * Owes the client exactly one `tools/list_changed` per `load_tools` call that
+ * un-hid a profile-suppressed tool (TRA-796).
+ *
+ * The suppression lives on the wire, so nothing below the session knows the
+ * surface changed and `load_tools` answers `already_loaded` without notifying.
+ * But the same call can *also* load a preset-deferred tool, and that path does
+ * notify — one request, two notifications, and a compliant host re-reads the
+ * whole surface twice. So the backend's notification cancels the debt, and only
+ * a call that produced none pays it, after its response.
+ */
+export class ListChangedDebt {
+  private owedFor: string | number | null = null;
+
+  /** Record that this request changed the advertised surface. */
+  owe(id: string | number | undefined): void {
+    if (id !== undefined) this.owedFor = id;
+  }
+
+  /** For each outbound frame: true when our own notification must follow it. */
+  settle(frame: { id?: string | number; method?: string }): boolean {
+    if (this.owedFor === null) return false;
+    if (frame.method === LIST_CHANGED) {
+      this.owedFor = null;
+      return false;
+    }
+    if (frame.id !== this.owedFor) return false;
+    this.owedFor = null;
+    return true;
+  }
+}
+
 function isInitializeRequest(msg: JSONRPCMessage): boolean {
   const m = msg as Record<string, unknown>;
   return m.method === 'initialize' && m.id !== undefined && m.id !== null;
@@ -102,6 +136,8 @@ export class StdioSession {
    * sees the handshake and every frame going back to the client.
    */
   private readonly clientProfile: ClientProfileGate;
+  /** One `tools/list_changed` per profile reinstatement, never two (TRA-796). */
+  private readonly listChanged = new ListChangedDebt();
   /** Id of the in-flight `initialize` request the watchdog below is timing. */
   private initializeId: string | number | null = null;
   private initializeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,7 +166,7 @@ export class StdioSession {
             return;
           }
         }
-        return this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
+        return this.sendAndSettleListChanged(msg);
       },
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
     });
@@ -155,7 +191,13 @@ export class StdioSession {
       // Cache the handshake so a later swapped-in proxy backend can re-establish
       // the daemon session (the client only sends `initialize` once).
       if (isInitializeRequest(msg as JSONRPCMessage)) this.cachedInitialize = msg as JSONRPCMessage;
-      this.clientProfile.observeFromClient(msg);
+      // Reinstating a profile-suppressed tool changes what tools/list would
+      // answer, and nothing below this layer knows that — the tool was never
+      // deregistered, only hidden here. Owe the client one re-read, and settle
+      // the debt when the call answers (TRA-796).
+      if (this.clientProfile.observeFromClient(msg)) {
+        this.listChanged.owe((msg as unknown as { id?: string | number }).id);
+      }
       if (isInitializeRequest(msg as JSONRPCMessage)) {
         logger.info({ profile: this.clientProfile.name }, 'StdioSession: resolved client profile');
         this.armInitializeWatchdog((msg as unknown as { id: string | number }).id);
@@ -319,6 +361,13 @@ export class StdioSession {
   }
 
   // ── Internals ───────────────────────────────────────────────────────
+
+  /** Send one frame, then any `tools/list_changed` it left owed (TRA-796). */
+  private async sendAndSettleListChanged(msg: unknown): Promise<void> {
+    const owed = this.listChanged.settle(msg as { id?: string | number; method?: string });
+    await this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
+    if (owed) await this.stdio.send({ jsonrpc: '2.0', method: LIST_CHANGED } as JSONRPCMessage);
+  }
 
   /**
    * A reachable /health is not proof that the daemon's MCP handler can answer.
