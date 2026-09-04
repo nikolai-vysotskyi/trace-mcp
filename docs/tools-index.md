@@ -146,7 +146,7 @@ which excludes the framework-specific rows.
 | `get_health_trends` | Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. | always |
 | `get_implementations` | Find all classes that implement or extend a given interface or base class. | always |
 | `get_import_graph` | Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). | always |
-| `get_index_health` | Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). | always |
+| `get_index_health` | Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). | always |
 | `get_livewire_context` | Get full context for a Livewire component: properties, actions, events, view, child components. | framework |
 | `get_middleware_chain` | Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask). | framework |
 | `get_minimal_context` | Single-call orientation context (~150 tokens). | always |

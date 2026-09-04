@@ -23,6 +23,15 @@ interface OpenAIConfig {
    * TRACE_MCP_OPENAI_EXTRA_BODY (env). Core fields always win over this.
    */
   extraBody?: Record<string, unknown>;
+  /**
+   * Configured provider name for log lines ('lmstudio', 'groq', …). This class
+   * serves every OpenAI-compatible endpoint, so hard-coding "OpenAI" in the
+   * retry/error text pointed diagnosis at an API-key problem when the real
+   * cause was a local LM Studio process that wasn't running (TRA-812).
+   * Display only — `providerName()` deliberately stays 'openai' because it is
+   * stamped into the vector store and changing it would drop existing indexes.
+   */
+  providerLabel?: string;
 }
 
 /**
@@ -62,12 +71,18 @@ export function resolveOpenAIExtraBody(
 }
 
 class OpenAIEmbeddingService implements EmbeddingService {
+  /** e.g. "lmstudio embeddings @ http://localhost:1234/v1" — used in logs only. */
+  private readonly label: string;
+
   constructor(
     private baseUrl: string,
     private apiKey: string,
     private model: string,
     private dims: number,
-  ) {}
+    providerLabel = 'openai',
+  ) {
+    this.label = `${providerLabel} embeddings @ ${baseUrl}`;
+  }
 
   async embed(
     text: string,
@@ -103,9 +118,7 @@ class OpenAIEmbeddingService implements EmbeddingService {
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
           const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
-          throw new Error(
-            `OpenAI embeddings failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
-          );
+          throw new Error(`${this.label} failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
         }
 
         const data = (await resp.json()) as { data: { index: number; embedding: number[] }[] };
@@ -115,7 +128,7 @@ class OpenAIEmbeddingService implements EmbeddingService {
         }
         return result;
       },
-      { label: 'OpenAI embeddings' },
+      { label: this.label },
     );
   }
 
@@ -127,19 +140,31 @@ class OpenAIEmbeddingService implements EmbeddingService {
     return this.model;
   }
 
+  /**
+   * Wire-format identity, not the configured provider name. Stamped into the
+   * vector store meta — returning 'lmstudio' here would look like a provider
+   * change and drop every existing index built via an OpenAI-compatible
+   * endpoint. Log lines use `this.label` instead.
+   */
   providerName(): string {
     return 'openai';
   }
 }
 
 class OpenAIInferenceService implements InferenceService {
+  /** e.g. "lmstudio chat @ http://localhost:1234/v1" — used in logs only. */
+  private readonly label: string;
+
   constructor(
     private baseUrl: string,
     private apiKey: string,
     private model: string,
     /** Merged config+env extra body fields; core request fields win over these. */
     private extraBody: Record<string, unknown> = {},
-  ) {}
+    providerLabel = 'openai',
+  ) {
+    this.label = `${providerLabel} chat @ ${baseUrl}`;
+  }
 
   async generate(
     prompt: string,
@@ -172,13 +197,13 @@ class OpenAIInferenceService implements InferenceService {
         if (!resp.ok) {
           const body = await resp.text().catch(() => '');
           const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
-          throw new Error(`OpenAI chat failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
+          throw new Error(`${this.label} failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
         }
 
         const data = (await resp.json()) as { choices: { message: { content: string } }[] };
         return data.choices[0]?.message?.content ?? '';
       },
-      { label: 'OpenAI chat' },
+      { label: this.label },
     );
   }
 
@@ -211,7 +236,9 @@ class OpenAIInferenceService implements InferenceService {
     if (!resp.ok) {
       const body = await resp.text().catch(() => '');
       const safeBody = body.length > 200 ? `${body.slice(0, 200)}…` : body;
-      throw new Error(`OpenAI chat stream failed: ${resp.status} ${resp.statusText} — ${safeBody}`);
+      throw new Error(
+        `${this.label} stream failed: ${resp.status} ${resp.statusText} — ${safeBody}`,
+      );
     }
 
     yield* parseOpenAIStream(resp.body!);
@@ -248,6 +275,7 @@ export class OpenAIProvider implements AIProvider {
       this.config.apiKey,
       this.config.embeddingModel,
       this.config.embeddingDimensions,
+      this.config.providerLabel,
     );
   }
 
@@ -257,6 +285,7 @@ export class OpenAIProvider implements AIProvider {
       this.config.apiKey,
       this.config.inferenceModel,
       this.config.extraBody,
+      this.config.providerLabel,
     );
   }
 
@@ -266,6 +295,7 @@ export class OpenAIProvider implements AIProvider {
       this.config.apiKey,
       this.config.fastModel,
       this.config.extraBody,
+      this.config.providerLabel,
     );
   }
 }
