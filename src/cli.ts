@@ -142,7 +142,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
-import { atomicWriteJson, sweepOrphanTmpFiles } from './utils/atomic-write.js';
+import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
 /**
@@ -291,8 +291,12 @@ function softGcSweep(): void {
   // TRA-702: atomic writes unlink their own tmp on error, but a process killed
   // between open and rename never runs that handler — so every crash leaked one
   // file into the state dir, permanently.
+  //
+  // TRA-783: the sweep is shallow, and it only ever ran on the state root — a
+  // June orphan was still sitting in `sessions/` in September. The full set of
+  // atomically-written state directories lives in atomic-write.ts.
   try {
-    const removedTmps = sweepOrphanTmpFiles(TRACE_MCP_HOME);
+    const removedTmps = sweepOrphanTmpFilesUnderHome(TRACE_MCP_HOME);
     if (removedTmps.length > 0) {
       logger.info(
         { removedTmps: removedTmps.length },
