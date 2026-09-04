@@ -108,7 +108,13 @@ export function startHeartbeat(
     last_failed_tool_call_at: null,
     tool_calls_total: 0,
     tool_calls_failed: 0,
-    mcp_sessions_active: 0,
+    // A stdio server exists only because a client spawned it and holds its
+    // pipes — one attached session, by construction. Nothing ever called
+    // setSessionsActive(), so this stayed 0 and the guard hook's
+    // "mcp_sessions_active == 0 means nobody is attached" check (added in
+    // #301) fired on every healthy stdio session, degrading the Read branch to
+    // advisory. Measured in TRA-773.
+    mcp_sessions_active: transport === 'stdio' ? 1 : 0,
   };
 
   const flush = () => {
