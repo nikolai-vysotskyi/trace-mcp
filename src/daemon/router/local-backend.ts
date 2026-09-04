@@ -419,6 +419,14 @@ export class LocalBackend implements Backend {
           if (this.stopping) return;
           this.pipeline!.deleteFiles(deleted);
         },
+        {
+          // Dropped fs events leave the index silently stale — re-walk the
+          // root. indexAll() is hash-gated, so unchanged files aren't reparsed.
+          onRescan: async () => {
+            if (this.stopping) return;
+            await this.pipeline!.indexAll();
+          },
+        },
       );
 
     // Create McpServer and wire it to our in-memory pair.
