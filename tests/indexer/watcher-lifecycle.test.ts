@@ -298,3 +298,63 @@ describe('FileWatcher.stop drains an in-flight change handler (TRA-834)', () => 
     expect(handlerDone).toBe(true);
   });
 });
+
+/**
+ * TRA-834, Reviewer B finding 1: nothing serializes change handlers, so a
+ * second burst can fire while the first is still indexing. With a single
+ * `activeHandler` slot the second run overwrote the first and, finishing
+ * quickly, cleared the slot — `stop()` then returned while the first was still
+ * writing into a Store the caller was about to close.
+ */
+describe('FileWatcher.stop drains ALL in-flight handlers (TRA-834)', () => {
+  it('waits for a slow first handler even after a fast second one finishes', async () => {
+    let deliver: ((events: Array<{ type: string; path: string }>) => Promise<void>) | undefined;
+    vi.mocked(parcelWatcher.subscribe).mockImplementation(async (_dir, cb) => {
+      deliver = (events) =>
+        (cb as (err: Error | null, events: unknown[]) => Promise<void>)(null, events);
+      return { unsubscribe: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    const immediate = ((fn: () => void) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as unknown as typeof setTimeout;
+    const watcher = new FileWatcher(immediate, (() => {}) as unknown as typeof clearTimeout);
+
+    let releaseSlow: () => void = () => {};
+    let slowDone = false;
+    let call = 0;
+    const onChanges = vi.fn(async () => {
+      call += 1;
+      // First burst blocks; every later burst returns immediately, which is
+      // what used to clear the single tracking slot.
+      if (call === 1) {
+        await new Promise<void>((resolve) => {
+          releaseSlow = () => {
+            slowDone = true;
+            resolve();
+          };
+        });
+      }
+    });
+
+    await watcher.start('/project', mockConfig, onChanges);
+    await deliver?.([{ type: 'update', path: '/project/src/a.ts' }]);
+    await deliver?.([{ type: 'update', path: '/project/src/b.ts' }]);
+    expect(onChanges).toHaveBeenCalledTimes(2);
+
+    let stopped = false;
+    const stopping = watcher.stop().then(() => {
+      stopped = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(slowDone).toBe(false);
+    expect(stopped).toBe(false);
+
+    releaseSlow();
+    await stopping;
+    expect(stopped).toBe(true);
+    expect(slowDone).toBe(true);
+  });
+});

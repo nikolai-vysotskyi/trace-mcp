@@ -883,6 +883,20 @@ export class ProjectManager {
     // one project logging five of them over 27 seconds. Stopping the source of
     // new work first is what makes the teardown below finite.
     await managed.watcher.stop();
+    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
+    // scheduling LSP enrichment (see the onChanges tail in addProject), and
+    // `trailingDebounce` mints a fresh AbortController when it is scheduled
+    // after a cancel — so the cancels above no longer cover those timers. Cancel
+    // once more now that no handler is left to arm another one.
+    managed.cancelDebouncedAI?.();
+    try {
+      managed.lspEnricher?.cancel();
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'lspEnricher.cancel() failed during stopProject (non-fatal)',
+      );
+    }
     // Wait for the background initial-index chain (indexAll → summarize/embed →
     // subproject auto-sync) to finish so its topology.db handle is closed
     // before we tear down this project — see initialIndexPromise's doc comment.
