@@ -834,7 +834,15 @@ legibility. So the banner also ships at 480 CSS px in one column, selected with
 theme source: the first matching source wins, so a theme source above them takes
 the phone back to the wide cut. `media` is the only responsive lever GitHub's
 sanitiser leaves in a README, and it takes any media query, not just
-`prefers-color-scheme`. The narrow cut is a CSS modifier in the generator
+`prefers-color-scheme`. One catch, and it is not cosmetic: GitHub wraps every
+README `<picture>` in a `<themed-picture>` element that substring-matches
+`(prefers-color-scheme: light)` and, for a reader who pinned Light in Appearance,
+rewrites that source's media to match every viewport. Written with the space, the
+compound narrow source is classified as themed and wins on a 1440px desktop — the
+phone cut at 750px. So the narrow one is spelled `(prefers-color-scheme:light)`,
+no space: still valid CSS, still preserved by the sanitiser, invisible to that
+match. The wide source keeps the spaced form, where the rewrite is what a pinned
+reader wants. The narrow cut is a CSS modifier in the generator
 (`.banner.narrow`) overriding only the sizes that break — palette and copy stay
 shared, so a wording change lands in both. `tests/docs/readme-header-images.test.ts`
 guards the files, both cuts, and that ordering.

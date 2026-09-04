@@ -48,4 +48,21 @@ describe('README header images', () => {
     // phone back to the 1200px cut.
     expect(narrow).toBeLessThan(themed);
   });
+
+  it('the narrow light source hides its theme query from GitHub themed-picture', () => {
+    // GitHub wraps every README <picture> in a <themed-picture> element whose
+    // getSourceTheme() substring-matches "(prefers-color-scheme: light)". For a
+    // reader who pinned Light in Appearance it rewrites the media of any source
+    // it classifies that way to match all viewports — and this source is first,
+    // so the phone cut would land on a 750px desktop. Dropping the space after
+    // the colon keeps the query valid and survives GitHub's sanitiser, while
+    // falling outside that substring match.
+    expect(banner).toContain('(max-width: 500px) and (prefers-color-scheme:light)');
+    expect(banner).not.toContain('(max-width: 500px) and (prefers-color-scheme: light)');
+    // The wide source must keep the spaced form: there themed-picture doing the
+    // rewrite is exactly what a pinned-theme reader needs.
+    expect(banner).toMatch(
+      /media="\(prefers-color-scheme: light\)" srcset="docs\/images\/readme\/banner-light\.png"/,
+    );
+  });
 });
