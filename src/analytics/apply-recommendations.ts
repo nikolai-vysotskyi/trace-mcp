@@ -17,6 +17,7 @@
  *    from — into one manifest per `applyStartupRecommendations` call.
  *    `rollbackStartupRecommendations` replays that manifest in reverse.
  */
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -285,7 +286,9 @@ function applyDuplicateInstructions(
 // --- Entry points ---
 
 function backupId(): string {
-  return `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 8)}`;
+  // Not a security token, but Semgrep blocks Math.random() repo-wide and a
+  // collision here would let one bundle overwrite another's manifest.
+  return `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(3).toString('hex')}`;
 }
 
 export function applyStartupRecommendations(
