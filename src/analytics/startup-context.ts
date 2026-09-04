@@ -34,6 +34,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { claudeHome } from '../shared/paths.js';
 import { listAllSessions } from './log-parser.js';
+import { type StartupTextCompression, analyzeStartupText } from './startup-text.js';
 
 // --- Pricing (USD per million tokens, sonnet-class — same table the rest of
 // this package prices with, see analytics-store.ts). ---
@@ -128,6 +129,17 @@ export interface StartupContextAudit {
    * its reader more than it saves.
    */
   recommendations: Recommendation[];
+  /**
+   * The other half of the optimisation question (TRA-770): of the text that is
+   * NEEDED and stays, where does the block say the same thing twice?
+   *
+   * Deliberately part of this payload rather than a tool of its own. It is the
+   * same question — what is this block costing me and what can go — and a
+   * second parameterless tool would add schema chars to every session that
+   * lists tools while diluting the compact_schemas reduction the docs promise,
+   * for a report nobody asks for separately from this one.
+   */
+  textCompression: StartupTextCompression;
   /** The window `recommendations` observed, said out loud rather than implied. */
   observationWindow: string;
   notes: string[];
@@ -865,6 +877,13 @@ export async function analyzeStartupContext(
 
   const instructionFiles = readInstructionFiles(opts.projectRoot);
 
+  /* Cheap next to the scan above — it reads a handful of recent sessions, not
+     the corpus — so it rides along rather than making the user ask twice. */
+  const textCompression = await analyzeStartupText({
+    projectRoot: opts.projectRoot,
+    listSessions: opts.listSessions,
+  });
+
   const firstCallCacheWriteUsd = freshSessions.reduce(
     (usd, s) =>
       usd +
@@ -913,9 +932,11 @@ export async function analyzeStartupContext(
       startupUsd,
       days,
     }),
+    textCompression,
     observationWindow: `${days} days, ${freshSessions.length} fresh sessions`,
     notes: [
       'Computed locally from session logs. Nothing is sent anywhere.',
+      'textCompression proposes deletions only, and only where another source in the same startup block still says the same thing. Nothing is reworded and nothing is written.',
       'Every recommendation rests on evidence of non-use over the stated window — never on size. A tool missing from the startup block is a tool the agent will not call.',
       "SessionStart hooks get no recommendation on purpose: nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on.",
       'The system prompt, tool schemas and CLAUDE.md are never written to the session log — they can only be reported together, as the residual row.',
