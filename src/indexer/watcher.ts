@@ -36,6 +36,25 @@ function isEventsDroppedError(err: unknown): boolean {
   return typeof msg === 'string' && msg.toLowerCase().includes('events were dropped');
 }
 
+/**
+ * Process-wide tally of drop reports and the reconcile passes they triggered.
+ * Reported by `get_index_health` so a session can tell "the OS never dropped
+ * anything" from "it dropped events and the repair did/didn't run" — a
+ * distinction that otherwise only exists in the daemon log, which the agent
+ * asking the question cannot read (TRA-813).
+ */
+const droppedEventStats = { drops: 0, reconciles: 0 };
+
+export function getDroppedEventStats(): { drops: number; reconciles: number } {
+  return { ...droppedEventStats };
+}
+
+/** Test-only reset — the tally is module state shared by every watcher. */
+export function resetDroppedEventStats(): void {
+  droppedEventStats.drops = 0;
+  droppedEventStats.reconciles = 0;
+}
+
 function isMacSystemPolicyError(e: unknown): boolean {
   if (process.platform !== 'darwin') return false;
   const err = e as NodeJS.ErrnoException & { message?: string };
@@ -243,6 +262,7 @@ export class FileWatcher {
       async (err, events) => {
         if (err) {
           if (isEventsDroppedError(err)) {
+            droppedEventStats.drops++;
             // Don't just log: the events are gone, so nothing else will ever
             // reindex what changed in the lost window (TRA-852).
             logger.warn(
@@ -330,6 +350,7 @@ export class FileWatcher {
       this.rescanPending = true;
       return;
     }
+    droppedEventStats.reconciles++;
     this.activeRescan = onRescan()
       .catch((e) => {
         logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');

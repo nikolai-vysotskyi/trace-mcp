@@ -4,7 +4,7 @@
  * return — every change in the lost window stayed invisible to the index
  * forever. It must now run the reconcile pass instead.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as parcelWatcher from '@parcel/watcher';
 
 type Callback = (err: Error | null, events: parcelWatcher.Event[]) => void | Promise<void>;
@@ -18,7 +18,7 @@ vi.mock('@parcel/watcher', () => ({
   },
 }));
 
-const { FileWatcher } = await import('../watcher.js');
+const { FileWatcher, getDroppedEventStats, resetDroppedEventStats } = await import('../watcher.js');
 
 async function startWatcher(onRescan?: () => Promise<void>) {
   const watcher = new FileWatcher();
@@ -94,5 +94,44 @@ describe('FileWatcher — dropped fs events', () => {
     release();
     await stopping;
     expect(stopped).toBe(true);
+  });
+});
+
+/**
+ * TRA-813 asked for a counter on top of the repair: without one a later run
+ * cannot tell "the OS never dropped anything" from "it dropped events and the
+ * repair was silently skipped". `get_index_health` reads this tally.
+ */
+describe('FileWatcher — dropped-event tally', () => {
+  beforeEach(() => resetDroppedEventStats());
+
+  it('counts every drop report and every reconcile pass it starts', async () => {
+    const onRescan = vi.fn(async () => {});
+    const watcher = await startWatcher(onRescan);
+    const dropped = new Error('Events were dropped by the FSEvents client.');
+
+    await capturedCallback!(dropped, []);
+    await capturedCallback!(dropped, []);
+
+    expect(getDroppedEventStats()).toEqual({ drops: 2, reconciles: 2 });
+    await watcher.stop();
+  });
+
+  it('counts the drop even when no reconcile callback is wired', async () => {
+    const watcher = await startWatcher(undefined);
+
+    await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+
+    expect(getDroppedEventStats()).toEqual({ drops: 1, reconciles: 0 });
+    await watcher.stop();
+  });
+
+  it('leaves the tally alone for unrelated watcher errors', async () => {
+    const watcher = await startWatcher(vi.fn(async () => {}));
+
+    await capturedCallback!(new Error('EMFILE: too many open files'), []);
+
+    expect(getDroppedEventStats()).toEqual({ drops: 0, reconciles: 0 });
+    await watcher.stop();
   });
 });

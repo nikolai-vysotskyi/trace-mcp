@@ -1,6 +1,7 @@
 import { readEmbeddingBreakerState } from '../../ai/embedding-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { IndexStats, Store } from '../../db/store.js';
+import { getDroppedEventStats } from '../../indexer/watcher.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
@@ -65,6 +66,20 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
       `Low edge density: ${stats.totalEdges} edges for ${stats.totalSymbols} symbols ` +
         `(${Math.round((stats.totalEdges / stats.totalSymbols) * 100)}% ratio). ` +
         `Some call graph queries may return incomplete results.`,
+    );
+  }
+
+  // The OS dropped fs events at least once this process: everything changed
+  // inside those windows was invisible to the watcher until the reconcile pass
+  // caught up (TRA-852). Report it — an agent asking about index freshness
+  // cannot read the daemon log, which is where this otherwise only exists.
+  const { drops, reconciles } = getDroppedEventStats();
+  if (drops > 0) {
+    warnings.push(
+      `The OS dropped file-system events ${drops} time(s) since this process started; ` +
+        `${reconciles} index reconcile pass(es) were started in response ` +
+        `(started, not necessarily finished — a pass that failed is logged, not subtracted). ` +
+        `Results served between a drop and its reconcile may have been stale.`,
     );
   }
 
