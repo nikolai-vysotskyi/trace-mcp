@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.15.0
+# trace-mcp-guard v0.15.1
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.15.1 changes (TRA-845 — Bash branch had no liveness fallback):
+#   - Read, Grep and Glob all degrade to allow-with-warning when trace-mcp is
+#     unreachable (no heartbeat, stale heartbeat, stalled channel, transport
+#     mismatch, manual or auto bypass). The Bash branch never checked any of
+#     it, so with the daemon stopped `grep -rn foo src/`, `cat src/x.ts`,
+#     `ls src/`, `git diff src/x.ts` and `cmd < src/x.ts` were hard-denied
+#     while the tools they redirect to could not answer either.
+#   - Each of those six deny sites now calls bash_fallback_if_unavailable
+#     first. Ordinary Bash calls (builds, tests, git status) stay silent, and
+#     the .env rule stays unconditional — it is a secrets rule, not a
+#     navigation-cost tradeoff.
 #
 # v0.15 changes (guard v2 — TRA-711, navigation streak gate):
 #   - The guard no longer intervenes on an isolated navigation call. TRA-705
@@ -855,9 +867,31 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     exit 0
   fi
 
+  # ─── Fallback when trace-mcp can't answer (TRA-845) ───────────────
+  # Read/Grep/Glob all degrade to allow-with-warning when the heartbeat is
+  # dead, bypassed or auto-degraded. The Bash branch never did, so a stopped
+  # daemon hard-denied `grep -rn foo src/`, `cat src/x.ts`, `ls src/` and
+  # `git diff` with no working alternative — the "self-inflicted footgun"
+  # an external review named. Called immediately before each navigation
+  # deny below (not at branch entry) so ordinary Bash calls stay silent.
+  # The .env rule above stays unconditional: it is a secrets rule, not a
+  # navigation-cost tradeoff.
+  # ponytail: reads the liveness verdict only; it deliberately does NOT call
+  # maybe_auto_degrade. The deny counter is shared across tools, and feeding
+  # it from six Bash sites tripped the auto-bypass on ordinary sessions. Read/
+  # Grep/Glob denies still drive it, and the bypass sentinel they write is
+  # honoured here — Bash rides along instead of counting twice.
+  bash_fallback_if_unavailable() {
+    if (( HEARTBEAT_DEAD == 1 )); then
+      allow_with_context \
+        "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Bash as fallback — restart trace-mcp to re-enable strict routing."
+    fi
+  }
+
   # git show/diff/log -p/blame on code paths — these are de-facto Read.
   if echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +(show|blame|cat-file)( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-show"
       deny \
@@ -865,6 +899,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
         "trace-mcp alternatives:\\n- get_symbol { \\\"fqn\\\": \\\"...\\\" } — current source\\n- get_outline { \\\"path\\\": \\\"...\\\" } — file structure\\n- get_changed_symbols / compare_branches — git-aware diffs\\nUse git show/blame/cat-file only on non-code files."
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +log +.*(-p|--patch)( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-log-p"
       deny \
@@ -872,6 +907,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list"
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +diff( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-diff"
       deny \
@@ -903,6 +939,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE"; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-ls-find"
     deny \
@@ -933,6 +970,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE" \
      && { echo "$COMMAND" | grep -qiE "$CODE_EXT_ANYWHERE_RE" || echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE"; }; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-code-shell"
     deny \
@@ -942,6 +980,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
 
   # Input redirection from a code file: `cmd < src/foo.ts`.
   if echo "$COMMAND" | grep -qE '< +[^ ]+' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-input-redir"
     deny \
