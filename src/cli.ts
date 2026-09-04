@@ -2980,10 +2980,7 @@ program
       // that await is the cost, instead of us guessing.
       const projectsStopStartedAt = Date.now();
       await projectManager.shutdown();
-      logger.info(
-        { elapsedMs: Date.now() - projectsStopStartedAt },
-        'Projects stopped',
-      );
+      logger.info({ elapsedMs: Date.now() - projectsStopStartedAt }, 'Projects stopped');
       // Drop our PID registration last: while it exists, clients treat the
       // daemon as alive-but-busy and refuse to restart it (TRA-421). Stop the
       // re-assert first — httpServer.close() below waits on live SSE sessions,

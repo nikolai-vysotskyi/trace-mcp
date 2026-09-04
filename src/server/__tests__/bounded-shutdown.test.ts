@@ -76,9 +76,7 @@ describe('armBoundedExit', () => {
     expect(exitFn).toHaveBeenCalledWith(0);
     // Order matters: the hook records the clean stop and drops the PID file,
     // which is pointless after the process is gone.
-    expect(onTimeout.mock.invocationCallOrder[0]).toBeLessThan(
-      exitFn.mock.invocationCallOrder[0],
-    );
+    expect(onTimeout.mock.invocationCallOrder[0]).toBeLessThan(exitFn.mock.invocationCallOrder[0]);
   });
 
   it('still exits when onTimeout throws', () => {
