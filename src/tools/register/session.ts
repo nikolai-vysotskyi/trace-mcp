@@ -431,10 +431,16 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   // --- Analytics: Startup Context Audit (preset-gated; scans the whole
   // machine's logs, so it is a report you ask for, not one every session pays
-  // schema tokens to keep on the shelf). ---
+  // schema tokens to keep on the shelf).
+  //
+  // The description was tightened when TRA-770 added `textCompression`: the
+  // description budget (TRA-186) is a fixed pot every client pays from, so a
+  // new field earns its words by taking them from this same description rather
+  // than from the pot. Keep the string as the literal directly after the tool
+  // name — scripts/tools-index.ts reads it from here to generate the docs. ---
   server.tool(
     'get_startup_context_audit',
-    'What every session pays for before the first user message, what it costs, and what the logs prove went unused. Decomposes the startup block by source (system prompt, tool schemas, MCP servers, skill/agent listings, hooks), prices the cache rebuilds that make it get paid twice, and suggests removals backed by evidence of non-use — never by size. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, observationWindow }.',
+    'What every session pays for before your first message, what it costs, and what went unused. Decomposes it by source (system prompt, tool schemas, MCP servers, listings, hooks), prices the cache rebuilds, and suggests removals proven unused — never merely big. `textCompression` finds text the block says twice, as a delete-only diff. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, textCompression, observationWindow }.',
     /* No parameters on purpose. The look-back window is the only knob this
        report could have, and a fixed 30 days is the answer for "what does my
        startup block cost" — while a param here would have to survive
