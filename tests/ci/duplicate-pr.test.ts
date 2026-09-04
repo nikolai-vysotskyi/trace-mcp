@@ -125,10 +125,46 @@ describe('claimedKeys', () => {
     ]);
   });
 
+  // Review finding on #897: `, and` made the separator match `,`, leaving `and`
+  // in the way of the next key — so the last issue of an Oxford-comma list was
+  // dropped and a duplicate on it slipped through.
+  it('reads the last key of an Oxford-comma or ampersand list', () => {
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1, TRA-2, and TRA-3.' })).toEqual([
+      'TRA-1',
+      'TRA-2',
+      'TRA-3',
+    ]);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-1 & TRA-2' })).toEqual([
+      'TRA-1',
+      'TRA-2',
+    ]);
+  });
+
+  // Same finding, second half: a key wrapped in a markdown link or backticks
+  // bypassed the closing keyword entirely.
+  it('reads a key wrapped in a markdown link, brackets or backticks', () => {
+    const link = { title: 'docs: update pricing', body: 'Closes [TRA-448](https://x/448)' };
+    expect(claimedKeys(link)).toEqual(['TRA-448']);
+    expect(claimedKeys({ title: 'docs: x', body: 'Closes [TRA-448]' })).toEqual(['TRA-448']);
+    expect(claimedKeys({ title: 'docs: x', body: 'Closes `TRA-448`' })).toEqual(['TRA-448']);
+  });
+
   it('does not read a closing keyword separated from the key by prose', () => {
     expect(claimedKeys({ title: 'fix: x', body: 'Fixes the reporting half of TRA-9.' })).toEqual(
       [],
     );
+    expect(
+      claimedKeys({ title: 'fix: x', body: 'This closes the gap TRA-809 left behind.' }),
+    ).toEqual([]);
+  });
+
+  it('stops the claim list at prose that follows a key', () => {
+    expect(
+      claimedKeys({ title: 'fix: x', body: 'Closes TRA-1 and reduces the daemon footprint.' }),
+    ).toEqual(['TRA-1']);
+    expect(claimedKeys({ title: 'fix: x', body: 'Closes TRA-809 (found by Nikolai).' })).toEqual([
+      'TRA-809',
+    ]);
   });
 });
 

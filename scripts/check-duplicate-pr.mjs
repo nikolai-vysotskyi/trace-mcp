@@ -29,19 +29,28 @@ export function issueKeys(text) {
 }
 
 /**
+ * One key in a closing list: `TRA-9`, `` `TRA-9` ``, `[TRA-9]`, `[TRA-9](url)`.
+ * Missing a wrapped key drops a real claim silently, which is the direction that
+ * costs a duplicated implementation.
+ */
+const CLAIMED_KEY = String.raw`[\`[]?TRA-\d+\b[\`\]]?(?:\([^)]*\))?`;
+
+/** List punctuation between keys. Repeats so `, and` reads as one separator. */
+const KEY_SEPARATOR = String.raw`(?:\s*(?:,|&|and)\s*)*`;
+
+const CLOSING_CLAIM = new RegExp(
+  String.raw`\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*((?:${CLAIMED_KEY}${KEY_SEPARATOR})+)`,
+  'gi',
+);
+
+/**
  * Issue keys a PR *claims*: the ones in its title, plus the ones a closing
  * keyword names in the body. Everything else in the body is a reference.
  *
  * @param {{title?: string, body?: string}} pr
  */
 export function claimedKeys(pr) {
-  const closing = [
-    ...`${pr.body ?? ''}`.matchAll(
-      /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*((?:TRA-\d+\b(?:\s*(?:,|and)\s*)?)+)/gi,
-    ),
-  ]
-    .map((m) => m[1])
-    .join(' ');
+  const closing = [...`${pr.body ?? ''}`.matchAll(CLOSING_CLAIM)].map((m) => m[1]).join(' ');
   return issueKeys(`${pr.title ?? ''}\n${closing}`);
 }
 
