@@ -141,8 +141,8 @@ export class FileWatcher {
   /**
    * Handler runs currently executing. Unsubscribing stops future events and
    * clearing the debounce timer stops a scheduled run, but neither touches a
-   * run whose timer has already fired — that one is mid-`onChanges`, indexing
-   * into a Store the caller is about to close (TRA-834). `stop()` awaits these
+   * run whose timer has already fired — that one is mid-`onChanges`/`onDeletes`,
+   * indexing into a Store the caller is about to close (TRA-834). `stop()` awaits these
    * so "the watcher is stopped" means no handler is still running.
    *
    * A set, not a single reference: nothing serializes handlers, so a second
@@ -151,6 +151,21 @@ export class FileWatcher {
    * `stop()` would then return while the first is still writing.
    */
   private readonly activeHandlers = new Set<Promise<void>>();
+
+  /**
+   * Register an already-started handler run so `stop()` waits it out. The
+   * tracked copy swallows errors so `stop()`'s `Promise.all` can only wait,
+   * never throw; the caller still sees the original rejection.
+   */
+  private track(run: Promise<void>): Promise<void> {
+    const tracked: Promise<void> = run
+      .catch(() => {})
+      .finally(() => {
+        this.activeHandlers.delete(tracked);
+      });
+    this.activeHandlers.add(tracked);
+    return run;
+  }
 
   constructor(
     private readonly _setTimeout: typeof setTimeout = setTimeout,
@@ -262,7 +277,7 @@ export class FileWatcher {
 
         if (deleted.length > 0 && onDeletes) {
           logger.debug({ count: deleted.length }, 'File deletions detected');
-          await onDeletes(deleted);
+          await this.track(onDeletes(deleted));
         }
 
         if (changed.length === 0) return;
@@ -276,17 +291,15 @@ export class FileWatcher {
           this.pendingPaths.clear();
           this.debounceTimer = null;
           logger.debug({ count: paths.length }, 'File changes detected');
-          const run = (async () => {
-            try {
-              await onChanges(paths);
-            } catch (e) {
-              logger.error({ error: e }, 'File change handler failed');
-            }
-          })();
-          const tracked: Promise<void> = run.finally(() => {
-            this.activeHandlers.delete(tracked);
-          });
-          this.activeHandlers.add(tracked);
+          void this.track(
+            (async () => {
+              try {
+                await onChanges(paths);
+              } catch (e) {
+                logger.error({ error: e }, 'File change handler failed');
+              }
+            })(),
+          );
         }, debounceMs);
       },
       {
