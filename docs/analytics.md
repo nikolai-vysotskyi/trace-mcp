@@ -1,7 +1,7 @@
 ---
 title: "Session Analytics & Coverage Intelligence — token savings, wasteful patterns"
 description: "trace-mcp's built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage."
-updated: 2026-09-03
+updated: 2026-09-04
 ---
 
 # Session Analytics & Coverage Intelligence
@@ -164,6 +164,36 @@ Returns: the block's size distribution across fresh sessions, a decomposition by
 Every recommendation rests on **evidence of non-use over a stated observation window**, never on size: an MCP server whose instructions loaded into N startups and whose tools were never called, a skill listed at every start and never invoked, text duplicated between the global and project instruction files. A tool that is missing from the startup block is a tool the agent will not call, so a suggestion made because something is *big* can cost its reader far more than it saves. SessionStart hooks are deliberately excluded from suggestions for the same reason — nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on. They stay in the decomposition, where the reader sees the cost and decides.
 
 Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+
+#### `textCompression` — where the block says the same thing twice
+
+The audit answers "what does the block cost and what in it went unused". The `textCompression` field on the same payload answers the other half — of the text that is *needed* and stays, how much of it is a rule you already receive from somewhere else?
+
+It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
+
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from the most recent session log of the project you are in — and proposes deletions with a unified diff and a per-session token delta.
+
+**Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
+
+> a line is only proposed for removal when **every sentence on it** is still delivered by another source in the same startup block, and each removal cites that source per sentence. A heading goes only once its whole body has.
+
+The word doing the work is *every*. An earlier version removed a line once 60% of its characters were matched and validated that with a "some sentence matched" check — which deletes the other 40%, text nothing else says. Two independent reviews reproduced it. Any threshold below "every unit" reintroduces it, so the rule is universal and the report proposes less rather than guessing.
+
+That is also why this is not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Dropping the second copy leaves the instruction present, verbatim, in the block — which is what makes "the meaning survived" checkable instead of a matter of taste.
+
+Matching is on sentences and word overlap, with three guards:
+
+- **Polarity.** "Do not run tests in parallel" and "Run tests in parallel" share every content word and are opposite instructions. A prohibition is never removed on the evidence of a permission.
+- **Values.** Digits are kept and compared, so `Node 22` does not prove `Node 18`.
+- **Short sentences.** Below five content words, partial overlap means nothing — `Never push to main` and `Never push to prod` are mostly alike — so a short rule must be near-identical to its evidence.
+
+Evidence comes from **one** startup block, not a union across sessions: a server configured last month and removed since must not prove that today's file repeats it. It is scoped to the project, because another project's servers and hooks are not evidence about this one's session.
+
+Text it does not own is never edited — a third party's skill descriptions, another server's instructions, a plugin hook's output. Those are the reference corpus: read to prove duplication, reported in `notCompressible` with their size and the reason.
+
+Measured payload on real projects: 200–1400 tokens, with the diff capped at 200 lines; every removal is listed in `removals` regardless.
+
+Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
 
 ### `get_coverage_report`
 

@@ -179,7 +179,11 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   biome:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -210,7 +214,16 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # 3 minutes was never enough: the last green run spent 84s in
+    # pnpm/action-setup's self-installer and 71s in `pnpm audit` — 155s of a
+    # 180s budget, with the whole margin sitting on npm-registry round trips.
+    # On 2026-09-04 the registry slowed down and the job was cancelled without
+    # ever running the audit, on master, on release-please and on two agent
+    # branches inside an hour. This is a network step start to finish; size the
+    # budget for a slow registry, not a fast one: a 6m28s setup (observed on
+    # this PR's own run) plus the 5m the audit step below is now allowed to
+    # spend does not fit in 10.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -225,7 +238,15 @@ jobs:
           node-version: '22'
 
       # Audits the lockfile; no install needed.
+      #
+      # `fetch-timeout` is raised from pnpm's 60s default because the advisory
+      # endpoint regularly takes longer than that for a tree this size. At 60s
+      # pnpm kills its own request and retries: 60s + 10s + 60s + 60s ~= 190s,
+      # measured, which alone overran the job. Three slow attempts are strictly
+      # worse than one patient one — the answer is the same either way.
       - name: pnpm audit (production dependencies)
+        env:
+          npm_config_fetch_timeout: '300000'
         run: pnpm audit --prod --audit-level=moderate
 
   no-ai-marks:
@@ -270,7 +291,11 @@ jobs:
     if: needs.changes.outputs.core == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     # Safety cap. Cold cache build is ~90s; warm ~30s. 6 min absorbs npm/registry slowdowns.
-    timeout-minutes: 6
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     outputs:
@@ -621,7 +646,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -674,7 +703,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.vscode == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Every job that runs pnpm/action-setup pays for its self-installer, which
+    # has been measured between 84s and 6m28s depending on npm registry health.
+    # A budget that only fits the fast case turns a slow registry into a red
+    # gate — 12 is the floor already used by the report jobs below.
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
