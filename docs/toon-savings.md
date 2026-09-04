@@ -1,7 +1,7 @@
 ---
 title: "TOON Output Format — Measured Token Savings on Real Tool Calls"
 description: "Real-world token measurements for trace-mcp's TOON (Token-Oriented Object Notation) output format across tabular MCP tool responses."
-updated: 2026-09-03
+updated: 2026-09-04
 ---
 
 # TOON Token Savings — Measured

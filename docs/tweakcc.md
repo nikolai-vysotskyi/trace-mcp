@@ -1,7 +1,7 @@
 ---
 title: "System Prompt Routing via tweakcc — pairing trace-mcp with Claude Code"
 description: "How to pair trace-mcp with tweakcc to patch Claude Code's system prompts and route tool selection toward trace-mcp instead of native file reads."
-updated: 2026-09-03
+updated: 2026-09-04
 ---
 
 # System Prompt Routing via tweakcc
