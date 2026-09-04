@@ -7,6 +7,7 @@
  * - Hotspots placeholder (git integration for Phase 2)
  */
 
+import { type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store } from '../../db/store.js';
 import { getFilePinWeightExplicit, getSymbolPinWeightsByFile } from '../../scoring/pins.js';
 
@@ -329,6 +330,7 @@ export interface GetDependencyCyclesOptions {
 export function getDependencyCycles(
   store: Store,
   options: GetDependencyCyclesOptions = {},
+  guard: BudgetGuard = forTool('get_circular_imports'),
 ): DependencyCycle[] {
   const { includeTests = false } = options;
   // Use the import-only view of the graph. `projected:true` edges are
@@ -384,8 +386,9 @@ export function getDependencyCycles(
   const finishOrder: number[] = [];
 
   for (const node of nodes) {
+    if (guard.aborted) break;
     if (!visited.has(node)) {
-      dfsForward(node, forward, visited, finishOrder);
+      dfsForward(node, forward, visited, finishOrder, guard);
     }
   }
 
@@ -394,10 +397,11 @@ export function getDependencyCycles(
   const sccs: number[][] = [];
 
   for (let i = finishOrder.length - 1; i >= 0; i--) {
+    if (guard.aborted) break;
     const node = finishOrder[i];
     if (!visited2.has(node)) {
       const component: number[] = [];
-      dfsReverse(node, reverse, visited2, component);
+      dfsReverse(node, reverse, visited2, component, guard);
       if (component.length > 1) {
         sccs.push(component);
       }
@@ -416,10 +420,12 @@ function dfsForward(
   adj: Map<number, Set<number>>,
   visited: Set<number>,
   finishOrder: number[],
+  guard: BudgetGuard,
 ): void {
   const stack: Array<{ node: number; phase: 'enter' | 'exit' }> = [{ node: start, phase: 'enter' }];
 
   while (stack.length > 0) {
+    if (!guard.tick()) return;
     const { node, phase } = stack.pop()!;
     if (phase === 'exit') {
       finishOrder.push(node);
@@ -445,9 +451,11 @@ function dfsReverse(
   adj: Map<number, Set<number>>,
   visited: Set<number>,
   component: number[],
+  guard: BudgetGuard,
 ): void {
   const stack = [start];
   while (stack.length > 0) {
+    if (!guard.tick()) return;
     const node = stack.pop()!;
     if (visited.has(node)) continue;
     visited.add(node);
@@ -500,6 +508,7 @@ export function getPageRank(
      */
     includeExternals?: boolean;
   } = {},
+  guard: BudgetGuard = forTool('get_pagerank'),
 ): PageRankResult[] {
   const {
     damping = 0.85,
@@ -529,6 +538,9 @@ export function getPageRank(
   }
 
   for (let iter = 0; iter < maxIterations; iter++) {
+    // One full sweep over N nodes per iteration — check the clock/RSS
+    // ceilings once per sweep rather than per node.
+    if (!guard.check()) break;
     // Dangling mass: nodes with no outlinks redistribute uniformly
     let danglingMass = 0;
     for (let i = 0; i < N; i++) {

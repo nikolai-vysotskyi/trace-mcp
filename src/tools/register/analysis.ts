@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { forTool } from '../../compute-guard.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
@@ -296,7 +297,8 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         ),
     },
     async ({ include_tests }) => {
-      const cycles = getDependencyCycles(store, { includeTests: include_tests === true });
+      const guard = forTool('get_circular_imports');
+      const cycles = getDependencyCycles(store, { includeTests: include_tests === true }, guard);
       const stats = store.getStats();
       return {
         content: [
@@ -305,6 +307,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
             text: jh('get_circular_imports', {
               total_cycles: cycles.length,
               cycles,
+              ...guard.marker(),
               ...(cycles.length === 0
                 ? {
                     evidence: buildNegativeEvidence(
@@ -336,9 +339,17 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
       output_format: OutputFormatSchema,
     },
     async ({ limit, include_markdown, output_format }) => {
-      const results = getPageRank(store, { includeMarkdown: include_markdown });
+      const guard = forTool('get_pagerank');
+      const results = getPageRank(store, { includeMarkdown: include_markdown }, guard);
       const sliced = results.slice(0, limit ?? 50);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
+      // The array payload has nowhere to carry a marker, so an aborted run
+      // returns the object form instead: on a call that did not finish, the
+      // truncation reason is worth more than shape stability.
+      if (guard.aborted) {
+        const text = jh('get_pagerank', { results: sliced, ...guard.marker() });
+        return { content: [{ type: 'text', text }] };
+      }
       const text = encodeResponse(sliced, fmt);
       return { content: [{ type: 'text', text }] };
     },
