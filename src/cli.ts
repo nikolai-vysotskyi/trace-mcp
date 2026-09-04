@@ -11,6 +11,7 @@ import { startParentDeathWatch } from './server/parent-death-watch.js';
 import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
+  describeStopContext,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -2894,20 +2895,18 @@ program
       // cleanup once.
       if (daemonShuttingDown) return;
       daemonShuttingDown = true;
-      // Field debugging of the 60s restart loop (desktop-app /health watchdog
-      // firing `daemon restart` against a warming daemon) was blind because
-      // shutdowns left no trace of WHO asked. Always say why we're going down.
-      // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
-      // programmatic callers pass their own reason string.
-      logger.info(
-        { reason: reason ?? 'unknown', uptimeSec: Math.floor((Date.now() - startedAt) / 1000) },
-        'Daemon shutting down',
-      );
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
       // async cleanup and only exits from httpServer.close()'s callback. If a
       // close hangs or the event loop is starved, the daemon would never die on
       // a legitimate SIGTERM. Arm a bounded hard-exit so termination is
       // guaranteed within a bounded time. Unref'd — never keeps the process up.
+      //
+      // Armed before anything else runs, including the diagnostic below: the
+      // deadline is meant to be measured from the signal, and `launchctl print`
+      // can burn its own 2s timeout first (TRA-850). A JS timer still cannot
+      // interrupt a synchronous call in progress — this bounds when the clock
+      // starts, not that call.
+      //
       // TRA-849: exit 0, not 1. Everything reaching `shutdown()` is a requested
       // stop (SIGTERM/SIGINT/idle-exit); overrunning the deadline says our
       // cleanup was slow, not that the daemon died. Exit 1 made launchd log a
@@ -2934,6 +2933,23 @@ program
           recordDaemonCleanStop();
         },
       });
+      // Field debugging of the 60s restart loop (desktop-app /health watchdog
+      // firing `daemon restart` against a warming daemon) was blind because
+      // shutdowns left no trace of WHO asked. Always say why we're going down.
+      // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
+      // programmatic callers pass their own reason string.
+      // For a signalled stop the reason alone says nothing about the source, so
+      // attach what the process can observe about it (TRA-850). Only for
+      // signals: a programmatic reason already names its caller.
+      const isSignal = reason === 'SIGTERM' || reason === 'SIGINT' || reason === 'SIGHUP';
+      logger.info(
+        {
+          reason: reason ?? 'unknown',
+          uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+          ...(isSignal ? describeStopContext() : {}),
+        },
+        'Daemon shutting down',
+      );
       // Close SSE connections
       for (const res of sseConnections) {
         try {

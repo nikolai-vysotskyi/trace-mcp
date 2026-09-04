@@ -53,6 +53,7 @@ import {
   runningBundlePath,
 } from './locate-app.mjs';
 import { traceHomeDir } from './trace-home.mjs';
+import { logDaemonStopAttribution } from './daemon-attribution.mjs';
 
 // Every installed bundle on this machine, the primary target first. Empty
 // means no install was found — the script then exits 0 like the old hardcoded
@@ -101,6 +102,11 @@ if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
  */
 function stopRunningDaemon() {
   try {
+    logDaemonStopAttribution(
+      path.join(traceHomeDir(), 'daemon.log'),
+      'stop',
+      'postinstall-app: respawn with new binary',
+    );
     if (process.platform === 'darwin') {
       execFileSync(LAUNCHCTL_BIN, ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
       return;

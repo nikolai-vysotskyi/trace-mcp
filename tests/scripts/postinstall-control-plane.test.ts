@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const SCRIPT_PATH = path.join(REPO_ROOT, 'scripts', 'postinstall-control-plane.mjs');
+const ATTRIBUTION_PATH = path.join(REPO_ROOT, 'scripts', 'daemon-attribution.mjs');
 
 function mkTmp(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -110,6 +111,8 @@ describe('postinstall-control-plane', () => {
       fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
       // Copy the script + required hook + a fake dist/cli.js + package.json.
       fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+      // Sibling module the script imports for stop attribution (TRA-850).
+      fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
       for (const name of [
         'trace-mcp-launcher.sh',
         'trace-mcp-launcher.cmd',
@@ -179,6 +182,8 @@ describe('postinstall-control-plane', () => {
       fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
       fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
       fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+      // Sibling module the script imports for stop attribution (TRA-850).
+      fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
       for (const name of [
         'trace-mcp-launcher.sh',
         'trace-mcp-launcher.cmd',
