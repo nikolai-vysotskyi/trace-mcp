@@ -3,6 +3,7 @@ import { createAIProvider } from '../../src/ai/index.js';
 import {
   OpenAIProvider,
   parseOpenAIExtraBodyEnv,
+  redactBaseUrlForLogs,
   resolveOpenAIExtraBody,
 } from '../../src/ai/openai.js';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -127,6 +128,13 @@ describe('OpenAIProvider', () => {
       await expect(provider.embedding().embedBatch(['a'])).rejects.toThrow(
         `lmstudio embeddings @ ${baseConfig.baseUrl} failed: 500`,
       );
+    });
+
+    it('keeps userinfo and query credentials out of the logged base URL', () => {
+      expect(redactBaseUrlForLogs('https://user:s3cret@gw.example.com/v1?key=abc123')).toBe(
+        'https://gw.example.com/v1',
+      );
+      expect(redactBaseUrlForLogs('not a url')).toBe('<invalid base_url>');
     });
   });
 

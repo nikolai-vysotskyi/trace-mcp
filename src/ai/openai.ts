@@ -70,6 +70,21 @@ export function resolveOpenAIExtraBody(
   return { ...envExtra, ...(configExtra ?? {}) };
 }
 
+/**
+ * Origin + path of `baseUrl`, with any userinfo and query string dropped. The
+ * URL goes into log lines and thrown errors, and some OpenAI-compatible
+ * gateways carry a token in userinfo or `?key=` — those must not reach the log.
+ * Unparseable input degrades to the scheme+host prefix, never the raw string.
+ */
+export function redactBaseUrlForLogs(baseUrl: string): string {
+  try {
+    const u = new URL(baseUrl);
+    return `${u.protocol}//${u.host}${u.pathname}`.replace(/\/$/, '');
+  } catch {
+    return '<invalid base_url>';
+  }
+}
+
 class OpenAIEmbeddingService implements EmbeddingService {
   /** e.g. "lmstudio embeddings @ http://localhost:1234/v1" — used in logs only. */
   private readonly label: string;
@@ -81,7 +96,7 @@ class OpenAIEmbeddingService implements EmbeddingService {
     private dims: number,
     providerLabel = 'openai',
   ) {
-    this.label = `${providerLabel} embeddings @ ${baseUrl}`;
+    this.label = `${providerLabel} embeddings @ ${redactBaseUrlForLogs(baseUrl)}`;
   }
 
   async embed(
@@ -163,7 +178,7 @@ class OpenAIInferenceService implements InferenceService {
     private extraBody: Record<string, unknown> = {},
     providerLabel = 'openai',
   ) {
-    this.label = `${providerLabel} chat @ ${baseUrl}`;
+    this.label = `${providerLabel} chat @ ${redactBaseUrlForLogs(baseUrl)}`;
   }
 
   async generate(
