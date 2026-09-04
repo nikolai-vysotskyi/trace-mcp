@@ -2,9 +2,14 @@
      them from docs/_data/counts.yml and docs/_data/pr_context_bench.json. Never
      retouch a PNG by hand: the numbers in it would stop tracking the data.
      PNG @2x rather than SVG because GitHub renders README images in an isolated
-     context where an SVG's @font-face never loads and Space Grotesk falls back. -->
+     context where an SVG's @font-face never loads and Space Grotesk falls back.
+     The narrow cut is for phones: GitHub scales the 1200px banner into a ~390px
+     column, which drops the tagline to 8px. Order matters — the first matching
+     <source> wins, so the max-width pair has to stay above the theme source. -->
 <p align="center">
   <picture>
+    <source media="(max-width: 500px) and (prefers-color-scheme: light)" srcset="docs/images/readme/banner-narrow-light.png" />
+    <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
     <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp — precomputed code intelligence for AI coding agents. Index the repo once so the agent stops re-reading the same files. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 177 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
   </picture>

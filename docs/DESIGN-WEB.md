@@ -826,6 +826,22 @@ load the fonts and will tell you it is fine when it is not.
 `<source media="(prefers-color-scheme: light)">` plus a dark `<img>`. GitHub
 honours it. Never stack the two.
 
+**Two cuts of the banner, one for the phone.** GitHub scales README images to
+the column, and on a phone that column is about 390 CSS px — the 1200px banner
+arrives at 0.33 scale, which puts its 25px tagline at 8px and the receipt below
+legibility. So the banner also ships at 480 CSS px in one column, selected with
+`<source media="(max-width: 500px)">` (plus the light pair) placed **above** the
+theme source: the first matching source wins, so a theme source above them takes
+the phone back to the wide cut. `media` is the only responsive lever GitHub's
+sanitiser leaves in a README, and it takes any media query, not just
+`prefers-color-scheme`. The narrow cut is a CSS modifier in the generator
+(`.banner.narrow`) overriding only the sizes that break — palette and copy stay
+shared, so a wording change lands in both. `tests/docs/readme-header-images.test.ts`
+guards the files, both cuts, and that ordering.
+
+**The buttons need no narrow cut.** At `width="250"` a button plate is already
+narrower than a phone column, so the three simply stack at full size.
+
 **Every number is generated.** The banner reads `docs/_data/counts.yml` and
 `docs/_data/pr_context_bench.json` — the same sources the site uses. A hand-
 retouched PNG turns "177 tools" into a silent lie two releases later. This is
