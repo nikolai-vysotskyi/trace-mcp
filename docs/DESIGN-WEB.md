@@ -238,25 +238,34 @@ second mark drawn on its own.
 
 ### What it is
 
-`trace-mcp` drawn, not set: monolinear lowercase letterforms on one grid, with
-**the hyphen redrawn as a step that climbs**. The step is the whole idea — the
-word carries the product's meaning in the one place nobody looks — so it is the
-only coloured thing in the logo and it is drawn with the same pen as the
-letters.
+**Space Mono Bold, lowercase, no tracking, converted to outlines** — the same
+file the site already ships, `docs/fonts/space-mono-700-latin.woff2`. The
+letters are the font's own contours on the font's own advances. They are
+**not** redrawn, and redrawing them is not an improvement waiting to happen:
+the first attempt at this replaced them with a thin geometric grotesque and
+lost the logo (TRA-777, 2026-09-04). Outlining is a technical step, not a
+design step.
 
-Grid, in units of a 100-unit em:
+The one drawn element is **the step that replaces the hyphen**, in font units
+(1000 upem):
 
 | | Value |
 |---|---|
-| ascender / x-height top / baseline / descender | `22` / `48` / `100` / `124` |
-| stem weight | `13` |
-| corner radius | `14` |
-| step rise | `26` — exactly two stem weights, centred on the x-height middle (`74`) |
-| step path | `M6 87 H30 V61 H56` — **one path, one subpath** |
+| letter stem, measured on `m` at the x-height middle | `126` |
+| **step weight** | **`88` — 0.70 of the stem** |
+| step rise | `253` |
+| step box | `900` (lower run `383`, upper run `517`) |
+| air before / after the step | `88` / `112` — optically balanced, not equal |
+| vertical placement | centred on the x-height middle (`248`) |
 
-The step is a single path on purpose: it survives conversion to outlines and
-small-size rasterisation as one shape. If it ever becomes two paths, it will
-break at the join before anything else does.
+**The step is thinner than the letters, and that is the whole idea.** A thin
+cobalt line cut through heavy monospaced letters reads as a trace through
+mass. Match its weight to the stems and it stops being a trace and becomes a
+connector — that is exactly what went wrong the first time. Never equalise
+them.
+
+It is drawn as **one closed contour** (eight points, no curves), so it
+survives outlining and small rasters as a single shape.
 
 ### Colour
 
@@ -265,35 +274,40 @@ break at the join before anything else does.
 | Light | `#000000` | `--accent-solid` `#2B5FE3` |
 | Dark | `#F2F2F2` | `--accent` `#5B8CFF` |
 
-The step is the **only** colour in the logo. No second accent, ever — the
-contrast between one monochrome word and one coloured connector is what makes
-the step read as a trace instead of a hyphen. Red is out here as everywhere
-(§0).
+The step is the **only** colour in the logo. No second accent, ever. Red is
+out here as everywhere (§0).
 
 ### Minimum size, and when the fragment takes over
 
-Measured on a 1× raster, not a retina screenshot — the wordmark is 474 units
-wide, so the stroke is `width × 0.0274`:
+Measured on a 1× raster, not a retina screenshot. The wordmark is 5996 units
+wide, so at width `W` the stem is `W × 0.021` and the step is `W × 0.0147`.
+The step is the limiting element — the letters outlive it:
 
-| Width | Stroke | Verdict |
-|---|---|---|
-| 520px | 14.3px | display — README banner, social preview |
-| 200px | 5.5px | header, docs |
-| **104px** | **2.9px** | **minimum — the last size the word survives** |
-| 84px | 2.3px | the `e` bar and the `a`/`c` counters start to close |
-| 72px | 2.0px | grey mush; do not ship |
+| Width | Stem | Step | Verdict |
+|---|---|---|---|
+| 520px | 10.9px | 7.6px | display — README banner, social preview |
+| 200px | 4.2px | 2.9px | header, docs |
+| **144px** | **3.0px** | **2.1px** | **minimum — the last size the step still reads as a step** |
+| 104px | 2.2px | 1.5px | letters fine, step fades to grey |
+| 72px | 1.5px | 1.1px | the step is gone; do not ship |
 
-**Below 104px wide the word is not used.** What runs there is the step alone,
-lifted out of the word — favicon, app icon, GitHub avatar. That fragment is a
-crop of the logo, not a logo of its own, and it is never placed next to the
-wordmark: if the word is on screen, the fragment is redundant.
+**Below 144px wide the word is not used.** What runs there is the step alone,
+lifted out of the word — favicon, app icon, GitHub avatar. Inside that square
+the step is opened up (17% of the plate instead of its in-word 0.70-of-stem
+proportion): with no letters beside it there is nothing left to be thin
+against, and it has to survive 16px. That correction applies **only** to the
+square, never to the word.
+
+The fragment is a crop of the logo, not a logo of its own, and it is never
+placed next to the wordmark: if the word is on screen, the fragment is
+redundant.
 
 ### Lockups
 
-- **Site header** — the word alone at 132px. No mark beside it.
+- **Site header** — the word alone at 168px. No mark beside it.
 - **README banner** — the word alone, centred, on `--black`.
 - **Social preview** — the word is the subject of the frame; the domain and the
-  line of copy are Space Mono caps at `--text-disabled`. Nothing else in frame.
+  line of copy are Space Mono caps at `--text-disabled`.
 - **Square surfaces** (`.icns`, `.ico`, favicons, `apple-touch-icon`, avatar) —
   the step fragment on a near-black plate. The craft of that square — squircle,
   optical sizing, stroke weight at 16px — is TRA-780, owned by the Design/UX
@@ -301,12 +315,12 @@ wordmark: if the word is on screen, the fragment is redundant.
 
 ### Never
 
-- Do not set the wordmark in Space Mono or Space Grotesk with tracking and call
-  it the logo — the drawn outlines are the logo.
-- Do not put the brackets back around it.
+- Do not redraw the letters. The logo is Space Mono Bold outlined, full stop.
+- Do not add tracking to it, and do not put the brackets back around it.
+- Do not thicken the step to match the stems.
 - Do not colour anything in it but the step.
 - Do not place the fragment next to the word.
-- Do not use the word below 104px wide.
+- Do not use the word below 144px wide.
 
 ---
 
@@ -474,8 +488,9 @@ WebP conversion.
   no red CTA, dot, chip, bullet, outline, underline, hover, icon, banner or
   social preview. This overrides the old "red is the single accent" rule.
 - Reintroducing a **red** `--accent-solid`, or any red fill.
-- Setting the wordmark in a system font instead of its drawn outlines,
-  bracketing it, or giving it a second accent colour (§1a).
+- Redrawing the wordmark's letters instead of outlining Space Mono Bold,
+  tracking it out, bracketing it, thickening the step to the weight of the
+  stems, or giving it a second accent colour (§1a).
 - A second accent colour. Cobalt is the only one; `--accent` and
   `--accent-solid` are two lightnesses of it for two jobs (§1), not two
   accents. `--negative` is not an accent — it is the danger colour, §0.
