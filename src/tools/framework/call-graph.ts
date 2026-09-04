@@ -1,4 +1,5 @@
 import { err, ok } from 'neverthrow';
+import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
 import type { EdgeResolution } from '../../plugin-api/types.js';
@@ -40,6 +41,8 @@ interface CallGraphResult {
   max_depth: number;
   /** Distribution of resolution tiers across all edges */
   resolution_tiers: ResolutionTiers;
+  /** Present only when a compute ceiling stopped the traversal (TRA-841) */
+  _budget_exceeded?: BudgetExceeded;
 }
 
 /** Read resolution tier from edge column, with fallback inference for legacy data */
@@ -92,6 +95,7 @@ export function getCallGraph(
   store: Store,
   opts: { symbolId?: string; fqn?: string },
   depth = 2,
+  guard: BudgetGuard = forTool('get_call_graph'),
 ): TraceMcpResult<CallGraphResult> {
   depth = Math.min(depth, MAX_DEPTH);
   const resolved = resolveSymbolInput(store, opts);
@@ -130,6 +134,7 @@ export function getCallGraph(
     visited,
     edgeTypesUsed,
     chaAliasNodeIds,
+    guard,
   );
 
   return ok({
@@ -137,6 +142,7 @@ export function getCallGraph(
     edge_types_used: [...edgeTypesUsed],
     max_depth: depth,
     resolution_tiers: tiers,
+    ...guard.marker(),
   });
 }
 
@@ -152,6 +158,7 @@ function buildCallNode(
   _visited: Set<number>,
   edgeTypesUsed: Set<string>,
   chaAliasNodeIds: number[] = [],
+  guard: BudgetGuard = forTool('get_call_graph'),
 ): { node: CallGraphNode; tiers: ResolutionTiers } {
   // Phase 1: BFS to collect all reachable node IDs + edges
   interface EdgeRef {
@@ -189,6 +196,9 @@ function buildCallNode(
 
   for (let d = 0; d < maxDepth; d++) {
     if (frontier.length === 0) break;
+    // One forced check per depth level: a batch fetch over a wide frontier is
+    // expensive enough to deserve a ceiling check of its own.
+    if (!guard.check()) break;
 
     // Batch fetch all edges for this frontier
     const batchEdges = store.getEdgesForNodesBatch(frontier);
@@ -196,6 +206,7 @@ function buildCallNode(
     // Collect new neighbor node IDs
     const newNeighbors = new Set<number>();
     for (const edge of batchEdges) {
+      if (!guard.tick()) break;
       if (!CALL_EDGE_TYPES.has(edge.edge_type_name)) continue;
       edgeTypesUsed.add(edge.edge_type_name);
 
@@ -236,6 +247,7 @@ function buildCallNode(
       }
     }
 
+    if (guard.aborted) break;
     if (newNeighbors.size === 0) break;
 
     // Batch resolve node refs to get symbolRefIds
@@ -272,13 +284,18 @@ function buildCallNode(
     const node = makeNode(sym, filePath, sym.line_start, [], []);
     buildVisited.add(nodeId);
 
-    if (depth <= 0) {
+    // This phase turns a graph into a *tree*: every distinct path to a node
+    // materializes its own subtree, so a dense neighbourhood expands
+    // combinatorially. This tick is the one that actually stands between a
+    // pathological symbol and the OOM killer.
+    if (!guard.tick() || depth <= 0) {
       node.calls = undefined;
       node.called_by = undefined;
       return node;
     }
 
     for (const { nodeId: targetNodeId, edgeType, resolution } of info.outgoing) {
+      if (guard.aborted) break;
       if (buildVisited.has(targetNodeId)) continue;
       if (!nodeInfoMap.has(targetNodeId)) continue;
       const child = buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited));
@@ -287,6 +304,7 @@ function buildCallNode(
     }
 
     for (const { nodeId: sourceNodeId, edgeType, resolution } of info.incoming) {
+      if (guard.aborted) break;
       if (buildVisited.has(sourceNodeId)) continue;
       if (!nodeInfoMap.has(sourceNodeId)) continue;
       const child = buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited));

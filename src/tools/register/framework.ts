@@ -295,7 +295,9 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
           isError: true,
         };
       }
-      if (result.value.total === 0) {
+      // A truncated scan cannot claim `indexed_no_edges`: it stopped before
+      // seeing the whole edge set, so zero results is not evidence of absence.
+      if (result.value.total === 0 && !result.value._budget_exceeded) {
         const stats = store.getStats();
         // findReferences returns NOT_FOUND for missing symbols/files — reaching
         // this branch means the symbol IS indexed with 0 incoming edges. Probe
@@ -376,7 +378,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       const root = result.value.root;
       const isolated = (root.calls?.length ?? 0) === 0 && (root.called_by?.length ?? 0) === 0;
-      if (isolated) {
+      if (isolated && !result.value._budget_exceeded) {
         const stats = store.getStats();
         const sym = store.getSymbolBySymbolId(root.symbol_id);
         const probe = probeSymbolName(store, projectRoot, root.symbol_id);
