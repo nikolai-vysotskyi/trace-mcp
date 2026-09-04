@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DAEMON_SHUTDOWN_DEADLINE_MS } from '../../src/server/bounded-shutdown.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -279,9 +280,11 @@ describe('postinstall-control-plane', () => {
     const lifecycleTimeout = lifecycle.match(pattern)?.[1];
     expect(scriptTimeout).toBeDefined();
     expect(scriptTimeout).toBe(lifecycleTimeout);
-    // Must exceed the daemon's own 5s bounded hard-exit so we decide when to
-    // give up, not launchd.
-    expect(Number(scriptTimeout)).toBeGreaterThan(5);
+    // Must exceed the daemon's own bounded hard-exit so we decide when to give
+    // up, not launchd. Compared against the real constant (TRA-849): raising
+    // one of the two past the other silently reintroduces the SIGKILL that
+    // TRA-421 fixed.
+    expect(Number(scriptTimeout) * 1000).toBeGreaterThan(DAEMON_SHUTDOWN_DEADLINE_MS);
     for (const src of [script, lifecycle]) {
       expect(src).toContain('<key>ExitTimeOut</key>');
       expect(src).toContain('<integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>');
