@@ -220,7 +220,12 @@ function _isPlistLoaded(): boolean {
   }
 }
 
-function bootoutPlist(): void {
+function bootoutPlist(via: string): void {
+  // A bootout of a loaded job is a SIGTERM to the running daemon. Every caller
+  // has to say why, or the stop lands in daemon.log as an anonymous
+  // `reason: SIGTERM` — 27 of 34 stops in one day had no recorded initiator
+  // because this path never logged (TRA-850).
+  logLaunchdAction('bootout', via);
   // Modern replacement for `launchctl unload`. Errors ignored — plist may
   // not currently be bootstrapped, which is fine.
   const domain = getLaunchdDomain();
@@ -245,7 +250,9 @@ function bootstrapPlist(): { ok: boolean; error?: string } {
   return { ok: false, error: result.stderr ?? 'bootstrap failed' };
 }
 
-function kickstartPlist(): { ok: boolean; error?: string } {
+function kickstartPlist(via: string): { ok: boolean; error?: string } {
+  // `-k` kills the running instance — same story as bootout: log the initiator.
+  logLaunchdAction('kickstart', via);
   // -k kills the running instance first (if any) and resets the throttle,
   // which `launchctl load/unload` does not do. This is the key to reliable
   // restart when launchd has given up on a crash-looping service.
@@ -255,14 +262,17 @@ function kickstartPlist(): { ok: boolean; error?: string } {
   return { ok: false, error: result.stderr ?? 'kickstart failed' };
 }
 
-function ensurePlistInstalled(port: number): { ok: boolean; error?: string; regenerated: boolean } {
+function ensurePlistInstalled(
+  port: number,
+  via: string,
+): { ok: boolean; error?: string; regenerated: boolean } {
   const exists = fs.existsSync(LAUNCHD_PLIST_PATH);
   const current = exists && isPlistCurrent();
   if (current) return { ok: true, regenerated: false };
   if (exists) {
     // Stale plist — bootout the old definition before overwriting so launchd
     // picks up the new ProgramArguments / env / throttle on next bootstrap.
-    bootoutPlist();
+    bootoutPlist(`${via}: stale plist regenerated`);
   }
   try {
     installPlist(port);
@@ -418,7 +428,7 @@ export function startDaemonLogRotation(
 
 function ensureDaemonMac(port: number): EnsureResult {
   rotateDaemonLogIfLarge();
-  const install = ensurePlistInstalled(port);
+  const install = ensurePlistInstalled(port, 'ensureDaemon');
   if (!install.ok) return { ok: false, error: install.error };
   // Idempotent: when the plist was already current AND launchd already has it
   // loaded, skip the redundant `launchctl bootstrap` subprocess (it would just
@@ -435,17 +445,17 @@ function ensureDaemonMac(port: number): EnsureResult {
 
 function stopDaemonMac(): void {
   if (!fs.existsSync(LAUNCHD_PLIST_PATH)) return;
-  bootoutPlist();
+  bootoutPlist('stopDaemon');
 }
 
 function restartDaemonMac(port: number): EnsureResult {
   rotateDaemonLogIfLarge();
   // Regenerate stale plist first, then ensure it's loaded, then force kickstart.
-  const install = ensurePlistInstalled(port);
+  const install = ensurePlistInstalled(port, 'restartDaemon');
   if (!install.ok) return { ok: false, error: install.error };
   const boot = bootstrapPlist();
   if (!boot.ok) return { ok: false, error: boot.error };
-  const kick = kickstartPlist();
+  const kick = kickstartPlist('restartDaemon');
   if (!kick.ok) return { ok: false, error: kick.error };
   return { ok: true, strategy: 'launchd' };
 }
@@ -638,6 +648,77 @@ function logLifecycleRequest(action: 'stop' | 'restart'): void {
     requesterArgs: process.argv.slice(2, 6),
     managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
   });
+}
+
+/**
+ * Log a launchd call that kills the running daemon (TRA-850).
+ *
+ * `logLifecycleRequest` only covers `stopDaemon`/`restartDaemon`. Everything
+ * else that reaches launchd — a stale-plist bootout inside `ensurePlistInstalled`,
+ * a kickstart -k — sent a SIGTERM the daemon recorded as `reason: SIGTERM` with
+ * no initiator. Exported for tests: the launchctl calls themselves cannot be
+ * exercised without touching the real service.
+ */
+export function logLaunchdAction(action: 'bootout' | 'kickstart', via: string): void {
+  appendDaemonLog(`Daemon ${action} requested`, {
+    action,
+    via,
+    requesterPid: process.pid,
+    requesterPpid: process.ppid,
+    requesterArgs: process.argv.slice(2, 6),
+    managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
+  });
+}
+
+/** What the daemon can tell about who is stopping it (TRA-850). */
+export interface StopContext {
+  /** Our parent: 1 under launchd, anything else means a supervisor spawned us. */
+  ppid: number;
+  /** launchd's start count for the job — rises by one on every respawn. */
+  launchdRuns?: number;
+  /** launchd's record of the *previous* exit, when it kept one. */
+  launchdLastExit?: number;
+  launchdLastExitReason?: string;
+  /**
+   * Seconds since the plist file was last written. A stop within a second or
+   * two of a plist rewrite is our own `ensurePlistInstalled` bootout, not an
+   * external kill.
+   */
+  plistAgeSec?: number;
+}
+
+/**
+ * Collect whatever is knowable about the source of a signal-initiated stop.
+ *
+ * Nothing here identifies the sender outright — POSIX does not tell the target
+ * who signalled it — but ppid + launchd start count + plist freshness together
+ * separate the three cases we actually have: launchd respawn, our own plist
+ * regeneration, and a kill from somewhere else. Best-effort and never throws;
+ * it runs on the shutdown path.
+ */
+export function describeStopContext(): StopContext {
+  const ctx: StopContext = { ppid: process.ppid };
+  try {
+    const stat = fs.statSync(LAUNCHD_PLIST_PATH);
+    ctx.plistAgeSec = Math.floor((Date.now() - stat.mtimeMs) / 1000);
+  } catch {
+    /* no plist — not launchd-managed */
+  }
+  if (!isMac) return ctx;
+  try {
+    const out = execFileSync('launchctl', ['print', `${getLaunchdDomain()}/${PLIST_LABEL}`], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    });
+    const parsed = parseLaunchdLastExit(out);
+    if (parsed.runs !== undefined) ctx.launchdRuns = parsed.runs;
+    if (parsed.exitCode !== undefined) ctx.launchdLastExit = parsed.exitCode;
+    if (parsed.reason !== undefined) ctx.launchdLastExitReason = parsed.reason;
+  } catch {
+    /* job not loaded, or launchctl unavailable */
+  }
+  return ctx;
 }
 
 /**
