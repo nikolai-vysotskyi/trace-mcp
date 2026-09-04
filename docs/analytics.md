@@ -193,7 +193,36 @@ Text it does not own is never edited — a third party's skill descriptions, ano
 
 Measured payload on real projects: 200–1400 tokens, with the diff capped at 200 lines; every removal is listed in `removals` regardless.
 
-Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
+Applying a `textCompression` proposal — with a backup and one-action rollback — is separate work; this only shows you the diff. (`recommendations[]`, below, is a different payload field and does have an apply path.)
+
+### `apply_startup_recommendations` / `rollback_startup_recommendations`
+
+The apply half of `recommendations[]` (TRA-769). Every recommendation kind maps to configuration the user could edit themselves:
+
+| `kind` | What applying it does |
+|---|---|
+| `unusedMcpServer` | Removes the server's entry from `mcpServers` in `~/.claude/settings.json`, `~/.claude.json`, or the project's `.mcp.json` — whichever actually has it |
+| `unusedSkill` | Moves the skill's directory out of `~/.claude/skills` (or the project's `.claude/skills`) into a `.trace-mcp-disabled` sibling, so it stops being discovered |
+| `duplicateInstructions` | Deletes the lines the project instruction file shares with the global one, leaving the global file untouched |
+
+A plugin-namespaced skill (its name contains `:`) is always skipped — one unused skill is not evidence for disabling the plugin that ships it.
+
+```
+apply_startup_recommendations({
+  requests: [{ kind: "unusedMcpServer", target: "idle-server" }],
+  dry_run?: boolean, // default true
+})
+```
+
+`requests` takes the recommendation's own `kind` and `target` verbatim — one entry per recommendation you want acted on, never "apply all". With `dry_run` at its default (`true`), nothing is written: each outcome reports `status: "wouldApply"` or `"skipped"` (with why), and `duplicateInstructions` includes the same kind of deletion-only diff `textCompression` uses, plus the token count it would remove. Pass `dry_run: false` to actually write — every file is backed up before it's touched, bundled into one backup per call.
+
+```
+rollback_startup_recommendations({ backup_id?: string })
+```
+
+Restores everything one `apply_startup_recommendations(dry_run: false)` call wrote, byte-for-byte, in a single action: files go back to their exact prior bytes, moved skill directories move back. Defaults to the most recent backup. Backups live under `~/.trace-mcp/startup-backups/`, one directory per apply call, and are never deleted automatically — rolling back twice is a safe no-op, not a second undo.
+
+Re-run `get_startup_context_audit` afterward to see the new size rather than trusting the delta.
 
 ### `get_coverage_report`
 
