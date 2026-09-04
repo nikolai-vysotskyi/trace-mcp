@@ -103,32 +103,49 @@ export function extractTemplateParams(node: TSNode): string | undefined {
 /**
  * Extract #include directives and using-namespace directives as import edges.
  */
+// Header-guard and feature-test blocks put nearly every real #include inside
+// one of these — tree-sitter-cpp flattens the guarded body onto the wrapper's
+// own namedChildren rather than nesting it under a separate field, so a scan
+// of only `root.namedChildren` misses almost everything behind a guard.
+const PREPROC_CONDITIONAL_TYPES = new Set([
+  'preproc_ifdef',
+  'preproc_if',
+  'preproc_elif',
+  'preproc_else',
+]);
+
+/** Extract #include / using-namespace import edges, descending into #ifdef/#if/#elif/#else blocks. */
 export function extractImportEdges(root: TSNode): RawEdge[] {
   const edges: RawEdge[] = [];
-  for (const child of root.namedChildren) {
-    if (child.type === 'preproc_include') {
-      const pathNode = child.childForFieldName('path');
-      if (pathNode) {
-        const raw = pathNode.text;
-        const importPath = raw.replace(/^["<]|[">]$/g, '');
-        const isSystem = raw.startsWith('<');
-        edges.push({
-          edgeType: 'imports',
-          metadata: { module: importPath, ...(isSystem ? { system: true } : {}) },
-        });
-      }
-    } else if (child.type === 'using_declaration') {
-      // using namespace std; is a using_declaration in tree-sitter-cpp
-      const text = child.text.trim();
-      const nsMatch = text.match(/^using\s+namespace\s+([\w:]+)\s*;?$/);
-      if (nsMatch) {
-        edges.push({
-          edgeType: 'imports',
-          metadata: { module: nsMatch[1], usingNamespace: true },
-        });
+  const visit = (node: TSNode): void => {
+    for (const child of node.namedChildren) {
+      if (child.type === 'preproc_include') {
+        const pathNode = child.childForFieldName('path');
+        if (pathNode) {
+          const raw = pathNode.text;
+          const importPath = raw.replace(/^["<]|[">]$/g, '');
+          const isSystem = raw.startsWith('<');
+          edges.push({
+            edgeType: 'imports',
+            metadata: { module: importPath, ...(isSystem ? { system: true } : {}) },
+          });
+        }
+      } else if (child.type === 'using_declaration') {
+        // using namespace std; is a using_declaration in tree-sitter-cpp
+        const text = child.text.trim();
+        const nsMatch = text.match(/^using\s+namespace\s+([\w:]+)\s*;?$/);
+        if (nsMatch) {
+          edges.push({
+            edgeType: 'imports',
+            metadata: { module: nsMatch[1], usingNamespace: true },
+          });
+        }
+      } else if (PREPROC_CONDITIONAL_TYPES.has(child.type)) {
+        visit(child);
       }
     }
-  }
+  };
+  visit(root);
   return edges;
 }
 
