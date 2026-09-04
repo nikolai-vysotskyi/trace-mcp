@@ -16,6 +16,11 @@ Rules for keeping it honest:
   and it had been listed all along.
 - Record the **decisions and the dead ends** too, not just the state. A closed
   door with no reason written down gets pushed on again next month.
+- **Editing a surface without adding its row is the failure this file exists to
+  prevent.** `claude-code-templates` was submitted in April and refreshed in
+  August, both by us, and was still missing here in September (TRA-846). If a
+  run touches an external listing at all — submits, corrects, or refreshes it —
+  the row lands in the same change, before the run ends.
 - Numbers quoted to the outside world come from `docs/_data/counts.yml`
   (169 tools / 81 languages / 87 frameworks as of 2026-08-29). Never hand-type
   them, and re-read the file rather than trusting a number written here: the
@@ -25,6 +30,7 @@ Rules for keeping it honest:
 
 | Surface | Listed | Arrivals | What it shows | How to change it | Verified |
 |---|---|---|---|---|---|
+| [davila7/claude-code-templates](https://github.com/davila7/claude-code-templates) / [aitmpl.com](https://www.aitmpl.com/component/trace-mcp) | **Yes — and it is the largest surface we are on: 30,531★ / 3,459 forks, pushed daily** | **None.** No referrer from `github.com/davila7/*`, `aitmpl.com` or their CLI in any of four consecutive 14-day windows | `cli-tool/components/mcps/devtools/trace-mcp.json`, mirrored verbatim into `dashboard/public/component-content/mcps/devtools/trace-mcp.json` (same string, wrapped in a `content` field — both must be edited together). Ships `npx -y trace-mcp@latest` and a hand-typed description. **Already stale again**: it says "80 languages", `counts.yml` says 81 — six days after the refresh that was supposed to fix exactly this | **The entry is ours, not a third-party scrape.** Both commits are Nikolai's: [#553](https://github.com/davila7/claude-code-templates/commit/8b18c46f) 2026-04-29 added it, [#844](https://github.com/davila7/claude-code-templates/commit/bb0c681c) 2026-08-29 refreshed the counts. PRs are the route and two have been merged, so the door is open — but see the note below before spending a run on it. It hardcodes the npm name in `args`, so it belongs on the TRA-644 rename checklist; fold the 80→81 fix into that same PR rather than opening one for a digit | 2026-09-05 |
 | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | None | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest` | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
 | [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | None | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows. Renders 31 links to `trace-mcp.com` and rewrites every one to `rel="ugc nofollow"` — see TRA-792 below | 2026-09-04 |
 | [pulsemcp.com](https://www.pulsemcp.com/servers/nikolai-vysotskyi-trace) | Yes | None | **Stale: "44+ tools"** — their hand-written `server.json`, kept "until the maintainer publishes to the official registry" | Their submissions are **paused**; their own submit page says publishing to the official registry is the fix. Done 2026-08-29 — waiting on their next sync | 2026-08-29 |
@@ -118,6 +124,47 @@ live) because they cost nothing per run. Correcting a *stale* listing is still
 worth doing when the copy is wrong about the product, but as accuracy work,
 not as growth work. New distribution effort belongs where the arrivals already
 are: search and Reddit.
+
+**Reading, 2026-09-05 (TRA-846)** — 796 views / 192 uniques over the trailing 14
+days: Google 72/36, reddit.com 64/33, trace-mcp.com 44/19, github.com 33/10,
+my.feishu.cn 8/1, l.threads.com 7/2, Bing 4/4, yandex.ru 2/1, DuckDuckGo 1/1,
+chatgpt.com 1/1. Still not one listing surface, and this window is the sharpest
+version of the finding so far: it now includes `claude-code-templates`, a
+30.5k-star surface we are on, whose entry was refreshed six days earlier. Four
+consecutive windows, four times nothing.
+
+**Why "arrivals: none" cannot yet mean "nobody came" — checked, and the
+discriminator does not exist.** TRA-846 proposed splitting the two readings —
+directories convert nobody, versus directory installs arrive by `npx` and never
+load a GitHub page — using the ping's `install_type` / `by_country` shape. They
+do not discriminate, and a future run should not retry it:
+
+- `install_type` is not an acquisition field. `installType()` in
+  `src/telemetry/usage-ping.ts` returns `new` / `upgrade` / `downgrade` /
+  `active` from a version comparison against the install's own last ping. It
+  says which version transition happened, never where the install came from.
+- `by_country` is where the machine is, not where the install came from. Two
+  installs from the same directory land in different countries; two installs
+  from different sources land in the same one.
+- **Nothing in the ping payload names an origin at all.** That is a deliberate
+  privacy property, not an oversight, and it is why arrivals are read from
+  GitHub traffic in the first place.
+- The one field with any bearing — `by_client`, since their CLI installs into
+  Claude Code only — is not readable yet: `client_reporting.pct` is 30 and
+  `readable: false` on the 2026-09-04 snapshot, below this file's own bar.
+- Their side publishes nothing either: `aitmpl.com` is an SPA with no API
+  (`/api/components`, `/api/downloads`, `/api/stats` all return the app shell),
+  and `docs/components-metadata.json` in their repo carries no per-component
+  install counts.
+
+So the question is answerable only by tagging the invocation at the source —
+adding a marker to the `args` in *their* file and reading it back — which costs
+a third-party PR, a client change, and a GA4 dimension registration. Four ping
+fields (`repos_indexed`, `calls`, `preset`, `tools_advertised`) are already
+sitting unregistered and returning `error` in `adoption.yml`; a fifth buys
+nothing. **Not worth commissioning.** The conclusion to act on is unchanged and
+now four windows deep: directory listings produce no measurable arrivals, and
+the largest one we have is no exception.
 
 The window is rolling and only 14 days long — nothing older is retrievable
 from GitHub. `.github/workflows/ga4-snapshot.yml` therefore copies these
