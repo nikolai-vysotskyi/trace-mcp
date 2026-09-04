@@ -33,6 +33,7 @@
     "docs:sitemap": "node scripts/gen-sitemap.mjs && node scripts/gen-llms-full.mjs",
     "docs:language-matrix": "tsx scripts/language-matrix.ts",
     "docs:tools-index": "tsx scripts/tools-index.ts",
+    "docs:config-index": "tsx scripts/config-index.ts",
     "gen:tz-country": "node scripts/gen-tz-country.mjs"
   },
   "simple-git-hooks": {
