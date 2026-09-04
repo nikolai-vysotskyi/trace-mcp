@@ -82,6 +82,19 @@ long sessions, and the one short session in the set lost. Until the crossover is
 located, paying schema tokens for these seven tools in every session — most of
 which are short — is not justified by anything measured.
 
+## MCP Prompt: `state`
+
+The tools do not start the loop on their own — an agent has to be told to run
+it. The `state` prompt is that instruction: it returns the execution protocol
+below plus a seeded `trace_state_init` call, so a client can enter state mode in
+one step (`/state` in clients that surface MCP prompts as slash commands).
+
+| Argument | Required | Meaning |
+|----------|----------|---------|
+| `goal` | yes | What the task has to achieve |
+| `task_id` | no | State id to write under; derived from the goal when omitted |
+| `steps` | no | Comma-separated initial plan steps |
+
 ## MCP Tools Suite
 
 | Tool | Purpose |

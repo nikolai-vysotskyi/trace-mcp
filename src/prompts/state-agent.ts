@@ -30,10 +30,12 @@ On every execution cycle:
 `;
 
 export function generateInitialStatePrompt(taskId: string, goal: string, steps: string[]): string {
+  // Every value goes through JSON.stringify: a goal or id carrying a quote must
+  // not be able to break out of the call it is being rendered into.
   return `Initialize task state using trace_state_init:
 trace_state_init({
-  task_id: "${taskId}",
-  goal: "${goal}",
+  task_id: ${JSON.stringify(taskId)},
+  goal: ${JSON.stringify(goal)},
   initial_plan: ${JSON.stringify(steps)}
 })`;
 }

@@ -23,6 +23,7 @@ import { getHotspots } from '../tools/git/git-analysis.js';
 import { getFeatureContext } from '../tools/navigation/context.js';
 import { getProjectMap } from '../tools/project/project.js';
 import { getDeadCodeV2 } from '../tools/refactoring/dead-code.js';
+import { STATE_AGENT_SYSTEM_PROMPT, generateInitialStatePrompt } from './state-agent.js';
 
 interface PromptContext {
   store: Store;
@@ -446,4 +447,50 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       };
     },
   );
+
+  // --- 6. SKILL.state Prompt ---
+  // The state engine (TRA-596) shipped its tools, its serializer and its
+  // benchmark, but the protocol that tells an agent to run the two-phase loop
+  // had no call site — so nothing ever started a task in state mode. This is
+  // that call site.
+  server.prompt(
+    'state',
+    'SKILL.state protocol: seed a linear-context task state and run the action/patch loop',
+    {
+      goal: z.string().describe('What the task has to achieve'),
+      task_id: z
+        .string()
+        .optional()
+        .describe('State id to write under (default: derived from goal)'),
+      steps: z.string().optional().describe('Comma-separated initial plan steps'),
+    },
+    async ({ goal, task_id, steps }) => {
+      const planSteps = (steps ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const id = task_id?.trim() || taskIdFromGoal(goal);
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: `${STATE_AGENT_SYSTEM_PROMPT}\n${generateInitialStatePrompt(id, goal, planSteps)}`,
+            },
+          },
+        ],
+      };
+    },
+  );
+}
+
+/** Derives a stable, non-empty `task_id` from a free-text goal. */
+function taskIdFromGoal(goal: string): string {
+  const slug = goal
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48);
+  return slug || 'task';
 }

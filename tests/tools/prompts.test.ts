@@ -80,13 +80,39 @@ describe('MCP Prompts', () => {
     });
   });
 
-  it('registers all 5 prompts', () => {
-    expect(registeredPrompts.size).toBe(5);
+  it('registers all 6 prompts', () => {
+    expect(registeredPrompts.size).toBe(6);
     expect(registeredPrompts.has('review')).toBe(true);
     expect(registeredPrompts.has('onboard')).toBe(true);
     expect(registeredPrompts.has('debug')).toBe(true);
     expect(registeredPrompts.has('architecture')).toBe(true);
     expect(registeredPrompts.has('pre-merge')).toBe(true);
+    expect(registeredPrompts.has('state')).toBe(true);
+  });
+
+  describe('state prompt', () => {
+    const callbackFor = (name: string) =>
+      (registeredPrompts.get(name) as unknown[])[3] as (
+        params: unknown,
+      ) => Promise<{ messages: { content: { text: string } }[] }>;
+
+    it('emits the SKILL.state protocol and a seeded trace_state_init call', async () => {
+      const result = await callbackFor('state')({
+        goal: 'Fix the flaky indexer test',
+        steps: 'reproduce, isolate, fix',
+      });
+      const text = result.messages[0]!.content.text;
+      expect(text).toContain('SKILL.state Execution Protocol');
+      expect(text).toContain('trace_state_init');
+      expect(text).toContain('"fix-the-flaky-indexer-test"');
+      expect(text).toContain('["reproduce","isolate","fix"]');
+    });
+
+    it('keeps a quote in the goal inside the rendered string', async () => {
+      const result = await callbackFor('state')({ goal: 'handle "quoted" input', task_id: 't1' });
+      const text = result.messages[0]!.content.text;
+      expect(text).toContain('goal: "handle \\"quoted\\" input"');
+    });
   });
 
   it('review prompt has branch argument', () => {
