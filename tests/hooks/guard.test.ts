@@ -700,6 +700,36 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     ).toBe(false);
   });
 
+  // TRA-845: Read/Grep/Glob degraded to allow-with-warning when trace-mcp was
+  // unreachable, but the Bash branch had no heartbeat check at all — a stopped
+  // daemon hard-denied shell navigation with no working alternative.
+  it('allows Bash code exploration when heartbeat is dead (fallback)', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    for (const command of [
+      'grep -rn foo src/',
+      'cat src/foo.ts',
+      'ls src/',
+      'git diff src/foo.ts',
+      'wc -l < src/foo.ts',
+    ]) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, command).toBe(true);
+      expect(decision.context, command).toContain('Allowing Bash as fallback');
+    }
+  });
+
+  it('still blocks .env via Bash when heartbeat is dead', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    expect(runGuard('Bash', { command: 'cat .env' }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('stays silent on safe Bash commands when heartbeat is dead', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    const decision = runGuard('Bash', { command: 'pnpm test' }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context).toBeUndefined();
+  });
+
   it('denies env-prefixed grep on code files (no longer slips through)', () => {
     expect(
       runGuard('Bash', { command: 'LC_ALL=C grep -r foo src/foo.ts' }, sessionId, projectDir)
