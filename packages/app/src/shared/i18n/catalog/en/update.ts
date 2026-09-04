@@ -28,6 +28,11 @@ export const update = {
   headerAvailable: 'Version {{version}} available',
   /** `when` is a relative time from i18n/format.ts, e.g. "2 hr. ago". */
   headerUpToDate: 'Up to date · checked {{when}}',
+  /** One button checks both the app and the daemon (TRA-686); these two name
+      whichever one the plain `headerAvailable` line above cannot, because more
+      than the app itself is behind. */
+  headerDaemonAvailable: 'Daemon update available · v{{version}}',
+  headerBothAvailable: 'App and daemon updates available',
 
   // ── The update card in the sidebar (App.tsx) ────────────────────────────
   cardReadyTitle: 'v{{version}} ready',
@@ -37,4 +42,10 @@ export const update = {
   cardAvailableSubtitle: 'Currently v{{current}} · checked {{when}}',
   cardUpdate: 'Update',
   cardUpdating: 'Updating…',
+
+  // ── Settings → Updates (Settings.tsx, TRA-686) ──────────────────────────
+  settingsTitle: 'Updates',
+  settingsAppRow: 'App',
+  settingsDaemonRow: 'Daemon',
+  settingsCheck: 'Check for updates',
 } as const;

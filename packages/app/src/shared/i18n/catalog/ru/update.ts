@@ -19,6 +19,8 @@ export const update = {
   headerChecking: 'Проверяем…',
   headerAvailable: 'Доступна версия {{version}}',
   headerUpToDate: 'Актуальная версия · проверено {{when}}',
+  headerDaemonAvailable: 'Доступно обновление демона · v{{version}}',
+  headerBothAvailable: 'Доступны обновления приложения и демона',
 
   cardReadyTitle: 'v{{version}} готова',
   cardReadySubtitle: 'Перезапустите, чтобы установить · v{{current}}',
@@ -27,4 +29,9 @@ export const update = {
   cardAvailableSubtitle: 'Сейчас v{{current}} · проверено {{when}}',
   cardUpdate: 'Обновить',
   cardUpdating: 'Обновляем…',
+
+  settingsTitle: 'Обновления',
+  settingsAppRow: 'Приложение',
+  settingsDaemonRow: 'Демон',
+  settingsCheck: 'Проверить обновления',
 } as const;
