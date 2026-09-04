@@ -2596,8 +2596,8 @@ supply it.
 
 | Key | Type | Default |
 | --- | --- | --- |
-| `db` | object | `{}` |
-| `db.path` | string | `".trace-mcp/index.db"` |
+| `db` | object | — |
+| `db.path` | string | _unset_ |
 | `include` | string[] | _built-in list_ |
 | `exclude` | string[] | _built-in list_ |
 | `follow_symlinks` | boolean | `false` |
