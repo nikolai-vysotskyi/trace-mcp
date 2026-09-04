@@ -339,6 +339,20 @@ describe('trace-mcp mirror hook', () => {
     expect(runMirror('Read', readResponse(big, spill as string)).rewritten).toBe(false);
   });
 
+  it('exempts the spill when the home dir has a trailing slash', () => {
+    // The spill path we hand the model must survive the harness normalising it
+    // before it comes back as a Read, or the exemption misses and the escape
+    // hatch is compressed again.
+    const big = Array.from({ length: 400 }, (_, i) => `line ${i} ${'z'.repeat(40)}`).join('\n');
+    const first = runMirror('Read', readResponse(big), { TRACE_MCP_MIRROR_HOME: `${home}/` });
+    const spill = /Full output: (\S+)/.exec(first.output ?? '')?.[1] as string;
+
+    expect(spill).not.toContain('//');
+    expect(
+      runMirror('Read', readResponse(big, spill), { TRACE_MCP_MIRROR_HOME: `${home}/` }).rewritten,
+    ).toBe(false);
+  });
+
   it('rewrites the same output to the same bytes', () => {
     // A clock- or pid-derived spill name would make two identical reads produce
     // two different replacements. Nothing the model sees may vary run to run.

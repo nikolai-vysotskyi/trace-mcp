@@ -59,6 +59,9 @@ KEEP_HEAD="${TRACE_MCP_MIRROR_KEEP_HEAD:-24}"
 KEEP_TAIL="${TRACE_MCP_MIRROR_KEEP_TAIL:-12}"
 MAX_CHARS="${TRACE_MCP_MIRROR_MAX_CHARS:-3000}"
 HOME_DIR="${TRACE_MCP_MIRROR_HOME:-$HOME/.trace-mcp/mirror}"
+# A trailing slash would put a `//` in every spill path we build, and the Read
+# exemption below compares against a path the harness has already normalised.
+HOME_DIR="${HOME_DIR%/}"
 
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)
 case "$TOOL_NAME" in
@@ -115,9 +118,15 @@ find "$HOME_DIR" -name '*.txt' -type f -mtime +1 -delete 2>/dev/null
 # two identical reads produce two different byte strings, which is exactly the
 # non-determinism TRA-858 is removing from our own tool outputs; it also spills
 # the same file twice. Content-addressed: same output, same name, written once.
-SPILL_KEY=$(printf '%s' "$ORIGINAL" \
-  | { shasum -a 256 2>/dev/null || sha256sum 2>/dev/null || cksum; } \
-  | awk '{print $1}' | cut -c1-16)
+# Each candidate gets its own pipe. Sharing one would be worse than no
+# fallback: if `shasum` exists but dies after reading stdin, the next hasher
+# reads an empty pipe, succeeds, and returns the hash of the empty string --
+# a valid-looking key that every failed call would then collide on.
+SPILL_KEY=$(printf '%s' "$ORIGINAL" | shasum -a 256 2>/dev/null | awk '{print $1}' | cut -c1-16)
+[ -z "$SPILL_KEY" ] &&
+  SPILL_KEY=$(printf '%s' "$ORIGINAL" | sha256sum 2>/dev/null | awk '{print $1}' | cut -c1-16)
+[ -z "$SPILL_KEY" ] &&
+  SPILL_KEY=$(printf '%s' "$ORIGINAL" | cksum 2>/dev/null | awk '{print $1}' | cut -c1-16)
 [ -z "$SPILL_KEY" ] && exit 0
 SPILL="$SPILL_DIR/$SPILL_KEY.txt"
 printf '%s' "$ORIGINAL" >"$SPILL" 2>/dev/null || exit 0
