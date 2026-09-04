@@ -265,7 +265,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'find_usages',
-    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — understands semantic relationships, not just text matches. For bidirectional call graph use get_call_graph instead. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
+    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — semantic, not text matches. For raw text use search_text; for a bidirectional call graph use get_call_graph. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find references for'),
       fqn: optionalNonEmptyString(512).describe('Fully qualified name to find references for'),
@@ -295,7 +295,9 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
           isError: true,
         };
       }
-      if (result.value.total === 0) {
+      // A truncated scan cannot claim `indexed_no_edges`: it stopped before
+      // seeing the whole edge set, so zero results is not evidence of absence.
+      if (result.value.total === 0 && !result.value._budget_exceeded) {
         const stats = store.getStats();
         // findReferences returns NOT_FOUND for missing symbols/files — reaching
         // this branch means the symbol IS indexed with 0 incoming edges. Probe
@@ -376,7 +378,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       const root = result.value.root;
       const isolated = (root.calls?.length ?? 0) === 0 && (root.called_by?.length ?? 0) === 0;
-      if (isolated) {
+      if (isolated && !result.value._budget_exceeded) {
         const stats = store.getStats();
         const sym = store.getSymbolBySymbolId(root.symbol_id);
         const probe = probeSymbolName(store, projectRoot, root.symbol_id);

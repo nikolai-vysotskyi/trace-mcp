@@ -35,3 +35,15 @@ export function clientReporting(
   rows: FunnelRow[] | undefined | null,
   floor?: string,
 ): ClientReporting;
+
+/** Days of history the 28-day window needs before `month` covers a month. */
+export const MONTH_WINDOW_DAYS: number;
+
+/** Inclusive days of data from GA4's `YYYYMMDD` first-ping date (TRA-843). */
+export function daysObserved(firstDate: string | undefined | null, today?: Date): number | null;
+
+/** Whether the property has enough history for a 28-day window to be one. */
+export function monthWindowFull(observed: number | null): boolean;
+
+/** DAU/MAU, or null until the month window covers a month (TRA-843). */
+export function retention(day: number, month: number, windowFull: boolean): number | null;

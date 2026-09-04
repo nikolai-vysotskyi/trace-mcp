@@ -11,7 +11,11 @@ import { createRegexLanguagePlugin } from '../regex-base.js';
 const _plugin = createRegexLanguagePlugin({
   name: 'form',
   language: 'form',
-  extensions: ['.frm', '.prc', '.h'],
+  // WHY no `.h`: FORM's own include headers use it too, but `.h` is
+  // overwhelmingly a C/C++ header in the wild, and this plugin's priority (4)
+  // beat the C plugin's (5) for the shared extension — every C header in
+  // every repo was silently indexed as FORM instead of C (TRA-832).
+  extensions: ['.frm', '.prc'],
   priority: 4,
   symbolPatterns: [
     // Symbols name1,...,nameN;
