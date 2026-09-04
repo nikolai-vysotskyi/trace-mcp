@@ -92,6 +92,20 @@ describe('MCP registry manifest (server.json)', () => {
     expect((server.description as string).length).toBeLessThanOrEqual(100);
   });
 
+  // TRA-792: measured 2026-09-04, Google knows exactly two external URLs
+  // linking trace-mcp.com, and eleven of the site's 24 pages have no index
+  // entry at all. Every directory that renders our README rewrites its links
+  // to rel="ugc nofollow" (glama) or strips the domain entirely and links only
+  // GitHub (mcpservers.org, skillsllm.com). These two fields are the only
+  // place in the repo that hands a directory the site URL as data rather than
+  // as scraped prose — server.json republishes to the MCP registry on every
+  // release, and the registry is what mcp.so, Smithery, PulseMCP and goose
+  // ingest. Dropping either one is silent: nothing else fails.
+  it('points the registry and npm at trace-mcp.com', () => {
+    expect(server.websiteUrl).toBe('https://trace-mcp.com');
+    expect(pkg.homepage).toBe('https://trace-mcp.com');
+  });
+
   it('release-please is configured to bump both version fields', () => {
     const config = readJson('release-please-config.json') as {
       packages: Record<string, { 'extra-files': Array<{ path: string; jsonpath: string }> }>;
