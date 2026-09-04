@@ -185,3 +185,46 @@ describe('ProjectManager.stopProject — AbortSignal teardown', () => {
     expect(signalB.aborted).toBe(true);
   });
 });
+
+/**
+ * TRA-834, Reviewer B finding 2: draining the watcher closed one hole and
+ * opened another. A drained onChanges handler ends by re-arming
+ * debouncedSummarize/debouncedEmbed and scheduling LSP enrichment, and
+ * `trailingDebounce` mints a fresh AbortController when it is scheduled after a
+ * cancel — so the cancel that ran *before* the drain no longer covers those
+ * timers. They would fire ~1s later, against a closed DB.
+ */
+describe('ProjectManager.stopProject — cancels background AI again after the watcher drain', () => {
+  it('cancels debounced AI and the LSP enricher after watcher.stop() resolves', async () => {
+    const pm = new ProjectManager();
+    const callOrder: string[] = [];
+    const fake = makeFakeManaged('/tmp/proj-rearm', callOrder);
+    // A watcher whose stop() drains a handler that re-arms the AI debounces,
+    // exactly as the real onChanges tail does.
+    fake.watcher.stop = vi.fn(async () => {
+      callOrder.push('watcher.stop');
+      callOrder.push('handler-rearms-ai');
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: fake ManagedProject shape
+    (fake as any).lspEnricher = {
+      cancel: vi.fn(() => {
+        callOrder.push('lsp.cancel');
+      }),
+    };
+    injectProject(pm, fake);
+
+    await pm.removeProject('/tmp/proj-rearm');
+
+    // Two cancels: one before the drain (nothing in flight escapes it) and one
+    // after (whatever the drained handler armed).
+    expect(fake.cancelDebouncedAI).toHaveBeenCalledTimes(2);
+    const rearm = callOrder.indexOf('handler-rearms-ai');
+    const lastCancel = callOrder.lastIndexOf('cancelDebouncedAI');
+    const closeIdx = callOrder.indexOf('pipeline.dispose');
+    expect(rearm).toBeGreaterThanOrEqual(0);
+    expect(lastCancel).toBeGreaterThan(rearm);
+    expect(lastCancel).toBeLessThan(closeIdx);
+    // biome-ignore lint/suspicious/noExplicitAny: fake ManagedProject shape
+    expect((fake as any).lspEnricher.cancel).toHaveBeenCalledTimes(2);
+  });
+});

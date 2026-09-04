@@ -241,3 +241,120 @@ describe('ProjectManager watcher lifecycle', () => {
     expect((pm as any).projects.size).toBe(0);
   });
 });
+
+/**
+ * TRA-834, review finding 1: unsubscribing and clearing the debounce timer says
+ * nothing about a handler whose timer has ALREADY fired. That run is
+ * mid-`onChanges`, indexing into the very Store `stopProject()` closes a few
+ * lines later — the residual half of the "database connection is not open"
+ * race. `stop()` must not resolve until it has settled.
+ */
+describe('FileWatcher.stop drains an in-flight change handler (TRA-834)', () => {
+  it('does not resolve while onChanges is still running', async () => {
+    let deliver: ((events: Array<{ type: string; path: string }>) => Promise<void>) | undefined;
+    vi.mocked(parcelWatcher.subscribe).mockImplementation(async (_dir, cb) => {
+      deliver = (events) =>
+        (cb as (err: Error | null, events: unknown[]) => Promise<void>)(null, events);
+      return { unsubscribe: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    // Fire the debounce synchronously so the handler is genuinely in flight by
+    // the time stop() is called.
+    const immediate = ((fn: () => void) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as unknown as typeof setTimeout;
+    const watcher = new FileWatcher(immediate, (() => {}) as unknown as typeof clearTimeout);
+
+    let releaseHandler: () => void = () => {};
+    let handlerDone = false;
+    const onChanges = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          releaseHandler = () => {
+            handlerDone = true;
+            resolve();
+          };
+        }),
+    );
+
+    await watcher.start('/project', mockConfig, onChanges);
+    await deliver?.([{ type: 'update', path: '/project/src/a.ts' }]);
+    expect(onChanges).toHaveBeenCalledOnce();
+
+    let stopped = false;
+    const stopping = watcher.stop().then(() => {
+      stopped = true;
+    });
+
+    // Several turns of the microtask queue: stop() must still be pending.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(handlerDone).toBe(false);
+    expect(stopped).toBe(false);
+
+    releaseHandler();
+    await stopping;
+    expect(stopped).toBe(true);
+    expect(handlerDone).toBe(true);
+  });
+});
+
+/**
+ * TRA-834, Reviewer B finding 1: nothing serializes change handlers, so a
+ * second burst can fire while the first is still indexing. With a single
+ * `activeHandler` slot the second run overwrote the first and, finishing
+ * quickly, cleared the slot — `stop()` then returned while the first was still
+ * writing into a Store the caller was about to close.
+ */
+describe('FileWatcher.stop drains ALL in-flight handlers (TRA-834)', () => {
+  it('waits for a slow first handler even after a fast second one finishes', async () => {
+    let deliver: ((events: Array<{ type: string; path: string }>) => Promise<void>) | undefined;
+    vi.mocked(parcelWatcher.subscribe).mockImplementation(async (_dir, cb) => {
+      deliver = (events) =>
+        (cb as (err: Error | null, events: unknown[]) => Promise<void>)(null, events);
+      return { unsubscribe: vi.fn().mockResolvedValue(undefined) };
+    });
+
+    const immediate = ((fn: () => void) => {
+      fn();
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }) as unknown as typeof setTimeout;
+    const watcher = new FileWatcher(immediate, (() => {}) as unknown as typeof clearTimeout);
+
+    let releaseSlow: () => void = () => {};
+    let slowDone = false;
+    let call = 0;
+    const onChanges = vi.fn(async () => {
+      call += 1;
+      // First burst blocks; every later burst returns immediately, which is
+      // what used to clear the single tracking slot.
+      if (call === 1) {
+        await new Promise<void>((resolve) => {
+          releaseSlow = () => {
+            slowDone = true;
+            resolve();
+          };
+        });
+      }
+    });
+
+    await watcher.start('/project', mockConfig, onChanges);
+    await deliver?.([{ type: 'update', path: '/project/src/a.ts' }]);
+    await deliver?.([{ type: 'update', path: '/project/src/b.ts' }]);
+    expect(onChanges).toHaveBeenCalledTimes(2);
+
+    let stopped = false;
+    const stopping = watcher.stop().then(() => {
+      stopped = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(slowDone).toBe(false);
+    expect(stopped).toBe(false);
+
+    releaseSlow();
+    await stopping;
+    expect(stopped).toBe(true);
+    expect(slowDone).toBe(true);
+  });
+});
