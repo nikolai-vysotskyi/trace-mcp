@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.17.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.16.0...v3.17.0) (2026-09-04)
+
+
+### Features
+
+* **analytics:** startup-context audit — what every session pays for before the first message ([#843](https://github.com/nikolai-vysotskyi/trace-mcp/issues/843)) ([b82c43d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b82c43d8cb7588e211c8d44418159d2e3170aeef))
+* **analytics:** startup-text compressor — drop what the block already says (TRA-770) ([#845](https://github.com/nikolai-vysotskyi/trace-mcp/issues/845)) ([8a820f6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8a820f6ec149b39ea03d787911aa7604c76ffeef))
+* **app:** split app and daemon updates into independent checks ([#790](https://github.com/nikolai-vysotskyi/trace-mcp/issues/790)) ([93cc4e5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/93cc4e519af9629ce41f1dee59d4e3a3efb50453))
+* **distribution:** publish the site URL to the MCP registry and npm (TRA-792) ([#855](https://github.com/nikolai-vysotskyi/trace-mcp/issues/855)) ([d0b3791](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0b3791cc43f69a12cf1673870300a55a78b813a))
+* **mirror:** default the Read/Bash window to 24/12, add an opt-in char cap (TRA-750) ([#832](https://github.com/nikolai-vysotskyi/trace-mcp/issues/832)) ([83ce1bb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/83ce1bbd26dece7255836f605740b9e4bc0aad69))
+* **site:** red means danger, not brand — monochrome CTA and chrome (TRA-739) ([#840](https://github.com/nikolai-vysotskyi/trace-mcp/issues/840)) ([78ecb0f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/78ecb0fb12694d3194f54a6ba7c3142e515cc8b3))
+
+
+### Bug Fixes
+
+* **app:** a number stops breaking in half, and a Korean word stops splitting (TRA-803) ([#865](https://github.com/nikolai-vysotskyi/trace-mcp/issues/865)) ([150a59f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/150a59fd0a623a161c2c3df4c545d7968b367192))
+* **app:** clamp the sheet to the window so the first-run actions stay reachable (TRA-794) ([#856](https://github.com/nikolai-vysotskyi/trace-mcp/issues/856)) ([c018e52](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c018e520e9d087da2788b9c86dfe4114909f6420))
+* **app:** the German KPI label no longer truncates and the wizard uses the app's informal tone (TRA-591) ([#838](https://github.com/nikolai-vysotskyi/trace-mcp/issues/838)) ([cc5916f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc5916fef638ed7faac86e12c7210ddcd71a8659))
+* **docs:** correct the stale tool/resource counts in the README diagram (TRA-608) ([#830](https://github.com/nikolai-vysotskyi/trace-mcp/issues/830)) ([a3ef5b7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3ef5b707af6bb365a5138c395a7cf2e0236b184))
+* **docs:** regenerate config-index after db.path lost its schema default ([e8b5064](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8b5064f753134c2ddbb05ced99b383bd32f589d))
+* **docs:** regenerate llms-full.txt alongside the config index ([81f9a6d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/81f9a6d1adf2910ceb757eba06d5239575318a68))
+* **docs:** regenerate stale sitemap lastmod ([#858](https://github.com/nikolai-vysotskyi/trace-mcp/issues/858)) ([58d8f04](https://github.com/nikolai-vysotskyi/trace-mcp/commit/58d8f04b5cfd6d7be12e722da835a6875ffa6562))
+* **docs:** stop the sitemap guard failing on merge-date drift (TRA-800) ([#862](https://github.com/nikolai-vysotskyi/trace-mcp/issues/862)) ([868dae8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/868dae844631f3eea55dfb4b3437b86d26b0bbe5))
+* **hooks:** port the guard v2 navigation gate to Windows (TRA-757) ([#836](https://github.com/nikolai-vysotskyi/trace-mcp/issues/836)) ([cbe59bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cbe59bfee1e2d2327af9aed8b26522c47f7280dc))
+* **launcher:** an unreadable launcher.env must not kill the server (TRA-797) ([#861](https://github.com/nikolai-vysotskyi/trace-mcp/issues/861)) ([1b4bdcd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b4bdcd35b9edab575d1d276a59e32dfdea95b19))
+* **launcher:** refuse to start the server on an unsupported node (TRA-755) ([#831](https://github.com/nikolai-vysotskyi/trace-mcp/issues/831)) ([9ca72dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9ca72dd8030bf7898a1dbbddfc9b616b7119858b))
+* **launcher:** resolve node from a prefix only pkg_roots knows (TRA-742) ([#833](https://github.com/nikolai-vysotskyi/trace-mcp/issues/833)) ([7343980](https://github.com/nikolai-vysotskyi/trace-mcp/commit/734398071eea2bffe45bcd01f6c7dae9ed54065d))
+* **server:** report the attached stdio session so the guard stops degrading (TRA-773) ([#846](https://github.com/nikolai-vysotskyi/trace-mcp/issues/846)) ([8f62854](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f628548f57ae70dede0ce926b60515ae0f8713e))
+* **server:** the client-profile notice was an instruction, not a note (TRA-796) ([#860](https://github.com/nikolai-vysotskyi/trace-mcp/issues/860)) ([1051fda](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1051fda34d2a386081efb03ff479f8d81a2cbef0))
+* **state:** sweep orphaned tmp files in state subdirectories (TRA-783) ([#849](https://github.com/nikolai-vysotskyi/trace-mcp/issues/849)) ([0b6e428](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0b6e428ab6d48b1a7cfba47d67df4408d7b47f2d))
+* **tools:** report the real index path in get_index_health (TRA-802) ([#864](https://github.com/nikolai-vysotskyi/trace-mcp/issues/864)) ([7a22fc2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7a22fc289f3779cfa50f189d4782f5f191d98e92))
+* **web:** left-align comparison table cells kramdown centres (TRA-741) ([#821](https://github.com/nikolai-vysotskyi/trace-mcp/issues/821)) ([6305636](https://github.com/nikolai-vysotskyi/trace-mcp/commit/630563674af21417d1d38156c8426f4e6da34b60))
+
+
+### Documentation
+
+* benchmark_project is an estimator, not measured tool output (TRA-762) ([#837](https://github.com/nikolai-vysotskyi/trace-mcp/issues/837)) ([6299383](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62993836dd98ca2b6934c40ff51f7fd3acfea304))
+* **comparisons:** give CodeGraphContext a real hub summary (TRA-768) ([#847](https://github.com/nikolai-vysotskyi/trace-mcp/issues/847)) ([8905aa4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8905aa47cfabe74aae8a5a6d0b169e0626bbdb56))
+* **comparisons:** give each head-to-head peer real coverage on the hub (TRA-767) ([#842](https://github.com/nikolai-vysotskyi/trace-mcp/issues/842)) ([3494fdb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3494fdb9e26fc740b144d979434eb631f050cf73))
+* **design-web:** the wordmark is the logo — grid, step, minimum size, lockups ([#848](https://github.com/nikolai-vysotskyi/trace-mcp/issues/848)) ([6287b6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6287b6a71c4fe450a569112246de2fe1eba5f24d))
+* generate a complete config index, and fix the preset-default claim (TRA-801) ([#863](https://github.com/nikolai-vysotskyi/trace-mcp/issues/863)) ([57762d4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/57762d49032e11c59c6bf7dc5c614202f4f7ddc9))
+* **ops:** measured ledger of client start-block levers (TRA-771) ([#844](https://github.com/nikolai-vysotskyi/trace-mcp/issues/844)) ([accd5b4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/accd5b4735eb69d2b4cd52eaa54cf96098d58df7))
+* **ops:** put the measured benchmark into the launch drafts (TRA-722) ([#813](https://github.com/nikolai-vysotskyi/trace-mcp/issues/813)) ([a842a7a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a842a7a96b22055dd0c3be65b4ba55abf989266e))
+* **ops:** user-signal run 2026-09-03 — the ping is the channel, and by_client is 90% pre-fix (TRA-745) ([#824](https://github.com/nikolai-vysotskyi/trace-mcp/issues/824)) ([f7363aa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f7363aaf3339bc5e087aaf7e5c99d63aa4fa1769))
+* **seo:** structured data, citable comparison hub, and number-drift guards (TRA-419) ([#841](https://github.com/nikolai-vysotskyi/trace-mcp/issues/841)) ([586d016](https://github.com/nikolai-vysotskyi/trace-mcp/commit/586d01698965a6a4b18358bc1e8dbb30989f2a41))
+* **site:** cobalt accent instead of red, README header as a generated banner ([#839](https://github.com/nikolai-vysotskyi/trace-mcp/issues/839)) ([b69cc0f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b69cc0fb4a0b2bdb6f97d92e10af6792b86aa65d))
+
+
+### Chores
+
+* **app-deps:** bump fast-uri and @xmldom/xmldom to patched versions ([#852](https://github.com/nikolai-vysotskyi/trace-mcp/issues/852)) ([1f4fca2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1f4fca2d03917e606afb40a920eed0790f1c28d2))
+* **security:** scope ga4-snapshot permissions to the job, document alert triage ([#818](https://github.com/nikolai-vysotskyi/trace-mcp/issues/818)) ([531dcad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/531dcad53bf9ed0970516f68721830d5dfa1efe9))
+
+
+### CI/CD
+
+* make the audit gate depend on advisories, not on npm's uptime ([#853](https://github.com/nikolai-vysotskyi/trace-mcp/issues/853)) ([4c38b3d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4c38b3d7253b3707feb350c14e76ca5e4e2e3f7b))
+* unblock the board — audit job timeouts, and the docs lastmod master is red on ([#850](https://github.com/nikolai-vysotskyi/trace-mcp/issues/850)) ([a968ef8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a968ef81b7d6a282f1ff3708f866e3dd6701e7c3))
+
 ## [3.16.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.15.0...v3.16.0) (2026-09-03)
 
 
