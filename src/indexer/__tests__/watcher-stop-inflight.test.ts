@@ -65,10 +65,16 @@ describe('FileWatcher.stop() with an in-flight change handler', () => {
     const watcher = new FileWatcher();
     let finished = false;
 
-    await watcher.start(root, {} as never, async () => {}, 1, async () => {
-      await new Promise((r) => setTimeout(r, 50));
-      finished = true;
-    });
+    await watcher.start(
+      root,
+      {} as never,
+      async () => {},
+      1,
+      async () => {
+        await new Promise((r) => setTimeout(r, 50));
+        finished = true;
+      },
+    );
 
     capturedCallback?.(null, [{ type: 'delete', path: path.join(root, 'a.ts') }]);
     await new Promise((r) => setTimeout(r, 5));
