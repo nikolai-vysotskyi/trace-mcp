@@ -63,6 +63,10 @@ Rules for keeping it honest:
 | [skillsllm.com](https://skillsllm.com/skill/trace-mcp) | **Yes** — found while checking it as a "roundup" (see below); it is a directory, and we were already in it | Accurate and live: 177 tools / 81 languages / 102 stars, matching `docs/_data/counts.yml` on the day it was read. Passed their Semgrep + dependency scan | Nothing to submit. Their `/about` says a scraper "searches GitHub daily for repositories containing SKILL.md files or tagged with relevant topics like `claude-code`, `ai-agent`, `mcp-server`" — we carry all three, so the topics row below is what put us here and what keeps the numbers current. A `/submit` form and a paid "Featured Listing" also exist; neither is needed | 2026-09-02 |
 | `trace-mcp.vi.softonic.com/mcp` | **Yes — scraped, not submitted** | Unknown — all of `*.softonic.com` answers HTTP 412 to a scripted fetch (four UA/header variants, 2026-09-04) | **Nothing to do, and do not open this door.** Found because Search Console names it as one of exactly two external URLs linking `trace-mcp.com` (TRA-792). A download portal that wraps third-party installers in its own; we control nothing on that page. Do not submit, do not link, do not chase the other locales | 2026-09-04 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
+| GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 90.6% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own. 81 languages, 87 frameworks, 100% local." | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/` | 2026-09-05 |
+| [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
+| [linny006/mcp-servers-live](https://github.com/linny006/mcp-servers-live) + [its Pages site](https://linny006.github.io/mcp-servers-live/r/nikolai-vysotskyi/trace-mcp/) | **Yes — never submitted** | Auto-index of MCP servers refreshed every 15 minutes; we are #49 by stars with a per-repo page. Its whole body is our GitHub description, repeated 5× on that page | Nothing to submit. Links only `github.com`, never `trace-mcp.com`, so it adds nothing to the domain count below. Its value is that it demonstrates the description-propagation above | 2026-09-05 |
+| [linny006/trending-claude-skills](https://github.com/linny006/trending-claude-skills) | **Yes — never submitted** | Trending table, **rank 3**, 133★, same auto-copied description | Same scraper family as the row above; one operator, two indexes. Nothing to submit | 2026-09-05 |
 
 The repo's own `description` and `homepage` are part of that surface and were
 left alone — the description already leads with the clients and a concrete
@@ -418,6 +422,69 @@ Not blockers to route around — genuinely outside what an agent may do alone:
 - Everything else here was self-serve: the mcpservers.org form takes a repo URL
   and an email, the Cline submission is a GitHub issue, and the registry publish
   needs no credential at all in CI.
+
+## Sweeping GitHub code search for mentions we did not make (2026-09-05)
+
+Recorded as a **source with a method**, not as a surface, because it is how the
+other rows get found. It has now produced a first: `mattbutlerengineering/ai-tooling`,
+the only third-party evaluation of trace-mcp anyone has written, was found this
+way (TRA-845) and not in any directory.
+
+Run it once per distribution run. Four queries, `gh search code`, dedupe by repo:
+
+```
+gh search code 'trace-mcp'                  --limit 100 --json repository --jq '.[].repository.nameWithOwner' | sort | uniq -c | sort -rn
+gh search code 'nikolai-vysotskyi/trace-mcp' --limit 100 ...
+gh search code 'trace-mcp.com'               --limit 100 ...
+gh search code '"npx -y trace-mcp"'          --limit 100 ...
+```
+
+Two things about reading the output, both learned on the first run:
+
+- **The bare `trace-mcp` query is mostly name collisions.** `btraceio/btrace`,
+  `oisee/odata_mcp`, `korwabs/playwright-trace-mcp`, `imj01y/trace-ui`,
+  `aleutian-ai/AleutianFOSS` (a Go `cmd/trace-mcp` binary) and
+  `g-shevchenko/mcp-token-savers` (its own `agent-trace-mcp` service, 11 hits)
+  are all somebody else. `nikolai-vysotskyi/trace-mcp` is the query that only
+  matches us. Open the file before recording anything — the same discipline the
+  "code search is not evidence of absence" note above asks for, in the other
+  direction.
+- **The code-search quota is 10 requests/minute, separate from the 5,000/hour
+  core quota, and it is easy to burn.** Read the matched files over
+  `raw.githubusercontent.com` instead of `gh api search/code` per repo.
+
+**Result of the first run: three surfaces carrying trace-mcp that this ledger
+had never heard of**, all three rows above, none submitted to, all three
+automatic. That matches what the arrivals reading already says — the mechanism
+that puts us on surfaces is being findable by a crawler, not filing forms.
+
+### And the finding that came out of it: the repo description was the last home of "~42 minutes"
+
+The scrapers do not paraphrase. `linny006.github.io` repeats our GitHub
+description five times on one page; `trending-claude-skills` and every GitHub
+search result carry the same string. Until 2026-09-05 that string was "One tool
+call replaces ~42 minutes of agent exploration" — a number that appears **nowhere
+in this repository**, that `mattbutlerengineering/ai-tooling` named as one of the
+reasons its evaluation stopped at `tentative read`, and that is the same class of
+unsupported claim as the "40–50% fewer tokens" retired the same day (TRA-904).
+README, npm `description` and `server.json` had all already moved to the measured
+PR-benchmark figure; the repo description was missed because it is not a file and
+no test can read it.
+
+Changed to the PR-benchmark wording (row above). Nothing to re-submit anywhere:
+every surface that carries it re-reads it on its own schedule.
+
+**The guard this leaves open.** `tests/docs/readme-claims.test.ts` and
+`savings-claims.test.ts` guard files. The two surfaces we own that are *not*
+files — the repo description and the repo topics — are guarded by nothing, and
+this is the second time one of them drifted unnoticed. Whoever next touches the
+claims gate should decide whether it is worth a network read in CI; until then,
+re-read both in every distribution run.
+
+**Adoption number for anyone quoting it: 133★ on 2026-09-05** (the ledger's last
+figure was 102 on 2026-09-01). Both awesome-list star gates recorded above —
+`hesreallyhim` at 100 and `subinium` at 1,000 — should be re-read against this,
+not against 102.
 
 ## Next door to try
 
