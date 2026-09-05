@@ -28,9 +28,9 @@ Rules for keeping it honest, same three as the sibling ledgers:
 
 Every public surface — homepage, `README.md`, `server.json`, all the listings in
 `ops/distribution.md`, `comparisons.md` — describes a code-graph MCP server.
-That was accurate in June. Since then four mechanisms shipped or landed in
-flight that are not the graph: `Read`/`Bash` mirrors, the startup-block audit and
-its apply button, and `trace_state_*`. The question TRA-906 put was whether we
+That was accurate in June. Since then **four** mechanisms shipped or landed in
+flight that are not the graph: decision memory, the `Read`/`Bash` mirrors, the
+startup-block audit with its apply button, and `trace_state_*`. The question TRA-906 put was whether we
 are (a) a code graph with those as features, or (b) the thing that manages an
 agent's context budget end to end.
 
@@ -50,23 +50,34 @@ your repository once so AI coding agents stop re-reading the same files" is this
 sentence with one noun substituted. Nothing currently public becomes false; it
 becomes the leading example rather than the whole claim.
 
-Four mechanisms, one move — precompute once, hand over the answer rather than the
-source:
+Five mechanisms, one move — stop paying twice for text the agent already has:
 
-| What the agent would re-read | The mechanism | How it ships today |
-|---|---|---|
-| the repository | the code graph (tools / languages / frameworks — `counts.yml`) | MCP tools |
-| files it opens, commands it runs | `Read`/`Bash` mirrors | `hooks/trace-mcp-mirror.sh` |
-| the instructions it loads at start | startup-block audit + apply | `get_startup_context_audit` (MCP tool) + app button + config edits |
-| the task it is on | `trace_state_*` | MCP tools |
+| What the agent would re-read | The mechanism | Shape | How it ships today |
+|---|---|---|---|
+| the repository | the code graph (tools / languages / frameworks — `counts.yml`) | index & serve | MCP tools |
+| what was already decided, and why | decision memory (`wake_up`, `mine_sessions`, `query_decisions`, `get_project_memo`) | index & serve | MCP tools |
+| the task it is on | `trace_state_*` | index & serve | MCP tools |
+| files it opens, commands it runs | `Read`/`Bash` mirrors | stop re-paying | `hooks/trace-mcp-mirror.sh` |
+| the instructions it loads at start | startup-block audit + apply | stop re-paying | `get_startup_context_audit` (MCP tool) + app button + config edits |
 
-The site's own eyebrow already says this: **Recomputation → Reuse**. The
+**The Shape column is the known stretch in the sentence, and it is recorded here
+rather than smoothed over.** Three rows literally index something and hand back
+an answer; the word is exact for them. The mirrors window and spill command
+output — nothing is indexed — and the audit prunes dead configuration rather than
+serving anything. What all five share is the move underneath, not the mechanism:
+the agent stops paying, every turn, for text it has already been given once.
+"Indexes" reads as a user-facing metaphor on the bottom two rows. If a rewrite of
+the public copy ever has to choose between the two, the *move* is the claim and
+"indexes" is the illustration — do not let the illustration narrow the claim back
+to the graph, which is how the surfaces got here in the first place.
+
+The site's own eyebrow already says exactly this: **Recomputation → Reuse**. The
 repositioning is not inventing a category. It is promoting a line that has been
-on the page all along over a headline that describes one of its four instances.
+on the page all along over a headline that describes one of its five instances.
 
 ### The finding that matters more than the category noun
 
-Read the right-hand column. **Two of the four mechanisms are not MCP tools at
+Read the right-hand column. **Two of the five mechanisms are not MCP tools at
 all**, and a third is only half one. `hooks/` holds 23 scripts; the guard, the
 launcher, precompact, session-start and the mirrors are all product, none of
 them reachable through `tools/list`.
@@ -123,6 +134,18 @@ client's binary, intercept its traffic, or rewrite its files.** That line is the
 operating rule in `ops/context-block-levers.md` and it is what makes the claim
 survivable — the first is a product, the second breaks the user's environment at
 their next client update.
+
+**The one place that boundary is under strain is `tweakcc`** (`docs/tweakcc.md`,
+`src/init/tweakcc.ts`). It patches Claude Code's system prompts, which is the far
+side of the line as written. It stays defensible only on a distinction the copy
+has to make explicitly, every time it is mentioned: **`tweakcc` is a third-party
+tool the user installs and runs themselves, and we document a pairing with it —
+trace-mcp does not patch anything.** Anyone writing public copy that puts the
+boundary sentence and `tweakcc` on the same page owes the reader that sentence
+too. If the distinction ever stops being drawn, the honest move is to drop the
+pairing from the public surfaces, not to soften the boundary: the boundary is
+load-bearing for the whole claim and `tweakcc` is an optional amplifier on one
+client.
 
 And say the reachable share out loud, because "manages your context budget"
 implies a whole we do not have. The measured decomposition of one real start
@@ -252,7 +275,8 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
   surface until one arm can fail** (roadmap item 8). This pass answers where
   state belongs, not what may be claimed for it.
 - **Nothing here is measured on a client other than Claude Code.** Door 2 is
-  mostly Claude-Code-shaped: the guard hook and tweakcc are Claude Code only,
+  mostly Claude-Code-shaped: the guard hook and the `tweakcc` pairing (third
+  party, see the boundary above) are Claude Code only,
   Cursor and Windsurf get a rules file, everything else gets tool descriptions.
   A category claim that only lands on one client is a narrower claim than it
   reads as. TRA-673 owns finding out.

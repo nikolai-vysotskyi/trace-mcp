@@ -313,7 +313,7 @@ directory listing, a `/vs/` page. Update it in the same change that moves the
 claim.
 
 It exists because the product grew four mechanisms that are not the code graph —
-the `Read`/`Bash` mirrors, the startup-block audit and its apply button, and
-`trace_state_*` — and two of them do not ship as MCP tools at all. Deciding each
-one's public framing separately produces two products by accident, which is the
-failure the file is there to prevent.
+decision memory, the `Read`/`Bash` mirrors, the startup-block audit with its
+apply button, and `trace_state_*` — and two of them do not ship as MCP tools at
+all. Deciding each one's public framing separately produces two products by
+accident, which is the failure the file is there to prevent.
