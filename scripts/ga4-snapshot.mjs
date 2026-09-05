@@ -515,9 +515,9 @@ ${yaml(useByClient.installs, 4)}
 
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
-# site carries no analytics, and Reddit, our largest referrer, cannot be read
-# from a run at all (\`[internal record]\`, private repo). Cross-check these names against the
-# "Arrivals" column of \`[internal record]\` before adding another directory.
+# site carries no analytics, and the largest external referrer cannot be read
+# from a run at all (\`[internal record]\`, private repo). Cross-check these names
+# against \`ops/arrivals.md\` in private project repository before adding another directory.
 acquisition:
   views_uniques_14d: ${yamlNum(arrivals.views_uniques_14d)}
 ${errLine(arrivals.error)}  referrers_uniques_14d:
