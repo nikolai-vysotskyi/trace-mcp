@@ -34,7 +34,7 @@ export const clients = {
   setUpManually: '手动配置…',
   hideSteps: '隐藏步骤',
 
-  enforcementLevel: '强制级别',
+  enforcementLevel: '管控级别',
   levelBase: '基础',
   levelBaseHint: '仅 CLAUDE.md — 软性路由规则',
   levelStandard: '标准',
