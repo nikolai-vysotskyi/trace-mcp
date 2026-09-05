@@ -35,6 +35,7 @@ const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS us
 | DB model relationships | \`get_model_context\` (framework-gated) | reading model + migration files |
 | Component tree | \`get_component_tree\` (framework-gated) | reading component files |
 | Circular dependencies | \`get_circular_imports\` | manual tracing |
+| Task spanning many turns | \`trace_state_init\` once, then \`trace_state_patch\` / \`trace_state_add_dead_end\` per step, \`trace_state_get\` to re-read (deferred — \`load_tools({preset:"state"})\`) | re-reading the whole transcript every turn |
 
 Start sessions with \`get_project_map\` (summary_only=true) to get project overview.
 Use built-in file reading ONLY for non-code files (.md, .json, .yaml, config) or before editing.`;
