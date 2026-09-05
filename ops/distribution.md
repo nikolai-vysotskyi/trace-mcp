@@ -64,6 +64,8 @@ Rules for keeping it honest:
 | `trace-mcp.vi.softonic.com/mcp` | **Yes — scraped, not submitted** | Unknown — all of `*.softonic.com` answers HTTP 412 to a scripted fetch (four UA/header variants, 2026-09-04) | **Nothing to do, and do not open this door.** Found because Search Console names it as one of exactly two external URLs linking `trace-mcp.com` (TRA-792). A download portal that wraps third-party installers in its own; we control nothing on that page. Do not submit, do not link, do not chase the other locales | 2026-09-04 |
 | [tolkonepiu/best-of-mcp-servers](https://github.com/tolkonepiu/best-of-mcp-servers) | **Submitted, not merged** — [PR #384](https://github.com/tolkonepiu/best-of-mcp-servers/pull/384), opened 2026-08-29 | One entry in `projects.yaml`; a scheduled bot commits the rendered README ("Best-of update", last one 2026-09-02) | PR adding a `projects.yaml` block; `yamllint` is the only check and it passed on ours. **The door is slow, not closed, and the numbers say don't push:** 12 other `Add project:` PRs are open, the oldest from 2026-08-27, and across all of 2026 only four external project-add PRs were merged at all (#52, #120, #161, #299) — #299 took 39 days. Zero maintainer activity on ours since it opened. Do not ping before 2026-09-26; a reminder at day 7 in a queue this shape is noise. **This row was missing until 2026-09-05** — the submission was made on 2026-08-29 and never recorded, which is exactly the failure the rules at the top of this file describe | 2026-09-05 |
 | [axisrow/trace-mcp-plugin](https://github.com/axisrow/trace-mcp-plugin) via [etopro/plugin-marketplace](https://github.com/etopro/plugin-marketplace) | **Yes — third-party, we did not submit it** | A Claude Code plugin (MIT, 0★, created 2026-08-01) that wraps our CLI: `/trace-mcp-install`, `/trace-mcp-measure`, `/trace-mcp-uninstall`, plus a saved benchmark baseline for a re-measure a week later. Listed in the `etopro-plugins` marketplace (2★) as `trace-mcp`. README is in Russian and links our repo | Nothing to submit, and **the value here is not the listing**. The author read `dist/cli.js` at 1.46.2 and filed two issues about our behaviour in his own tracker — [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (the daemon auto-registers every project root an MCP client connects from; he watched 9 projects appear in the registry within a day of one install) and [#5](https://github.com/axisrow/trace-mcp-plugin/issues/5) (installation places hooks without asking). #4 re-verified against 3.17.1 and filed upstream as [#936](https://github.com/nikolai-vysotskyi/trace-mcp/issues/936), credited to him; answered once in his thread with the current gate list and the `remove --keep-db` cleanup. **Found by GitHub issue search for our own name, not by any directory** — the same channel that found `mattbutlerengineering/ai-tooling` | 2026-09-05 |
+| [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Do not ping. Re-read 2026-10-05 | 2026-09-05 |
+| [yzfly/awesome-context-engineering](https://github.com/yzfly/awesome-context-engineering) | **Submitted, not merged** — [PR #44](https://github.com/yzfly/awesome-context-engineering/pull/44), opened 2026-09-05 | One line each in `README.md` and `README_CN.md`, section `Memory & Compression` / `记忆与压缩`, next to `lean-ctx`, `headroom` and `skillreaper` (140★) | PR to both READMEs — `CONTRIBUTING.md` requires the English and Chinese versions to stay in sync, so an entry that touches one file only is incomplete. **This is the door with a real merge rate in this class:** five external PRs merged in the two weeks to 2026-08-30, three of them in one batch, authors unaffiliated with the maintainer. Re-check 2026-09-19 | 2026-09-05 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
 | GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 90.6% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own. 81 languages, 87 frameworks, 100% local." | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/` | 2026-09-05 |
 | [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
@@ -680,6 +682,47 @@ requires one graph call but does not forbid source reads, so an agent that
 queries the graph and then greps anyway produces exactly that result. That is
 routing, and routing is the part of our product that does not port across
 clients. Tracked in TRA-874; the outgoing comment is in TRA-875.
+
+### The competitor-README search works with any competitor, and the seed decides the yield (2026-09-05)
+
+The method recorded above was run once, with `oraios/serena` as the seed. Run
+again with two seeds that are closer to what we actually claim —
+`DeusData/codebase-memory-mcp` (357 README hits) and `yvgude/lean-ctx` (107) —
+it returns a different population: not MCP directories, but curated lists about
+*context* and *token cost*, which is the shelf our nearest neighbours are
+already on. Two of them took a submission the same day (rows above). Use
+`gh api -X GET search/code -f q='"<owner>/<repo>" in:file filename:README.md'`;
+the search endpoint rate-limits hard, so seed one competitor per run, not five.
+
+**Read the commit log before valuing the PR queue.** Both new lists accept PRs
+in writing; only one accepts them in practice. `ai-boost` has merged two
+external PRs ever while adding one entry a day by his own hand, so a PR there is
+a lottery ticket — worth the ten minutes, not worth a follow-up.
+`gh api -X GET repos/<r>/commits --jq '.[].commit.message'` next to
+`gh pr list --state merged` answers this in one pair of calls and should be run
+before any list submission, not after.
+
+**Parked, with the reason, so the next run does not re-derive them:**
+
+- `pleasedodisturb/awesome-llm-token-optimization` (67★) — the closest list to
+  our claim by topic, and the maintainer does absorb outside entries (they land
+  through his own weekly "maintenance" PRs, with authorship credited). **Fit is
+  the problem, not the door:** every tool section is a compression section
+  (`Prompt Compression → Tools` holds `rtk`, `lean-ctx`, `headroom`, `llmtrim`),
+  and we are not a compressor. Submitting into the wrong section is how an entry
+  gets closed. The honest opening is an issue asking where a graph navigator
+  belongs — one message, and only if the answer is worth a section.
+- `GetBindu/awesome-claude-code-and-skills` (188★), `RoggeOhta/awesome-codex-cli`,
+  `ai-boost/awesome-prompts` — surfaced by the same search, not yet read.
+- `justrach/code-search-shootout` (2★) — not a listing at all: a reproducible
+  paired benchmark of code-search backends (`codedb` vs SQLite FTS5 vs
+  `lean-ctx`). Same class as the pi-extensions harness in the section above —
+  someone else's harness, pointed at our category. Worth more to Competitor
+  Intelligence than to this file.
+- `alexykn/pi-cbm`, `porameht/pi-codebase-memory-mcp`, `fxjs/cbm-tool` — third
+  parties wrapping a competitor for a specific client, the same shape as
+  `axisrow/trace-mcp-plugin` wrapping us. Not doors; evidence that the wrapper
+  layer is where this category gets installed.
 
 ## Sweeping the GitHub *issue* index — a different index from code search (2026-09-05)
 
