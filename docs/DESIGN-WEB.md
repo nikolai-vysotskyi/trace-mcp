@@ -533,10 +533,11 @@ appearance without a screenshot or a measurement is not a finding.
         i.classList.contains('theme-dark-only')).length
       ```
 
-      Must be 0. It is 2 today — `app-overview` and `app-projects` have no
-      dark counterpart, so a dark reader gets two light app windows on OLED
-      black (TRA-851). The un-paired shot is the failure this line exists to
-      catch; the stacked pair above is the other one.
+      Must be 0, and is: all six app shots have been paired since TRA-851.
+      It read 2 while `app-overview` and `app-projects` had no dark
+      counterpart and a dark reader got two light app windows on OLED black.
+      The un-paired shot is the failure this line exists to catch; the
+      stacked pair above is the other one.
 - [ ] Theme choice survives landing → doc page navigation.
 - [ ] Contrast sweep is green. Not a claim — a command:
 
