@@ -39,6 +39,19 @@
 import fs from 'node:fs';
 import { INFLATION_RATIO, MIN_DAYS_FOR_TRIM } from './ga4-savings.mjs';
 
+/**
+ * First day whose pings can carry a measured `tokens_saved`.
+ *
+ * Set this to the release date of the first version shipping
+ * `recordActualTokens` (#915 / TRA-880). Until the field has rolled onto it,
+ * every summed token is `RAW_COST_ESTIMATES[tool] x 0.15` — see the refusal
+ * below. Bump it, never lower it.
+ *
+ * ponytail: a date, not a version-to-date lookup. The one thing this compares
+ * against is a date string already in the snapshot.
+ */
+const CORRECTED_COUNTER_SINCE = '2026-09-05';
+
 const SRC =
   'https://raw.githubusercontent.com/nikolai-vysotskyi/trace-mcp/adoption-data/adoption.yml';
 const OUT = 'docs/_data/savings.yml';
@@ -97,6 +110,40 @@ if (!Number.isFinite(days) || days < MIN_DAYS_FOR_TRIM) {
       `the raw sum of an unauthenticated counter — publishing it would brand raw\n` +
       `data as sanitized. GA4 does not backfill, so this clears on its own once\n` +
       `the metric has been registered for ${MIN_DAYS_FOR_TRIM} days. Leaving ${OUT} untouched.`,
+  );
+  process.exit(1);
+}
+
+// TRA-904: two independent reasons the field aggregate cannot be quoted today,
+// both fatal, so this refuses rather than prints a caveat someone can drop.
+//
+// 1. Every install in the field still runs the PRE-#915 counter, which scored a
+//    call before the tool ran: `RAW_COST_ESTIMATES[tool] x 0.15`, a constant.
+//    Measured against real responses it overstates by ~2.4x. A window that
+//    includes days before CORRECTED_COUNTER_SINCE is arithmetic, not a
+//    measurement, whatever caption sits under it.
+// 2. `inflation_suspected` means the sanitizer capped days it could not
+//    explain. TRA-843 chose to warn and publish; with (1) also true the two
+//    stack, and "sanitized" would be doing work the caveat cannot.
+//
+// This clears on its own: once the corrected counter has shipped and the
+// snapshot window starts after it, the check passes and the counter returns.
+const since = field(snapshot, 'since');
+if (since < CORRECTED_COUNTER_SINCE) {
+  console.error(
+    `Refusing to publish: the snapshot sums from ${since}, and the counter only started\n` +
+      `measuring responses on ${CORRECTED_COUNTER_SINCE} (#915). Everything before that date is\n` +
+      `calls x constant, ~2.4x over what the same calls measure. Re-run once the window\n` +
+      `starts after the corrected counter shipped. Leaving ${OUT} untouched.`,
+  );
+  process.exit(1);
+}
+
+if (field(snapshot, 'inflation_suspected') === 'true') {
+  console.error(
+    `Refusing to publish: the snapshot carries inflation_suspected at raw_ratio ` +
+      `${field(snapshot, 'raw_ratio')}. The sanitizer capped days it could not explain, and a\n` +
+      `capped figure is not one to put on a storefront. Leaving ${OUT} untouched.`,
   );
   process.exit(1);
 }

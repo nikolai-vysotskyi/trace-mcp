@@ -116,9 +116,8 @@ updated: 2026-09-04
     "featureList": [
       "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
       "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
-      "40–50% fewer tokens on average across real agent workflows",
-      "Up to 2× effective capacity at the same context budget",
-      "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
+      "{{ site.data.response_tokens.reduction_pct }}% fewer tokens across {{ site.data.response_tokens.calls_weighted }} real tool calls — responses measured on the wire against an estimated file-reading baseline",
+      "Up to 99% less redundant processing in structured tasks — a synthetic per-call estimate from the bundled benchmark, not a session average",
       "Framework-aware dependency graph ({{ site.data.counts.frameworks }} integrations, {{ site.data.counts.languages }} languages)",
       "{{ site.data.counts.tools }} MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
@@ -177,7 +176,7 @@ updated: 2026-09-04
         "name": "What is the best MCP server for giving Claude Code codebase context?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations, Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
         }
       },
       {
@@ -185,7 +184,7 @@ updated: 2026-09-04
         "name": "How do I reduce Claude Code token usage?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like get_outline, get_symbol, find_usages, and get_change_impact that return only the relevant symbols and relationships instead of whole files. Teams typically see 40–50% fewer tokens per session, since navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. Install it with 'npm install -g trace-mcp', point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required."
+          "text": "The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like get_outline, get_symbol, find_usages, and get_change_impact that return only the relevant symbols and relationships instead of whole files. Across {{ site.data.response_tokens.calls_weighted }} real calls measured on the wire, those responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the reads they replace, because navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. That is one machine's usage mix against an estimated baseline, not a benchmark. Install it with 'npm install -g trace-mcp', point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required."
         }
       },
       {
@@ -2250,18 +2249,18 @@ updated: 2026-09-04
           <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">~40&ndash;50%</span>
-          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
+          <span class="metrics-strip-value">{{ site.data.response_tokens.reduction_pct }}%</span>
+          <span class="metrics-strip-label">Fewer tokens than the file reads they replace, across {{ site.data.response_tokens.calls_weighted }} real tool calls on one machine &mdash; measured responses, estimated baseline</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">up to 2&times;</span>
-          <span class="metrics-strip-label">Effective context capacity per session</span>
+          <span class="metrics-strip-value">{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_measured }}</span>
+          <span class="metrics-strip-label">Tools we measured that cost <em>more</em> than what they replace &mdash; published, not hidden</span>
         </div>
       </div>
       <!-- TRA-647: the first tile is the only figure here taken on code we do not
            own, so it leads and it says where it came from. The other two are our
            own instrumentation and are labelled as such rather than dropped. -->
-      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation, measured against baseline agent runs that re-read files and re-traverse dependencies on every turn &mdash; <a href="/reduce-claude-code-token-usage.html#what-we-claim-and-what-we-have-measured">what that figure covers, and where it is roughly zero</a>.</p>
+      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation on one machine: {{ site.data.response_tokens.calls_weighted }} recorded calls, response tokens counted on the wire, against a file-reading baseline that is still an estimate &mdash; <a href="/reduce-claude-code-token-usage.html#what-we-claim-and-what-we-have-measured">what that figure covers, why it replaced the &ldquo;40&ndash;50%&rdquo; we used to print, and where it is roughly zero</a>.</p>
     </div>
   </section>
 
@@ -2934,14 +2933,14 @@ updated: 2026-09-04
             <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations, Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
         </details>
         <details class="faq">
           <summary>
             <h3>How do I reduce Claude Code token usage?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like <code>get_outline</code>, <code>get_symbol</code>, <code>find_usages</code>, and <code>get_change_impact</code> that return only the relevant symbols and relationships instead of whole files. Teams typically see 40&ndash;50% fewer tokens per session, since navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. Install it with <code>npm install -g trace-mcp</code>, point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required.</div>
+          <div class="answer">The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like <code>get_outline</code>, <code>get_symbol</code>, <code>find_usages</code>, and <code>get_change_impact</code> that return only the relevant symbols and relationships instead of whole files. Across {{ site.data.response_tokens.calls_weighted }} real calls measured on the wire, those responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the reads they replace, because navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. That is one machine's usage mix against an estimated baseline, not a benchmark. Install it with <code>npm install -g trace-mcp</code>, point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required.</div>
         </details>
         <details class="faq">
           <summary>
@@ -3013,7 +3012,7 @@ updated: 2026-09-04
         <span class="em">query for the rest of the session.</span>
       </h2>
       <p class="cta-sub">
-        <a href="/reduce-claude-code-token-usage.html">~40&ndash;50% lower token usage on average</a>, and up to 94&ndash;99% on structured tasks. One install, and every MCP-capable agent in the project gets the same graph.
+        <a href="/reduce-claude-code-token-usage.html">{{ site.data.response_tokens.reduction_pct }}% fewer tokens across {{ site.data.response_tokens.calls_weighted }} measured tool calls</a>, and up to 94&ndash;99% on structured tasks in a synthetic benchmark. One install, and every MCP-capable agent in the project gets the same graph.
       </p>
       <div class="cta-buttons">
         <a href="#install" class="btn btn-primary">

@@ -1,5 +1,5 @@
 title: trace-mcp
-description: Precomputed code intelligence for AI coding agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn — ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.
+description: Precomputed code intelligence for AI coding agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn — a median 90.6% fewer input tokens to review a pull request, measured on 60 merged PRs in repos we don't own. Open source, local-first, MCP-native.
 url: https://trace-mcp.com
 lang: en
 markdown: kramdown

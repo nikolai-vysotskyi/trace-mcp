@@ -53,7 +53,19 @@ That number is not internal. It is the counter on the homepage and in the README
 | `get_call_graph` | 12 | 1,500 | 225 | **5,165** | 3.44 | 15,300 | 0 |
 
 **Totals over these twelve tools: 23,048,005 claimed vs 9,547,447 measured — 41%.**
-They cover 17 947 of the 20 187 recorded calls.
+They cover {{ site.data.response_tokens.calls_weighted }} of the {{ site.data.response_tokens.calls_store_total }} recorded calls.
+
+Stated as a reduction rather than as a correction factor: those calls cost
+{{ site.data.response_tokens.measured_tokens }} measured tokens against a
+{{ site.data.response_tokens.baseline_tokens }}-token baseline —
+**{{ site.data.response_tokens.reduction_pct }}% fewer**, or
+{{ site.data.response_tokens.credited_reduction_pct }}% if you floor the four
+losing tools at zero the way the corrected counter does. That is the figure the
+homepage and the README now quote in place of the old "~40–50% on average"
+(TRA-904). It is generated into `docs/_data/response_tokens.json` by
+`npx tsx scripts/gen-response-tokens-data.ts` from this table's two inputs, so
+no surface can retype it. The baseline half is still an estimate — see the last
+section.
 
 Three things the table says:
 

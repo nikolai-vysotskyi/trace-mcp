@@ -121,12 +121,19 @@ describe('MCP registry manifest (server.json)', () => {
 /**
  * TRA-393: the install surfaces (npm page, MCP registry, plugin marketplaces)
  * are where people decide whether to try trace-mcp, and they were advertising
- * "up to 99% token reduction" while README and the homepage say 40–50% on
- * average and reserve 99% for *redundant processing* on structured calls.
+ * "up to 99% token reduction" while README and the homepage reserve 99% for
+ * *redundant processing* on structured calls. (TRA-904 retired the "40–50% on
+ * average" those surfaces used to print — it was never measured — so the
+ * aggregate this compares against is now docs/_data/response_tokens.json.)
  * The strongest, least defensible version of the claim was on the surfaces
  * with the least room to qualify it. Keep 99% attached to what it measures.
  */
 describe('install-surface token claims stay honest', () => {
+  const PR_BENCH = readJson('docs', '_data', 'pr_context_bench.json') as {
+    median_savings_pct: number;
+  };
+  const RESPONSE = readJson('docs', '_data', 'response_tokens.json') as { reduction_pct: number };
+
   const surfaces = [
     'package.json',
     'plugin.json',
@@ -155,10 +162,18 @@ describe('install-surface token claims stay honest', () => {
       const claim = text.match(
         new RegExp(`${pct}\\+?[^"]{0,40}?(?:${noun})|(?:${noun})[^"]{0,40}?${pct}`, 'i'),
       );
+      // TRA-904: one 9x% number IS defensible on an install surface — the PR
+      // review context benchmark, measured with a tokenizer on 60 merged PRs in
+      // repositories we do not own, generated into docs/_data/pr_context_bench.json.
+      // It is allowed only when the surface says which task it measures; the ban
+      // on selling benchmark_project's synthetic ceiling as a headline stands.
+      const measuredPr =
+        claim?.[0].includes(`${PR_BENCH.median_savings_pct}%`) && /PR|pull request/i.test(text);
       expect(
-        claim?.[0],
-        `${path} advertises a peak token number as if it were the average. ` +
-          'The average is 40–50%; 99% is "less redundant processing" on structured calls.',
+        measuredPr ? undefined : claim?.[0],
+        `${path} advertises a peak token number as if it were the average. The measured ` +
+          `aggregate is ${RESPONSE.reduction_pct}% (docs/_data/response_tokens.json); 99% is ` +
+          '"less redundant processing" on structured calls, from a synthetic estimator.',
       ).toBeUndefined();
     });
   }
