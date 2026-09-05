@@ -5,17 +5,11 @@
 // that were actually measured to be broken, so they cannot come back quietly.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const ICON_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  'assets',
-  'icon',
-);
+// `src/main` builds to CommonJS, where `import.meta` is a compile error — so
+// resolve from the package root the way the other tests in here do.
+const ICON_DIR = path.resolve(process.cwd(), 'assets/icon');
 
 const masters = {
   detail: fs.readFileSync(path.join(ICON_DIR, 'icon.svg'), 'utf8'),
