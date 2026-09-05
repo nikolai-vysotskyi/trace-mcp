@@ -21,6 +21,7 @@ export const overview = {
   menuRemoveService: '서비스 제거…',
 
   sectionIndex: '인덱스',
+  staleNumbers: '아래는 마지막으로 인덱싱한 수치입니다.',
   rowStatus: '상태',
   rowFiles: '인덱싱된 파일',
   rowSymbols: '심볼',

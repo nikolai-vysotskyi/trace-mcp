@@ -722,15 +722,25 @@ export function ProjectOverview({
               ) : stats ? (
                 <>
                   {!statsFresh && (
-                    /* Same sentence the Workspace uses for the same condition,
-                       from the same key — one wording for "these are the last
-                       indexed numbers", not two. */
+                    /* States the one thing this flag knows — the numbers came
+                       from the stored snapshot, not from an answer this
+                       session — and names no cause for it. The Workspace's
+                       `busyStale` was reused here, and its lead half ("The
+                       daemon is busy") is a claim `!statsFresh` does not
+                       establish: on the Workspace that sentence is chosen by
+                       `busyMessage` from a real busy reading, while here it
+                       printed for every stale one. It then sat directly above
+                       the Status row that names the actual condition, so the
+                       card gave two answers about one daemon — "The daemon is
+                       busy." over "Daemon unreachable", and over "Not tracked"
+                       a moment later. The cause belongs to the Status row;
+                       this line describes the numbers (TRA-469, TRA-489). */
                     <div
                       role="status"
                       className="px-3 pt-2 text-[13px]"
                       style={{ color: 'var(--label-secondary)' }}
                     >
-                      {t('workspace:busyStale')}
+                      {t('staleNumbers')}
                     </div>
                   )}
                   <ListRow

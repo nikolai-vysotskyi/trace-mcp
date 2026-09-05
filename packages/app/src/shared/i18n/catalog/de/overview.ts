@@ -24,6 +24,7 @@ export const overview = {
 
   // ── Index ──
   sectionIndex: 'Index',
+  staleNumbers: 'Dies sind die zuletzt indexierten Zahlen.',
   rowStatus: 'Status',
   rowFiles: 'Indexierte Dateien',
   rowSymbols: 'Symbole',

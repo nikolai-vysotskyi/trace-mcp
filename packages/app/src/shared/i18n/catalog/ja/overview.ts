@@ -21,6 +21,7 @@ export const overview = {
   menuRemoveService: 'サービスを削除…',
 
   sectionIndex: 'インデックス',
+  staleNumbers: '表示中の数値は前回のものです。',
   rowStatus: '状態',
   rowFiles: 'インデックス済みファイル',
   rowSymbols: 'シンボル',

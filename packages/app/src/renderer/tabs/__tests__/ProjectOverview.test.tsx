@@ -222,9 +222,30 @@ describe('ProjectOverview surface', () => {
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText('337')).toBeTruthy();
-    expect(
-      screen.getByText('The daemon is busy. These are the last indexed numbers.'),
-    ).toBeTruthy();
+    expect(screen.getByText('These are the last indexed numbers.')).toBeTruthy();
+  });
+
+  /* The stale line used to borrow the Workspace's `busyStale`, whose lead half
+     asserts the daemon is busy — a claim `!statsFresh` does not establish. It
+     printed directly above the Status row that names the real condition, so the
+     card gave two answers about one daemon: on the running app, "The daemon is
+     busy." over "Daemon unreachable", and over "Not tracked" a moment later.
+     One condition, one sentence (DESIGN.md §5) — the cause is the Status row's
+     to state, and this line's job is to describe the numbers. */
+  it('never gives the Index card two verdicts about one daemon', async () => {
+    localStorage.setItem(`trace-mcp.overview.stats:${ROOT}`, JSON.stringify(STATS));
+    // The daemon answers, and its list has forgotten this project: the Status
+    // row reads "Not tracked" while the numbers on screen are the snapshot's.
+    daemon.projects = [];
+    daemon.loading = false;
+    daemon.connected = true;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Not tracked')).toBeTruthy();
+    expect(screen.getByText('These are the last indexed numbers.')).toBeTruthy();
+    expect(screen.queryByText(/The daemon is busy/)).toBeNull();
   });
 
   it('does not call a project the daemon forgot "not indexed"', async () => {

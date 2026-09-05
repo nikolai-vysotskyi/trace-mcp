@@ -32,6 +32,12 @@ export const overview = {
 
   // ── Index ──
   sectionIndex: 'Index',
+  /* Says only what it knows: that the numbers came from the stored
+     snapshot, not from an answer this session. It names no cause — the
+     Status row directly below is where the daemon's condition is
+     stated, and the two disagreed on screen when this reused the
+     Workspace's "The daemon is busy" sentence for every stale reading. */
+  staleNumbers: 'These are the last indexed numbers.',
   rowStatus: 'Status',
   rowFiles: 'Files indexed',
   rowSymbols: 'Symbols',
