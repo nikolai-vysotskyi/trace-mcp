@@ -6,9 +6,12 @@
  * spawns N worker_threads — each with its own parser cache — so parsing of N
  * files actually proceeds in parallel.
  *
- * Lifecycle: lazy. The first `extract()` call spawns workers; `terminate()`
- * shuts them down. Worker spawn cost is non-trivial (~150-300 ms each because
- * of WASM init + plugin loading), so callers should gate use by batch size.
+ * Lifecycle: lazy. The first `extract()` call spawns workers; they are released
+ * again after an idle window (milliseconds for CLI, minutes for the daemon —
+ * see IDLE_TERMINATE_MS / KEEPALIVE_IDLE_TERMINATE_MS) and `terminate()` shuts
+ * them down for good. Worker spawn cost is non-trivial (~150-300 ms each
+ * because of WASM init + plugin loading), so callers should gate use by batch
+ * size.
  *
  * Crash resilience: each slot has exponential backoff on respawn and a
  * consecutive-failure budget. After repeated failures (e.g. MODULE_NOT_FOUND
@@ -88,8 +91,9 @@ const DEFAULT_KEEPALIVE_WORKER_COUNT = Math.max(1, Math.min(4, Math.floor(os.cpu
 
 export interface ExtractPoolOptions {
   size?: number;
-  /** When true, skip idle teardown — daemon mode. CLI/tests pass false so the
-   *  process can exit cleanly when the pool drains. */
+  /** When true, use the long daemon-mode idle window instead of the short CLI
+   *  one, so workers stay warm across bursty edits. CLI/tests pass false so the
+   *  process can exit cleanly the moment the pool drains. */
   keepAlive?: boolean;
 }
 
@@ -117,6 +121,17 @@ function resolveWorkerEntry(): URL | null {
  * next `extract()` call.
  */
 const IDLE_TERMINATE_MS = 200;
+
+/**
+ * Idle teardown delay for keepAlive (daemon) pools. Measured on TRA-811: each
+ * live worker costs ~35 MB just to boot and ~50 MB once it has parsed a file
+ * (own V8 isolate + tree-sitter WASM + loaded grammars), so a pool of 8 held
+ * ~430 MB resident for the daemon's whole lifetime whether or not anything was
+ * being indexed. Five minutes is long enough that a burst of edits never pays
+ * the ~150-300 ms × N respawn cost twice, short enough that a daemon nobody is
+ * indexing against gives the memory back.
+ */
+export const KEEPALIVE_IDLE_TERMINATE_MS = 5 * 60_000;
 
 /** Crash-loop guard tunables. Defaults are conservative — five fast crashes
  *  in a row almost certainly mean the worker entry is unrecoverable (missing
@@ -256,27 +271,31 @@ export class ExtractPool {
   }
 
   /**
-   * Schedule a one-shot idle check; reset on each extract() call. After
-   * IDLE_TERMINATE_MS with nothing in flight, soft-terminate workers so the
-   * parent process can exit naturally. The pool remains usable — the next
-   * extract() call re-spawns workers.
+   * Schedule a one-shot idle check; reset on each extract() call. After the
+   * idle delay with nothing in flight, soft-terminate workers so the parent
+   * process can exit naturally and the memory goes back. The pool remains
+   * usable — the next extract() call re-spawns workers.
+   *
+   * Daemon mode (keepAlive) uses a much longer delay so workers stay warm
+   * across a burst of edits instead of paying respawn cost per file, but it is
+   * no longer "never" — see KEEPALIVE_IDLE_TERMINATE_MS.
    */
   private scheduleIdleTeardown(): void {
-    // Daemon mode: workers stay warm so the next bursty edit doesn't pay the
-    // ~150-300 ms × N respawn cost. Explicit terminate() still works.
-    if (this.keepAlive) return;
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = null;
-      if (
-        this.pending.size === 0 &&
-        this.queue.length === 0 &&
-        !this.terminated &&
-        this.workers.length > 0
-      ) {
-        this.idleTeardown().catch(() => 0);
-      }
-    }, IDLE_TERMINATE_MS);
+    this.idleTimer = setTimeout(
+      () => {
+        this.idleTimer = null;
+        if (
+          this.pending.size === 0 &&
+          this.queue.length === 0 &&
+          !this.terminated &&
+          this.workers.length > 0
+        ) {
+          this.idleTeardown().catch(() => 0);
+        }
+      },
+      this.keepAlive ? KEEPALIVE_IDLE_TERMINATE_MS : IDLE_TERMINATE_MS,
+    );
     // Don't keep the parent process alive on the timer alone.
     this.idleTimer.unref();
   }
@@ -287,6 +306,15 @@ export class ExtractPool {
     this.busy = [];
     // Slot state is reset on next ensureStarted(); keep nothing here.
     this.slots = [];
+    if (this.keepAlive && workers.length > 0) {
+      // Only worth a log line in daemon mode — CLI pools tear down constantly.
+      logger.info({ size: workers.length }, 'Extract worker pool idle — releasing workers');
+    }
+    // Detach first. An idle release is deliberate, so the 'exit' these workers
+    // are about to emit carries no information — and by the time it lands the
+    // slot may already hold a *new* worker spawned by an extract() that arrived
+    // mid-teardown, which onExit would then kill as a crash.
+    for (const w of workers) w.removeAllListeners();
     await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
   }
 
@@ -357,6 +385,10 @@ export class ExtractPool {
     // respawn completes. busy stays false (the request was rejected).
     delete this.workers[workerIdx];
     this.busy[workerIdx] = false;
+    // Only onMessage used to re-arm the idle timer, so a batch that ended in a
+    // rejection left the pool resident with no timer until the next successful
+    // extract() — the exact leak this idle window exists to close.
+    if (this.pending.size === 0) this.scheduleIdleTeardown();
 
     if (this.terminated) return;
 
