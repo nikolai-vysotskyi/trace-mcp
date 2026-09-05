@@ -148,6 +148,17 @@ async function run() {
   fs.writeFileSync(pgrepStub, '#!/bin/sh\nexit 1\n');
   fs.chmodSync(pgrepStub, 0o755);
 
+  // postinstall-app.mjs unconditionally runs `launchctl stop com.trace-mcp.server`
+  // before it resolves which bundle to touch — on the machine that runs this
+  // script for real (the Update Health autopilot, a developer's own Mac), that
+  // is the real running daemon, not the sandboxed one this script creates.
+  // launchd's KeepAlive respawns it, so nothing stays broken, but a
+  // verification script has no business bouncing production state as a side
+  // effect. Same no-op-binary pattern as the pgrep stub above.
+  const launchctlStub = path.join(sandbox, 'launchctl-noop');
+  fs.writeFileSync(launchctlStub, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(launchctlStub, 0o755);
+
   let failure = null;
   try {
     await downloadReleaseZip(from, zipSuffix, sandbox);
@@ -179,6 +190,7 @@ async function run() {
         HOME: home,
         TRACE_MCP_APP_DIRS: apps,
         TRACE_MCP_PGREP_BIN: pgrepStub,
+        TRACE_MCP_LAUNCHCTL_BIN: launchctlStub,
       },
     });
 
