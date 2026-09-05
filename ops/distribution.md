@@ -10,7 +10,9 @@ of 24 pages have no index entry. `ops/index-coverage.md` carries that
 measurement and the limits on reading a cause into it.
 
 **Read this before any distribution / directory / listing work. Update it in the
-same change that touched a surface.** Without it every run re-discovers the same
+same change that touched a surface.** What the copy on those surfaces is
+allowed to claim is a separate decision, in `ops/positioning.md` — read it too
+before rewriting a listing's description. Without it every run re-discovers the same
 things — that mcp.so dropped free submissions, that PulseMCP submissions are
 paused — and either wastes the run or reaches a different conclusion than the
 last one did.

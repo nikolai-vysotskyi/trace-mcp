@@ -302,3 +302,18 @@ question: per-tool schema prices, the system-prompt options, and the traps
 (`--tools ""` costs *more*, not less). **Read it before promising, building or
 documenting any start-block optimisation, and update it in the same change.**
 Every number there carries the harness and the date it was measured.
+
+## What we say the product does
+
+`ops/positioning.md` holds the one-sentence claim trace-mcp leads with, the
+honesty boundary that travels with it, and the list of surfaces obliged to match.
+**Read it before writing or editing any public-facing description** — the
+homepage hero, `README.md`'s first screen, `server.json`'s `description`, a
+directory listing, a `/vs/` page. Update it in the same change that moves the
+claim.
+
+It exists because the product grew four mechanisms that are not the code graph —
+decision memory, the `Read`/`Bash` mirrors, the startup-block audit with its
+apply button, and `trace_state_*` — and two of them do not ship as MCP tools at
+all. Deciding each one's public framing separately produces two products by
+accident, which is the failure the file is there to prevent.

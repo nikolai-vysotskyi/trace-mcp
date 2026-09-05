@@ -10,6 +10,10 @@ for TRA-771 because TRA-759 recorded the two largest items — native tool schem
 (41%) and the shell's system prompt (14%) — as "not our lever", and that is
 wrong: both have supported, user-facing switches.
 
+The share of this block we are allowed to *claim* in public is fixed separately,
+in `ops/positioning.md`. The numbers here are that claim's evidence and its
+ceiling — read them before writing a percentage onto a public surface.
+
 Rules for keeping it honest:
 
 - Record what you **measured**, with the date and the harness. A flag's help

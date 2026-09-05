@@ -423,10 +423,23 @@ check (item 1's companion), the use-vs-setup question (item 5 below), the
 daemon field signal (TRA-671, shipped and reading zero), and every arrivals
 judgement the distribution and SEO work is currently making on taste.
 
-### 4. Name the category the product actually moved into (new, TRA-906)
-Three mechanisms now ship under one binary and only one of them is code
-intelligence: the graph and its tools, the Read/Bash **mirrors**, and the
-**startup-text compressor** — plus `trace_state_*` (item 8). The
+### 4. Name the category the product actually moved into — answered (TRA-906)
+**Done 2026-09-05. The written position is `ops/positioning.md`; read that
+before editing any public description.** The answer was neither of the two
+options below: the sentence that covers everything shipped is a
+generalisation of the one already on the homepage, and the site's own eyebrow
+(*Recomputation → Reuse*) has carried the category claim all along. The
+finding that forced it was not the graph's token share but that **two of the
+five mechanisms are not MCP tools at all** — trace-mcp outgrew "an MCP
+server" before it outgrew "a code graph". The ledger also fixes what falls
+out of the headline, the two doors, why `server.json` must *not* carry the
+category sentence, and the surfaces this obliges us to change. Those surfaces
+are now ordinary issues; what remains here is history.
+
+Five mechanisms now ship under one binary and only one of them is code
+intelligence: the graph and its tools, **decision memory**, the Read/Bash
+**mirrors**, and the **startup-text compressor** — plus `trace_state_*`
+(item 8). The
 decomposition above says the schema surface we lead with is 3.5% of the
 context an agent actually pays for, and the two new mechanisms sit on much
 larger shares with measured, gated results behind them.
@@ -519,9 +532,12 @@ TRA-880 just disproved about our own counter, and exactly what item 2 exists
 to stop us shipping. Before this number reaches a public surface it needs
 one arm where the baseline can fail.
 
-The positioning half of this item is now folded into item 4: `trace_state_*`
-is one of three non-graph mechanisms in the binary, and deciding its door
-separately from theirs produces two products by accident.
+**The positioning half of this item is answered** (item 4, `ops/positioning.md`):
+`trace_state_*` is one of four non-graph mechanisms in the binary, it stays
+behind the tool surface and does **not** get its own door, and deciding that
+separately from the others would have produced two products by accident. What
+survives here is the quality half above — the A/B still owes one arm where the
+baseline can fail before any of it reaches a public surface.
 
 ### 9. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 Unchanged. The design pass is done and stays valid; its smallest slice is a
