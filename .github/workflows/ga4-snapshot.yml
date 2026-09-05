@@ -12,12 +12,15 @@ on:
     - cron: '17 6 * * *' # daily, after the UTC day the ping counts against has closed
   workflow_dispatch:
 
+# Deny everything at the top level so a future job added here starts with no
+# token scopes; the one job that needs `contents: write` grants it to itself.
+permissions: {}
+
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    # Scoped to the job rather than the top level: `contents: write` is only
-    # needed by the publish step below, and a top-level grant hands it to every
-    # future job added here (Scorecard TokenPermissions).
+    # Scoped to the job rather than the top level: only the publish step below
+    # needs it, and a top-level grant would hand it to every future job here.
     permissions:
       contents: write
     steps:
