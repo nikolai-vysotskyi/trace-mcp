@@ -47,7 +47,9 @@ const round = (n: number, d = 1): number => (Number.isFinite(n) ? Number(n.toFix
 const median = (xs: number[]): number => {
   if (xs.length === 0) return 0;
   const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 !== 0 ? s[(s.length - 1) / 2]! : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
+  return s.length % 2 !== 0
+    ? s[(s.length - 1) / 2]!
+    : (s[s.length / 2 - 1]! + s[s.length / 2]!) / 2;
 };
 
 // ── Process Monitoring Helpers ─────────────────────────────────────────────
@@ -123,10 +125,14 @@ function getTreeStats(rootPid: number): TreeStats {
   let totalCpu = 0;
   for (const pid of pids) {
     try {
-      const rssRaw = execFileSync('ps', ['-o', 'rss=', '-p', String(pid)], { encoding: 'utf-8' }).trim();
+      const rssRaw = execFileSync('ps', ['-o', 'rss=', '-p', String(pid)], {
+        encoding: 'utf-8',
+      }).trim();
       totalRss += Number(rssRaw) / 1024;
       totalThreads += getThreadCount(pid);
-      const cpuRaw = execFileSync('ps', ['-o', 'cputime=', '-p', String(pid)], { encoding: 'utf-8' }).trim();
+      const cpuRaw = execFileSync('ps', ['-o', 'cputime=', '-p', String(pid)], {
+        encoding: 'utf-8',
+      }).trim();
       totalCpu += parseCpuTime(cpuRaw);
     } catch {
       // Process may have exited
@@ -354,7 +360,11 @@ async function registerProjectWithDaemon(port: number, projectRoot: string): Pro
   throw new Error(`Project ${projectRoot} never became ready on daemon port ${port}`);
 }
 
-async function triggerDaemonReindex(port: number, projectRoot: string, filePath: string): Promise<void> {
+async function triggerDaemonReindex(
+  port: number,
+  projectRoot: string,
+  filePath: string,
+): Promise<void> {
   const res = await fetch(`http://127.0.0.1:${port}/api/projects/reindex-file`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -378,7 +388,9 @@ function ensureFixtureWorktree(): { path: string; cleanup: () => void } {
   });
   execFileSync('git', ['init', fixtureDir], { stdio: 'ignore' });
   execFileSync('git', ['-C', fixtureDir, 'config', 'user.name', 'bench'], { stdio: 'ignore' });
-  execFileSync('git', ['-C', fixtureDir, 'config', 'user.email', 'bench@example.com'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', fixtureDir, 'config', 'user.email', 'bench@example.com'], {
+    stdio: 'ignore',
+  });
   execFileSync('git', ['-C', fixtureDir, 'add', '.'], { stdio: 'ignore' });
   execFileSync('git', ['-C', fixtureDir, 'commit', '-m', 'corpus baseline'], { stdio: 'ignore' });
 
@@ -414,16 +426,22 @@ async function main() {
     .readdirSync(path.join(fixture.path, 'src'), { recursive: true })
     .filter((f) => String(f).endsWith('.ts')).length;
 
-  console.log(`Corpus: detached worktree at ${PINNED_COMMIT.slice(0, 8)} (${fileCount}+ TypeScript files)`);
+  console.log(
+    `Corpus: detached worktree at ${PINNED_COMMIT.slice(0, 8)} (${fileCount}+ TypeScript files)`,
+  );
 
   const scalingMatrix: any[] = [];
   let singleSessionResults: any = null;
 
   try {
     for (const N of STEPS) {
-      console.log(`\n────────────────────────────────────────────────────────────────────────────────`);
+      console.log(
+        `\n────────────────────────────────────────────────────────────────────────────────`,
+      );
       console.log(`Running Step N = ${N} concurrent session(s)...`);
-      console.log(`────────────────────────────────────────────────────────────────────────────────`);
+      console.log(
+        `────────────────────────────────────────────────────────────────────────────────`,
+      );
 
       // ── ARM A: DAEMON HEALTHY ───────────────────────────────────────────
       console.log(`\n[N=${N}] Arm A: Daemon Healthy (Proxy Mode)...`);
@@ -461,7 +479,8 @@ async function main() {
       const idleStatsDaemonA = getTreeStats(daemon.pid);
       const totalSessionsRssA = idleStatsSessionsA.reduce((sum, s) => sum + s.rssMb, 0);
       const totalRssA = totalSessionsRssA + idleStatsDaemonA.rssMb;
-      const totalThreadsA = idleStatsSessionsA.reduce((sum, s) => sum + s.threads, 0) + idleStatsDaemonA.threads;
+      const totalThreadsA =
+        idleStatsSessionsA.reduce((sum, s) => sum + s.threads, 0) + idleStatsDaemonA.threads;
 
       console.log(
         `  Idle (${IDLE_SECONDS}s): per-session RSS=${round(median(idleStatsSessionsA.map((s) => s.rssMb)), 1)}MB | daemon RSS=${idleStatsDaemonA.rssMb}MB | TOTAL RSS=${round(totalRssA, 1)}MB | Threads=${totalThreadsA}`,
@@ -491,7 +510,10 @@ async function main() {
         `  1-file change: wall=${round(editWallA, 0)}ms | daemon CPU=${round(daemonCpuBurnedA, 2)}s | sessions CPU=${round(sessionsCpuBurnedA, 2)}s | TOTAL CPU=${round(totalCpuBurnedA, 2)}s`,
       );
 
-      execFileSync('git', ['checkout', '--', 'src/util/debounce.ts'], { cwd: fixture.path, stdio: 'ignore' });
+      execFileSync('git', ['checkout', '--', 'src/util/debounce.ts'], {
+        cwd: fixture.path,
+        stdio: 'ignore',
+      });
 
       await Promise.all(sessionsA.map((s) => s.close()));
       await daemon.close();
@@ -555,7 +577,10 @@ async function main() {
         `  1-file change: wall=${round(editWallB, 0)}ms | sessions CPU=${round(totalCpuBurnedB, 2)}s | TOTAL CPU=${round(totalCpuBurnedB, 2)}s`,
       );
 
-      execFileSync('git', ['checkout', '--', 'src/util/debounce.ts'], { cwd: fixture.path, stdio: 'ignore' });
+      execFileSync('git', ['checkout', '--', 'src/util/debounce.ts'], {
+        cwd: fixture.path,
+        stdio: 'ignore',
+      });
 
       await Promise.all(sessionsB.map((s) => s.close()));
       try {
@@ -570,7 +595,10 @@ async function main() {
             wall_time_median_ms: round(median(armAWallTimes), 0),
             wall_time_max_ms: Math.max(...armAWallTimes),
             per_session_peak_rss_mb: round(median(armAPeakRss), 1),
-            total_peak_rss_mb: round(armAPeakRss.reduce((a, b) => a + b, 0), 1),
+            total_peak_rss_mb: round(
+              armAPeakRss.reduce((a, b) => a + b, 0),
+              1,
+            ),
             threads_per_session: round(median(armAPeakThreads), 0),
             total_threads: armAPeakThreads.reduce((a, b) => a + b, 0),
           },
@@ -595,7 +623,10 @@ async function main() {
             wall_time_median_ms: round(median(armBWallTimes), 0),
             wall_time_max_ms: Math.max(...armBWallTimes),
             per_session_peak_rss_mb: round(median(armBPeakRss), 1),
-            total_peak_rss_mb: round(armBPeakRss.reduce((a, b) => a + b, 0), 1),
+            total_peak_rss_mb: round(
+              armBPeakRss.reduce((a, b) => a + b, 0),
+              1,
+            ),
             threads_per_session: round(median(armBPeakThreads), 0),
             total_threads: armBPeakThreads.reduce((a, b) => a + b, 0),
           },
@@ -651,14 +682,56 @@ async function main() {
   const n9 = scalingMatrix.find((s) => s.n === 9);
   const multipliers = {
     daemon_healthy: {
-      rss_multiplier: n1 && n9 ? round(n9.daemon_healthy.steady_state_idle.total_rss_mb / n1.daemon_healthy.steady_state_idle.total_rss_mb, 2) : 1,
-      threads_multiplier: n1 && n9 ? round(n9.daemon_healthy.steady_state_idle.total_threads / n1.daemon_healthy.steady_state_idle.total_threads, 2) : 1,
-      one_file_change_cpu_multiplier: n1 && n9 ? round(n9.daemon_healthy.one_file_change.total_cpu_seconds / Math.max(0.01, n1.daemon_healthy.one_file_change.total_cpu_seconds), 2) : 1,
+      rss_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_healthy.steady_state_idle.total_rss_mb /
+                n1.daemon_healthy.steady_state_idle.total_rss_mb,
+              2,
+            )
+          : 1,
+      threads_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_healthy.steady_state_idle.total_threads /
+                n1.daemon_healthy.steady_state_idle.total_threads,
+              2,
+            )
+          : 1,
+      one_file_change_cpu_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_healthy.one_file_change.total_cpu_seconds /
+                Math.max(0.01, n1.daemon_healthy.one_file_change.total_cpu_seconds),
+              2,
+            )
+          : 1,
     },
     daemon_absent: {
-      rss_multiplier: n1 && n9 ? round(n9.daemon_absent.steady_state_idle.total_rss_mb / n1.daemon_absent.steady_state_idle.total_rss_mb, 2) : 1,
-      threads_multiplier: n1 && n9 ? round(n9.daemon_absent.steady_state_idle.total_threads / n1.daemon_absent.steady_state_idle.total_threads, 2) : 1,
-      one_file_change_cpu_multiplier: n1 && n9 ? round(n9.daemon_absent.one_file_change.total_cpu_seconds / Math.max(0.01, n1.daemon_absent.one_file_change.total_cpu_seconds), 2) : 1,
+      rss_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_absent.steady_state_idle.total_rss_mb /
+                n1.daemon_absent.steady_state_idle.total_rss_mb,
+              2,
+            )
+          : 1,
+      threads_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_absent.steady_state_idle.total_threads /
+                n1.daemon_absent.steady_state_idle.total_threads,
+              2,
+            )
+          : 1,
+      one_file_change_cpu_multiplier:
+        n1 && n9
+          ? round(
+              n9.daemon_absent.one_file_change.total_cpu_seconds /
+                Math.max(0.01, n1.daemon_absent.one_file_change.total_cpu_seconds),
+              2,
+            )
+          : 1,
     },
   };
 
@@ -670,13 +743,15 @@ async function main() {
     } catch {}
   }
 
-  const previousRun = existingData.runs.length > 0 ? existingData.runs[existingData.runs.length - 1] : null;
+  const previousRun =
+    existingData.runs.length > 0 ? existingData.runs[existingData.runs.length - 1] : null;
 
   let deltas: any = undefined;
   if (previousRun && singleSessionResults) {
     deltas = {
       cold_start_ms_delta: round(
-        singleSessionResults.cold_start.wall_time_ms - previousRun.single_session.cold_start.wall_time_ms,
+        singleSessionResults.cold_start.wall_time_ms -
+          previousRun.single_session.cold_start.wall_time_ms,
         0,
       ),
       idle_rss_daemon_healthy_mb_delta: round(
@@ -750,8 +825,12 @@ async function main() {
   );
 
   console.log(`\n4. Scaling Matrix:`);
-  console.log(`   N | Mode           | Cold Start p50 | Idle Total RSS | Idle Total Threads | 1-File Change CPU`);
-  console.log(`   --+----------------+----------------+----------------+--------------------+------------------`);
+  console.log(
+    `   N | Mode           | Cold Start p50 | Idle Total RSS | Idle Total Threads | 1-File Change CPU`,
+  );
+  console.log(
+    `   --+----------------+----------------+----------------+--------------------+------------------`,
+  );
   for (const row of scalingMatrix) {
     console.log(
       `   ${row.n} | daemon_healthy | ${String(row.daemon_healthy.cold_start.wall_time_median_ms).padStart(12)}ms | ${String(row.daemon_healthy.steady_state_idle.total_rss_mb).padStart(12)}MB | ${String(row.daemon_healthy.steady_state_idle.total_threads).padStart(16)} | ${String(row.daemon_healthy.one_file_change.total_cpu_seconds).padStart(15)}s`,
@@ -773,11 +852,21 @@ async function main() {
 
   if (deltas) {
     console.log(`\n6. Delta Against Previous Run:`);
-    console.log(`   Δ cold start:             ${deltas.cold_start_ms_delta > 0 ? '+' : ''}${deltas.cold_start_ms_delta} ms`);
-    console.log(`   Δ idle RSS (healthy):     ${deltas.idle_rss_daemon_healthy_mb_delta > 0 ? '+' : ''}${deltas.idle_rss_daemon_healthy_mb_delta} MB`);
-    console.log(`   Δ idle RSS (absent):      ${deltas.idle_rss_daemon_absent_mb_delta > 0 ? '+' : ''}${deltas.idle_rss_daemon_absent_mb_delta} MB`);
-    console.log(`   Δ 1-file CPU (healthy):   ${deltas.one_file_cpu_daemon_healthy_s_delta > 0 ? '+' : ''}${deltas.one_file_cpu_daemon_healthy_s_delta} s`);
-    console.log(`   Δ 1-file CPU (absent):    ${deltas.one_file_cpu_daemon_absent_s_delta > 0 ? '+' : ''}${deltas.one_file_cpu_daemon_absent_s_delta} s`);
+    console.log(
+      `   Δ cold start:             ${deltas.cold_start_ms_delta > 0 ? '+' : ''}${deltas.cold_start_ms_delta} ms`,
+    );
+    console.log(
+      `   Δ idle RSS (healthy):     ${deltas.idle_rss_daemon_healthy_mb_delta > 0 ? '+' : ''}${deltas.idle_rss_daemon_healthy_mb_delta} MB`,
+    );
+    console.log(
+      `   Δ idle RSS (absent):      ${deltas.idle_rss_daemon_absent_mb_delta > 0 ? '+' : ''}${deltas.idle_rss_daemon_absent_mb_delta} MB`,
+    );
+    console.log(
+      `   Δ 1-file CPU (healthy):   ${deltas.one_file_cpu_daemon_healthy_s_delta > 0 ? '+' : ''}${deltas.one_file_cpu_daemon_healthy_s_delta} s`,
+    );
+    console.log(
+      `   Δ 1-file CPU (absent):    ${deltas.one_file_cpu_daemon_absent_s_delta > 0 ? '+' : ''}${deltas.one_file_cpu_daemon_absent_s_delta} s`,
+    );
   }
 
   console.log(`\nOutput written to: ${OUT_FILE}`);

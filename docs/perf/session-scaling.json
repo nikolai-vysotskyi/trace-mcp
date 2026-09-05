@@ -15,11 +15,7 @@
       },
       "config": {
         "idle_seconds": 60,
-        "steps": [
-          1,
-          4,
-          9
-        ]
+        "steps": [1, 4, 9]
       },
       "single_session": {
         "cold_start": {

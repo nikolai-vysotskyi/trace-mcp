@@ -1,3 +1,11 @@
+---
+layout: default
+title: Concurrency and session scaling
+permalink: /perf/session-scaling/
+description: Internal working document. What N concurrent stdio sessions cost with and without a shared daemon.
+noindex: true
+---
+
 # Concurrency & Session Scaling Benchmark Report (TRA-931)
 
 Automated benchmark evaluation of multi-session concurrency scaling for stdio AI coding agent sessions.
