@@ -15,12 +15,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TraceMcpConfig } from '../../config.js';
 import type { ServerHandle } from '../server.js';
 
+/** Usage pings this test's servers fired. */
+const pings: Array<{ preset: string; toolsAdvertised: number }> = [];
+vi.mock('../../telemetry/usage-ping.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../telemetry/usage-ping.js')>();
+  return {
+    ...actual,
+    sendUsagePing: async (p: { preset: string; toolsAdvertised: number }) => {
+      pings.push(p);
+    },
+  };
+});
+
 let tmpHome: string;
 let projectRoot: string;
 const handles: ServerHandle[] = [];
 const closers: Array<() => void> = [];
 
 beforeEach(() => {
+  pings.length = 0;
   tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-tra951-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
   vi.resetModules();
@@ -93,6 +106,32 @@ describe('serveFullSurface (TRA-951)', () => {
     expect(instructionsOf(narrow)).not.toBe('');
     expect(instructionsOf(wide)).toBe(instructionsOf(narrow));
     expect(instructionsOf(wide)).not.toContain(OUTSIDE_MINIMAL);
+  });
+
+  it("follows the client's preset when the daemon builds the session for it", async () => {
+    // The daemon's own config says `minimal`; the client asked for `full`, and
+    // the block it is handed has to describe what *it* can call.
+    const wideClient = await build({ serveFullSurface: true, sessionPreset: 'full' });
+    const narrowClient = await build({ serveFullSurface: true, sessionPreset: 'minimal' });
+    const instructionsOf = (h: ServerHandle): string =>
+      (h.server as unknown as { server: { _options?: { instructions?: string } } }).server._options
+        ?.instructions ?? '';
+
+    expect(instructionsOf(wideClient)).toContain(OUTSIDE_MINIMAL);
+    expect(instructionsOf(narrowClient)).not.toContain(OUTSIDE_MINIMAL);
+  });
+
+  it("reports the client's preset and its advertised count in the usage ping", async () => {
+    await build({ serveFullSurface: true, sessionPreset: 'minimal' });
+    const ping = pings.at(-1);
+    expect(ping?.preset).toBe('minimal');
+    // The daemon registers ~160 tools; the session advertises far fewer.
+    expect(ping?.toolsAdvertised).toBeLessThan(60);
+  });
+
+  it('sends no usage ping for a server with no client behind it', async () => {
+    await build({ serveFullSurface: true, skipUsagePing: true });
+    expect(pings).toEqual([]);
   });
 
   it('still honours tools.exclude, which is a hard restriction, not a preset', async () => {

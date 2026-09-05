@@ -120,6 +120,17 @@ describe('get_preset_info over the daemon proxy (TRA-951)', () => {
     expect(TOOL_PRESETS.minimal as string[]).not.toContain('get_tests_for');
   });
 
+  it('forwards an excluded get_preset_info instead of answering it', async () => {
+    // `tools.exclude` is a hard restriction and outranks the intercept: the
+    // call has to reach the standard filter, which rejects it.
+    const { reply } = await callPresetInfo(
+      { tools: { preset: 'full', exclude: ['get_preset_info'] } } as TraceMcpConfig,
+      'full',
+    );
+    const r = reply as { error?: { message?: string } };
+    expect(r.error?.message).toContain('get_preset_info');
+  });
+
   it('forwards to the daemon when the catalog is unavailable rather than reporting an empty surface', async () => {
     const { reply, transport } = await callPresetInfo(
       { tools: { preset: 'full' } } as TraceMcpConfig,

@@ -455,6 +455,9 @@ export class ProxyBackend implements Backend {
   private async handlePresetInfo(id: string | number): Promise<boolean> {
     const filter = this.opts.toolFilter;
     if (!filter || !this.opts.presetName) return false;
+    // `tools.exclude` is a hard restriction that outranks the intercept: fall
+    // through so the standard filter rejects the call instead of answering it.
+    if (!filter('get_preset_info')) return false;
     await this.primeDaemonTools();
     if (this.daemonTools.length === 0) return false;
     const names = this.daemonTools.map((t) => t.name);
@@ -636,7 +639,14 @@ export class ProxyBackend implements Backend {
    */
   private mcpUrl(projectRoot: string): string {
     const base = `${this.opts.daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
-    return this.opts.toolFilter ? `${base}&surface=full` : base;
+    if (!this.opts.toolFilter) return base;
+    // `preset` travels too: the daemon registers everything, but it still
+    // writes this session's instructions block and usage ping, and both are
+    // about what the *client* advertises.
+    const preset = this.opts.presetName
+      ? `&preset=${encodeURIComponent(this.opts.presetName)}`
+      : '';
+    return `${base}&surface=full${preset}`;
   }
 
   /**

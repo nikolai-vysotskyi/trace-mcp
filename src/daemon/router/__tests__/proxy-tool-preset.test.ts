@@ -101,6 +101,7 @@ async function startProxy(
     projectRoot: '/nonexistent/fake-project',
     clientId: 'tra-250-test',
     toolFilter: filterless ? undefined : createToolFilter(config),
+    presetName: filterless ? undefined : (config.tools?.preset ?? 'minimal'),
     transportFactory: (mcpUrl) => {
       lastMcpUrl = mcpUrl;
       return transport;
@@ -167,6 +168,11 @@ describe('daemon proxy honours the session tool preset (TRA-250)', () => {
   it('asks the daemon for the unfiltered surface when it filters locally', async () => {
     await startProxy({ tools: { preset: 'minimal' } } as TraceMcpConfig);
     expect(lastMcpUrl).toContain('surface=full');
+  });
+
+  it('tells the daemon which preset the session asked for, so its instructions and ping match', async () => {
+    await startProxy({ tools: { preset: 'minimal' } } as TraceMcpConfig);
+    expect(lastMcpUrl).toContain('preset=minimal');
   });
 
   it('omits the marker when it has no filter of its own', async () => {

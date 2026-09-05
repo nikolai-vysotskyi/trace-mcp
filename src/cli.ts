@@ -818,6 +818,8 @@ program
        * directly has no such filter, so it keeps the daemon's preset.
        */
       fullSurface: boolean,
+      /** The preset the client asked for, when it sent one (TRA-951). */
+      clientPreset: string | undefined,
     ): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
@@ -868,6 +870,7 @@ program
         // TRA-951: the daemon advertises the full surface to a session that
         // applies its own preset client-side (ProxyBackend).
         serveFullSurface: fullSurface,
+        sessionPreset: clientPreset,
       };
       const handle = createServer(
         managed.store,
@@ -1149,6 +1152,7 @@ program
         // TRA-951: only the stdio proxy sends this, and only when it filters
         // the surface itself.
         const fullSurface = url.searchParams.get('surface') === 'full';
+        const clientPreset = url.searchParams.get('preset') ?? undefined;
 
         // Resolve to the deepest KNOWN root: a registered subproject
         // (the/fair/fair-front) wins over its container ancestor (the) so the
@@ -1178,7 +1182,8 @@ program
             }
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
-            transport = (await createSessionTransport(projectRoot, fullSurface)) ?? undefined;
+            transport =
+              (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ?? undefined;
             if (!transport) {
               // Auto-register the project on first MCP connect when the path
               // is plausibly a real project root. This recovers the common
@@ -1236,7 +1241,9 @@ program
                       ? 'Auto-served registered subproject read-mostly on first MCP connect'
                       : 'Auto-registered project on first MCP connect',
                   );
-                  transport = (await createSessionTransport(projectRoot, fullSurface)) ?? undefined;
+                  transport =
+                    (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ??
+                    undefined;
                 } catch (err) {
                   logger.warn(
                     { err: String(err), projectRoot },
