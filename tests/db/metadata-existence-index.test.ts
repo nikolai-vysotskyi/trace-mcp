@@ -116,3 +116,69 @@ describe('metadata-existence partial indexes (TRA-924)', () => {
     expect(hasBareTableScan(lines)).toBe(false);
   });
 });
+
+// TRA-940 follow-up: src/tools/quality/antipatterns.ts had three more
+// occurrences of the same `metadata LIKE '%"callSites"%'` pattern that
+// TRA-924 didn't cover (it named only the 5 edge-resolver files). Fixed by
+// reusing the same idx_symbols_call_sites partial index -- no new migration.
+describe('antipatterns.ts callSites queries avoid a bare symbols scan (TRA-940)', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:');
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  function planLines(sql: string): string[] {
+    const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>;
+    return plan.map((p) => p.detail);
+  }
+
+  function hasBareTableScan(lines: string[]): boolean {
+    return lines.some((l) => /^SCAN s$/.test(l));
+  }
+
+  it('event-listener-leak callSites query seeks idx_symbols_call_sites', () => {
+    const lines = planLines(`
+      SELECT s.id, s.file_id, s.symbol_id, s.name, s.kind, s.parent_id, s.line_start, s.metadata,
+             f.path as file_path
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.metadata IS NOT NULL
+        AND json_extract(s.metadata, '$.callSites') IS NOT NULL
+        AND f.gitignored = 0
+    `);
+    expect(lines.join(' | ')).toContain('idx_symbols_call_sites');
+    expect(hasBareTableScan(lines)).toBe(false);
+  });
+
+  it('memory-leak handler-candidates callSites query seeks idx_symbols_call_sites', () => {
+    const lines = planLines(`
+      SELECT s.id, s.file_id, s.symbol_id, s.name, s.line_start, s.metadata,
+             f.path as file_path
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.metadata IS NOT NULL
+        AND json_extract(s.metadata, '$.callSites') IS NOT NULL
+        AND f.gitignored = 0
+    `);
+    expect(lines.join(' | ')).toContain('idx_symbols_call_sites');
+    expect(hasBareTableScan(lines)).toBe(false);
+  });
+
+  it('callSiteFileCount query seeks idx_symbols_call_sites', () => {
+    const lines = planLines(`
+      SELECT COUNT(DISTINCT s.file_id) AS n
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+      WHERE s.metadata IS NOT NULL
+        AND json_extract(s.metadata, '$.callSites') IS NOT NULL
+        AND f.gitignored = 0
+    `);
+    expect(lines.join(' | ')).toContain('idx_symbols_call_sites');
+    expect(hasBareTableScan(lines)).toBe(false);
+  });
+});

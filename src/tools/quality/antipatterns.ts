@@ -662,7 +662,7 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
     .all() as Array<{
@@ -1077,7 +1077,7 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
     .all() as Array<{
@@ -1465,7 +1465,7 @@ export function detectAntipatterns(
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
         .get() as { n: number } | undefined
