@@ -85,10 +85,12 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
 
   // 3. Build resolution indexes
 
-  // All Python symbols indexed by name → array of {id, symbol_id, file_id, kind, parent_symbol_id}
+  // All Python symbols indexed by name → array of {id, symbol_id, file_id, kind, parent_symbol_id}.
+  // `signature` is fetched here (not per-symbol below) — this query already
+  // runs on the full project on every single-file save.
   const allPySymbols = store.db
     .prepare(`
-    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
+    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.signature,
            p.symbol_id AS parent_symbol_id
     FROM symbols s
     JOIN files f ON s.file_id = f.id
@@ -101,6 +103,7 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
     name: string;
     kind: string;
     file_id: number;
+    signature: string | null;
     parent_symbol_id: string | null;
   }>;
 
@@ -145,11 +148,8 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
   const returnTypeIndex = new Map<string, string>();
   for (const s of allPySymbols) {
     if (s.kind !== 'function' && s.kind !== 'method') continue;
-    const sigRow = store.db.prepare(`SELECT signature FROM symbols WHERE id = ?`).get(s.id) as
-      | { signature: string | null }
-      | undefined;
-    if (!sigRow?.signature) continue;
-    const retMatch = sigRow.signature.match(/-> *([A-Z][A-Za-z0-9_]*)/);
+    if (!s.signature) continue;
+    const retMatch = s.signature.match(/-> *([A-Z][A-Za-z0-9_]*)/);
     if (retMatch) {
       returnTypeIndex.set(s.name, retMatch[1]);
     }
