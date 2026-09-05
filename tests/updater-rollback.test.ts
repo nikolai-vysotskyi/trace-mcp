@@ -239,14 +239,17 @@ describe('checkAndInstallUpdate — backup + rollback', () => {
   // name, so the order is arbitrary — and permanently reinstate a build that
   // may be many versions old. Newest on disk is the only defensible pick.
   it('restores the newest stale backup when several dead-PID backups exist', async () => {
-    const older = path.join(tmpRoot, 'trace-mcp.tmcp-bak-4242');
-    const newer = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999');
+    // PIDs above any plausible pid_max, so `isPidAlive` is ESRCH everywhere.
+    // A low PID like 999 is a live process on a Linux CI runner, which made
+    // reconcile skip the newer backup as owned and restore the older one.
+    const older = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999999997');
+    const newer = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999999998');
     fs.mkdirSync(older, { recursive: true });
     fs.writeFileSync(path.join(older, 'marker.txt'), 'stale-old-build');
     fs.mkdirSync(newer, { recursive: true });
     fs.writeFileSync(path.join(newer, 'marker.txt'), 'recent-build');
     // Make the ordering unambiguous regardless of filesystem timestamp
-    // granularity: 'trace-mcp.tmcp-bak-4242' sorts first by name, last by mtime.
+    // granularity: the older backup sorts first by name, last by mtime.
     const old = new Date(Date.now() - 60 * 60 * 1000);
     fs.utimesSync(older, old, old);
     expect(fs.existsSync(mainDir)).toBe(false);
