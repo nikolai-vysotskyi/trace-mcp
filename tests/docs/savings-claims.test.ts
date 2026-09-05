@@ -244,6 +244,10 @@ describe('aggregate savings claims (TRA-904)', () => {
         'README.md',
         `${WORD[response.tools_costing_more] ?? response.tools_costing_more} of the ${WORD[response.tools_with_baseline] ?? response.tools_with_baseline} tools`,
       ],
+      // The all-in figure went stale here once (TRA-952 review): reduction_pct
+      // was pinned and this one was not, so a re-measure moved one and not the
+      // other.
+      ['README.md', `all-in figure is **${response.reduction_pct_incl_overhead}%**`],
       ['skills/README.md', `${response.reduction_pct}%`],
       ['skills/README.md', `${response.calls_weighted.toLocaleString('en-US')} real tool calls`],
       // Trimmed to fit the registry's 100-char description limit, so it states

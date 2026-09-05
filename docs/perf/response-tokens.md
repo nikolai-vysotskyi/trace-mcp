@@ -155,13 +155,16 @@ quietly start booking savings again.
 
 ### What closing the tail did to the headline
 
-| | TRA-880 (12 tools) | TRA-945 (24 tools) |
-|---|---|---|
-| coverage of recorded calls | 88.4% | **97.2%** |
-| net `reduction_pct` | 29.3% | **{{ site.data.response_tokens.reduction_pct }}%** |
-| credited | 35.2% | {{ site.data.response_tokens.credited_reduction_pct }}% |
-| all-in, incl. no-baseline overhead | not computed | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
-| tools costing more than their baseline | 4 of 12 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
+The two right-hand columns are frozen: they record what those runs measured, so
+a later re-measurement cannot rewrite them. Only the last column is live.
+
+| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) |
+|---|---|---|---|
+| coverage of recorded calls | 88.4% | 97.2% | **97.2%** |
+| net `reduction_pct` | 29.3% | 21.1% | **{{ site.data.response_tokens.reduction_pct }}%** |
+| credited | 35.2% | 32.6% | {{ site.data.response_tokens.credited_reduction_pct }}% |
+| all-in, incl. no-baseline overhead | not computed | 19.5% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
+| tools costing more than their baseline | 4 of 12 | 10 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
 
 The tail was more expensive than the head, in both directions: it contained the
 worst per-call ratios in the product and the calls that should never have been
