@@ -151,38 +151,122 @@ describe('install-surface token claims stay honest', () => {
     'skills/README.md',
   ];
 
+  // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
+  // "token" alone is too narrow: "92%+ reduction on typical projects" never
+  // says the word, and that was the live defect on docs/tools-reference.md.
+  const pct = String.raw`9\d(?:\.\d+)?\s*%`;
+  const noun = 'tokens?|reduction|savings|fewer|less';
+  const claimPattern = new RegExp(`${pct}\\+?[^"]{0,40}?(?:${noun})|(?:${noun})[^"]{0,40}?${pct}`);
+
+  // TRA-904: one 9x% number IS defensible on an install surface — the PR review
+  // context benchmark, measured with a tokenizer on 60 merged PRs in repositories
+  // we do not own, generated into docs/_data/pr_context_bench.json. It is allowed
+  // only where the surface says which task it measures.
+  //
+  // TRA-883: that exemption has to be anchored to the claim, and three weaker
+  // versions were killed in review before this one — each is a negative test
+  // below. A neighbourhood of N characters crosses JSON fields and sentences; a
+  // per-sentence split still lets one claim shield another across a semicolon or
+  // a conjunction; plain span containment lets a peak claim hide inside the gap
+  // the approved phrase allows. What survives: list the approved phrasings, each
+  // of which STARTS at the measured percentage, and exempt a claim only when it
+  // sits inside one of those spans and the single percentage it carries is that
+  // anchor. "Contains 90.6%" is weaker still — a nested second copy satisfies it.
+  // Anything that qualifies a region rather than a match has this bug.
+  const measuredPct = String(PR_BENCH.median_savings_pct).replace('.', String.raw`\.`);
+  const approvedPhrasings = [
+    // package.json / plugin.json: the npm page has room for the whole sentence.
+    new RegExp(`${measuredPct}%\\s*(?:fewer|less)\\s*input tokens[^.]{0,60}?pull request`, 'gi'),
+    // server.json: the registry caps the description at 100 characters, so the
+    // claim names the task in the shortest form that still names it.
+    new RegExp(`${measuredPct}%\\s*(?:fewer|less)\\s*PR[ -](?:review tokens|context)`, 'gi'),
+  ];
+
+  function unqualifiedClaims(text: string): string[] {
+    const approved = approvedPhrasings.flatMap((pattern) =>
+      [...text.matchAll(pattern)].map((m) => ({ from: m.index, to: m.index + m[0].length })),
+    );
+    return [...text.matchAll(new RegExp(claimPattern.source, 'gi'))]
+      .filter((claim) => {
+        const percentages = [...claim[0].matchAll(new RegExp(pct, 'gi'))].map(
+          (m) => claim.index + m.index,
+        );
+        return !approved.some(
+          ({ from, to }) =>
+            claim.index >= from &&
+            claim.index + claim[0].length <= to &&
+            percentages.length === 1 &&
+            percentages[0] === from,
+        );
+      })
+      .map((claim) => claim[0]);
+  }
+
   for (const path of surfaces) {
     it(`${path} does not claim 9x% fewer tokens`, () => {
       const text = readFileSync(join(REPO_ROOT, ...path.split('/')), 'utf8');
-      // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
-      // "token" alone is too narrow: "92%+ reduction on typical projects" never
-      // says the word, and that was the live defect on docs/tools-reference.md.
-      const pct = String.raw`9\d(?:\.\d+)?\s*%`;
-      const noun = 'tokens?|reduction|savings|fewer|less';
-      const claim = text.match(
-        new RegExp(`${pct}\\+?[^"]{0,40}?(?:${noun})|(?:${noun})[^"]{0,40}?${pct}`, 'i'),
-      );
-      // TRA-904: one 9x% number IS defensible on an install surface — the PR
-      // review context benchmark, measured with a tokenizer on 60 merged PRs in
-      // repositories we do not own, generated into docs/_data/pr_context_bench.json.
-      // It is allowed only when the surface says which task it measures; the ban
-      // on selling benchmark_project's synthetic ceiling as a headline stands.
-      // Qualified *beside* the number, not anywhere in the file: docs/tools-reference.md
-      // says "PR impact report" 240 lines away, which would have excused a bare
-      // "90.6% fewer tokens" at the top of the page.
-      const at = claim ? text.indexOf(claim[0]) : -1;
-      const nearby = claim ? text.slice(Math.max(0, at - 60), at + claim[0].length + 60) : '';
-      const measuredPr =
-        claim?.[0].includes(`${PR_BENCH.median_savings_pct}%`) &&
-        /\bPR\b|pull request/i.test(nearby);
       expect(
-        measuredPr ? undefined : claim?.[0],
+        unqualifiedClaims(text)[0],
         `${path} advertises a peak token number as if it were the average. The measured ` +
           `aggregate is ${RESPONSE.reduction_pct}% (docs/_data/response_tokens.json); 99% is ` +
           '"less redundant processing" on structured calls, from a synthetic estimator.',
       ).toBeUndefined();
     });
   }
+
+  // The exemption's own regression tests: every bypass found in review on PR #914.
+  it.each([
+    ['bare claim', '{"description":"90.6% fewer tokens"}'],
+    [
+      'qualifier in a neighbouring JSON field',
+      '{"description":"90.6% fewer tokens","unrelated":"Pull request support is configured elsewhere"}',
+    ],
+    [
+      'qualifier in the next sentence',
+      '90.6% fewer tokens. Separately, this plugin can summarize a pull request.',
+    ],
+    ['peak claim beside a qualified one', 'Up to 99% fewer tokens. 90.6% fewer PR-review tokens.'],
+    [
+      'two claims across a semicolon',
+      'Up to 99% fewer tokens; separately, 90.6% fewer PR-review tokens.',
+    ],
+    [
+      'two claims across a conjunction',
+      'Up to 99% fewer tokens, while the benchmark reports 90.6% fewer PR-review tokens.',
+    ],
+    [
+      'peak claim after the qualified one',
+      '90.6% fewer PR-review tokens, but up to 99% fewer tokens everywhere else.',
+    ],
+    [
+      'peak claim swallowed by the approved span, semicolon',
+      '90.6% fewer input tokens; up to 99% fewer tokens per pull request',
+    ],
+    [
+      'peak claim swallowed by the approved span, dashes',
+      '90.6% fewer input tokens — 99% fewer tokens — to review a pull request',
+    ],
+    [
+      'peak claim swallowed by the approved span, apposition',
+      '90.6% fewer input tokens, including 99% savings, to review a pull request',
+    ],
+    [
+      'nested second copy of the measured number',
+      '90.6% fewer input tokens, 90.6% savings elsewhere, to review a pull request',
+    ],
+  ])('rejects a 9x%% claim that is not itself the measured wording (%s)', (_name, text) => {
+    expect(unqualifiedClaims(text).length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['server.json', 'Code intelligence for agents: 177 tools, 90.6% fewer PR-review tokens'],
+    [
+      'package.json',
+      'Framework-aware code intelligence MCP server — 90.6% fewer input tokens to review a pull request',
+    ],
+  ])('admits the measured median where the claim itself names the task (%s)', (_name, text) => {
+    expect(unqualifiedClaims(text)).toEqual([]);
+  });
 });
 
 describe('Codex CLI plugin manifests', () => {
