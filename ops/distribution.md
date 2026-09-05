@@ -39,7 +39,7 @@ Rules for keeping it honest:
 | Surface | Listed | What it shows | How to change it | Verified |
 |---|---|---|---|---|
 | [davila7/claude-code-templates](https://github.com/davila7/claude-code-templates) / [aitmpl.com](https://www.aitmpl.com/component/trace-mcp) | **Yes — and it is the largest surface we are on: 30,531★ / 3,459 forks, pushed daily** | `cli-tool/components/mcps/devtools/trace-mcp.json`, mirrored verbatim into `dashboard/public/component-content/mcps/devtools/trace-mcp.json` (same string, wrapped in a `content` field — both must be edited together). Ships `npx -y trace-mcp@latest` and a hand-typed description. **Already stale again**: it says "80 languages", `counts.yml` says 81 — six days after the refresh that was supposed to fix exactly this | **The entry is ours, not a third-party scrape.** Both commits are Nikolai's: [#553](https://github.com/davila7/claude-code-templates/commit/8b18c46f) 2026-04-29 added it, [#844](https://github.com/davila7/claude-code-templates/commit/bb0c681c) 2026-08-29 refreshed the counts. PRs are the route and two have been merged, so the door is open — but see the note below before spending a run on it. It hardcodes the npm name in `args`, so it belongs on the TRA-644 rename checklist; fold the 80→81 fix into that same PR rather than opening one for a digit | 2026-09-05 |
-| [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest` | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
+| [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest`. **The `description` it renders was rewritten 2026-09-05 (TRA-883)** and lands with the next release, not with the merge — see the one-liner section below | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
 | [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows. Renders 31 links to `trace-mcp.com` and rewrites every one to `rel="ugc nofollow"` — see TRA-792 below | 2026-09-04 |
 | [pulsemcp.com](https://www.pulsemcp.com/servers/nikolai-vysotskyi-trace) | Yes | **Stale: "44+ tools"** — their hand-written `server.json`, kept "until the maintainer publishes to the official registry" | Their submissions are **paused**; their own submit page says publishing to the official registry is the fix. Done 2026-08-29 — waiting on their next sync | 2026-08-29 |
 | [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h — but it said "80 languages … up to 99% fewer tokens", and master has since moved to 81 languages and (TRA-904, 2026-09-05) to the PR-benchmark headline, so re-submit once it lands. Premium $39 — declined | 2026-08-29 |
@@ -366,6 +366,35 @@ do not hand-type the number into a submission form. It is generated into
 `docs/_data/pr_context_bench.json` by `scripts/bench-pr-context.ts` and guarded
 by `tests/docs/readme-claims.test.ts` — same discipline as
 `docs/_data/counts.yml`.
+
+**The one-liner every directory renders was still on our weakest number, six
+days after the strongest one landed** (TRA-883, 2026-09-05). README and the
+homepage moved to the PR-context benchmark on 2026-09-02 — 90.6% fewer input
+tokens to review a pull request, median over 60 merged PRs in six repositories
+we do not own. `server.json`, `package.json` and `plugin.json` still said
+"40–50% fewer tokens on average", our own aggregate over our own usage. That is
+backwards for the surface it is on: the README is read by people who then read
+the rest of the README, while these three strings are rendered verbatim by
+every registry that ingests us and by npm, with no room to qualify anything.
+The tokenomics review (PR #53 above) made the same point from the outside —
+what convinced that maintainer was evidence we did not produce ourselves.
+
+All three now lead with the measured number. Two things worth keeping:
+
+- **The honesty guard was blocking it.** `tests/plugin/manifest-sync.test.ts`
+  refused any `9x%` + tokens claim on the install surfaces (TRA-393, when they
+  advertised "up to 99% token reduction"). 90.6% is not that: it is a median,
+  not a peak, and it is measured off our own machines. The guard now admits a
+  `9x%` claim **only** when the number equals `median_savings_pct` in
+  `docs/_data/pr_context_bench.json` and the surrounding text names what was
+  measured; a bare "90.6% fewer tokens" still fails. Do not widen it further.
+- **The number is pinned to the data file**, so regenerating the benchmark
+  fails CI with the number to write, the same discipline `counts.yml` gets.
+  Never hand-type it into a submission form either.
+
+`server.json` is capped at 100 characters by the registry schema, so its version
+is compressed to "Framework-aware code graph: 81 languages, 87 frameworks, 90.6%
+less PR context (60-PR benchmark)" (96). The method lives at `websiteUrl`.
 
 **TRA-263's "165 tools" is stale.** `docs/_data/counts.yml` says 169 and the
 README already agreed. TRA-346's "141 schema-carrying tools" answers a different
