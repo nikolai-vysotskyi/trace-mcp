@@ -123,7 +123,7 @@ const why = (e) =>
  * The top of the funnel: where visitors to the repo came from.
  *
  * GitHub's traffic API is the only acquisition source available to us — the
- * docs site has no analytics of its own, and Reddit (our largest referrer) is
+ * docs site has no analytics of its own, and the largest external referrer is
  * unreadable from a run at all (`ops/user-signal.md`, private repo). Its window is a rolling
  * 14 days and nothing older is retrievable, which is exactly why the numbers
  * are copied into the daily snapshot: the `adoption-data` branch becomes the
