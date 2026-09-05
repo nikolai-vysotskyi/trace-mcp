@@ -93,3 +93,21 @@ describe('TRACE_MCP_REPO_ROOT', () => {
     expect(out).not.toBe('~/some-repo');
   });
 });
+
+describe('TRACE_MCP_DAEMON_PORT', () => {
+  it('overrides default daemon port when set', () => {
+    const out = runWithEnv(
+      `import { DEFAULT_DAEMON_PORT } from './src/global.ts'; console.log(DEFAULT_DAEMON_PORT);`,
+      { TRACE_MCP_DAEMON_PORT: '37499' },
+    );
+    expect(out).toBe('37499');
+  });
+
+  it('falls back to 3741 when env var is empty', () => {
+    const out = runWithEnv(
+      `import { DEFAULT_DAEMON_PORT } from './src/global.ts'; console.log(DEFAULT_DAEMON_PORT);`,
+      { TRACE_MCP_DAEMON_PORT: '' },
+    );
+    expect(out).toBe('3741');
+  });
+});
