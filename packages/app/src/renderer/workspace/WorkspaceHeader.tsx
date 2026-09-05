@@ -211,13 +211,18 @@ export function WorkspaceHeader({
     if (next) saveBaseline(next);
   }, [metricsLoading, listLoading, metricsFailed, listFailed, kpis]);
 
-  const deltaCaption = useMemo(
-    () =>
-      baseline
-        ? t('kpiDeltaCaption', { when: relativeTime(Date.parse(baseline.at), Date.now()) })
-        : undefined,
-    [baseline, t],
-  );
+  /* Computed on every render, deliberately not memoized on `baseline`. The
+     baseline is rolled once per mount, so a `useMemo` keyed on it froze
+     `Date.now()` at that moment: the delta NUMBER kept updating off the live
+     KPIs every 2s poll, while the caption beside it still said "vs 34 seconds
+     ago" for as long as the window stayed open. A window left open all day
+     therefore reported a whole day of growth as the last half-minute's. The
+     recompute is one `Intl.RelativeTimeFormat.format` on a memoized formatter,
+     and the pane re-renders on the poll it already runs — no timer of its
+     own. */
+  const deltaCaption = baseline
+    ? t('kpiDeltaCaption', { when: relativeTime(Date.parse(baseline.at), Date.now()) })
+    : undefined;
   /**
    * The daemon is unreachable and what is on screen is the restored snapshot.
    *
