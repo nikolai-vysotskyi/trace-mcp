@@ -64,7 +64,7 @@ updated: 2026-09-04
           "name": "Whose token-savings numbers are better supported?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "codegraph's. It publishes an A/B benchmark across seven repositories with the model, the queries, the run count and a documented correction of an earlier flaw in its own methodology, reporting 62% fewer tokens and 44% lower cost on average. It is self-run rather than third-party reproduced, but it is documented well enough to argue with. trace-mcp's headline figure is a more conservative 40-50% and its per-project get_real_savings tool measures your own repo rather than a benchmark set."
+            "text": "Both projects publish one. codegraph's is an A/B across seven repositories with the model, the queries and the run count named, plus a documented correction of an earlier flaw in its own harness: 62% fewer tokens and 44% lower cost on average. trace-mcp's is the PR review context benchmark, a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction across {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody on the project maintains, shipping the base and head SHAs, the cases where it lost, and the single command that re-runs it. codegraph's covers a broader slice of session work; trace-mcp's runs on code its authors do not control and publishes its losses. Both are self-run rather than third-party reproduced."
           }
         },
         {
@@ -138,7 +138,7 @@ Four honest points.
 
 **Their default surface is cheaper than ours and it is not close.** One advertised tool against our 28 and ~11.6K tokens. Our number is down from ~50K after the preset bypass on the daemon path was fixed and the default preset moved to `minimal`, and everything outside it is one call away — but "much better than we were" is not "as cheap as theirs."
 
-**Their benchmark is better than ours.** We publish a conservative 40-50% typical token reduction and ship `get_real_savings` so you can measure your own repository instead of trusting a number from ours. That is a defensible choice, but it is not a substitute for a published A/B across named repositories with a disclosed harness, and codegraph has one.
+**Their benchmark covers more of the job than ours does.** Both projects now publish an A/B across named repositories with a disclosed harness — theirs across seven repos and a broad slice of session work, ours the [PR review context benchmark](/pr-context-benchmark.html): a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories nobody here maintains, with the losing cases and the re-run command shipped in the repo. Ours has the better provenance, theirs the wider workload. One task type measured well is not the same as a general claim, and our headline 40-50% for everything else is still an aggregate from our own usage rather than a benchmark.
 
 **They publish their own downside, so we will repeat it rather than quietly use it.** codegraph's README states that its responses leave roughly 80% more retrieval context resident at the end of a multi-turn session than a file-reading agent's do — 67K tokens against 18K on VS Code. That is a genuine cost of returning rich graph answers, it is a cost trace-mcp pays in its own form, and the fact that they printed it is a point in their favour.
 
@@ -158,7 +158,7 @@ Yes, substantially — one advertised tool against 28 and ~11.6K tokens. That is
 No. Reading its source on August 29, 2026 found no rename/move/codemod, no taint analysis, no control-flow graph, no SARIF and no cross-session memory. It is a navigation and discovery tool, and scopes itself that way.
 
 **Whose token-savings numbers are better supported?**
-Theirs. Seven repositories, model and queries named, four runs per arm, a documented fix to a flaw in their own earlier harness: 62% fewer tokens, 44% lower cost. Self-run rather than third-party reproduced, but well enough documented to argue with. Ours is a more conservative 40-50%, with `get_real_savings` measuring your repo instead of a benchmark set.
+Both publish one. Theirs: seven repositories, model and queries named, four runs per arm, a documented fix to a flaw in their own earlier harness — 62% fewer tokens, 44% lower cost. Ours: the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction across {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories we do not maintain, with base and head SHAs, the five cases where it lost, and one command to re-run it. Theirs covers more of a session; ours runs on other people's code. Neither is third-party reproduced.
 
 **Do either of them send code to a cloud service?**
 No. Both index locally into SQLite, need no API key, and survive restarts.

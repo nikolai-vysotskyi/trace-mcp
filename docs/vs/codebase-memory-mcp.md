@@ -64,7 +64,7 @@ updated: 2026-09-04
           "name": "Does codebase-memory-mcp have a published benchmark?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Its authors published a preprint (arXiv 2603.27277) reporting 83% answer quality, roughly 10 times fewer tokens and 2.1 times fewer tool calls versus file-by-file exploration across 31 repositories. We have not independently reproduced it, and it is a self-published preprint rather than peer-reviewed third-party work — but it is still more evidence than most peers, trace-mcp included, have put on the table."
+            "text": "Yes. Its authors published a preprint (arXiv 2603.27277) reporting 83% answer quality, roughly 10 times fewer tokens and 2.1 times fewer tool calls versus file-by-file exploration across 31 repositories. We have not independently reproduced it and it is not peer-reviewed. trace-mcp publishes one too, narrower in scope: the PR review context benchmark, a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction across {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody on the project maintains, with the base and head SHAs, the losing cases and the re-run command in the repository. Thirty-one repositories across general exploration is a wider claim than {{ site.data.pr_context_bench.pr_count }} pull requests on one task."
           }
         },
         {
@@ -108,7 +108,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
 | MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
-| Published benchmark | ✗ | ✓ preprint, not independently reproduced |
+| Published benchmark | ✓ [PR review context](/pr-context-benchmark.html), one task, losses published | ✓ preprint, 31 repos, not independently reproduced |
 | Written in | TypeScript | C |
 
 ## When to pick codebase-memory-mcp
@@ -117,7 +117,7 @@ This is the peer where the honest list is longest, so here it is in full:
 
 - **Your advertised tool budget is tight.** 15 tools at roughly 7K tokens — or 7 with `--tool-profile=scout` — against trace-mcp's ~11.6K on the shipped default path (down from ~50K; the preset-bypass bug is fixed and the default is now `minimal`). If you run several MCP servers in one client and every one of them is competing for the same context window, a ~1.7× difference still matters. This is the clearest place any competitor beats us, and we are not going to pretend otherwise on our own comparison page.
 - **You need a language we do not parse.** 161 grammars against {{ site.data.counts.languages }}. If your repo has one in the gap, none of trace-mcp's depth helps you.
-- **You want evidence before adopting.** Its authors published a benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repositories). We have not reproduced it and it is not peer-reviewed — but trace-mcp has no comparable published number at all.
+- **You want evidence across a broad workload.** Its authors published a benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repositories). We have not reproduced it and it is not peer-reviewed. Ours — the [PR review context benchmark](/pr-context-benchmark.html), median {{ site.data.pr_context_bench.median_savings_pct }}% over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories we do not maintain — is the more transparent of the two and the only one run on other people's code, but it measures one task, not general exploration. If breadth of workload is what you need evidence for, theirs is the wider claim.
 - **Supply-chain requirements are strict.** SLSA Level 3 provenance plus VirusTotal-scanned reproducible release candidates is a stronger posture than ours, and in a regulated environment that can be the whole decision.
 - **You have runtime traces to fold in.** `ingest_traces` enriches the graph with observed caller/callee counts — dynamic edges static analysis cannot see. trace-mcp has no equivalent.
 
@@ -145,7 +145,7 @@ Only if your repository contains a language in the gap. trace-mcp's coverage tar
 On advertised surface, yes — ~7K against our ~11.6K on the shipped default path as of August 29, 2026. The preset-bypass bug that put us at ~50K is fixed and the default preset is now `minimal`; the remaining ~1.7× gap is real and is the clearest place a competitor leads.
 
 **Does it have a published benchmark?**
-A self-published preprint (arXiv 2603.27277), not independently reproduced and not peer-reviewed — but still more evidence than most peers, us included, have put on the table.
+Yes — a self-published preprint (arXiv 2603.27277) across 31 repositories, not independently reproduced and not peer-reviewed. So does trace-mcp, narrower: the [PR review context benchmark](/pr-context-benchmark.html), median {{ site.data.pr_context_bench.median_savings_pct }}% over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories nobody here maintains, with the losing cases and the re-run command shipped. Theirs is the wider workload; ours is the more auditable.
 
 **Can either one refactor code, not just read it?**
 Only trace-mcp. codebase-memory-mcp is read-only analysis.

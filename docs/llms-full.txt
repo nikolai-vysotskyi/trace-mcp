@@ -1138,7 +1138,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
 | MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
-| Published benchmark | ✗ | ✓ preprint, not independently reproduced |
+| Published benchmark | ✓ [PR review context](/pr-context-benchmark.html), one task, losses published | ✓ preprint, 31 repos, not independently reproduced |
 | Written in | TypeScript | C |
 
 ## When to pick codebase-memory-mcp
@@ -1147,7 +1147,7 @@ This is the peer where the honest list is longest, so here it is in full:
 
 - **Your advertised tool budget is tight.** 15 tools at roughly 7K tokens — or 7 with `--tool-profile=scout` — against trace-mcp's ~11.6K on the shipped default path (down from ~50K; the preset-bypass bug is fixed and the default is now `minimal`). If you run several MCP servers in one client and every one of them is competing for the same context window, a ~1.7× difference still matters. This is the clearest place any competitor beats us, and we are not going to pretend otherwise on our own comparison page.
 - **You need a language we do not parse.** 161 grammars against {{ site.data.counts.languages }}. If your repo has one in the gap, none of trace-mcp's depth helps you.
-- **You want evidence before adopting.** Its authors published a benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repositories). We have not reproduced it and it is not peer-reviewed — but trace-mcp has no comparable published number at all.
+- **You want evidence across a broad workload.** Its authors published a benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repositories). We have not reproduced it and it is not peer-reviewed. Ours — the [PR review context benchmark](/pr-context-benchmark.html), median {{ site.data.pr_context_bench.median_savings_pct }}% over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories we do not maintain — is the more transparent of the two and the only one run on other people's code, but it measures one task, not general exploration. If breadth of workload is what you need evidence for, theirs is the wider claim.
 - **Supply-chain requirements are strict.** SLSA Level 3 provenance plus VirusTotal-scanned reproducible release candidates is a stronger posture than ours, and in a regulated environment that can be the whole decision.
 - **You have runtime traces to fold in.** `ingest_traces` enriches the graph with observed caller/callee counts — dynamic edges static analysis cannot see. trace-mcp has no equivalent.
 
@@ -1175,7 +1175,7 @@ Only if your repository contains a language in the gap. trace-mcp's coverage tar
 On advertised surface, yes — ~7K against our ~11.6K on the shipped default path as of August 29, 2026. The preset-bypass bug that put us at ~50K is fixed and the default preset is now `minimal`; the remaining ~1.7× gap is real and is the clearest place a competitor leads.
 
 **Does it have a published benchmark?**
-A self-published preprint (arXiv 2603.27277), not independently reproduced and not peer-reviewed — but still more evidence than most peers, us included, have put on the table.
+Yes — a self-published preprint (arXiv 2603.27277) across 31 repositories, not independently reproduced and not peer-reviewed. So does trace-mcp, narrower: the [PR review context benchmark](/pr-context-benchmark.html), median {{ site.data.pr_context_bench.median_savings_pct }}% over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories nobody here maintains, with the losing cases and the re-run command shipped. Theirs is the wider workload; ours is the more auditable.
 
 **Can either one refactor code, not just read it?**
 Only trace-mcp. codebase-memory-mcp is read-only analysis.
@@ -1252,7 +1252,7 @@ Four honest points.
 
 **Their default surface is cheaper than ours and it is not close.** One advertised tool against our 28 and ~11.6K tokens. Our number is down from ~50K after the preset bypass on the daemon path was fixed and the default preset moved to `minimal`, and everything outside it is one call away — but "much better than we were" is not "as cheap as theirs."
 
-**Their benchmark is better than ours.** We publish a conservative 40-50% typical token reduction and ship `get_real_savings` so you can measure your own repository instead of trusting a number from ours. That is a defensible choice, but it is not a substitute for a published A/B across named repositories with a disclosed harness, and codegraph has one.
+**Their benchmark covers more of the job than ours does.** Both projects now publish an A/B across named repositories with a disclosed harness — theirs across seven repos and a broad slice of session work, ours the [PR review context benchmark](/pr-context-benchmark.html): a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories nobody here maintains, with the losing cases and the re-run command shipped in the repo. Ours has the better provenance, theirs the wider workload. One task type measured well is not the same as a general claim, and our headline 40-50% for everything else is still an aggregate from our own usage rather than a benchmark.
 
 **They publish their own downside, so we will repeat it rather than quietly use it.** codegraph's README states that its responses leave roughly 80% more retrieval context resident at the end of a multi-turn session than a file-reading agent's do — 67K tokens against 18K on VS Code. That is a genuine cost of returning rich graph answers, it is a cost trace-mcp pays in its own form, and the fact that they printed it is a point in their favour.
 
@@ -1272,7 +1272,7 @@ Yes, substantially — one advertised tool against 28 and ~11.6K tokens. That is
 No. Reading its source on August 29, 2026 found no rename/move/codemod, no taint analysis, no control-flow graph, no SARIF and no cross-session memory. It is a navigation and discovery tool, and scopes itself that way.
 
 **Whose token-savings numbers are better supported?**
-Theirs. Seven repositories, model and queries named, four runs per arm, a documented fix to a flaw in their own earlier harness: 62% fewer tokens, 44% lower cost. Self-run rather than third-party reproduced, but well enough documented to argue with. Ours is a more conservative 40-50%, with `get_real_savings` measuring your repo instead of a benchmark set.
+Both publish one. Theirs: seven repositories, model and queries named, four runs per arm, a documented fix to a flaw in their own earlier harness — 62% fewer tokens, 44% lower cost. Ours: the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction across {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories we do not maintain, with base and head SHAs, the five cases where it lost, and one command to re-run it. Theirs covers more of a session; ours runs on other people's code. Neither is third-party reproduced.
 
 **Do either of them send code to a cloud service?**
 No. Both index locally into SQLite, need no API key, and survive restarts.
@@ -1360,7 +1360,7 @@ Four things are worth stating precisely, because the marketing word "context" co
 
 **Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 28 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
 
-**Their measurement is published and ours is not, again.** This is the third head-to-head page where we have to write that sentence. We publish a conservative 40-50% and ship `get_real_savings` so you can measure your own repository, which is a defensible choice and not a substitute for a benchmark with named fixtures you can re-run.
+**Their measurement covers the session; ours covers one task in it.** We now have a benchmark with named fixtures — the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, re-runnable from the repo. It measures assembling code-review context, not a whole working session, so it does not answer the question Context Mode's numbers answer. The 40-50% we quote for general use is still our own aggregate, not a benchmark.
 
 **They are 200 times our size, and it is not only marketing.** A tool that reaches 20K stars in six months has found something people wanted. The "think in code" framing is a genuinely good idea that we do not have an equivalent of.
 
