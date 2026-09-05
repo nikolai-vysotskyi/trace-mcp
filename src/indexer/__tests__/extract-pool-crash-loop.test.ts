@@ -172,11 +172,11 @@ describe('ExtractPool — crash-loop guard', () => {
     // only the dedup path, not the disable path.
     for (let i = 0; i < 4; i++) {
       internals.onError(0, new Error('MODULE_NOT_FOUND: extract-worker.js'));
-      // Advance by this crash's own backoff (200ms doubling, 3s in total)
-      // rather than runAllTimers(): since TRA-811 the pool also arms a
-      // 5-minute keepAlive idle-teardown timer, and running it would push the
-      // fake clock past the 5s dedup window this case is about.
-      vi.advanceTimersByTime(200 * 2 ** i);
+      // Deliberately advance no timers here. onError() does its counting and
+      // dedup synchronously, so this case needs neither the respawn backoff
+      // nor the keepAlive idle teardown to fire — and running either one
+      // (TRA-811 armed a 5-minute idle timer; TRA-885 caught the fallout)
+      // pushes the fake clock past the 5s dedup window this case is about.
     }
 
     // First crash logs a full error with err+stack; subsequent identical
