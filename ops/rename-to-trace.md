@@ -169,6 +169,28 @@ the claim above.
 
 *Measured by the SEO Agent autopilot, TRA-876 → TRA-879.*
 
+### Second window, wider: 90 days says the same thing (added 2026-09-05, TRA-907)
+
+An independent GSC read on the same property over 2026-06-05 → 2026-09-02 —
+three months, not one — lands on the same ratio: 101 clicks, of which 98 (97%)
+came from `trace-mcp`, `trace mcp`, `trayce mcp` or `mcp trace`. Non-brand
+clicks in a full quarter: two, both `"codegraphcontext"` → `/comparisons.html`.
+The one-month and three-month windows agreeing rules out the reading that the
+77–83% brand share was an artefact of the late-August impression spike.
+
+It also sharpens what a redirect can and cannot buy, which is the part worth
+remembering on cutover day: a 301 preserves link equity for a URL, it does not
+make anyone type a new name into Google. The asset here is query demand for a
+string, and nothing on our side controls that. Under the boundary above the
+question does not arise — the domain, the package and the on-page copy all keep
+the string, and `tests/docs/searchable-name.test.ts` now also asserts the
+*visible* home page copy carries it, not only the metadata. Should a domain
+move ever be reopened, the new host must be verified in Search Console and the
+Change of Address tool used **before** the cutover; it does not work
+retroactively.
+
+*Measured by the SEO Agent autopilot, TRA-907.*
+
 ## If someone reopens this
 
 The two facts that close it are checkable in under a minute and should be
