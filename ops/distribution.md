@@ -558,3 +558,61 @@ does not just stop the daemon — it writes `~/.trace-mcp/daemon.disabled`, whic
 persistently disables auto-spawn for every later stdio session on that machine,
 including the user's own. Undo with `trace-mcp daemon start`. Learned the hard
 way while verifying the install above.
+
+### The other two of that shape, resolved (2026-09-05)
+
+Both were named above as unexplored. Neither turned into an outgoing message,
+and the reasons are worth keeping so the next run does not re-open them.
+
+**`gglucass/headroom-desktop` (535★) is the same door as headroom, and the same
+person.** It does ship the class: a "Bundled tools" table where `serena`,
+`codebase-memory-mcp` and `context7` are one-click opt-in add-ons, plus a stated
+inclusion policy pointing at `research/tool-compatibility-matrix.md`. That
+policy file is stale against the app it governs — it says Python-runtime-only
+and "reject candidates that require profile mutation", while the shipped table
+includes `rtk` (Rust binary plus a Claude Code hook) and `context7` (Node), and
+the app writes its own fenced block into the user's shell profile. That gap is a
+real opening for a disclosure-first issue. It is on hold anyway: `gglucass` is a
+top contributor to `headroomlabs-ai/headroom` with over a hundred issues and PRs
+there, so they are very likely one of the people who has not yet answered our
+2026-09-04 comment on headroom #1009. Writing into their second repo the day
+after is the "do not write again to someone who has not answered" rule in
+substance if not in letter. Revisit when #1009 moves, or after the two-week
+reminder window.
+
+**`Mibayy/token-savior` (1.1k★) is a competitor, not a door.** Its "How it
+composes with adjacent tools" table is not a list of recommended navigators; it
+tells the reader which half of Token Savior to switch off when a neighbouring
+tool already covers that layer. It ships `find_symbol`, `get_change_impact` and
+`find_dead_code` under those names and a `compact-only` profile that advertises
+a single tool. Our overlap with it is close to total, so the honest row for us
+would read "pick one", which buys nobody anything and costs a maintainer a
+review. Dropped. Keep it on the competitor list instead: it is the only one we
+have seen ship a one-tool profile.
+
+### Someone else measured the category and it lost (2026-09-05)
+
+`narumiruna/pi-extensions` (505★, pushed daily) is a Pi Coding Agent extension
+monorepo. On 2026-08-30 it deprecated `@narumitw/pi-cbmem`, an extension that ran
+`codebase-memory-mcp` behind a persistent MCP stdio session and registered 15
+tools, with this note:
+
+> A simple benchmark found that the extension did not improve results enough to
+> justify its overhead, while token usage increased substantially.
+
+The benchmark was real and careful: PR #1119 added `just benchmark-cbmem`, a
+paired runner comparing `pi -ne` against `pi -ne -e npm:@narumitw/pi-cbmem` with
+a fixed model, disabled retry and compaction, a read-only tool allowlist, hidden
+exact-fact grading, and recorded cache tokens, tool activity, timing and cost. It
+was deleted along with the package on the same day and now exists only in that
+PR's history; `deprecated/pi-cbmem/` has no `benchmark` directory.
+
+This is the only A/B of our category we have found that a vendor did not write,
+and it went against the category. Two things follow. First, it belongs in the
+same paragraph as the pr-context benchmark whenever we cite ourselves: someone
+with no stake ran the comparison and got the opposite sign. Second, the design
+points at the likeliest cause and it is not retrieval — their same-evidence study
+requires one graph call but does not forbid source reads, so an agent that
+queries the graph and then greps anyway produces exactly that result. That is
+routing, and routing is the part of our product that does not port across
+clients. Tracked in TRA-874; the outgoing comment is in TRA-875.
