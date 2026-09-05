@@ -995,6 +995,18 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
   // Strategy 1: Find cache-like variables/properties (Map/Set declarations or
   // name-based hints) and verify growth vs. cleanup via callSites in the same file.
   // Name patterns use word-endings to avoid matching `useStore`, `restoreX`, etc.
+  //
+  // TRA-944: the LIKE group below is deliberately left unindexed. SQLite seeks
+  // idx_symbols_kind for `kind IN (...)` (verified with EXPLAIN QUERY PLAN both
+  // with and without sqlite_stat1), then applies the LIKE patterns to that
+  // subset only. Measured on the largest real index on hand (59k symbols /
+  // 546 MB, ~41k of them variable/property/constant): 45-75 ms. An 8x synthetic
+  // copy (473k symbols): ~210 ms, i.e. linear, no cliff. Strategy 2 below reads
+  // and JSON-parses ~7 MB of callSites metadata on that same DB, so it dominates
+  // this detector's cost by an order of magnitude. Neither an FTS5/trigram index
+  // (new schema surface + migration) nor narrowing the candidate set (changes
+  // which rows the detector sees, i.e. false negatives) buys anything here.
+  // Revisit only if this query shows up in an actual profile.
   const cacheSymbols = store.db
     .prepare(`
     SELECT s.id, s.name, s.kind, s.symbol_id, s.line_start, s.signature,
