@@ -38,6 +38,15 @@ describe('the searchable name stays trace-mcp', () => {
     expect(index).toMatch(/property="og:title" content="[^"]*trace-mcp[^"]*"/);
   });
 
+  it('the visible home page copy carries it, not only the metadata', () => {
+    const index = read('docs/index.html');
+    const body = index.slice(index.indexOf('<body'));
+    // Tags stripped: a rename sweep that leaves the string only in <meta> would
+    // keep the SERP snippet matching while the page a visitor reads no longer does.
+    const visible = body.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ');
+    expect(visible).toMatch(/\btrace-mcp\b/);
+  });
+
   it('the JSON-LD entity anchor names it', () => {
     const layout = read('docs/_layouts/default.html');
     const names = [
