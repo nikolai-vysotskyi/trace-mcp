@@ -25,17 +25,21 @@ const LAUNCHER_TIMEOUT_MS = 30_000;
 // the spawn budget above — otherwise vitest's default 10s caps it back down.
 vi.setConfig({ testTimeout: LAUNCHER_TIMEOUT_MS + 5_000 });
 
+function assertNotKilled(result: { signal: NodeJS.Signals | null }, args: string[]) {
+  if (result.signal) {
+    throw new Error(
+      `launcher killed by ${result.signal} after ${LAUNCHER_TIMEOUT_MS}ms (args: ${args.join(' ')})`,
+    );
+  }
+}
+
 function runLauncher(env: Record<string, string>, args: string[] = ['serve']): RunResult {
   const result = spawnSync(LAUNCHER_SRC, args, {
     env: { ...env, PATH: '/usr/bin:/bin' }, // minimal PATH, no node visible
     encoding: 'utf-8',
     timeout: LAUNCHER_TIMEOUT_MS,
   });
-  if (result.signal) {
-    throw new Error(
-      `launcher killed by ${result.signal} after ${LAUNCHER_TIMEOUT_MS}ms (args: ${args.join(' ')})`,
-    );
-  }
+  assertNotKilled(result, args);
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
@@ -365,6 +369,7 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
           encoding: 'utf-8',
           timeout: LAUNCHER_TIMEOUT_MS,
         });
+        assertNotKilled(result, ['serve']);
 
         expect(result.status).toBe(0);
         expect(fs.existsSync(sentinel)).toBe(false);
@@ -387,6 +392,7 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         encoding: 'utf-8',
         timeout: LAUNCHER_TIMEOUT_MS,
       });
+      assertNotKilled(result, ['serve']);
 
       expect(result.stdout.trim()).toBe('NODE_PATH_ENV:/client/bin:/usr/bin:/bin');
     });
