@@ -1,9 +1,9 @@
 {
   "$comment": "Written by scripts/capture-screenshots.mjs. `--check` compares it against HEAD.",
-  "generatedAt": "2026-09-04T21:21:50.169Z",
-  "appVersion": "3.17.0",
-  "commit": "f0c0858b44190b11547a03c223311782fa38d214",
-  "uiCommit": "150a59fd0a623a161c2c3df4c545d7968b367192",
+  "generatedAt": "2026-09-05T19:08:15.986Z",
+  "appVersion": "3.18.0",
+  "commit": "27f6808552179ceb104bfa21121daedf44ba39f7",
+  "uiCommit": "d88864d480c48b15a9f41cd5f0b22cc27bc510be",
   "uiPaths": ["packages/app/src/renderer", "packages/app/src/main"],
   "images": [
     {
@@ -13,7 +13,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 40836,
+      "bytes": 41056,
       "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics"
     },
     {
@@ -23,7 +23,7 @@
       "theme": "dark",
       "width": 1920,
       "height": 1200,
-      "bytes": 40954,
+      "bytes": 41024,
       "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance"
     },
     {
@@ -33,7 +33,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 76860,
+      "bytes": 77222,
       "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage"
     },
     {
@@ -43,7 +43,7 @@
       "theme": "dark",
       "width": 1920,
       "height": 1200,
-      "bytes": 74324,
+      "bytes": 74724,
       "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage, dark appearance"
     },
     {
@@ -53,7 +53,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 116786,
+      "bytes": 133358,
       "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance"
     },
     {
@@ -63,7 +63,7 @@
       "theme": "dark",
       "width": 1920,
       "height": 1200,
-      "bytes": 127478,
+      "bytes": 103616,
       "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance"
     }
   ]
