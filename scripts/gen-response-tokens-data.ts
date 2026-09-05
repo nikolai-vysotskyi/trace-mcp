@@ -60,8 +60,10 @@ const allRows = bench.rows
       calls,
       baseline_per_call: baseline,
       measured_per_call: r.real,
-      // >1 means the response costs more than the Read/Grep it replaces.
-      measured_over_baseline: Number((r.real / baseline).toFixed(2)),
+      // >1 means the response costs more than the Read/Grep it replaces. Null
+      // when there is no baseline to be a multiple of — dividing by zero here
+      // yields Infinity, which JSON.stringify silently turns into null anyway.
+      measured_over_baseline: baseline > 0 ? Number((r.real / baseline).toFixed(2)) : null,
       baseline_tokens: calls * baseline,
       measured_tokens: calls * r.real,
     };

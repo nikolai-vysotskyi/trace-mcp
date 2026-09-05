@@ -53,9 +53,21 @@ describe('no-baseline tools (TRA-945)', () => {
     ).toEqual([]);
   });
 
+  // Case- and form-insensitive on purpose: the first version of this guard
+  // matched only capitalised "Mutates" and so missed `consolidate_decisions`
+  // ("Mutating; respects dry_run") and `tune_decision_weights`.
+  /**
+   * Mentions mutation without being a mutation: `call_project_tool` is a
+   * read-only relay whose description warns that a *relayed* tool keeps its own
+   * effects. It stands in for a real lookup against another project, so it has
+   * a baseline like any other read.
+   */
+  const MENTIONS_MUTATION_ONLY = new Set(['call_project_tool']);
+
   it('covers every tool that says it mutates', () => {
     const mutating = captured
-      .filter((t) => /\bMutates\b/.test(t.description))
+      .filter((t) => /\bmutat(?:es|ing)\b/i.test(t.description))
+      .filter((t) => !MENTIONS_MUTATION_ONLY.has(t.name))
       .map((t) => t.name)
       .filter((n) => !NO_BASELINE_TOOLS.has(n));
     expect(

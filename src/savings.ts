@@ -82,6 +82,7 @@ export const NO_BASELINE_TOOLS: ReadonlySet<string> = new Set([
   'index_sessions',
   'mine_sessions',
   'build_corpus',
+  'delete_corpus',
   'build_decision_clusters',
   'snapshot_graph',
   'detect_communities',
@@ -99,6 +100,9 @@ export const NO_BASELINE_TOOLS: ReadonlySet<string> = new Set([
   'add_decision',
   'remember_decision',
   'invalidate_decision',
+  'consolidate_decisions',
+  'tune_decision_weights',
+  'tune_weights',
   'approve_decision',
   'reject_decision',
   'pin',
@@ -107,6 +111,12 @@ export const NO_BASELINE_TOOLS: ReadonlySet<string> = new Set([
   'trace_state_init',
   'trace_state_patch',
   'trace_state_add_dead_end',
+  'trace_state_checkpoint',
+  'trace_state_rollback',
+  // Startup-audit writes: disable MCP servers, move skill directories, restore
+  // backups. Nothing a Read could have done.
+  'apply_startup_recommendations',
+  'rollback_startup_recommendations',
 ]);
 
 /**
