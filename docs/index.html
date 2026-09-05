@@ -1992,18 +1992,12 @@ updated: 2026-09-04
       border-right: 1px solid var(--border);
     }
     .team-member:last-child { border-right: none; }
-    /* ponytail: initials monogram until real headshots land — no image, no layout shift. */
     .team-avatar {
       flex: none;
       width: 72px; height: 72px;
       border-radius: 50%;
       border: 1px solid var(--border-visible);
       background: var(--surface-raised);
-      display: grid; place-items: center;
-      font-family: var(--font-mono);
-      font-size: 20px;
-      letter-spacing: 0.05em;
-      color: var(--text-display);
       object-fit: cover;
     }
     .team-member h3 {
@@ -2905,7 +2899,7 @@ updated: 2026-09-04
 
       <div class="team-grid reveal">
         <div class="team-member">
-          <div class="team-avatar" aria-hidden="true">NV</div>
+          <img class="team-avatar" src="images/team/nikolai-vysotskyi.webp" width="72" height="72" loading="lazy" alt="Nikolai Vysotskyi">
           <div>
             <h3>Nikolai Vysotskyi</h3>
             <span class="team-role">Co-founder</span>
@@ -2913,7 +2907,7 @@ updated: 2026-09-04
           </div>
         </div>
         <div class="team-member">
-          <div class="team-avatar" aria-hidden="true">MG</div>
+          <img class="team-avatar" src="images/team/max-glubochansky.webp" width="72" height="72" loading="lazy" alt="Max Glubochansky">
           <div>
             <h3>Max Glubochansky</h3>
             <span class="team-role">Co-founder &middot; <a class="team-yc" href="https://www.ycombinator.com/" target="_blank" rel="noopener">Y Combinator alum</a></span>
