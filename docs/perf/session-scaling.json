@@ -1,0 +1,220 @@
+{
+  "runs": [
+    {
+      "timestamp": "2026-09-05T16:21:04.489Z",
+      "measured_build": {
+        "version": "3.18.0",
+        "commit": "44af510f",
+        "dirty": true
+      },
+      "corpus": {
+        "name": "trace-mcp",
+        "commit": "9256cf184370cc7175e076baf2c142c4054d0d6c",
+        "files": 898,
+        "symbols": 11134
+      },
+      "config": {
+        "idle_seconds": 60,
+        "steps": [1, 4, 9]
+      },
+      "single_session": {
+        "cold_start": {
+          "wall_time_ms": 2699,
+          "peak_rss_mb": 192.4,
+          "threads": 12
+        },
+        "steady_state_idle": {
+          "daemon_healthy": {
+            "session_rss_mb": 145.5,
+            "session_threads": 12,
+            "daemon_rss_mb": 528.1,
+            "daemon_threads": 18,
+            "total_rss_mb": 673.6
+          },
+          "daemon_absent": {
+            "session_rss_mb": 181.6,
+            "session_threads": 12,
+            "total_rss_mb": 181.6
+          }
+        },
+        "one_file_change": {
+          "daemon_healthy": {
+            "wall_time_ms": 2489,
+            "daemon_cpu_seconds": 2.66,
+            "sessions_cpu_seconds": 0,
+            "total_cpu_seconds": 2.66
+          },
+          "daemon_absent": {
+            "wall_time_ms": 3501,
+            "sessions_cpu_seconds": 0,
+            "total_cpu_seconds": 0
+          }
+        }
+      },
+      "scaling_matrix": [
+        {
+          "n": 1,
+          "daemon_healthy": {
+            "cold_start": {
+              "wall_time_min_ms": 2699,
+              "wall_time_median_ms": 2699,
+              "wall_time_max_ms": 2699,
+              "per_session_peak_rss_mb": 192.4,
+              "total_peak_rss_mb": 192.4,
+              "threads_per_session": 12,
+              "total_threads": 12
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 145.5,
+              "total_sessions_rss_mb": 145.5,
+              "daemon_rss_mb": 528.1,
+              "total_rss_mb": 673.6,
+              "threads_per_session": 12,
+              "total_threads": 30
+            },
+            "one_file_change": {
+              "wall_time_ms": 2489,
+              "daemon_cpu_seconds": 2.66,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 2.66
+            }
+          },
+          "daemon_absent": {
+            "cold_start": {
+              "wall_time_min_ms": 932,
+              "wall_time_median_ms": 932,
+              "wall_time_max_ms": 932,
+              "per_session_peak_rss_mb": 216.9,
+              "total_peak_rss_mb": 216.9,
+              "threads_per_session": 12,
+              "total_threads": 12
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 181.6,
+              "total_rss_mb": 181.6,
+              "threads_per_session": 12,
+              "total_threads": 12
+            },
+            "one_file_change": {
+              "wall_time_ms": 3501,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 0
+            }
+          }
+        },
+        {
+          "n": 4,
+          "daemon_healthy": {
+            "cold_start": {
+              "wall_time_min_ms": 3617,
+              "wall_time_median_ms": 3721,
+              "wall_time_max_ms": 3762,
+              "per_session_peak_rss_mb": 221.1,
+              "total_peak_rss_mb": 884.6,
+              "threads_per_session": 12,
+              "total_threads": 48
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 173.8,
+              "total_sessions_rss_mb": 695.6,
+              "daemon_rss_mb": 806.2,
+              "total_rss_mb": 1501.8,
+              "threads_per_session": 12,
+              "total_threads": 66
+            },
+            "one_file_change": {
+              "wall_time_ms": 3623,
+              "daemon_cpu_seconds": 3.79,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 3.79
+            }
+          },
+          "daemon_absent": {
+            "cold_start": {
+              "wall_time_min_ms": 1073,
+              "wall_time_median_ms": 1133,
+              "wall_time_max_ms": 1186,
+              "per_session_peak_rss_mb": 218.1,
+              "total_peak_rss_mb": 872.7,
+              "threads_per_session": 12,
+              "total_threads": 48
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 182.1,
+              "total_rss_mb": 728.4,
+              "threads_per_session": 12,
+              "total_threads": 48
+            },
+            "one_file_change": {
+              "wall_time_ms": 3501,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 0
+            }
+          }
+        },
+        {
+          "n": 9,
+          "daemon_healthy": {
+            "cold_start": {
+              "wall_time_min_ms": 1853,
+              "wall_time_median_ms": 3608,
+              "wall_time_max_ms": 3712,
+              "per_session_peak_rss_mb": 222.8,
+              "total_peak_rss_mb": 2002.4,
+              "threads_per_session": 12,
+              "total_threads": 108
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 175,
+              "total_sessions_rss_mb": 1573.8,
+              "daemon_rss_mb": 875.4,
+              "total_rss_mb": 2449.2,
+              "threads_per_session": 12,
+              "total_threads": 126
+            },
+            "one_file_change": {
+              "wall_time_ms": 3356,
+              "daemon_cpu_seconds": 3.69,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 3.69
+            }
+          },
+          "daemon_absent": {
+            "cold_start": {
+              "wall_time_min_ms": 2037,
+              "wall_time_median_ms": 2164,
+              "wall_time_max_ms": 2341,
+              "per_session_peak_rss_mb": 220,
+              "total_peak_rss_mb": 1977.8,
+              "threads_per_session": 12,
+              "total_threads": 108
+            },
+            "steady_state_idle": {
+              "per_session_rss_mb": 182.5,
+              "total_rss_mb": 1645.1,
+              "threads_per_session": 12,
+              "total_threads": 108
+            },
+            "one_file_change": {
+              "wall_time_ms": 3501,
+              "sessions_cpu_seconds": 0,
+              "total_cpu_seconds": 0
+            }
+          }
+        }
+      ],
+      "multipliers_n9_vs_n1": {
+        "daemon_healthy": {
+          "rss_multiplier": 3.64,
+          "threads_multiplier": 4.2,
+          "one_file_change_cpu_multiplier": 1.39
+        },
+        "daemon_absent": {
+          "rss_multiplier": 9.06,
+          "threads_multiplier": 9,
+          "one_file_change_cpu_multiplier": 0
+        }
+      }
+    }
+  ]
+}
