@@ -413,7 +413,17 @@ export class ProjectManager {
       ? new BackgroundLspEnricher({ store, config, rootPath: projectRoot })
       : null;
 
-    const serverHandle = createServer(store, registry, config, projectRoot, progress);
+    // TRA-938: route through the shared pool so this server's TopologyStore/
+    // DecisionStore/StateEngine are the daemon-wide singletons, not private
+    // per-project SQLite connections onto the same three files.
+    const serverHandle = createServer(
+      store,
+      registry,
+      config,
+      projectRoot,
+      progress,
+      this.resourcePool?.getSharedDeps(config),
+    );
 
     const managed: ManagedProject = {
       root: projectRoot,
@@ -939,12 +949,13 @@ export class ProjectManager {
     } catch (err) {
       logger.warn({ error: err, projectRoot: root }, 'sharedPool.dropProject failed (non-fatal)');
     }
-    // Force-dispose the per-project entry in the resource pool (TopologyStore
-    // + DecisionStore SQLite handles). stopProject runs unconditionally — we
-    // don't wait for refCount to drain because by this point the project is
-    // gone from `projects` and no new sessions can be acquired for this root.
-    // Any in-flight session.onclose handler will see a stale entry but its
-    // release() call is a no-op (entry already deleted).
+    // Forget this project's own refcount bookkeeping in the resource pool.
+    // TRA-938: the pool's TopologyStore/DecisionStore/StateEngine are
+    // daemon-wide singletons now, not owned per-project, so this no longer
+    // closes any SQLite handle — it only drops the counter used by
+    // unloadIdleProjects/sweepEphemeralProjects. Any in-flight
+    // session.onclose handler will see a stale entry but its release() call
+    // is a no-op (entry already deleted).
     try {
       this.resourcePool?.disposeProject(root);
     } catch (err) {
