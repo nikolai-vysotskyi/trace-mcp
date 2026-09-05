@@ -20,11 +20,13 @@ import path from 'node:path';
  * `src/daemon/lifecycle.ts`. `tests/scripts/postinstall-plist-version.test.ts`
  * keeps them in sync.
  */
-export const PLIST_VERSION = 4;
+export const PLIST_VERSION = 5;
 export const PLIST_LABEL = 'com.trace-mcp.server';
 export const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 /** Seconds launchd waits after SIGTERM before SIGKILL (TRA-421). */
 const PLIST_EXIT_TIMEOUT_SEC = 30;
+/** Open-file ceiling for the daemon process (TRA-938). Mirrors PLIST_MAX_FILES in src/daemon/lifecycle.ts. */
+const PLIST_MAX_FILES = 4096;
 export const DEFAULT_DAEMON_PORT = 3741;
 
 export function generatePlist(shimPath: string, home: string, port = DEFAULT_DAEMON_PORT): string {
@@ -58,6 +60,16 @@ export function generatePlist(shimPath: string, home: string, port = DEFAULT_DAE
   <integer>5</integer>
   <key>ExitTimeOut</key>
   <integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
   <key>StandardOutPath</key>
   <string>${path.join(home, 'daemon.log')}</string>
   <key>StandardErrorPath</key>

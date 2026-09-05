@@ -41,9 +41,14 @@ import { logDaemonStopAttribution } from './daemon-attribution.mjs';
 // shim everywhere so node-version swaps don't pin the daemon to a stale binary.
 // v4: adds ExitTimeOut — launchd's 5s default SIGKILLed the daemon mid-cleanup
 // (TRA-421), losing both the shutdown log line and the graceful DB close.
-const PLIST_VERSION = 4;
+// v5 (TRA-938): adds SoftResourceLimits/NumberOfFiles — launchd's 256-fd
+// default left no headroom for a daemon with several registered projects,
+// so accept() started failing with EMFILE.
+const PLIST_VERSION = 5;
 /** Seconds launchd waits after SIGTERM before SIGKILL. Mirrors PLIST_EXIT_TIMEOUT_SEC. */
 const PLIST_EXIT_TIMEOUT_SEC = 30;
+/** Open-file ceiling for the daemon process. Mirrors PLIST_MAX_FILES in src/daemon/lifecycle.ts. */
+const PLIST_MAX_FILES = 4096;
 const PLIST_LABEL = 'com.trace-mcp.server';
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const DEFAULT_DAEMON_PORT = 3741;
@@ -339,6 +344,16 @@ function generatePlist(binaryPath, port) {
   <integer>5</integer>
   <key>ExitTimeOut</key>
   <integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
   <key>StandardOutPath</key>
   <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
