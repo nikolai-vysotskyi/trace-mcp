@@ -71,6 +71,58 @@ TechArticle schema (TRA-419, 09-03).
 13 indexed, 11 not. The 11 are the newest pages and the whole `/vs/` cluster —
 the two groups carrying every non-branded keyword the site targets.
 
+## Reading 2026-09-05 (TRA-905), and what was decided about external links
+
+The SEO agent re-read Search Console on 2026-09-05: 14 of the now-25 sitemap
+URLs took zero impressions in 28 days, and `/vs/codegraph.html` came back
+`URL is unknown to Google`.
+
+**That is not a regression.** The 09-04 table above already recorded
+`/vs/codegraph.html` as unknown, so the two readings agree; nothing got worse
+between them. TRA-626 recorded the cluster as *discoverable by sitemap*, which
+was never a claim about the index. Do not re-report this as a discovery bug on
+the strength of one day's re-read.
+
+**Zero impressions is also not the same set as not indexed.** `/quality-gates.html`
+and `/telemetry.html` are in Google's index and still took no impressions in the
+window — that is the 0.0% non-branded demand recorded below, not a coverage
+problem. Keep the two measures separate when quoting either.
+
+### Decision: no deep-URL submissions to the directory channels (2026-09-05)
+
+TRA-905 asked whether to push deep URLs — the `/vs/` cluster and
+`/pr-context-benchmark.html` — through the surfaces in `ops/distribution.md`
+instead of only the homepage. **Declined, and the reason should stop this being
+re-opened:** every one of those surfaces either emits no link to `trace-mcp.com`
+at all (mcpservers.org, skillsllm.com — both rewrite our doc links to
+`github.com`) or emits `rel="ugc nofollow"` on all of them (glama.ai, 31
+anchors), and GitHub applies `nofollow` to external links in every awesome-list
+README we are in. There is no dofollow deep link available in that channel set
+to go and get, so a submission run cannot move the lever this ledger names.
+`ops/arrivals.md` (private repo) independently shows four consecutive 14-day
+windows in which no listing surface sent a single visitor.
+
+### What was done instead, and when to read it back
+
+The one deep-link surface that costs nothing per run is our own README: glama
+scrapes it live and already renders 31 anchors from it, and its deep links
+(`/comparisons.html`, `/configuration.html`, `/supported-frameworks.html`) are
+all indexed while the `/vs/` cluster, which had no external anchor anywhere, is
+not. That is correlation on three pages, not a finding — so it is being run as
+one cheap test rather than asserted: 2026-09-05 the README gained a
+head-to-head line linking all six `/vs/` pages (`/pr-context-benchmark.html`
+was already linked from it twice).
+
+**Re-read on or after 2026-09-26** (the ~3 weeks TRA-905 asked for): inspect the
+six `/vs/` URLs plus `/pr-context-benchmark.html`, `/tools-index.html` and
+`/reduce-claude-code-token-usage.html`, and record the rows here. If the `/vs/`
+pages moved off `unknown` and the other three did not, the nofollow README
+anchors did something and the same trick is worth extending. If nothing moved,
+close the external-link lever for the site: the remaining named inputs are page
+quality, update frequency and perceived inventory, none of which has been
+measured here, and the honest next step is to measure one rather than submit
+anywhere else.
+
 ## What has been ruled out, and what has not
 
 Every one of the 11 was verified serving-clean on 2026-09-04:
