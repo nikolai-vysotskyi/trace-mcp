@@ -19,6 +19,17 @@ export interface KpiBaseline {
 
 export const LS_BASELINE_KEY = 'trace-mcp.workspace.kpi-baseline';
 export const BASELINE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/**
+ * A snapshot this young is not history yet (TRA-958).
+ *
+ * The first launch stores a baseline and then compares against it on the very
+ * next frame, so every tile prints "No change vs 2 seconds ago" — a caption
+ * about when the app was opened, not about the workspace. It photographs the
+ * harness: the docs capture script hit exactly this, shipping a dark-theme
+ * screenshot whose three headline tiles all said it. Below this age the tile
+ * falls back to its footnote, which is a statement about the workspace.
+ */
+export const BASELINE_MIN_AGE_MS = 60 * 60 * 1000;
 
 export interface BaselineRoll {
   /** Snapshot to compare today's numbers against; null when we have none yet. */
@@ -46,6 +57,7 @@ function isComparable(b: KpiBaseline | null): b is KpiBaseline {
  * Decide which baseline to show and which to store.
  *
  *  - nothing comparable stored → start tracking now, show no delta yet
+ *  - stored minutes ago        → keep it, show no delta yet
  *  - stored today              → compare against it, keep it
  *  - stored earlier            → compare against it, then replace it
  */
@@ -59,6 +71,8 @@ export function rollBaseline(
   if (!isComparable(stored)) return { previous: null, next: fresh };
   const age = nowMs - Date.parse(stored.at);
   if (!Number.isFinite(age) || age < 0) return { previous: null, next: fresh };
+  // Keep it rather than re-stamping it — an overwritten `at` never matures.
+  if (age < BASELINE_MIN_AGE_MS) return { previous: null, next: null };
   if (age >= BASELINE_MAX_AGE_MS) return { previous: stored, next: fresh };
   return { previous: stored, next: null };
 }

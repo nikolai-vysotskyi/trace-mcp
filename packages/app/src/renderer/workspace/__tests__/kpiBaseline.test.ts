@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASELINE_MAX_AGE_MS, rollBaseline } from '../kpiBaseline';
+import { BASELINE_MAX_AGE_MS, BASELINE_MIN_AGE_MS, rollBaseline } from '../kpiBaseline';
 import { relativeTime } from '../../i18n/format';
 import type { WorkspaceKpis } from '../types';
 
@@ -23,7 +23,7 @@ describe('rollBaseline', () => {
   });
 
   it("keeps today's snapshot and compares against it", () => {
-    const stored = { at: at(NOW - 60_000), kpis: kpis(8) };
+    const stored = { at: at(NOW - BASELINE_MIN_AGE_MS - 1), kpis: kpis(8) };
     const { previous, next } = rollBaseline(NOW, stored, kpis(10));
     expect(previous).toBe(stored);
     expect(next).toBeNull();
@@ -34,6 +34,16 @@ describe('rollBaseline', () => {
     const { previous, next } = rollBaseline(NOW, stored, kpis(10));
     expect(previous).toBe(stored);
     expect(next?.kpis.totalProjects).toBe(10);
+  });
+
+  /* The first launch stores a baseline and would otherwise compare against it
+     on the next frame: "No change vs 2 seconds ago" is a caption about when the
+     app was opened, not about the workspace (TRA-958). */
+  it('shows no delta against a snapshot taken minutes ago, and does not re-stamp it', () => {
+    const stored = { at: at(NOW - 2_000), kpis: kpis(8) };
+    const { previous, next } = rollBaseline(NOW, stored, kpis(10));
+    expect(previous).toBeNull();
+    expect(next).toBeNull();
   });
 
   it('discards a corrupt or future-dated snapshot instead of inventing a delta', () => {
@@ -48,7 +58,7 @@ describe('rollBaseline', () => {
      indistinguishable once stored. It is also useless when it is genuine: the
      only delta it can produce is the value itself (TRA-458). */
   it('never compares against an empty snapshot', () => {
-    const stored = { at: at(NOW - 60_000), kpis: kpis(0) };
+    const stored = { at: at(NOW - BASELINE_MIN_AGE_MS - 1), kpis: kpis(0) };
     const { previous, next } = rollBaseline(NOW, stored, kpis(53));
     expect(previous).toBeNull();
     expect(next?.kpis.totalProjects).toBe(53);
