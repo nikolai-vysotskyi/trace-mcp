@@ -61,6 +61,7 @@ IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER us
 | DB model relationships | \`get_model_context\` (framework-gated) | reading model + migrations |
 | Component tree | \`get_component_tree\` (framework-gated) | reading component files |
 | Circular dependencies | \`get_circular_imports\` | manual tracing |
+| Task spanning many turns | \`trace_state_init\` once, then \`trace_state_patch\` / \`trace_state_add_dead_end\` per step, \`trace_state_get\` to re-read (deferred — \`load_tools({preset:"state"})\`) | re-reading the whole transcript every turn |
 
 Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before Edit.
 Start sessions with \`get_project_map\` (summary_only=true).
