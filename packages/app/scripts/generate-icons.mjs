@@ -63,6 +63,12 @@ function trayIconSVG(size, dim = false, color = 'black') {
 }
 
 // ── App icon design (colour, for dock / installer) ──────────────────
+//
+// NOTE (TRA-780): this hard-coded copy is still what the release builds, but it
+// is no longer the drawing we want. The vector masters in assets/icon/ and
+// scripts/gen-app-icon.mjs replace it — every size rendered from SVG instead of
+// resampled from one 512px raster. Switching release.yml over is a follow-up,
+// held until the redrawn mark is approved.
 
 function appIconSVG(size) {
   // Original layout — the one that looked great
