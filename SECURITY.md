@@ -118,7 +118,7 @@ Files matching `.gitignore` patterns are **indexed for graph metadata** (symbols
 
 CodeQL and Semgrep run on every push/PR with `security-extended` + OWASP/nodejsscan rulesets, which surfaces a structural false-positive shape specific to this codebase: **`js/path-injection`**. Nearly every MCP tool takes a `file_path`-shaped argument, and the sanitizer (`validatePath()` / `guardPath()`, see above) runs in the tool-registration wrapper (`src/tools/register/*.ts`) one call away from the implementation function CodeQL flags — interprocedural taint tracking doesn't follow the sanitizer across that boundary. Per the precedent set in alerts #1068/#1069 ("local read-only search under the registered project root, same trust domain as the CLI/MCP user"), this bucket is dismissed in bulk as **won't fix** whenever the flagged path either passes through `validatePath()`/`guardPath()` before use, or is sourced from already-validated indexed data (e.g. `file_path` columns populated at index time). New `js/path-injection` alerts should be checked against this pattern and dismissed with the same justification rather than left to accumulate — but a path that reaches a sink *without* going through the wrapper is a real bug, not this exception.
 
-OpenSSF Scorecard contributes a second structural bucket: **`TokenPermissionsID` on `.github/workflows/release.yml`**. Scorecard flags any `contents: write`, but release-please *is* the release: it pushes release commits, creates tags, and publishes GitHub Releases, so the workflow cannot function without that scope. These alerts are dismissed as **won't fix** with the justification "release-please requires `contents: write` to create tags and releases; the permission is scoped to a job in a workflow gated on `master`", and re-dismissed the same way when a Scorecard run re-raises them. The exception is deliberately narrow — it covers `release.yml` only. A `contents: write` grant in any other workflow, or one at the top level rather than scoped to the job that needs it, is a real finding and gets fixed (as `ga4-snapshot.yml` was). Two adjacent Scorecard results are also expected and not gaps: `Signed-Releases: 0` reflects that release assets carry `actions/attest-build-provenance` attestations, which Scorecard does not look for (it only counts `.sig`/`.asc`/`.intoto.jsonl` uploaded as release assets), and the legacy branch-protection API reporting `allow_force_pushes: true` on `master` is overridden by the active `default` ruleset's `non_fast_forward` rule with an empty bypass list.
+OpenSSF Scorecard contributes a second structural bucket: **`TokenPermissionsID` on `.github/workflows/release.yml`**. Scorecard flags any `contents: write`, but release-please *is* the release: it pushes release commits, creates tags, and publishes GitHub Releases, so the workflow cannot function without that scope. These alerts are dismissed as **won't fix** with the justification "release-please requires `contents: write` to create tags and releases; the permission is scoped to a job in a workflow gated on `master`", and re-dismissed the same way when a Scorecard run re-raises them. The exception is deliberately narrow — it covers `release.yml` only. A `contents: write` grant in any other workflow, or one at the top level rather than scoped to the job that needs it, is a real finding and gets fixed (as `ga4-snapshot.yml` was). One adjacent Scorecard result is also expected and not a gap: the legacy branch-protection API reporting `allow_force_pushes: true` on `master` is overridden by the active `default` ruleset's `non_fast_forward` rule with an empty bypass list.
 
 The remaining volume buckets (`ajinabraham.njsscan.dos.regex_dos`, `js/insecure-temporary-file`, `js/file-system-race`) are **not** covered by this exception — they involve regex-shape and TOCTOU analysis that has to be judged per call site, not by a single architectural argument, and a lazy blanket dismissal here would hide a real bug class (this tool is designed to scan arbitrary — including untrusted/third-party — codebases, so a crafted file triggering catastrophic backtracking in one of the scanner's own detection regexes is a plausible local DoS). These are tracked for individual review rather than dismissed.
 
@@ -234,6 +234,29 @@ cosign verify-blob --bundle <bundle-url> <tarball>
 | Build environment | `ubuntu-latest`, Node 22 |
 
 A missing or invalid attestation means the package was **not** built by the official GitHub Actions pipeline and should be treated as suspect.
+
+---
+
+## Desktop App Provenance
+
+The desktop installers on GitHub Releases carry the same class of claim as the npm package. Each build job runs `actions/attest-build-provenance`, so every `.dmg`, `.exe`, and `.zip` on a release has a SLSA v1 provenance statement tied to this repository and to the workflow run that produced it:
+
+```bash
+gh attestation verify trace-mcp-3.17.1-arm64.dmg --repo nikolai-vysotskyi/trace-mcp
+```
+
+The same sigstore bundles are also attached to the release as `trace-mcp-mac.intoto.jsonl` and `trace-mcp-win.intoto.jsonl`, so verification works without reaching GitHub's attestation API:
+
+```bash
+gh attestation verify trace-mcp.Setup.3.17.1.exe --bundle trace-mcp-win.intoto.jsonl \
+  --repo nikolai-vysotskyi/trace-mcp
+```
+
+The `.sha256` file beside each artifact answers a different and much weaker question — whether the download arrived intact. It is published on the same page by the same token as the artifact, so it is not a tamper control; the attestation is.
+
+Each release also carries an SPDX SBOM (`trace-mcp-<version>.spdx.json`), generated from GitHub's dependency graph.
+
+macOS builds are additionally signed and notarized with an Apple Developer ID, which is what Gatekeeper checks. **Windows builds are not code-signed** — there is no Authenticode certificate — so SmartScreen will warn on first run, and `gh attestation verify` is the only way to establish that a Windows installer came from this pipeline.
 
 ---
 
@@ -372,5 +395,7 @@ If you discover a security vulnerability, please report it responsibly:
 | Auto-update Gatekeeper check | `spctl -a -t exec` on staged bundle | No |
 | Auto-update opt-out | Disabled when set | Yes (`TRACE_MCP_NO_AUTO_UPDATE=1`) |
 | npm provenance attestation | Sigstore/OIDC on every release | No |
+| Desktop build provenance | SLSA attestation + `.intoto.jsonl` bundle on every release | No |
+| Release SBOM | SPDX, from GitHub's dependency graph | No |
 | Apple signing secret scope | `apple-signing` environment, protected branches only | No |
 | GA4 telemetry credentials | Public by design, ship in `dist/`, write-only | Yes (`TRACE_MCP_TELEMETRY=off`) |

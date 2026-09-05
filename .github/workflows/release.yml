@@ -13,13 +13,13 @@ on:
 permissions:
   contents: read
 
-# Scorecard flags the four job-level `contents: write` grants below
-# (release-please, the macOS/Windows build jobs, and verify-release-assets).
-# They are accepted, not oversights: release-please has to push the release
-# branch and cut the tag, the build jobs upload signed installers as release
-# assets, and verify-release-assets has to be able to take an incomplete
-# release back out of `latest` (TRA-566). All are already scoped to the job,
-# never top-level (TRA-255).
+# Scorecard flags the five job-level `contents: write` grants below
+# (release-please, the macOS/Windows build jobs, verify-release-assets, and
+# sbom). They are accepted, not oversights: release-please has to push the
+# release branch and cut the tag, the build jobs upload signed installers as
+# release assets, verify-release-assets has to be able to take an incomplete
+# release back out of `latest` (TRA-566), and sbom uploads one more asset.
+# All are already scoped to the job, never top-level (TRA-255).
 
 jobs:
   release-please:
@@ -172,6 +172,38 @@ jobs:
           done
           echo "::error::$TAG verified but could not be returned to stable — users will not be offered it"
           exit 1
+
+  # An SPDX SBOM is the first artifact an enterprise evaluator asks for, and
+  # GitHub already builds one from the dependency graph — no scanner, no
+  # service, one API call (TRA-902). Deliberately not a gate on anything: a
+  # missing SBOM is a paperwork problem, not a broken release.
+  sbom:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Generate and attach the SPDX SBOM
+        run: |
+          set -euo pipefail
+          FILE="trace-mcp-${TAG#v}.spdx.json"
+          # DEPRECATED, Sunset: 2026-11-13 (headers on the response itself;
+          # github.blog/changelog/2026-05-12-synchronous-sbom-api-deprecated).
+          # The successor is async — POST .../sbom/generate-report, then poll
+          # .../fetch-report/{uuid} — and returned 404 when probed on
+          # 2026-09-05, so it is not yet usable here. Migrate before the
+          # sunset or this step starts failing (TRA-908).
+          gh api "repos/${{ github.repository }}/dependency-graph/sbom" --jq .sbom > "$FILE"
+          # An empty package list means the dependency graph had not been
+          # ingested for this commit yet — better to fail loudly than to ship
+          # an SBOM that claims we depend on nothing.
+          test "$(jq '.packages | length' "$FILE")" -gt 1
+          gh release upload "$TAG" "$FILE" --repo "${{ github.repository }}" --clobber
 
   # TRA-368: the asset gate above proves latest.yml is ON the release. It cannot
   # prove an install would act on it — a feed whose sha512 no longer matches the
@@ -462,11 +494,21 @@ jobs:
         run: node scripts/generate-shasums.mjs packages/app/release .zip .dmg
 
       - name: Generate SLSA build provenance attestation
+        id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             packages/app/release/*.zip
             packages/app/release/*.dmg
+
+      # The attestation above lives in GitHub's attestation API, which needs
+      # network access to a service that must still be up, and which OpenSSF
+      # Scorecard does not look at (Signed-Releases counts release assets only).
+      # The same sigstore bundle attached to the release makes verification
+      # offline-capable — `gh attestation verify --bundle` — and is what a
+      # mirror or an air-gapped evaluator can actually check (TRA-902).
+      - name: Attach the provenance bundle to the release
+        run: cp "${{ steps.attest.outputs.bundle-path }}" "packages/app/release/trace-mcp-mac.intoto.jsonl"
 
       - name: Upload to release
         env:
@@ -477,6 +519,7 @@ jobs:
             packages/app/release/*.zip.sha256 \
             packages/app/release/*.dmg \
             packages/app/release/*.dmg.sha256 \
+            packages/app/release/trace-mcp-mac.intoto.jsonl \
             packages/app/release/latest-mac.yml \
             --clobber
 
@@ -554,11 +597,19 @@ jobs:
         run: node scripts/generate-shasums.mjs packages/app/release .exe .zip
 
       - name: Generate SLSA build provenance attestation
+        id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             packages/app/release/*.exe
             packages/app/release/*-win*.zip
+
+      # See the matching step in build-app-mac for why the bundle is uploaded
+      # as well as registered with GitHub's attestation API (TRA-902).
+      # pwsh, not bash: the action emits a Windows path with backslashes and
+      # Git Bash's handling of those is not worth relying on here.
+      - name: Attach the provenance bundle to the release
+        run: Copy-Item "${{ steps.attest.outputs.bundle-path }}" "packages/app/release/trace-mcp-win.intoto.jsonl"
 
       - name: Upload to release
         env:
@@ -575,5 +626,6 @@ jobs:
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             "${FILES[@]}" \
             "${SUMS[@]}" \
+            packages/app/release/trace-mcp-win.intoto.jsonl \
             packages/app/release/latest.yml \
             --clobber
