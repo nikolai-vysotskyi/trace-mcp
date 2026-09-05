@@ -203,17 +203,34 @@ export function buildProjectContext(rootPath: string): ProjectContext {
     }
   };
 
+  // One readdir per scanned directory, instead of an lstat+open per candidate
+  // filename. ~60 manifest/config names are probed per directory and a monorepo
+  // scan visits hundreds of directories, so the misses — not the hits — were the
+  // cost: 245 ms of blocking syscalls per pipeline run on this repo (TRA-922).
+  const dirEntries = new Map<string, Set<string>>();
+  const plainFilesIn = (dir: string): Set<string> => {
+    let names = dirEntries.get(dir);
+    if (names) return names;
+    names = new Set<string>();
+    try {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        // Symlinks stay excluded, same as the previous per-file lstat check.
+        if (e.isFile()) names.add(e.name);
+      }
+    } catch {
+      /* unreadable dir → no candidates */
+    }
+    dirEntries.set(dir, names);
+    return names;
+  };
+
   const readFile = (dir: string, file: string): string | undefined => {
     try {
+      if (!plainFilesIn(dir).has(file)) return undefined;
       const fullPath = path.resolve(dir, file);
       const relToRoot = path.relative(rootPath, fullPath);
       const check = validatePath(relToRoot, rootPath);
       if (check.isErr()) return undefined;
-      try {
-        if (fs.lstatSync(fullPath).isSymbolicLink()) return undefined;
-      } catch {
-        return undefined;
-      }
       return fs.readFileSync(fullPath, 'utf-8');
     } catch {
       return undefined;
@@ -705,22 +722,13 @@ export function buildProjectContext(rootPath: string): ProjectContext {
     }
 
     // ========== Config files scan ==========
+    const present = plainFilesIn(dir);
     for (const name of CONFIG_FILE_NAMES) {
-      try {
-        const fullPath = path.resolve(dir, name);
-        const relToRoot = path.relative(rootPath, fullPath);
-        const check = validatePath(relToRoot, rootPath);
-        if (check.isErr()) continue;
-        try {
-          if (fs.lstatSync(fullPath).isSymbolicLink()) continue;
-        } catch {
-          continue;
-        }
-        fs.accessSync(fullPath);
-        configFiles.push(getRelPath(name));
-      } catch {
-        /* not found */
-      }
+      if (!present.has(name)) continue;
+      const fullPath = path.resolve(dir, name);
+      const relToRoot = path.relative(rootPath, fullPath);
+      if (validatePath(relToRoot, rootPath).isErr()) continue;
+      configFiles.push(getRelPath(name));
     }
   }
 
