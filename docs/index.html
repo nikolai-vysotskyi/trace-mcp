@@ -13,12 +13,12 @@ updated: 2026-09-04
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- ── Primary Meta ── -->
-  <title>trace-mcp — precomputed code intelligence for AI coding agents</title>
+  <title>trace-mcp — code graph MCP server for AI coding agents</title>
   <!-- Front-loaded on the SEO Agent's measurement: Google truncates this around
        155 characters, and the previous wording shared its first 133 with the old
        one, so the number was cut mid-word in the snippet. The 155-char cut now
        lands after "we don't own". -->
-  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
+  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp is a code graph MCP server: it indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -59,7 +59,7 @@ updated: 2026-09-04
   <meta property="og:site_name" content="trace-mcp">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
-  <meta property="og:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
+  <meta property="og:title" content="trace-mcp — code graph MCP server for AI coding agents">
   <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
@@ -70,7 +70,7 @@ updated: 2026-09-04
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
+  <meta name="twitter:title" content="trace-mcp — code graph MCP server for AI coding agents">
   <meta name="twitter:description" content="A structured map of your codebase for AI agents. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
@@ -81,7 +81,7 @@ updated: 2026-09-04
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
-    "alternateName": "trace-mcp — precomputed code intelligence for AI coding agents",
+    "alternateName": "trace-mcp — code graph MCP server for AI coding agents",
     "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
@@ -2451,7 +2451,7 @@ updated: 2026-09-04
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">003 / Product View</span></div>
         <div>
-          <h2 class="section-title">A structured model of your codebase <span class="em">that agents can use.</span></h2>
+          <h2 class="section-title">A code graph of your repository <span class="em">that agents can use.</span></h2>
           <p class="section-lede">An AI agent reading <code>UserController.php</code> sees a class. trace-mcp sees the route that hits it, the form request that validates input, the model it touches, the page it renders, the components rendered inside.</p>
         </div>
       </div>
