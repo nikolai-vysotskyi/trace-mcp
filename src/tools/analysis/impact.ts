@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store, SymbolRow } from '../../db/store.js';
-import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
+import { err, notFound, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { getChaNodeIds } from '../shared/cha.js';
@@ -501,7 +501,12 @@ export function getChangeImpact(
     }
     startNodeIds = [...new Set(startNodeIds)];
   } else {
-    return err(notFound('', ['Provide either filePath, symbolId, or symbolIds']));
+    // Not "not found" — nothing to look up was given in the first place.
+    return err(
+      validationError(
+        'No file_path, symbol_id, fqn, or symbol_ids provided — specify at least one',
+      ),
+    );
   }
 
   // Pennant feature flag check
