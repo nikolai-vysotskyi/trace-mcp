@@ -102,10 +102,27 @@ function sentinelPaths(name: string): [string, string] {
   return [path.join(statusDir(), name), path.join(os.tmpdir(), name)];
 }
 
-/** Whichever of the two exists; the state-home one when neither does. */
+/**
+ * Whichever of the two was touched most recently; the state-home one when
+ * neither exists. Newest rather than primary-first: a sentinel left behind by a
+ * crashed current server would otherwise mask an older server still refreshing
+ * the $TMPDIR copy, showing a live session as dead.
+ */
 function resolveSentinel(name: string): string {
   const [primary, legacy] = sentinelPaths(name);
-  return fs.existsSync(primary) ? primary : fs.existsSync(legacy) ? legacy : primary;
+  const mtime = (p: string): number => {
+    try {
+      return fs.statSync(p).mtimeMs;
+    } catch {
+      return Number.NEGATIVE_INFINITY;
+    }
+  };
+  const primaryAt = mtime(primary);
+  const legacyAt = mtime(legacy);
+  if (primaryAt === Number.NEGATIVE_INFINITY && legacyAt === Number.NEGATIVE_INFINITY) {
+    return primary;
+  }
+  return legacyAt > primaryAt ? legacy : primary;
 }
 
 function statusPath(projectRoot: string): string {
@@ -736,7 +753,13 @@ export function setBypass(projectRoot: string, minutes: number): void {
     } catch {
       /* not present */
     }
-    fs.writeFileSync(file, 'manual', { flag: 'wx', mode: 0o600 });
-    fs.utimesSync(file, future, future);
+    try {
+      fs.writeFileSync(file, 'manual', { flag: 'wx', mode: 0o600 });
+      fs.utimesSync(file, future, future);
+    } catch {
+      // One unwritable location must not cost the other: if the state home is
+      // read-only the $TMPDIR copy still reaches a hook that reads it, and the
+      // reverse holds too.
+    }
   }
 }

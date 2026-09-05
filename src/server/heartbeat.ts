@@ -113,13 +113,30 @@ function tmpdirSentinelPaths(projectRoot: string): [string, string] {
 const STALE_SENTINEL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * Everything STATUS_DIR holds, and nothing else: the sweep below deletes by
+ * this list, so an unrelated file a user dropped in there is never touched.
+ * `trace-mcp-consulted-` is a directory, the other three are files.
+ */
+const SWEPT_SENTINEL_PREFIXES = [
+  'trace-mcp-status-',
+  'trace-mcp-alive-',
+  'trace-mcp-bypass-',
+  'trace-mcp-consulted-',
+];
+
+/**
  * Drop sentinels from servers that died without running `stop()`.
  *
  * `stop()` unlinks its own files, but a killed process never gets there. In
  * $TMPDIR that never mattered — the OS reaps it — whereas STATUS_DIR lives
- * under the state home and is never cleaned by anyone else, so one file per
- * crashed server would accumulate there forever. Best-effort: a sweep that
- * cannot read the directory is not worth failing a server start over.
+ * under the state home and is never cleaned by anyone else, so every crashed
+ * server, every project ever opened and every expired bypass would accumulate
+ * there forever. Best-effort: a sweep that cannot read the directory is not
+ * worth failing a server start over.
+ *
+ * mtime, not age-since-creation: a live server rewrites its sentinel every 5s
+ * and a bypass carries a future mtime while it is in force, so neither can be
+ * collected while it still means something.
  */
 function sweepStaleSentinels(): void {
   const cutoff = Date.now() - STALE_SENTINEL_MAX_AGE_MS;
@@ -130,12 +147,13 @@ function sweepStaleSentinels(): void {
     return;
   }
   for (const name of names) {
-    if (!name.startsWith('trace-mcp-status-') && !name.startsWith('trace-mcp-alive-')) continue;
+    if (!SWEPT_SENTINEL_PREFIXES.some((p) => name.startsWith(p))) continue;
     const full = path.join(STATUS_DIR, name);
     try {
       const st = fs.lstatSync(full);
-      if (!st.isFile() || st.mtimeMs > cutoff) continue;
-      fs.unlinkSync(full);
+      if (st.isSymbolicLink() || st.mtimeMs > cutoff) continue;
+      if (st.isDirectory()) fs.rmSync(full, { recursive: true, force: true });
+      else if (st.isFile()) fs.unlinkSync(full);
     } catch {
       /* vanished under us, or not ours — skip */
     }

@@ -333,6 +333,41 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(decision.allowed).toBe(false);
   });
 
+  // A crashed current server leaves its state-home sentinel behind. Preferring
+  // the state home unconditionally would then hide an older server that is
+  // still refreshing the $TMPDIR copy, and report a live session as stale.
+  it('prefers the fresher sentinel when a stale state-home one is left over', () => {
+    const stale = setHeartbeatAliveInStateHome(projectDir);
+    const past = new Date(Date.now() - 120_000);
+    fs.utimesSync(stale, past, past);
+    setHeartbeatAlive(projectDir); // live, in $TMPDIR, as an older server writes it
+    const file = path.join(projectDir, 'fresher-wins.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.context ?? '').not.toContain('stale');
+    expect(decision.allowed).toBe(false);
+  });
+
+  it('finds a consultation marker in $TMPDIR even when the state-home dir exists', () => {
+    // An older server marks in $TMPDIR while an empty state-home directory
+    // lingers from an earlier run — the marker must still count.
+    fs.mkdirSync(
+      path.join(
+        stateStatusDir as string,
+        `trace-mcp-consulted-${projectHash(fs.realpathSync(projectDir))}`,
+      ),
+      {
+        recursive: true,
+      },
+    );
+    const file = path.join(projectDir, 'legacy-marker.ts');
+    fs.writeFileSync(file, 'export {};');
+    runGuard('Read', { file_path: file }, sessionId, projectDir);
+    runGuard('Read', { file_path: file }, sessionId, projectDir); // BLOCKED #2
+    writeConsultationMarker(projectDir, 'legacy-marker.ts');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+  });
+
   it('allows Read with warning when heartbeat is stale', () => {
     setHeartbeatStale(projectDir);
     const file = path.join(projectDir, 'fallback2.ts');

@@ -118,9 +118,14 @@ if ($projectRoot) {
     }
     $relPath = $relPath -replace '\\', '/'
     $consultedHash = Sha256Hex $relPath
+    # Markers live under the state home; %TEMP% is the pre-TRA-869 location and
+    # is still checked because the server writes both while old hooks exist.
+    $traceStateHome = $env:TRACE_MCP_DATA_DIR
+    if (-not $traceStateHome) { $traceStateHome = Join-Path $env:USERPROFILE '.trace' }
+    $stateConsultedFile = Join-Path (Join-Path (Join-Path $traceStateHome 'status') ("trace-mcp-consulted-" + $projectHash)) $consultedHash
     $consultedDir = Join-Path $tmp ("trace-mcp-consulted-" + $projectHash)
     $consultedFile = Join-Path $consultedDir $consultedHash
-    if (Test-Path $consultedFile) {
+    if ((Test-Path $stateConsultedFile) -or (Test-Path $consultedFile)) {
         $newCount = $prevCount + 1
         Set-Content -LiteralPath $readState -Value ("{0}:{1}" -f $newCount, $curMtime) -NoNewline
         Write-Output 'ALLOW'

@@ -391,21 +391,56 @@ fi
 # trace-mcp exists to replace. $TMPDIR stays as the second choice so a server
 # installed before that fix is still found.
 TRACE_STATE_HOME="${TRACE_MCP_DATA_DIR:-$HOME/.trace}"
-case "$TRACE_STATE_HOME" in "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;; esac
+case "$TRACE_STATE_HOME" in
+  "~") TRACE_STATE_HOME="$HOME" ;;
+  "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;;
+esac
 STATUS_HOME="$TRACE_STATE_HOME/status"
 TMP_HOME="${TMPDIR:-/tmp}"
 
-# First path that exists; the state-home one when neither does, so anything this
-# hook writes itself (the auto-degradation bypass) lands in the shared location.
-pick_path() {
-  if [[ -e "$1" ]]; then echo "$1"; else echo "$2"; fi
+# Whichever of the two was touched most recently, so a sentinel left behind by a
+# crashed new server cannot mask a live old one still refreshing the $TMPDIR
+# copy — the freshest file is by definition the one a running server owns. The
+# state-home path when neither exists, so anything this hook writes itself lands
+# in the shared location.
+newest_path() {
+  if [[ -e "$1" && -e "$2" ]]; then
+    if (( $(file_mtime "$2") > $(file_mtime "$1") )); then echo "$2"; else echo "$1"; fi
+  elif [[ -e "$2" ]]; then
+    echo "$2"
+  else
+    echo "$1"
+  fi
 }
 
-CONSULTED_DIR=$(pick_path "$STATUS_HOME/trace-mcp-consulted-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-consulted-${PROJECT_HASH}")
-HEARTBEAT_FILE=$(pick_path "$STATUS_HOME/trace-mcp-alive-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-alive-${PROJECT_HASH}")
-STATUS_FILE=$(pick_path "$STATUS_HOME/trace-mcp-status-${PROJECT_HASH}.json" "$TMP_HOME/trace-mcp-status-${PROJECT_HASH}.json")
-BYPASS_FILE=$(pick_path "$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}")
+# Consultation markers are NOT resolved to one directory: an older server writes
+# them to $TMPDIR while a state-home directory from an earlier run may still be
+# on disk, and binding to either one alone denies a Read the agent did consult.
+# Both are searched on every lookup.
+CONSULTED_DIR="$STATUS_HOME/trace-mcp-consulted-${PROJECT_HASH}"
+CONSULTED_DIR_TMP="$TMP_HOME/trace-mcp-consulted-${PROJECT_HASH}"
+HEARTBEAT_FILE=$(newest_path "$STATUS_HOME/trace-mcp-alive-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-alive-${PROJECT_HASH}")
+STATUS_FILE=$(newest_path "$STATUS_HOME/trace-mcp-status-${PROJECT_HASH}.json" "$TMP_HOME/trace-mcp-status-${PROJECT_HASH}.json")
+BYPASS_FILE=$(newest_path "$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}")
+# Written, not read: this hook's own auto-degradation bypass always goes to the
+# shared location so every reader sees it, whatever their $TMPDIR.
+BYPASS_WRITE_FILE="$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}"
+BYPASS_FILE_TMP="$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}"
 mkdir -p "$STATUS_HOME" 2>/dev/null || true
+
+# True when a consultation marker for $1 exists in either directory.
+consulted_marker_exists() {
+  [[ -f "$CONSULTED_DIR/$1" || -f "$CONSULTED_DIR_TMP/$1" ]]
+}
+
+# True when either consultation directory holds at least one marker.
+any_consultation_markers() {
+  local d
+  for d in "$CONSULTED_DIR" "$CONSULTED_DIR_TMP"; do
+    [[ -d "$d" ]] && [[ -n "$(ls -A "$d" 2>/dev/null)" ]] && return 0
+  done
+  return 1
+}
 # Per-session read ledger: written and read by this hook family only, all
 # spawned by the same client, so $TMPDIR is the right home for it.
 READS_DIR="$TMP_HOME/trace-mcp-reads-${SESSION_ID}"
@@ -517,7 +552,7 @@ elif [[ -f "$BYPASS_FILE" ]]; then
     HEARTBEAT_REASON="trace-mcp guard manually bypassed (${REMAINING}s remaining); re-enable: bash scripts/trace-mcp-enable-guard.sh"
   else
     # Expired bypass — clean up so it doesn't accumulate.
-    rm -f "$BYPASS_FILE" 2>/dev/null || true
+    rm -f "$BYPASS_WRITE_FILE" "$BYPASS_FILE_TMP" 2>/dev/null || true
   fi
 fi
 
@@ -609,7 +644,7 @@ maybe_auto_degrade() {
   fi
   # If consultation markers exist for this project, the agent is reaching
   # trace-mcp successfully — don't auto-degrade.
-  if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+  if any_consultation_markers; then
     return
   fi
 
@@ -631,11 +666,11 @@ maybe_auto_degrade() {
   if (( count >= AUTO_DEGRADE_DENY_THRESHOLD )); then
     # Trip auto-degradation: write bypass sentinel with mtime in the future.
     local expiry=$((NOW + AUTO_DEGRADE_DURATION_SEC))
-    echo "auto-degraded" > "$BYPASS_FILE" 2>/dev/null || true
+    echo "auto-degraded" > "$BYPASS_WRITE_FILE" 2>/dev/null || true
     if command -v gtouch >/dev/null 2>&1; then
-      gtouch -d "@$expiry" "$BYPASS_FILE" 2>/dev/null || true
+      gtouch -d "@$expiry" "$BYPASS_WRITE_FILE" 2>/dev/null || true
     else
-      touch -t "$(date -r "$expiry" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$expiry" +%Y%m%d%H%M.%S 2>/dev/null)" "$BYPASS_FILE" 2>/dev/null || true
+      touch -t "$(date -r "$expiry" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$expiry" +%Y%m%d%H%M.%S 2>/dev/null)" "$BYPASS_WRITE_FILE" 2>/dev/null || true
     fi
     HEARTBEAT_DEAD=1
     HEARTBEAT_REASON="auto-degraded — ${count} denies / 0 consultation markers in window. trace-mcp MCP channel appears unresponsive. Auto-bypass for $((AUTO_DEGRADE_DURATION_SEC / 60))min; will re-arm on next consultation marker"
@@ -645,7 +680,7 @@ maybe_auto_degrade() {
 
 # Reset deny aggregate as soon as ANY consultation marker exists — that proves
 # the MCP channel is alive in this session.
-if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+if any_consultation_markers; then
   rm -f "$DENY_AGGREGATE_FILE" 2>/dev/null || true
 fi
 
@@ -746,7 +781,7 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     REL_PATH_FOR_HASH="$REL_PATH"
     CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
     HAS_MARKER=0
-    if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
+    if [[ -n "$PROJECT_HASH" ]] && consulted_marker_exists "$CONSULTED_HASH"; then
       HAS_MARKER=1
     fi
 
