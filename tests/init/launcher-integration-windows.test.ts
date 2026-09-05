@@ -236,4 +236,44 @@ Write-Output "EXIT:$LASTEXITCODE"`;
     const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
     expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
   });
+
+  // Review of #982: the first cut returned "fine" when the marker matched but
+  // no invocation line could be parsed out - the shim known to be ours and
+  // known to be unverified, run anyway. Once the marker matches, unparseable
+  // means reprobe.
+  it('reprobes a managed node-runtime.cmd whose invocation line cannot be parsed', () => {
+    const { home, traceHome } = setupFakeHome();
+    const shim = path.join(traceHome, 'bin', 'node-runtime.cmd');
+    fs.writeFileSync(
+      shim,
+      ['@echo off', 'rem Managed by the trace-mcp app (TRA-438) - do not edit by hand.', ''].join(
+        '\r\n',
+      ),
+    );
+    const cli = path.join(home, 'fake-cli.js');
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="${shim.replace(/\\/g, '\\\\')}"`,
+        `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
+        'TRACE_MCP_NODE_MAJOR="24"',
+        '',
+      ].join('\r\n'),
+    );
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
+  });
 });

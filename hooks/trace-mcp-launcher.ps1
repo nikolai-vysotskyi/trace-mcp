@@ -138,25 +138,33 @@ function Test-NodeBinary {
 # with no ERROR line, because from the .cmd's own side nothing went wrong
 # (TRA-965).
 #
-# Reading the target is one file read, so the fast path stays a pure file
-# check. Only OUR shim shape is inspected; a real node.exe is assumed fine,
-# since it cannot be checked without running it.
+# Two gates, in this order, and both matter:
+#
+#  1. The basename. RUNTIME_SHIM_NAME in daemon-install.ts is always
+#     `node-runtime.cmd`, so anything else - every real node.exe - is answered
+#     without opening the file at all.
+#  2. The marker, matched anywhere in the header rather than on a fixed line:
+#     the shim has gained comment lines before and may again, and a
+#     line-number match would silently stop recognising it.
+#
+# Once the marker says this IS our shim, an unreadable or unparseable body is
+# a failure, not a pass: returning "fine" there restores the exact outage this
+# closes the moment the generator's invocation line changes shape. Reprobing
+# costs a probe; running an unverified shim costs the session.
 function Test-RuntimeShim {
     param([string]$Path)
+    if ([System.IO.Path]::GetFileName($Path) -ne 'node-runtime.cmd') { return $true }
     try {
         $head = Get-Content -LiteralPath $Path -TotalCount 8 -ErrorAction Stop
     } catch {
-        return $true
+        return $false
     }
-    # Marker anywhere in the header, not on a fixed line: the shim has gained
-    # comment lines before and may again, and a line-number match would
-    # silently stop recognising it - failing open, which is the bug this closes.
     if (-not ($head | Where-Object { $_ -match '^rem Managed by the trace-mcp app' })) { return $true }
     $target = $null
     foreach ($line in $head) {
         if ($line -match '^"(.+)" %\*\s*$') { $target = $Matches[1] }
     }
-    if (-not $target) { return $true }
+    if (-not $target) { return $false }
     return (Test-Path -LiteralPath $target -PathType Leaf)
 }
 

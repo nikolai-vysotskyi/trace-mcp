@@ -939,10 +939,13 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
       ),
     );
 
-    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+    const { status } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
 
+    // 0, not 126: the shim was never exec'd, and the probe found a node.
+    // Deliberately not asserting WHICH node — a CI runner with a real node on
+    // a standard path wins the probe ahead of the planted prefix, and the
+    // contract here is recovery, not the winner.
     expect(status).toBe(0);
-    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
     // Logged as an ERROR: a session that only survives because of the fallback
     // must still be visible to the daily launcher.log audit.
     const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
@@ -966,6 +969,39 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
     expect(log).toMatch(/exec\(config\)/);
     expect(log).not.toMatch(/ERROR/);
+  });
+
+  // Review of #982: the first cut returned "fine" when the marker matched but
+  // no `exec` line could be parsed out. That is the outage again — the shim is
+  // known to be ours and known to be unverified, and it got exec'd anyway. It
+  // would have fired for real the first time the generator's exec line changed
+  // shape. Once the marker matches, unparseable means reprobe.
+  it('reprobes a managed shim whose exec line cannot be parsed', () => {
+    const { home, traceHome, cli } = setupFakeHome();
+    const dir = path.join(traceHome, 'bin');
+    fs.mkdirSync(dir, { recursive: true });
+    const shim = path.join(dir, 'node-runtime');
+    fs.writeFileSync(
+      shim,
+      ['#!/bin/bash', '# Managed by the trace-mcp app (TRA-438) — do not edit by hand.', ''].join(
+        '\n',
+      ),
+      { mode: 0o755 },
+    );
+    // Only the node is reprobed here — the configured cli.js is still valid.
+    plantFallbackPrefix(home, traceHome);
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [`TRACE_MCP_NODE="${shim}"`, `TRACE_MCP_CLI="${cli}"`, 'TRACE_MCP_NODE_MAJOR="24"', ''].join(
+        '\n',
+      ),
+    );
+
+    const { status } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
   });
 
   // The check must never reject a real node binary: it cannot be verified

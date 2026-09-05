@@ -155,19 +155,42 @@ node_major() {
 # succeeded. Reproduced against a real Homebrew node and cli.js sitting unused
 # on the same disk (TRA-965).
 #
-# Reading the target costs one `sed` and one `test`, no process spawn, so the
-# fast path stays a pure file check. Only OUR shim shape is inspected;
-# anything else is assumed fine, since a real node binary cannot be checked
-# without running it.
+# Two gates, in this order, and both matter:
+#
+#  1. The basename. RUNTIME_SHIM_NAME in daemon-install.ts is always
+#     `node-runtime`, so anything else — every real node binary — is answered
+#     without opening the file at all. The fast path must stay fork-free: the
+#     cached TRACE_MCP_NODE_MAJOR exists precisely so a normal start spawns no
+#     process, and a `head | grep` pair on every start would have quietly
+#     undone that (review of #982).
+#  2. The marker, matched anywhere in the header rather than on a fixed line:
+#     the shim has gained comment lines before and may again, and a
+#     line-number match would silently stop recognising it.
+#
+# Parsing uses shell builtins only, for gate 1's reason. Once the marker says
+# this IS our shim, an unreadable or unparseable body is a failure, not a pass:
+# returning "fine" there restores the exact outage this closes the moment the
+# generator's `exec` line changes shape. Reprobing costs a probe; exec-ing an
+# unverified shim costs the session.
 node_runtime_shim_ok() {
-  local target
-  # Marker anywhere in the header, not on a fixed line: the shim has gained
-  # comment lines before and may again, and a line-number match would silently
-  # stop recognising it — failing open, which is the bug this closes.
-  head -8 "$1" 2>/dev/null | grep -q '^# Managed by the trace-mcp app' || return 0
-  target=$(sed -n 's/^exec "\(.*\)" "\$@"$/\1/p' "$1" 2>/dev/null | tail -1)
-  [ -n "$target" ] || return 0
-  [ -x "$target" ]
+  local line target='' marked=0 i=0
+  case "$1" in
+    */node-runtime) ;;
+    *) return 0 ;;
+  esac
+  [ -f "$1" ] && [ -r "$1" ] || return 1
+  while [ "$i" -lt 8 ] && IFS= read -r line; do
+    i=$((i + 1))
+    case "$line" in
+      '# Managed by the trace-mcp app'*) marked=1 ;;
+      'exec "'*'" "$@"')
+        target="${line#exec \"}"
+        target="${target%\" \"\$@\"}"
+        ;;
+    esac
+  done < "$1"
+  [ "$marked" = 1 ] || return 0
+  [ -n "$target" ] && [ -x "$target" ]
 }
 
 # Resolve node from an nvm-layout tree ($1 = root, e.g. ~/.nvm or ~/Library/.../Herd/config/nvm).
