@@ -105,11 +105,15 @@ describe('renderDaemonEvents', () => {
       indexed: 70,
       p50_ms: 180,
       p95_ms: 240,
+      p95_queued_ms: 900,
     });
     expect(out).toMatch(/Daemon reindex events/);
     expect(out).toMatch(/total: 100/);
     expect(out).toMatch(/p50=180ms/);
     expect(out).toMatch(/p95=240ms/);
+    // The queue wait is reported next to the work, never folded into it — a
+    // fast reindex stuck behind a full pass has to be visible as such.
+    expect(out).toMatch(/queued p95=900ms/);
     expect(out).toMatch(/skipped_recent/);
     expect(out).toMatch(/skipped_hash/);
   });

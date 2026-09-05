@@ -650,7 +650,9 @@ export class ProjectManager {
           }
           if (toIndex.length === 0) return;
 
-          let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
+          let result:
+            | { indexed?: number; skipped?: number; durationMs?: number; changedFileIds?: number[] }
+            | undefined;
           let watchErr: unknown;
           try {
             result = await pipeline.indexFiles(toIndex);
@@ -658,7 +660,13 @@ export class ProjectManager {
             watchErr = err;
             throw err;
           } finally {
-            const elapsedMs = Math.round(performance.now() - watchStart);
+            // TRA-935: the batch's wall-clock is mostly time spent waiting for
+            // the pipeline lock when several batches land at once. Report the
+            // indexing work as `elapsedMs` and the wait as `queuedMs` — summed
+            // into one number they showed watcher reindexes taking hours.
+            const totalMs = Math.round(performance.now() - watchStart);
+            const elapsedMs = result?.durationMs ?? totalMs;
+            const queuedMs = Math.max(0, totalMs - elapsedMs);
             const indexed = result?.indexed ?? 0;
             const skippedRows = result?.skipped ?? 0;
             const skippedHash = indexed === 0 && skippedRows > 0;
@@ -699,6 +707,7 @@ export class ProjectManager {
                     skippedHash,
                     indexed,
                     elapsedMs,
+                    queuedMs,
                   },
                   'reindex-file telemetry',
                 );
@@ -708,6 +717,7 @@ export class ProjectManager {
                   skippedHash,
                   indexed,
                   elapsedMs,
+                  queuedMs,
                 });
               }
             }

@@ -14,7 +14,8 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-Related measurements in this directory: [daemon idle memory](./daemon-idle-memory.md),
+Related measurements in this directory: [idle cost](./idle-cost.md),
+[daemon idle memory](./daemon-idle-memory.md),
 [tool response token cost](./response-tokens.md).
 
 ## Preregistration — TRA-920
