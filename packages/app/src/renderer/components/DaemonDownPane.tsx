@@ -24,6 +24,7 @@ type SetupState =
   | { phase: 'idle' }
   | { phase: 'installing' }
   | { phase: 'ready' }
+  | { phase: 'unresponsive'; message: string }
   | { phase: 'failed'; message: string };
 
 /** Follow the main process's daemon-install progress. `idle` outside Electron. */
@@ -63,6 +64,20 @@ export function DaemonDownPane({
         iconSize={32}
         title={t('daemonInstallingTitle')}
         subtitle={t('daemonInstallingSubtitle')}
+      />
+    );
+  }
+
+  /* Live but not answering. No repair button: there is nothing broken to
+     repair, and "Try again" here would reinstall a working daemon (TRA-939).
+     The surfaces behind this pane keep revalidating, so it clears itself. */
+  if (setup.phase === 'unresponsive') {
+    return (
+      <EmptyState
+        icon="cable"
+        iconSize={32}
+        title={t('daemonBusyTitle')}
+        subtitle={setup.message}
       />
     );
   }

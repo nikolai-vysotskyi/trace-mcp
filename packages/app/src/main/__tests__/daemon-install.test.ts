@@ -6,12 +6,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import net from 'node:net';
 import {
   compareVersions,
   decideTakeover,
   bundledServerDir,
   ensureDaemonInstalled,
+  type EnsureOptions,
   generatePlist,
+  isPortHeld,
   launcherEnvContent,
   PLIST_MARKER,
   readLauncherEnv,
@@ -237,7 +240,7 @@ describe('ensureDaemonInstalled', () => {
   let bootstrapped: boolean;
   const previousHome = process.env.TRACE_MCP_HOME;
 
-  const run = (appVersion: string) =>
+  const run = (appVersion: string, extra: Partial<EnsureOptions> = {}) =>
     ensureDaemonInstalled({
       appVersion,
       execPath: '/Applications/trace-mcp.app/Contents/MacOS/trace-mcp',
@@ -251,6 +254,7 @@ describe('ensureDaemonInstalled', () => {
       },
       probeHealth: async () => true,
       log: () => {},
+      ...extra,
     });
 
   beforeEach(() => {
@@ -373,5 +377,96 @@ describe('ensureDaemonInstalled', () => {
     expect(result.changed).toBe(false);
     expect(calls).toEqual([]);
     expect(fs.existsSync(path.join(home, 'launcher.env'))).toBe(false);
+  });
+});
+
+/* TRA-939: a daemon that holds the port and does not answer is a different
+   state from a daemon that was never installed, and the app used to call both
+   "Setup didn't finish" after spending 30 s finding out. */
+describe('a live but unanswering daemon', () => {
+  let home: string;
+  let resources: string;
+  let launchAgent: string;
+  const previousHome = process.env.TRACE_MCP_HOME;
+  const servers: net.Server[] = [];
+
+  /** A socket that holds the port and never answers — the wedged daemon. */
+  const wedgedListener = async (): Promise<number> => {
+    const srv = net.createServer();
+    servers.push(srv);
+    await new Promise<void>((r) => srv.listen({ port: 0, host: '127.0.0.1', backlog: 1 }, r));
+    srv.on('connection', () => {
+      /* accepted, never answered */
+    });
+    return (srv.address() as net.AddressInfo).port;
+  };
+
+  const run = (port: number, extra: Partial<EnsureOptions> = {}) =>
+    ensureDaemonInstalled({
+      appVersion: '3.7.0',
+      execPath: '/Applications/trace-mcp.app/Contents/MacOS/trace-mcp',
+      resourcesPath: resources,
+      launchAgentPath: launchAgent,
+      port,
+      runLaunchctl: () => ({ ok: false, stderr: '' }),
+      log: () => {},
+      ...extra,
+    });
+
+  beforeEach(() => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-wedge-'));
+    home = path.join(tmp, 'home');
+    resources = path.join(tmp, 'Resources');
+    launchAgent = path.join(tmp, 'com.trace-mcp.server.plist');
+    fs.mkdirSync(path.join(resources, 'server', 'dist'), { recursive: true });
+    fs.mkdirSync(path.join(resources, 'server', 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(resources, 'server', 'dist', 'cli.js'), '');
+    fs.writeFileSync(path.join(resources, 'server', 'hooks', 'trace-mcp-launcher.sh'), '#!/bin/bash\n');
+    process.env.TRACE_MCP_HOME = home;
+  });
+
+  afterEach(() => {
+    for (const s of servers.splice(0)) s.close();
+    if (previousHome === undefined) delete process.env.TRACE_MCP_HOME;
+    else process.env.TRACE_MCP_HOME = previousHome;
+  });
+
+  it('tells a held port from a free one by binding, not by connecting', async () => {
+    const port = await wedgedListener();
+    expect(await isPortHeld(port)).toBe(true);
+    const free = net.createServer();
+    await new Promise<void>((r) => free.listen({ port: 0, host: '127.0.0.1' }, r));
+    const freePort = (free.address() as net.AddressInfo).port;
+    await new Promise<void>((r) => free.close(() => r()));
+    expect(await isPortHeld(freePort)).toBe(false);
+  });
+
+  it.runIf(process.platform === 'darwin')(
+    'reports a busy daemon, not a failed install, and does not spend the cold-start budget',
+    async () => {
+      const port = await wedgedListener();
+      const started = Date.now();
+      const result = await run(port, { busyTimeoutMs: 300 });
+      const elapsed = Date.now() - started;
+
+      expect(result.state.phase).toBe('unresponsive');
+      const message = (result.state as { message: string }).message;
+      expect(message).toContain('busy');
+      expect(message).not.toContain('never answered');
+      // The regression this guards: 30 s of "Setting up trace-mcp" over an
+      // index that was readable on disk the whole time.
+      expect(elapsed).toBeLessThan(5_000);
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')('still calls it failed when nothing is listening', async () => {
+    const free = net.createServer();
+    await new Promise<void>((r) => free.listen({ port: 0, host: '127.0.0.1' }, r));
+    const port = (free.address() as net.AddressInfo).port;
+    await new Promise<void>((r) => free.close(() => r()));
+
+    const result = await run(port, { healthTimeoutMs: 200 });
+    expect(result.state.phase).toBe('failed');
+    expect((result.state as { message: string }).message).toContain('nothing is listening');
   });
 });

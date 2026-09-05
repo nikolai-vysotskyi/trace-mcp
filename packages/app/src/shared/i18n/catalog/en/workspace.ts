@@ -15,6 +15,7 @@ export const workspace = {
   startingDaemon: 'Starting…',
   daemonInstallingTitle: 'Setting up trace-mcp',
   daemonInstallingSubtitle: 'Installing the background service that indexes your projects. This happens once, and takes a few seconds.',
+  daemonBusyTitle: 'The daemon is busy',
   daemonInstallFailedTitle: "Setup didn't finish",
   daemonInstallRetry: 'Try again',
   daemonInstallRetrying: 'Setting up…',

@@ -31,6 +31,7 @@ import {
 } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -125,6 +126,10 @@ export type DaemonSetupState =
   | { phase: 'idle' }
   | { phase: 'installing' }
   | { phase: 'ready' }
+  /* The daemon exists, holds the port and did not answer in time — busy, not
+     missing (TRA-939). A different cause and a different cure from `failed`:
+     nothing here needs reinstalling, so this state offers no repair button. */
+  | { phase: 'unresponsive'; message: string }
   | { phase: 'failed'; message: string };
 
 // ── filesystem layer ─────────────────────────────────────────────────
@@ -379,8 +384,43 @@ function plistPath(): string {
   return path.join(os.homedir(), 'Library', 'LaunchAgents', `${PLIST_LABEL}.plist`);
 }
 
+/**
+ * Is something already listening on this port?
+ *
+ * Asked by binding, not by connecting: a wedged daemon's accept queue is full,
+ * so a connect attempt sits in SYN_SENT and answers nothing — which is exactly
+ * the state we are trying to name. A bind that fails with EADDRINUSE proves a
+ * LISTEN socket is held without adding one more connection to the queue.
+ *
+ * ponytail: this holds the port for the ~1 ms of a successful bind, so a daemon
+ * binding in exactly that window would see EADDRINUSE and be restarted by
+ * launchd. Called twice per launch at most; if that ever shows up in the logs,
+ * the upgrade path is reading the LISTEN table (`lsof`/`netstat`) instead.
+ */
+export function isPortHeld(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', (err: NodeJS.ErrnoException) => {
+      resolve(err.code === 'EADDRINUSE');
+    });
+    probe.listen({ port, host: '127.0.0.1', exclusive: true }, () => {
+      probe.close(() => resolve(false));
+    });
+  });
+}
+
+/**
+ * Poll /health until it answers or the budget runs out.
+ *
+ * The wait between attempts doubles (TRA-939). A fixed 500 ms poll spent the
+ * whole 30 s budget opening 60 connections into an accept queue that was
+ * already full — the client's retries were part of what kept it full. Backing
+ * off costs nothing when the daemon is coming up in a second or two, and stops
+ * the app from making a busy daemon busier.
+ */
 async function waitForHealth(port: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  let wait = 250;
   while (Date.now() < deadline) {
     const ok = await new Promise<boolean>((resolve) => {
       const req = http.get(
@@ -397,7 +437,8 @@ async function waitForHealth(port: number, timeoutMs: number): Promise<boolean> 
       });
     });
     if (ok) return true;
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, Math.min(wait, Math.max(0, deadline - Date.now()))));
+    wait = Math.min(wait * 2, 4000);
   }
   return false;
 }
@@ -412,6 +453,9 @@ export interface EnsureOptions {
   port?: number;
   /** How long to wait for /health before calling the install failed. */
   healthTimeoutMs?: number;
+  /** How long to wait when the port is already held — a daemon that exists is
+      not being waited for, it is being given a moment. */
+  busyTimeoutMs?: number;
   log?: (message: string) => void;
   /* Seams, so the idempotence and file-layout tests can run without touching
      the machine's real LaunchAgents directory or its launchd domain. */
@@ -594,12 +638,26 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
     return { state: { phase: 'ready' }, changed, reason: decision.reason };
   }
 
-  const healthy = await (opts.probeHealth ?? waitForHealth)(port, opts.healthTimeoutMs ?? 30_000);
+  /* A daemon that is already listening is not being waited *for* — it is
+     there. Give it a short grace period rather than the full cold-start budget:
+     30 s of "Setting up trace-mcp" on a screen whose data has been on disk the
+     whole time is the defect, and the surfaces revalidate on their own once it
+     answers (TRA-939). */
+  const held = await isPortHeld(port);
+  const budget = held ? (opts.busyTimeoutMs ?? 5_000) : (opts.healthTimeoutMs ?? 30_000);
+  const healthy = await (opts.probeHealth ?? waitForHealth)(port, budget);
   if (healthy) {
     log('daemon install: /health responding');
     return { state: { phase: 'ready' }, changed, reason: decision.reason };
   }
-  const message = `The daemon was installed but never answered on port ${port}. See ${path.join(home, 'daemon.log')}.`;
+  /* Ask again after the wait: a daemon that came up during the probe but is
+     too busy to answer still gets called busy, not missing. */
+  if (held || (await isPortHeld(port))) {
+    const message = `The daemon is running and holding port ${port}, but it has not answered /health for ${Math.round(budget / 1000)}s — most likely busy indexing. Nothing needs reinstalling. See ${path.join(home, 'daemon.log')}.`;
+    log(`daemon install: ${message}`);
+    return { state: { phase: 'unresponsive', message }, changed, reason: decision.reason };
+  }
+  const message = `The daemon was installed but nothing is listening on port ${port}. See ${path.join(home, 'daemon.log')}.`;
   log(`daemon install: ${message}`);
   return { state: { phase: 'failed', message }, changed, reason: decision.reason };
 }
