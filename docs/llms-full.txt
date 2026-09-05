@@ -516,7 +516,7 @@ which excludes the framework-specific rows.
 | `list_corpora` | List every corpus saved on disk with its manifest (scope, project_root, sizes, timestamps). | always |
 | `list_graph_snapshots` | List previously captured graph snapshots, most recent first. | always |
 | `list_pins` | List all active ranking pins with weight, scope, target, expiry, and creator. | always |
-| `list_projects` | List projects registered with trace-mcp (~/.trace/registry.json), plus any known subprojects. | always |
+| `list_projects` | List projects registered with trace-mcp (~/.trace/registry.json) — the roots call_project_tool accepts. | always |
 | `load_tools` | Load tools this session's preset deferred, by preset name and/or explicit tool names. | always |
 | `mine_sessions` | Mine Claude Code / Claw Code session logs for architectural decisions, tech choices, bug root causes, and preferences. | always |
 | `pack_context` | Pack project context into a single document for external LLMs. | always |
@@ -5677,28 +5677,28 @@ what it stands in for.**
 
 | tool | calls (real) | raw baseline | measured response | measured/baseline |
 |---|---|---|---|---|
-| `search_text` | 5,125 | 3,000 | **1,659** | 0.55 |
+| `search_text` | 5,125 | 3,000 | **1,722** | 0.57 |
 | `get_outline` | 4,461 | 1,200 | **1,427** | 1.19 |
-| `search` | 4,441 | 600 | **926** | 1.54 |
+| `search` | 4,441 | 600 | **924** | 1.54 |
 | `get_symbol` | 2,687 | 800 | **294** | 0.37 |
-| `find_usages` | 440 | 1,000 | **1,122** | 1.12 |
+| `find_usages` | 440 | 1,000 | **975** | 0.97 |
 | `get_project_map` | 351 | 1,500 | **568** | 0.38 |
-| `get_index_health` | 211 | 500 | **337** | 0.67 |
+| `get_index_health` | 211 | 500 | **297** | 0.59 |
 | `get_tests_for` | 96 | 800 | **90** | 0.11 |
 | `get_complexity_report` | 80 | 800 | **1,820** | 2.27 |
-| `get_feature_context` | 73 | 4,000 | **7,441** | 1.86 |
+| `get_feature_context` | 73 | 4,000 | **7,443** | 1.86 |
 | `get_env_vars` | 66 | 500 | **13** | 0.03 |
-| `get_dead_code` | 53 | 1,200 | **4,819** | 4.02 |
+| `get_dead_code` | 53 | 1,200 | **2,725** | 2.27 |
 | `get_context_bundle` | 39 | 6,000 | **127** | 0.02 |
-| `get_changed_symbols` | 38 | 500 | **521** | 1.04 |
-| `get_task_context` | 32 | 8,000 | **5,384** | 0.67 |
+| `get_changed_symbols` | 38 | 500 | **1,224** | 2.45 |
+| `get_task_context` | 32 | 8,000 | **5,383** | 0.67 |
 | `check_quality_gates` | 24 | 500 | **121** | 0.24 |
 | `get_circular_imports` | 21 | 500 | **76** | 0.15 |
 | `check_duplication` | 19 | 500 | **272** | 0.54 |
 | `check_claudemd_drift` | 17 | 500 | **1,099** | 2.20 |
 | `scan_security` | 16 | 500 | **38** | 0.08 |
-| `list_projects` | 15 | 500 | **5,240** | 10.48 |
-| `get_call_graph` | 14 | 1,500 | **5,263** | 3.51 |
+| `list_projects` | 15 | 500 | **901** | 1.80 |
+| `get_call_graph` | 14 | 1,500 | **1,421** | 0.95 |
 
 Those {{ site.data.response_tokens.calls_weighted }} calls cost
 {{ site.data.response_tokens.measured_tokens }} measured tokens against a
@@ -5718,11 +5718,12 @@ Three things the table says:
    calls) measure 0.37–1.54. The assumption is off by 2.5x on the best of them.
 2. **{{ site.data.response_tokens.tools_costing_more }} of the
    {{ site.data.response_tokens.tools_with_baseline }} cost more than the
-   baseline they replace** — and were still booking a positive number on every
-   call. `list_projects` at 10.5x and `get_dead_code` at 4.0x are the worst
-   ratios; `get_call_graph` at 5 263 tokens for one symbol is the worst per
-   call. Each of these is a response-shaping defect: a default `depth`/`limit`
-   too generous for what the caller asked.
+   baseline they replace** — and, before the counter was corrected, were still
+   booking a positive number on every call. It was ten of twenty-two until
+   TRA-952 reshaped the three worst (below); the ones left are led by
+   `get_complexity_report` and `get_dead_code` at 2.27x. Each is a
+   response-shaping defect: a default `depth`/`limit` too generous for what the
+   caller asked.
 3. **A few are far better than claimed** — `get_context_bundle` at 0.02 and
    `get_env_vars` at 0.03 were being under-credited by an order of magnitude.
 
@@ -5821,14 +5822,46 @@ one: it needs a real counterfactual (the same question answered with
 `Read`/`Grep`, tokens counted), which is what `benchmarks/pr-context-benchmark`
 does for PR context and nothing does for tool calls.
 
-Second follow-up: ten tools are now known to return more than they save. That is
-a response-shaping problem — a default `depth`/`limit` that is too generous — and
-it is worth a separate issue per tool with this table as the before number.
-`list_projects` (10.5x), `get_dead_code` (4.0x) and `get_call_graph` (3.5x)
-first.
-
-One caveat on `get_outline`: it reads 1 427 tokens here against 1 056 in
+One caveat on `get_outline`: it read 1 427 tokens against 1 056 in
 TRA-880, on the same target file, because the change that added
 `NO_BASELINE_TOOLS` grew `src/savings.ts` by ~70 lines. The bench measures a
 live repository, so its own commits move its numbers. That is a property of the
 corpus, not noise, and it is why the corpus size is stated at the top.
+
+## What shaping the three worst tools did (TRA-952)
+
+The first three tools on that follow-up list have been reshaped, and the table
+above is the after. What each one was returning that nobody asked for:
+
+| tool | before | after | what came out |
+|---|---|---|---|
+| `list_projects` | 5,240 (10.48x) | **901 (1.80x)** | 98 subprojects, three absolute paths each. `call_project_tool` only accepts registered roots, so a subproject was never a valid next call. Now `include_subprojects`, default off. |
+| `get_call_graph` | 5,263 (3.51x) | **1,421 (0.95x)** | Both directions expanded at every level, so depth 2 answered "what else does my caller call" — 64 of 75 nodes. Each branch now keeps its own direction. |
+| `get_dead_code` | 4,819 (4.02x) | **2,725 (2.27x)** | 50 of 341 candidates in one page, for a list the caller verifies entry by entry. Default is 25; `total_dead` is unchanged, so nothing is hidden. |
+
+No response field was dropped and no schema changed: the subprojects list is
+still available on request, the call graph still reaches the same depth, and a
+deeper dead-code page is still one `limit` away.
+
+**And it moved the headline by 0.1 points.** Those three tools are 82 of 18,319
+recorded calls. The weighted figure is decided by `search_text`, `get_outline`
+and `search`, which are 78% of call volume between them — `search` at 1.54x and
+`get_outline` at 1.19x are now the whole of the negative block that matters.
+Worst-ratio-first was the right order for finding defects and the wrong one for
+moving the number; the next response-shaping issue should be `search`, on
+volume.
+
+`get_dead_code` is left at 2.27x on purpose. Its baseline is 1,200 tokens —
+"what a `Read`/`Grep` would have cost instead" for a whole-repo dead-code sweep
+over 3,412 exports, which is not a credible 1,200 tokens. Cutting the tool
+further would buy the ratio by answering less; the honest correction there is on
+the baseline half, which is still an estimate.
+
+### Three rows moved for reasons that are not this change
+
+`get_changed_symbols` (521 → 1,224), `find_usages` (1,122 → 975) and
+`search_text` (1,659 → 1,722) were not touched. `get_changed_symbols` reports the
+diff of whatever working tree it runs on, so the two runs asked it different
+questions and its row is not comparable between them at all. The other two track the corpus: the repo gained files and symbols between
+the two measurements. Same caveat as `get_outline` above, and the reason the
+per-tool ratios are the durable part of this page and the aggregate is not.
