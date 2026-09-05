@@ -43,10 +43,41 @@ export function hostToolLines(h: HostToolNames): string[] {
     `THE RULE (${h.rubric}):`,
     `- Full-file ${h.read} for discovery: not the move. Take \`get_outline\`, then pull the one symbol with \`get_symbol\`. Read the file directly only when you already have the outline and the span you want is a few lines — or the file is not code (.md/.json/.yaml/config), or you are about to edit it.`,
     `- ${h.grep} or ${h.glob} over source: not the move. \`search\` and \`find_usages\` resolve symbol kinds, imports, and call sites; a text scan cannot rank its hits and misses re-exports, aliases, and dynamic dispatch.`,
-    `- After every ${h.edit} → \`register_edit\` { file_path } (reindexes one file; far lighter than \`reindex\`). If the reply carries \`_duplication_warnings\`, review them before continuing.`,
+    `- After every ${h.edit} → \`register_edit\` { file_path } (reindexes just that file). If the reply carries \`_duplication_warnings\`, review them before continuing.`,
     `Use trace-mcp tools instead of ${h.read}/${h.grep}/${h.glob} for source code.`,
     `Use ${h.read}/${h.grep} only for non-code files (.md, .json, .yaml) or before ${h.edit}.`,
   ];
+}
+
+/**
+ * Is this tool on the surface this session actually advertises (TRA-929)?
+ *
+ * The block used to be preset-blind: it routed every session to the `full`
+ * catalog, so a default (`minimal`) install was told by name to call 26 tools
+ * missing from its own `tools/list`. The likely agent response to an unknown
+ * tool is the host's own `read`/`content-match` — the exact behaviour this
+ * block exists to prevent — and we paid for the lines that caused it on every
+ * connect. The predicate is `createToolFilter`'s, passed in by server.ts; the
+ * default keeps every line, for callers with no surface to declare (docs
+ * generation, the token-budget baseline).
+ */
+export type ToolOnSurface = (name: string) => boolean;
+
+/** A routing line and the tools it names — the line ships only if they all do. */
+interface RoutingLine {
+  tools: string[];
+  text: string;
+}
+
+/** Keep the lines whose tools are all on the surface. */
+function live(lines: RoutingLine[], onSurface: ToolOnSurface): string[] {
+  return lines.filter((l) => l.tools.every(onSurface)).map((l) => l.text);
+}
+
+/** A heading plus its lines, dropped whole when nothing under it survives. */
+function section(heading: string, lines: RoutingLine[], onSurface: ToolOnSurface): string[] {
+  const kept = live(lines, onSurface);
+  return kept.length ? [heading, ...kept, ''] : [];
 }
 
 /** Builds the MCP server instructions string based on verbosity level. */
@@ -54,6 +85,7 @@ export function buildInstructions(
   detectedFrameworks: string,
   verbosity: 'full' | 'minimal' | 'none',
   agentBehavior: 'strict' | 'minimal' | 'off' = 'off',
+  onSurface: ToolOnSurface = () => true,
 ): string {
   const behaviorBlock = buildBehaviorBlock(agentBehavior);
   const host = hostToolLines(HOST_TOOLS_GENERIC);
@@ -61,64 +93,199 @@ export function buildInstructions(
   if (verbosity === 'none') return behaviorBlock;
 
   if (verbosity === 'minimal') {
+    const keyTools = [
+      'search',
+      'get_outline',
+      'get_symbol',
+      'get_task_context',
+      'get_change_impact',
+      'find_usages',
+      'batch',
+    ].filter(onSurface);
     const core = [
       `trace-mcp: framework-aware code intelligence. Detected: ${detectedFrameworks}.`,
       host[4],
-      'Key tools: search, get_outline, get_symbol, get_task_context, get_change_impact, find_usages, batch.',
-      'Use batch for 2+ independent queries. Use get_task_context to start tasks.',
+      ...(keyTools.length ? [`Key tools: ${keyTools.join(', ')}.`] : []),
+      ...(onSurface('batch') ? ['Use batch for 2+ independent queries.'] : []),
+      ...(onSurface('get_task_context') ? ['Use get_task_context to start tasks.'] : []),
       host[5],
     ].join(' ');
     return behaviorBlock ? `${core}\n\n${behaviorBlock}` : core;
   }
 
+  const rule = live(
+    [
+      { tools: ['get_outline', 'get_symbol'], text: host[1] },
+      { tools: ['search', 'find_usages'], text: host[2] },
+    ],
+    onSurface,
+  );
+
+  const rationalizations = live(
+    [
+      {
+        tools: [],
+        text: '- "I already know the path, so one read is cheaper than a lookup." — knowing the path does not shrink the file. The lookup returns the symbol; the read returns everything around it.',
+      },
+      {
+        tools: [],
+        text: '- "The read tool\'s description says to use it when I know the file." — it was written for hosts without a symbol index. This project has one.',
+      },
+      {
+        tools: ['batch'],
+        text: '- "Three of these calls versus one built-in call." — what costs is tokens returned into context, not calls issued. `batch` sends up to 10 as one request.',
+      },
+      {
+        tools: ['get_symbol'],
+        text: '- "This is a quick check, not exploration." — a quick check on a 500-line file still costs 500 lines; `get_symbol` costs the symbol.',
+      },
+      {
+        tools: ['get_outline'],
+        text: '- "I read this file already, re-reading is free." — it is not; call `get_outline` for a structure reminder instead.',
+      },
+    ],
+    onSurface,
+  );
+
+  const routing = [
+    ...section(
+      'Navigation & search:',
+      [
+        {
+          tools: ['search'],
+          text: '- Find a function/class/method → `search` (add `fusion=true` for best ranking; `implements`/`extends` filter by interface)',
+        },
+        { tools: ['get_outline'], text: '- Understand a file before editing → `get_outline`' },
+        {
+          tools: ['get_symbol', 'get_context_bundle'],
+          text: "- Read one symbol's source → `get_symbol`; symbol + its imports → `get_context_bundle`",
+        },
+        {
+          tools: ['get_feature_context', 'get_task_context'],
+          text: '- Quick keyword context → `get_feature_context`; starting a task → `get_task_context`',
+        },
+      ],
+      onSurface,
+    ),
+    ...section(
+      'Relationships & impact:',
+      [
+        { tools: ['get_change_impact'], text: '- What breaks if I change X → `get_change_impact`' },
+        { tools: ['get_call_graph'], text: '- Who calls this / what it calls → `get_call_graph`' },
+        { tools: ['find_usages'], text: '- All usages of a symbol → `find_usages`' },
+        { tools: ['get_tests_for'], text: '- Tests for a symbol/file → `get_tests_for`' },
+      ],
+      onSurface,
+    ),
+    ...section(
+      'Architecture & meta-analysis:',
+      [
+        {
+          tools: ['get_implementations'],
+          text: '- Implementations of an interface → `get_implementations`',
+        },
+        {
+          tools: ['self_audit', 'get_untested_symbols'],
+          text: '- Health, dead exports, hotspots → `self_audit`; untested symbols → `get_untested_symbols`',
+        },
+        {
+          tools: ['get_dead_code'],
+          text: '- Dead code → `get_dead_code` (`mode: "exports_only"` for exports)',
+        },
+        {
+          tools: ['get_import_graph', 'get_module_graph', 'get_circular_imports', 'get_coupling'],
+          text: '- Imports → `get_import_graph` (`get_module_graph` on NestJS); cycles → `get_circular_imports`; coupling → `get_coupling`',
+        },
+      ],
+      onSurface,
+    ),
+    // Framework tools are registered only when their framework is detected, so
+    // the lines are worth their tokens only on a project that has one.
+    ...(detectedFrameworks === 'none'
+      ? []
+      : section(
+          'Framework-specific:',
+          [
+            { tools: ['get_request_flow'], text: '- HTTP route→controller → `get_request_flow`' },
+            {
+              tools: ['get_model_context', 'get_schema'],
+              text: '- DB models and schema → `get_model_context`, `get_schema`',
+            },
+            {
+              tools: ['get_component_tree'],
+              text: '- React/Vue/Angular components → `get_component_tree`',
+            },
+            {
+              tools: ['get_state_stores', 'get_event_graph'],
+              text: '- Stores and events → `get_state_stores`, `get_event_graph`',
+            },
+          ],
+          onSurface,
+        )),
+    ...section(
+      'Token optimization:',
+      [
+        {
+          tools: ['batch'],
+          text: '- 2+ independent queries → `batch` ({ calls: [{ tool, args }, ...] }), up to 10 per request',
+        },
+        {
+          tools: ['get_task_context'],
+          text: '- `get_task_context` replaces spawning a subagent to explore — same context, one call, inside a token budget',
+        },
+        {
+          tools: ['get_optimization_report', 'get_session_stats', 'get_real_savings'],
+          text: '- Check waste → `get_optimization_report`; track savings → `get_session_stats`, `get_real_savings`',
+        },
+      ],
+      onSurface,
+    ),
+    ...section(
+      'Editing:',
+      [
+        { tools: ['register_edit'], text: host[3] },
+        {
+          tools: ['check_duplication'],
+          text: '- Before writing a new function/class → `check_duplication` { name, kind }',
+        },
+        {
+          tools: [
+            'apply_rename',
+            'apply_move',
+            'change_signature',
+            'remove_dead_code',
+            'plan_refactoring',
+          ],
+          text: '- Rename → `apply_rename`; move a symbol or file → `apply_move`; change params → `change_signature`; delete → `remove_dead_code`. All dry-run by default: review, then re-call with `dry_run: false` (`confirm_large: true` past 20 files). Preview any of them with `plan_refactoring`.',
+        },
+        {
+          tools: ['apply_codemod'],
+          text: '- Same mechanical change 2+ times → `apply_codemod` { pattern, replacement, file_pattern }, not a run of edits.',
+        },
+      ],
+      onSurface,
+    ),
+  ];
+
   return [
     `trace-mcp is a framework-aware code intelligence server for this project. Detected frameworks: ${detectedFrameworks}.`,
     '',
-    host[0],
-    host[1],
-    host[2],
-    '',
-    'If you catch yourself thinking one of these, that is the signal to switch:',
-    '- "I already know the path, so one read is cheaper than a lookup." — knowing the path does not shrink the file. The lookup returns the symbol; the read returns everything around it.',
-    '- "The read tool\'s description says to use it when I know the file." — it was written for hosts without a symbol index. This project has one.',
-    '- "Three of these calls versus one built-in call." — what costs is tokens returned into context, not calls issued. `batch` sends up to 10 as one request.',
-    '- "This is a quick check, not exploration." — a quick check on a 500-line file still costs 500 lines; `get_symbol` costs the symbol.',
-    '- "I read this file already, re-reading is free." — it is not; call `get_outline` for a structure reminder instead.',
-    '',
+    ...(rule.length ? [host[0], ...rule, ''] : []),
+    ...(rationalizations.length
+      ? [
+          'If you catch yourself thinking one of these, that is the signal to switch:',
+          ...rationalizations,
+          '',
+        ]
+      : []),
     'WHEN TO USE trace-mcp tools (tool descriptions carry the details):',
     '',
-    'Navigation & search:',
-    '- Find a function/class/method → `search` (add `fusion=true` for best ranking; `implements`/`extends` filter by interface)',
-    '- Understand a file before editing → `get_outline`',
-    "- Read one symbol's source → `get_symbol`; symbol + its imports → `get_context_bundle`",
-    '- Quick keyword context → `get_feature_context`; starting a task → `get_task_context`',
-    '',
-    'Relationships & impact:',
-    '- What breaks if I change X → `get_change_impact`',
-    '- Who calls this / what it calls → `get_call_graph`',
-    '- All usages of a symbol → `find_usages`',
-    '- Tests for a symbol/file → `get_tests_for`',
-    '',
-    'Architecture & meta-analysis:',
-    '- Implementations of an interface → `get_implementations`',
-    '- Health, dead exports, hotspots → `self_audit`; untested symbols → `get_untested_symbols`',
-    '- Dead code → `get_dead_code` (`mode: "exports_only"` for exports)',
-    '- Imports → `get_import_graph` (`get_module_graph` on NestJS); cycles → `get_circular_imports`; coupling → `get_coupling`',
-    '',
-    'Framework-specific: `get_request_flow` (HTTP route→controller), `get_model_context` and `get_schema` (DB), `get_component_tree` (React/Vue/Angular), `get_state_stores`, `get_event_graph`.',
-    '',
-    'Token optimization:',
-    '- 2+ independent queries → `batch` ({ calls: [{ tool, args }, ...] }), up to 10 per request',
-    '- `get_task_context` replaces spawning a subagent to explore — same context, one call, inside a token budget',
-    '- Check waste → `get_optimization_report`; track savings → `get_session_stats`, `get_real_savings`',
-    '',
-    'Editing:',
-    host[3],
-    '- Before writing a new function/class → `check_duplication` { name, kind }',
-    '- Rename → `apply_rename`; move a symbol or file → `apply_move`; change params → `change_signature`; delete → `remove_dead_code`. All dry-run by default: review, then re-call with `dry_run: false` (`confirm_large: true` past 20 files). Preview any of them with `plan_refactoring`. `extract_function` is disabled.',
-    '- Same mechanical change 2+ times → `apply_codemod` { pattern, replacement, file_pattern }, not a run of edits.',
-    '',
-    'Start with `get_project_map` (summary_only=true) to orient yourself.',
+    ...routing,
+    // Said once, instead of naming every deferred tool as if it were live.
+    'Anything not listed above is deferred, not missing: `load_tools` registers a tool for direct calls, `batch` dispatches one by name without registering it.',
+    ...(onSurface('get_project_map')
+      ? ['Start with `get_project_map` (summary_only=true) to orient yourself.']
+      : []),
     ...(behaviorBlock ? ['', behaviorBlock] : []),
   ].join('\n');
 }
