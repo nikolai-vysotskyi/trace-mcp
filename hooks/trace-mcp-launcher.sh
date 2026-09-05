@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.3
+# trace-mcp-launcher v0.6.4
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -141,6 +141,33 @@ node_major() {
   v="${v%%.*}"
   is_bounded_major "$v" || return 1
   echo "$v"
+}
+
+# True unless $1 is one of our own `node-runtime` shims with a dangling target.
+#
+# The desktop app records `~/.trace/bin/node-runtime` as TRACE_MCP_NODE — a
+# bash script that execs the binary inside trace-mcp.app with
+# ELECTRON_RUN_AS_NODE (packages/app/src/main/daemon-install.ts). `[ -x ]` is
+# true for that script long after the .app it points at has been replaced by an
+# update, moved, or dragged to the Trash. So the fast path execs it, bash exits
+# 126, and the MCP client loses all ~170 tools for the rest of the session —
+# with no ERROR line anywhere, because from the shim's own side the exec
+# succeeded. Reproduced against a real Homebrew node and cli.js sitting unused
+# on the same disk (TRA-965).
+#
+# Reading the target costs one `sed` and one `test`, no process spawn, so the
+# fast path stays a pure file check. Only OUR shim shape is inspected;
+# anything else is assumed fine, since a real node binary cannot be checked
+# without running it.
+node_runtime_shim_ok() {
+  local target
+  # Marker anywhere in the header, not on a fixed line: the shim has gained
+  # comment lines before and may again, and a line-number match would silently
+  # stop recognising it — failing open, which is the bug this closes.
+  head -8 "$1" 2>/dev/null | grep -q '^# Managed by the trace-mcp app' || return 0
+  target=$(sed -n 's/^exec "\(.*\)" "\$@"$/\1/p' "$1" 2>/dev/null | tail -1)
+  [ -n "$target" ] || return 0
+  [ -x "$target" ]
 }
 
 # Resolve node from an nvm-layout tree ($1 = root, e.g. ~/.nvm or ~/Library/.../Herd/config/nvm).
@@ -454,6 +481,14 @@ heal_config() {
 # Only the NODE override exempts a run from the gate. Sharing one flag with
 # TRACE_MCP_CLI_OVERRIDE would let a CLI-only debugging override carry the
 # configured node past the check — the exact failure this gate exists to stop.
+if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ]; then
+  if ! node_runtime_shim_ok "$NODE_PATH"; then
+    log "ERROR: config node=$NODE_PATH is an app runtime shim whose target is gone (app updated, moved or removed) — reprobing"
+    NODE_PATH=""
+    NODE_MAJOR=""
+  fi
+fi
+
 if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ]; then
   if ! is_bounded_major "$NODE_MAJOR"; then
     NODE_MAJOR=$(node_major "$NODE_PATH") || NODE_MAJOR=0

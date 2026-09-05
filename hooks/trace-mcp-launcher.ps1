@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.3 (Windows)
+# trace-mcp-launcher v0.6.4 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -126,6 +126,40 @@ function Test-NodeBinary {
     return $true
 }
 
+# $true unless $Path is one of our own `node-runtime.cmd` shims whose target is
+# gone.
+#
+# The desktop app records `bin\node-runtime.cmd` as TRACE_MCP_NODE - a .cmd
+# that runs the app binary with ELECTRON_RUN_AS_NODE
+# (packages/app/src/main/daemon-install.ts). Test-NodeBinary is true for that
+# .cmd long after the app it points at has been replaced by an update,
+# moved or uninstalled, so the fast path runs it, cmd fails to start the
+# target, and the MCP client loses all ~170 tools for the rest of the session -
+# with no ERROR line, because from the .cmd's own side nothing went wrong
+# (TRA-965).
+#
+# Reading the target is one file read, so the fast path stays a pure file
+# check. Only OUR shim shape is inspected; a real node.exe is assumed fine,
+# since it cannot be checked without running it.
+function Test-RuntimeShim {
+    param([string]$Path)
+    try {
+        $head = Get-Content -LiteralPath $Path -TotalCount 8 -ErrorAction Stop
+    } catch {
+        return $true
+    }
+    # Marker anywhere in the header, not on a fixed line: the shim has gained
+    # comment lines before and may again, and a line-number match would
+    # silently stop recognising it - failing open, which is the bug this closes.
+    if (-not ($head | Where-Object { $_ -match '^rem Managed by the trace-mcp app' })) { return $true }
+    $target = $null
+    foreach ($line in $head) {
+        if ($line -match '^"(.+)" %\*\s*$') { $target = $Matches[1] }
+    }
+    if (-not $target) { return $true }
+    return (Test-Path -LiteralPath $target -PathType Leaf)
+}
+
 function Test-CliFile {
     param([string]$Path)
     if (-not $Path) { return $false }
@@ -199,6 +233,12 @@ function Get-NodeMajor {
 # Only the NODE override exempts a run from the gate. Sharing one flag with
 # TRACE_MCP_CLI_OVERRIDE would let a CLI-only debugging override carry the
 # configured node past the check - the exact failure this gate exists to stop.
+if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath) -and -not (Test-RuntimeShim $NodePath)) {
+    Write-LauncherLog "ERROR: config node=$NodePath is an app runtime shim whose target is gone (app updated, moved or removed) - reprobing"
+    $NodePath = ''
+    $NodeMajor = ''
+}
+
 if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath)) {
     $cached = Get-BoundedMajor $NodeMajor
     if ($null -eq $cached) {

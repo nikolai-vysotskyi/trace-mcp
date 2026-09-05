@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { runtimeShimContent } from '../../packages/app/src/main/daemon-install';
 import { sweepOrphanTmpFiles } from '../../src/utils/atomic-write.js';
 
 const LAUNCHER_SRC = path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.sh');
@@ -891,5 +892,97 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     } finally {
       fs.chmodSync(traceHome, 0o700);
     }
+  });
+});
+
+// TRA-965. The desktop app records `~/.trace/bin/node-runtime` as
+// TRACE_MCP_NODE — a bash script that execs the binary inside trace-mcp.app.
+// `[ -x ]` stays true for that script after the .app is replaced by an update,
+// moved, or removed, so the launcher took the fast path, exec'd it, and bash
+// exited 126. The client lost all ~170 tools for the session, and the daily
+// "zero ERROR lines in launcher.log" health check read clean, because from the
+// shim's own side the exec had succeeded.
+describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling target', () => {
+  /** The real generator, so the launcher's marker can never drift from it. */
+  function plantRuntimeShim(dir: string, execPath: string): string {
+    fs.mkdirSync(dir, { recursive: true });
+    const shim = path.join(dir, 'node-runtime');
+    fs.writeFileSync(shim, runtimeShimContent(execPath), { mode: 0o755 });
+    return shim;
+  }
+
+  function plantFallbackPrefix(home: string, traceHome: string): { cli: string } {
+    const prefix = path.join(home, 'fallback-prefix');
+    fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(prefix, 'bin', 'node'), fakeNodeBody('22.22.2'), { mode: 0o755 });
+    const dist = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+    fs.mkdirSync(dist, { recursive: true });
+    const cli = path.join(dist, 'cli.js');
+    fs.writeFileSync(cli, '// fallback cli\n');
+    fs.writeFileSync(
+      path.join(traceHome, 'pkg-roots'),
+      `${path.join(prefix, 'lib', 'node_modules')}\n`,
+    );
+    return { cli: fs.realpathSync(cli) };
+  }
+
+  it('reprobes onto a real node instead of exec-ing a shim whose app is gone', () => {
+    const { home, traceHome, cli } = setupFakeHome();
+    const shim = plantRuntimeShim(path.join(traceHome, 'bin'), path.join(home, 'gone.app', 'bin'));
+    plantFallbackPrefix(home, traceHome);
+    // Includes the cached major, so nothing on the fast path would have run
+    // `node -v` and noticed — the exact shape found on the reporting machine.
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [`TRACE_MCP_NODE="${shim}"`, `TRACE_MCP_CLI="${cli}"`, 'TRACE_MCP_NODE_MAJOR="24"', ''].join(
+        '\n',
+      ),
+    );
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    // Logged as an ERROR: a session that only survives because of the fallback
+    // must still be visible to the daily launcher.log audit.
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
+  });
+
+  it('leaves the fast path alone when the shim target still exists', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    const shim = plantRuntimeShim(path.join(traceHome, 'bin'), node);
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [`TRACE_MCP_NODE="${shim}"`, `TRACE_MCP_CLI="${cli}"`, 'TRACE_MCP_NODE_MAJOR="24"', ''].join(
+        '\n',
+      ),
+    );
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/exec\(config\)/);
+    expect(log).not.toMatch(/ERROR/);
+  });
+
+  // The check must never reject a real node binary: it cannot be verified
+  // without running it, and treating an unreadable one as broken would turn
+  // every healthy start into a probe.
+  it('does not treat a plain node binary as a shim', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [`TRACE_MCP_NODE="${node}"`, `TRACE_MCP_CLI="${cli}"`, 'TRACE_MCP_NODE_MAJOR="22"', ''].join(
+        '\n',
+      ),
+    );
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
 });
