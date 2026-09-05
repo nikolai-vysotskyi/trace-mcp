@@ -32,9 +32,14 @@ const jsonOut = arg('json', null);
 /** CPU time as reported by ps: [[dd-]hh:]mm:ss[.ff] → seconds. */
 function cpuSeconds(t) {
   const [head, frac = '0'] = t.split('.');
-  const parts = head.replace('-', ':').split(':').map(Number);
-  const secs = parts.reduce((acc, n) => acc * 60 + n, 0);
-  return secs + Number(`0.${frac}`);
+  // Days are separated by '-', not ':', and are worth 24 hours — folding them
+  // into the sexagesimal reduce would price a day at 60 hours.
+  const [days, clock] = head.includes('-') ? head.split('-') : ['0', head];
+  const secs = clock
+    .split(':')
+    .map(Number)
+    .reduce((acc, n) => acc * 60 + n, 0);
+  return Number(days) * 86400 + secs + Number(`0.${frac}`);
 }
 
 function sample() {
