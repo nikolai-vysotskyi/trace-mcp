@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.2 (Windows)
+# trace-mcp-launcher v0.6.3 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -374,8 +374,12 @@ function Find-Cli {
     # of the client's session.
     foreach ($r in $roots) {
         if (-not (Test-Path -LiteralPath $r -PathType Container)) { continue }
+        # Newest first: the suffix is the crashed updater's PID, so name order
+        # says nothing about which copy is more recent (TRA-881).
         $bak = Get-ChildItem -LiteralPath $r -Directory -ErrorAction SilentlyContinue |
                Where-Object { $_.Name -like 'trace-mcp.tmcp-bak-*' -or $_.Name -like '.trace-mcp-*' } |
+               Sort-Object @{ Expression = { if ($_.Name -like 'trace-mcp.tmcp-bak-*') { 0 } else { 1 } } },
+                           @{ Expression = 'LastWriteTime'; Descending = $true } |
                ForEach-Object { Join-Path $_.FullName 'dist\cli.js' } |
                Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
                Select-Object -First 1

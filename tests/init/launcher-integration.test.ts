@@ -252,6 +252,71 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       );
     });
 
+    // TRA-881: the backup fallback took whatever the glob listed first. The
+    // suffix is the updater's PID, so name order is arbitrary — two crashed
+    // updates could leave the client served an arbitrarily old build for the
+    // whole session. Newest by mtime is the only meaningful ordering.
+    it('prefers the newest backup when the swap window leaves several', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const root = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'lib', 'node_modules');
+      // '4242' sorts before '999' by name, so a first-match pick loses here.
+      for (const [name, body] of [
+        ['trace-mcp.tmcp-bak-4242', '// stale old version\n'],
+        ['trace-mcp.tmcp-bak-999', '// recent version\n'],
+      ]) {
+        fs.mkdirSync(path.join(root, name, 'dist'), { recursive: true });
+        fs.writeFileSync(path.join(root, name, 'dist', 'cli.js'), body);
+      }
+      const old = new Date(Date.now() - 60 * 60 * 1000);
+      fs.utimesSync(path.join(root, 'trace-mcp.tmcp-bak-4242'), old, old);
+      const newestCli = fs.realpathSync(
+        path.join(root, 'trace-mcp.tmcp-bak-999', 'dist', 'cli.js'),
+      );
+      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v22.22.2\n');
+      const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
+      fs.mkdirSync(nvmBin, { recursive: true });
+      fs.writeFileSync(path.join(nvmBin, 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+
+      writeConfig(traceHome, node, path.join(root, 'trace-mcp', 'dist', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${newestCli} serve`);
+    });
+
+    // npm rewrites its `.trace-mcp-<hex>` staging dir throughout the unpack, so
+    // its mtime is almost always the newest thing in the root — and a cli.js
+    // that exists there may still be mid-write. A complete backup wins even
+    // when it is older (TRA-881).
+    it('prefers a complete backup over npm\'s newer in-progress staging dir', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const root = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'lib', 'node_modules');
+      for (const name of ['trace-mcp.tmcp-bak-4242', '.trace-mcp-deadbeef']) {
+        fs.mkdirSync(path.join(root, name, 'dist'), { recursive: true });
+        fs.writeFileSync(path.join(root, name, 'dist', 'cli.js'), `// ${name}\n`);
+      }
+      const bakCli = fs.realpathSync(
+        path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist', 'cli.js'),
+      );
+      // Backdate the backup so a pure mtime sort would pick the staging dir.
+      const old = new Date(Date.now() - 60 * 60 * 1000);
+      fs.utimesSync(path.join(root, 'trace-mcp.tmcp-bak-4242'), old, old);
+      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v22.22.2\n');
+      const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
+      fs.mkdirSync(nvmBin, { recursive: true });
+      fs.writeFileSync(path.join(nvmBin, 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+
+      writeConfig(traceHome, node, path.join(root, 'trace-mcp', 'dist', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${bakCli} serve`);
+    });
+
     it.skipIf(process.platform === 'win32')('keeps the healed launcher.env at 0600', () => {
       const { home, traceHome, node } = setupFakeHome();
       plantNvmPackage(home);
