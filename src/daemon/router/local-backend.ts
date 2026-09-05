@@ -38,6 +38,9 @@ import type { ProjectRelay } from '../../server/types.js';
 import { seedSessionDbFromShared, sweepOrphanedSessionDbs } from './session-db.js';
 import type { Backend } from './types.js';
 
+/** Extract workers a fallback session runs — see the pool construction below. */
+const SESSION_EXTRACT_WORKERS = 2;
+
 const AI_COALESCE_WAIT_MS = 5_000;
 
 export interface LocalBackendOptions {
@@ -153,7 +156,10 @@ export class LocalBackend implements Backend {
       );
     }
 
-    // Build all full-mode resources up-front — cheap (~500ms) compared to indexing.
+    // Build all full-mode resources up-front. Measured at ~7 MB / ~21 ms for the
+    // whole stack (TRA-925, docs/perf/session-baseline.md) — the session's real
+    // baseline is module evaluation, which has already happened by this point,
+    // so deferring these constructors behind `readOnly` would buy nothing.
     this.db = initializeDatabase(this.dbPath);
     writeServerPid(this.db);
     this.store = new Store(this.db);
@@ -161,7 +167,14 @@ export class LocalBackend implements Backend {
     this.progress = new ProgressState(this.db);
     this.extractPool = new ExtractPool({
       keepAlive: true,
-      size: config.indexer?.workers,
+      // Half the daemon's pool. A fallback session indexes one project for one
+      // client, and its worker threads live inside its own RSS: measured on
+      // this repo (2 285 files), 4 workers peak at 836-881 MB / 20 threads
+      // against 630 MB / 13 threads at 2, for 4.3 s vs 6.2 s of indexing
+      // (TRA-925, docs/perf/session-baseline.md). During a daemon outage every
+      // client runs one of these, so ~205 MB per session buys more than 1.9 s
+      // of one-off indexing. The daemon, which indexes for everyone, keeps 4.
+      size: config.indexer?.workers ?? SESSION_EXTRACT_WORKERS,
     });
     // Daemon-style long-lived process: use the SQLite-backed task cache so
     // pass outputs persist on disk rather than accumulating in resident set.
