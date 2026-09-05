@@ -6,12 +6,17 @@
  * count. Peak RSS is sampled from `ps`, so it includes worker-thread heaps —
  * which is the whole point: worker threads live inside the session's RSS.
  *
- * Usage: WORKERS=4 tsx scripts/perf/session-index-cost.ts [root]
+ * Requires `pnpm run build` first: unbundled runs resolve no worker entry, and
+ * the pipeline then falls back to in-process extraction — which would make
+ * every worker count measure the same thing.
+ *
+ * Usage: pnpm run build && WORKERS=4 tsx scripts/perf/session-index-cost.ts [root]
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../../src/config.js';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
@@ -38,14 +43,22 @@ const db = initializeDatabase(path.join(dir, 'index.db'));
 const store = new Store(db);
 const registry = PluginRegistry.createWithDefaults();
 const progress = new ProgressState(db);
-const pool = new ExtractPool({ keepAlive: true, size: workers });
+const workerEntry = pathToFileURL(
+  path.resolve(import.meta.dirname, '../../dist/extract-worker.js'),
+);
+if (!fs.existsSync(workerEntry)) {
+  throw new Error(`no worker entry at ${workerEntry.pathname} — run \`pnpm run build\` first`);
+}
+const pool = new ExtractPool({ keepAlive: true, size: workers, workerEntry });
+if (!pool.available)
+  throw new Error('extract pool unavailable — would measure in-process extraction');
 const pipeline = new IndexingPipeline(store, registry, config, root, progress, {
   extractPool: pool,
   taskCache: new SqliteTaskCache(db),
 });
 
-let peak = 0;
-let peakThreads = 0;
+let peak = rssMB();
+let peakThreads = threads();
 const sampler = setInterval(() => {
   peak = Math.max(peak, rssMB());
   peakThreads = Math.max(peakThreads, threads());
@@ -56,6 +69,7 @@ await pipeline.indexAll();
 const ms = Math.round(performance.now() - t0);
 clearInterval(sampler);
 peak = Math.max(peak, rssMB());
+peakThreads = Math.max(peakThreads, threads());
 
 console.log(
   JSON.stringify({
@@ -70,4 +84,5 @@ console.log(
 );
 await pipeline.dispose();
 await pool.terminate();
+fs.rmSync(dir, { recursive: true, force: true });
 process.exit(0);
