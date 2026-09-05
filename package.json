@@ -27,6 +27,7 @@
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "bench:state-replay": "tsx scripts/state-trace-replay.ts",
+    "bench:index-throughput": "tsx scripts/bench-index-throughput.ts --json docs/perf/index-throughput.json",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
     "prepare": "simple-git-hooks",

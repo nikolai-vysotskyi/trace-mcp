@@ -16,7 +16,8 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 
 Related measurements in this directory: [idle cost](./idle-cost.md),
 [daemon idle memory](./daemon-idle-memory.md),
-[tool response token cost](./response-tokens.md).
+[tool response token cost](./response-tokens.md),
+[indexing throughput stage breakdown](./index-throughput.md).
 
 ## Preregistration — TRA-920
 
@@ -35,6 +36,7 @@ published figure has no preregistration or no build stamp.
 
 - [PR review context benchmark](./prereg-pr-context.md) — MET, retrospective.
 - [Tool response token cost](./prereg-response-tokens.md) — MISSED on coverage, retrospective.
+- [Indexing throughput stage breakdown](./prereg-index-throughput.md) — no bar (measurement-only, see the doc); worker-warmup-tax and edge-resolution-share predictions both held.
 
 The two above are labelled retrospective because they were written after their
 runs. An honest "this was not preregistered" is worth more than a backdated file
