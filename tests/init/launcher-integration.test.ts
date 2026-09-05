@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { sweepOrphanTmpFiles } from '../../src/utils/atomic-write.js';
 
 const LAUNCHER_SRC = path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.sh');
@@ -14,12 +14,32 @@ interface RunResult {
   stderr: string;
 }
 
+// TRA-959: the probe tests plant several candidate node installs and the launcher
+// execs `node -v` on each, so under full-suite worker contention this walk used to
+// blow a 5s budget and get SIGTERM'd — surfacing as `status: null` and an assertion
+// failure that read like a launcher bug. The budget is a hang guard, not a perf
+// assertion: keep it well clear of contention, and report a kill as a kill.
+const LAUNCHER_TIMEOUT_MS = 30_000;
+
+// Every test here shells out to the launcher, so the per-test budget has to clear
+// the spawn budget above — otherwise vitest's default 10s caps it back down.
+vi.setConfig({ testTimeout: LAUNCHER_TIMEOUT_MS + 5_000 });
+
+function assertNotKilled(result: { signal: NodeJS.Signals | null }, args: string[]) {
+  if (result.signal) {
+    throw new Error(
+      `launcher killed by ${result.signal} after ${LAUNCHER_TIMEOUT_MS}ms (args: ${args.join(' ')})`,
+    );
+  }
+}
+
 function runLauncher(env: Record<string, string>, args: string[] = ['serve']): RunResult {
   const result = spawnSync(LAUNCHER_SRC, args, {
     env: { ...env, PATH: '/usr/bin:/bin' }, // minimal PATH, no node visible
     encoding: 'utf-8',
-    timeout: 5000,
+    timeout: LAUNCHER_TIMEOUT_MS,
   });
+  assertNotKilled(result, args);
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
@@ -347,8 +367,9 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         const result = spawnSync(LAUNCHER_SRC, ['serve'], {
           env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: `${hostileBin}:/usr/bin:/bin` },
           encoding: 'utf-8',
-          timeout: 5000,
+          timeout: LAUNCHER_TIMEOUT_MS,
         });
+        assertNotKilled(result, ['serve']);
 
         expect(result.status).toBe(0);
         expect(fs.existsSync(sentinel)).toBe(false);
@@ -369,8 +390,9 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       const result = spawnSync(LAUNCHER_SRC, ['serve'], {
         env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: '/client/bin:/usr/bin:/bin' },
         encoding: 'utf-8',
-        timeout: 5000,
+        timeout: LAUNCHER_TIMEOUT_MS,
       });
+      assertNotKilled(result, ['serve']);
 
       expect(result.stdout.trim()).toBe('NODE_PATH_ENV:/client/bin:/usr/bin:/bin');
     });
