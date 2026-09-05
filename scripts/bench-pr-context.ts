@@ -38,6 +38,7 @@ import { initializeDatabase } from '../src/db/schema.js';
 import { Store } from '../src/db/store.js';
 import { IndexingPipeline } from '../src/indexer/pipeline.js';
 import { PluginRegistry } from '../src/plugin-api/registry.js';
+import { measuredBuild } from './measured-build.js';
 import { getChangeImpact } from '../src/tools/analysis/impact.js';
 import { getContextBundle } from '../src/tools/navigation/context-bundle.js';
 import { getChangedSymbols } from '../src/tools/quality/changed-symbols.js';
@@ -532,6 +533,8 @@ async function run(limit?: number): Promise<void> {
 
   const results = {
     generated_at: new Date().toISOString(),
+    // TRA-920: the build this ran at travels with the number to every surface.
+    measured_build: measuredBuild(),
     model_for_pricing: MODEL_NAME,
     input_usd_per_mtok: INPUT_USD_PER_MTOK,
     context_window: CONTEXT_WINDOW,
@@ -571,6 +574,7 @@ async function run(limit?: number): Promise<void> {
     `${JSON.stringify(
       {
         generated_at: results.generated_at,
+        measured_build: results.measured_build,
         pr_count: results.pr_count,
         repo_count: new Set(rows.map((r) => r.repo)).size,
         skipped_count: skipped.length,

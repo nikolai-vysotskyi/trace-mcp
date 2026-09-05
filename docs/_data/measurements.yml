@@ -1,0 +1,28 @@
+# Every measurement whose numbers appear on a public surface — TRA-920.
+#
+# One entry per published figure. `tests/docs/savings-claims.test.ts` drives off
+# this file: each entry's data file must carry a `measured_build` stamp, each
+# must have a preregistration under docs/perf/, and each surface that prints the
+# figure must print the build and date it was measured at.
+#
+# `historical: true` is the honest answer when a figure's build is more than
+# STALE_AFTER_MINORS releases behind the current release: the number stays
+# published, but every surface presents it as a result from a named date rather
+# than as a claim about the code someone is installing today. Clear the flag by
+# re-measuring, not by editing this line.
+
+pr_context:
+  title: PR review context benchmark
+  figure: median input tokens to assemble review context for a merged pull request
+  data: docs/_data/pr_context_bench.json
+  prereg: docs/perf/prereg-pr-context.md
+  page: /pr-context-benchmark.html
+  historical: true # measured at 3.9.0, published from 3.17.1 — re-measure to clear
+
+response_tokens:
+  title: Tool response token cost
+  figure: net token reduction of real tool responses against an estimated file-reading baseline
+  data: docs/_data/response_tokens.json
+  prereg: docs/perf/prereg-response-tokens.md
+  page: /perf/response-tokens/
+  historical: false

@@ -157,6 +157,8 @@ Until that date this site and the README claimed **~40–50% fewer tokens on ave
 
 The figure we publish in its place is **{{ site.data.response_tokens.reduction_pct }}%**, over {{ site.data.response_tokens.calls_weighted }} recorded calls of twelve tools, with each tool's response counted in `o200k_base` tokens on the wire. Read the caveats before quoting it:
 
+Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }} (`{{ site.data.response_tokens.measured_build.commit }}`)** on {{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}. Its [preregistration](/perf/prereg-response-tokens/) publishes it as a **miss** — the reduction clears the bar, the call-volume coverage does not.
+
 - **The measured half is the response. The baseline half is still an estimate.** "What a `Read`/`Grep` would have cost instead" is hand-written in `RAW_COST_ESTIMATES` and has never been validated. Until it is, this is a measured numerator over an estimated denominator.
 - **One machine's usage mix**, not the field — the call weighting comes from a single maintainer store (`benchmarks/response-tokens/call-volume.json`, with provenance).
 - **{{ site.data.response_tokens.tools_costing_more }} of the {{ site.data.response_tokens.tools_measured }} tools measured return *more* tokens than the baseline they replace** — `search`, `find_usages`, `get_complexity_report` and `get_call_graph`. The old counter booked a positive number for them anyway. The per-tool table is published in full: [tool response token cost](/perf/response-tokens/).

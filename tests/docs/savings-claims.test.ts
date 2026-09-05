@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { MIN_DAYS_FOR_TRIM } from '../../scripts/ga4-savings.mjs';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
@@ -298,4 +299,159 @@ describe('aggregate savings claims (TRA-904)', () => {
     ).toBe(read(RESPONSE_DATA));
     fs.rmSync(out, { force: true });
   }, 60_000);
+});
+
+/**
+ * Preregistration and version stamps — TRA-920.
+ *
+ * TRA-904 made an unsourced figure fail CI. Two holes stayed open behind it.
+ *
+ * Nothing was declared before a measurement ran, so a number produced after the
+ * fact can always be read as a number that was shaped until it looked good —
+ * and TRA-880 showed that failure mode is not hypothetical here. And no
+ * published figure carried the build it was measured at, so a correct number
+ * decays silently into a claim about code nobody is running.
+ *
+ * `docs/_data/measurements.yml` is the registry of every figure on a public
+ * surface. For each entry this test demands a build stamp in the generated data,
+ * a preregistration with a verdict, and — on the surfaces that print the figure
+ * as a headline — the build and date rendered next to it.
+ */
+describe('preregistration and version stamps (TRA-920)', () => {
+  type Entry = {
+    title: string;
+    data: string;
+    prereg: string;
+    historical: boolean;
+  };
+  const REGISTRY = 'docs/_data/measurements.yml';
+  const measurements = Object.entries(parseYaml(read(REGISTRY)) as Record<string, Entry>);
+
+  /**
+   * How far a measurement may fall behind the shipped release before it stops
+   * being a current claim. Six is roughly a month at our cadence. A stale figure
+   * is not deleted — it is marked `historical: true` and every surface dates it.
+   * Clear that flag by re-measuring, never by raising this number.
+   */
+  const STALE_AFTER_MINORS = 6;
+
+  /** `---\n...\n---` at the top of a Jekyll page. */
+  const frontMatter = (file: string) =>
+    parseYaml(read(file).match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '') as Record<string, unknown>;
+
+  it('registers at least the two figures on the storefront', () => {
+    expect(measurements.map(([key]) => key).sort()).toEqual(['pr_context', 'response_tokens']);
+  });
+
+  it.each(measurements)('%s carries the build it was measured at', (_key, entry) => {
+    const data = JSON.parse(read(entry.data)) as {
+      measured_build?: { version?: string; commit?: string };
+      measured_at?: string;
+      generated_at?: string;
+    };
+    const build = data.measured_build;
+    expect(
+      build,
+      `${entry.data} has no measured_build. Benchmark scripts stamp it via ` +
+        'scripts/measured-build.ts; a figure without one cannot be told from a stale one.',
+    ).toBeDefined();
+    expect(build?.version, `${entry.data}: measured_build.version`).toMatch(/^\d+\.\d+\.\d+/);
+    expect(build?.commit, `${entry.data}: measured_build.commit`).toMatch(/^[0-9a-f]{7,40}$/);
+    expect(data.measured_at ?? data.generated_at, `${entry.data} has no measurement date`).toMatch(
+      /^\d{4}-\d{2}-\d{2}/,
+    );
+  });
+
+  it.each(measurements)('%s has a preregistration with a verdict', (key, entry) => {
+    const fm = frontMatter(entry.prereg);
+    expect(fm.measurement, `${entry.prereg}: front matter should name its measurement`).toBe(key);
+    expect(fm.data_file, `${entry.prereg}: front matter should name its data file`).toBe(
+      entry.data,
+    );
+    // A missed bar is a publishable outcome — that is the whole point. What is
+    // not publishable is a result with no bar to miss.
+    expect(['MET', 'MISSED', 'NOT-RUN'], `${entry.prereg}: verdict`).toContain(fm.verdict);
+    expect(
+      ['yes', 'retrospective'],
+      `${entry.prereg}: say whether this was preregistered or written afterwards`,
+    ).toContain(fm.preregistration);
+
+    const body = read(entry.prereg);
+    for (const section of [
+      '## Question',
+      '## Metric',
+      '## Corpus',
+      '## Pass bar',
+      '## Prediction',
+    ]) {
+      expect(body, `${entry.prereg} is missing ${section}`).toContain(section);
+    }
+    expect(body, `${entry.prereg} must state its control condition, or that it has none`).toMatch(
+      /## Control/,
+    );
+    // Retrospective means retrospective on the page too, not only in front matter.
+    if (fm.preregistration === 'retrospective') {
+      expect(
+        body,
+        `${entry.prereg} is labelled retrospective in front matter but not on the page`,
+      ).toMatch(/retrospective/i);
+    }
+  });
+
+  it.each(measurements)('%s is dated as historical once it falls behind', (_key, entry) => {
+    const release = JSON.parse(read('docs/_data/release.json')) as { version: string };
+    const minor = (v: string) => Number(v.split('.')[1]);
+    const behind =
+      minor(release.version) -
+      minor(
+        (JSON.parse(read(entry.data)) as { measured_build: { version: string } }).measured_build
+          .version,
+      );
+    if (behind <= STALE_AFTER_MINORS) return;
+    expect(
+      entry.historical,
+      `${entry.data} was measured ${behind} minor releases before ${release.version}. ` +
+        `Re-measure, or set \`historical: true\` in ${REGISTRY} so every surface presents it ` +
+        'as a dated result rather than a current claim. Do not raise STALE_AFTER_MINORS.',
+    ).toBe(true);
+  });
+
+  /**
+   * The surfaces that print a figure as a headline. Deliberately not every page
+   * that mentions a number in passing — a stamp on the FAQ answers would be
+   * noise, and the pages here are the ones a stranger reads the figure off.
+   */
+  const STAMPED: [string, string[]][] = [
+    [
+      'docs/index.html',
+      ['site.data.pr_context_bench.measured_build', 'site.data.response_tokens.measured_build'],
+    ],
+    ['docs/pr-context-benchmark.md', ['site.data.pr_context_bench.measured_build']],
+    ['docs/reduce-claude-code-token-usage.md', ['site.data.response_tokens.measured_build']],
+  ];
+
+  it.each(STAMPED)('%s renders the build next to the figure', (file, needles) => {
+    const src = read(file);
+    for (const needle of needles) {
+      expect(
+        src.includes(`${needle}.version`) && src.includes(`${needle}.commit`),
+        `${file} should render {{ ${needle}.version }} and .commit next to the figure — TRA-920.`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps the README stamps in step with the data files', () => {
+    // Same bargain as the literals above: Jekyll never renders README.md.
+    const readme = read('README.md');
+    for (const [, entry] of measurements) {
+      const { measured_build: build } = JSON.parse(read(entry.data)) as {
+        measured_build: { version: string; commit: string };
+      };
+      expect(
+        readme.includes(`trace-mcp ${build.version} (\`${build.commit}\`)`),
+        `README.md should state "trace-mcp ${build.version} (\`${build.commit}\`)" beside the ` +
+          `${entry.title} figure — re-measure or update the literal. TRA-920.`,
+      ).toBe(true);
+    }
+  });
 });
