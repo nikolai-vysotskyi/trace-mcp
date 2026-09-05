@@ -652,8 +652,9 @@ is the one that only matches us. Both quotas are the search quota, 10 req/min.
 **What it found: [`axisrow/trace-mcp-plugin`](https://github.com/axisrow/trace-mcp-plugin)**
 — a third-party Claude Code plugin that installs and configures trace-mcp
 per project (created 2026-08-01, 0★, last pushed 2026-08-04). Its author is
-`axisrow`, who also filed our issues #277, #282 and #297. Two of its three
-issues are reports about **trace-mcp**, filed in his tracker and never in ours:
+`axisrow`, who also filed our issues #277, #282 and #297. Two of its six issues
+are reports about **trace-mcp**, filed in his tracker and never in ours (the
+other four are about the plugin itself and are closed):
 
 - [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (2026-08-03) —
   auto-registration: `local` scope silently becomes global, measured as 9 project
@@ -681,7 +682,10 @@ analyser, last touched nine months ago). A directory query for our name can land
 on him. That is a fact about the name, not a reason to reopen it —
 `ops/rename-to-trace.md` and TRA-879 already settled that nothing public changes.
 
-**Inbound to our own tracker over the same period: nothing.** No external issue
-since 2026-08-19 (#334, verbose output), no external pull request ever, and the
-four most recent external issues before that were directory invitations, not
-usage. Read with the above, that is not the same as no users.
+**Inbound to our own tracker over the same period, for comparison.** The last
+external *bug report* is #334 (2026-08-19, verbose output by default); since then
+the tracker has had two framework-support requests (#381, #382 — `drguptavivek`,
+2026-08-27) and one directory invitation (#536, 2026-08-29), and no pull request
+from a human outside the project, ever. Two behavioural reports landed in
+somebody else's tracker in the same window. Read together, a quiet tracker is not
+the same as a quiet user base — it is a statement about where reports go.
