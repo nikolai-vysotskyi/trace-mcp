@@ -37,7 +37,13 @@ const PLIST_LABEL = 'com.trace-mcp.server';
 // v4: ExitTimeOut — launchd's default 5s is shorter than a graceful shutdown
 // that closes every project DB, so launchd SIGKILLed the daemon mid-cleanup
 // (LastExitStatus=9) and the buffered "Daemon shutting down" line died with it.
-const PLIST_VERSION = 4;
+// v5 (TRA-938): SoftResourceLimits/NumberOfFiles — launchd's default 256-fd
+// soft limit left no headroom once a handful of projects were loaded, so
+// accept() started failing with EMFILE (surfaced to users as "the daemon was
+// installed but never answered"). The daemon-wide store sharing fix
+// (ProjectResourcePool) removes the per-project multiplier; this raises the
+// ceiling as defense in depth, not the fix itself.
+const PLIST_VERSION = 5;
 /**
  * Seconds launchd waits after SIGTERM before escalating to SIGKILL. Graceful
  * shutdown closes DBs, tears down watchers and flushes indexes for every
@@ -48,6 +54,14 @@ const PLIST_VERSION = 4;
  * tests/scripts/postinstall-control-plane.test.ts.
  */
 const PLIST_EXIT_TIMEOUT_SEC = 30;
+/**
+ * Open-file ceiling for the daemon process (both soft and hard). launchd's
+ * own default is 256 — comfortably below what a daemon holding a handful of
+ * registered projects needs (each project's index DB is 3 fds, plus sockets,
+ * logs, and the daemon-wide shared stores). Well under macOS's per-process
+ * kern.maxfilesperproc ceiling (10240 by default), so no root/sudo required.
+ */
+const PLIST_MAX_FILES = 4096;
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
@@ -186,6 +200,16 @@ function generatePlist(binaryPath: string, port: number): string {
   <integer>5</integer>
   <key>ExitTimeOut</key>
   <integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>${PLIST_MAX_FILES}</integer>
+  </dict>
   <key>StandardOutPath</key>
   <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
