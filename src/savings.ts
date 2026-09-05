@@ -150,6 +150,28 @@ export class SavingsTracker {
     };
   }
 
+  /**
+   * Correct a just-recorded call with the actual token cost of its response.
+   *
+   * {@link recordCall} has to run before the tool does, so it scores the call
+   * against {@link COMPRESSION_RATIO} — a guess. This replaces that guess with
+   * the measured response size once it exists. Without it every "tokens saved"
+   * number is `calls x constant` and carries no measurement (TRA-880: the guess
+   * is 2.5-10x off on the tools that dominate real call volume, and four of the
+   * twelve busiest return MORE tokens than their assumed raw baseline).
+   */
+  recordActualTokens(toolName: string, actualTokens: number): void {
+    const rec = this.session.per_tool[toolName];
+    if (!rec || !Number.isFinite(actualTokens) || actualTokens < 0) return;
+    const rawCost = RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;
+    const assumed = Math.round(rawCost * COMPRESSION_RATIO);
+    const deltaActual = actualTokens - assumed;
+    const deltaSaved = Math.max(0, rawCost - actualTokens) - Math.max(0, rawCost - assumed);
+    this.session.total_actual_tokens += deltaActual;
+    this.session.total_tokens_saved += deltaSaved;
+    rec.tokens_saved += deltaSaved;
+  }
+
   /** Record a tool call with an optional actual response token count */
   recordCall(toolName: string, actualTokens?: number): void {
     const rawCost = RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;

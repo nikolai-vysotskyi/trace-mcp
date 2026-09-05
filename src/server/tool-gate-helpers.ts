@@ -324,7 +324,9 @@ async function handleDuplicate(
     };
     ctx.stripMetaFields(dedupResponse);
     ctx.journal.record(ctx.name, params, (dupInfo.compact_result._result_count as number) ?? 1);
-    return { content: [{ type: 'text', text: ctx.j(dedupResponse) }] };
+    const dedupText = ctx.j(dedupResponse);
+    ctx.savings.recordActualTokens(ctx.name, Math.ceil(dedupText.length / 4));
+    return { content: [{ type: 'text', text: dedupText }] };
   }
 
   // Warn-only path: run the tool, annotate the response with the dup warning.
@@ -339,10 +341,14 @@ async function handleDuplicate(
     });
   }
   const count = ctx.extractResultCount(result);
+  const warnTokens = result?.content?.[0]?.text?.length
+    ? Math.ceil(result.content[0].text.length / 4)
+    : undefined;
+  if (warnTokens !== undefined) ctx.savings.recordActualTokens(ctx.name, warnTokens);
   ctx.journal.record(ctx.name, params, count);
   emitJournalEntry(ctx, {
     count,
-    resultTokens: undefined,
+    resultTokens: warnTokens,
     latencyMs: warnLatency,
     isError: !!result?.isError,
   });
@@ -460,6 +466,7 @@ export function createGatedCallback(
     const resultTokens = resultObj?.content?.[0]?.text?.length
       ? Math.ceil(resultObj.content[0].text.length / 4)
       : undefined;
+    if (resultTokens !== undefined) ctx.savings.recordActualTokens(ctx.name, resultTokens);
     ctx.journal.record(ctx.name, params, count, { compactResult, resultTokens });
     emitJournalEntry(ctx, {
       count,

@@ -22,6 +22,7 @@ function makeMockConfig() {
 function makeMockSavings() {
   return {
     recordCall: vi.fn(),
+    recordActualTokens: vi.fn(),
     getSessionStats: () => ({ total_calls: 0, total_raw_tokens: 0 }),
     getFullStats: () => ({}),
   } as any;
