@@ -166,6 +166,8 @@ See [Analytics](analytics.md) for full documentation.
 | `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
 | `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
 | `get_startup_context_audit` | What every session pays for before the first message, by source, what it costs, what the logs prove went unused, and where it says the same thing twice |
+| `apply_startup_recommendations` | Apply (or preview) a `get_startup_context_audit` recommendation, backed up first |
+| `rollback_startup_recommendations` | Undo one `apply_startup_recommendations` call, byte-for-byte, in one action |
 | `get_usage_trends` | Daily token usage trends over time |
 | `get_session_stats` | Real-time token savings for the current session |
 | `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |
@@ -373,6 +375,7 @@ which excludes the framework-specific rows.
 | `apply_codemod` | Structural (AST-aware) or regex find-and-replace across files. | always |
 | `apply_move` | Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. | always |
 | `apply_rename` | Rename a symbol across all usages (definition + all importing files). | always |
+| `apply_startup_recommendations` | Apply or preview a get_startup_context_audit recommendation: disable an unused MCP server, move an unused skill aside, or delete duplicated instruction lines. | always |
 | `approve_decision` | Approve a decision currently in the memoir-style review queue (review_status="pending"). | always |
 | `assess_change_risk` | Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. | always |
 | `audit_config` | Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
@@ -456,7 +459,7 @@ which excludes the framework-specific rows.
 | `get_health_trends` | Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. | always |
 | `get_implementations` | Find all classes that implement or extend a given interface or base class. | always |
 | `get_import_graph` | Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). | always |
-| `get_index_health` | Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). | always |
+| `get_index_health` | Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). | always |
 | `get_livewire_context` | Get full context for a Livewire component: properties, actions, events, view, child components. | framework |
 | `get_middleware_chain` | Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask). | framework |
 | `get_minimal_context` | Single-call orientation context (~150 tokens). | always |
@@ -488,7 +491,7 @@ which excludes the framework-specific rows.
 | `get_session_journal` | Session history: all tool calls made, files read, zero-result searches, and duplicate queries. | always |
 | `get_session_snapshot` | Compact session snapshot (~200 tokens) for context recovery after compaction. | always |
 | `get_session_stats` | Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/e… | always |
-| `get_startup_context_audit` | What every session pays for before your first message, what it costs, and what went unused. | always |
+| `get_startup_context_audit` | What every session pays before your first message, what it costs, and what went unused: source decomposition, cache-rebuild prices, and removals proven unuse… | always |
 | `get_state_stores` | List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites. | framework |
 | `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint. | opt-in |
 | `get_subproject_graph` | Show all subprojects and their cross-repo connections. | opt-in |
@@ -533,6 +536,7 @@ which excludes the framework-specific rows.
 | `remember_decision` | Live agent write into the decision knowledge graph. | always |
 | `remove_dead_code` | Safely remove a dead symbol from its file. | always |
 | `repair_index` | Apply a targeted repair to the local SQLite index. | always |
+| `rollback_startup_recommendations` | Undo one apply_startup_recommendations(dry_run:false) call byte-for-byte: restores files and moved skills. | always |
 | `scan_code_smells` | Find deferred work and shortcuts: TODO/FIXME/HACK/XXX comments, empty functions & stubs, hardcoded values (IPs, URLs, credentials, magic numbers), and per-la… | always |
 | `scan_security` | Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. | always |
 | `search` | Search symbols by name, kind, or text. | always |
@@ -1943,6 +1947,19 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 
+> **When the embedding endpoint is unreachable:** background embedding trips a
+> circuit breaker after 2 consecutive failed batches and then pauses for 10
+> minutes. The pause is stored in the project DB, so it survives a daemon
+> restart instead of re-attempting the whole backlog on every start. While it is
+> open, `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
+> and adds a warning — semantic and hybrid search results are incomplete until
+> the provider is reachable. `embed_repo` ignores the pause and retries
+> immediately.
+
+> **`ai.enabled` takes effect per project start.** A project already open in the
+> daemon keeps the config it was started with, so flipping `ai.enabled` off stops
+> embedding for that project only after it restarts.
+
 > **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
 
 > **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
@@ -2038,7 +2055,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (32 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (34 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -3516,7 +3533,36 @@ Text it does not own is never edited — a third party's skill descriptions, ano
 
 Measured payload on real projects: 200–1400 tokens, with the diff capped at 200 lines; every removal is listed in `removals` regardless.
 
-Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
+Applying a `textCompression` proposal — with a backup and one-action rollback — is separate work; this only shows you the diff. (`recommendations[]`, below, is a different payload field and does have an apply path.)
+
+### `apply_startup_recommendations` / `rollback_startup_recommendations`
+
+The apply half of `recommendations[]` (TRA-769). Every recommendation kind maps to configuration the user could edit themselves:
+
+| `kind` | What applying it does |
+|---|---|
+| `unusedMcpServer` | Removes the server's entry from `mcpServers` in `~/.claude/settings.json`, `~/.claude.json`, or the project's `.mcp.json` — whichever actually has it |
+| `unusedSkill` | Moves the skill's directory out of `~/.claude/skills` (or the project's `.claude/skills`) into a `.trace-mcp-disabled-skills` sibling of `skills/`, so it stops being discovered |
+| `duplicateInstructions` | Deletes the lines the project instruction file shares with the global one, leaving the global file untouched |
+
+A plugin-namespaced skill (its name contains `:`) is always skipped — one unused skill is not evidence for disabling the plugin that ships it.
+
+```
+apply_startup_recommendations({
+  requests: [{ kind: "unusedMcpServer", target: "idle-server" }],
+  dry_run?: boolean, // default true
+})
+```
+
+`requests` takes the recommendation's own `kind` and `target` verbatim — one entry per recommendation you want acted on, never "apply all". With `dry_run` at its default (`true`), nothing is written: each outcome reports `status: "wouldApply"` or `"skipped"` (with why), and `duplicateInstructions` includes the same kind of deletion-only diff `textCompression` uses, plus the token count it would remove. Pass `dry_run: false` to actually write — every file is backed up before it's touched, bundled into one backup per call.
+
+```
+rollback_startup_recommendations({ backup_id?: string })
+```
+
+Restores everything one `apply_startup_recommendations(dry_run: false)` call wrote, byte-for-byte, in a single action: files go back to their exact prior bytes, moved skill directories move back. Defaults to the most recent backup. Backups live under `~/.trace/startup-backups/`, one directory per apply call, and are never deleted automatically — rolling back twice is a safe no-op, not a second undo.
+
+Re-run `get_startup_context_audit` afterward to see the new size rather than trusting the delta.
 
 ### `get_coverage_report`
 

@@ -36,6 +36,25 @@ function isEventsDroppedError(err: unknown): boolean {
   return typeof msg === 'string' && msg.toLowerCase().includes('events were dropped');
 }
 
+/**
+ * Process-wide tally of drop reports and the reconcile passes they triggered.
+ * Reported by `get_index_health` so a session can tell "the OS never dropped
+ * anything" from "it dropped events and the repair did/didn't run" — a
+ * distinction that otherwise only exists in the daemon log, which the agent
+ * asking the question cannot read (TRA-813).
+ */
+const droppedEventStats = { drops: 0, reconciles: 0 };
+
+export function getDroppedEventStats(): { drops: number; reconciles: number } {
+  return { ...droppedEventStats };
+}
+
+/** Test-only reset — the tally is module state shared by every watcher. */
+export function resetDroppedEventStats(): void {
+  droppedEventStats.drops = 0;
+  droppedEventStats.reconciles = 0;
+}
+
 function isMacSystemPolicyError(e: unknown): boolean {
   if (process.platform !== 'darwin') return false;
   const err = e as NodeJS.ErrnoException & { message?: string };
@@ -138,6 +157,34 @@ export class FileWatcher {
    * settled state left by the previous call.
    */
   private opQueue: Promise<void> = Promise.resolve();
+  /**
+   * Handler runs currently executing. Unsubscribing stops future events and
+   * clearing the debounce timer stops a scheduled run, but neither touches a
+   * run whose timer has already fired — that one is mid-`onChanges`/`onDeletes`,
+   * indexing into a Store the caller is about to close (TRA-834). `stop()` awaits these
+   * so "the watcher is stopped" means no handler is still running.
+   *
+   * A set, not a single reference: nothing serializes handlers, so a second
+   * burst can fire while the first is still indexing. With one slot the second
+   * run overwrites the first and, if it finishes quickly, clears the slot —
+   * `stop()` would then return while the first is still writing.
+   */
+  private readonly activeHandlers = new Set<Promise<void>>();
+
+  /**
+   * Register an already-started handler run so `stop()` waits it out. The
+   * tracked copy swallows errors so `stop()`'s `Promise.all` can only wait,
+   * never throw; the caller still sees the original rejection.
+   */
+  private track(run: Promise<void>): Promise<void> {
+    const tracked: Promise<void> = run
+      .catch(() => {})
+      .finally(() => {
+        this.activeHandlers.delete(tracked);
+      });
+    this.activeHandlers.add(tracked);
+    return run;
+  }
 
   constructor(
     private readonly _setTimeout: typeof setTimeout = setTimeout,
@@ -215,6 +262,7 @@ export class FileWatcher {
       async (err, events) => {
         if (err) {
           if (isEventsDroppedError(err)) {
+            droppedEventStats.drops++;
             // Don't just log: the events are gone, so nothing else will ever
             // reindex what changed in the lost window (TRA-852).
             logger.warn(
@@ -249,7 +297,7 @@ export class FileWatcher {
 
         if (deleted.length > 0 && onDeletes) {
           logger.debug({ count: deleted.length }, 'File deletions detected');
-          await onDeletes(deleted);
+          await this.track(onDeletes(deleted));
         }
 
         if (changed.length === 0) return;
@@ -258,16 +306,20 @@ export class FileWatcher {
         for (const p of changed) this.pendingPaths.add(p);
 
         if (this.debounceTimer) this._clearTimeout(this.debounceTimer);
-        this.debounceTimer = this._setTimeout(async () => {
+        this.debounceTimer = this._setTimeout(() => {
           const paths = Array.from(this.pendingPaths);
           this.pendingPaths.clear();
           this.debounceTimer = null;
           logger.debug({ count: paths.length }, 'File changes detected');
-          try {
-            await onChanges(paths);
-          } catch (e) {
-            logger.error({ error: e }, 'File change handler failed');
-          }
+          void this.track(
+            (async () => {
+              try {
+                await onChanges(paths);
+              } catch (e) {
+                logger.error({ error: e }, 'File change handler failed');
+              }
+            })(),
+          );
         }, debounceMs);
       },
       {
@@ -298,6 +350,7 @@ export class FileWatcher {
       this.rescanPending = true;
       return;
     }
+    droppedEventStats.reconciles++;
     this.activeRescan = onRescan()
       .catch((e) => {
         logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');
@@ -368,5 +421,10 @@ export class FileWatcher {
     // pass rather than letting it resume against a closed DB.
     this.rescanPending = false;
     if (this.activeRescan) await this.activeRescan;
+    // Same for every handler whose debounce timer had already fired before we got
+    // here. Without this the caller closes the DB out from under a running
+    // indexing pass (TRA-834). Each run swallows its own errors, so this can
+    // only wait, never throw.
+    await Promise.all(this.activeHandlers);
   }
 }

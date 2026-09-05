@@ -2,25 +2,30 @@
  * Consultation markers — bridge between trace-mcp server and guard hook.
  *
  * When a trace-mcp tool accesses a file (get_outline, get_symbol, etc.),
- * a marker is written to /tmp/trace-mcp-consulted-{projectHash}/{fileHash}.
+ * a marker is written to trace-mcp-consulted-{projectHash}/{fileHash}.
  * The PreToolUse guard hook checks these markers: if a file has been
  * "consulted" via trace-mcp, Read is allowed immediately without denial.
  *
- * Markers are ephemeral (tmpdir) and scoped per project.
+ * Markers are scoped per project and written to two directories: STATUS_DIR
+ * under the state home (primary — the only path the hook and the server agree
+ * on, see TRA-869) and `$TMPDIR` (for hooks installed before that fix).
+ *
+ * ponytail: drop the $TMPDIR half once no supported release reads it.
  */
 
 import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { projectHash } from '../global.js';
+import { projectHash, STATUS_DIR } from '../global.js';
 import { ensureTmpDirSync, writeTmpFileSync } from '../utils/safe-fs.js';
 
 function fileHash(filePath: string): string {
   return crypto.createHash('sha256').update(filePath).digest('hex');
 }
 
-function markerDir(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-consulted-${projectHash(path.resolve(projectRoot))}`);
+function markerDirs(projectRoot: string): string[] {
+  const name = `trace-mcp-consulted-${projectHash(path.resolve(projectRoot))}`;
+  return [path.join(STATUS_DIR, name), path.join(os.tmpdir(), name)];
 }
 
 // Per-process dedup: markers are existence-only (empty files) and the guard
@@ -32,20 +37,22 @@ const _writtenMarkers = new Set<string>();
 
 /** Write a consultation marker for a file. Non-blocking, best-effort. */
 function markConsulted(projectRoot: string, relPath: string): void {
-  try {
-    const dir = markerDir(projectRoot);
-    const markerPath = path.join(dir, fileHash(relPath));
-    if (_writtenMarkers.has(markerPath)) return; // already marked this process
-    if (!_ensuredDirs.has(dir)) {
-      if (!ensureTmpDirSync(dir)) return; // squatted or unwritable — skip markers
-      _ensuredDirs.add(dir);
+  const name = fileHash(relPath);
+  for (const dir of markerDirs(projectRoot)) {
+    try {
+      const markerPath = path.join(dir, name);
+      if (_writtenMarkers.has(markerPath)) continue; // already marked this process
+      if (!_ensuredDirs.has(dir)) {
+        if (!ensureTmpDirSync(dir)) continue; // squatted or unwritable — skip markers
+        _ensuredDirs.add(dir);
+      }
+      writeTmpFileSync(markerPath, '');
+      // ponytail: bound the dedup set — clearing only costs one repeat write.
+      if (_writtenMarkers.size >= 50_000) _writtenMarkers.clear();
+      _writtenMarkers.add(markerPath);
+    } catch {
+      /* best-effort — never block tool execution */
     }
-    writeTmpFileSync(markerPath, '');
-    // ponytail: bound the dedup set — clearing only costs one repeat write.
-    if (_writtenMarkers.size >= 50_000) _writtenMarkers.clear();
-    _writtenMarkers.add(markerPath);
-  } catch {
-    /* best-effort — never block tool execution */
   }
 }
 

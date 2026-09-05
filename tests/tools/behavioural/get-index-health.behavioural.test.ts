@@ -104,6 +104,63 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(result.warnings.some((w) => /edges/i.test(w))).toBe(true);
   });
 
+  it('omits the embedding block when AI is off and nothing has failed', () => {
+    ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+    expect(getIndexHealth(ctx.store, ctx.config).embedding).toBeUndefined();
+  });
+
+  // TRA-812: a paused embedding backlog degraded semantic search silently for
+  // two days. get_index_health is the surface that has to say so.
+  it('reports a paused embedding backlog as degraded, with the deadline and cause', () => {
+    const fid = ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+    ctx.store.insertSymbol(fid, {
+      symbolId: 'src/a.ts::unembedded#function',
+      name: 'unembedded',
+      kind: 'function',
+      fqn: 'unembedded',
+      byteStart: 0,
+      byteEnd: 30,
+      lineStart: 1,
+      lineEnd: 3,
+    });
+    const pausedUntil = Date.now() + 600_000;
+    ctx.store.db.prepare('INSERT OR REPLACE INTO server_state (key, value) VALUES (?, ?)').run(
+      'embedding_breaker',
+      JSON.stringify({
+        disabledUntilMs: pausedUntil,
+        consecutiveFailures: 2,
+        lastFailureAt: Date.now(),
+        lastError: 'fetch failed',
+      }),
+    );
+
+    const result = getIndexHealth(ctx.store, ctx.config);
+    expect(result.embedding?.queued).toBe(1);
+    expect(result.embedding?.pausedUntil).toBe(pausedUntil);
+    expect(result.embedding?.lastError).toBe('fetch failed');
+    expect(result.status).toBe('degraded');
+    expect(result.warnings.some((w) => /queued for embedding.*paused/s.test(w))).toBe(true);
+  });
+
+  it('an elapsed pause is not reported as paused', () => {
+    ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+    ctx.store.db.prepare('INSERT OR REPLACE INTO server_state (key, value) VALUES (?, ?)').run(
+      'embedding_breaker',
+      JSON.stringify({
+        disabledUntilMs: Date.now() - 1_000,
+        consecutiveFailures: 2,
+        lastFailureAt: Date.now() - 601_000,
+        lastError: 'fetch failed',
+      }),
+    );
+
+    const result = getIndexHealth(ctx.store, ctx.config);
+    expect(result.embedding?.pausedUntil).toBeUndefined();
+    // The last failure is still worth reporting — it explains a stale backlog.
+    expect(result.embedding?.lastError).toBe('fetch failed');
+    expect(result.status).toBe('ok');
+  });
+
   it('reflects include/exclude patterns from the supplied config', () => {
     const custom: TraceMcpConfig = {
       ...ctx.config,

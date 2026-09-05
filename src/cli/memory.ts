@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Command } from 'commander';
 import { listAllSessions } from '../analytics/log-parser.js';
+import { checkStartupWatch } from '../analytics/startup-watch.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { mineSessions } from '../memory/conversation-miner.js';
 import {
@@ -308,16 +309,20 @@ memoryCommand
   .option('--project <path>', 'Project root (default: current directory)', process.cwd())
   .option('--max-decisions <n>', 'Max recent decisions to include (default: 10)', '10')
   .option('--json', 'Output as JSON (default: pretty text)')
-  .action((opts: { project: string; maxDecisions: string; json?: boolean }) => {
+  .action(async (opts: { project: string; maxDecisions: string; json?: boolean }) => {
     const store = openStore();
     try {
       const projectRoot = path.resolve(opts.project);
       const wakeUp = assembleWakeUp(store, projectRoot, {
         maxDecisions: parseInt(opts.maxDecisions, 10),
       });
+      // Independent of decision memory — reads session logs, not the decision
+      // store — so a failure here (e.g. no session logs yet) must never take
+      // the rest of wake-up down with it.
+      const startupWatch = await checkStartupWatch({ projectRoot }).catch(() => null);
 
       if (opts.json) {
-        console.log(JSON.stringify(wakeUp, null, 2));
+        console.log(JSON.stringify({ ...wakeUp, startupWatch }, null, 2));
         return;
       }
 
@@ -341,6 +346,10 @@ memoryCommand
         );
       }
       console.log(`Estimated tokens: ${wakeUp.estimated_tokens}`);
+      if (startupWatch) {
+        console.log();
+        console.log(startupWatch.message);
+      }
     } finally {
       store.close();
     }

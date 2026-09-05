@@ -523,7 +523,7 @@ export async function checkHealth(): Promise<void> {
         );
         try {
           lastDaemonStartAttempt = Date.now();
-          const result = restartDaemon();
+          const result = await restartDaemon();
           if (!result.ok) {
             console.warn(
               `[trace-mcp] version-mismatch restart failed: ${result.error ?? 'unknown'}`,
@@ -612,7 +612,7 @@ export async function checkHealth(): Promise<void> {
         // 809 restarts fit into 22.8 hours.
         firstUnreachableAt = Date.now();
         restartsThisOutage++;
-        const result = useRestart ? restartDaemon() : ensureDaemon();
+        const result = await (useRestart ? restartDaemon() : ensureDaemon());
         if (!result.ok) {
           console.warn(`[trace-mcp] daemon ${action} failed: ${result.error ?? 'unknown'}`);
         }

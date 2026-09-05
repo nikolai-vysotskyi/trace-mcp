@@ -1,5 +1,7 @@
+import { readEmbeddingBreakerState } from '../../ai/embedding-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { IndexStats, Store } from '../../db/store.js';
+import { getDroppedEventStats } from '../../indexer/watcher.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
@@ -15,6 +17,22 @@ interface IndexHealthResult {
   };
   warnings: string[];
   progress?: ProgressSnapshot;
+  /**
+   * Embedding backlog state. Present only when embeddings are configured or a
+   * previous run failed — otherwise the extra COUNT isn't worth paying for.
+   * Without this, semantic search silently degrades with nothing to look at
+   * (TRA-812).
+   */
+  embedding?: {
+    /** Indexed symbols with no vector yet. */
+    queued: number;
+    /** Epoch ms until which background embedding is paused, if it is. */
+    pausedUntil?: number;
+    /** Epoch ms of the last failed batch. */
+    lastFailureAt?: number;
+    /** Message from the last failed batch. */
+    lastError?: string;
+  };
 }
 
 export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealthResult {
@@ -51,13 +69,50 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
     );
   }
 
+  // The OS dropped fs events at least once this process: everything changed
+  // inside those windows was invisible to the watcher until the reconcile pass
+  // caught up (TRA-852). Report it — an agent asking about index freshness
+  // cannot read the daemon log, which is where this otherwise only exists.
+  const { drops, reconciles } = getDroppedEventStats();
+  if (drops > 0) {
+    warnings.push(
+      `The OS dropped file-system events ${drops} time(s) since this process started; ` +
+        `${reconciles} index reconcile pass(es) were started in response ` +
+        `(started, not necessarily finished — a pass that failed is logged, not subtracted). ` +
+        `Results served between a drop and its reconcile may have been stale.`,
+    );
+  }
+
   const versionRow = store.db
     .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
     .get() as { value: string } | undefined;
 
+  const breaker = readEmbeddingBreakerState(store.db);
+  let embedding: IndexHealthResult['embedding'];
+  if (config.ai?.enabled || breaker) {
+    const queued = store.countUnembeddedSymbols();
+    const paused = breaker && breaker.disabledUntilMs > Date.now();
+    embedding = {
+      queued,
+      pausedUntil: paused ? breaker.disabledUntilMs : undefined,
+      lastFailureAt: breaker?.lastFailureAt || undefined,
+      lastError: breaker?.lastError,
+    };
+    if (paused && queued > 0) {
+      if (status === 'ok') status = 'degraded';
+      warnings.push(
+        `${queued} symbols are queued for embedding but background embedding is paused until ` +
+          `${new Date(breaker.disabledUntilMs).toISOString()} after repeated failures ` +
+          `(${breaker.lastError ?? 'unknown error'}). Semantic and hybrid search results are ` +
+          `incomplete until the embedding provider is reachable; call embed_repo to retry now.`,
+      );
+    }
+  }
+
   return {
     status,
     stats,
+    embedding,
     schemaVersion: versionRow ? Number(versionRow.value) : 0,
     config: {
       // The path this store was actually opened at, not a config default —

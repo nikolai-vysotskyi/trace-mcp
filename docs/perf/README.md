@@ -14,39 +14,35 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.11.0, `e8a0dd7c`, darwin 25.5.0 / arm64, median of 3)
+## Current numbers (3.17.0, `121e3e9b`, darwin 25.5.0 / arm64, median of 3)
 
-Two passes on 2026-09-02, by the same autopilot, reconciled into one series: the
-2026-09-01 entry that first filled the workload metrics, and this one, which repeats them
-on the merged harness and adds the two rows marked new. Where they overlap they agree —
-`ui_p95_ms` 668 / 690, `heap_growth_mb_per_hour` 1.39 / 0.19, `rss_after_index_settle_mb`
-383 / 316 — which is the first independent confirmation these numbers have had.
-
-The `artifact_mb` rows are from a separate artifact-only pack (3.11.0, `64b14a12`). Sizes
-are deterministic, so they do not need a median.
+Taken 2026-09-04, 30 minutes / 574 cycles / 0 cycle errors, offscreen. First pass since the
+3.11.0 series and six app-visible releases later. **No regression on any metric** against the
+median of the last five runs; four improved. The `artifact_mb` rows come from
+`pnpm -C packages/app run pack` on this same commit; sizes are deterministic and need no median.
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_first_content_ms` | 97 | — | **the startup metric of record** (new, new series) |
+| `renderer_first_content_ms` | 93 | — | **the startup metric of record** — 97 last time |
 | `renderer_fcp_ms` | null | — | structurally unavailable offscreen — see below |
-| `cold_start_ms` | 393 | 3000 | ok, load-sensitive |
-| `window_interactive_ms` | 129 | — | load-sensitive, do not trend it |
-| `ui_p95_ms` | 690 | — | search p95 690, open p95 144, switch p95 130 |
-| `renderer_cpu_idle_pct.overview` | 2.9 | — | new |
-| `renderer_cpu_idle_pct.graph` | **29.3** | — | **new — the Graph tab never idles**, TRA-683 |
-| `heap_idle_mb` (5 min idle) | 15.4 | — | ok — see note below, not comparable to 9.5 |
-| `heap_after_workload_mb` | 7.8 | — | ok |
-| `heap_growth_mb_per_hour` | +0.19 | 50 | ok — no leak over 521 cycles |
-| `tree_rss_idle_mb` (app + daemon) | 920 | — | ok vs 955 |
-| `tree_rss_peak_mb` (app + daemon) | 1250 | 2000 | ok |
-| `tree_cpu_peak_pct` (combined, sums cores) | 180 | — | ok |
-| `rss_after_index_settle_mb` (daemon only) | 316 | 500 | ok settled — **but ~700 MB while serving, see below** |
+| `cold_start_ms` | 415 | 3000 | ok, load-sensitive |
+| `window_interactive_ms` | 141 | — | load-sensitive, do not trend it |
+| `ui_p95_ms` | 667 | — | **old detector — see the correction below**; search p95 667, open 73, switch 189 |
+| `renderer_cpu_idle_pct.overview` | 0.1 | — | was 2.9 |
+| `renderer_cpu_idle_pct.graph` | **6.8** | — | **was 29.3 — TRA-683 landed and this is its field number** |
+| `heap_idle_mb` (5 min idle) | 9.5 | — | ok — was 15.4 |
+| `heap_after_workload_mb` | 7.7 | — | ok |
+| `heap_growth_mb_per_hour` | +1.56 | 50 | ok — flat 9.3–9.8 MB across 574 cycles |
+| `tree_rss_idle_mb` (app + daemon) | 878 | — | ok vs 920 |
+| `tree_rss_peak_mb` (app + daemon) | 1512 | 2000 | ok |
+| `tree_cpu_peak_pct` (combined, sums cores) | 133 | — | ok vs 180 |
+| `rss_after_index_settle_mb` (daemon only) | 196 | 500 | ok — was 316 |
 | `main_cpu_idle_pct` | 0.1 | 2 | ok |
-| `renderer_eager_kb` | 2131 | — | **the size metric of record** |
-| `renderer_bundle_kb` | 2301 | — | +1.4% vs 2270 — noise |
-| `artifact_mb.mac_app_unpacked` | 346.2 | x1.5 growth | re-anchored 2026-09-02, was 478.2 |
-| `artifact_mb.mac_server_payload` | 77 | **100 MB, absolute** | ok |
-| `artifact_mb.mac_asar` | 6 | x1.5 growth | ok |
+| `renderer_eager_kb` | 2084 | — | **the size metric of record** — -0.9% |
+| `renderer_bundle_kb` | 2346 | — | +3.3%, all of it in lazy chunks |
+| `artifact_mb.mac_app_unpacked` | 350 | x1.5 growth | +1.1% vs the 346.2 re-anchor |
+| `artifact_mb.mac_server_payload` | 80 | **100 MB, absolute** | ok, watch it |
+| `artifact_mb.mac_asar` | 7 | x1.5 growth | ok |
 
 **Open finding — the daemon costs ~700 MB to serve one small project.** With a fresh data
 dir, a private port and exactly one registered project (this repo at the pinned fixture
@@ -71,17 +67,21 @@ sets itself when React commits the first content under `#root`
 the pipeline. **It starts a new series: 97 ms here is not comparable to the 136 ms
 `renderer_fcp_ms` of the 2026-09-01 entry, which ran with a visible window.**
 
-### The Graph tab burns 29.3% of a core with nobody touching it
+### The Graph tab used to burn 29.3% of a core with nobody touching it — now 6.8%
 
 `renderer_cpu_idle_pct` is renderer CPU over a 60 s window with **no input**, per view,
 taken from `cputime` deltas — `ps -o %cpu` is a decaying lifetime average and cannot answer
-"busy right now". Overview reads 2.9% of a core, Graph 29.3%; measured three times across
-two harness versions on 2026-09-02 (27.0 / 27.7 / 29.3).
+"busy right now".
 
-This is the `.cosmos-gpu-label` finding priced. The settle detector had to stop counting
-that layer because it mutates every animation frame forever (~730 mutations/second with no
-input); that established the tab never goes quiet, and this metric says what the quiet
-costs. Tracked as TRA-683, not fixed here.
+| | 2026-09-02 (3.11.0) | 2026-09-04 (3.17.0) |
+|---|---|---|
+| Overview | 2.9% of a core | 0.1% |
+| Graph | 29.3% (27.0 / 27.7 / 29.3 across three passes) | **6.8%** (6.5 / 6.8 / 6.8) |
+
+The fix is `0c79f0e2`, "let the Graph tab go quiet when nobody is watching" (TRA-683),
+merged between the two runs. This is the metric that found the cost and the metric that
+confirms it went away — the tab is now roughly a fifth of what it was, and Overview is
+effectively free. What is left is not zero, so keep sampling it.
 
 ### `heap_idle_mb` moved 9.5 to 15.4 and it is not a leak
 
@@ -244,10 +244,20 @@ How each number is derived:
   `switch_view` into Graph times the surrounding DOM, not the graph's own render. "The
   graph has actually loaded" is enforced separately, by the `matchCount() > 0` gate before
   the cycle loop starts.
-- The **search median reads near zero and that is not a bug**: the graph typeahead filters
-  nodes the renderer already holds, so the list updates within a few milliseconds of the
-  keystroke. `ui_p95_ms` takes the worst per-action p95 precisely so a cheap action cannot
-  hide an expensive one.
+- **The completion detector arms its observer before the action fires** (TRA-835). It used
+  to fire the action first and attach the `MutationObserver` afterwards. React commits a
+  discrete event — a click, an `input` — synchronously inside `dispatchEvent`, so by the time
+  the observer attached, the render the action caused was already on the page and there was
+  nothing left to see: the action scored 0 ms. In a controlled 2-minute run on 2026-09-04
+  that was **42.5% of 360 searches**, and two of the ten fixture queries (`search`, `graph`)
+  measured 0 ms on all 36 of their occurrences while the same queries measured 300–800 ms on
+  other cycles. Arming first takes the zero rate to **0.0%** and moved search p95 from 592 to
+  758 ms on matched runs. Earlier revisions of this file read that near-zero median as the
+  typeahead being fast; it was the harness starting its clock after the work.
+  **`ui_p95_ms` and the per-action p95s therefore start a new series with the run after
+  2026-09-04** and will read higher for that reason alone.
+  Guard: `packages/app/src/renderer/__tests__/perf-driver.test.ts` evaluates the injected
+  driver text against jsdom and fails on the old ordering.
 - **`heap_after_workload_mb`** — the post-GC heap after the first complete cycle.
 - **`heap_growth_mb_per_hour`** — least-squares slope of the post-GC heap series over the
   whole run. Over 50 is an issue on its own, whatever the delta to the previous run.
@@ -262,6 +272,14 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 (or two consecutive warnings) is a regression worth an issue.
 
 ## Changes worth remembering
+
+**2026-09-04 — the harness was not timing the synchronous half of every action (TRA-835).**
+See the detector bullet above: observer armed after the action, 42.5% of searches recorded
+as exactly 0 ms, `ui_p95_ms` roughly 20% low. Found by noticing that the 30-minute run
+reported a search *median* of 0 against 64 in the previous entry while p95 barely moved —
+a median that collapses while the tail does not is a measurement fault, not a speed-up.
+Fixed by arming the observer first; the primitive moved into `scripts/perf-lib.mjs` as
+`MEASURE_SRC` so a jsdom test can run the same text the renderer runs.
 
 **2026-09-02 — four secondary tabs were sitting in the startup chunk (TRA-593).**
 `Activity`, `Insights`, `MemoryExplorer` and `Notebook` were static imports in `App.tsx`, so

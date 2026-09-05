@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import {
   cpuOverWindow,
   fitGrowth,
+  MEASURE_SRC,
   median,
   p95,
   pidOnPort,
@@ -402,44 +403,7 @@ function artifactMb() {
  */
 const DRIVER = `
 window.__perf = (() => {
-  const QUIET_MS = 120;
-  const SETTLE_CAP_MS = 5000;
-  // An action is done when the DOM stops changing, not when React returns:
-  // switching to the Graph tab paints an empty canvas in a few ms and then
-  // spends real time loading the graph. Measuring only the first paint would
-  // report single-digit milliseconds for every action and catch no regression.
-  //
-  // Except for one layer. The GPU graph repaints its HTML label overlay every
-  // animation frame — measured at ~730 mutations/second, unbroken, with no input
-  // at all — so a whole-document observer never sees 120 ms of quiet and every
-  // action in the Graph tab burns the cap instead of being timed. That is how
-  // ui_p95_ms first read as exactly 5000 ms (TRA-617). An animation that never
-  // stops cannot be a completion signal, so its mutations are not one.
-  const IGNORED = '.cosmos-gpu-label';
-  const ignorable = (rec) => {
-    const el = rec.target.nodeType === 1 ? rec.target : rec.target.parentElement;
-    return !!(el && el.closest && el.closest(IGNORED));
-  };
-  const settled = (start) =>
-    new Promise((resolve) => {
-      let last = start;
-      const obs = new MutationObserver((recs) => {
-        if (recs.every(ignorable)) return;
-        last = performance.now();
-      });
-      obs.observe(document.documentElement, {
-        subtree: true, childList: true, characterData: true, attributes: true,
-      });
-      const tick = () => {
-        const now = performance.now();
-        if (now - last >= QUIET_MS || now - start >= SETTLE_CAP_MS) {
-          obs.disconnect();
-          return resolve(Math.min(last - start, SETTLE_CAP_MS));
-        }
-        setTimeout(tick, 16);
-      };
-      setTimeout(tick, 16);
-    });
+${MEASURE_SRC}
   const mainText = () => (document.querySelector('main') || {}).innerText || '';
   const overviewReady = () =>
     mainText().indexOf('Files indexed') !== -1 && mainText().indexOf('Symbols') !== -1;
@@ -473,16 +437,12 @@ window.__perf = (() => {
     async switchView(label) {
       const btn = sidebarButton(label);
       if (!btn) throw new Error('perf: no sidebar tab "' + label + '"');
-      const t = performance.now();
-      btn.click();
-      return settled(t);
+      return measure(() => btn.click());
     },
     async search(q) {
       const el = searchInput();
       if (!el) throw new Error('perf: no graph search input');
-      const t = performance.now();
-      setReactValue(el, q);
-      return settled(t);
+      return measure(() => setReactValue(el, q));
     },
   };
 })();

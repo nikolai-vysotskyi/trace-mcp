@@ -275,6 +275,8 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_session_stats',
     'get_session_analytics',
     'get_startup_context_audit',
+    'apply_startup_recommendations',
+    'rollback_startup_recommendations',
     'get_usage_trends',
     'register_edit',
     'batch',
