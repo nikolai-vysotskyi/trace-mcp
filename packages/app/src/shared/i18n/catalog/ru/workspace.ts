@@ -13,6 +13,7 @@ export const workspace = {
   startingDaemon: 'Запуск…',
   daemonInstallingTitle: 'Настройка trace-mcp',
   daemonInstallingSubtitle: 'Устанавливаем фоновую службу, которая индексирует проекты. Это делается один раз и занимает несколько секунд.',
+  daemonBusyTitle: 'Служба занята',
   daemonInstallFailedTitle: 'Настройка не завершилась',
   daemonInstallRetry: 'Повторить',
   daemonInstallRetrying: 'Настраиваем…',

@@ -6,6 +6,7 @@ export const workspace = {
   startingDaemon: 'Arrancando…',
   daemonInstallingTitle: 'Configurando trace-mcp',
   daemonInstallingSubtitle: 'Instalando el servicio en segundo plano que indexa tus proyectos. Ocurre una sola vez y tarda unos segundos.',
+  daemonBusyTitle: 'El servicio está ocupado',
   daemonInstallFailedTitle: 'La configuración no terminó',
   daemonInstallRetry: 'Reintentar',
   daemonInstallRetrying: 'Configurando…',

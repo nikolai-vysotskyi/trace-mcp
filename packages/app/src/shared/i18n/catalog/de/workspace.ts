@@ -7,6 +7,7 @@ export const workspace = {
   startingDaemon: 'Wird gestartet…',
   daemonInstallingTitle: 'trace-mcp wird eingerichtet',
   daemonInstallingSubtitle: 'Der Hintergrunddienst, der deine Projekte indexiert, wird installiert. Das passiert einmal und dauert ein paar Sekunden.',
+  daemonBusyTitle: 'Der Dienst ist beschäftigt',
   daemonInstallFailedTitle: 'Einrichtung nicht abgeschlossen',
   daemonInstallRetry: 'Erneut versuchen',
   daemonInstallRetrying: 'Wird eingerichtet…',
