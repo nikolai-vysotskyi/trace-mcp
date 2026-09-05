@@ -57,6 +57,33 @@ describe('SavingsTracker', () => {
       expect(stats.total_calls).toBe(1);
     });
 
+    it('books nothing for a failed call, whatever its error text cost', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('get_task_context'); // raw 8000, guess 1200 -> 6800 saved
+      tracker.recordFailedCall('get_task_context', 4); // a 4-token error message
+      const stats = tracker.getSessionStats();
+      // Scored as payload this would have booked 7 996 — more than any real answer.
+      expect(stats.total_tokens_saved).toBe(0);
+      expect(stats.per_tool.get_task_context.tokens_saved).toBe(0);
+      expect(stats.total_actual_tokens).toBe(4);
+    });
+
+    it('books nothing for a call that threw before producing a response', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search');
+      tracker.recordFailedCall('search');
+      expect(tracker.getSessionStats().total_tokens_saved).toBe(0);
+    });
+
+    it('treats an empty response as a measured zero, not as missing', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search'); // raw 600
+      tracker.recordActualTokens('search', 0);
+      const stats = tracker.getSessionStats();
+      expect(stats.total_tokens_saved).toBe(600);
+      expect(stats.total_actual_tokens).toBe(0);
+    });
+
     it('ignores a correction for a tool that was never recorded', () => {
       const tracker = new SavingsTracker('/test/project');
       tracker.recordActualTokens('search', 100);

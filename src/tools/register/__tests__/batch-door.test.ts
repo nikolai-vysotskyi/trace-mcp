@@ -31,7 +31,11 @@ function buildBatch(opts: { loaded?: string[]; deferred?: string[]; exclude?: st
   };
   const ctx = metaCtx({
     config: { tools: { exclude: opts.exclude } },
-    savings: { recordCall: () => undefined },
+    savings: {
+      recordCall: () => undefined,
+      recordActualTokens: () => undefined,
+      recordFailedCall: () => undefined,
+    },
   }) as unknown as Record<string, unknown>;
   const stub =
     (name: string): Handler =>

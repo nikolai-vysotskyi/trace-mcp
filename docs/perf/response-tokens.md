@@ -70,10 +70,23 @@ Three things the table says:
 ## The fix
 
 `SavingsTracker.recordActualTokens(tool, tokens)` corrects the pre-call guess once
-the response exists; the gate calls it on the normal, dedup and duplicate-warning
-paths with the count it already computed for the journal. Guarded in
-`tests/tools/savings.test.ts` — including the case that used to be silent, a
-response bigger than its baseline crediting zero rather than a fat positive.
+the response exists. `recordCall` stays where it is, before the tool runs, because
+budget clamping and dedup both read the session totals first — this is a two-phase
+estimate-then-reconcile, not a move.
+
+Four things the correction has to get right, all found in review and guarded in
+`tests/tools/savings.test.ts`:
+
+- **A response bigger than its baseline credits zero**, not a fat positive.
+- **A failed call credits zero** (`recordFailedCall`). Scored as payload, a 4-token
+  error from `get_task_context` would have booked 7 996 saved — more than any real
+  answer to the same call. Applies to error responses and to throws alike.
+- **`batch` is corrected too.** It dispatches handlers directly and never goes
+  through the gate, so every batched call would otherwise have kept the guess.
+- **Measured last, on the wire bytes.** `enrichResponse` adds fields and
+  `applyWireFormat` can re-encode into a denser format; measuring before either
+  books a number the client never receives. An empty response is a measured zero,
+  not a missing one.
 
 ## What is still an estimate, and what to do next
 

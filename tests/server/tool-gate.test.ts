@@ -31,6 +31,7 @@ function createMockSavings() {
   return {
     recordCall: vi.fn(),
     recordActualTokens: vi.fn(),
+    recordFailedCall: vi.fn(),
     recordLatency: vi.fn(),
     getLatencyPerTool: vi.fn().mockReturnValue({}),
     getLatencyStats: vi.fn().mockReturnValue(null),

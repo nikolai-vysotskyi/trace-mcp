@@ -153,21 +153,37 @@ export class SavingsTracker {
   /**
    * Correct a just-recorded call with the actual token cost of its response.
    *
-   * {@link recordCall} has to run before the tool does, so it scores the call
-   * against {@link COMPRESSION_RATIO} — a guess. This replaces that guess with
-   * the measured response size once it exists. Without it every "tokens saved"
+   * {@link recordCall} has to run before the tool does — budget clamping and
+   * dedup both read the session totals first — so it scores the call against
+   * {@link COMPRESSION_RATIO}, a guess. This replaces that guess with the
+   * measured response size once it exists. Without it every "tokens saved"
    * number is `calls x constant` and carries no measurement (TRA-880: the guess
    * is 2.5-10x off on the tools that dominate real call volume, and four of the
    * twelve busiest return MORE tokens than their assumed raw baseline).
    */
   recordActualTokens(toolName: string, actualTokens: number): void {
+    this.correctCall(toolName, actualTokens, false);
+  }
+
+  /**
+   * Correct a just-recorded call that failed. A call that returned an error
+   * delivered no context, so it saved nothing — whatever its error text cost.
+   * Without this an error response is scored against the length of its own
+   * message and books near-100% savings, which is more than a successful call
+   * gets.
+   */
+  recordFailedCall(toolName: string, actualTokens = 0): void {
+    this.correctCall(toolName, actualTokens, true);
+  }
+
+  private correctCall(toolName: string, actualTokens: number, failed: boolean): void {
     const rec = this.session.per_tool[toolName];
     if (!rec || !Number.isFinite(actualTokens) || actualTokens < 0) return;
     const rawCost = RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;
     const assumed = Math.round(rawCost * COMPRESSION_RATIO);
-    const deltaActual = actualTokens - assumed;
-    const deltaSaved = Math.max(0, rawCost - actualTokens) - Math.max(0, rawCost - assumed);
-    this.session.total_actual_tokens += deltaActual;
+    const saved = failed ? 0 : Math.max(0, rawCost - actualTokens);
+    const deltaSaved = saved - Math.max(0, rawCost - assumed);
+    this.session.total_actual_tokens += actualTokens - assumed;
     this.session.total_tokens_saved += deltaSaved;
     rec.tokens_saved += deltaSaved;
   }

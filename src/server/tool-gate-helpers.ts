@@ -341,10 +341,11 @@ async function handleDuplicate(
     });
   }
   const count = ctx.extractResultCount(result);
-  const warnTokens = result?.content?.[0]?.text?.length
-    ? Math.ceil(result.content[0].text.length / 4)
-    : undefined;
-  if (warnTokens !== undefined) ctx.savings.recordActualTokens(ctx.name, warnTokens);
+  const warnTokens = responseTokens(result);
+  if (warnTokens !== undefined) {
+    if (result?.isError) ctx.savings.recordFailedCall(ctx.name, warnTokens);
+    else ctx.savings.recordActualTokens(ctx.name, warnTokens);
+  }
   ctx.journal.record(ctx.name, params, count);
   emitJournalEntry(ctx, {
     count,
@@ -353,6 +354,16 @@ async function handleDuplicate(
     isError: !!result?.isError,
   });
   return result;
+}
+
+/**
+ * Token cost of a response's text, or undefined when it has none. Deliberately
+ * `typeof`, not truthiness: an empty string is a real, measured zero-token
+ * response, not a missing one.
+ */
+function responseTokens(result: WrappedToolResponse | undefined): number | undefined {
+  const text = result?.content?.[0]?.text;
+  return typeof text === 'string' ? Math.ceil(text.length / 4) : undefined;
 }
 
 /** Enrich a successful response with optimization hint, budget defaults, warnings. */
@@ -449,6 +460,9 @@ export function createGatedCallback(
       telemetrySpan.setAttribute('duration_ms', Date.now() - normalStart);
       telemetrySpan.recordError(err);
       telemetrySpan.end();
+      // A throw returns no context at all, so it saves nothing. Without this it
+      // would keep the pre-call guess and score better than a real answer.
+      ctx.savings.recordFailedCall(ctx.name);
       throw err;
     }
     const resultObj = result as WrappedToolResponse;
@@ -463,10 +477,7 @@ export function createGatedCallback(
     ctx.recordToolCall?.(!resultObj?.isError);
     const count = ctx.extractResultCount(resultObj);
     const compactResult = ctx.extractCompactResult(ctx.name, resultObj);
-    const resultTokens = resultObj?.content?.[0]?.text?.length
-      ? Math.ceil(resultObj.content[0].text.length / 4)
-      : undefined;
-    if (resultTokens !== undefined) ctx.savings.recordActualTokens(ctx.name, resultTokens);
+    const resultTokens = responseTokens(resultObj);
     ctx.journal.record(ctx.name, params, count, { compactResult, resultTokens });
     emitJournalEntry(ctx, {
       count,
@@ -477,6 +488,15 @@ export function createGatedCallback(
 
     enrichResponse(ctx, resultObj, params, originalParamSnapshot, appliedDefaults);
     applyWireFormat(resultObj, effectiveFormat);
+
+    // Scored last, on the bytes that actually go over the wire: `enrichResponse`
+    // adds fields and `applyWireFormat` can re-encode into a denser format, so
+    // measuring any earlier books a number the client never sees.
+    const wireTokens = responseTokens(resultObj);
+    if (wireTokens !== undefined) {
+      if (resultObj?.isError) ctx.savings.recordFailedCall(ctx.name, wireTokens);
+      else ctx.savings.recordActualTokens(ctx.name, wireTokens);
+    }
 
     return result;
   };

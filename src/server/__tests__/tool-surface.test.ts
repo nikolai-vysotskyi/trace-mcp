@@ -25,6 +25,7 @@ function gateStubs() {
     savings: {
       recordCall: () => {},
       recordActualTokens: () => {},
+      recordFailedCall: () => {},
       recordLatency: () => {},
       getSessionStats: () => ({ total_calls: 0, total_raw_tokens: 0 }),
     },
