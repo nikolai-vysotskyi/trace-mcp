@@ -111,7 +111,7 @@ if (Number.isFinite(raw) && tokens > 0 && raw / tokens > INFLATION_RATIO) {
   console.error(
     `Warning: the endpoint received ${(raw / tokens).toFixed(2)}x what this publishes ` +
       `(over ${INFLATION_RATIO}x). The figure below is sanitized and safe to quote; ` +
-      `the input is not. Check ops/user-signal.md for a harvest overlapping this window.`,
+      `the input is not. Check ops/user-signal.md in trace-mcp-private for a harvest overlapping this window.`,
   );
 }
 

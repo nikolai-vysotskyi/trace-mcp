@@ -68,7 +68,7 @@ export const MIN_DAYS_FOR_TRIM = 5;
  * The gap between the raw and the sanitized total was described as "the signal
  * that someone is flooding the endpoint" while being written to a file nobody
  * diffs — it went 4.95x → 5.21x in a day, on a day that overlaps a documented
- * npm/clone harvest (`ops/user-signal.md`), and no run noticed. 2x is the point
+ * npm/clone harvest (`ops/user-signal.md`, private repo), and no run noticed. 2x is the point
  * where more than half of what the endpoint received was capped away, so the
  * published figure has stopped being a measurement of anything and become the
  * ceiling the sanitizer chose.

@@ -64,10 +64,12 @@ commits in the last seven days — and the ratio is the strategy. We are
 shipping roughly fifty commits a day for sixty-one users. Every gap this
 file has tracked for months has been a *capability* gap, and we have closed
 them at a rate almost nothing else closes them at. The gap that is actually
-binding is on the other side: **reach, and first value.** 102 GitHub stars
-after five months, ~20 human page views a day on the site, Reddit as our
-single largest referrer and unreadable to us, and a client attribution we
-could not read at all until TRA-643 found out why.
+binding is on the other side: **reach, and first value.** Five months in, the
+reach numbers are small, flat, and concentrated in a couple of channels, and the
+client attribution could not be read at all until TRA-643 found out why. The
+figures themselves and the channel-by-channel read are in the private repo
+(`ops/user-signal.md`, `ops/arrivals.md`) — this page is published, and those
+are not.
 
 This is not an argument to slow the engine room down. It is an argument
 that the next several weeks of *strategic* work — the items below, and the
@@ -193,14 +195,17 @@ picked up as items below:
 as one. Settled twice (TRA-273, TRA-413): all published versions cluster at
 a near-uniform weekly count while the median version has ~2 real installs,
 and day-old releases hit parity with month-old ones instantly. That is a
-mirror sweeping the version history. **Git clones are out too** (TRA-540):
-16,006 clones / 928 uniques in 14 days while human page views stayed flat
-at ~20/day, with unique *cloners* inflating alongside the raw count.
+mirror sweeping the version history. **Git clones are out too** (TRA-540): a
+14-day clone count two orders of magnitude above human page views, which stayed
+flat across the same window, with unique *cloners* inflating alongside the raw
+count. The figures are in `ops/arrivals.md` in the private repo.
 
 The public-facing metric of record is therefore **active installs, GitHub
-stars, and traffic *views* uniques** — nothing else. Channel-by-channel
-state lives in `ops/user-signal.md`; listing-by-listing state in
-`ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
+stars, and traffic *views* uniques** — nothing else. Listing-by-listing state
+lives in `ops/distribution.md`, still in this repo. The current values, and the
+channel-by-channel state behind them, moved to
+[`trace-mcp-private`](https://github.com/nikolai-vysotskyi/trace-mcp-private) on
+2026-09-05 (`ops/user-signal.md`, `ops/arrivals.md`).
 
 ### The funnel — five numbers around that denominator (TRA-645, TRA-673)
 
@@ -241,15 +246,18 @@ a nice-to-have and reach work goes wide; if it collapses without one, our
 addressable market is clients that can enforce routing, and a large share of
 current distribution effort points at installs that will never reach value. We
 ship into MCP directories on a premise of client neutrality and have never
-tested it. **Read the answer beside `by_client_installs`** — the only client
-breakdown we have is 8 claude-code / 2 codex / 1 grok, which concludes nothing.
+tested it. **Read the answer beside `by_client_installs`** — the client
+breakdown we have is small enough to conclude nothing, and most of its rows are
+`unknown` for a reason the ping's own design explains: `state.client` is a single
+field overwritten at each `initialize`, so a machine running several clients
+reports whichever one handshook last.
 
 **Do not refresh these by hand either.** All of them are computed by the same
 daily `ga4-snapshot.yml` run and published under `funnel:` in
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
-that file is where a weekly run reads them, not this page. As of **2026-09-02**:
-178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
-activation still blocked — see below. Use is blocked on the same one form.
+that file is where a weekly run reads them, not this page, and the current
+values are not repeated here — see `ops/arrivals.md` in the private repo.
+Activation and use are both still blocked on the credentials below.
 
 **Two credentials stand between this and all five numbers**, both verified
 against the live property by a `workflow_dispatch` on 2026-09-02
@@ -312,11 +320,12 @@ appears **zero times in `scripts/ga4-snapshot.mjs`** — the only ping field of
 substance no report has ever read. Nothing above should be read as "installs
 are using the product"; so far we know they installed it.
 
-Acquisition already has a finding. Over two independent 14-day windows
-(2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
-`ops/distribution.md` appears as a referrer** — arrivals come from search,
-Reddit and our own site. New distribution effort belongs where those arrivals
-are; see that file's "Arrivals" column for the limits on that conclusion.
+Acquisition already has a finding, and it is the strongest argument this page
+makes about where effort should go: repeated 14-day windows agree that the
+directory listings are not where arrivals come from. New distribution effort
+belongs where the arrivals actually are. The readings, the sources they name and
+the limits on that conclusion are in `ops/arrivals.md` in the private repo —
+read it before planning any listings work.
 
 ## Ready to start
 
@@ -371,9 +380,9 @@ We now have a denominator, and no funnel. Reach → install → **activation**
 → retention is mostly derivable from what we already collect: `repos_indexed`
 tells us whether an install ever indexed anything, `install_type` separates
 new from returning, `by_version` shows whether they stay current. Nothing
-tells us where they came from — GitHub referrers say Reddit, which we
-cannot read (`ops/user-signal.md`), and the directory ledger tracks presence
-but never arrival.
+tells us where they came from — the referrer picture and what is readable of it
+are in `ops/user-signal.md` in the private repo, and the directory ledger tracks
+presence but never arrival.
 
 **Why now:** with 61 installs, a 10-install swing is a 16% move and every
 listing, page and README rewrite is currently graded on taste. One
