@@ -48,7 +48,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 15
+- **import edges:** 16
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 68
@@ -158,7 +158,7 @@ second thing, so it is much shorter than the language list — see
 | protobuf | .proto | regex | yes | — | — | — | yes |
 | python | .py .pyi | tree-sitter | yes | yes | yes | yes | yes |
 | r | .r .R .Rmd | regex | yes | — | — | — | yes |
-| ruby | .rb .rake | tree-sitter | yes | — | — | — | yes |
+| ruby | .rb .rake | tree-sitter | yes | yes | — | — | yes |
 | rust | .rs | tree-sitter | yes | yes | — | — | yes |
 | scala | .scala .sc | tree-sitter | yes | — | — | — | yes |
 | solidity | .sol | tree-sitter | yes | — | — | — | yes |
