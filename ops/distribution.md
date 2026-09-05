@@ -164,9 +164,9 @@ on-page work, however good they get.
 | Surface | Listed | What it shows | How to change it | Verified |
 |---|---|---|---|---|
 | [dev.to/coder11](https://dev.to/coder11/code-review-graph-vs-graphify-vs-codebase-memory-mcp-the-best-code-intelligence-mcp-tools-for-ai-3ea) | **No** | code-review-graph, Graphify, codebase-memory-mcp, with a language / token-reduction / tool-count matrix | Comments are open and the thread was still live 15 days after publication. Same author and same text as the saurabhsharma.dev row — **one door, not two** | 2026-09-02 |
-| [saurabhsharma.dev](https://www.saurabhsharma.dev/blogs/code-graph-mcp-tools-comparison/) | **No** | The dev.to piece on the author's own site, published 2026-07-02 | Saurabh Sharma, `github.com/coder0011`, email published on the site. Reachable as a person; there is nothing to submit to | 2026-09-02 |
+| [saurabhsharma.dev](https://www.saurabhsharma.dev/blogs/code-graph-mcp-tools-comparison/) | **No** | The dev.to piece on the author's own site, published 2026-07-02 | The author is reachable directly — contact details are published on the site itself. There is nothing to submit to | 2026-09-02 |
 | [sverklo.com](https://sverklo.com/blog/practical-guide-mcp-code-intelligence/) | **No** | "Honest Comparison of 12 Options", May 2026 | **Not a third party — it is a competitor's own blog.** Sverklo is one of the twelve it compares and discloses that outright ("the project that wrote this guide"). Corrections would go to `github.com/sverklo/sverklo` issues. Treat as a competitor page we might be added to out of goodwill, not as an editorial door | 2026-09-02 |
-| [chatforest.com](https://chatforest.com/reviews/code-intelligence-codebase-graph-mcp-servers/) | **No** | GitNexus, code-review-graph, codebase-memory-mcp, Claude Context, CodeGraphContext, SocratiCode, sverklo, and others down to 18 stars | Self-described "AI-native publication", agent-authored, and it **re-verifies star counts against live GitHub** (published 2026-04-25, re-verified 2026-08-24). No contact form and no submit page, newsletter only; oversight is Rob Nugen. The lever is being discoverable to their next re-verification pass, not pitching anyone. It already lists tools at 18 and 77 stars, so its bar is not adoption | 2026-09-02 |
+| [chatforest.com](https://chatforest.com/reviews/code-intelligence-codebase-graph-mcp-servers/) | **No** | GitNexus, code-review-graph, codebase-memory-mcp, Claude Context, CodeGraphContext, SocratiCode, sverklo, and others down to 18 stars | Self-described "AI-native publication", agent-authored, and it **re-verifies star counts against live GitHub** (published 2026-04-25, re-verified 2026-08-24). No contact form and no submit page, newsletter only; agent-authored with named human editorial oversight. The lever is being discoverable to their next re-verification pass, not pitching anyone. It already lists tools at 18 and 77 stars, so its bar is not adoption | 2026-09-02 |
 | [builder.io/blog](https://www.builder.io/blog/best-mcp-servers-2026) | **No** | 40+ MCP servers over 11 categories — Context7, GitHub, Figma, Playwright, Stripe. Published 2025-12-10 | **Not our category page.** A general MCP roundup with no code-intelligence section; it ranks for our head term on breadth. Company blog, no correction or suggestion path. Lowest value of the five | 2026-09-02 |
 | [mattbutlerengineering/ai-tooling](https://github.com/mattbutlerengineering/ai-tooling/blob/main/evaluations/trace-mcp.md) | **Yes** — evaluated, verdict `discovery-log — tentative read` | A 2026-06-22 hands-off source review of v1.43.1. Credits the framework-aware cross-language edges as the real differentiator over codegraph, but blocks on the unverified "~42 minutes" headline, scope sprawl, small adoption and the strict guard hook. Also states **"no telemetry"** twice — in the What-worked bullet and in the Safety row — which stopped being true at v1.47.0 | Corrections go in issues; the maintainer runs the catalog from daily `scan:` issues. We filed [#585](https://github.com/mattbutlerengineering/ai-tooling/issues/585) on 2026-09-04 correcting the telemetry claim and pointing at the PR-context benchmark, which is the hands-on re-evaluation trigger the eval itself named. One message, no verdict ask — **do not follow up** (TRA-857) | 2026-09-04 |
 
@@ -404,8 +404,8 @@ merged (row above, TRA-632), goose closed its directory to all new submissions
 merged one took two review rounds in which the maintainer read our source and
 found a claim we could not support. Repeat the search — READMEs naming a
 competitor's repo path — rather than searching for directories; but read
-`ops/arrivals.md` in the private repo first, because neither of these has sent a
-visitor yet.
+`ops/arrivals.md` in the private repo first, and let what it says about this
+class of surface decide whether the search is worth a run at all.
 
 ### A door class this ledger did not have: someone else's backend slot (2026-09-04)
 
@@ -489,13 +489,13 @@ policy file is stale against the app it governs — it says Python-runtime-only
 and "reject candidates that require profile mutation", while the shipped table
 includes `rtk` (Rust binary plus a Claude Code hook) and `context7` (Node), and
 the app writes its own fenced block into the user's shell profile. That gap is a
-real opening for a disclosure-first issue. It is on hold anyway: `gglucass` is a
-top contributor to `headroomlabs-ai/headroom` with over a hundred issues and PRs
-there, so they are very likely one of the people who has not yet answered our
-2026-09-04 comment on headroom #1009. Writing into their second repo the day
-after is the "do not write again to someone who has not answered" rule in
-substance if not in letter. Revisit when #1009 moves, or after the two-week
-reminder window.
+real opening for a disclosure-first issue. It is on hold anyway: the two repos
+share a maintainer with our open 2026-09-04 comment on headroom #1009, so
+writing into the second one the day after is the "do not write again to someone
+who has not answered" rule in substance if not in letter. Revisit when #1009
+moves, or after the two-week reminder window. The reasoning that identifies the
+overlap is in `ops/arrivals.md` in the private repo — it names a person, so it
+does not belong here.
 
 **`Mibayy/token-savior` (1.1k★) is a competitor, not a door.** Its "How it
 composes with adjacent tools" table is not a list of recommended navigators; it
