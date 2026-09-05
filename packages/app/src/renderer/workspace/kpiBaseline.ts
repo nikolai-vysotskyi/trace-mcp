@@ -19,6 +19,20 @@ export interface KpiBaseline {
 
 export const LS_BASELINE_KEY = 'trace-mcp.workspace.kpi-baseline';
 export const BASELINE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Below this age a snapshot is stored but not compared against.
+ *
+ * The mechanism is a daily one — "today against yesterday" — and a reading
+ * taken minutes ago is not yesterday. Two things go wrong without a floor,
+ * and both were on screen at once on a first launch: the comparison line read
+ * "No change vs 34 seconds ago", which is a tautology where DESIGN.md §7 asks
+ * for an answer to "compared to what?"; and the tile above it read
+ * "Projects 18, ↑ +3 vs 34 seconds ago", because the baseline was snapshotted
+ * from the first complete-looking reading and the three projects that arrived
+ * after it were reported as workspace growth. TRA-458 refused an *empty*
+ * snapshot for the same reason; this refuses a *just-taken* one.
+ */
+export const BASELINE_MIN_AGE_MS = 60 * 60 * 1000;
 
 export interface BaselineRoll {
   /** Snapshot to compare today's numbers against; null when we have none yet. */
@@ -46,6 +60,7 @@ function isComparable(b: KpiBaseline | null): b is KpiBaseline {
  * Decide which baseline to show and which to store.
  *
  *  - nothing comparable stored → start tracking now, show no delta yet
+ *  - stored within the hour    → keep it, show no delta yet
  *  - stored today              → compare against it, keep it
  *  - stored earlier            → compare against it, then replace it
  */
@@ -60,6 +75,7 @@ export function rollBaseline(
   const age = nowMs - Date.parse(stored.at);
   if (!Number.isFinite(age) || age < 0) return { previous: null, next: fresh };
   if (age >= BASELINE_MAX_AGE_MS) return { previous: stored, next: fresh };
+  if (age < BASELINE_MIN_AGE_MS) return { previous: null, next: null };
   return { previous: stored, next: null };
 }
 
