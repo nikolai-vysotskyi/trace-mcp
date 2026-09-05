@@ -631,3 +631,57 @@ requires one graph call but does not forbid source reads, so an agent that
 queries the graph and then greps anyway produces exactly that result. That is
 routing, and routing is the part of our product that does not port across
 clients. Tracked in TRA-874; the outgoing comment is in TRA-875.
+
+## Sweeping the GitHub *issue* index — a different index from code search (2026-09-05)
+
+The code-search sweep above reads files. It cannot see a tracker: an issue body
+is not a file, and `gh search code` never returns one. Running the same names
+through `gh search issues` is a second source with a second method, and on its
+first pass it returned something the code sweep had missed for a month.
+
+```
+gh search issues 'nikolai-vysotskyi/trace-mcp' --limit 30 --json repository,title,url,createdAt,state
+gh search issues 'trace-mcp'                   --limit 40 --json repository,title,url,createdAt
+```
+
+Read the same way as the code sweep: the bare `trace-mcp` query is dominated by
+OpenTelemetry-flavoured noise (`trace`, `trace_id`, `MCP traces` — a dozen repos
+per page, none of them us), and the qualified `nikolai-vysotskyi/trace-mcp` query
+is the one that only matches us. Both quotas are the search quota, 10 req/min.
+
+**What it found: [`axisrow/trace-mcp-plugin`](https://github.com/axisrow/trace-mcp-plugin)**
+— a third-party Claude Code plugin that installs and configures trace-mcp
+per project (created 2026-08-01, 0★, last pushed 2026-08-04). Its author is
+`axisrow`, who also filed our issues #277, #282 and #297. Two of its three
+issues are reports about **trace-mcp**, filed in his tracker and never in ours:
+
+- [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (2026-08-03) —
+  auto-registration: `local` scope silently becomes global, measured as 9 project
+  roots in the registry within a day of a single install. This is upstream #936,
+  opened 2026-09-05 — **a month after he measured it**, and independently.
+- [#5](https://github.com/axisrow/trace-mcp-plugin/issues/5) (2026-08-03, open,
+  unread by us until now) — his own install skill puts guard hooks in without
+  asking, because the package default is `standard` = `--enforce advisory`. The
+  defect is his, but the reasoning is about our enforcement tiers, and the note
+  that `full` = `--enforce strict` hard-denies `Read`/`Grep`/`Glob`/`Bash`/`Agent`
+  in every later session is a fair description of what our flag does.
+
+**The generalisable part, and the reason this belongs in the ledger:** the person
+who uses trace-mcp most visibly writes his findings down in *his* repository.
+Our tracker under-counts real usage, and the gap is not small — two of his three
+reports. Read alongside `ops/arrivals.md`: the same shape as the code-search
+result, in that the mechanism is being findable, not being submitted to.
+
+Two lesser results from the same pass, recorded so the next run does not re-open
+them: [`apiiskan/ai-agent-radar`](https://github.com/apiiskan/ai-agent-radar)
+(1★) auto-listed us in a generated Chinese daily digest on 2026-08-03 — a bot,
+no audience, nothing to do; and `mcprepository.com/mnehmos/trace-mcp` lists a
+**different project of the same name** (`Mnehmos/trace-mcp`, 0★, a schema-mismatch
+analyser, last touched nine months ago). A directory query for our name can land
+on him. That is a fact about the name, not a reason to reopen it —
+`ops/rename-to-trace.md` and TRA-879 already settled that nothing public changes.
+
+**Inbound to our own tracker over the same period: nothing.** No external issue
+since 2026-08-19 (#334, verbose output), no external pull request ever, and the
+four most recent external issues before that were directory invitations, not
+usage. Read with the above, that is not the same as no users.
