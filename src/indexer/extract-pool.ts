@@ -91,6 +91,12 @@ const DEFAULT_KEEPALIVE_WORKER_COUNT = Math.max(1, Math.min(4, Math.floor(os.cpu
 
 export interface ExtractPoolOptions {
   size?: number;
+  /** Override the bundled worker entry. Only measurement harnesses and tests
+   *  pass this — they run unbundled (tsx/vitest), where `./extract-worker.js`
+   *  does not exist next to this module, so the pool would silently report
+   *  itself unavailable and every measurement would be of in-process
+   *  extraction instead (TRA-925). */
+  workerEntry?: URL;
   /** When true, use the long daemon-mode idle window instead of the short CLI
    *  one, so workers stay warm across bursty edits. CLI/tests pass false so the
    *  process can exit cleanly the moment the pool drains. */
@@ -180,7 +186,7 @@ export class ExtractPool {
     const o: ExtractPoolOptions = typeof opts === 'number' ? { size: opts } : opts;
     this.keepAlive = o.keepAlive ?? false;
     this.size = o.size ?? (this.keepAlive ? DEFAULT_KEEPALIVE_WORKER_COUNT : DEFAULT_WORKER_COUNT);
-    this.workerEntry = resolveWorkerEntry();
+    this.workerEntry = o.workerEntry ?? resolveWorkerEntry();
   }
 
   /** True when workers are usable in the current runtime (bundled build). */
