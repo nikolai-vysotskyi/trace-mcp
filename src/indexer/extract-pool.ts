@@ -310,6 +310,11 @@ export class ExtractPool {
       // Only worth a log line in daemon mode — CLI pools tear down constantly.
       logger.info({ size: workers.length }, 'Extract worker pool idle — releasing workers');
     }
+    // Detach first. An idle release is deliberate, so the 'exit' these workers
+    // are about to emit carries no information — and by the time it lands the
+    // slot may already hold a *new* worker spawned by an extract() that arrived
+    // mid-teardown, which onExit would then kill as a crash.
+    for (const w of workers) w.removeAllListeners();
     await Promise.all(workers.map((w) => w.terminate().catch(() => 0)));
   }
 
@@ -380,6 +385,10 @@ export class ExtractPool {
     // respawn completes. busy stays false (the request was rejected).
     delete this.workers[workerIdx];
     this.busy[workerIdx] = false;
+    // Only onMessage used to re-arm the idle timer, so a batch that ended in a
+    // rejection left the pool resident with no timer until the next successful
+    // extract() — the exact leak this idle window exists to close.
+    if (this.pending.size === 0) this.scheduleIdleTeardown();
 
     if (this.terminated) return;
 

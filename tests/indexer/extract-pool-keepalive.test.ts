@@ -48,7 +48,7 @@ describe('ExtractPool — keepAlive option', () => {
       const daemonTeardown = vi.spyOn(daemon, 'idleTeardown').mockResolvedValue();
       const cliTeardown = vi.spyOn(cli, 'idleTeardown').mockResolvedValue();
       // idleTeardown only fires when workers exist — fake one slot each.
-      const fakeWorker = (): unknown => ({ terminate: async () => 0 });
+      const fakeWorker = (): unknown => ({ terminate: async () => 0, removeAllListeners() {} });
       (daemon as unknown as { workers: unknown[] }).workers = [fakeWorker()];
       (cli as unknown as { workers: unknown[] }).workers = [fakeWorker()];
 
@@ -74,5 +74,46 @@ describe('ExtractPool — keepAlive option', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('idleTeardown detaches listeners before terminating (TRA-811)', async () => {
+    // The released workers' 'exit' is meaningless, and by the time it lands the
+    // slot may hold a new worker that onExit would kill as a crash.
+    const detached: boolean[] = [];
+    const pool = new ExtractPool({ keepAlive: true }) as ExtractPool & {
+      workers: unknown[];
+      idleTeardown: () => Promise<void>;
+    };
+    pool.workers = [0, 1].map((i) => ({
+      removeAllListeners() {
+        detached[i] = true;
+      },
+      terminate: async () => {
+        expect(detached[i]).toBe(true);
+        return 0;
+      },
+    }));
+    await pool.idleTeardown();
+    expect(detached).toEqual([true, true]);
+  });
+
+  it('re-arms the idle timer when a batch ends in a rejection (TRA-811)', () => {
+    // Only onMessage used to call scheduleIdleTeardown, so a failing batch left
+    // the pool resident with no timer until the next successful extract().
+    const pool = new ExtractPool({ keepAlive: true }) as ExtractPool & {
+      slots: unknown[];
+      workers: unknown[];
+      pending: Map<number, { reject: (e: Error) => void }>;
+      idleTimer: NodeJS.Timeout | null;
+      onError: (idx: number, err: Error) => void;
+    };
+    pool.slots = [{ consecutiveFailures: 0, suppressedCount: 0, respawnTimer: null }];
+    pool.workers = [{ terminate: async () => 0 }];
+    pool.pending.set(1, { reject: () => {} });
+    expect(pool.idleTimer).toBeNull();
+    pool.onError(0, new Error('boom'));
+    expect(pool.pending.size).toBe(0);
+    expect(pool.idleTimer).not.toBeNull();
+    clearTimeout(pool.idleTimer as NodeJS.Timeout);
   });
 });
