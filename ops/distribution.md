@@ -727,57 +727,21 @@ before any list submission, not after.
 ## Sweeping the GitHub *issue* index — a different index from code search (2026-09-05)
 
 The code-search sweep above reads files. It cannot see a tracker: an issue body
-is not a file, and `gh search code` never returns one. Running the same names
-through `gh search issues` is a second source with a second method, and on its
-first pass it returned something the code sweep had missed for a month.
+is not a file, and `gh search code` never returns one. Running our name through
+the issue index is a second source with a second method, and on its first pass
+it returned a third-party wrapper the code sweep had missed for a month (the
+`axisrow/trace-mcp-plugin` row in the table above).
 
-```
-gh search issues 'nikolai-vysotskyi/trace-mcp' --limit 30 --json repository,title,url,createdAt,state
-gh search issues 'trace-mcp'                   --limit 40 --json repository,title,url,createdAt
-```
+**The naive query is the trap.** `q='"trace-mcp"'` returns ~31,000 hits: the
+issue index tokenises on the hyphen, so it matches every issue containing
+"trace" and "mcp" anywhere and the phrase quotes do nothing. Use the qualified
+path instead — `gh api -X GET search/issues -f q='"nikolai-vysotskyi/trace-mcp" -repo:nikolai-vysotskyi/trace-mcp'`
+— which only matches text where someone wrote our full path. Never `in:title`.
+Search quota is 10 req/min.
 
-Read the same way as the code sweep: the bare `trace-mcp` query is dominated by
-OpenTelemetry-flavoured noise (`trace`, `trace_id`, `MCP traces` — a dozen repos
-per page, none of them us), and the qualified `nikolai-vysotskyi/trace-mcp` query
-is the one that only matches us. Both quotas are the search quota, 10 req/min.
-
-**What it found: [`axisrow/trace-mcp-plugin`](https://github.com/axisrow/trace-mcp-plugin)**
-— a third-party Claude Code plugin that installs and configures trace-mcp
-per project (created 2026-08-01, 0★, last pushed 2026-08-04). Its author is
-`axisrow`, who also filed our issues #277, #282 and #297. Two of its six issues
-are reports about **trace-mcp**, filed in his tracker and never in ours (the
-other four are about the plugin itself and are closed):
-
-- [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (2026-08-03) —
-  auto-registration: `local` scope silently becomes global, measured as 9 project
-  roots in the registry within a day of a single install. This is upstream #936,
-  opened 2026-09-05 — **a month after he measured it**, and independently.
-- [#5](https://github.com/axisrow/trace-mcp-plugin/issues/5) (2026-08-03, open,
-  unread by us until now) — his own install skill puts guard hooks in without
-  asking, because the package default is `standard` = `--enforce advisory`. The
-  defect is his, but the reasoning is about our enforcement tiers, and the note
-  that `full` = `--enforce strict` hard-denies `Read`/`Grep`/`Glob`/`Bash`/`Agent`
-  in every later session is a fair description of what our flag does.
-
-**The generalisable part, and the reason this belongs in the ledger:** the person
-who uses trace-mcp most visibly writes his findings down in *his* repository.
-Our tracker under-counts real usage, and the gap is not small — two of his three
-reports. Read alongside `ops/arrivals.md`: the same shape as the code-search
-result, in that the mechanism is being findable, not being submitted to.
-
-Two lesser results from the same pass, recorded so the next run does not re-open
-them: [`apiiskan/ai-agent-radar`](https://github.com/apiiskan/ai-agent-radar)
-(1★) auto-listed us in a generated Chinese daily digest on 2026-08-03 — a bot,
-no audience, nothing to do; and `mcprepository.com/mnehmos/trace-mcp` lists a
-**different project of the same name** (`Mnehmos/trace-mcp`, 0★, a schema-mismatch
-analyser, last touched nine months ago). A directory query for our name can land
-on him. That is a fact about the name, not a reason to reopen it —
-`ops/rename-to-trace.md` and TRA-879 already settled that nothing public changes.
-
-**Inbound to our own tracker over the same period, for comparison.** The last
-external *bug report* is #334 (2026-08-19, verbose output by default); since then
-the tracker has had two framework-support requests (#381, #382 — `drguptavivek`,
-2026-08-27) and one directory invitation (#536, 2026-08-29), and no pull request
-from a human outside the project, ever. Two behavioural reports landed in
-somebody else's tracker in the same window. Read together, a quiet tracker is not
-the same as a quiet user base — it is a statement about where reports go.
+**What the results mean, and who they name, is not recorded here.** A hit on
+this channel is a person writing about us in their own tracker, so the reading
+of it belongs in `ops/user-signal.md` in the private repo, alongside the rest of
+the "what users say" ledger — see the repository-split rule in the
+`workspace-rules` skill. This file records the door and the query; that one
+records the people. The 2026-09-05 pass is already written up there in full.
