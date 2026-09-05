@@ -16,6 +16,7 @@
  */
 import { searchFts as ftsSearch } from '../../db/fts.js';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import { minMax } from '../../util/minmax.js';
 
 /** Filters accepted by the flat-mode search path. */
 export interface FlatSearchFilters {
@@ -69,8 +70,9 @@ export async function runFlatSearch(
   const fileIds = [...new Set(ftsResults.map((r) => r.fileId))];
   const fileMap = store.getFilesByIds(fileIds);
 
-  const minRank = Math.min(...ftsResults.map((r) => r.rank));
-  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+  // Reduce, never spread: ftsResults is bounded by the index, not by `limit`
+  // (#957 — every `search` on a 152k-symbol index threw RangeError here).
+  const { min: minRank, max: maxRank } = minMax(ftsResults.map((r) => r.rank));
   const rankSpread = maxRank - minRank || 1;
 
   const heritage = filters.implements || filters.extends;
