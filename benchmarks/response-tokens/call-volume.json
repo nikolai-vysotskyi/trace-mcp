@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "Real call volume behind docs/_data/response_tokens.json (TRA-904).",
+    "Source: one machine's ~/.trace/savings.json, read 2026-09-05 during TRA-880 —",
+    "20,187 recorded calls since the store was created, of which the 12 tools below",
+    "account for 17,847. It is committed rather than read live because the weighting",
+    "of a published figure must be reproducible by anyone checking it out, and",
+    "nobody else's store has these numbers. Re-snapshot with:",
+    "  node -e \"const s=require(require('os').homedir()+'/.trace/savings.json');console.log(JSON.stringify(s))\"",
+    "and say in the same commit whose store it is and when it was read.",
+    "This is ONE machine's usage mix, not the field. Never call it an average user."
+  ],
+  "read_at": "2026-09-05",
+  "source": "~/.trace/savings.json, single machine (maintainer), store created 2026-07",
+  "calls_store_total": 20187,
+  "calls": {
+    "search_text": 5123,
+    "get_outline": 4428,
+    "search": 4413,
+    "get_symbol": 2646,
+    "find_usages": 436,
+    "get_project_map": 345,
+    "get_index_health": 206,
+    "get_tests_for": 94,
+    "get_complexity_report": 78,
+    "get_context_bundle": 36,
+    "get_task_context": 30,
+    "get_call_graph": 12
+  }
+}

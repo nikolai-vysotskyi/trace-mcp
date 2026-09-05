@@ -151,9 +151,20 @@ That is the trade in one line: if your session is a single question about a smal
 
 ## What we claim, and what we have measured
 
-Our homepage claims **~40–50% fewer tokens on average** across real agent workflows. That is our own aggregate figure from our own usage, not a third-party benchmark, and it varies enormously with repository size and session shape — on a small repo that fits in context it is roughly zero. The numbers on this page that come with a script and a tokenizer are the ones in section 4; those you can reproduce.
+### The number moved on 5 September 2026, and here is why
 
-We do not currently have a published, independently reproducible end-to-end benchmark, and at least one competitor does. We would rather write that here than quietly imply otherwise.
+Until that date this site and the README claimed **~40–50% fewer tokens on average**. That figure was not a measurement. It descended from a counter in `src/savings.ts` that scored every tool call *before the tool ran*: `RAW_COST_ESTIMATES[tool] × 0.15`, a constant. Thousands of calls, zero variance — 5,123 `search_text` calls each booked exactly 2,550 tokens saved. We found it ourselves, in [TRA-880](https://github.com/nikolai-vysotskyi/trace-mcp/pull/915), and the counter now measures the real response instead.
+
+The figure we publish in its place is **{{ site.data.response_tokens.reduction_pct }}%**, over {{ site.data.response_tokens.calls_weighted }} recorded calls of twelve tools, with each tool's response counted in `o200k_base` tokens on the wire. Read the caveats before quoting it:
+
+- **The measured half is the response. The baseline half is still an estimate.** "What a `Read`/`Grep` would have cost instead" is hand-written in `RAW_COST_ESTIMATES` and has never been validated. Until it is, this is a measured numerator over an estimated denominator.
+- **One machine's usage mix**, not the field — the call weighting comes from a single maintainer store (`benchmarks/response-tokens/call-volume.json`, with provenance).
+- **{{ site.data.response_tokens.tools_costing_more }} of the {{ site.data.response_tokens.tools_measured }} tools measured return *more* tokens than the baseline they replace** — `search`, `find_usages`, `get_complexity_report` and `get_call_graph`. The old counter booked a positive number for them anyway. The per-tool table is published in full: [tool response token cost](/perf/response-tokens/).
+- It still varies enormously with repository size and session shape; on a small repo that fits in context it is roughly zero.
+
+The one figure here that is neither ours nor an estimate is the [PR review context benchmark](/pr-context-benchmark.html) — {{ site.data.pr_context_bench.median_savings_pct }}% median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories we do not maintain, SHAs pinned and losing cases published. The numbers on this page that come with a script and a tokenizer are the ones in section 4; those you can reproduce.
+
+We still do not have a published, independently reproducible *end-to-end session* benchmark, and at least one competitor does. We would rather write that here than quietly imply otherwise.
 
 ## FAQ
 
