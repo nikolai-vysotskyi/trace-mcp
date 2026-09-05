@@ -28,7 +28,10 @@ import { useDaemon } from '../hooks/useDaemon';
 import { deriveDaemonState } from '../workspace/useWorkspaceProjects';
 import { t } from '../i18n';
 import { formatDate, formatList, formatNumber, relativeTime } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
+import { loadSnapshot, saveSnapshot } from '../snapshot';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Badge,
   Button,
@@ -268,8 +271,21 @@ export function ProjectOverview({
       metricsErrorKind: null,
     }) !== 'ok';
 
-  const [stats, setStats] = useState<ProjectStats | null>(null);
+  /* Open on the last numbers we had for this project rather than on a
+     skeleton. Measured 2026-09-05: every renderer read of the daemon blocked
+     for 7.80 s while it indexed, and this screen spent all of it showing five
+     grey bars for counts that were already on disk (TRA-934). The fresh read
+     is still issued; it replaces these when it lands, and until it does the
+     card says so. */
+  const statsKey = `trace-mcp.overview.stats:${root}`;
+  const [stats, setStats] = useState<ProjectStats | null>(() =>
+    loadSnapshot<ProjectStats>(statsKey),
+  );
   const [statsLoad, setStatsLoad] = useState<Load>('loading');
+  /* Whether the numbers on screen came from the daemon *this* session. False
+     while the snapshot is standing in, and the card says so — a stale answer
+     the user can read beats a skeleton, but only if it admits what it is. */
+  const [statsFresh, setStatsFresh] = useState(false);
   const [coverage, setCoverage] = useState<CoverageReport | null>(null);
   const [coverageLoad, setCoverageLoad] = useState<Load>('loading');
   const [, setRepos] = useState<SubprojectInfo[]>([]);
@@ -284,6 +300,10 @@ export function ProjectOverview({
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  /* The Index card is the first thing on this screen with a number in it. */
+  /* A snapshot on screen is a useful frame — that is the point of keeping it. */
+  useUsefulPaint('overview', statsLoad !== 'loading' || stats !== null);
+
   const overflowMenu = useMenuAnchor();
   const rowMenu = useMenuAnchor();
   const [rowMenuFor, setRowMenuFor] = useState<ServiceInfo | null>(null);
@@ -296,19 +316,22 @@ export function ProjectOverview({
   const fetchStats = useCallback(async () => {
     setStatsLoad('loading');
     try {
-      const res = await fetch(`${BASE}/api/projects/stats?project=${encodeURIComponent(root)}`);
+      const res = await daemonFetch(`${BASE}/api/projects/stats?project=${encodeURIComponent(root)}`);
       if (!res.ok) throw new Error(String(res.status));
-      setStats(await res.json());
+      const fresh = (await res.json()) as ProjectStats;
+      setStats(fresh);
+      saveSnapshot(statsKey, fresh);
+      setStatsFresh(true);
       setStatsLoad('ready');
     } catch {
       setStatsLoad('failed');
     }
-  }, [root]);
+  }, [root, statsKey]);
 
   const fetchCoverage = useCallback(async () => {
     setCoverageLoad('loading');
     try {
-      const res = await fetch(`${BASE}/api/projects/coverage?project=${encodeURIComponent(root)}`);
+      const res = await daemonFetch(`${BASE}/api/projects/coverage?project=${encodeURIComponent(root)}`);
       if (!res.ok) throw new Error(String(res.status));
       setCoverage(await res.json());
       setCoverageLoad('ready');
@@ -321,7 +344,7 @@ export function ProjectOverview({
     setServicesLoad('loading');
     try {
       const params = new URLSearchParams({ project: root });
-      const res = await fetch(`${BASE}/api/projects/subprojects?${params}`);
+      const res = await daemonFetch(`${BASE}/api/projects/subprojects?${params}`);
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       setRepos(data.repos ?? []);
@@ -337,7 +360,7 @@ export function ProjectOverview({
       setSmellsLoad('loading');
       try {
         const params = new URLSearchParams({ project: root, category, limit: '500' });
-        const res = await fetch(`${BASE}/api/projects/smells?${params}`);
+        const res = await daemonFetch(`${BASE}/api/projects/smells?${params}`);
         if (!res.ok) throw new Error(String(res.status));
         setSmells(await res.json());
         setSmellsLoad('ready');
@@ -379,7 +402,7 @@ export function ProjectOverview({
     try {
       const folder = await api.selectFolder();
       if (!folder) return;
-      await fetch(`${BASE}/api/projects/subprojects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      await daemonFetch(`${BASE}/api/projects/subprojects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoPath: folder, project: root }),
@@ -394,7 +417,7 @@ export function ProjectOverview({
 
   const handleRemoveService = async (name: string) => {
     try {
-      const res = await fetch(`${BASE}/api/projects/subprojects?name=${encodeURIComponent(name)}`, {
+      const res = await daemonFetch(`${BASE}/api/projects/subprojects?name=${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -408,7 +431,7 @@ export function ProjectOverview({
 
   const handleUpdateGroup = async (serviceId: number, projectGroup: string | null) => {
     try {
-      const res = await fetch(`${BASE}/api/projects/services`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await daemonFetch(`${BASE}/api/projects/services`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serviceId, projectGroup: projectGroup || null }),
@@ -698,6 +721,18 @@ export function ProjectOverview({
                 <SectionError what={t('errorIndexSummary')} onRetry={fetchStats} />
               ) : stats ? (
                 <>
+                  {!statsFresh && (
+                    /* Same sentence the Workspace uses for the same condition,
+                       from the same key — one wording for "these are the last
+                       indexed numbers", not two. */
+                    <div
+                      role="status"
+                      className="px-3 pt-2 text-[13px]"
+                      style={{ color: 'var(--label-secondary)' }}
+                    >
+                      {t('workspace:busyStale')}
+                    </div>
+                  )}
                   <ListRow
                     label={t('rowStatus')}
                     value={

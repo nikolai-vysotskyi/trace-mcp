@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
    — without it a test that renders Notebook in isolation gets raw keys. */
 import '../i18n';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Button,
   Card,
@@ -87,6 +88,9 @@ export function Notebook({
   const { t } = useTranslation('notebook');
   const [cells, setCells] = useState<Cell[]>(() => [makeCell()]);
   const [scrolled, setScrolled] = useState(false);
+
+  /* Cells run on demand; nothing is fetched before the first paint. */
+  useUsefulPaint('notebook', true);
 
   const addCell = useCallback(() => {
     setCells((prev) => [...prev, makeCell()]);

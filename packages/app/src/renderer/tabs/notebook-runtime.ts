@@ -16,6 +16,8 @@
  * re-exports the public API for backwards compatibility.
  */
 
+import { DAEMON_TOOL_TIMEOUT_MS, daemonFetch } from '../daemon-fetch';
+
 const BASE = 'http://127.0.0.1:3741';
 
 // ── Tool catalog ─────────────────────────────────────────────────────
@@ -133,12 +135,12 @@ export const defaultNotebookClient: NotebookClient = {
       const kind = args.kind?.trim() ?? '';
       const params = new URLSearchParams({ project: root, q, limit: '30' });
       if (kind) params.set('kind', kind);
-      const r = await fetch(`${BASE}/api/projects/symbols?${params}`);
+      const r = await daemonFetch(`${BASE}/api/projects/symbols?${params}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => '')}`);
       return await r.json();
     }
     // JSON-RPC path: initialize a session, then call the tool.
-    const initRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    const initRes = await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
       body: JSON.stringify({
@@ -151,14 +153,14 @@ export const defaultNotebookClient: NotebookClient = {
           clientInfo: { name: 'trace-mcp-notebook', version: '0.1.0' },
         },
       }),
-    });
+    }, DAEMON_TOOL_TIMEOUT_MS);
     if (!initRes.ok) throw new Error(`init failed: HTTP ${initRes.status}`);
     const sessionId = initRes.headers.get('mcp-session-id') ?? '';
     if (!sessionId) throw new Error('init did not return a session ID');
     // Drain the init response body so the server doesn't keep it open.
     await initRes.text().catch(() => '');
     // Send the notifications/initialized lifecycle message.
-    await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -166,13 +168,13 @@ export const defaultNotebookClient: NotebookClient = {
         'mcp-session-id': sessionId,
       },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }),
-    }).then((r) => r.text().catch(() => ''));
+    }, DAEMON_TOOL_TIMEOUT_MS).then((r) => r.text().catch(() => ''));
     // Call the tool.
     const cleanArgs: Record<string, string> = {};
     for (const [k, v] of Object.entries(args)) {
       if (typeof v === 'string' && v.trim() !== '') cleanArgs[k] = v;
     }
-    const callRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    const callRes = await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -185,7 +187,7 @@ export const defaultNotebookClient: NotebookClient = {
         method: 'tools/call',
         params: { name: tool, arguments: cleanArgs },
       }),
-    });
+    }, DAEMON_TOOL_TIMEOUT_MS);
     if (!callRes.ok) throw new Error(`HTTP ${callRes.status}: ${await callRes.text().catch(() => '')}`);
     const ct = callRes.headers.get('content-type') ?? '';
     let payload: unknown;

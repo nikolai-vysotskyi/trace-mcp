@@ -1,0 +1,141 @@
+{
+  "schema": "trace-mcp app per-screen time-to-first-useful-paint, TRA-934",
+  "notes": [
+    "cold_ms  — Page.navigate -> the screen's own `useful:<id>` mark (src/renderer/perf.ts).",
+    "cold_shell_ms — `app-first-content`: React committed the shell. The gap to cold_ms is the wait for data.",
+    "warm_ms — sidebar click -> useful, in a window that is already up.",
+    "never_useful — samples where the screen produced no useful frame inside 30 s. Any non-zero value is the headline.",
+    "The `wedged-daemon` run holds every request to 127.0.0.1:3741 open and unanswered — the daemon's observed failure shape (TRA-922).",
+    "Produced by `node scripts/perf-screens.mjs` in packages/app; see docs/perf/README.md."
+  ],
+  "runs": [
+    {
+      "date": "2026-09-05T16:43:37.142Z",
+      "mode": "live-daemon",
+      "daemon": "http://127.0.0.1:3741",
+      "project": "/Users/nikolai/PhpstormProjects/trace-mcp",
+      "profile": "warm (reused)",
+      "samples": 3,
+      "deadline_ms": 30000,
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "v22.22.3"
+      },
+      "metrics": {
+        "workspace": {
+          "cold_ms": 67,
+          "cold_shell_ms": 72,
+          "warm_ms": null,
+          "never_useful": 0
+        },
+        "clients": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 314,
+          "never_useful": 0
+        },
+        "overview": {
+          "cold_ms": 21,
+          "cold_shell_ms": 22,
+          "warm_ms": null,
+          "never_useful": 0
+        },
+        "ask": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 303,
+          "never_useful": 0
+        },
+        "activity": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 8306,
+          "never_useful": 0
+        },
+        "memory": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 6485,
+          "never_useful": 0
+        },
+        "notebook": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 302,
+          "never_useful": 0
+        },
+        "insights": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 304,
+          "never_useful": 0
+        }
+      }
+    },
+    {
+      "date": "2026-09-05T16:42:36.406Z",
+      "mode": "wedged-daemon",
+      "daemon": "intercepted: accepts, never answers",
+      "project": "/Users/nikolai/PhpstormProjects/trace-mcp",
+      "profile": "warm (reused)",
+      "samples": 3,
+      "deadline_ms": 30000,
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "v22.22.3"
+      },
+      "metrics": {
+        "workspace": {
+          "cold_ms": 67,
+          "cold_shell_ms": 72,
+          "warm_ms": null,
+          "never_useful": 0
+        },
+        "clients": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 326,
+          "never_useful": 0
+        },
+        "overview": {
+          "cold_ms": 22,
+          "cold_shell_ms": 24,
+          "warm_ms": null,
+          "never_useful": 0
+        },
+        "ask": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 302,
+          "never_useful": 0
+        },
+        "activity": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 8307,
+          "never_useful": 0
+        },
+        "memory": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 8305,
+          "never_useful": 0
+        },
+        "notebook": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 302,
+          "never_useful": 0
+        },
+        "insights": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 304,
+          "never_useful": 0
+        }
+      }
+    }
+  ]
+}

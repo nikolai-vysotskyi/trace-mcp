@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatNumber } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
 import { Badge, type Tone } from '../lattice/ui';
 
 const BASE = 'http://127.0.0.1:3741';
@@ -801,7 +802,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
 
   const fetchPayload = useCallback(async () => {
     try {
-      const res = await fetch(
+      const res = await daemonFetch(
         `${BASE}/api/projects/full-stats?project=${encodeURIComponent(root)}`,
       );
       if (!res.ok) {

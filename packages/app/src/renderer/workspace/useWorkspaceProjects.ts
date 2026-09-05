@@ -18,15 +18,15 @@
  * snapshot, and it says so once rather than escalating through three sentences.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DAEMON_FETCH_TIMEOUT_MS, useDaemon } from '../hooks/useDaemon';
+import { BASE, DAEMON_FETCH_TIMEOUT_MS, daemonFetch } from '../daemon-fetch';
+import { loadSnapshot, saveSnapshot } from '../snapshot';
+import { useDaemon } from '../hooks/useDaemon';
 import { t } from '../i18n';
 import {
   type ProjectHealthMetrics,
   type ProjectViewModel,
   mergeIntoViewModel,
 } from './types';
-
-const BASE = 'http://127.0.0.1:3741';
 
 export const AUTO_REFRESH_INTERVAL_MS = 300_000; // 5 min — matches backend cache TTL.
 export const STATUS_TRANSITION_DEBOUNCE_MS = 1000;
@@ -43,23 +43,12 @@ export const DEGRADED_GRACE_MS = 1500;
 const LS_METRICS_KEY = 'trace-mcp.workspace.metrics';
 
 export function loadMetricsSnapshot(): ProjectHealthMetrics[] {
-  try {
-    const raw = localStorage.getItem(LS_METRICS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-    return Array.isArray(parsed) ? (parsed as ProjectHealthMetrics[]) : [];
-  } catch {
-    // Corrupted JSON, or a sandboxed renderer with no storage — start cold.
-    return [];
-  }
+  const parsed = loadSnapshot<unknown>(LS_METRICS_KEY);
+  return Array.isArray(parsed) ? (parsed as ProjectHealthMetrics[]) : [];
 }
 
 export function saveMetricsSnapshot(metrics: ProjectHealthMetrics[]): void {
-  try {
-    localStorage.setItem(LS_METRICS_KEY, JSON.stringify(metrics));
-  } catch {
-    // Quota or sandbox. A missing snapshot costs one screen of em dashes, so
-    // there is nothing worth reporting to the user here.
-  }
+  saveSnapshot(LS_METRICS_KEY, metrics);
 }
 
 // ── Exported pure helpers (testable without React) ────────────────────────
@@ -237,7 +226,7 @@ export function classifyMetricsError(err: unknown): MetricsErrorKind {
  */
 export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/api/dashboard/projects`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+    const res = await daemonFetch(`${BASE}/api/dashboard/projects`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     if (!res.ok) {
       setters.setErrorKind('server');
       return false;
@@ -316,7 +305,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetch(`${BASE}/api/dashboard/refresh`, { method: 'POST', signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      await daemonFetch(`${BASE}/api/dashboard/refresh`, { method: 'POST' }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     } catch {
       // Best-effort; still fetch even if invalidation failed.
     }

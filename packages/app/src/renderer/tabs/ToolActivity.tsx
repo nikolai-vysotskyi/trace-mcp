@@ -32,7 +32,9 @@ import { useTranslation } from 'react-i18next';
 import { useDocumentVisible } from '../hooks/useDocumentVisible';
 import { t } from '../i18n';
 import { formatDate, formatNumber, relativeTime } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Badge,
   Button,
@@ -1675,6 +1677,8 @@ export function ToolActivity({
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /* Useful once the journal feed is up or has produced a row — whichever
+     comes first; an empty-but-connected feed is a real answer. */
   // ── Keyboard navigation state ────────────────────────────────────────
   // Index into the currently-visible `filtered` list (flat order, regardless
   // of group-by-session). -1 means no selection.
@@ -1691,6 +1695,14 @@ export function ToolActivity({
   // appears on scroll instead of being painted permanently.
   const [scrolled, setScrolled] = useState(false);
   const [historyFailed, setHistoryFailed] = useState(false);
+
+  /* Useful once the journal has landed, provably failed, or the live feed is
+     up — whichever comes first. An empty-but-connected feed is a real answer;
+     a skeleton behind an unanswered daemon is not (TRA-934). */
+  useUsefulPaint(
+    'activity',
+    connected || entries.length > 0 || historyFailed || error !== null,
+  );
   const overflow = useMenuAnchor();
 
   // ── Pause / clear / export local controls ────────────────────────────
@@ -1738,7 +1750,7 @@ export function ToolActivity({
 
     const curFetch = (async () => {
       try {
-        const res = await fetch(`${BASE}/api/projects/journal/stats?${curParams}`);
+        const res = await daemonFetch(`${BASE}/api/projects/journal/stats?${curParams}`);
         if (res.ok) {
           const data = (await res.json()) as JournalStats;
           setStats(data);
@@ -1754,7 +1766,7 @@ export function ToolActivity({
     // current stats, so it has its own try/catch and leaves prevStats as-is.
     const prevFetch = (async () => {
       try {
-        const res = await fetch(`${BASE}/api/projects/journal/stats?${prevParams}`);
+        const res = await daemonFetch(`${BASE}/api/projects/journal/stats?${prevParams}`);
         if (res.ok) {
           const data = (await res.json()) as JournalStats;
           setPrevStats(data);
@@ -1839,7 +1851,7 @@ export function ToolActivity({
   const fetchHistory = useCallback(async () => {
     try {
       const params = new URLSearchParams({ project: root, limit: '200' });
-      const res = await fetch(`${BASE}/api/projects/journal?${params}`);
+      const res = await daemonFetch(`${BASE}/api/projects/journal?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       {
         const data = (await res.json()) as JournalEntry[];

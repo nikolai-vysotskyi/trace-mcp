@@ -12,7 +12,9 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { relativeTime } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Button,
   Card,
@@ -144,6 +146,10 @@ export function AskTab({ root }: { root: string }) {
      rule fades in on scroll instead of being painted permanently. */
   const [scrolled, setScrolled] = useState(false);
 
+  /* The thread is the screen. An empty thread with the composer ready is
+     useful; a session still loading is not. */
+  useUsefulPaint('ask', !loadingSession);
+
   const abortRef = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -165,7 +171,7 @@ export function AskTab({ root }: { root: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${BASE}/api/ask/provider?project=${encodeURIComponent(root)}`);
+        const r = await daemonFetch(`${BASE}/api/ask/provider?project=${encodeURIComponent(root)}`);
         if (cancelled || !r.ok) return;
         const d = await r.json();
         if (!cancelled) {
@@ -184,7 +190,7 @@ export function AskTab({ root }: { root: string }) {
   // Load sessions list
   const loadSessions = useCallback(async () => {
     try {
-      const r = await fetch(`${BASE}/api/ask/sessions?project=${encodeURIComponent(root)}`);
+      const r = await daemonFetch(`${BASE}/api/ask/sessions?project=${encodeURIComponent(root)}`);
       if (!r.ok) return;
       const d = await r.json();
       setSessions(d.sessions ?? []);
@@ -206,7 +212,7 @@ export function AskTab({ root }: { root: string }) {
     setError(null);
     setPhase('idle');
     try {
-      const r = await fetch(`${BASE}/api/ask/sessions/${encodeURIComponent(id)}`);
+      const r = await daemonFetch(`${BASE}/api/ask/sessions/${encodeURIComponent(id)}`);
       if (!r.ok) return;
       const d = await r.json();
       setMessages(d.messages ?? []);
@@ -245,7 +251,7 @@ export function AskTab({ root }: { root: string }) {
   // Create a new session
   const createSession = useCallback(async () => {
     try {
-      const r = await fetch(`${BASE}/api/ask/sessions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const r = await daemonFetch(`${BASE}/api/ask/sessions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_root: root, title: t('newChat') }),
@@ -261,7 +267,7 @@ export function AskTab({ root }: { root: string }) {
   const deleteSession = useCallback(
     async (id: string) => {
       try {
-        await fetch(`${BASE}/api/ask/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        await daemonFetch(`${BASE}/api/ask/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
         if (activeSessionId === id) {
           setActiveSessionId(null);
           setMessages([]);
@@ -303,7 +309,7 @@ export function AskTab({ root }: { root: string }) {
       setPhase('retrieving');
       setError(null);
       try {
-        const r = await fetch(
+        const r = await daemonFetch(
           `${BASE}/api/ask/sessions/${encodeURIComponent(sessionId)}/slash`,
           {
             method: 'POST',
@@ -354,7 +360,7 @@ export function AskTab({ root }: { root: string }) {
     // Auto-create session if none selected
     if (!sessionId) {
       try {
-        const r = await fetch(`${BASE}/api/ask/sessions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+        const r = await daemonFetch(`${BASE}/api/ask/sessions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_root: root, title: q.slice(0, 60) }),
@@ -402,7 +408,7 @@ export function AskTab({ root }: { root: string }) {
     abortRef.current = ctrl;
 
     try {
-      const r = await fetch(
+      const r = await daemonFetch(
         `${BASE}/api/ask/sessions/${encodeURIComponent(sessionId)}/messages`,
         {
           method: 'POST',

@@ -18,7 +18,9 @@ import {
 import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
 import { FloatingLayer } from '../lattice/FloatingLayer';
+import { daemonFetch } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Badge,
   Button,
@@ -862,6 +864,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   );
   // The categorical colour key currently painted on the canvas — legend data.
   const [colorKey, setColorKey] = useState<ColorKeyEntry[]>([]);
+
+  /* Nodes on the canvas, or a stated failure. Not the layout settling. */
+  useUsefulPaint('graph', stats !== null || error !== null);
   // Toolbar overflow menu + the anchored filter popover that replaced the
   // second floating control bar.
   const overflowMenu = useMenuAnchor();
@@ -1705,7 +1710,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
-        const resp = await fetch(`${BASE}/api/projects/graph?${params}`);
+        const resp = await daemonFetch(`${BASE}/api/projects/graph?${params}`);
         if (resp.status === 429) {
           const delay = 400 * 2 ** attempt;
           await new Promise((r) => setTimeout(r, delay));

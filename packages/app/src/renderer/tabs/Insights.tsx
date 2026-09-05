@@ -18,6 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useUsefulPaint } from '../perf';
 import { Badge, Button, EmptyState, PopUpButton, SegmentedControl, Toolbar } from '../lattice/ui';
 import {
   INSIGHT_REPORTS,
@@ -191,6 +192,10 @@ export function Insights({
   const focusedState = states[focused];
   const running = focusedState.status === 'running';
   const runLabel = running ? t('running') : focusedState.status === 'ok' ? t('refresh') : t('run');
+
+  /* Reports run on demand, so the screen is useful the moment the picker
+     and the empty state are up — there is nothing to wait for. */
+  useUsefulPaint('insights', !running);
 
   return (
     <div
