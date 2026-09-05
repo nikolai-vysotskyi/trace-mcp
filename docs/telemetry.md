@@ -1,10 +1,10 @@
 ---
-title: "Telemetry & Observability — OpenTelemetry spans for every MCP tool call"
-description: "trace-mcp's pluggable observability bridge emits OpenTelemetry-compatible spans for every AI provider call and every MCP tool call."
+title: "MCP Tracing — OpenTelemetry spans for every MCP tool call"
+description: "How to trace MCP tool calls: trace-mcp emits OpenTelemetry spans for every MCP tool invocation and AI provider call, exported to Jaeger or Langfuse."
 updated: 2026-09-04
 ---
 
-# Telemetry & Observability
+# MCP Tracing & Telemetry
 
 <script type="application/ld+json">
 {
@@ -31,10 +31,13 @@ updated: 2026-09-04
   }
 }
 </script>
-trace-mcp ships a pluggable observability bridge (P13) that emits
-OpenTelemetry-compatible spans for every AI provider call and every MCP tool
-invocation. The default sink is `noop` — opt-in only, and switched on with the
-`telemetry.*` keys described in [configuration](configuration.md). Turning it on
+Tracing an MCP server means seeing which tool the agent called, how long it
+took and what it threw. trace-mcp ships a pluggable observability bridge (P13)
+that emits OpenTelemetry-compatible spans for every AI provider call and every
+MCP tool invocation, so MCP tool traffic shows up in the same tracing backend
+as the rest of your stack. The default sink is `noop` — opt-in only, and
+switched on with the `telemetry.*` keys described in
+[configuration](configuration.md). Turning it on
 also unlocks the persistent `window` values of `analyze_perf`, which is
 otherwise limited to the current session ([analytics](analytics.md)).
 
@@ -69,7 +72,7 @@ JSON
 pnpm run build && node dist/cli.js eval run --dataset default
 ```
 
-## Where spans appear
+## Where the traces appear
 
 Open <http://localhost:16686>, pick `trace-mcp` from the **Service** dropdown,
 click **Find Traces**.
