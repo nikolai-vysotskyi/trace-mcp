@@ -162,18 +162,52 @@ function run(): Promise<Row[]> {
   });
 }
 
-const rows = await run();
+// TRA-945: three sessions, median per tool. A single sample is not a
+// measurement here — `get_task_context` moved 5 383 -> 8 357 tokens between two
+// runs minutes apart on the same commit, because the answer depends on index
+// state, not only on the code. The median is what gets published; the spread is
+// printed so a reader can see it.
+const RUNS = Number(process.env.BENCH_RUNS ?? 3);
+const samples = new Map<string, Row[]>();
+for (let n = 0; n < RUNS; n += 1) {
+  for (const r of await run()) {
+    if (!r.ok) {
+      throw new Error(
+        `[${r.tool}] returned an error — the preset or the index is wrong for this run, ` +
+          'and a number measured on a degraded surface is worse than none. Fix, then re-run.',
+      );
+    }
+    (samples.get(r.tool) ?? samples.set(r.tool, []).get(r.tool)!).push(r);
+  }
+}
+
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2] : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
+};
+const rows = [...samples.entries()].map(([tool, rs]) => ({
+  tool,
+  ok: true,
+  chars: median(rs.map((r) => r.chars)),
+  est: median(rs.map((r) => r.est)),
+  real: median(rs.map((r) => r.real)),
+  ms: median(rs.map((r) => r.ms)),
+  runs: rs.length,
+  real_min: Math.min(...rs.map((r) => r.real)),
+  real_max: Math.max(...rs.map((r) => r.real)),
+}));
+
 const pad = (s: string | number, n: number): string => String(s).padEnd(n);
 console.log(
-  `\n${pad('tool', 24)}${pad('ok', 4)}${pad('chars', 10)}${pad('est(c/4)', 10)}${pad('o200k', 10)}${pad('ms', 8)}`,
+  `\n${pad('tool', 24)}${pad('chars', 10)}${pad('est(c/4)', 10)}${pad('o200k', 10)}${pad('min-max', 16)}${pad('ms', 8)}`,
 );
 for (const r of rows) {
   console.log(
-    `${pad(r.tool, 24)}${pad(r.ok ? 'y' : 'ERR', 4)}${pad(r.chars, 10)}${pad(r.est, 10)}${pad(r.real, 10)}${pad(r.ms, 8)}`,
+    `${pad(r.tool, 24)}${pad(r.chars, 10)}${pad(r.est, 10)}${pad(r.real, 10)}${pad(`${r.real_min}-${r.real_max}`, 16)}${pad(r.ms, 8)}`,
   );
 }
 const total = rows.reduce((a, r) => a + r.real, 0);
-console.log(`\ntotal o200k tokens across ${rows.length} calls: ${total}`);
+console.log(`\nmedian of ${RUNS} runs; total o200k tokens across ${rows.length} tools: ${total}`);
 writeFileSync(
   join(REPO, 'docs/perf/response-tokens.json'),
   `${JSON.stringify(
@@ -182,6 +216,7 @@ writeFileSync(
       // TRA-920: the build this ran at travels with the number to every surface.
       measured_build: measuredBuild(),
       target: TARGET === REPO ? 'self' : TARGET,
+      runs: RUNS,
       rows,
     },
     null,
