@@ -153,7 +153,10 @@ export class LocalBackend implements Backend {
       );
     }
 
-    // Build all full-mode resources up-front — cheap (~500ms) compared to indexing.
+    // Build all full-mode resources up-front. Measured at ~7 MB / ~21 ms for the
+    // whole stack (TRA-925, docs/perf/session-baseline.md) — the session's real
+    // baseline is module evaluation, which has already happened by this point,
+    // so deferring these constructors behind `readOnly` would buy nothing.
     this.db = initializeDatabase(this.dbPath);
     writeServerPid(this.db);
     this.store = new Store(this.db);
