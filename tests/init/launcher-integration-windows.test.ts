@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { runtimeShimContent } from '../../packages/app/src/main/daemon-install';
 
 const isWin = process.platform === 'win32';
 const descIf = isWin ? describe : describe.skip;
@@ -192,5 +193,87 @@ try {
 
     expect(fs.existsSync(sentinel)).toBe(false);
     expect(fs.existsSync(`${sentinel}-sub`)).toBe(false);
+  });
+
+  // TRA-965. The app records `bin\node-runtime.cmd` as TRACE_MCP_NODE - a .cmd
+  // that runs the app binary with ELECTRON_RUN_AS_NODE. The file test on the
+  // fast path stays true after the app is replaced by an update, moved or
+  // uninstalled, so the launcher ran the .cmd, cmd failed to start a target
+  // that is no longer there, and the client lost trace-mcp for the whole
+  // session - with no ERROR line, because nothing the launcher did failed.
+  // Driven through powershell.exe directly, like the locked-pkg-roots test
+  // above: the cmd shim does not spawn on the windows-latest runner.
+  it('reprobes past a node-runtime.cmd whose app is gone', () => {
+    const { home, traceHome } = setupFakeHome();
+    const shim = path.join(traceHome, 'bin', 'node-runtime.cmd');
+    // The real generator, so the ps1's marker can never drift from it.
+    fs.writeFileSync(shim, runtimeShimContent(path.join(home, 'gone', 'trace-mcp.exe')));
+    const cli = path.join(home, 'fake-cli.js');
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="${shim.replace(/\\/g, '\\\\')}"`,
+        `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
+        // Cached, so nothing on the fast path would have run `node -v` and
+        // noticed - the exact shape the app writes.
+        'TRACE_MCP_NODE_MAJOR="24"',
+        '',
+      ].join('\r\n'),
+    );
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
+  });
+
+  // Review of #982: the first cut returned "fine" when the marker matched but
+  // no invocation line could be parsed out - the shim known to be ours and
+  // known to be unverified, run anyway. Once the marker matches, unparseable
+  // means reprobe.
+  it('reprobes a managed node-runtime.cmd whose invocation line cannot be parsed', () => {
+    const { home, traceHome } = setupFakeHome();
+    const shim = path.join(traceHome, 'bin', 'node-runtime.cmd');
+    fs.writeFileSync(
+      shim,
+      ['@echo off', 'rem Managed by the trace-mcp app (TRA-438) - do not edit by hand.', ''].join(
+        '\r\n',
+      ),
+    );
+    const cli = path.join(home, 'fake-cli.js');
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="${shim.replace(/\\/g, '\\\\')}"`,
+        `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
+        'TRACE_MCP_NODE_MAJOR="24"',
+        '',
+      ].join('\r\n'),
+    );
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
   });
 });
