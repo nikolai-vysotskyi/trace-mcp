@@ -13,6 +13,7 @@ import {
 } from '../../ai/index.js';
 import { SummarizationPipeline } from '../../ai/summarization-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
+import { isDangerousProjectRoot } from '../../dangerous-root.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
@@ -248,7 +249,21 @@ export class LocalBackend implements Backend {
     // DB already holds the daemon's index, so skip the entire indexing stack —
     // no indexAll (which spawns the ExtractPool worker threads), no AI passes.
     // Full indexing only runs in the genuine daemonless case (nothing seeded).
-    const readOnly = seeded;
+    // Never index or watch an obviously-wrong root. MCP clients that spawn us
+    // with cwd=/ (Claude Desktop does) otherwise pull the ENTIRE filesystem
+    // through indexAll + @parcel/watcher: 1.5 GB RSS and a permanent ~70% CPU
+    // burn per session, forever, on a project that does not exist (TRA-893).
+    // Reads still work — this only takes the write side offline.
+    const dangerReason = isDangerousProjectRoot(projectRoot);
+    if (dangerReason) {
+      logger.error(
+        { projectRoot, reason: dangerReason },
+        'LocalBackend: refusing to index — not a project directory. ' +
+          'Start trace-mcp with its working directory set to your project.',
+      );
+    }
+
+    const readOnly = seeded || dangerReason !== null;
     this.readOnly = readOnly;
 
     // Kick off initial indexing in the background — do not block start.
