@@ -195,9 +195,10 @@ picked up as items below:
 as one. Settled twice (TRA-273, TRA-413): all published versions cluster at
 a near-uniform weekly count while the median version has ~2 real installs,
 and day-old releases hit parity with month-old ones instantly. That is a
-mirror sweeping the version history. **Git clones are out too** (TRA-540):
-16,006 clones / 928 uniques in 14 days while human page views stayed flat
-at ~20/day, with unique *cloners* inflating alongside the raw count.
+mirror sweeping the version history. **Git clones are out too** (TRA-540): a
+14-day clone count two orders of magnitude above human page views, which stayed
+flat across the same window, with unique *cloners* inflating alongside the raw
+count. The figures are in `ops/arrivals.md` in the private repo.
 
 The public-facing metric of record is therefore **active installs, GitHub
 stars, and traffic *views* uniques** — nothing else. Listing-by-listing state
@@ -245,15 +246,18 @@ a nice-to-have and reach work goes wide; if it collapses without one, our
 addressable market is clients that can enforce routing, and a large share of
 current distribution effort points at installs that will never reach value. We
 ship into MCP directories on a premise of client neutrality and have never
-tested it. **Read the answer beside `by_client_installs`** — the only client
-breakdown we have is 8 claude-code / 2 codex / 1 grok, which concludes nothing.
+tested it. **Read the answer beside `by_client_installs`** — the client
+breakdown we have is small enough to conclude nothing, and most of its rows are
+`unknown` for a reason the ping's own design explains: `state.client` is a single
+field overwritten at each `initialize`, so a machine running several clients
+reports whichever one handshook last.
 
 **Do not refresh these by hand either.** All of them are computed by the same
 daily `ga4-snapshot.yml` run and published under `funnel:` in
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
-that file is where a weekly run reads them, not this page. As of **2026-09-02**:
-178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
-activation still blocked — see below. Use is blocked on the same one form.
+that file is where a weekly run reads them, not this page, and the current
+values are not repeated here — see `ops/arrivals.md` in the private repo.
+Activation and use are both still blocked on the credentials below.
 
 **Two credentials stand between this and all five numbers**, both verified
 against the live property by a `workflow_dispatch` on 2026-09-02
