@@ -356,7 +356,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'get_call_graph',
-    'Build a bidirectional call graph centered on a symbol (who calls it + what it calls). Use to understand control flow through a function. For flat list of all references use find_usages instead. Read-only. Returns JSON: { root: { symbol_id, name, calls: [...], called_by: [...] } }.',
+    'Build a bidirectional call graph centered on a symbol (who calls it + what it calls). Each branch keeps its direction: depth 2 = callers of callers, callees of callees. Use to understand control flow through a function. For flat list of all references use find_usages instead. Read-only. Returns JSON: { root: { symbol_id, name, calls: [...], called_by: [...] } }.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to center the graph on'),
       fqn: optionalNonEmptyString(512).describe('Fully qualified name to center the graph on'),

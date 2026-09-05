@@ -1,9 +1,8 @@
 {
-  "measured_at": "2026-09-05T18:17:47.682Z",
+  "measured_at": "2026-09-05T18:43:14.980Z",
   "measured_build": {
     "version": "3.18.0",
-    "commit": "8e8fc25a",
-    "dirty": true
+    "commit": "94dbaf70"
   },
   "target": "self",
   "runs": 3,
@@ -11,13 +10,13 @@
     {
       "tool": "search_text",
       "ok": true,
-      "chars": 6190,
-      "est": 1780,
-      "real": 1659,
-      "ms": 89,
+      "chars": 6418,
+      "est": 1846,
+      "real": 1722,
+      "ms": 87,
       "runs": 3,
-      "real_min": 1659,
-      "real_max": 1659
+      "real_min": 1722,
+      "real_max": 1722
     },
     {
       "tool": "get_outline",
@@ -33,10 +32,10 @@
     {
       "tool": "search",
       "ok": true,
-      "chars": 3278,
-      "est": 943,
-      "real": 926,
-      "ms": 21,
+      "chars": 3275,
+      "est": 942,
+      "real": 924,
+      "ms": 18,
       "runs": 3,
       "real_min": 924,
       "real_max": 926
@@ -47,7 +46,7 @@
       "chars": 1189,
       "est": 342,
       "real": 294,
-      "ms": 1,
+      "ms": 3,
       "runs": 3,
       "real_min": 294,
       "real_max": 294
@@ -55,13 +54,13 @@
     {
       "tool": "find_usages",
       "ok": true,
-      "chars": 4817,
-      "est": 1385,
-      "real": 1122,
-      "ms": 2,
+      "chars": 4196,
+      "est": 1207,
+      "real": 975,
+      "ms": 1,
       "runs": 3,
-      "real_min": 1122,
-      "real_max": 1122
+      "real_min": 975,
+      "real_max": 975
     },
     {
       "tool": "get_project_map",
@@ -69,7 +68,7 @@
       "chars": 2100,
       "est": 604,
       "real": 568,
-      "ms": 6,
+      "ms": 7,
       "runs": 3,
       "real_min": 568,
       "real_max": 568
@@ -77,13 +76,13 @@
     {
       "tool": "get_index_health",
       "ok": true,
-      "chars": 1122,
-      "est": 323,
-      "real": 337,
-      "ms": 3,
+      "chars": 978,
+      "est": 282,
+      "real": 297,
+      "ms": 2,
       "runs": 3,
-      "real_min": 336,
-      "real_max": 337
+      "real_min": 294,
+      "real_max": 298
     },
     {
       "tool": "get_tests_for",
@@ -91,7 +90,7 @@
       "chars": 380,
       "est": 110,
       "real": 90,
-      "ms": 6,
+      "ms": 5,
       "runs": 3,
       "real_min": 90,
       "real_max": 90
@@ -110,24 +109,24 @@
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 18722,
+      "chars": 18723,
       "est": 5383,
-      "real": 5384,
-      "ms": 5,
+      "real": 5383,
+      "ms": 4,
       "runs": 3,
       "real_min": 5382,
-      "real_max": 5385
+      "real_max": 5384
     },
     {
       "tool": "get_call_graph",
       "ok": true,
-      "chars": 21616,
-      "est": 6215,
-      "real": 5263,
+      "chars": 5752,
+      "est": 1654,
+      "real": 1421,
       "ms": 2,
       "runs": 3,
-      "real_min": 5263,
-      "real_max": 5263
+      "real_min": 1421,
+      "real_max": 1421
     },
     {
       "tool": "get_complexity_report",
@@ -135,7 +134,7 @@
       "chars": 6864,
       "est": 1974,
       "real": 1820,
-      "ms": 4,
+      "ms": 3,
       "runs": 3,
       "real_min": 1820,
       "real_max": 1820
@@ -146,7 +145,7 @@
       "chars": 1189,
       "est": 342,
       "real": 345,
-      "ms": 159,
+      "ms": 152,
       "runs": 3,
       "real_min": 345,
       "real_max": 345
@@ -157,7 +156,7 @@
       "chars": 227,
       "est": 66,
       "real": 59,
-      "ms": 537,
+      "ms": 499,
       "runs": 3,
       "real_min": 59,
       "real_max": 59
@@ -165,13 +164,13 @@
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 26256,
+      "chars": 26257,
       "est": 7549,
-      "real": 7441,
-      "ms": 67,
+      "real": 7443,
+      "ms": 56,
       "runs": 3,
-      "real_min": 7439,
-      "real_max": 7442
+      "real_min": 7442,
+      "real_max": 7443
     },
     {
       "tool": "get_env_vars",
@@ -187,24 +186,24 @@
     {
       "tool": "get_dead_code",
       "ok": true,
-      "chars": 19198,
-      "est": 5520,
-      "real": 4819,
-      "ms": 65,
+      "chars": 11066,
+      "est": 3182,
+      "real": 2725,
+      "ms": 59,
       "runs": 3,
-      "real_min": 4819,
-      "real_max": 4819
+      "real_min": 2725,
+      "real_max": 2725
     },
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 1954,
-      "est": 562,
-      "real": 521,
-      "ms": 65,
+      "chars": 4805,
+      "est": 1382,
+      "real": 1224,
+      "ms": 73,
       "runs": 3,
-      "real_min": 521,
-      "real_max": 521
+      "real_min": 1224,
+      "real_max": 1224
     },
     {
       "tool": "check_quality_gates",
@@ -212,7 +211,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 466,
+      "ms": 428,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -245,7 +244,7 @@
       "chars": 4437,
       "est": 1276,
       "real": 1099,
-      "ms": 19,
+      "ms": 16,
       "runs": 3,
       "real_min": 1099,
       "real_max": 1099
@@ -256,7 +255,7 @@
       "chars": 120,
       "est": 35,
       "real": 38,
-      "ms": 628,
+      "ms": 558,
       "runs": 3,
       "real_min": 38,
       "real_max": 38
@@ -264,13 +263,13 @@
     {
       "tool": "list_projects",
       "ok": true,
-      "chars": 16983,
-      "est": 4883,
-      "real": 5240,
-      "ms": 2,
+      "chars": 2553,
+      "est": 734,
+      "real": 901,
+      "ms": 1,
       "runs": 3,
-      "real_min": 5240,
-      "real_max": 5240
+      "real_min": 901,
+      "real_max": 901
     }
   ]
 }

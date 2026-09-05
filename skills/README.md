@@ -33,7 +33,7 @@ trace-mcp add    # indexes the current project
 
 ## Why use these skills?
 
-Agents without routing guidance will happily `Grep` a 5,000-file repo, `Read` 15 files to understand one feature, and miss cross-file references when renaming. These skills encode the rules that route an agent to precomputed answers instead of file reads — measured at 21.1% fewer tokens across 18,319 real tool calls, much more on individual structured lookups, while improving accuracy. (Basis: `docs/_data/response_tokens.json`; the baseline half is still an estimate.)
+Agents without routing guidance will happily `Grep` a 5,000-file repo, `Read` 15 files to understand one feature, and miss cross-file references when renaming. These skills encode the rules that route an agent to precomputed answers instead of file reads — measured at 21% fewer tokens across 18,319 real tool calls, much more on individual structured lookups, while improving accuracy. (Basis: `docs/_data/response_tokens.json`; the baseline half is still an estimate.)
 
 See the [benchmark results in the main repo](https://github.com/nikolai-vysotskyi/trace-mcp#token-reduction--what-we-measured) for concrete numbers.
 

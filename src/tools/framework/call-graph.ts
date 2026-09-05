@@ -273,7 +273,17 @@ function buildCallNode(
   // Phase 3: Build tree from pre-fetched data
   const _builtNodes = new Map<number, CallGraphNode>();
 
-  function buildFromInfo(nodeId: number, depth: number, buildVisited: Set<number>): CallGraphNode {
+  // TRA-952: each branch keeps expanding in the direction it started in.
+  // Expanding both directions at every level answers a question nobody asked —
+  // "what else does my caller call" — and it is where the payload goes: on
+  // `estimateTokens` (12 neighbours) depth 2 materialised 75 nodes, 64 of them
+  // cousins, for 4 698 tokens against a 1 500-token baseline.
+  function buildFromInfo(
+    nodeId: number,
+    depth: number,
+    buildVisited: Set<number>,
+    direction: 'both' | 'down' | 'up',
+  ): CallGraphNode {
     const info = nodeInfoMap.get(nodeId);
     if (!info) return { symbol_id: '', name: '?', kind: 'unknown', file: '', line: null };
 
@@ -294,22 +304,26 @@ function buildCallNode(
       return node;
     }
 
-    for (const { nodeId: targetNodeId, edgeType, resolution } of info.outgoing) {
-      if (guard.aborted) break;
-      if (buildVisited.has(targetNodeId)) continue;
-      if (!nodeInfoMap.has(targetNodeId)) continue;
-      const child = buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited));
-      child.edge = { resolution, edge_type: edgeType };
-      node.calls!.push(child);
+    if (direction !== 'up') {
+      for (const { nodeId: targetNodeId, edgeType, resolution } of info.outgoing) {
+        if (guard.aborted) break;
+        if (buildVisited.has(targetNodeId)) continue;
+        if (!nodeInfoMap.has(targetNodeId)) continue;
+        const child = buildFromInfo(targetNodeId, depth - 1, new Set(buildVisited), 'down');
+        child.edge = { resolution, edge_type: edgeType };
+        node.calls!.push(child);
+      }
     }
 
-    for (const { nodeId: sourceNodeId, edgeType, resolution } of info.incoming) {
-      if (guard.aborted) break;
-      if (buildVisited.has(sourceNodeId)) continue;
-      if (!nodeInfoMap.has(sourceNodeId)) continue;
-      const child = buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited));
-      child.edge = { resolution, edge_type: edgeType };
-      node.called_by!.push(child);
+    if (direction !== 'down') {
+      for (const { nodeId: sourceNodeId, edgeType, resolution } of info.incoming) {
+        if (guard.aborted) break;
+        if (buildVisited.has(sourceNodeId)) continue;
+        if (!nodeInfoMap.has(sourceNodeId)) continue;
+        const child = buildFromInfo(sourceNodeId, depth - 1, new Set(buildVisited), 'up');
+        child.edge = { resolution, edge_type: edgeType };
+        node.called_by!.push(child);
+      }
     }
 
     if (node.calls!.length === 0) node.calls = undefined;
@@ -317,7 +331,7 @@ function buildCallNode(
     return node;
   }
 
-  return { node: buildFromInfo(rootNodeId, maxDepth, new Set()), tiers };
+  return { node: buildFromInfo(rootNodeId, maxDepth, new Set(), 'both'), tiers };
 }
 
 function makeNode(

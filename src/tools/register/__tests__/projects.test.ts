@@ -93,7 +93,7 @@ describe('list_projects', () => {
     vi.resetModules();
   });
 
-  it('includes subprojects when ctx.topoStore is available, omits the key otherwise', async () => {
+  it('includes subprojects only when asked (TRA-952), and only when topology is open', async () => {
     const { server, captured } = makeCapturingServer();
     const topoStore = {
       getAllSubprojects: () => [{ name: 'sub', repo_root: '/repo/sub', project_root: '/repo' }],
@@ -101,15 +101,22 @@ describe('list_projects', () => {
     registerProjectsTools(server as never, ctxStub({ topoStore }));
     const { handler } = findTool(captured, 'list_projects');
 
-    const result = parseText(await handler({})) as { subprojects?: unknown[] };
-    expect(result.subprojects).toEqual([
+    const off = parseText(await handler({})) as { subprojects?: unknown[] };
+    expect(off.subprojects).toBeUndefined();
+
+    const on = parseText(await handler({ include_subprojects: true })) as {
+      subprojects?: unknown[];
+    };
+    expect(on.subprojects).toEqual([
       { name: 'sub', repo_root: '/repo/sub', project_root: '/repo' },
     ]);
 
     const { server: server2, captured: captured2 } = makeCapturingServer();
     registerProjectsTools(server2 as never, ctxStub({ topoStore: null }));
     const { handler: handler2 } = findTool(captured2, 'list_projects');
-    const result2 = parseText(await handler2({})) as { subprojects?: unknown[] };
+    const result2 = parseText(await handler2({ include_subprojects: true })) as {
+      subprojects?: unknown[];
+    };
     expect(result2.subprojects).toBeUndefined();
   });
 });
