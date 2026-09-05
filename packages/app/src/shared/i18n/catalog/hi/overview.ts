@@ -21,6 +21,7 @@ export const overview = {
   menuRemoveService: 'सर्विस हटाएँ…',
 
   sectionIndex: 'इंडेक्स',
+  staleNumbers: 'ये पिछली बार के इंडेक्स किए आँकड़े हैं।',
   rowStatus: 'स्थिति',
   rowFiles: 'इंडेक्स हुई फ़ाइलें',
   rowSymbols: 'सिंबल',

@@ -21,6 +21,7 @@ export const overview = {
   menuRemoveService: '移除服务…',
 
   sectionIndex: '索引',
+  staleNumbers: '以下是上次索引的数字。',
   rowStatus: '状态',
   rowFiles: '已索引文件',
   rowSymbols: '符号',
