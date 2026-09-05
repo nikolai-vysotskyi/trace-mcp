@@ -50,7 +50,7 @@ type SymEntry = {
   kind: string;
   file_id: number;
   parent_symbol_id: string | null;
-  metadata?: string | null;
+  signature: string | null;
   workspace: string | null;
 };
 
@@ -104,10 +104,17 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
 
   if (symbolsWithCalls.length === 0) return;
 
+  // Resolution universe: every TS/JS symbol, needed because a call target can
+  // live in any file. `metadata` is deliberately NOT selected here — it's a
+  // per-symbol JSON blob and this query already runs on the full project on
+  // every single-file save (targets are resolved globally); materializing it
+  // for every symbol just to read `extends` off the ~1% that are classes was
+  // the dominant cost. Classes are fetched separately below, narrowed to rows
+  // that actually carry heritage metadata (idx_symbols_has_heritage).
   const allSyms = store.db
     .prepare(`
-    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
-           p.symbol_id AS parent_symbol_id, s.metadata, f.workspace
+    SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.signature,
+           p.symbol_id AS parent_symbol_id, f.workspace
       FROM symbols s
       JOIN files f ON s.file_id = f.id
       LEFT JOIN symbols p ON s.parent_id = p.id
@@ -145,10 +152,23 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
     }
   }
 
-  // Build class heritage index: class symbol_id → extends class name (unresolved), implements
+  // Build class heritage index: class symbol_id → extends class name (unresolved), implements.
+  // Narrow scan — only classes whose metadata has heritage info, via the same
+  // partial index idx_symbols_has_heritage uses — instead of the metadata blob
+  // of every TS/JS symbol in the project.
   const classExtends = new Map<string, string>();
-  for (const s of allSyms) {
-    if (s.kind !== 'class' || !s.metadata) continue;
+  const classesWithExtends = store.db
+    .prepare(`
+    SELECT s.symbol_id, s.metadata
+      FROM symbols s
+      JOIN files f ON s.file_id = f.id
+     WHERE f.language IN ${TS_JS_LANGS}
+       AND s.kind = 'class'
+       AND s.metadata IS NOT NULL
+       AND json_extract(s.metadata, '$.extends') IS NOT NULL
+  `)
+    .all() as Array<{ symbol_id: string; metadata: string }>;
+  for (const s of classesWithExtends) {
     try {
       const meta = JSON.parse(s.metadata) as Record<string, unknown>;
       if (typeof meta.extends === 'string') classExtends.set(s.symbol_id, meta.extends);
@@ -159,14 +179,12 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
 
   // Build return-type index from signatures: funcName → type
   // `function getUser(): User` / `const getUser = (): User => ...`
+  // `signature` is already on the allSyms row (see query above) — no per-symbol query.
   const returnTypeIndex = new Map<string, string>();
   for (const s of allSyms) {
     if (s.kind !== 'function' && s.kind !== 'method') continue;
-    const row = store.db.prepare(`SELECT signature FROM symbols WHERE id = ?`).get(s.id) as
-      | { signature: string | null }
-      | undefined;
-    if (!row?.signature) continue;
-    const m = row.signature.match(/\):\s*(?:Promise<)?([A-Z][A-Za-z0-9_]*)/);
+    if (!s.signature) continue;
+    const m = s.signature.match(/\):\s*(?:Promise<)?([A-Z][A-Za-z0-9_]*)/);
     if (m) returnTypeIndex.set(s.name, m[1]);
   }
 
