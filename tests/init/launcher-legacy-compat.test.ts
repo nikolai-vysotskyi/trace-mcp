@@ -144,6 +144,39 @@ describe.skipIf(process.platform === 'win32')('legacy bin compat', () => {
     expect(fs.readdirSync(path.dirname(legacyPath))).toEqual(['trace-mcp']);
   });
 
+  // TRA-910. A run pointed at a throwaway TRACE_MCP_HOME (the test suite's own
+  // mkdtemp home, a sandboxed install probe) must not reach out of that home and
+  // repoint the real `~/.trace-mcp/bin/trace-mcp` at it. When the temp dir is
+  // cleaned up the symlink dangles, and every MCP client registered at that path
+  // gets ENOENT with nothing in launcher.log — the shim never runs to log it.
+  it('does not touch the real legacy path when TRACE_MCP_HOME is a throwaway dir', () => {
+    writeLegacy(STALE_SHIM);
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-launcher-'));
+    process.env.TRACE_MCP_HOME = scratch;
+    try {
+      installLauncher({ force: true });
+
+      expect(fs.lstatSync(legacyPath).isSymbolicLink()).toBe(false);
+      expect(fs.readFileSync(legacyPath, 'utf-8')).toBe(STALE_SHIM);
+    } finally {
+      delete process.env.TRACE_MCP_HOME;
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // TRA-910. `isSymlink` alone treated a dangling link as "already delegating",
+  // so the one state that actually breaks clients was the one state no later
+  // `trace init` would ever repair.
+  it('repairs a legacy symlink whose target no longer exists', () => {
+    const gone = path.join(home, 'evicted', 'bin', 'trace');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    fs.symlinkSync(gone, legacyPath);
+
+    installLauncher({ force: true });
+
+    expect(fs.realpathSync(legacyPath)).toBe(fs.realpathSync(getLauncherPath()));
+  });
+
   it('does not link the legacy path to itself when it is the launcher home', () => {
     process.env.TRACE_MCP_HOME = path.join(home, '.trace-mcp');
     try {

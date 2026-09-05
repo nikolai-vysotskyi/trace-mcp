@@ -336,8 +336,20 @@ function installLegacyBinCompat(): void {
   // When the legacy home *is* the launcher home, the real shim already lives at
   // this path; delegating it would point it at itself.
   if (path.resolve(legacyPath) === path.resolve(current)) return;
+  // The legacy path lives in the real home no matter where the launcher home
+  // points, so a run aimed at some other home would reach out and repoint it at
+  // a directory the real machine does not use. When that home is a throwaway one
+  // — our own test suite's mkdtemp, a sandboxed install probe — the symlink
+  // dangles the moment it is cleaned up, and every MCP client registered at the
+  // legacy path gets ENOENT with nothing in launcher.log to explain it: the shim
+  // never runs, so it never logs (TRA-910). A custom TRACE_MCP_HOME means "use
+  // this home"; writing into a different one is never what it asked for.
+  if (path.resolve(getLauncherDir()) !== path.resolve(os.homedir(), '.trace')) return;
   try {
-    if (isSymlink(legacyPath)) return; // already delegating to the current shim
+    // existsSync follows the link: a symlink pointing at a target that is gone
+    // is the one state that actually breaks clients, so it must not be mistaken
+    // for a healthy delegation and skipped (TRA-910).
+    if (isSymlink(legacyPath) && fs.existsSync(legacyPath)) return; // already delegating
     const exists = fs.existsSync(legacyPath);
     if (
       !exists &&
