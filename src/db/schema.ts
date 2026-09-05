@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 31;
+const SCHEMA_VERSION = 32;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -259,6 +259,19 @@ CREATE INDEX IF NOT EXISTS idx_symbols_parent ON symbols(parent_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_exported
   ON symbols(json_extract(metadata, '$.exported'))
   WHERE json_extract(metadata, '$.exported') IS NOT NULL;
+-- v32: the edge resolvers (typescript-calls, python-calls, typescript-types,
+-- python-types, python-heritage) used to gate their source SELECT with a
+-- leading-wildcard metadata LIKE '%"callSites"%' (etc.), which SQLite can't
+-- serve from an index -- it ran the pattern matcher over every symbol's
+-- metadata blob. These partial indexes on the same json_extract expression
+-- the resolvers now filter on turns that full scan into an index seek.
+-- Mirrored in MIGRATIONS[32].
+CREATE INDEX IF NOT EXISTS idx_symbols_call_sites ON symbols(file_id)
+  WHERE json_extract(metadata, '$.callSites') IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_symbols_type_refs ON symbols(file_id)
+  WHERE json_extract(metadata, '$.typeRefs') IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_symbols_bases ON symbols(file_id)
+  WHERE json_extract(metadata, '$.bases') IS NOT NULL;
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -1759,6 +1772,20 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // Backfill is a no-op on existing DBs (no scip_resolved rows exist yet),
     // but kept for symmetry with the per-tier backfill in migration 25.
     db.exec(`UPDATE edges SET confidence = 1.00 WHERE resolution_tier = 'scip_resolved'`);
+  },
+  32: (db) => {
+    // Partial indexes for the metadata-existence checks in the edge
+    // resolvers (typescript-calls, python-calls, typescript-types,
+    // python-types, python-heritage). Mirrored in the top-of-file DDL block
+    // for fresh-DB parity (byte-identical definitions).
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_symbols_call_sites ON symbols(file_id)
+        WHERE json_extract(metadata, '$.callSites') IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_symbols_type_refs ON symbols(file_id)
+        WHERE json_extract(metadata, '$.typeRefs') IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_symbols_bases ON symbols(file_id)
+        WHERE json_extract(metadata, '$.bases') IS NOT NULL;
+    `);
   },
 };
 

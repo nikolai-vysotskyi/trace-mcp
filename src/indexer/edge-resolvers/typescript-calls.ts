@@ -83,7 +83,7 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
         LEFT JOIN symbols p ON s.parent_id = p.id
        WHERE f.language IN ${TS_JS_LANGS}
          AND s.metadata IS NOT NULL
-         AND s.metadata LIKE '%"callSites"%'
+         AND json_extract(s.metadata, '$.callSites') IS NOT NULL
          AND s.file_id IN (${ph})
     `)
       .all(...scopedIds) as SymbolRow[];
@@ -97,7 +97,7 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
         LEFT JOIN symbols p ON s.parent_id = p.id
        WHERE f.language IN ${TS_JS_LANGS}
          AND s.metadata IS NOT NULL
-         AND s.metadata LIKE '%"callSites"%'
+         AND json_extract(s.metadata, '$.callSites') IS NOT NULL
     `)
       .all() as SymbolRow[];
   }
