@@ -28,14 +28,14 @@ export function resolvePythonHeritageEdges(state: PipelineState, scope?: ChangeS
     query = `SELECT s.id, s.name, s.metadata FROM symbols s
              JOIN files f ON s.file_id = f.id
              WHERE f.language = 'python' AND s.kind = 'class'
-             AND s.metadata IS NOT NULL AND s.metadata LIKE '%"bases"%'
+             AND s.metadata IS NOT NULL AND json_extract(s.metadata, '$.bases') IS NOT NULL
              AND f.id IN (${ph})`;
     params.push(...changedFileIds);
   } else {
     query = `SELECT s.id, s.name, s.metadata FROM symbols s
              JOIN files f ON s.file_id = f.id
              WHERE f.language = 'python' AND s.kind = 'class'
-             AND s.metadata IS NOT NULL AND s.metadata LIKE '%"bases"%'`;
+             AND s.metadata IS NOT NULL AND json_extract(s.metadata, '$.bases') IS NOT NULL`;
   }
 
   const classesWithBases = store.db.prepare(query).all(...params) as Array<{
