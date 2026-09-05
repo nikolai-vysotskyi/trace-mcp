@@ -1,6 +1,9 @@
 /** Below this many days `sanitizedTokens` returns the raw sum, unsanitized. */
 export const MIN_DAYS_FOR_TRIM: number;
 
+/** `raw / tokens` above which the snapshot warns that the counter is inflated. */
+export const INFLATION_RATIO: number;
+
 /** Cheapest tracked model, whose input price floors the dollar figure. */
 export const PRICE_MODEL: string;
 
@@ -19,6 +22,8 @@ export function sanitizedTokens(days: SavingsDay[]): {
   raw: number;
   days: number;
   capped_days: number;
+  raw_ratio: number | null;
+  inflation_suspected: boolean;
 };
 
 /** Dollars for a token count, at `PRICE_PER_TOKEN`. */

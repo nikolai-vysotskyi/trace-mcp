@@ -2,9 +2,19 @@
      them from docs/_data/counts.yml and docs/_data/pr_context_bench.json. Never
      retouch a PNG by hand: the numbers in it would stop tracking the data.
      PNG @2x rather than SVG because GitHub renders README images in an isolated
-     context where an SVG's @font-face never loads and Space Grotesk falls back. -->
+     context where an SVG's @font-face never loads and Space Grotesk falls back.
+     The narrow cut is for phones: GitHub scales the 1200px banner into a ~390px
+     column, which drops the tagline to 8px. Order matters — the first matching
+     <source> wins, so the max-width pair has to stay above the theme source.
+     The missing space in `(prefers-color-scheme:light)` on the narrow source is
+     deliberate: GitHub's <themed-picture> substring-matches the spaced form and,
+     for a reader who pinned Light in Appearance, rewrites that source's media to
+     match every viewport — which would put the phone cut on a 750px desktop. -->
+
 <p align="center">
   <picture>
+    <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
+    <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
     <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp — precomputed code intelligence for AI coding agents. Index the repo once so the agent stops re-reading the same files. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 177 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
   </picture>
@@ -12,8 +22,19 @@
 
 <!-- The three buttons carry their own background plate and sit flush against each
      other, so they continue the banner instead of floating on GitHub's canvas.
-     Keep the anchors on one line: any whitespace between them paints a seam. -->
-<p align="center"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-macos-light.png" /><img src="docs/images/readme/btn-macos-dark.png" width="250" alt="Download for macOS — Apple Silicon, Intel, .dmg" /></picture></a><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-windows-light.png" /><img src="docs/images/readme/btn-windows-dark.png" width="250" alt="Download for Windows — .exe installer" /></picture></a><a href="https://www.npmjs.com/package/trace-mcp"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-npm-light.png" /><img src="docs/images/readme/btn-npm-dark.png" width="250" alt="Install via npm — npm install -g trace-mcp" /></picture></a></p>
+     Keep the anchors on one line: any whitespace between them paints a seam.
+     There is no `width` attribute here on purpose. One `width` serves every
+     viewport, so it can pin the desktop row (3 x 250 = 750, the banner's width)
+     or let the phone cut fill the column, never both. The size therefore comes
+     from srcset density instead: the 1600px desktop art declared `6.4x` lays out
+     at exactly 250, and the 2000px phone art declared `4x` lays out at 500 —
+     wider than any phone column, so `max-width: 100%` clamps it to the full
+     width and the empty margin either side of the plate disappears.
+     GitHub strips srcset from <img> while keeping it on <source> — measured on
+     a live PR page — so the last <source> carries no media at all and always
+     matches. That is what sizes the default dark view; the <img> is only ever
+     reached by a renderer that drops <picture> entirely. -->
+<p align="center"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-macos-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-macos-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-macos-light.png 6.4x" /><source srcset="docs/images/readme/btn-macos-dark.png 6.4x" /><img src="docs/images/readme/btn-macos-dark.png" alt="Download for macOS — Apple Silicon, Intel, .dmg" /></picture></a><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-windows-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-windows-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-windows-light.png 6.4x" /><source srcset="docs/images/readme/btn-windows-dark.png 6.4x" /><img src="docs/images/readme/btn-windows-dark.png" alt="Download for Windows — .exe installer" /></picture></a><a href="https://www.npmjs.com/package/trace-mcp"><picture><source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/btn-npm-narrow-light.png 4x" /><source media="(max-width: 500px)" srcset="docs/images/readme/btn-npm-narrow-dark.png 4x" /><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-npm-light.png 6.4x" /><source srcset="docs/images/readme/btn-npm-dark.png 6.4x" /><img src="docs/images/readme/btn-npm-dark.png" alt="Install via npm — npm install -g trace-mcp" /></picture></a></p>
 
 <p align="center">
   <sub><b>WORKS WITH</b> &nbsp;&middot;&nbsp; Claude Code &nbsp;&middot;&nbsp; Cursor &nbsp;&middot;&nbsp; Codex &nbsp;&middot;&nbsp; Windsurf &nbsp;&middot;&nbsp; Zed &nbsp;&middot;&nbsp; any MCP client</sub>
@@ -119,13 +140,15 @@ trace-mcp builds a **cross-language dependency graph** from your source code and
 trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
 
 <p align="center">
-  <img src="docs/images/app-projects.webp" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-projects.webp#gh-light-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-projects.webp#gh-dark-mode-only" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
 <p align="center">
-  <img src="docs/images/app-overview.webp" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-overview.webp#gh-light-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+  <img src="docs/images/app-dark-overview.webp#gh-dark-mode-only" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
 **Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.

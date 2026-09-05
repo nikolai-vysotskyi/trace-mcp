@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.15.0
+# trace-mcp-guard v0.16
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.16 changes (TRA-869 — sentinels moved out of $TMPDIR):
+#   - The heartbeat, status, consultation-marker and bypass paths are read from
+#     <state home>/status/ first, $TMPDIR second. $TMPDIR is per-process: the
+#     server is spawned by the MCP client and this hook by the agent harness,
+#     and on macOS they routinely hold different values. Measured live: the
+#     server refreshed /var/folders/.../T/trace-mcp-alive-<hash> every 5s while
+#     the hook looked in /tmp/multica-task-<id>/, so every call reported
+#     "trace-mcp server not running" and degraded to the Read/Grep fallback,
+#     against a healthy connected session.
+#   - The $TMPDIR fallback keeps a server older than that fix discoverable.
+#
+# v0.15.1 changes (TRA-845 — Bash branch had no liveness fallback):
+#   - Read, Grep and Glob all degrade to allow-with-warning when trace-mcp is
+#     unreachable (no heartbeat, stale heartbeat, stalled channel, transport
+#     mismatch, manual or auto bypass). The Bash branch never checked any of
+#     it, so with the daemon stopped `grep -rn foo src/`, `cat src/x.ts`,
+#     `ls src/`, `git diff src/x.ts` and `cmd < src/x.ts` were hard-denied
+#     while the tools they redirect to could not answer either.
+#   - Each of those six deny sites now calls bash_fallback_if_unavailable
+#     first. Ordinary Bash calls (builds, tests, git status) stay silent, and
+#     the .env rule stays unconditional — it is a secrets rule, not a
+#     navigation-cost tradeoff.
 #
 # v0.15 changes (guard v2 — TRA-711, navigation streak gate):
 #   - The guard no longer intervenes on an isolated navigation call. TRA-705
@@ -358,11 +381,69 @@ elif command -v shasum >/dev/null 2>&1; then
 else
   PROJECT_HASH=""
 fi
-CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
-HEARTBEAT_FILE="${TMPDIR:-/tmp}/trace-mcp-alive-${PROJECT_HASH}"
-STATUS_FILE="${TMPDIR:-/tmp}/trace-mcp-status-${PROJECT_HASH}.json"
-BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
-READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
+
+# The server↔hook sentinels live under the state home, NOT $TMPDIR (TRA-869).
+# $TMPDIR is per-process: the server is spawned by the MCP client, this hook by
+# the agent harness, and on macOS those routinely hold different values (a
+# per-user /var/folders/.../T vs. whatever a task runner exports). A sentinel
+# written to one is invisible in the other, so the hook reported "server not
+# running" against a live session and degraded to the Read/Grep fallback
+# trace-mcp exists to replace. $TMPDIR stays as the second choice so a server
+# installed before that fix is still found.
+TRACE_STATE_HOME="${TRACE_MCP_DATA_DIR:-$HOME/.trace}"
+case "$TRACE_STATE_HOME" in
+  "~") TRACE_STATE_HOME="$HOME" ;;
+  "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;;
+esac
+STATUS_HOME="$TRACE_STATE_HOME/status"
+TMP_HOME="${TMPDIR:-/tmp}"
+
+# Whichever of the two was touched most recently, so a sentinel left behind by a
+# crashed new server cannot mask a live old one still refreshing the $TMPDIR
+# copy — the freshest file is by definition the one a running server owns. The
+# state-home path when neither exists, so anything this hook writes itself lands
+# in the shared location.
+newest_path() {
+  if [[ -e "$1" && -e "$2" ]]; then
+    if (( $(file_mtime "$2") > $(file_mtime "$1") )); then echo "$2"; else echo "$1"; fi
+  elif [[ -e "$2" ]]; then
+    echo "$2"
+  else
+    echo "$1"
+  fi
+}
+
+# Consultation markers are NOT resolved to one directory: an older server writes
+# them to $TMPDIR while a state-home directory from an earlier run may still be
+# on disk, and binding to either one alone denies a Read the agent did consult.
+# Both are searched on every lookup.
+CONSULTED_DIR="$STATUS_HOME/trace-mcp-consulted-${PROJECT_HASH}"
+CONSULTED_DIR_TMP="$TMP_HOME/trace-mcp-consulted-${PROJECT_HASH}"
+HEARTBEAT_FILE=$(newest_path "$STATUS_HOME/trace-mcp-alive-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-alive-${PROJECT_HASH}")
+STATUS_FILE=$(newest_path "$STATUS_HOME/trace-mcp-status-${PROJECT_HASH}.json" "$TMP_HOME/trace-mcp-status-${PROJECT_HASH}.json")
+BYPASS_FILE=$(newest_path "$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}")
+# Written, not read: this hook's own auto-degradation bypass always goes to the
+# shared location so every reader sees it, whatever their $TMPDIR.
+BYPASS_WRITE_FILE="$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}"
+BYPASS_FILE_TMP="$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}"
+mkdir -p "$STATUS_HOME" 2>/dev/null || true
+
+# True when a consultation marker for $1 exists in either directory.
+consulted_marker_exists() {
+  [[ -f "$CONSULTED_DIR/$1" || -f "$CONSULTED_DIR_TMP/$1" ]]
+}
+
+# True when either consultation directory holds at least one marker.
+any_consultation_markers() {
+  local d
+  for d in "$CONSULTED_DIR" "$CONSULTED_DIR_TMP"; do
+    [[ -d "$d" ]] && [[ -n "$(ls -A "$d" 2>/dev/null)" ]] && return 0
+  done
+  return 1
+}
+# Per-session read ledger: written and read by this hook family only, all
+# spawned by the same client, so $TMPDIR is the right home for it.
+READS_DIR="$TMP_HOME/trace-mcp-reads-${SESSION_ID}"
 DENY_AGGREGATE_FILE="$READS_DIR/.deny-aggregate"
 mkdir -p "$READS_DIR" 2>/dev/null || true
 
@@ -471,7 +552,7 @@ elif [[ -f "$BYPASS_FILE" ]]; then
     HEARTBEAT_REASON="trace-mcp guard manually bypassed (${REMAINING}s remaining); re-enable: bash scripts/trace-mcp-enable-guard.sh"
   else
     # Expired bypass — clean up so it doesn't accumulate.
-    rm -f "$BYPASS_FILE" 2>/dev/null || true
+    rm -f "$BYPASS_WRITE_FILE" "$BYPASS_FILE_TMP" 2>/dev/null || true
   fi
 fi
 
@@ -563,7 +644,7 @@ maybe_auto_degrade() {
   fi
   # If consultation markers exist for this project, the agent is reaching
   # trace-mcp successfully — don't auto-degrade.
-  if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+  if any_consultation_markers; then
     return
   fi
 
@@ -585,11 +666,11 @@ maybe_auto_degrade() {
   if (( count >= AUTO_DEGRADE_DENY_THRESHOLD )); then
     # Trip auto-degradation: write bypass sentinel with mtime in the future.
     local expiry=$((NOW + AUTO_DEGRADE_DURATION_SEC))
-    echo "auto-degraded" > "$BYPASS_FILE" 2>/dev/null || true
+    echo "auto-degraded" > "$BYPASS_WRITE_FILE" 2>/dev/null || true
     if command -v gtouch >/dev/null 2>&1; then
-      gtouch -d "@$expiry" "$BYPASS_FILE" 2>/dev/null || true
+      gtouch -d "@$expiry" "$BYPASS_WRITE_FILE" 2>/dev/null || true
     else
-      touch -t "$(date -r "$expiry" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$expiry" +%Y%m%d%H%M.%S 2>/dev/null)" "$BYPASS_FILE" 2>/dev/null || true
+      touch -t "$(date -r "$expiry" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$expiry" +%Y%m%d%H%M.%S 2>/dev/null)" "$BYPASS_WRITE_FILE" 2>/dev/null || true
     fi
     HEARTBEAT_DEAD=1
     HEARTBEAT_REASON="auto-degraded — ${count} denies / 0 consultation markers in window. trace-mcp MCP channel appears unresponsive. Auto-bypass for $((AUTO_DEGRADE_DURATION_SEC / 60))min; will re-arm on next consultation marker"
@@ -599,7 +680,7 @@ maybe_auto_degrade() {
 
 # Reset deny aggregate as soon as ANY consultation marker exists — that proves
 # the MCP channel is alive in this session.
-if [[ -d "$CONSULTED_DIR" ]] && [[ -n "$(ls -A "$CONSULTED_DIR" 2>/dev/null)" ]]; then
+if any_consultation_markers; then
   rm -f "$DENY_AGGREGATE_FILE" 2>/dev/null || true
 fi
 
@@ -700,7 +781,7 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     REL_PATH_FOR_HASH="$REL_PATH"
     CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
     HAS_MARKER=0
-    if [[ -n "$PROJECT_HASH" && -f "$CONSULTED_DIR/$CONSULTED_HASH" ]]; then
+    if [[ -n "$PROJECT_HASH" ]] && consulted_marker_exists "$CONSULTED_HASH"; then
       HAS_MARKER=1
     fi
 
@@ -855,9 +936,31 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     exit 0
   fi
 
+  # ─── Fallback when trace-mcp can't answer (TRA-845) ───────────────
+  # Read/Grep/Glob all degrade to allow-with-warning when the heartbeat is
+  # dead, bypassed or auto-degraded. The Bash branch never did, so a stopped
+  # daemon hard-denied `grep -rn foo src/`, `cat src/x.ts`, `ls src/` and
+  # `git diff` with no working alternative — the "self-inflicted footgun"
+  # an external review named. Called immediately before each navigation
+  # deny below (not at branch entry) so ordinary Bash calls stay silent.
+  # The .env rule above stays unconditional: it is a secrets rule, not a
+  # navigation-cost tradeoff.
+  # ponytail: reads the liveness verdict only; it deliberately does NOT call
+  # maybe_auto_degrade. The deny counter is shared across tools, and feeding
+  # it from six Bash sites tripped the auto-bypass on ordinary sessions. Read/
+  # Grep/Glob denies still drive it, and the bypass sentinel they write is
+  # honoured here — Bash rides along instead of counting twice.
+  bash_fallback_if_unavailable() {
+    if (( HEARTBEAT_DEAD == 1 )); then
+      allow_with_context \
+        "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Bash as fallback — restart trace-mcp to re-enable strict routing."
+    fi
+  }
+
   # git show/diff/log -p/blame on code paths — these are de-facto Read.
   if echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +(show|blame|cat-file)( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-show"
       deny \
@@ -865,6 +968,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
         "trace-mcp alternatives:\\n- get_symbol { \\\"fqn\\\": \\\"...\\\" } — current source\\n- get_outline { \\\"path\\\": \\\"...\\\" } — file structure\\n- get_changed_symbols / compare_branches — git-aware diffs\\nUse git show/blame/cat-file only on non-code files."
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +log +.*(-p|--patch)( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-log-p"
       deny \
@@ -872,6 +976,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list"
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +diff( |$)'; then
+      bash_fallback_if_unavailable
       nav_hit
       backoff_hit "bash-git-diff"
       deny \
@@ -903,6 +1008,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE"; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-ls-find"
     deny \
@@ -933,6 +1039,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE" \
      && { echo "$COMMAND" | grep -qiE "$CODE_EXT_ANYWHERE_RE" || echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE"; }; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-code-shell"
     deny \
@@ -942,6 +1049,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
 
   # Input redirection from a code file: `cmd < src/foo.ts`.
   if echo "$COMMAND" | grep -qE '< +[^ ]+' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    bash_fallback_if_unavailable
     nav_hit
     backoff_hit "bash-input-redir"
     deny \

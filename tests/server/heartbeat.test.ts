@@ -33,6 +33,41 @@ describe('status sentinel (heartbeat)', () => {
     }
   });
 
+  // TRA-869: the sentinel is a channel between two processes that do NOT share
+  // $TMPDIR — the server is spawned by the MCP client, the guard hook by the
+  // agent harness. Writing it only to os.tmpdir() made the hook report "server
+  // not running" against a live session and fall back to Read/Grep.
+  it('writes the sentinels under the state home, not only $TMPDIR', () => {
+    const stateHome = process.env.TRACE_MCP_DATA_DIR;
+    expect(stateHome, 'test setup must isolate the state home').toBeTruthy();
+    const handle = startHeartbeat(projectDir);
+    try {
+      const statusDir = path.join(path.resolve(stateHome as string), 'status');
+      expect(handle.path.startsWith(statusDir)).toBe(true);
+      expect(handle.legacyPath.startsWith(statusDir)).toBe(true);
+      expect(fs.existsSync(handle.path)).toBe(true);
+      expect(fs.existsSync(handle.legacyPath)).toBe(true);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  it('still writes the $TMPDIR copies a pre-TRA-869 hook reads', () => {
+    const real = fs.realpathSync(projectDir);
+    const tmpStatus = path.join(TMP_BASE, `trace-mcp-status-${projectHash(real)}.json`);
+    const tmpLegacy = path.join(TMP_BASE, `trace-mcp-alive-${projectHash(real)}`);
+    const handle = startHeartbeat(projectDir);
+    try {
+      expect(fs.existsSync(tmpStatus)).toBe(true);
+      expect(fs.existsSync(tmpLegacy)).toBe(true);
+    } finally {
+      handle.stop();
+    }
+    // stop() clears both locations, so a stopped server never looks alive.
+    expect(fs.existsSync(tmpStatus)).toBe(false);
+    expect(fs.existsSync(tmpLegacy)).toBe(false);
+  });
+
   it('writes a JSON status file with required fields', () => {
     const handle = startHeartbeat(projectDir);
     try {

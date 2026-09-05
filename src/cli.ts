@@ -8,10 +8,10 @@
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
 import { startParentDeathWatch } from './server/parent-death-watch.js';
-import { armBoundedExit } from './server/bounded-shutdown.js';
+import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
-  describeDaemonExitContext,
+  describeStopContext,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -518,7 +518,15 @@ program
       // — only SIGKILL worked. Arm a bounded hard-exit so a wedged session
       // cannot outlive its shutdown signal. Unref'd, so it never keeps the
       // process alive on its own.
-      armBoundedExit(reason);
+      // TRA-849: exit 0 — every reason that reaches here is a requested stop
+      // (signal, or the client closing stdin). Blowing the deadline means our
+      // cleanup ran long, not that the session crashed.
+      armBoundedExit(reason, {
+        exitCode: 0,
+        onTimeout: () => {
+          logger.warn({ reason }, 'Session shutdown exceeded its deadline — forcing exit');
+        },
+      });
       try {
         await session.shutdown(reason);
       } catch (err) {
@@ -2887,28 +2895,61 @@ program
       // cleanup once.
       if (daemonShuttingDown) return;
       daemonShuttingDown = true;
-      // Field debugging of the 60s restart loop (desktop-app /health watchdog
-      // firing `daemon restart` against a warming daemon) was blind because
-      // shutdowns left no trace of WHO asked. Always say why we're going down.
-      // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
-      // programmatic callers pass their own reason string.
-      // TRA-809: `reason` is just the signal name for every SIGTERM, so it never
-      // answered "who asked". The exit context does: launchd cycling us, an
-      // external kill, or a racing spawn that stole daemon.pid.
-      logger.info(
-        {
-          reason: reason ?? 'unknown',
-          uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
-          ...describeDaemonExitContext(),
-        },
-        'Daemon shutting down',
-      );
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
       // async cleanup and only exits from httpServer.close()'s callback. If a
       // close hangs or the event loop is starved, the daemon would never die on
       // a legitimate SIGTERM. Arm a bounded hard-exit so termination is
       // guaranteed within a bounded time. Unref'd — never keeps the process up.
-      armBoundedExit(reason ?? 'unknown');
+      //
+      // Armed before anything else runs, including the diagnostic below: the
+      // deadline is meant to be measured from the signal, and `launchctl print`
+      // can burn its own 2s timeout first (TRA-850). A JS timer still cannot
+      // interrupt a synchronous call in progress — this bounds when the clock
+      // starts, not that call.
+      //
+      // TRA-849: exit 0, not 1. Everything reaching `shutdown()` is a requested
+      // stop (SIGTERM/SIGINT/idle-exit); overrunning the deadline says our
+      // cleanup was slow, not that the daemon died. Exit 1 made launchd log a
+      // failed exit, `daemon status` report `last exit: 1`, and — because the
+      // forced exit skips `recordDaemonCleanStop()` below — the clean-stop
+      // telemetry count 56% of ordinary stops as unclean deaths. So record the
+      // clean stop and drop the PID file here too: both are what the graceful
+      // path would have done, and both are cheap and synchronous.
+      const shutdownStartedAt = Date.now();
+      armBoundedExit(reason ?? 'unknown', {
+        deadlineMs: DAEMON_SHUTDOWN_DEADLINE_MS,
+        exitCode: 0,
+        onTimeout: () => {
+          logger.warn(
+            {
+              reason: reason ?? 'unknown',
+              deadlineMs: DAEMON_SHUTDOWN_DEADLINE_MS,
+              elapsedMs: Date.now() - shutdownStartedAt,
+            },
+            'Graceful shutdown exceeded its deadline — forcing exit',
+          );
+          clearInterval(pidReassert);
+          clearOwnDaemonPidFile();
+          recordDaemonCleanStop();
+        },
+      });
+      // Field debugging of the 60s restart loop (desktop-app /health watchdog
+      // firing `daemon restart` against a warming daemon) was blind because
+      // shutdowns left no trace of WHO asked. Always say why we're going down.
+      // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
+      // programmatic callers pass their own reason string.
+      // For a signalled stop the reason alone says nothing about the source, so
+      // attach what the process can observe about it (TRA-850). Only for
+      // signals: a programmatic reason already names its caller.
+      const isSignal = reason === 'SIGTERM' || reason === 'SIGINT' || reason === 'SIGHUP';
+      logger.info(
+        {
+          reason: reason ?? 'unknown',
+          uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+          ...(isSignal ? describeStopContext() : {}),
+        },
+        'Daemon shutting down',
+      );
       // Close SSE connections
       for (const res of sseConnections) {
         try {
@@ -2948,7 +2989,14 @@ program
       clearInterval(activityPoker);
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
+      // TRA-849: which phase eats the shutdown budget is not answerable from
+      // the log today — we only know the total sometimes exceeded 5s. Time the
+      // one phase that can block on real work (`stopProject` awaits each
+      // project's in-flight initial index) so the next field log says whether
+      // that await is the cost, instead of us guessing.
+      const projectsStopStartedAt = Date.now();
       await projectManager.shutdown();
+      logger.info({ elapsedMs: Date.now() - projectsStopStartedAt }, 'Projects stopped');
       // Drop our PID registration last: while it exists, clients treat the
       // daemon as alive-but-busy and refuse to restart it (TRA-421). Stop the
       // re-assert first — httpServer.close() below waits on live SSE sessions,
@@ -2958,7 +3006,10 @@ program
       clearOwnDaemonPidFile();
       // Reaching here at all is what makes this stop "clean" (TRA-671).
       recordDaemonCleanStop();
-      httpServer.close(() => process.exit(0));
+      httpServer.close(() => {
+        logger.info({ elapsedMs: Date.now() - shutdownStartedAt }, 'Daemon shutdown complete');
+        process.exit(0);
+      });
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);

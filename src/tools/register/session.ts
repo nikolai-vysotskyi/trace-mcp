@@ -7,6 +7,10 @@ import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark
 import { listAllSessions } from '../../analytics/log-parser.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
+import {
+  applyStartupRecommendations,
+  rollbackStartupRecommendations,
+} from '../../analytics/apply-recommendations.js';
 import { analyzeStartupContext } from '../../analytics/startup-context.js';
 import {
   attachIngestionStatus,
@@ -440,7 +444,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // name — scripts/tools-index.ts reads it from here to generate the docs. ---
   server.tool(
     'get_startup_context_audit',
-    'What every session pays for before your first message, what it costs, and what went unused. Decomposes it by source (system prompt, tool schemas, MCP servers, listings, hooks), prices the cache rebuilds, and suggests removals proven unused — never merely big. `textCompression` finds text the block says twice, as a delete-only diff. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, textCompression, observationWindow }.',
+    'What every session pays before your first message, what it costs, and what went unused: source decomposition, cache-rebuild prices, and removals proven unused — never merely big. `textCompression` finds text the block says twice, as a delete-only diff. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, textCompression, observationWindow }.',
     /* No parameters on purpose. The look-back window is the only knob this
        report could have, and a fixed 30 days is the answer for "what does my
        startup block cost" — while a param here would have to survive
@@ -462,6 +466,63 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           isError: true,
         };
       }
+    },
+  );
+
+  // --- Analytics: Apply / Rollback Startup Recommendations (TRA-769) ---
+  //
+  // Applies exactly what get_startup_context_audit's `recommendations[]`
+  // proved unused: an mcpServers entry, a filesystem-backed skill directory,
+  // or the duplicated lines a project instruction file shares with the global
+  // one. Never a plugin, never a client binary. `dry_run` defaults to true —
+  // every request is previewed before anything is written, and a write
+  // always lands a restorable backup first (see rollback_startup_recommendations).
+  server.tool(
+    'apply_startup_recommendations',
+    'Apply or preview a get_startup_context_audit recommendation: disable an unused MCP server, move an unused skill aside, or delete duplicated instruction lines. dry_run defaults to true; every write is backed up first. Returns JSON: { dryRun, backupId, outcomes }.',
+    {
+      requests: z
+        .array(
+          z.object({
+            kind: z.enum(['unusedMcpServer', 'unusedSkill', 'duplicateInstructions']),
+            target: z.string().min(1).max(1024).describe("Recommendation's `target`, verbatim"),
+          }),
+        )
+        .min(1)
+        .max(20)
+        .describe('One entry per recommendation — never "apply all"'),
+      dry_run: z.boolean().optional().describe('Preview only, no writes (default true)'),
+    },
+    async ({ requests, dry_run }) => {
+      try {
+        const result = applyStartupRecommendations(requests, {
+          projectRoot,
+          dryRun: dry_run ?? true,
+        });
+        return { content: [{ type: 'text' as const, text: j(result) }] };
+      } catch (e) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: j({ error: e instanceof Error ? e.message : String(e) }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  server.tool(
+    'rollback_startup_recommendations',
+    'Undo one apply_startup_recommendations(dry_run:false) call byte-for-byte: restores files and moved skills. Defaults to the latest backup. Returns JSON: { backupId, restored, errors }.',
+    {
+      backup_id: optionalNonEmptyString(128).describe('Backup id to restore (default: latest)'),
+    },
+    async ({ backup_id }) => {
+      const result = rollbackStartupRecommendations(backup_id);
+      return { content: [{ type: 'text' as const, text: j(result) }] };
     },
   );
 

@@ -4,11 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DAEMON_SHUTDOWN_DEADLINE_MS } from '../../src/server/bounded-shutdown.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const SCRIPT_PATH = path.join(REPO_ROOT, 'scripts', 'postinstall-control-plane.mjs');
+const ATTRIBUTION_PATH = path.join(REPO_ROOT, 'scripts', 'daemon-attribution.mjs');
 
 function mkTmp(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -109,6 +111,8 @@ describe('postinstall-control-plane', () => {
       fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
       // Copy the script + required hook + a fake dist/cli.js + package.json.
       fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+      // Sibling module the script imports for stop attribution (TRA-850).
+      fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
       for (const name of [
         'trace-mcp-launcher.sh',
         'trace-mcp-launcher.cmd',
@@ -178,6 +182,8 @@ describe('postinstall-control-plane', () => {
       fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
       fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
       fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+      // Sibling module the script imports for stop attribution (TRA-850).
+      fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
       for (const name of [
         'trace-mcp-launcher.sh',
         'trace-mcp-launcher.cmd',
@@ -274,9 +280,11 @@ describe('postinstall-control-plane', () => {
     const lifecycleTimeout = lifecycle.match(pattern)?.[1];
     expect(scriptTimeout).toBeDefined();
     expect(scriptTimeout).toBe(lifecycleTimeout);
-    // Must exceed the daemon's own 5s bounded hard-exit so we decide when to
-    // give up, not launchd.
-    expect(Number(scriptTimeout)).toBeGreaterThan(5);
+    // Must exceed the daemon's own bounded hard-exit so we decide when to give
+    // up, not launchd. Compared against the real constant (TRA-849): raising
+    // one of the two past the other silently reintroduces the SIGKILL that
+    // TRA-421 fixed.
+    expect(Number(scriptTimeout) * 1000).toBeGreaterThan(DAEMON_SHUTDOWN_DEADLINE_MS);
     for (const src of [script, lifecycle]) {
       expect(src).toContain('<key>ExitTimeOut</key>');
       expect(src).toContain('<integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>');

@@ -155,6 +155,10 @@ For `search_text`, `grouping: "by_file"` is the default (lossless path-dedup in 
 
 Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneous payloads with nested objects or arrays land in TOON's list mode, which costs more tokens than JSON). Don't pass `output_format: "toon"` to a tool not on this list; it will be rejected by schema validation. Drift guardrail: `src/tools/register/__tests__/toon-drift.test.ts` keeps the schema, description, and allowlist in sync.
 
+### Cross-tool routing hints
+
+Tools that overlap (`search` / `search_text` / `find_usages` / `get_feature_context`, the context family, the impact family) point at each other in their descriptions. That prose is the only routing mechanism reaching every MCP client — the PreToolUse guard hook is Claude Code only, `src/init/ide-rules.ts` covers Cursor/Windsurf. The families are declared in `src/tools/tool-families.ts`, enforced by `src/tools/register/__tests__/family-routing-drift.test.ts`, and protected from the `description_verbosity: minimal` collapse. Adding a tool to one of those families means adding a sibling pointer to its description — and trimming elsewhere to keep net description bytes flat.
+
 ## Plugin & LSP Architecture
 
 ### Plugin architecture
@@ -272,6 +276,11 @@ the same closed doors and sometimes decides the opposite of the last one.
 
 Numbers quoted to the outside world come from `docs/_data/counts.yml`. Never
 hand-type a tool/language/framework count into a listing, a form, or `server.json`.
+
+`ops/index-coverage.md` is the companion ledger for the site itself: per-URL
+Search Console coverage and last-crawl dates. **Read it before any SEO or docs
+work aimed at Google, and update it in the same change** — it is what tells a run
+whether Google has even fetched the pages it is about to change.
 
 ## Client start-block token costs
 

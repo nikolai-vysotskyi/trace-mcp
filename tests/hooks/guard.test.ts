@@ -8,6 +8,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-guard.sh');
 const TMP_BASE = fs.realpathSync(os.tmpdir());
 
+/**
+ * Where a current server writes its sentinels: the state home, not $TMPDIR.
+ * Mirrors STATUS_DIR in src/global.ts — the two processes must agree on this
+ * path without agreeing on their environments (TRA-869).
+ */
+const stateStatusDir = process.env.TRACE_MCP_DATA_DIR
+  ? path.join(path.resolve(process.env.TRACE_MCP_DATA_DIR), 'status')
+  : null;
+
 interface HookDecision {
   allowed: boolean;
   reason?: string;
@@ -69,6 +78,19 @@ function runGuard(
     reason: hookOut.permissionDecisionReason,
     context: hookOut.additionalContext,
   };
+}
+
+/**
+ * Write the heartbeat sentinel where a current server writes it: the state
+ * home, not $TMPDIR. Returns the sentinel path.
+ */
+function setHeartbeatAliveInStateHome(cwd: string): string {
+  const dir = stateStatusDir;
+  if (!dir) throw new Error('test setup must isolate TRACE_MCP_DATA_DIR');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `trace-mcp-alive-${projectHash(fs.realpathSync(cwd))}`);
+  fs.writeFileSync(file, String(Date.now()));
+  return file;
 }
 
 /** Simulate a live trace-mcp server: write a fresh heartbeat sentinel for `cwd`. */
@@ -175,6 +197,12 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
   });
 
   afterEach(() => {
+    // State-home sentinels outlive the $TMPDIR ones — the state home is shared
+    // by every test in this file, so a leftover here would make the next test's
+    // "server is dead" setup silently see a live server.
+    if (stateStatusDir && fs.existsSync(stateStatusDir)) {
+      fs.rmSync(stateStatusDir, { recursive: true, force: true });
+    }
     const readsDir = path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
     if (fs.existsSync(readsDir)) fs.rmSync(readsDir, { recursive: true, force: true });
     if (fs.existsSync(projectDir)) {
@@ -286,6 +314,58 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
     expect(decision.allowed).toBe(true);
     expect(decision.context).toContain('not running');
+  });
+
+  // TRA-869: the writer (server, spawned by the MCP client) and this reader
+  // (hook, spawned by the agent harness) do not share $TMPDIR. Observed live:
+  // the server refreshed /var/folders/.../T/trace-mcp-alive-<hash> every 5s
+  // while the hook looked in /tmp/multica-task-<id>/ and degraded every call.
+  it("finds the sentinel in the state home when $TMPDIR differs from the server's", () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    setHeartbeatAliveInStateHome(projectDir);
+    const foreignTmp = fs.mkdtempSync(path.join(TMP_BASE, 'guard-foreign-tmp-'));
+    const file = path.join(projectDir, 'cross-tmpdir.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TMPDIR: foreignTmp,
+    });
+    expect(decision.context ?? '').not.toContain('not running');
+    expect(decision.allowed).toBe(false);
+  });
+
+  // A crashed current server leaves its state-home sentinel behind. Preferring
+  // the state home unconditionally would then hide an older server that is
+  // still refreshing the $TMPDIR copy, and report a live session as stale.
+  it('prefers the fresher sentinel when a stale state-home one is left over', () => {
+    const stale = setHeartbeatAliveInStateHome(projectDir);
+    const past = new Date(Date.now() - 120_000);
+    fs.utimesSync(stale, past, past);
+    setHeartbeatAlive(projectDir); // live, in $TMPDIR, as an older server writes it
+    const file = path.join(projectDir, 'fresher-wins.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.context ?? '').not.toContain('stale');
+    expect(decision.allowed).toBe(false);
+  });
+
+  it('finds a consultation marker in $TMPDIR even when the state-home dir exists', () => {
+    // An older server marks in $TMPDIR while an empty state-home directory
+    // lingers from an earlier run — the marker must still count.
+    fs.mkdirSync(
+      path.join(
+        stateStatusDir as string,
+        `trace-mcp-consulted-${projectHash(fs.realpathSync(projectDir))}`,
+      ),
+      {
+        recursive: true,
+      },
+    );
+    const file = path.join(projectDir, 'legacy-marker.ts');
+    fs.writeFileSync(file, 'export {};');
+    runGuard('Read', { file_path: file }, sessionId, projectDir);
+    runGuard('Read', { file_path: file }, sessionId, projectDir); // BLOCKED #2
+    writeConsultationMarker(projectDir, 'legacy-marker.ts');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
   });
 
   it('allows Read with warning when heartbeat is stale', () => {
@@ -698,6 +778,39 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(
       runGuard('Bash', { command: 'grep -r foo src/*.ts' }, sessionId, projectDir).allowed,
     ).toBe(false);
+  });
+
+  // TRA-845: Read/Grep/Glob degraded to allow-with-warning when trace-mcp was
+  // unreachable, but the Bash branch had no heartbeat check at all — a stopped
+  // daemon hard-denied shell navigation with no working alternative.
+  it('allows Bash code exploration when heartbeat is dead (fallback)', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    for (const command of [
+      'grep -rn foo src/',
+      'cat src/foo.ts',
+      'ls src/',
+      'git diff src/foo.ts',
+      'git show HEAD:src/foo.ts',
+      'git blame src/foo.ts',
+      'git log -p src/foo.ts',
+      'wc -l < src/foo.ts',
+    ]) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, command).toBe(true);
+      expect(decision.context, command).toContain('Allowing Bash as fallback');
+    }
+  });
+
+  it('still blocks .env via Bash when heartbeat is dead', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    expect(runGuard('Bash', { command: 'cat .env' }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('stays silent on safe Bash commands when heartbeat is dead', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    const decision = runGuard('Bash', { command: 'pnpm test' }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context).toBeUndefined();
   });
 
   it('denies env-prefixed grep on code files (no longer slips through)', () => {

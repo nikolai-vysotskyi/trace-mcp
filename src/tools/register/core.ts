@@ -42,7 +42,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_index_health',
-    'Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). Read-only, no side effects. Use to verify the index is ready before running queries. Returns JSON: { totalFiles, totalSymbols, languages, frameworks, pipelineProgress }.',
+    'Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). Read-only, no side effects. Use to verify the index is ready before running queries. Returns JSON: { totalFiles, totalSymbols, languages, frameworks, pipelineProgress, embedding }.',
     {},
     async () => {
       const result = getIndexHealth(store, config);
@@ -210,6 +210,9 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         progress ?? undefined,
         { autoRebuildOnProviderMismatch: autoRebuild },
       );
+      // Explicit user request — never a silent no-op because the background
+      // breaker is still in its cooldown from an earlier failure (TRA-812).
+      pipeline.resetCircuitBreaker();
       try {
         const startedAt = Date.now();
         // R09 v2: emit embed_started before the work begins. The total is

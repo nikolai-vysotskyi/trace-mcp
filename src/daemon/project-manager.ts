@@ -715,7 +715,15 @@ export class ProjectManager {
         async (deleted) => {
           pipeline.deleteFiles(deleted);
         },
-        { descendantExcludeGlobs: descendantExcludeGlobs(projectRoot) },
+        {
+          descendantExcludeGlobs: descendantExcludeGlobs(projectRoot),
+          // Dropped fs events (bulk checkout, install, wake from sleep) leave
+          // the index silently stale. indexAll() re-walks the root and is
+          // hash-gated, so unchanged files cost a stat+hash, not a reparse.
+          onRescan: async () => {
+            await pipeline.indexAll();
+          },
+        },
       );
     }
 
@@ -850,15 +858,37 @@ export class ProjectManager {
   private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
     if (!managed) return;
-    // Abort in-flight AI fetches FIRST so any pending summarization /
-    // embedding fetch tears its socket down before we start disposing the
-    // store. Without this, a long-running summarize batch can return after
-    // the DB has already closed and write into stale references.
+    // Signal every background producer synchronously, before the first await:
+    // abort in-flight AI fetches so a long-running summarize batch cannot
+    // return after the DB has closed and write into stale references, and
+    // cancel the LSP enricher so its run aborts via its AbortSignal. These are
+    // non-blocking, so nothing below can starve them.
     managed.aiAbortController?.abort();
     managed.cancelDebouncedAI?.();
-    // Cancel background LSP enricher BEFORE closing the store so any
-    // in-flight enrichment run aborts via its AbortSignal and won't try to
-    // write into a disposed Store.
+    try {
+      managed.lspEnricher?.cancel();
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'lspEnricher.cancel() failed during stopProject (non-fatal)',
+      );
+    }
+    // Then unsubscribe the file watcher and drain its in-flight handler BEFORE
+    // the waits below (TRA-834). `await managed.initialIndexPromise` can run
+    // for tens of seconds on a cold project, and a still-subscribed watcher
+    // keeps firing debounced `onChanges` handlers throughout it — each one
+    // starting a fresh indexing run against a Store that a sibling
+    // stopProject() is closing. Field logs showed 12 "The database connection
+    // is not open" failures, every one of them after "Daemon shutting down",
+    // one project logging five of them over 27 seconds. Stopping the source of
+    // new work first is what makes the teardown below finite.
+    await managed.watcher.stop();
+    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
+    // scheduling LSP enrichment (see the onChanges tail in addProject), and
+    // `trailingDebounce` mints a fresh AbortController when it is scheduled
+    // after a cancel — so the cancels above no longer cover those timers. Cancel
+    // once more now that no handler is left to arm another one.
+    managed.cancelDebouncedAI?.();
     try {
       managed.lspEnricher?.cancel();
     } catch (err) {
@@ -878,7 +908,6 @@ export class ProjectManager {
         'initialIndexPromise rejected during stopProject (non-fatal)',
       );
     }
-    await managed.watcher.stop();
     clearServerPid(managed.db);
     managed.serverHandle.dispose();
     await managed.server.close();
