@@ -5,10 +5,10 @@
  * resolved to a target node by a pipeline pass, or the edge is dropped. The
  * capability matrix used to derive its Imports column from "the plugin declares
  * import patterns" and so claimed 66 of 81 languages. Indexing a fixture where
- * every language performs one real cross-file import produced edges for four:
- * php, python, typescript and vue. Go, Ruby, Rust, C, C++, Java, C#, Kotlin,
- * Swift, Elixir, Lua, Astro and Svelte each extracted an import that nothing
- * consumed.
+ * every language performs one real cross-file import originally produced edges
+ * for only four: php, python, typescript and vue. Go, Rust, C, C++, Java and
+ * Ruby have since gained resolvers (in that order); C#, Kotlin, Swift, Elixir,
+ * Lua, Astro and Svelte still extract an import that nothing consumes.
  *
  * Adding a language here means adding or extending a resolver pass in
  * `src/indexer/pipeline.ts` — not editing a list.
@@ -46,6 +46,7 @@ export const IMPORT_EDGE_LANGUAGES: ReadonlySet<string> = new Set([
   'rust', // resolveRustImportEdges
   'c', // resolveCImportEdges
   'cpp', // resolveCImportEdges
+  'ruby', // resolveRubyImportEdges
   'yaml', // resolveIacImportEdges — kustomize / docker-compose refs
   'hcl', // resolveIacImportEdges — local terraform module sources
   'markdown', // resolveMarkdownWikilinkEdges
