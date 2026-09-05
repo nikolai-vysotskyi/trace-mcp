@@ -63,6 +63,7 @@ which excludes the framework-specific rows.
 | `apply_codemod` | Structural (AST-aware) or regex find-and-replace across files. | always |
 | `apply_move` | Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. | always |
 | `apply_rename` | Rename a symbol across all usages (definition + all importing files). | always |
+| `apply_startup_recommendations` | Apply or preview a get_startup_context_audit recommendation: disable an unused MCP server, move an unused skill aside, or delete duplicated instruction lines. | always |
 | `approve_decision` | Approve a decision currently in the memoir-style review queue (review_status="pending"). | always |
 | `assess_change_risk` | Before modifying a file or symbol, predict risk level (low/medium/high/critical) with contributing factors and recommended mitigations. | always |
 | `audit_config` | Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift be… | always |
@@ -146,7 +147,7 @@ which excludes the framework-specific rows.
 | `get_health_trends` | Time-series health metrics for a file or module: bug score, complexity, coupling, churn over time. | always |
 | `get_implementations` | Find all classes that implement or extend a given interface or base class. | always |
 | `get_import_graph` | Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). | always |
-| `get_index_health` | Get index status, statistics, health information, and pipeline progress (indexing, summarization, embedding). | always |
+| `get_index_health` | Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). | always |
 | `get_livewire_context` | Get full context for a Livewire component: properties, actions, events, view, child components. | framework |
 | `get_middleware_chain` | Trace middleware chain for a route URL (Express/NestJS/FastAPI/Flask). | framework |
 | `get_minimal_context` | Single-call orientation context (~150 tokens). | always |
@@ -178,7 +179,7 @@ which excludes the framework-specific rows.
 | `get_session_journal` | Session history: all tool calls made, files read, zero-result searches, and duplicate queries. | always |
 | `get_session_snapshot` | Compact session snapshot (~200 tokens) for context recovery after compaction. | always |
 | `get_session_stats` | Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/e… | always |
-| `get_startup_context_audit` | What every session pays for before your first message, what it costs, and what went unused. | always |
+| `get_startup_context_audit` | What every session pays before your first message, what it costs, and what went unused: source decomposition, cache-rebuild prices, and removals proven unuse… | always |
 | `get_state_stores` | List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites. | framework |
 | `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint. | opt-in |
 | `get_subproject_graph` | Show all subprojects and their cross-repo connections. | opt-in |
@@ -223,6 +224,7 @@ which excludes the framework-specific rows.
 | `remember_decision` | Live agent write into the decision knowledge graph. | always |
 | `remove_dead_code` | Safely remove a dead symbol from its file. | always |
 | `repair_index` | Apply a targeted repair to the local SQLite index. | always |
+| `rollback_startup_recommendations` | Undo one apply_startup_recommendations(dry_run:false) call byte-for-byte: restores files and moved skills. | always |
 | `scan_code_smells` | Find deferred work and shortcuts: TODO/FIXME/HACK/XXX comments, empty functions & stubs, hardcoded values (IPs, URLs, credentials, magic numbers), and per-la… | always |
 | `scan_security` | Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. | always |
 | `search` | Search symbols by name, kind, or text. | always |

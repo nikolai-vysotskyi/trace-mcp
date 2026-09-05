@@ -266,7 +266,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols. Use before modifying code to understand blast radius. For quick risk assessment without full report, use assess_change_risk instead. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Pass symbol_ids to scope analysis to changed symbols only. Use before modifying code to understand blast radius. For a quick risk score alone use assess_change_risk; for who-calls-what use get_call_graph. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
       file_path: optionalNonEmptyString(512).describe('Relative file path to analyze'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to analyze'),

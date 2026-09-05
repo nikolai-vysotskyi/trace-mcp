@@ -384,6 +384,19 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 
+> **When the embedding endpoint is unreachable:** background embedding trips a
+> circuit breaker after 2 consecutive failed batches and then pauses for 10
+> minutes. The pause is stored in the project DB, so it survives a daemon
+> restart instead of re-attempting the whole backlog on every start. While it is
+> open, `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
+> and adds a warning — semantic and hybrid search results are incomplete until
+> the provider is reachable. `embed_repo` ignores the pause and retries
+> immediately.
+
+> **`ai.enabled` takes effect per project start.** A project already open in the
+> daemon keeps the config it was started with, so flipping `ai.enabled` off stops
+> embedding for that project only after it restarts.
+
 > **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
 
 > **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
@@ -479,7 +492,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (32 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (34 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -935,6 +948,25 @@ With `enabled: "auto"` the provider is registered at boot; discovery returns an 
 |---|---|
 | `TRACE_MCP_LOG_LEVEL` | Log level (debug, info, warn, error) |
 | `HERMES_HOME` | Override for Hermes Agent storage root (default `~/.hermes`). Read by `discover_hermes_sessions` and the Hermes session provider. |
+| `TRACE_MCP_COMPUTE_TIMEOUT_MS` | Wall-clock ceiling for one heavy graph traversal (default `15000`). |
+| `TRACE_MCP_COMPUTE_RSS_MB` | Resident-memory ceiling checked during a traversal (default `3000`). |
+| `TRACE_MCP_COMPUTE_MAX_ITERATIONS` | Iteration ceiling for one traversal (default `2000000`). |
+| `TRACE_MCP_NO_COMPUTE_GUARD` | Set to `1` to disable all compute ceilings (debugging). |
+
+### Compute ceilings
+
+`get_call_graph`, `get_change_impact`, `get_dependency_diagram`,
+`get_circular_imports`, `find_usages` and `get_pagerank` tick a per-call guard
+inside their traversal loops. When a ceiling is hit the tool returns the
+**partial** result with a `_budget_exceeded` field naming the ceiling, the
+limit, and the elapsed time — never a tool-call error — and the daemon log
+gets one `Compute budget exceeded` line with the tool name.
+
+The defaults come from `scripts/bench-compute-guard.ts`: a deliberately heavy
+`get_call_graph` (37,449 symbols, depth 5) consumes 79,577 ticks in ~85 ms, so
+every ceiling sits one to two orders of magnitude above anything a real query
+reaches. Measured tick overhead on that same query is within run-to-run noise
+(−2.7% … +2.1% across five runs).
 
 ---
 

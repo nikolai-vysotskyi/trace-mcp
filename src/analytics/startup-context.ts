@@ -46,8 +46,8 @@ const USD_PER_MTOK_CACHE_READ = 0.3;
 const CHARS_PER_TOKEN = 4;
 /** cache_creation big enough mid-session to mean the prefix was rebuilt, not grown. */
 const PREFIX_REBUILD_MIN_TOKENS = 20_000;
-/** Files below this are handshakes and aborted runs, not sessions. */
-const MIN_SESSION_BYTES = 20_000;
+/** Files below this are handshakes and aborted runs, not sessions. Exported for startup-watch.ts, which scans the same logs for a single latest sample rather than the full window. */
+export const MIN_SESSION_BYTES = 20_000;
 /** A gap longer than the longest cache TTL explains a rebuild on its own. */
 const CACHE_TTL_SECONDS = 3600;
 
@@ -300,7 +300,8 @@ interface ApiCall {
   events: Set<string>;
 }
 
-interface FreshSession {
+/** Exported for startup-watch.ts (TRA-865), which needs a single session's startup size. */
+export interface FreshSession {
   projectPath: string;
   startupTokens: number;
   cacheCreate: number;
@@ -333,8 +334,11 @@ function timestampSeconds(ts: unknown): number {
  * parsed — a substring test first, `JSON.parse` second. On a 45-day corpus
  * that is the difference between parsing every line and parsing half of them,
  * and the report is one the user waits on.
+ *
+ * Exported for startup-watch.ts, which calls this on one file at a time
+ * rather than the whole corpus this module scans.
  */
-async function scanSessionFile(filePath: string, projectPath: string): Promise<FileScan> {
+export async function scanSessionFile(filePath: string, projectPath: string): Promise<FileScan> {
   const calls: ApiCall[] = [];
   const mcpToolCalls = new Map<string, number>();
   const skillInvocations = new Set<string>();
@@ -692,8 +696,24 @@ function buildRecommendations(input: RecommendationInputs): Recommendation[] {
   return out.sort((a, b) => b.usdOverWindow - a.usdOverWindow);
 }
 
-/** Tokens worth of non-trivial lines present in both instruction files. */
-function sharedLineTokens(a: string, b: string): number {
+export interface SharedLine {
+  /** 0-based index into `projectFile` split on '\n' — where apply-recommendations.ts cuts. */
+  index: number;
+  /** The line's trimmed text — what matched the global file. */
+  text: string;
+}
+
+/**
+ * Lines in `projectFile` whose trimmed text also appears, trimmed, in
+ * `globalFile`. This is the exact evidence `sharedLineTokens` prices AND the
+ * exact set TRA-769's applier deletes for a `duplicateInstructions`
+ * recommendation — both stay locked to one definition of "duplicate" by
+ * calling through here rather than each keeping their own copy.
+ *
+ * Short lines are headings, bullets and blanks that collide by accident;
+ * counting them would invent duplication that is not there.
+ */
+export function findSharedLines(globalFile: string, projectFile: string): SharedLine[] {
   const linesOf = (file: string): string[] => {
     try {
       return fs.readFileSync(file, 'utf8').split('\n');
@@ -701,19 +721,23 @@ function sharedLineTokens(a: string, b: string): number {
       return [];
     }
   };
-  // Short lines are headings, bullets and blanks that collide by accident;
-  // counting them would invent duplication that is not there.
   const meaningful = (line: string) => line.trim().length >= 40;
-  const first = new Set(
-    linesOf(a)
+  const globalLines = new Set(
+    linesOf(globalFile)
       .filter(meaningful)
       .map((l) => l.trim()),
   );
-  let chars = 0;
-  for (const line of linesOf(b)) {
+  const shared: SharedLine[] = [];
+  linesOf(projectFile).forEach((line, index) => {
     const t = line.trim();
-    if (meaningful(t) && first.has(t)) chars += t.length + 1;
-  }
+    if (meaningful(t) && globalLines.has(t)) shared.push({ index, text: t });
+  });
+  return shared;
+}
+
+/** Tokens worth of non-trivial lines present in both instruction files. */
+function sharedLineTokens(a: string, b: string): number {
+  const chars = findSharedLines(a, b).reduce((n, s) => n + s.text.length + 1, 0);
   return Math.round(chars / CHARS_PER_TOKEN);
 }
 

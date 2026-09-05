@@ -74,6 +74,12 @@ export const BUNDLES_DIR = path.join(TRACE_MCP_HOME, 'bundles');
 /** Anonymous install-id + last-ping-date state for the opt-out usage ping (see src/telemetry/usage-ping.ts). */
 export const TELEMETRY_STATE_PATH = path.join(TRACE_MCP_HOME, 'telemetry-state.json');
 
+/** Backup bundles for applied startup-context recommendations (TRA-769) — one dir per apply call, rollback source of truth. */
+export const STARTUP_BACKUPS_DIR = path.join(TRACE_MCP_HOME, 'startup-backups');
+
+/** Startup-block size history for growth watch (TRA-865) — one snapshot per session, per project. */
+export const STARTUP_WATCH_PATH = path.join(TRACE_MCP_HOME, 'startup-watch.json');
+
 // ── Foreign IDE / agent paths trace-mcp introspects ──────────────
 
 /**

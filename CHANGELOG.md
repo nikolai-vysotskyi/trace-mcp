@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.17.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.17.0...v3.17.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **daemon:** stop reporting requested shutdowns as exit=1 (TRA-849) ([#890](https://github.com/nikolai-vysotskyi/trace-mcp/issues/890)) ([52e7e67](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52e7e67a0adad5a82db2d71aee7f0b6ff975fe56))
+* **docs:** a narrow banner cut so the README header stays readable on a phone (TRA-827) ([#877](https://github.com/nikolai-vysotskyi/trace-mcp/issues/877)) ([f0c0858](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f0c0858b44190b11547a03c223311782fa38d214))
+* **hooks:** let Bash fall back when trace-mcp is unreachable (TRA-845) ([#889](https://github.com/nikolai-vysotskyi/trace-mcp/issues/889)) ([52c1531](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52c153150d9bc8400a5ff22041cf959480d80620))
+* **launcher:** refuse to heal launcher.env when the path is not a regular file ([#883](https://github.com/nikolai-vysotskyi/trace-mcp/issues/883)) ([73227a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/73227a1079e6eebf2062a7f9a6d6664e85a200ca))
+* **release:** import the Developer ID certificate ourselves (TRA-844) ([#887](https://github.com/nikolai-vysotskyi/trace-mcp/issues/887)) ([cc24562](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc245627bdf22335b76882ce1ef4dfe470eea21a))
+* **state:** bound the global state.db instead of growing it forever (TRA-830) ([#879](https://github.com/nikolai-vysotskyi/trace-mcp/issues/879)) ([5694c23](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5694c231f7c4d1eac2a8399bf5d200d879a26b35))
+* **watcher:** reconcile the index when the OS drops fs events ([#892](https://github.com/nikolai-vysotskyi/trace-mcp/issues/892)) ([846f17b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/846f17bf160004d84f9fa32e86c682a80c289ecc))
+
+
+### Documentation
+
+* **design-web:** an un-paired app screenshot is a finding, not a milder pair bug (TRA-851) ([#885](https://github.com/nikolai-vysotskyi/trace-mcp/issues/885)) ([6443a53](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6443a5365f42fa55f08ac1e34f69edf92b290e71))
+* **ops:** record claude-code-templates in the distribution ledger (TRA-846) ([#886](https://github.com/nikolai-vysotskyi/trace-mcp/issues/886)) ([5417a07](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5417a07e8ece1e9da50b70329d4cb3ba0dd88952))
+* **ops:** tokenomics listing merged, third arrivals window, backend-slot door class ([#884](https://github.com/nikolai-vysotskyi/trace-mcp/issues/884)) ([6c038f1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c038f1b007a76553d7a9ec8d3cbc53a2bc0d6b8))
+* regenerate the config index after db.path lost its default (TRA-810) ([#870](https://github.com/nikolai-vysotskyi/trace-mcp/issues/870)) ([a007163](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a007163365400a885d7957f9e1f526e59d6b3572))
+
 ## [3.17.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.16.0...v3.17.0) (2026-09-04)
 
 

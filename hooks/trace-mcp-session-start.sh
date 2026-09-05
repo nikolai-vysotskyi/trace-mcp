@@ -90,7 +90,8 @@ CONTEXT=$(printf '%s' "$WAKE_JSON" | jq -r '
     "Memory: " + ((.memory.sessions_mined // 0) | tostring) + " sessions mined, "
       + ((.memory.sessions_indexed // 0) | tostring) + " indexed, "
       + ((.memory.total_decisions // 0) | tostring) + " total decisions",
-    "Tip: call get_wake_up / query_decisions for richer context."
+    "Tip: call get_wake_up / query_decisions for richer context.",
+    (if (.startupWatch != null) then .startupWatch.message else empty end)
   ] | join("\n")
 ' 2>/dev/null) || exit 0
 

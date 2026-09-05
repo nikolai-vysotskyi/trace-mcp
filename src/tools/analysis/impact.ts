@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store, SymbolRow } from '../../db/store.js';
 import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { safeGitEnv } from '../../utils/git-env.js';
@@ -134,6 +135,8 @@ export interface ChangeImpactResult {
   pennant?: PennantImpactResult;
   /** When symbol_ids are provided, only those symbols are analyzed (diff-aware mode) */
   scopedToSymbols?: string[];
+  /** Present only when a compute ceiling stopped the traversal (TRA-841) */
+  _budget_exceeded?: BudgetExceeded;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -420,6 +423,7 @@ export function getChangeImpact(
   depth = 3,
   maxDependents = 200,
   cwd?: string,
+  guard: BudgetGuard = forTool('get_change_impact'),
 ): TraceMcpResult<ChangeImpactResult> {
   let startNodeIds: number[] = [];
   let targetPath: string;
@@ -556,6 +560,7 @@ export function getChangeImpact(
     rawDeps,
     testedFileIds,
     testedSymNames,
+    guard,
   );
 
   const truncated = rawDeps.length >= maxDependents;
@@ -775,6 +780,7 @@ export function getChangeImpact(
   if (truncated || dependentsTruncated) result.truncated = true;
   if (pennant) result.pennant = pennant;
   if (scopedToSymbols) result.scopedToSymbols = scopedToSymbols;
+  Object.assign(result, guard.marker());
 
   return ok(result);
 }
@@ -851,11 +857,15 @@ function traverseIncoming(
   rawDeps: RawDependent[],
   testedFileIds: Set<number>,
   testedSymNames: Map<number, Set<string>>,
+  guard: BudgetGuard,
 ): void {
   let frontier = startNodeIds;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     if (frontier.length === 0 || rawDeps.length >= maxDependents) break;
+    // A batch edge fetch over a wide frontier is the expensive step here, so
+    // check the clock/RSS ceilings before paying for it.
+    if (!guard.check()) break;
 
     const allEdges = store.getEdgesForNodesBatch(frontier);
 
@@ -865,6 +875,7 @@ function traverseIncoming(
     const edgeBySource = new Map<number, { type: string; tier: EdgeResolution }>();
 
     for (const edge of allEdges) {
+      if (!guard.tick()) break;
       if (rawDeps.length + sourceNodeIds.length >= maxDependents) break;
       if (!frontierSet.has(edge.target_node_id)) continue;
       if (edge.source_node_id === edge.target_node_id) continue;

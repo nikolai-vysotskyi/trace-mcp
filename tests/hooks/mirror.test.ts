@@ -20,11 +20,11 @@ function bashResponse(stdout: string) {
   return { stdout, stderr: '', interrupted: false, isImage: false, noOutputExpected: false };
 }
 
-function readResponse(content: string) {
+function readResponse(content: string, filePath = '/tmp/fixture.log') {
   return {
     type: 'text',
     file: {
-      filePath: '/tmp/fixture.log',
+      filePath,
       content,
       numLines: content.split('\n').length,
       startLine: 1,
@@ -321,6 +321,48 @@ describe('trace-mcp mirror hook', () => {
     expect(runMirror('Bash', bashResponse(small), { TRACE_MCP_MIRROR_CAP: '1' }).rewritten).toBe(
       false,
     );
+  });
+
+  it('never mirrors a Read of its own spill', () => {
+    // The footer points the agent at the spill for the full result. If the hook
+    // rewrote that read too, the escape hatch would return the same window the
+    // agent already has, plus a wasted turn and a second spill file (TRA-860).
+    const big = Array.from({ length: 400 }, (_, i) => `line ${i} ${'z'.repeat(40)}`).join('\n');
+    const first = runMirror('Read', readResponse(big));
+    expect(first.rewritten).toBe(true);
+
+    const spill = /Full output: (\S+)/.exec(first.output ?? '')?.[1];
+    expect(spill).toBeDefined();
+    expect(spill?.startsWith(home)).toBe(true);
+    expect(fs.readFileSync(spill as string, 'utf-8')).toBe(big);
+
+    expect(runMirror('Read', readResponse(big, spill as string)).rewritten).toBe(false);
+  });
+
+  it('exempts the spill when the home dir has a trailing slash', () => {
+    // The spill path we hand the model must survive the harness normalising it
+    // before it comes back as a Read, or the exemption misses and the escape
+    // hatch is compressed again.
+    const big = Array.from({ length: 400 }, (_, i) => `line ${i} ${'z'.repeat(40)}`).join('\n');
+    const first = runMirror('Read', readResponse(big), { TRACE_MCP_MIRROR_HOME: `${home}/` });
+    const spill = /Full output: (\S+)/.exec(first.output ?? '')?.[1] as string;
+
+    expect(spill).not.toContain('//');
+    expect(
+      runMirror('Read', readResponse(big, spill), { TRACE_MCP_MIRROR_HOME: `${home}/` }).rewritten,
+    ).toBe(false);
+  });
+
+  it('rewrites the same output to the same bytes', () => {
+    // A clock- or pid-derived spill name would make two identical reads produce
+    // two different replacements. Nothing the model sees may vary run to run.
+    const big = Array.from({ length: 400 }, (_, i) => `line ${i} ${'z'.repeat(40)}`).join('\n');
+    const a = runMirror('Read', readResponse(big));
+    const b = runMirror('Read', readResponse(big));
+    expect(a.output).toBe(b.output);
+    expect(
+      fs.readdirSync(path.join(home, 'test-session')).filter((f) => f.endsWith('.txt')),
+    ).toHaveLength(1);
   });
 
   it('honours the disable switch', () => {

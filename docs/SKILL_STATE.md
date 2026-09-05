@@ -82,6 +82,24 @@ long sessions, and the one short session in the set lost. Until the crossover is
 located, paying schema tokens for these seven tools in every session — most of
 which are short — is not justified by anything measured.
 
+## MCP Prompt: `state`
+
+The tools do not start the loop on their own — an agent has to be told to run
+it. The `state` prompt is that instruction: it returns the execution protocol
+below plus a seeded `trace_state_init` call, so a client can enter state mode in
+one step (`/state` in clients that surface MCP prompts as slash commands).
+
+Every state call it emits is wrapped in `batch` — on the default `minimal`
+preset the `trace_state_*` tools are not in `tools/list`, so a prompt naming
+them directly would ask the agent to call tools it cannot see. `batch` is on
+every preset and dispatches any registered tool by name.
+
+| Argument | Required | Meaning |
+|----------|----------|---------|
+| `goal` | yes | What the task has to achieve |
+| `task_id` | no | State id to write under; derived from the goal when omitted |
+| `steps` | no | Comma-separated initial plan steps |
+
 ## MCP Tools Suite
 
 | Tool | Purpose |
@@ -93,6 +111,20 @@ which are short — is not justified by anything measured.
 | `trace_state_rollback` | Restore state to a saved checkpoint |
 | `trace_state_add_dead_end` | Fast shortcut to record failed approaches and prevent repetition |
 | `trace_state_list` | List active task states in storage |
+
+---
+
+## Storage and retention
+
+State lives in `state.db` under `TRACE_MCP_HOME`, shared by every project and
+every task the install has ever run. Two limits keep it bounded:
+
+- Patch history is capped at the newest **200 revisions per task**. The current
+  state and all checkpoints are unaffected; only the older audit rows are dropped.
+- Task states in a terminal status (`completed`, `failed`) that have not been
+  updated for **30 days** are deleted on server start, along with their revisions
+  and checkpoints. `in_progress`, `paused` and `blocked` states are never swept,
+  however old they are.
 
 ---
 

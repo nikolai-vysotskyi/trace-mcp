@@ -2,6 +2,7 @@
  * Lazy background embedding indexer.
  * Finds symbols without embeddings and indexes them in batches.
  */
+import type Database from 'better-sqlite3';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
@@ -14,6 +15,48 @@ const DEFAULT_BATCH_SIZE = 50;
 const FAILURE_THRESHOLD = 2;
 /** How long to skip embedding work after the breaker trips. */
 const COOLDOWN_MS = 10 * 60 * 1000;
+/** `server_state` row holding the breaker state so it survives daemon restarts. */
+const BREAKER_STATE_KEY = 'embedding_breaker';
+
+/**
+ * Circuit-breaker state as persisted in `server_state`. In-memory only, the
+ * breaker resets on every process start — which under a restart loop (TRA-809)
+ * turns an unreachable embedding endpoint into a permanent retry storm against
+ * it (TRA-812). Persisting it makes the cooldown mean what it says.
+ */
+export interface EmbeddingBreakerState {
+  /** Epoch ms until which embedding work is skipped. */
+  disabledUntilMs: number;
+  /** Consecutive failed batches at the time of writing. */
+  consecutiveFailures: number;
+  /** Epoch ms of the most recent batch failure. */
+  lastFailureAt: number;
+  /** Message from the most recent batch failure. */
+  lastError?: string;
+}
+
+/**
+ * Read the persisted breaker state, or null when there is none (clean history,
+ * pre-migration DB without `server_state`, or an unparseable row).
+ */
+export function readEmbeddingBreakerState(db: Database.Database): EmbeddingBreakerState | null {
+  try {
+    const row = db.prepare('SELECT value FROM server_state WHERE key = ?').get(BREAKER_STATE_KEY) as
+      | { value: string }
+      | undefined;
+    if (!row) return null;
+    const parsed = JSON.parse(row.value) as Partial<EmbeddingBreakerState>;
+    if (typeof parsed?.disabledUntilMs !== 'number') return null;
+    return {
+      disabledUntilMs: parsed.disabledUntilMs,
+      consecutiveFailures: parsed.consecutiveFailures ?? 0,
+      lastFailureAt: parsed.lastFailureAt ?? 0,
+      lastError: parsed.lastError,
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Failure diagnostics for a single {@link EmbeddingPipeline} run, so callers
@@ -66,6 +109,21 @@ export class EmbeddingPipeline {
   };
   /** Per-run latch: set once a non-dimension-mismatch failure is seen. */
   private sawNonMismatchFailure = false;
+  /** Once-per-process latch for the "breaker still open" skip log. */
+  private skipNotified = false;
+
+  /**
+   * Forget any open cooldown so the next run actually calls the provider.
+   * For explicit user-driven runs (embed_repo) — a persisted breaker must not
+   * make "embed now" a silent no-op for the rest of the cooldown window.
+   */
+  resetCircuitBreaker(): void {
+    this.consecutiveFailures = 0;
+    this.disabledUntilMs = 0;
+    this.breakerNotified = false;
+    this.skipNotified = false;
+    this.clearBreakerState();
+  }
 
   /** Snapshot of why the last run embedded fewer symbols than expected. */
   getLastRunDiagnostics(): EmbeddingRunDiagnostics {
@@ -80,6 +138,49 @@ export class EmbeddingPipeline {
     options?: EmbeddingPipelineOptions,
   ) {
     this.autoRebuild = options?.autoRebuildOnProviderMismatch ?? true;
+    // Resume an open cooldown from a previous process. Without this the breaker
+    // is worthless in the daemon: every restart re-attempts the whole backlog.
+    const persisted = readEmbeddingBreakerState(store.db);
+    if (persisted && persisted.disabledUntilMs > Date.now()) {
+      this.disabledUntilMs = persisted.disabledUntilMs;
+      this.consecutiveFailures = persisted.consecutiveFailures;
+      // Already announced by the process that tripped it — don't re-log the trip.
+      this.breakerNotified = true;
+    } else if (persisted && Date.now() - persisted.lastFailureAt < COOLDOWN_MS) {
+      // A run stops at its first failed batch, so a single run can only ever
+      // add one to the counter. Starting from zero every process meant that
+      // under a restart loop the counter never reached FAILURE_THRESHOLD and
+      // the breaker never tripped at all — 36 full-backlog retries in 40 hours.
+      this.consecutiveFailures = persisted.consecutiveFailures;
+    }
+  }
+
+  /** Persist the breaker so the cooldown outlives this process. Best-effort. */
+  private persistBreakerState(): void {
+    try {
+      this.store.db.prepare('INSERT OR REPLACE INTO server_state (key, value) VALUES (?, ?)').run(
+        BREAKER_STATE_KEY,
+        JSON.stringify({
+          disabledUntilMs: this.disabledUntilMs,
+          consecutiveFailures: this.consecutiveFailures,
+          lastFailureAt: Date.now(),
+          lastError: this.diagnostics.lastError,
+        } satisfies EmbeddingBreakerState),
+      );
+    } catch (e) {
+      // Pre-migration DB without server_state, or a read-only store. The
+      // in-memory breaker still works for this process.
+      logger.debug({ error: e }, 'Failed to persist embedding breaker state');
+    }
+  }
+
+  /** Drop the persisted breaker after a successful batch. Best-effort. */
+  private clearBreakerState(): void {
+    try {
+      this.store.db.prepare('DELETE FROM server_state WHERE key = ?').run(BREAKER_STATE_KEY);
+    } catch {
+      /* see persistBreakerState */
+    }
   }
 
   /**
@@ -165,7 +266,22 @@ export class EmbeddingPipeline {
    */
   async indexUnembedded(batchSize = DEFAULT_BATCH_SIZE, signal?: AbortSignal): Promise<number> {
     if (this.inFlight) return 0;
-    if (this.disabledUntilMs > Date.now()) return 0;
+    if (this.disabledUntilMs > Date.now()) {
+      // Say it once per process. Silence here is what let a 3 445-symbol
+      // backlog sit undrained for two days with nothing in the log but
+      // "embedding completed: 0 items" (TRA-812).
+      if (!this.skipNotified) {
+        this.skipNotified = true;
+        logger.info(
+          {
+            queued: this.store.countUnembeddedSymbols(),
+            retryAfter: new Date(this.disabledUntilMs).toISOString(),
+          },
+          'Embedding paused — service failed recently, backlog is not being drained',
+        );
+      }
+      return 0;
+    }
     if (signal?.aborted) return 0;
 
     this.inFlight = true;
@@ -207,11 +323,23 @@ export class EmbeddingPipeline {
           if (this.disabledUntilMs > Date.now()) break;
         } while (batch > 0);
 
-        this.progress?.update('embedding', {
-          phase: 'completed',
-          processed: totalIndexed,
-          completedAt: Date.now(),
-        });
+        // A run that embedded nothing *because every batch failed* is not a
+        // completion. Reporting it as one made a two-day outage read as
+        // "embedding completed: 0 items in 2s" at info level (TRA-812).
+        if (totalIndexed === 0 && this.diagnostics.failedBatches > 0) {
+          this.progress?.update('embedding', {
+            phase: 'error',
+            processed: 0,
+            completedAt: Date.now(),
+            error: this.diagnostics.lastError ?? 'all embedding batches failed',
+          });
+        } else {
+          this.progress?.update('embedding', {
+            phase: 'completed',
+            processed: totalIndexed,
+            completedAt: Date.now(),
+          });
+        }
       } catch (e) {
         this.progress?.update('embedding', {
           phase: 'error',
@@ -269,6 +397,9 @@ export class EmbeddingPipeline {
         }
         this.consecutiveFailures = 0;
         this.breakerNotified = false;
+        this.disabledUntilMs = 0;
+        this.skipNotified = false;
+        this.clearBreakerState();
       }
     } catch (e) {
       logger.error({ error: e }, 'Embedding batch failed');
@@ -301,6 +432,9 @@ export class EmbeddingPipeline {
         // doesn't get probed the moment the previous window ends.
         this.disabledUntilMs = Date.now() + COOLDOWN_MS;
       }
+      // Record the failure (and any cooldown) for the next process and for
+      // get_index_health to surface.
+      this.persistBreakerState();
     }
 
     logger.debug({ indexed, total: unembedded.length }, 'Indexed unembedded symbols');
@@ -323,6 +457,7 @@ export class EmbeddingPipeline {
       );
     }
     this.consistent = true;
+    this.resetCircuitBreaker();
     return this.indexUnembedded(DEFAULT_BATCH_SIZE);
   }
 }
