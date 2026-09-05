@@ -1,6 +1,6 @@
 ---
 title: "MCP Tracing — OpenTelemetry spans for every MCP tool call"
-description: "How to trace MCP tool calls: trace-mcp emits OpenTelemetry-compatible spans for every MCP tool invocation and AI provider call, exported to Jaeger, Honeycomb or Langfuse."
+description: "How to trace MCP tool calls: trace-mcp emits OpenTelemetry spans for every MCP tool invocation and AI provider call, exported to Jaeger or Langfuse."
 updated: 2026-09-04
 ---
 
