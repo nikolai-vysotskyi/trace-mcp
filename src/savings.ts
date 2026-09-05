@@ -16,8 +16,16 @@ import { atomicWriteJson } from './utils/atomic-write.js';
 
 export const SAVINGS_PATH = path.join(TRACE_MCP_HOME, 'savings.json');
 
-/** Estimated raw-token cost for common operations (what you'd pay without trace-mcp) */
-const RAW_COST_ESTIMATES: Record<string, number> = {
+/**
+ * Estimated raw-token cost for common operations (what you'd pay without trace-mcp).
+ *
+ * Exported because it is the *baseline* half of every savings figure we publish:
+ * `scripts/gen-response-tokens-data.ts` weights it by real call volume to
+ * generate `docs/_data/response_tokens.json`. It is still hand-written and
+ * unvalidated (TRA-880), which is exactly why the published figure has to name
+ * it rather than hide it.
+ */
+export const RAW_COST_ESTIMATES: Record<string, number> = {
   get_symbol: 800,
   search: 600,
   search_text: 3000,
@@ -49,7 +57,7 @@ const RAW_COST_ESTIMATES: Record<string, number> = {
 };
 
 /** Default raw cost for tools not in the map */
-const DEFAULT_RAW_COST = 500;
+export const DEFAULT_RAW_COST = 500;
 
 /** Estimated compression ratio (trace-mcp response tokens / raw tokens) */
 const COMPRESSION_RATIO = 0.15;

@@ -188,19 +188,18 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
 
-**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository by trace-mcp's own estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 1,326 input tokens against 13,595 for loading the diff plus every file it touches, **90.6% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 5 pull requests where the index barely paid off are published alongside the wins.
+**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository — the first table row against real responses, everything below it by trace-mcp's own synthetic estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 1,326 input tokens against 13,595 for loading the diff plus every file it touches, **90.6% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 5 pull requests where the index barely paid off are published alongside the wins.
 
 **What to expect — by workload:**
 
 | Workload | Typical reduction |
 |---|---|
-| **Mixed real-world production** (code-aware tasks across a typical session) | **~40–50% on average** |
-| **Effective capacity at the same context budget** | **up to ~2×** |
-| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | **up to 99% less redundant processing** |
-| **Targeted research / planning queries** (composite tasks that replace ~10 sequential operations) | **up to ~40× on individual calls** |
+| **Mixed real-world production** (measured tool responses vs. the file reads they replace) | **29.3% fewer tokens** |
+| **Structured code-navigation tasks** (symbol lookup, impact analysis, type hierarchy, call graph) | up to 99% less redundant processing — *synthetic estimate* |
+| **Targeted research / planning queries** (composite tasks that replace ~10 sequential operations) | up to ~40× on individual calls — *synthetic estimate* |
 | Non-code workloads (raw text, unstructured data) | Out of scope today |
 
-The averages are the honest number to plan against: across a typical session you're mixing high-leverage graph queries with reads, edits, and cheaper calls, and the net usually lands at 30–60% depending on stack and task mix. The peaks (up to 99% on individual structured calls) are real and reproducible — that's where recomputation gets eliminated most cleanly — but they're per-call, not per-session.
+**The 29.3% is the honest number to plan against, and it is lower than what this README said until 5 September 2026.** We used to print "~40–50% on average". That figure descended from a counter that scored each call *before the tool ran* — `RAW_COST_ESTIMATES[tool] × 0.15`, a constant with no variance — which we found and fixed ourselves in [#915](https://github.com/nikolai-vysotskyi/trace-mcp/pull/915). The replacement weights real `o200k_base` counts of real responses by 17,847 recorded calls from one machine ([per-tool table](https://trace-mcp.com/perf/response-tokens/), generated into `docs/_data/response_tokens.json`). Two caveats travel with it: the baseline half — what a `Read`/`Grep` would have cost instead — is **still a hand-written estimate**, and **four of the twelve tools measured return more tokens than they replace** (`search`, `find_usages`, `get_complexity_report`, `get_call_graph`); the old counter booked a saving for them anyway. The peaks below (up to 99% on individual structured calls) are a synthetic estimate, per-call, not per-session.
 
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
@@ -222,9 +221,9 @@ Composite task              223,721 tokens      14,245 tokens       93.6%
 Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-Across 11 structured task categories, recomputation drops by **up to ~99% per call** when the agent reuses the graph instead of re-reading files. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
+Across 11 structured task categories, recomputation drops by **up to ~99% per call** when the agent reuses the graph instead of re-reading files. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **29.3%** — the measured figure above, not this synthetic one. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
 
-**Savings scale with project size.** On a 650-file project, structured-task savings cluster around ~522K tokens per session. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
+**Savings scale with project size** — argued, not measured. Without trace-mcp the agent reads more wrong files before finding the right one, while graph traversal stays O(relevant edges) rather than O(total files). We have no per-project-size measurement to put behind that, so this README no longer quotes one; the per-session token figure that used to sit here came from the same pre-#915 estimator as the "40–50%".
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, which is where most of the latency saving comes from.
 
@@ -234,7 +233,7 @@ Across 11 structured task categories, recomputation drops by **up to ~99% per ca
 npx trace-mcp benchmark .
 ```
 
-Per-category token savings against your actual repo in ~5 minutes — no install, no signup, all local. It reads an *existing* index, so run `trace-mcp index .` first if the project isn't registered yet. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
+Per-category token savings against your actual repo in ~5 minutes — no install, no signup, all local. It reads an *existing* index, so run `trace-mcp index .` first if the project isn't registered yet. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads is lower (29.3% measured, see above), but the per-task patterns hold for any well-supported stack.
 
 **This is a synthetic estimate**, not measured savings: the "without trace-mcp" side is computed from file sizes in the index, and the "with trace-mcp" side from per-scenario multipliers — not from actual tool calls. It shows the theoretical ceiling. To measure real savings from your own usage, run trace-mcp for a while, then:
 
