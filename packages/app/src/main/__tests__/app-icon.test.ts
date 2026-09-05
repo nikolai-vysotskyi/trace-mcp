@@ -49,6 +49,32 @@ describe.each(Object.entries(masters))('app icon master: %s', (name, svg) => {
     expect(svg.match(/<line /g)).toHaveLength(12);
   });
 
+  it('cuts the T out of the mark instead of painting a lighter patch over it', () => {
+    // The T shipped as a solid #6159E8 fill, which rendered rgb(97,89,232)
+    // against a plate that is rgb(78,71,229) at that point — 19 levels lighter,
+    // so the letter glowed faintly instead of reading as a hole. A real cut
+    // takes its colour from the plate by construction. The mask has to cover
+    // the whole mark, not just the hub disc: the hub-to-bottom edge runs under
+    // the letter and would otherwise show through the hole.
+    expect(svg).not.toContain('#6159E8');
+    expect(svg).toMatch(/<mask id="cut">/);
+    expect(svg).toMatch(/<g clip-path="url\(#plateClip\)" mask="url\(#cut\)">/);
+  });
+
+  it('sizes nodes by their role in the graph, not by where they sit', () => {
+    // Shipping radii were 44/36/36/32/32/30/26/26 — leaves held both the
+    // largest and the smallest value, and five nodes of the same degree had
+    // five different sizes. One value per role: hub, node, leaf.
+    const radii = [...svg.matchAll(/<circle [^>]*r="([\d.]+)"/g)].map((m) => Number(m[1]));
+    expect(new Set(radii).size).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps the top gloss below the 2010s 15%', () => {
+    const gloss = Number(svg.match(/id="shine"[\s\S]*?stop-opacity="([\d.]+)"/)?.[1]);
+    expect(gloss).toBeGreaterThan(0);
+    expect(gloss).toBeLessThanOrEqual(0.1);
+  });
+
   it('keeps the edge over the pixel floor measured for its tier', () => {
     // 0.88% of the plate was the shipping weight and it does not survive: 0.23px
     // on a 32px icon. Detail tier >= 1%, small tier >= 3%.
@@ -62,4 +88,31 @@ describe.each(Object.entries(masters))('app icon master: %s', (name, svg) => {
 it('the small master draws heavier than the detail master', () => {
   const weight = (svg: string) => Number(svg.match(/stroke-width="([\d.]+)"/)?.[1]);
   expect(weight(masters.small)).toBeGreaterThan(weight(masters.detail));
+});
+
+// Every tray PNG the app loads must still have a generator (TRA-780 review).
+// Retiring generate-icons.mjs nearly took the tray art with it: the app icon
+// moved to vector masters, but the tray drawing has no master and its only
+// source was inside the deleted file.
+it('every tray icon tray.ts loads is produced by generate-tray-icons.mjs', () => {
+  const tray = fs.readFileSync(path.resolve(process.cwd(), 'src/main/tray.ts'), 'utf8');
+  const generator = fs.readFileSync(
+    path.resolve(process.cwd(), 'scripts/generate-tray-icons.mjs'),
+    'utf8',
+  );
+
+  // tray.ts names them literally and via a `${theme}` template — expand both.
+  const referenced = new Set(
+    [...tray.matchAll(/'(tray-icon[\w@.-]*)\.png'/g), ...tray.matchAll(/`(tray-icon[^`]*)\.png`/g)]
+      .map((m) => m[1])
+      .flatMap((name) =>
+        name.includes('${theme}')
+          ? ['light', 'dark'].map((t) => name.replace('${theme}', t))
+          : [name],
+      )
+      .map((name) => `${name}.png`),
+  );
+
+  expect(referenced.size).toBeGreaterThan(0);
+  for (const name of referenced) expect(generator).toContain(`'${name}'`);
 });

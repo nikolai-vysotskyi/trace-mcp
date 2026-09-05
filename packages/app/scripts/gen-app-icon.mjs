@@ -16,15 +16,21 @@
 // drawings at different sizes:
 //
 //   assets/icon/icon.svg        >= 64px — the full fan, at its own proportions
-//   assets/icon/icon-small.svg  <= 48px — same mark, edges and nodes lifted over
-//                                 the pixel floor so they survive the grid
+//   assets/icon/icon-small.svg  <= 48px — the same nine nodes, edges and nodes
+//                                 lifted over the pixel floor so they survive
+//                                 the grid
+//
+// The node count is the same in both on purpose. A third master that dropped
+// two leaves read sharper at 16px, and was rejected: at that size the mark is
+// recognised as a silhouette, and a silhouette that differs from the one at
+// every other size is a different icon.
 //
 // Each PNG is rendered by librsvg at its final size — the SVG's width/height are
 // rewritten per target — so nothing is ever downsampled from a larger raster.
 //
-// NOT wired into the release yet. release.yml still calls generate-icons.mjs,
-// which still owns the shipping artwork; switching over is a separate change
-// once the drawing is approved.
+// This is the shipping artwork: release.yml calls this script, and
+// generate-icons.mjs — which used to hold the drawing as a list of numbers — is
+// gone.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,7 +42,7 @@ const ICON_DIR = path.join(APP_ROOT, 'assets', 'icon');
 const argOut = process.argv.indexOf('--out');
 const OUT_DIR = argOut === -1 ? path.join(APP_ROOT, 'build') : path.resolve(process.argv[argOut + 1]);
 
-// Below this, the small master is used. 48 is where a 1.1%-of-plate edge drops
+// Below this the small master is used. 48 is where a 1.1%-of-plate edge drops
 // under half a pixel; see the measurements in TRA-780.
 const SMALL_TIER_MAX = 48;
 
@@ -45,9 +51,13 @@ const masters = {
   small: fs.readFileSync(path.join(ICON_DIR, 'icon-small.svg'), 'utf8'),
 };
 
+function masterFor(size) {
+  return size <= SMALL_TIER_MAX ? 'small' : 'detail';
+}
+
 /** Render the right master at `size`, natively — never a resize of a bigger one. */
 function render(size) {
-  const src = size <= SMALL_TIER_MAX ? masters.small : masters.detail;
+  const src = masters[masterFor(size)];
   const scaled = src.replace(
     /width="\d+" height="\d+"/,
     `width="${size}" height="${size}"`,
@@ -137,7 +147,7 @@ async function main() {
 
   for (const size of PNG_SIZES) {
     fs.writeFileSync(path.join(OUT_DIR, `icon-${size}.png`), bySize.get(size));
-    console.log(`  ✓ icon-${size}.png  (${size <= SMALL_TIER_MAX ? 'small' : 'detail'} master)`);
+    console.log(`  ✓ icon-${size}.png  (${masterFor(size)} master)`);
   }
   // electron-builder's default look-up
   fs.writeFileSync(path.join(OUT_DIR, 'icon.png'), bySize.get(512));
