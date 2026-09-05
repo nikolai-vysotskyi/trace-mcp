@@ -7,7 +7,7 @@ import path from 'node:path';
 const TMP_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-exitattr-'));
 process.env.TRACE_MCP_DATA_DIR = TMP_HOME;
 
-const { afterEach, describe, expect, it } = await import('vitest');
+const { afterAll, afterEach, describe, expect, it } = await import('vitest');
 const { describeStopContext, processComm, writeOwnDaemonPidFile } = await import(
   '../../src/daemon/lifecycle.js'
 );
@@ -29,6 +29,13 @@ describe('describeStopContext process fields (TRA-809)', () => {
       /* not every case writes it */
     }
     delete process.env.TRACE_MCP_MANAGED_BY;
+  });
+
+  it('reports unparseable when daemon.pid exists but names no usable PID', () => {
+    fs.writeFileSync(PID_FILE, 'garbage\n');
+    expect(describeStopContext().pidFileOwner).toBe('unparseable');
+    fs.writeFileSync(PID_FILE, '0\n');
+    expect(describeStopContext().pidFileOwner).toBe('unparseable');
   });
 
   it('reports missing when nothing owns daemon.pid', () => {
@@ -57,4 +64,12 @@ describe('describeStopContext process fields (TRA-809)', () => {
     expect(processComm(process.pid)).toBeTruthy();
     expect(processComm(-1)).toBeNull();
   });
+});
+
+afterAll(() => {
+  try {
+    fs.rmSync(TMP_HOME, { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
 });

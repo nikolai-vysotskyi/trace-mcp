@@ -714,10 +714,11 @@ export interface StopContext {
   managedBy?: string;
   /**
    * Who daemon.pid names right now: `self` (normal), `missing` (someone
-   * unlinked it), or another PID — meaning a racing spawn took the
-   * registration from under us and this shutdown is a lost port race (TRA-809).
+   * unlinked it), `unparseable` (it exists but names no usable PID), or another
+   * PID — meaning a racing spawn took the registration from under us and this
+   * shutdown is a lost port race (TRA-809).
    */
-  pidFileOwner?: number | 'self' | 'missing';
+  pidFileOwner?: number | 'self' | 'missing' | 'unparseable';
 }
 
 /**
@@ -741,8 +742,13 @@ export function describeStopContext(): StopContext {
     // Read the pid file raw: `readDaemonPid()` unlinks files naming a dead
     // process, which is exactly the evidence worth reporting here.
     const raw = readIfExists(getPidFilePath());
-    const owner = raw === null ? null : parsePidFile(raw)?.pid;
-    if (owner != null) ctx.pidFileOwner = owner === process.pid ? 'self' : owner;
+    if (raw !== null) {
+      // A truncated or garbage pid file is a different fact from an absent one,
+      // and `parsePidFile` returns null for both — keep them apart.
+      const owner = parsePidFile(raw)?.pid;
+      ctx.pidFileOwner =
+        owner != null && owner > 0 ? (owner === process.pid ? 'self' : owner) : 'unparseable';
+    }
   } catch {
     /* best-effort — attribution must never block shutdown */
   }
