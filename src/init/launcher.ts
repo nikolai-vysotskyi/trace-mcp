@@ -359,6 +359,10 @@ function installLegacyBinCompat(): void {
       return;
     }
     // Anything we did not write is the user's own wrapper — leave it alone.
+    // A dangling symlink has no content to sniff, so it cannot be checked for
+    // ownership and is always repaired. That is the intended trade: a broken
+    // link at this exact path spawns nothing for anyone, so there is no working
+    // setup left to protect.
     if (exists && !isOwnedShim(legacyPath)) return;
     ensureDir(legacyDir);
     writeLegacyCompat(legacyPath, current);
