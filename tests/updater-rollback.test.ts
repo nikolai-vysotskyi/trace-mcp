@@ -234,6 +234,31 @@ describe('checkAndInstallUpdate — backup + rollback', () => {
     expect(fs.existsSync(backupDir)).toBe(false);
   });
 
+  // TRA-881: two crashed updater runs leave two dead-PID backups. Reconcile
+  // used to restore whichever `readdirSync` yielded first — a PID-suffixed
+  // name, so the order is arbitrary — and permanently reinstate a build that
+  // may be many versions old. Newest on disk is the only defensible pick.
+  it('restores the newest stale backup when several dead-PID backups exist', async () => {
+    const older = path.join(tmpRoot, 'trace-mcp.tmcp-bak-4242');
+    const newer = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999');
+    fs.mkdirSync(older, { recursive: true });
+    fs.writeFileSync(path.join(older, 'marker.txt'), 'stale-old-build');
+    fs.mkdirSync(newer, { recursive: true });
+    fs.writeFileSync(path.join(newer, 'marker.txt'), 'recent-build');
+    // Make the ordering unambiguous regardless of filesystem timestamp
+    // granularity: 'trace-mcp.tmcp-bak-4242' sorts first by name, last by mtime.
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    fs.utimesSync(older, old, old);
+    expect(fs.existsSync(mainDir)).toBe(false);
+
+    installResults = [{ status: 0, stderr: '' }];
+
+    await checkAndInstallUpdate({ checkIntervalHours: 24 });
+
+    expect(fs.readFileSync(path.join(mainDir, 'marker.txt'), 'utf-8')).toBe('recent-build');
+    expect(listBackups()).toEqual([]);
+  });
+
   it('removes stale backup garbage when main dir is present', async () => {
     seedInstalledPackage();
     const deadPid = 999_999_999;
