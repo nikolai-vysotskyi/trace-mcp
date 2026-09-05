@@ -285,7 +285,10 @@ describe('aggregate savings claims (TRA-904)', () => {
     // docs/_data/response_tokens.json by hand.
     const { execFileSync } = await import('node:child_process');
     const out = path.join(os.tmpdir(), `response-tokens-${process.pid}.json`);
-    execFileSync('npx', ['tsx', 'scripts/gen-response-tokens-data.ts'], {
+    // `node --import tsx`, not `npx tsx`: npx is a shell script on Windows and
+    // execFileSync cannot spawn it, which is how this test failed on
+    // windows-latest and nowhere else.
+    execFileSync(process.execPath, ['--import', 'tsx', 'scripts/gen-response-tokens-data.ts'], {
       cwd: REPO_ROOT,
       env: { ...process.env, RESPONSE_TOKENS_OUT: out },
     });
