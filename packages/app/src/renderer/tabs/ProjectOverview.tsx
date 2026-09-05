@@ -722,15 +722,16 @@ export function ProjectOverview({
               ) : stats ? (
                 <>
                   {!statsFresh && (
-                    /* Same sentence the Workspace uses for the same condition,
-                       from the same key — one wording for "these are the last
-                       indexed numbers", not two. */
+                    /* Only what `!statsFresh` actually knows: the numbers are
+                       the stored ones. The cause belongs to the Status row
+                       below — the Workspace's `busyStale` asserted a busy
+                       daemon here even when that row said "Not tracked". */
                     <div
                       role="status"
                       className="px-3 pt-2 text-[13px]"
                       style={{ color: 'var(--label-secondary)' }}
                     >
-                      {t('workspace:busyStale')}
+                      {t('staleNumbers')}
                     </div>
                   )}
                   <ListRow

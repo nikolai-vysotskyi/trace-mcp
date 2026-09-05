@@ -222,9 +222,27 @@ describe('ProjectOverview surface', () => {
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText('337')).toBeTruthy();
-    expect(
-      screen.getByText('The daemon is busy. These are the last indexed numbers.'),
-    ).toBeTruthy();
+    expect(screen.getByText('These are the last indexed numbers.')).toBeTruthy();
+  });
+
+  /* TRA-964. The line borrowed the Workspace's `busyStale`, which asserts a busy
+     daemon — a verdict `!statsFresh` never had. On the shipped build it sat 48px
+     above a Status row reading "Daemon unreachable", and a poll later "Not
+     tracked". One condition, one sentence (DESIGN.md §5): the numbers are stale,
+     the Status row names why. */
+  it('does not claim the daemon is busy above a Status row that says otherwise', async () => {
+    localStorage.setItem(`trace-mcp.overview.stats:${ROOT}`, JSON.stringify(STATS));
+    daemon.projects = [];
+    daemon.loading = false;
+    daemon.connected = true;
+    // The registry forgot the project; every local read hangs, so stats stay stored.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Not tracked')).toBeTruthy();
+    expect(screen.getByText('These are the last indexed numbers.')).toBeTruthy();
+    expect(screen.queryByText(/daemon is busy/)).toBeNull();
   });
 
   it('does not call a project the daemon forgot "not indexed"', async () => {

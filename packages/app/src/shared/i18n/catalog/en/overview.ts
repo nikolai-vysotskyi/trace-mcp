@@ -32,6 +32,7 @@ export const overview = {
 
   // ── Index ──
   sectionIndex: 'Index',
+  staleNumbers: 'These are the last indexed numbers.',
   rowStatus: 'Status',
   rowFiles: 'Files indexed',
   rowSymbols: 'Symbols',

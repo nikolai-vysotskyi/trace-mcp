@@ -675,6 +675,16 @@ statement: what could not be loaded, plus the control that tries again.** Retry 
 the next step and it is already in the row; the invented sentence between them only
 had to be wrong once to cost the reader a diagnosis.
 
+**A string borrowed from another surface carries that surface's verdict.** Project
+Overview's Index card printed the Workspace's `busyStale` — "The daemon is busy. These
+are the last indexed numbers." — whenever its numbers came from the stored snapshot.
+Only the second half is what "stale" knows; the first half is a diagnosis, and on the
+Workspace it is *chosen* from a real busy reading. Here it was asserted 48px above the
+Status row whose whole job is to name the cause, which read "Daemon unreachable", then
+"Not tracked" (TRA-964). Reuse a key only when the borrowing surface knows everything
+the sentence asserts; otherwise take the half you can prove and let the row that holds
+the cause say the rest.
+
 **And "at surface level" is not "when the source is down".** The collapse rule above
 was implemented as a daemon-down branch, so the moment the daemon was up and merely
 answering badly, each section went back to speaking for itself — the same duplication
