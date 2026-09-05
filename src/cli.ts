@@ -580,7 +580,7 @@ program
   )
   .option(
     '--preset <name>',
-    'Default tool preset for daemon sessions (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full)',
+    'Tool preset for clients that connect to this daemon directly over HTTP (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full). A stdio session carries its own preset and is never narrowed by this.',
   )
   .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
     if (opts.preset) {
@@ -811,6 +811,13 @@ program
 
     async function createSessionTransport(
       projectRoot: string,
+      /**
+       * Serve every tool regardless of the daemon's own `tools.preset`
+       * (TRA-951). Set for stdio sessions, which carry their own preset and
+       * apply it client-side in ProxyBackend. A client connecting to `/mcp`
+       * directly has no such filter, so it keeps the daemon's preset.
+       */
+      fullSurface: boolean,
     ): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
@@ -858,6 +865,9 @@ program
         },
         transport: 'http' as const,
         projectRelay,
+        // TRA-951: the daemon advertises the full surface to a session that
+        // applies its own preset client-side (ProxyBackend).
+        serveFullSurface: fullSurface,
       };
       const handle = createServer(
         managed.store,
@@ -1136,6 +1146,9 @@ program
           );
         }
         const requestedRoot = resolution.projectRoot;
+        // TRA-951: only the stdio proxy sends this, and only when it filters
+        // the surface itself.
+        const fullSurface = url.searchParams.get('surface') === 'full';
 
         // Resolve to the deepest KNOWN root: a registered subproject
         // (the/fair/fair-front) wins over its container ancestor (the) so the
@@ -1165,7 +1178,7 @@ program
             }
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
-            transport = (await createSessionTransport(projectRoot)) ?? undefined;
+            transport = (await createSessionTransport(projectRoot, fullSurface)) ?? undefined;
             if (!transport) {
               // Auto-register the project on first MCP connect when the path
               // is plausibly a real project root. This recovers the common
@@ -1223,7 +1236,7 @@ program
                       ? 'Auto-served registered subproject read-mostly on first MCP connect'
                       : 'Auto-registered project on first MCP connect',
                   );
-                  transport = (await createSessionTransport(projectRoot)) ?? undefined;
+                  transport = (await createSessionTransport(projectRoot, fullSurface)) ?? undefined;
                 } catch (err) {
                   logger.warn(
                     { err: String(err), projectRoot },

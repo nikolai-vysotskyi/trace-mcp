@@ -243,6 +243,14 @@ export interface ServerDeps {
    * fallback commands, unit tests) — the tool then reports itself unavailable.
    */
   projectRelay?: ProjectRelay;
+  /**
+   * Register every tool regardless of `tools.preset` (TRA-951). Set by the
+   * daemon and by the cross-project relay, whose servers are shared across
+   * sessions — the preset is a property of a *client* session and is applied
+   * on the way out by the proxy's per-session filter. Never set on a session's
+   * own server (LocalBackend, `serve-http`), where the preset must apply.
+   */
+  serveFullSurface?: boolean;
 }
 
 /**
@@ -292,7 +300,14 @@ export function createServer(
   // per-session filter — the two used to spell it out separately. Unknown
   // names fall back to the default surface and warn (TRA-648) — never to
   // `full`, which silently made the cheap-by-request session the expensive one.
-  const { name: presetName, tools: activePreset } = resolveSessionPreset(config);
+  // TRA-951: a daemon-side server is shared by every session, so it must not
+  // apply *its own* preset — the per-session filter lives in the proxy
+  // (daemon/router/proxy-backend.ts). Without this a daemon started with
+  // `tools.preset: minimal` deferred those tools for everybody, and a session
+  // that asked for `full` got `Tool X disabled` per call with no other signal.
+  const { name: presetName, tools: activePreset } = deps?.serveFullSurface
+    ? { name: 'all', tools: 'all' as const }
+    : resolveSessionPreset(config);
 
   // Create server with instructions
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';

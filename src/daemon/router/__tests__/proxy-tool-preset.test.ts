@@ -86,8 +86,13 @@ afterEach(async () => {
   delete process.env.TRACE_MCP_PRESET;
 });
 
+/** The /mcp URL the last started proxy asked its transport factory for. */
+let lastMcpUrl = '';
+
 async function startProxy(
   config: TraceMcpConfig,
+  /** Build the backend with no per-session filter at all. */
+  filterless = false,
 ): Promise<{ backend: ProxyBackend; transport: FakeDaemonTransport; toClient: JSONRPCMessage[] }> {
   const transport = new FakeDaemonTransport(DAEMON_TOOLS);
   const toClient: JSONRPCMessage[] = [];
@@ -95,8 +100,11 @@ async function startProxy(
     daemonUrl: 'http://127.0.0.1:0',
     projectRoot: '/nonexistent/fake-project',
     clientId: 'tra-250-test',
-    toolFilter: createToolFilter(config),
-    transportFactory: () => transport,
+    toolFilter: filterless ? undefined : createToolFilter(config),
+    transportFactory: (mcpUrl) => {
+      lastMcpUrl = mcpUrl;
+      return transport;
+    },
   });
   backend.onmessage = (m) => toClient.push(m);
   backends.push(backend);
@@ -150,6 +158,20 @@ describe('daemon proxy honours the session tool preset (TRA-250)', () => {
     const names = await proxiedToolNames({ tools: { preset: 'full' } } as TraceMcpConfig);
     const expected = new Set([...(TOOL_PRESETS.minimal as string[]), ...UNGATED_META_TOOLS]);
     expect(names.filter((n) => !expected.has(n))).toEqual([]);
+  });
+
+  // TRA-951: the daemon used to apply *its own* preset to every session it
+  // served, so a session that asked for `full` still got `Tool X disabled` for
+  // everything outside the daemon's preset — and `load_tools` could not escalate
+  // past it either. The marker says "don't narrow this one, I filter it myself".
+  it('asks the daemon for the unfiltered surface when it filters locally', async () => {
+    await startProxy({ tools: { preset: 'minimal' } } as TraceMcpConfig);
+    expect(lastMcpUrl).toContain('surface=full');
+  });
+
+  it('omits the marker when it has no filter of its own', async () => {
+    await startProxy({} as TraceMcpConfig, true);
+    expect(lastMcpUrl).not.toContain('surface=');
   });
 
   it('honours tools.exclude and tools.include over the preset', async () => {

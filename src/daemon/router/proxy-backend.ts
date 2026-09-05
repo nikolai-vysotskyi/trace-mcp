@@ -5,6 +5,7 @@ import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
 import { resolveDeepestKnownRoot } from '../../subproject/resolve.js';
 import { isTransientError, withRetry } from '../../utils/retry.js';
 import { LOAD_TOOLS_HINT, expandLoadRequest, planToolLoad } from '../../server/tool-surface.js';
+import { listPresets } from '../../tools/project/presets.js';
 import type { Backend } from './types.js';
 
 /**
@@ -59,6 +60,15 @@ export interface ProxyBackendOptions {
     /** Widen this session's surface to include `names`. */
     load: (names: string[]) => void;
   };
+  /**
+   * This session's preset name, reported by `get_preset_info` (TRA-951).
+   * That tool runs on the daemon, which knows only its own configuration, so
+   * it answered with the daemon's preset and *its* registered-tool count — the
+   * wrong answer to the one question a user asks when a tool is missing. Given
+   * this, the proxy answers it locally from the session's own filter. Omit to
+   * forward it to the daemon unchanged.
+   */
+  presetName?: string;
   /**
    * Test seam: build a transport for the resolved /mcp URL + project root.
    * Defaults to a real StreamableHTTPClientTransport.
@@ -235,6 +245,9 @@ export class ProxyBackend implements Backend {
       const called = toolCallName(msg);
       if (called === 'load_tools' && this.opts.toolSurface && id !== undefined) {
         await this.handleLoadTools(msg, id);
+        return;
+      }
+      if (called === 'get_preset_info' && id !== undefined && (await this.handlePresetInfo(id))) {
         return;
       }
       // `batch` dispatches by name on the daemon side, past this filter — that
@@ -431,6 +444,42 @@ export class ProxyBackend implements Backend {
     return this.priming;
   }
 
+  /**
+   * Answer `get_preset_info` from this session's own filter (TRA-951).
+   *
+   * Forwarded, it reports the daemon's preset and registered-tool count, which
+   * is neither what the session asked for nor what it can call. Returns false
+   * when the daemon's catalog is unavailable, so the call falls through and is
+   * forwarded rather than answered with an empty surface.
+   */
+  private async handlePresetInfo(id: string | number): Promise<boolean> {
+    const filter = this.opts.toolFilter;
+    if (!filter || !this.opts.presetName) return false;
+    await this.primeDaemonTools();
+    if (this.daemonTools.length === 0) return false;
+    const names = this.daemonTools.map((t) => t.name);
+    const registered = names.filter((n) => filter(n));
+    this.onmessage?.({
+      jsonrpc: '2.0',
+      id,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              active_preset: this.opts.presetName,
+              registered_tools: registered.length,
+              tool_names: registered,
+              available_presets: listPresets(),
+              deferred_tools: names.filter((n) => !filter(n)),
+            }),
+          },
+        ],
+      },
+    } as unknown as JSONRPCMessage);
+    return true;
+  }
+
   private async handleLoadTools(msg: JSONRPCMessage, id: string | number): Promise<void> {
     await this.primeDaemonTools();
     const surface = this.opts.toolSurface!;
@@ -577,8 +626,17 @@ export class ProxyBackend implements Backend {
     }) as unknown as ProxyTransport;
   }
 
+  /**
+   * TRA-951: `surface=full` tells the daemon not to apply its own preset to
+   * this session. The preset belongs to the client and is applied here, on the
+   * way out — a daemon started with `tools.preset: minimal` otherwise deferred
+   * those tools for every session, including one that asked for `full`, and
+   * `load_tools` could never escalate past them. Sessions that connect to
+   * `/mcp` directly send no such marker and keep the daemon's preset.
+   */
   private mcpUrl(projectRoot: string): string {
-    return `${this.opts.daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
+    const base = `${this.opts.daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
+    return this.opts.toolFilter ? `${base}&surface=full` : base;
   }
 
   /**
