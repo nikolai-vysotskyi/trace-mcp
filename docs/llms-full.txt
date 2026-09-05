@@ -5765,8 +5765,9 @@ quietly start booking savings again.
 
 ### What closing the tail did to the headline
 
-The two right-hand columns are frozen: they record what those runs measured, so
-a later re-measurement cannot rewrite them. Only the last column is live.
+The two left-hand columns are frozen literals: they record what those runs
+measured, so a later re-measurement cannot rewrite them. Only the TRA-952 column
+is live.
 
 | | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) |
 |---|---|---|---|
