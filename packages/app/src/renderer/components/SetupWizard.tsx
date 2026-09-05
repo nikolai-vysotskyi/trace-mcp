@@ -79,7 +79,9 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
       if (window.electronAPI?.daemonSetupState) {
         const state = await window.electronAPI.daemonSetupState();
         if (cancelled) return;
-        if (state?.phase === 'ready') {
+        // A busy daemon is an installed daemon — the wizard's question is
+        // whether one exists, not whether it is idle right now (TRA-939).
+        if (state?.phase === 'ready' || state?.phase === 'unresponsive') {
           setDaemonState({ phase: 'ready' });
           setStep('clients');
           return;
@@ -111,7 +113,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
     // Listen for live daemon setup state updates
     const unsubscribe = window.electronAPI?.onDaemonSetupState?.((state) => {
       if (cancelled) return;
-      if (state.phase === 'ready') {
+      if (state.phase === 'ready' || state.phase === 'unresponsive') {
         setDaemonState({ phase: 'ready' });
         setStep('clients');
       } else if (state.phase === 'installing') {
@@ -335,7 +337,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
     setDaemonState({ phase: 'installing' });
     try {
       const result = await window.electronAPI?.retryDaemonSetup?.();
-      if (result?.phase === 'ready') {
+      if (result?.phase === 'ready' || result?.phase === 'unresponsive') {
         setDaemonState({ phase: 'ready' });
         setStep('clients');
       } else if (result?.phase === 'failed') {

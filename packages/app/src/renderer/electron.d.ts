@@ -7,6 +7,7 @@ type DaemonSetupState =
   | { phase: 'idle' }
   | { phase: 'installing' }
   | { phase: 'ready' }
+  | { phase: 'unresponsive'; message: string }
   | { phase: 'failed'; message: string };
 
 declare global {

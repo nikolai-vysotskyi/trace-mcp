@@ -6,6 +6,7 @@ export const workspace = {
   startingDaemon: '启动中…',
   daemonInstallingTitle: '正在设置 trace-mcp',
   daemonInstallingSubtitle: '正在安装为项目建立索引的后台服务。只会进行一次，需要几秒钟。',
+  daemonBusyTitle: '服务正忙',
   daemonInstallFailedTitle: '设置未完成',
   daemonInstallRetry: '重试',
   daemonInstallRetrying: '设置中…',

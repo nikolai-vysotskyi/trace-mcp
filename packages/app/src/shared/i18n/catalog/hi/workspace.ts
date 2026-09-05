@@ -6,6 +6,7 @@ export const workspace = {
   startingDaemon: 'शुरू हो रहा है…',
   daemonInstallingTitle: 'trace-mcp सेट किया जा रहा है',
   daemonInstallingSubtitle: 'आपके प्रोजेक्ट इंडेक्स करने वाली बैकग्राउंड सेवा इंस्टॉल हो रही है। यह एक ही बार होता है और कुछ सेकंड लेता है।',
+  daemonBusyTitle: 'सेवा व्यस्त है',
   daemonInstallFailedTitle: 'सेटअप पूरा नहीं हुआ',
   daemonInstallRetry: 'फिर कोशिश करें',
   daemonInstallRetrying: 'सेट हो रहा है…',
