@@ -54,7 +54,7 @@ Two frozen inputs, both committed:
 - `docs/perf/response-tokens.json` — responses measured against trace-mcp's own
   repository (2,144 files, 11,134 symbols).
 - `benchmarks/response-tokens/call-volume.json` — the weights: a snapshot of one
-  machine's `~/.trace/savings.json`, 20,187 recorded calls, provenance in the
+  machine's `~/.trace/savings.json`, 20,359 recorded calls, provenance in the
   file.
 
 One machine's mix, and the surfaces that quote the figure have to say so.
@@ -91,27 +91,54 @@ one stops.
 
 Building a measured control is the outstanding work on this measurement.
 
-## Verdict — MISSED (retrospective)
+## Verdict — MISSED again, and on the other half (TRA-945, 2026-09-05)
+
+The first run of this measurement (TRA-880) missed on **coverage**: twelve tools
+carrying 88.4% of recorded calls against a declared 90%. The stated fix was
+"measuring the tail, not lowering the line". The tail is measured — twenty-four
+tools, **97.2%** of recorded call volume — and the bar is missed again, on the
+other half:
 
 {{ site.data.response_tokens.reduction_pct }}% net reduction
-({{ site.data.response_tokens.credited_reduction_pct }}% credited) clears the 25%
-half of the bar. The coverage half does not: the
-{{ site.data.response_tokens.tools_measured }} tools measured carry
-{{ site.data.response_tokens.calls_weighted }} of the
-{{ site.data.response_tokens.calls_store_total }} recorded calls — **88.4%,
-against a declared 90%**. 2,340 calls are unmeasured, and nothing rules out
-their being the expensive ones.
+({{ site.data.response_tokens.credited_reduction_pct }}% credited) against a
+declared **25%**. The coverage half now passes; the primary half does not.
 
-So the figure publishes as a miss. It is not rewritten into a bar it clears, and
-the 29.3% stays on the storefront with the coverage stated next to it, because
-the number is not wrong — it is incomplete in a direction we cannot sign. The
-fix is measuring the tail, not lowering the line.
+**That is the result, and it is the opposite of what closing a coverage gap was
+expected to do.** The prediction was that the unmeasured 11.6% would move the
+figure a little in an unknown direction. It moved it 8.2 points down, because the
+tail held the two most expensive things in the product:
+
+- **The worst per-call ratios.** `list_projects` returns 10.5x the baseline it is
+  credited against, `get_dead_code` 4.0x, `check_claudemd_drift` 2.2x. The count
+  of tools costing more than they replace went from 4 of 12 to
+  {{ site.data.response_tokens.tools_costing_more }} of
+  {{ site.data.response_tokens.tools_with_baseline }}.
+- **Calls that had no baseline at all.** `register_edit` and `reindex` replace no
+  file read, so `DEFAULT_RAW_COST` was inventing a counterfactual for them —
+  1 731 calls and ~736k tokens across the whole store. They are now credited
+  zero and counted as overhead, which is the honest treatment and also the one
+  that lowers the number.
+
+The bar is not moved. It said "unadjustable after seeing data. A future run at
+22% publishes as MISSED at 22%", and this run publishes as MISSED at
+{{ site.data.response_tokens.reduction_pct }}%. The figure stays on the
+storefront with the miss stated next to it, because it is not wrong — it is
+smaller than we hoped and better supported than what it replaces.
+
+A third number is published alongside for the first time:
+**{{ site.data.response_tokens.reduction_pct_incl_overhead }}%**, all-in, with
+the {{ site.data.response_tokens.overhead_calls }} no-baseline calls counted on
+the spend side and nothing on the baseline side. It answers "what does a session
+cost" where `reduction_pct` answers "what does a lookup cost". It is the lowest
+of the three and the right one to plan a budget against.
+
+The fix this time is not more coverage. It is response shaping on the ten tools
+that cost more than they replace — one issue each, with the
+[per-tool table](./response-tokens.md) as the before number.
 
 {{ site.data.response_tokens.tools_costing_more }} of the
-{{ site.data.response_tokens.tools_measured }} tools measured return more tokens
-than the baseline credits them (`search`, `find_usages`,
-`get_complexity_report`, `get_call_graph`); the per-tool table is on the
-[response cost page](./response-tokens.md).
+{{ site.data.response_tokens.tools_with_baseline }} tools with a baseline return
+more tokens than it credits them.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on

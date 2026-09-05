@@ -248,7 +248,8 @@ describe('docs footer nav covers every indexed page', () => {
    * Underscore directories (_layouts, _includes, _data) are Jekyll internals
    * that never get a URL, so they are not pages and are skipped.
    */
-  it('every published docs page is in the sitemap or marked noindex', () => {
+  it('every published docs page is in the sitemap or marked noindex', async () => {
+    const { sourceFor: sourceForPath } = await import('../../scripts/gen-sitemap.mjs');
     const pages = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
       .filter((f) => f.endsWith('.md'))
       .map((f) => f.replace(/\\/g, '/'))
@@ -256,8 +257,12 @@ describe('docs footer nav covers every indexed page', () => {
     const indexed = new Set(
       sitemapPaths().map((p) => p.replace(/^\//, '').replace(/\.html$/, '.md')),
     );
+    // A page with a `permalink:` is served at that URL, not at its file path,
+    // so the file-path mapping above never matches it — sourceFor resolves both
+    // (TRA-945, publishing /perf/response-tokens/).
+    const indexedSources = new Set(sitemapPaths().map((p) => sourceForPath(p)));
     const orphans = pages.filter((f) => {
-      if (indexed.has(f)) return false;
+      if (indexed.has(f) || indexedSources.has(f)) return false;
       return !/^---\n[\s\S]*?^noindex:\s*true\s*$[\s\S]*?^---$/m.test(
         readFileSync(join(DOCS, f), 'utf-8'),
       );

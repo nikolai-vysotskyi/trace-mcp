@@ -33,6 +33,7 @@ layout: null
 - [Quality gates](https://trace-mcp.com/quality-gates.html): How `.trace.json` quality-gate thresholds are configured and calibrated.
 - [System Prompt Routing via tweakcc](https://trace-mcp.com/tweakcc.html): Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.
 - [Development](https://trace-mcp.com/development.html): Local setup, build, and test instructions for contributing to trace-mcp.
+- [Tool response token cost](https://trace-mcp.com/perf/response-tokens/): Per-tool measured response token cost weighted by real call volume, including the tools that cost more than the file reads they replace.
 
 ## Optional
 

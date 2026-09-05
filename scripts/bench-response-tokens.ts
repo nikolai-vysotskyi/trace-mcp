@@ -45,6 +45,20 @@ const CALLS: Array<{ tool: string; args: Record<string, unknown>; warmup?: boole
   { tool: 'get_task_context', args: { task: 'reduce tool response token cost' } },
   { tool: 'get_call_graph', args: { symbol_id: '$SYMBOL' } },
   { tool: 'get_complexity_report', args: {} },
+  // TRA-945: the tail. The twelve above are 88% of recorded calls; these are the
+  // next thirteen by volume, taking coverage to 97%.
+  { tool: 'register_edit', args: { file_path: 'src/savings.ts' } },
+  { tool: 'reindex', args: {} },
+  { tool: 'get_feature_context', args: { description: 'tool response token cost' } },
+  { tool: 'get_env_vars', args: {} },
+  { tool: 'get_dead_code', args: {} },
+  { tool: 'get_changed_symbols', args: {} },
+  { tool: 'check_quality_gates', args: {} },
+  { tool: 'get_circular_imports', args: {} },
+  { tool: 'check_duplication', args: { name: 'estimateTokens' } },
+  { tool: 'check_claudemd_drift', args: {} },
+  { tool: 'scan_security', args: { rules: ['all'] } },
+  { tool: 'list_projects', args: {} },
 ];
 
 interface Row {
@@ -58,9 +72,11 @@ interface Row {
 
 function run(): Promise<Row[]> {
   return new Promise((resolve, reject) => {
-    const server = spawn('node', [join(REPO, 'dist/cli.js'), 'serve'], {
+    // `--preset full` rather than TRACE_MCP_PRESET: the flag is applied before
+    // the config loads, so it holds whatever the machine's global config says.
+    const server = spawn('node', [join(REPO, 'dist/cli.js'), 'serve', '--preset', 'full'], {
       cwd: TARGET,
-      env: { ...process.env, TRACE_MCP_NO_DAEMON: '1', TRACE_MCP_PRESET: 'full' },
+      env: { ...process.env, TRACE_MCP_NO_DAEMON: '1' },
       stdio: ['pipe', 'pipe', 'inherit'],
     });
     const send = (m: unknown): void => void server.stdin.write(`${JSON.stringify(m)}\n`);
@@ -146,18 +162,54 @@ function run(): Promise<Row[]> {
   });
 }
 
-const rows = await run();
+// TRA-945: three sessions, median per tool. A single sample is not a
+// measurement here — `get_task_context` moved 5 383 -> 8 357 tokens between two
+// runs minutes apart on the same commit, because the answer depends on index
+// state, not only on the code. The median is what gets published; the spread is
+// printed so a reader can see it.
+const RUNS = Number(process.env.BENCH_RUNS ?? 3);
+const samples = new Map<string, Row[]>();
+for (let n = 0; n < RUNS; n += 1) {
+  for (const r of await run()) {
+    if (!r.ok) {
+      throw new Error(
+        `[${r.tool}] returned an error — the preset or the index is wrong for this run, ` +
+          'and a number measured on a degraded surface is worse than none. Fix, then re-run.',
+      );
+    }
+    (samples.get(r.tool) ?? samples.set(r.tool, []).get(r.tool)!).push(r);
+  }
+}
+
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2
+    ? s[(s.length - 1) / 2]
+    : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
+};
+const rows = [...samples.entries()].map(([tool, rs]) => ({
+  tool,
+  ok: true,
+  chars: median(rs.map((r) => r.chars)),
+  est: median(rs.map((r) => r.est)),
+  real: median(rs.map((r) => r.real)),
+  ms: median(rs.map((r) => r.ms)),
+  runs: rs.length,
+  real_min: Math.min(...rs.map((r) => r.real)),
+  real_max: Math.max(...rs.map((r) => r.real)),
+}));
+
 const pad = (s: string | number, n: number): string => String(s).padEnd(n);
 console.log(
-  `\n${pad('tool', 24)}${pad('ok', 4)}${pad('chars', 10)}${pad('est(c/4)', 10)}${pad('o200k', 10)}${pad('ms', 8)}`,
+  `\n${pad('tool', 24)}${pad('chars', 10)}${pad('est(c/4)', 10)}${pad('o200k', 10)}${pad('min-max', 16)}${pad('ms', 8)}`,
 );
 for (const r of rows) {
   console.log(
-    `${pad(r.tool, 24)}${pad(r.ok ? 'y' : 'ERR', 4)}${pad(r.chars, 10)}${pad(r.est, 10)}${pad(r.real, 10)}${pad(r.ms, 8)}`,
+    `${pad(r.tool, 24)}${pad(r.chars, 10)}${pad(r.est, 10)}${pad(r.real, 10)}${pad(`${r.real_min}-${r.real_max}`, 16)}${pad(r.ms, 8)}`,
   );
 }
 const total = rows.reduce((a, r) => a + r.real, 0);
-console.log(`\ntotal o200k tokens across ${rows.length} calls: ${total}`);
+console.log(`\nmedian of ${RUNS} runs; total o200k tokens across ${rows.length} tools: ${total}`);
 writeFileSync(
   join(REPO, 'docs/perf/response-tokens.json'),
   `${JSON.stringify(
@@ -166,6 +218,7 @@ writeFileSync(
       // TRA-920: the build this ran at travels with the number to every surface.
       measured_build: measuredBuild(),
       target: TARGET === REPO ? 'self' : TARGET,
+      runs: RUNS,
       rows,
     },
     null,

@@ -14,15 +14,41 @@
  * allowed-plugins list.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DOCS = join(import.meta.dirname, '..', 'docs');
 const SITEMAP = join(DOCS, 'sitemap.xml');
 
-/** URL path -> source file under docs/ */
+/**
+ * URL path -> source file under docs/.
+ *
+ * Most pages are served at their file path, but a page with a `permalink:` in
+ * its front matter is served wherever that says (TRA-945 publishes
+ * docs/perf/response-tokens.md at /perf/response-tokens/), so the front matter
+ * has to be consulted before falling back to the path rewrite.
+ */
 export function sourceFor(urlPath) {
-  return urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, '').replace(/\.html$/, '.md');
+  if (urlPath === '/') return 'index.html';
+  const byPermalink = permalinkIndex().get(urlPath);
+  if (byPermalink) return byPermalink;
+  return urlPath.replace(/^\//, '').replace(/\.html$/, '.md');
+}
+
+let permalinks;
+/** permalink -> source file, built once from every .md under docs/. */
+function permalinkIndex() {
+  if (permalinks) return permalinks;
+  permalinks = new Map();
+  for (const f of readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })) {
+    if (!f.endsWith('.md') || f.startsWith('_')) continue;
+    const rel = f.replace(/\\/g, '/');
+    const m = /^---\n[\s\S]*?^permalink:\s*(\S+)\s*$[\s\S]*?^---$/m.exec(
+      readFileSync(join(DOCS, rel), 'utf-8'),
+    );
+    if (m) permalinks.set(m[1], rel);
+  }
+  return permalinks;
 }
 
 /**

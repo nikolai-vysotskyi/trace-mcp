@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadPersistentSavings, SavingsTracker } from '../../src/savings.js';
+import {
+  loadPersistentSavings,
+  NO_BASELINE_TOOLS,
+  rawCostFor,
+  SavingsTracker,
+} from '../../src/savings.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 // Use a temp dir to avoid polluting real ~/.trace-mcp
@@ -109,6 +114,35 @@ describe('SavingsTracker', () => {
       expect(stats.total_calls).toBe(1);
       expect(stats.total_raw_tokens).toBe(500); // DEFAULT_RAW_COST
       expect(stats.per_tool.unknown_tool_xyz.calls).toBe(1);
+    });
+
+    it('credits nothing to a tool that replaces no Read/Grep', () => {
+      // TRA-945: `register_edit` is a notification. There is no file read an
+      // agent could have done instead, so DEFAULT_RAW_COST was crediting a
+      // baseline that never existed — 1 289 calls on the measurement machine.
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('register_edit');
+      tracker.recordActualTokens('register_edit', 345);
+      const stats = tracker.getSessionStats();
+      expect(stats.total_calls).toBe(1);
+      expect(stats.total_raw_tokens).toBe(0);
+      expect(stats.total_tokens_saved).toBe(0);
+      expect(stats.per_tool.register_edit.tokens_saved).toBe(0);
+      // The response still cost the agent tokens; only the credit is zero.
+      expect(stats.total_actual_tokens).toBe(345);
+    });
+
+    it('keeps every no-baseline tool at zero credit', () => {
+      const tracker = new SavingsTracker('/test/project');
+      for (const tool of NO_BASELINE_TOOLS) {
+        tracker.recordCall(tool);
+        tracker.recordActualTokens(tool, 10_000);
+      }
+      const stats = tracker.getSessionStats();
+      expect(stats.total_tokens_saved).toBe(0);
+      expect(rawCostFor('register_edit')).toBe(0);
+      expect(rawCostFor('search')).toBe(600);
+      expect(rawCostFor('unknown_tool_xyz')).toBe(500);
     });
 
     it('accepts custom actual token count', () => {

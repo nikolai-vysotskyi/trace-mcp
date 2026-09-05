@@ -59,6 +59,75 @@ export const RAW_COST_ESTIMATES: Record<string, number> = {
 /** Default raw cost for tools not in the map */
 export const DEFAULT_RAW_COST = 500;
 
+/**
+ * Tools with no counterfactual: nothing an agent could have run instead.
+ *
+ * Every savings figure is "what a Read/Grep would have cost minus what we
+ * returned". For a mutation or a notification that subtraction has no left-hand
+ * side — there is no Read that reindexes a file, records a decision or renames a
+ * symbol — so {@link DEFAULT_RAW_COST} was crediting a baseline that never
+ * existed. On the measurement machine that was 1 734 calls (`register_edit`
+ * alone is the 4th busiest tool there) booking ~736k invented tokens (TRA-945).
+ *
+ * These still cost the agent real response tokens; they are counted on the
+ * spend side and credited zero on the savings side.
+ */
+export const NO_BASELINE_TOOLS: ReadonlySet<string> = new Set([
+  // Index and cache mutations
+  'register_edit',
+  'reindex',
+  'embed_repo',
+  'repair_index',
+  'refresh_co_changes',
+  'index_sessions',
+  'mine_sessions',
+  'build_corpus',
+  'delete_corpus',
+  'build_decision_clusters',
+  'snapshot_graph',
+  'detect_communities',
+  'subproject_add_repo',
+  'subproject_sync',
+  // Source mutations
+  'apply_move',
+  'apply_rename',
+  'apply_codemod',
+  'change_signature',
+  'remove_dead_code',
+  'extract_function',
+  'generate_docs',
+  // Decision-store and ranking writes
+  'add_decision',
+  'remember_decision',
+  'invalidate_decision',
+  'consolidate_decisions',
+  'tune_decision_weights',
+  'tune_weights',
+  'approve_decision',
+  'reject_decision',
+  'pin',
+  'unpin',
+  // Session-state writes
+  'trace_state_init',
+  'trace_state_patch',
+  'trace_state_add_dead_end',
+  'trace_state_checkpoint',
+  'trace_state_rollback',
+  // Startup-audit writes: disable MCP servers, move skill directories, restore
+  // backups. Nothing a Read could have done.
+  'apply_startup_recommendations',
+  'rollback_startup_recommendations',
+]);
+
+/**
+ * The raw baseline a call is scored against: what the same question would have
+ * cost without trace-mcp. Zero when there was no such question.
+ */
+export function rawCostFor(toolName: string): number {
+  if (NO_BASELINE_TOOLS.has(toolName)) return 0;
+  return RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;
+}
+
 /** Estimated compression ratio (trace-mcp response tokens / raw tokens) */
 const COMPRESSION_RATIO = 0.15;
 
@@ -187,7 +256,7 @@ export class SavingsTracker {
   private correctCall(toolName: string, actualTokens: number, failed: boolean): void {
     const rec = this.session.per_tool[toolName];
     if (!rec || !Number.isFinite(actualTokens) || actualTokens < 0) return;
-    const rawCost = RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;
+    const rawCost = rawCostFor(toolName);
     const assumed = Math.round(rawCost * COMPRESSION_RATIO);
     const saved = failed ? 0 : Math.max(0, rawCost - actualTokens);
     const deltaSaved = saved - Math.max(0, rawCost - assumed);
@@ -198,7 +267,7 @@ export class SavingsTracker {
 
   /** Record a tool call with an optional actual response token count */
   recordCall(toolName: string, actualTokens?: number): void {
-    const rawCost = RAW_COST_ESTIMATES[toolName] ?? DEFAULT_RAW_COST;
+    const rawCost = rawCostFor(toolName);
     const actual = actualTokens ?? Math.round(rawCost * COMPRESSION_RATIO);
     const saved = Math.max(0, rawCost - actual);
 

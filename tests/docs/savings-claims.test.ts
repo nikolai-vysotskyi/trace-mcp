@@ -146,7 +146,7 @@ describe('aggregate savings claims (TRA-904)', () => {
   ];
 
   /** Small numbers the README spells out — see the literal check below. */
-  const WORD: Record<number, string> = { 4: 'four', 12: 'twelve' };
+  const WORD: Record<number, string> = { 4: 'four', 10: 'ten', 12: 'twelve', 22: 'twenty-two' };
 
   /** Liquid stripped, so a tag-rendered figure is never mistaken for a typed one. */
   const typedIn = (src: string) => src.replace(/\{\{[^}]*\}\}/g, '').replace(/\{%[^%]*%\}/g, '');
@@ -231,9 +231,12 @@ describe('aggregate savings claims (TRA-904)', () => {
       ['README.md', `${response.calls_weighted.toLocaleString('en-US')} recorded calls`],
       // Spelled out: `4 of the 12 tools` reads as a tool-surface claim to
       // readme-claims.test.ts, which then fails on a number that is not one.
+      // The denominator is tools_with_baseline, not tools_measured: a tool that
+      // replaces no file read cannot cost more than a baseline it does not have
+      // (TRA-945), so counting it here would understate the share.
       [
         'README.md',
-        `${WORD[response.tools_costing_more] ?? response.tools_costing_more} of the ${WORD[response.tools_measured] ?? response.tools_measured} tools`,
+        `${WORD[response.tools_costing_more] ?? response.tools_costing_more} of the ${WORD[response.tools_with_baseline] ?? response.tools_with_baseline} tools`,
       ],
       ['skills/README.md', `${response.reduction_pct}%`],
       ['skills/README.md', `${response.calls_weighted.toLocaleString('en-US')} real tool calls`],
