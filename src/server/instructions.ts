@@ -80,6 +80,32 @@ function section(heading: string, lines: RoutingLine[], onSurface: ToolOnSurface
   return kept.length ? [heading, ...kept, ''] : [];
 }
 
+/**
+ * The refactoring bullet, naming only the operations this session can perform.
+ *
+ * Its clauses share one tail (the dry-run protocol), so it is assembled rather
+ * than gated whole: `standard` carries `remove_dead_code` and none of the
+ * others, and an all-or-nothing line would hide the one tool it does have.
+ */
+function refactorLine(onSurface: ToolOnSurface): RoutingLine[] {
+  const ops: string[] = [];
+  if (onSurface('apply_rename')) ops.push('rename → `apply_rename`');
+  if (onSurface('apply_move')) ops.push('move a symbol or file → `apply_move`');
+  if (onSurface('change_signature')) ops.push('change params → `change_signature`');
+  if (onSurface('remove_dead_code')) ops.push('delete → `remove_dead_code`');
+  if (ops.length === 0) return [];
+  const preview = onSurface('plan_refactoring')
+    ? ' Preview any of them with `plan_refactoring`.'
+    : '';
+  const list = ops.join('; ');
+  return [
+    {
+      tools: [],
+      text: `- ${list[0].toUpperCase()}${list.slice(1)}. All dry-run by default: review, then re-call with \`dry_run: false\` (\`confirm_large: true\` past 20 files).${preview}`,
+    },
+  ];
+}
+
 /** Builds the MCP server instructions string based on verbosity level. */
 export function buildInstructions(
   detectedFrameworks: string,
@@ -156,14 +182,13 @@ export function buildInstructions(
           text: '- Find a function/class/method → `search` (add `fusion=true` for best ranking; `implements`/`extends` filter by interface)',
         },
         { tools: ['get_outline'], text: '- Understand a file before editing → `get_outline`' },
+        { tools: ['get_symbol'], text: "- Read one symbol's source → `get_symbol`" },
         {
-          tools: ['get_symbol', 'get_context_bundle'],
-          text: "- Read one symbol's source → `get_symbol`; symbol + its imports → `get_context_bundle`",
+          tools: ['get_context_bundle'],
+          text: '- A symbol plus its imports → `get_context_bundle`',
         },
-        {
-          tools: ['get_feature_context', 'get_task_context'],
-          text: '- Quick keyword context → `get_feature_context`; starting a task → `get_task_context`',
-        },
+        { tools: ['get_feature_context'], text: '- Quick keyword context → `get_feature_context`' },
+        { tools: ['get_task_context'], text: '- Starting a task → `get_task_context`' },
       ],
       onSurface,
     ),
@@ -184,18 +209,15 @@ export function buildInstructions(
           tools: ['get_implementations'],
           text: '- Implementations of an interface → `get_implementations`',
         },
-        {
-          tools: ['self_audit', 'get_untested_symbols'],
-          text: '- Health, dead exports, hotspots → `self_audit`; untested symbols → `get_untested_symbols`',
-        },
+        { tools: ['self_audit'], text: '- Health, dead exports, hotspots → `self_audit`' },
+        { tools: ['get_untested_symbols'], text: '- Untested symbols → `get_untested_symbols`' },
         {
           tools: ['get_dead_code'],
           text: '- Dead code → `get_dead_code` (`mode: "exports_only"` for exports)',
         },
-        {
-          tools: ['get_import_graph', 'get_module_graph', 'get_circular_imports', 'get_coupling'],
-          text: '- Imports → `get_import_graph` (`get_module_graph` on NestJS); cycles → `get_circular_imports`; coupling → `get_coupling`',
-        },
+        { tools: ['get_import_graph'], text: '- Imports → `get_import_graph`' },
+        { tools: ['get_circular_imports'], text: '- Import cycles → `get_circular_imports`' },
+        { tools: ['get_coupling'], text: '- Coupling → `get_coupling`' },
       ],
       onSurface,
     ),
@@ -207,18 +229,15 @@ export function buildInstructions(
           'Framework-specific:',
           [
             { tools: ['get_request_flow'], text: '- HTTP route→controller → `get_request_flow`' },
-            {
-              tools: ['get_model_context', 'get_schema'],
-              text: '- DB models and schema → `get_model_context`, `get_schema`',
-            },
+            { tools: ['get_model_context'], text: '- DB models → `get_model_context`' },
+            { tools: ['get_schema'], text: '- DB schema → `get_schema`' },
             {
               tools: ['get_component_tree'],
               text: '- React/Vue/Angular components → `get_component_tree`',
             },
-            {
-              tools: ['get_state_stores', 'get_event_graph'],
-              text: '- Stores and events → `get_state_stores`, `get_event_graph`',
-            },
+            { tools: ['get_state_stores'], text: '- State stores → `get_state_stores`' },
+            { tools: ['get_event_graph'], text: '- Events → `get_event_graph`' },
+            { tools: ['get_module_graph'], text: '- NestJS modules → `get_module_graph`' },
           ],
           onSurface,
         )),
@@ -248,16 +267,7 @@ export function buildInstructions(
           tools: ['check_duplication'],
           text: '- Before writing a new function/class → `check_duplication` { name, kind }',
         },
-        {
-          tools: [
-            'apply_rename',
-            'apply_move',
-            'change_signature',
-            'remove_dead_code',
-            'plan_refactoring',
-          ],
-          text: '- Rename → `apply_rename`; move a symbol or file → `apply_move`; change params → `change_signature`; delete → `remove_dead_code`. All dry-run by default: review, then re-call with `dry_run: false` (`confirm_large: true` past 20 files). Preview any of them with `plan_refactoring`.',
-        },
+        ...refactorLine(onSurface),
         {
           tools: ['apply_codemod'],
           text: '- Same mechanical change 2+ times → `apply_codemod` { pattern, replacement, file_pattern }, not a run of edits.',

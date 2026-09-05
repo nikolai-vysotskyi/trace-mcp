@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildInstructions } from '../../src/server/instructions.js';
 import { UNGATED_META_TOOLS } from '../../src/server/tool-filter.js';
 import { TOOL_PRESETS, resolvePreset } from '../../src/tools/project/presets.js';
-import { allToolNames } from '../docs/tool-surface.js';
+import { allToolNames, frameworkGatedToolNames } from '../docs/tool-surface.js';
 
 /**
  * TRA-929: the instructions block used to be preset-blind — it routed every
@@ -61,6 +61,18 @@ describe('instructions match the session surface', () => {
       });
     }
   }
+
+  // `full` passes every name, so the preset predicate cannot catch this one:
+  // framework tools are registered only on a project that has the framework.
+  it('names no framework-gated tool on a project with no framework detected', () => {
+    const gated = frameworkGatedToolNames();
+    const out = buildInstructions('none', 'full', 'off', () => true);
+    const leaked = [...gated].filter((n) => out.includes(n));
+    expect(
+      leaked,
+      `instructions name framework-only tools on a bare repo: ${leaked.join(', ')}`,
+    ).toEqual([]);
+  });
 
   it('still routes the default preset to the tools it does have', () => {
     const minimal = resolvePreset('minimal') as Set<string>;
