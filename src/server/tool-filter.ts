@@ -72,12 +72,20 @@ const warnedUnknownPresets = new Set<string>();
  * reported too, because callers log it and `get_preset_info` reports it — a
  * session must not claim to be running a preset it isn't.
  */
-export function resolveSessionPreset(config: TraceMcpConfig): {
+export function resolveSessionPreset(
+  config: TraceMcpConfig,
+  /**
+   * Preset this session asked for, when it is not this process's own config —
+   * the daemon resolves the *client's* preset, which travels with the request
+   * (TRA-951). Unknown names fall back the same way as a local one.
+   */
+  requestedName?: string,
+): {
   name: string;
   tools: Set<string> | 'all';
   unknownName?: string;
 } {
-  const requested = resolvePresetName(config);
+  const requested = requestedName ?? resolvePresetName(config);
   const resolved = resolvePreset(requested);
   if (resolved) return { name: requested, tools: resolved };
 

@@ -7,7 +7,7 @@ import { logger } from '../../logger.js';
 import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
 import { stripRedundantSchemaKeyword } from '../../server/schema-shim.js';
 import { ClientProfileGate } from '../../server/client-profile.js';
-import { createToolFilter } from '../../server/tool-filter.js';
+import { createToolFilter, resolveSessionPreset } from '../../server/tool-filter.js';
 import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
@@ -529,6 +529,9 @@ export class StdioSession {
       // (which serves every tool to everyone) — so it has to be applied here
       // on the way out, or it never reaches a daemon-backed client (TRA-250).
       toolFilter: (name) => this.baseToolFilter(name) || this.loadedTools.has(name),
+      // TRA-951: so `get_preset_info` reports *this* session's preset instead
+      // of the daemon's.
+      presetName: resolveSessionPreset(this.opts.config).name,
       // TRA-402: `load_tools` is answered by the proxy, not the daemon — the
       // daemon serves one full surface to every session and has no idea which
       // tools *this* session has paid for. Escalation state lives on the

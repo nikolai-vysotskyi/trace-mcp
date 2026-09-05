@@ -243,6 +243,27 @@ export interface ServerDeps {
    * fallback commands, unit tests) — the tool then reports itself unavailable.
    */
   projectRelay?: ProjectRelay;
+  /**
+   * Register every tool regardless of `tools.preset` (TRA-951). Set by the
+   * daemon and by the cross-project relay, whose servers are shared across
+   * sessions — the preset is a property of a *client* session and is applied
+   * on the way out by the proxy's per-session filter. Never set on a session's
+   * own server (LocalBackend, `serve-http`), where the preset must apply.
+   */
+  serveFullSurface?: boolean;
+  /**
+   * The preset the *client* asked for, when this server is built on its behalf
+   * by the daemon (TRA-951). Drives the instructions block and the usage ping;
+   * the registered surface is `serveFullSurface`'s business. Omitted on a
+   * session's own server, which reads the preset from its own config/env.
+   */
+  sessionPreset?: string;
+  /**
+   * Skip the anonymous usage ping. Set for servers with no client behind them
+   * — `ProjectManager`'s per-project server and the cross-project relay —
+   * which would otherwise report a session that nobody opened (TRA-951).
+   */
+  skipUsagePing?: boolean;
 }
 
 /**
@@ -289,15 +310,30 @@ export function createServer(
   // Resolved before the instructions, because they are written against it
   // (TRA-929): the block names only tools this session actually advertises.
   // Single source of truth for the default, shared with the daemon proxy's
-  // per-session filter — the two used to spell it out separately. Unknown
-  // names fall back to the default surface and warn (TRA-648) — never to
-  // `full`, which silently made the cheap-by-request session the expensive one.
-  const { name: presetName, tools: activePreset } = resolveSessionPreset(config);
+  // per-session filter — the two used to spell it out separately.
+  // TRA-951: two different questions, which used to have one answer.
+  //  - *What does this session advertise?* Still the session's preset — it
+  //    writes the instructions block and the usage ping, and on the daemon
+  //    path it belongs to the client, which sends it with the request.
+  //  - *What does this server register?* Everything, when it is shared by many
+  //    sessions (`serveFullSurface`). A daemon started with `tools.preset:
+  //    minimal` otherwise left those tools disabled for everybody, so a session
+  //    that asked for `full` got `Tool X disabled` per call and `load_tools`
+  //    could not escalate past it.
+  // Unknown names fall back to the default surface and warn (TRA-648) — never
+  // to `full`, which silently made the cheap-by-request session the expensive one.
+  const { name: presetName, tools: sessionSurface } = resolveSessionPreset(
+    config,
+    deps?.sessionPreset,
+  );
+  const activePreset = deps?.serveFullSurface ? 'all' : sessionSurface;
 
-  // Create server with instructions
+  // Create server with instructions. Written against the *session* surface
+  // (TRA-929): the block names only tools this session actually advertises,
+  // never the daemon's larger registered set.
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';
   const agentBehavior = config.tools?.agent_behavior ?? 'off';
-  const onSurface = createToolFilter(config, activePreset);
+  const onSurface = createToolFilter(config, sessionSurface);
   const server = new McpServer(
     { name: 'trace', version: PKG_VERSION },
     {
@@ -740,13 +776,20 @@ export function createServer(
   // Fire-and-forget — never blocks startup, never throws. Last, so it can
   // report the surface this session actually built: `registeredToolNames` is
   // only complete once every register*Tools call above has run (TRA-643).
-  void sendUsagePing({
-    version: PKG_VERSION,
-    preset: presetName,
-    toolsAdvertised: registeredToolNames.length + ungatedToolNames.length,
-  }).catch((err) => {
-    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
-  });
+  // TRA-951: count the session's surface, not the registered one — a
+  // daemon-side server registers every tool but advertises only what the
+  // client's preset allows, and the ping's `tools_advertised` dimension is
+  // about what reached the client. Identical on the local path, where
+  // `registeredToolNames` passed exactly this filter.
+  if (!deps?.skipUsagePing) {
+    void sendUsagePing({
+      version: PKG_VERSION,
+      preset: presetName,
+      toolsAdvertised: registeredToolNames.filter(onSurface).length + ungatedToolNames.length,
+    }).catch((err) => {
+      logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
+    });
+  }
 
   return { server, journal, dispose, toolHandlers };
 }

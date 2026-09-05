@@ -422,7 +422,14 @@ export class ProjectManager {
       config,
       projectRoot,
       progress,
-      this.resourcePool?.getSharedDeps(config),
+      // TRA-951: the daemon's per-project server serves every session and the
+      // cross-project relay — the preset belongs to the client session and is
+      // applied by the proxy, not here.
+      {
+        ...this.resourcePool?.getSharedDeps(config),
+        serveFullSurface: true,
+        skipUsagePing: true,
+      },
     );
 
     const managed: ManagedProject = {
