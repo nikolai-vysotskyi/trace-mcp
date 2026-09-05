@@ -445,6 +445,9 @@ describe('a live but unanswering daemon', () => {
     'reports a busy daemon, not a failed install, and does not spend the cold-start budget',
     async () => {
       const port = await wedgedListener();
+      // First run installs; the second changes nothing, so the daemon holding
+      // the port on entry is one that was already there — busy, not starting.
+      await run(port, { probeHealth: async () => true });
       const started = Date.now();
       const result = await run(port, { busyTimeoutMs: 300 });
       const elapsed = Date.now() - started;
@@ -454,8 +457,41 @@ describe('a live but unanswering daemon', () => {
       expect(message).toContain('busy');
       expect(message).not.toContain('never answered');
       // The regression this guards: 30 s of "Setting up trace-mcp" over an
-      // index that was readable on disk the whole time.
-      expect(elapsed).toBeLessThan(5_000);
+      // index that was readable on disk the whole time. The ceiling is the
+      // budget itself — a poll that outlives it is the bug next door.
+      expect(elapsed).toBeLessThan(1_500);
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')(
+    'still gives a daemon it just restarted the full cold-start budget',
+    async () => {
+      const port = await wedgedListener();
+      const started = Date.now();
+      // A first run: this one installs and starts the daemon, so a held port
+      // means "coming up", and cutting the wait short would call a cold start
+      // busy. The verdict is still "busy", never "install failed".
+      const result = await run(port, { healthTimeoutMs: 600, busyTimeoutMs: 10 });
+      expect(result.state.phase).toBe('unresponsive');
+      expect(Date.now() - started).toBeGreaterThanOrEqual(600);
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')(
+    'calls a daemon that died during the wait missing, not busy',
+    async () => {
+      const port = await wedgedListener();
+      await run(port, { probeHealth: async () => true });
+      const result = await run(port, {
+        busyTimeoutMs: 100,
+        probeHealth: async () => {
+          // The daemon exits while we wait: the port is free by the time the
+          // verdict is written, and the verdict has to follow.
+          for (const srv of servers.splice(0)) await new Promise<void>((r) => srv.close(() => r()));
+          return false;
+        },
+      });
+      expect(result.state.phase).toBe('failed');
     },
   );
 
