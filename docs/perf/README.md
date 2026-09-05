@@ -17,6 +17,28 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 Related measurements in this directory: [daemon idle memory](./daemon-idle-memory.md),
 [tool response token cost](./response-tokens.md).
 
+## Preregistration — TRA-920
+
+Every measurement whose numbers reach a public surface gets a preregistration
+file here, committed **before** the run: the question in one sentence, the
+metric's formula and where it is emitted, the frozen corpus by path and commit,
+a pass bar stated as a number and unadjustable after seeing data, the prediction,
+and the control condition — or the fact that there is no control, which is a
+finding in itself.
+
+Results report a verdict against that bar. **A missed bar publishes as MISSED
+with the numbers**; it is never rewritten into a bar the result clears. The
+registry of what is published, and which measurement each figure comes from, is
+`docs/_data/measurements.yml`; `tests/docs/savings-claims.test.ts` fails CI when a
+published figure has no preregistration or no build stamp.
+
+- [PR review context benchmark](./prereg-pr-context.md) — MET, retrospective.
+- [Tool response token cost](./prereg-response-tokens.md) — MISSED on coverage, retrospective.
+
+The two above are labelled retrospective because they were written after their
+runs. An honest "this was not preregistered" is worth more than a backdated file
+pretending otherwise.
+
 ## Current numbers (3.17.0, `121e3e9b`, darwin 25.5.0 / arm64, median of 3)
 
 Taken 2026-09-04, 30 minutes / 574 cycles / 0 cycle errors, offscreen. First pass since the

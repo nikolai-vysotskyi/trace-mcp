@@ -8,7 +8,10 @@ noindex: true
 
 # Tool response token cost
 
-Measured 2026-09-05 on darwin 25.5.0 / arm64, trace-mcp 3.17.1 (`f9645147`), against
+Measured 2026-09-05 on darwin 25.5.0 / arm64, trace-mcp 3.17.1 (`f9645147`) — the
+build stamp travels with the figure to every surface that quotes it, and the
+[preregistration](./prereg-response-tokens.md) states the bar and the verdict
+(this run publishes as a miss on coverage). Against
 trace-mcp's own repo (2 144 files, 11 134 symbols) over a real stdio `tools/call`
 round-trip. TRA-880. Reproduce with:
 
