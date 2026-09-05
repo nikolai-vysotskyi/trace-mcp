@@ -31,7 +31,7 @@ export const guard = {
   'row.promotion': '转为严格模式',
   'row.promoted': '已转为严格模式',
   'row.promotedValue': '指导期已结束',
-  'row.enforcement': '拦截',
+  'row.enforcement': '管控',
   statusErrorWhat: 'guard 状态',
 
   'health.ok': '活跃',
@@ -39,7 +39,7 @@ export const guard = {
   'health.down': '未运行',
   'health.unknown': '未知',
 
-  'reason.neverStarted': '此项目中的编程助手还没有启动过 trace-mcp。重启助手即可恢复拦截。',
+  'reason.neverStarted': '此项目中的编程助手还没有启动过 trace-mcp。重启助手即可让 guard 生效。',
   'reason.heartbeatStale': 'trace-mcp 最后一次响应是{{ago}}。重启编程助手即可恢复拦截。',
   'reason.channelQuiet': 'guard 已安装并在等待——最后一次工具调用是{{ago}}。',
 
