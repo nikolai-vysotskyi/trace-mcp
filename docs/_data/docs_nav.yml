@@ -41,7 +41,7 @@
   url: /analytics.html
 - title: TOON savings
   url: /toon-savings.html
-- title: Telemetry
+- title: MCP tracing
   url: /telemetry.html
 - title: Daemon memory
   url: /daemon-memory.html
