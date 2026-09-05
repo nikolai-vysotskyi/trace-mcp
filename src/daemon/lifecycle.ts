@@ -672,6 +672,27 @@ export function logLaunchdAction(action: 'bootout' | 'kickstart', via: string): 
   });
 }
 
+/**
+ * Best-effort executable name of a PID (TRA-809). `null` when unavailable
+ * (Windows, dead process, `ps` failure) — never throws, never blocks long.
+ */
+export function processComm(pid: number): string | null {
+  if (!Number.isInteger(pid) || pid <= 0 || isWin) return null;
+  try {
+    if (process.platform === 'linux') {
+      return fs.readFileSync(`/proc/${pid}/comm`, 'utf-8').trim() || null;
+    }
+    const out = execFileSync('ps', ['-p', String(pid), '-o', 'comm='], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
+    }).trim();
+    return out ? path.basename(out) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** What the daemon can tell about who is stopping it (TRA-850). */
 export interface StopContext {
   /** Our parent: 1 under launchd, anything else means a supervisor spawned us. */
@@ -687,6 +708,17 @@ export interface StopContext {
    * external kill.
    */
   plistAgeSec?: number;
+  /** Executable name of `ppid`, when readable (TRA-809). */
+  parentComm?: string | null;
+  /** `launchd` | `spawn` | `cli` — how this daemon was started (TRA-809). */
+  managedBy?: string;
+  /**
+   * Who daemon.pid names right now: `self` (normal), `missing` (someone
+   * unlinked it), `unparseable` (it exists but names no usable PID), or another
+   * PID — meaning a racing spawn took the registration from under us and this
+   * shutdown is a lost port race (TRA-809).
+   */
+  pidFileOwner?: number | 'self' | 'missing' | 'unparseable';
 }
 
 /**
@@ -695,11 +727,31 @@ export interface StopContext {
  * Nothing here identifies the sender outright — POSIX does not tell the target
  * who signalled it — but ppid + launchd start count + plist freshness together
  * separate the three cases we actually have: launchd respawn, our own plist
- * regeneration, and a kill from somewhere else. Best-effort and never throws;
+ * regeneration, and a kill from somewhere else. `pidFileOwner` adds the
+ * fourth (TRA-809): a racing spawn that took the registration from under us. Best-effort and never throws;
  * it runs on the shutdown path.
  */
 export function describeStopContext(): StopContext {
-  const ctx: StopContext = { ppid: process.ppid };
+  const ctx: StopContext = {
+    ppid: process.ppid,
+    parentComm: processComm(process.ppid),
+    managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
+    pidFileOwner: 'missing',
+  };
+  try {
+    // Read the pid file raw: `readDaemonPid()` unlinks files naming a dead
+    // process, which is exactly the evidence worth reporting here.
+    const raw = readIfExists(getPidFilePath());
+    if (raw !== null) {
+      // A truncated or garbage pid file is a different fact from an absent one,
+      // and `parsePidFile` returns null for both — keep them apart.
+      const owner = parsePidFile(raw)?.pid;
+      ctx.pidFileOwner =
+        owner != null && owner > 0 ? (owner === process.pid ? 'self' : owner) : 'unparseable';
+    }
+  } catch {
+    /* best-effort — attribution must never block shutdown */
+  }
   try {
     const stat = fs.statSync(LAUNCHD_PLIST_PATH);
     ctx.plistAgeSec = Math.floor((Date.now() - stat.mtimeMs) / 1000);
