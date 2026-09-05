@@ -79,6 +79,22 @@ describe('serveFullSurface (TRA-951)', () => {
     expect(handle.toolHandlers.has(OUTSIDE_MINIMAL)).toBe(true);
   });
 
+  // The regression this guards: widening the registration surface used to widen
+  // `presetName` with it, so a daemon-backed session was handed the instructions
+  // block for the entire catalog it never asked for — a token regression on the
+  // default setup.
+  it('does not widen the instructions block with the registration surface', async () => {
+    const narrow = await build({});
+    const wide = await build({ serveFullSurface: true });
+    const instructionsOf = (h: ServerHandle): string =>
+      (h.server as unknown as { server: { _options?: { instructions?: string } } }).server._options
+        ?.instructions ?? '';
+
+    expect(instructionsOf(narrow)).not.toBe('');
+    expect(instructionsOf(wide)).toBe(instructionsOf(narrow));
+    expect(instructionsOf(wide)).not.toContain(OUTSIDE_MINIMAL);
+  });
+
   it('still honours tools.exclude, which is a hard restriction, not a preset', async () => {
     const { initializeDatabase } = await import('../../db/schema.js');
     const { Store } = await import('../../db/store.js');

@@ -305,14 +305,26 @@ export function createServer(
   // (daemon/router/proxy-backend.ts). Without this a daemon started with
   // `tools.preset: minimal` deferred those tools for everybody, and a session
   // that asked for `full` got `Tool X disabled` per call with no other signal.
-  const { name: presetName, tools: activePreset } = deps?.serveFullSurface
-    ? { name: 'all', tools: 'all' as const }
-    : resolveSessionPreset(config);
+  const resolvedPreset = resolveSessionPreset(config);
+
+  // `serveFullSurface` widens the *registration* surface only. Everything
+  // derived from the preset — the instructions block, `get_preset_info`, the
+  // usage ping — keeps the resolved name, because those describe a session and
+  // a widened surface would make every daemon-backed session advertise the
+  // whole catalog it never asked for. That is a token regression, which is the
+  // one thing this product may not trade away for a fix.
+  const activePreset = deps?.serveFullSurface ? ('all' as const) : resolvedPreset.tools;
+  const presetName = resolvedPreset.name;
 
   // Create server with instructions
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';
   const agentBehavior = config.tools?.agent_behavior ?? 'off';
   const onSurface = createToolFilter(config, activePreset);
+  // Instructions describe what a client should reach for, so they follow the
+  // preset, never the widened registration surface.
+  const onInstructionSurface = deps?.serveFullSurface
+    ? createToolFilter(config, resolvedPreset.tools)
+    : onSurface;
   const server = new McpServer(
     { name: 'trace', version: PKG_VERSION },
     {
@@ -320,7 +332,7 @@ export function createServer(
         detectedFrameworks,
         instructionsVerbosity,
         agentBehavior,
-        onSurface,
+        onInstructionSurface,
       ),
     },
   );
