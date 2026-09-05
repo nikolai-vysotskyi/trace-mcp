@@ -56,6 +56,10 @@ const NO_SMELLS = {
 };
 
 beforeEach(() => {
+  /* The pane keeps its last stats in localStorage (TRA-934), and jsdom shares
+     one store across every test in this file — so a test that fetches stats
+     successfully would otherwise hand its numbers to the next one. */
+  localStorage.clear();
   daemon.projects = [{ root: ROOT, status: 'ready' }];
   daemon.loading = false;
   daemon.connected = true;
@@ -204,6 +208,23 @@ describe('ProjectOverview surface', () => {
     expect(await screen.findByText('Checking…')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Index project' })).toBeNull();
     expect(screen.queryByText('Not indexed')).toBeNull();
+  });
+
+  it('opens on the last known numbers while the daemon is unanswered', async () => {
+    /* TRA-934. Measured on this machine, every renderer read of the daemon
+       blocked for 7.80 s at once while it indexed. Without a snapshot this pane
+       spent all of it on five grey bars for counts that were on disk. With one
+       it opens on the counts and says they are the last indexed ones. */
+    localStorage.setItem(`trace-mcp.overview.stats:${ROOT}`, JSON.stringify(STATS));
+    // Every endpoint hangs — the wedge, not a refusal.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('337')).toBeTruthy();
+    expect(
+      screen.getByText('The daemon is busy. These are the last indexed numbers.'),
+    ).toBeTruthy();
   });
 
   it('does not call a project the daemon forgot "not indexed"', async () => {

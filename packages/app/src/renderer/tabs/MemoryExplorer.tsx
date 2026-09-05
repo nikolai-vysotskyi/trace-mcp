@@ -10,7 +10,9 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { matchesFilter } from '../components/FilterBar';
 import { formatDate as formatDateIntl, formatNumber } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
+import { useUsefulPaint } from '../perf';
 import {
   Badge,
   Button,
@@ -556,7 +558,7 @@ function DecisionCard({
   const confirm = useMenuAnchor();
 
   const handleEdit = async (values: DecisionFormValues) => {
-    const res = await fetch(`${BASE}/api/projects/decisions/${decision.id}`, {
+    const res = await daemonFetch(`${BASE}/api/projects/decisions/${decision.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -590,7 +592,7 @@ function DecisionCard({
   const handleInvalidate = async () => {
     setActionPending(true);
     try {
-      const res = await fetch(`${BASE}/api/projects/decisions/${decision.id}/invalidate`, {
+      const res = await daemonFetch(`${BASE}/api/projects/decisions/${decision.id}/invalidate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -835,11 +837,16 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [stats, setStats] = useState<DecisionStats | null>(null);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  /* True from the first frame: every one of these views fetches on mount,
+     and starting at false paints the empty state — "nothing here" — for the
+     frame before the rows land (TRA-934). */
+  const [loading, setLoading] = useState(true);
   /* A swallowed fetch failure used to fall through to "No decisions yet",
      inviting you to re-add decisions you already have. Failure is its own
      state (TRA-294). */
   const [failed, setFailed] = useState(false);
+
+  useUsefulPaint('memory', !loading || decisions.length > 0 || failed);
   /* One search field feeds the FTS `q` parameter; one optional exclude field
      hides rows client-side. Both take plain text or /regex/i. This replaces the
      shared FilterBar, whose MATCH / EXCLUDE labels were 10.5px/700 ALL-CAPS
@@ -872,7 +879,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
         // the client-side filter do the work after the fetch.
         if (search && !search.startsWith('/')) params.set('q', search);
         if (type) params.set('type', type);
-        const res = await fetch(`${BASE}/api/projects/decisions?${params}`);
+        const res = await daemonFetch(`${BASE}/api/projects/decisions?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { decisions: DecisionRow[]; total: number };
         setDecisions(data.decisions);
@@ -888,7 +895,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch(
+      const res = await daemonFetch(
         `${BASE}/api/projects/decisions/stats?${new URLSearchParams({ project: root })}`,
       );
       if (res.ok) setStats((await res.json()) as DecisionStats);
@@ -927,7 +934,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   };
 
   const handleAdd = async (values: DecisionFormValues) => {
-    const res = await fetch(`${BASE}/api/projects/decisions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+    const res = await daemonFetch(`${BASE}/api/projects/decisions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1216,7 +1223,7 @@ function CorpusQueryModal({
     setResult(null);
     setPending(true);
     try {
-      const res = await fetch(`${BASE}/api/projects/corpora/${encodeURIComponent(corpusName)}/query`, {
+      const res = await daemonFetch(`${BASE}/api/projects/corpora/${encodeURIComponent(corpusName)}/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_root: root, query, max_tokens: 4000 }),
@@ -1357,14 +1364,17 @@ function CorpusQueryModal({
 function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const { t } = useTranslation('memory');
   const [corpora, setCorpora] = useState<CorpusItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  /* True from the first frame: every one of these views fetches on mount,
+     and starting at false paints the empty state — "nothing here" — for the
+     frame before the rows land (TRA-934). */
+  const [loading, setLoading] = useState(true);
   const [queryCorpus, setQueryCorpus] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const fetchCorpora = useCallback(() => {
     setLoading(true);
-    fetch(`${BASE}/api/projects/corpora?${new URLSearchParams({ project: root })}`)
+    daemonFetch(`${BASE}/api/projects/corpora?${new URLSearchParams({ project: root })}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { corpora: CorpusItem[] } | null) => {
         if (data) setCorpora(data.corpora);
@@ -1381,7 +1391,7 @@ function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
     setDeletePending(name);
     try {
       const params = new URLSearchParams({ project_root: root });
-      const res = await fetch(
+      const res = await daemonFetch(
         `${BASE}/api/projects/corpora/${encodeURIComponent(name)}?${params}`,
         { method: 'DELETE' },
       );
@@ -1556,11 +1566,14 @@ function CorpusDeleteButton({
 function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const { t } = useTranslation('memory');
   const [sessions, setSessions] = useState<MinedSession[]>([]);
-  const [loading, setLoading] = useState(false);
+  /* True from the first frame: every one of these views fetches on mount,
+     and starting at false paints the empty state — "nothing here" — for the
+     frame before the rows land (TRA-934). */
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(
+    daemonFetch(
       `${BASE}/api/projects/sessions?${new URLSearchParams({ project: root, limit: '100' })}`,
     )
       .then((r) => (r.ok ? r.json() : null))
@@ -1803,7 +1816,10 @@ function ReviewView({
 }) {
   const { t } = useTranslation('memory');
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  /* True from the first frame: every one of these views fetches on mount,
+     and starting at false paints the empty state — "nothing here" — for the
+     frame before the rows land (TRA-934). */
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const fetchPending = useCallback(async () => {
@@ -1814,7 +1830,7 @@ function ReviewView({
         review_status: 'pending',
         limit: '100',
       });
-      const res = await fetch(`${BASE}/api/projects/decisions?${params}`);
+      const res = await daemonFetch(`${BASE}/api/projects/decisions?${params}`);
       if (res.ok) {
         const data = (await res.json()) as { decisions: DecisionRow[]; total: number };
         setDecisions(data.decisions);
@@ -1849,7 +1865,7 @@ function ReviewView({
     onPendingCountChange?.(Math.max(0, decisions.length - 1));
 
     try {
-      const res = await fetch(`${BASE}/api/projects/decisions/${id}/review`, {
+      const res = await daemonFetch(`${BASE}/api/projects/decisions/${id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -1949,7 +1965,7 @@ export function MemoryExplorer({ root }: { root: string }) {
   // Cheap stats endpoint, returns the same number ReviewView would compute.
   useEffect(() => {
     let cancelled = false;
-    void fetch(`${BASE}/api/projects/decisions/stats?${new URLSearchParams({ project: root })}`)
+    void daemonFetch(`${BASE}/api/projects/decisions/stats?${new URLSearchParams({ project: root })}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: DecisionStats | null) => {
         if (!cancelled && data && typeof data.pending_reviews === 'number') {

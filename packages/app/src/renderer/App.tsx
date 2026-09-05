@@ -126,6 +126,7 @@ const BASE = 'http://127.0.0.1:3741';
 // ── Recent projects (localStorage) ──────────────────────────
 // Helpers live in ./recent-projects.ts so the Workspace tab can import
 // `removeRecentProject` without pulling in App.tsx (import cycle).
+import { daemonFetch } from './daemon-fetch';
 import {
   addRecentProject,
   getRecentProjects,
@@ -319,7 +320,7 @@ function ProjectFileExplorer({
        sits in SYN_SENT and `fetch` neither resolves nor rejects — which is how
        the skeletons outlived the request (TRA-478). Without a deadline there is
        no terminal state to render. */
-    fetch(`${BASE}/api/projects/files?${params}`, {
+    daemonFetch(`${BASE}/api/projects/files?${params}`, {
       signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -1153,7 +1154,7 @@ function AppTabView({
     if (!quickOpen || !isProject || !root || quickFiles.length > 0) return;
     let cancelled = false;
     const params = new URLSearchParams({ project: root, sort: 'symbols', limit: '400' });
-    fetch(`${BASE}/api/projects/files?${params}`)
+    daemonFetch(`${BASE}/api/projects/files?${params}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data: { files?: { path: string }[] }) => {
         if (!cancelled) setQuickFiles((data.files ?? []).map((f) => f.path));
@@ -1273,6 +1274,7 @@ function AppTabView({
                   {(sectionList as { id: ProjectTab; label: string; icon: string }[]).map((s) => (
                     <SidebarRow
                       key={s.id}
+                      navId={s.id}
                       icon={s.icon}
                       label={s.label}
                       selected={projectTab === s.id}
@@ -1291,6 +1293,7 @@ function AppTabView({
                   {(sectionList as { id: GlobalTab; label: string; icon: string }[]).map((s) => (
                     <SidebarRow
                       key={s.id}
+                      navId={s.id}
                       icon={s.icon}
                       label={s.label}
                       selected={globalTab === s.id}

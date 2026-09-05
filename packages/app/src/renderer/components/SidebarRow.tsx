@@ -9,6 +9,7 @@ import type React from 'react';
 import { Icon } from '../lattice/icons';
 
 export function SidebarRow({
+  navId,
   icon,
   glyph,
   label,
@@ -22,6 +23,10 @@ export function SidebarRow({
   rowRef,
   ...aria
 }: {
+  /** Stable id for the section this row selects, published as `data-nav` so
+      the perf harness can drive navigation without matching translated labels
+      (scripts/perf-screens.mjs). */
+  navId?: string;
   icon?: string;
   glyph?: React.ReactNode;
   label: React.ReactNode;
@@ -39,6 +44,7 @@ export function SidebarRow({
       type="button"
       ref={rowRef}
       className={`ws-sb-row${selected ? ' is-selected' : ''}`}
+      data-nav={navId}
       onClick={onClick}
       onKeyDown={onKeyDown}
       onContextMenu={onContextMenu}
