@@ -1,5 +1,10 @@
 {
   "generated_at": "2026-08-30T21:08:37.167Z",
+  "measured_build": {
+    "version": "3.9.0",
+    "commit": "a7de2d26",
+    "reconstructed": true
+  },
   "pr_count": 60,
   "repo_count": 6,
   "skipped_count": 12,

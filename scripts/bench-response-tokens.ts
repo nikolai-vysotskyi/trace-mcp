@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { encode } from 'gpt-tokenizer/encoding/o200k_base';
 import { estimateTokens } from '../src/utils/token-counter.js';
+import { measuredBuild } from './measured-build.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const TARGET = process.argv[2] ?? REPO;
@@ -160,7 +161,13 @@ console.log(`\ntotal o200k tokens across ${rows.length} calls: ${total}`);
 writeFileSync(
   join(REPO, 'docs/perf/response-tokens.json'),
   `${JSON.stringify(
-    { measured_at: new Date().toISOString(), target: TARGET === REPO ? 'self' : TARGET, rows },
+    {
+      measured_at: new Date().toISOString(),
+      // TRA-920: the build this ran at travels with the number to every surface.
+      measured_build: measuredBuild(),
+      target: TARGET === REPO ? 'self' : TARGET,
+      rows,
+    },
     null,
     2,
   )}\n`,

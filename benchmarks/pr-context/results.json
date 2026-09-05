@@ -1,5 +1,10 @@
 {
   "generated_at": "2026-08-30T21:08:37.167Z",
+  "measured_build": {
+    "version": "3.9.0",
+    "commit": "a7de2d26",
+    "reconstructed": true
+  },
   "model_for_pricing": "claude-sonnet-4-5",
   "input_usd_per_mtok": 3,
   "context_window": 200000,

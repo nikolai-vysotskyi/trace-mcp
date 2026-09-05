@@ -60,6 +60,8 @@ trace add                  # index the repo you are in
 
 **90.6% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 1,326 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
+<sub>Measured at trace-mcp 3.9.0 (`a7de2d26`) on 30 August 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
+
 <p align="center">
   <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
   <br/>
@@ -200,6 +202,8 @@ AI agents burn tokens recomputing what they already discovered last turn — re-
 | Non-code workloads (raw text, unstructured data) | Out of scope today |
 
 **The 29.3% is the honest number to plan against, and it is lower than what this README said until 5 September 2026.** We used to print "~40–50% on average". That figure descended from a counter that scored each call *before the tool ran* — `RAW_COST_ESTIMATES[tool] × 0.15`, a constant with no variance — which we found and fixed ourselves in [#915](https://github.com/nikolai-vysotskyi/trace-mcp/pull/915). The replacement weights real `o200k_base` counts of real responses by 17,847 recorded calls from one machine ([per-tool table](https://trace-mcp.com/perf/response-tokens/), generated into `docs/_data/response_tokens.json`). Two caveats travel with it: the baseline half — what a `Read`/`Grep` would have cost instead — is **still a hand-written estimate**, and **four of the twelve tools measured return more tokens than they replace** (`search`, `find_usages`, `get_complexity_report`, `get_call_graph`); the old counter booked a saving for them anyway. The peaks below (up to 99% on individual structured calls) are a synthetic estimate, per-call, not per-session.
+
+Measured at trace-mcp 3.17.1 (`f9645147`) on 5 September 2026. Its [preregistration](https://trace-mcp.com/perf/prereg-response-tokens/) publishes it as a **miss**: the 29.3% clears the bar we set, the coverage does not — the twelve tools measured carry 17,847 of 20,187 recorded calls, 88.4% against a declared 90%, and the tail is unmeasured.
 
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 

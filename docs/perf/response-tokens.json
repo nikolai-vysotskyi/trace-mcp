@@ -1,5 +1,10 @@
 {
   "measured_at": "2026-09-05T08:05:50.130Z",
+  "measured_build": {
+    "version": "3.17.1",
+    "commit": "f9645147",
+    "reconstructed": true
+  },
   "target": "self",
   "rows": [
     {

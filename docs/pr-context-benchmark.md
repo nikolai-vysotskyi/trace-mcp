@@ -58,6 +58,13 @@ the change can break visible, not less.
 | affected call sites readable | {{ site.data.pr_context_bench.baseline_dependent_readable }} | **{{ site.data.pr_context_bench.trace_dependent_readable }}** |
 | affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | **{{ site.data.pr_context_bench.trace_dependent_pointed }}** |
 
+Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
+(`{{ site.data.pr_context_bench.measured_build.commit }}`)** on
+{{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}{% if site.data.measurements.pr_context.historical %} — published as a result from that
+build, not as a claim about the current one{% endif %}. What this run set out to
+measure, the bar it had to clear and the verdict against that bar:
+[preregistration]({{ '/perf/prereg-pr-context/' | relative_url }}).
+
 Dollar figures are input tokens priced at `{{ site.data.pr_context_bench.model }}`,
 ${{ site.data.pr_context_bench.input_usd_per_mtok }} per million input tokens.
 Indexing a repository costs a median {{ site.data.pr_context_bench.median_index_ms }} ms

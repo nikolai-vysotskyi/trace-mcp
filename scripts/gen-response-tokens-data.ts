@@ -39,6 +39,7 @@ const read = (p: string) => JSON.parse(readFileSync(join(REPO, p), 'utf-8'));
 
 const bench = read('docs/perf/response-tokens.json') as {
   measured_at: string;
+  measured_build: { version: string; commit: string };
   target: string;
   rows: Array<{ tool: string; ok: boolean; real: number }>;
 };
@@ -87,6 +88,10 @@ const out = {
     'Every published aggregate savings figure reads from here. The measured side is ' +
     'real response tokens on the wire; the baseline side is still an estimate. Say both.',
   measured_at: bench.measured_at,
+  // TRA-920: carried through from the bench run, never taken from the current
+  // HEAD — the stamp names the build that produced the number, not the build
+  // that regenerated the file.
+  measured_build: bench.measured_build,
   measured_on: bench.target === 'self' ? "trace-mcp's own repository" : bench.target,
   volume_read_at: volume.read_at,
   volume_source: volume.source,
