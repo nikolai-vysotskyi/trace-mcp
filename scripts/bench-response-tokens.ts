@@ -183,7 +183,9 @@ for (let n = 0; n < RUNS; n += 1) {
 
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 ? s[(s.length - 1) / 2] : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
+  return s.length % 2
+    ? s[(s.length - 1) / 2]
+    : Math.round((s[s.length / 2 - 1] + s[s.length / 2]) / 2);
 };
 const rows = [...samples.entries()].map(([tool, rs]) => ({
   tool,

@@ -47,9 +47,10 @@ describe('no-baseline tools (TRA-945)', () => {
 
   it('names only tools that are actually registered', () => {
     const stale = [...NO_BASELINE_TOOLS].filter((t) => !names.has(t));
-    expect(stale, `NO_BASELINE_TOOLS lists tools that no longer exist: ${stale.join(', ')}`).toEqual(
-      [],
-    );
+    expect(
+      stale,
+      `NO_BASELINE_TOOLS lists tools that no longer exist: ${stale.join(', ')}`,
+    ).toEqual([]);
   });
 
   it('covers every tool that says it mutates', () => {
