@@ -400,17 +400,22 @@ describe('preregistration and version stamps (TRA-920)', () => {
 
   it.each(measurements)('%s is dated as historical once it falls behind', (_key, entry) => {
     const release = JSON.parse(read('docs/_data/release.json')) as { version: string };
-    const minor = (v: string) => Number(v.split('.')[1]);
+    const parts = (v: string) => v.split('.').map(Number);
+    const [releaseMajor, releaseMinor] = parts(release.version);
+    const [measuredMajor, measuredMinor] = parts(
+      (JSON.parse(read(entry.data)) as { measured_build: { version: string } }).measured_build
+        .version,
+    );
+    // A major bump resets the minor to 0, so a plain minor subtraction goes
+    // negative and silently exempts every 3.x figure the day 4.0.0 ships.
     const behind =
-      minor(release.version) -
-      minor(
-        (JSON.parse(read(entry.data)) as { measured_build: { version: string } }).measured_build
-          .version,
-      );
+      releaseMajor > measuredMajor ? Number.POSITIVE_INFINITY : releaseMinor - measuredMinor;
     if (behind <= STALE_AFTER_MINORS) return;
     expect(
       entry.historical,
-      `${entry.data} was measured ${behind} minor releases before ${release.version}. ` +
+      `${entry.data} was measured ${
+        behind === Number.POSITIVE_INFINITY ? 'a major release' : `${behind} minor releases`
+      } before ${release.version}. ` +
         `Re-measure, or set \`historical: true\` in ${REGISTRY} so every surface presents it ` +
         'as a dated result rather than a current claim. Do not raise STALE_AFTER_MINORS.',
     ).toBe(true);
@@ -436,6 +441,16 @@ describe('preregistration and version stamps (TRA-920)', () => {
       expect(
         src.includes(`${needle}.version`) && src.includes(`${needle}.commit`),
         `${file} should render {{ ${needle}.version }} and .commit next to the figure — TRA-920.`,
+      ).toBe(true);
+      // The `historical` guard has to be on the page before the figure goes
+      // stale, not added on the day it does — otherwise flipping the registry
+      // flag changes nothing a reader can see.
+      const key = needle.split('.')[2].replace(/_bench$/, '');
+      expect(
+        src.includes(`site.data.measurements.${key}.historical`),
+        `${file} renders the ${key} stamp but never checks ` +
+          `site.data.measurements.${key}.historical, so marking that figure historical would ` +
+          'not change what a reader sees — TRA-920.',
       ).toBe(true);
     }
   });
