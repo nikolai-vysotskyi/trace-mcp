@@ -130,4 +130,15 @@ describe('getChangeImpact() — behavioural contract', () => {
     expect(impact.totalAffected).toBe(0);
     expect(impact.risk.level).toBe('low');
   });
+
+  // TRA-962: calling with none of filePath/symbolId/fqn/symbolIds is a caller
+  // mistake ("you gave me nothing to look up"), not a lookup miss ("I looked
+  // and found nothing"). It must not surface as NOT_FOUND with an empty id.
+  it('no identifying param at all → VALIDATION_ERROR, not NOT_FOUND with an empty id', () => {
+    const result = getChangeImpact(ctx.store, {});
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe('VALIDATION_ERROR');
+    expect('message' in error && error.message).toMatch(/file_path|symbol_id|fqn|symbol_ids/);
+  });
 });
