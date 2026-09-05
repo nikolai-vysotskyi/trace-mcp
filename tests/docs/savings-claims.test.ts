@@ -125,12 +125,21 @@ describe('aggregate savings claims (TRA-904)', () => {
   const bench = JSON.parse(read('docs/_data/pr_context_bench.json')) as Record<string, number>;
   const response = JSON.parse(read(RESPONSE_DATA)) as Record<string, number>;
 
-  /** Our own storefront. Every one of these quotes a savings number at a stranger. */
+  /**
+   * Our own storefront. Every one of these quotes a savings number at a stranger.
+   *
+   * `package.json` and `plugin.json` are here because they are the loudest of
+   * the lot and the easiest to forget: `npm view trace-mcp description` and
+   * every plugin listing read them, and the first pass of this sweep missed
+   * both while updating `server.json` beside them.
+   */
   const STOREFRONT = [
     'README.md',
     'docs/index.html',
     'docs/_config.yml',
     'server.json',
+    'package.json',
+    'plugin.json',
     'skills/README.md',
     'docs/reduce-claude-code-token-usage.md',
   ];
@@ -143,9 +152,15 @@ describe('aggregate savings claims (TRA-904)', () => {
 
   const TOKEN_CONTEXT = /token|saving|saved|reduction|fewer|less redundant/i;
   const RANGE = /\d{1,3}(?:\.\d)?\s*(?:–|—|&ndash;|&mdash;|-| to )\s*\d{1,3}(?:\.\d)?\s*%/;
-  /** Marked as history ("we used to print X") or as an estimate. Both are disclosure. */
+  /**
+   * Marked as history ("we used to print X") or as a named kind of estimate.
+   *
+   * Bare `estimate` is deliberately NOT enough: "Estimated savings of 40–50% on
+   * average" would then excuse itself, which is the exact sentence this whole
+   * change exists to delete. The phrase has to say *which* estimate.
+   */
   const DISCLOSED =
-    /used to (print|say|claim)|until \d|no longer|replaced|superseded|disproved|synthetic|estimate|estimated/i;
+    /used to (print|say|claim)|(this site|the README) claimed|until (that date|\d)|no longer|replaced|superseded|disproved|synthetic (estimate|benchmark)|estimated baseline|baseline (that is )?still (an|a hand-written) estimate|argued, not measured/i;
 
   it('states no hand-typed savings range without saying what kind of number it is', () => {
     const offenders: string[] = [];
@@ -165,8 +180,12 @@ describe('aggregate savings claims (TRA-904)', () => {
   });
 
   it('quotes no per-session average that is not a generated datum', () => {
-    // The exact shape of the disproved claim: a percentage worn as an average.
-    const AVERAGE = /(\d{1,3}(?:\.\d)?)\s*%[^.]{0,80}?(on average|per session|typical)/i;
+    // The exact shape of the disproved claim: a percentage worn as an average —
+    // in either word order, and whether or not the sentence bothers to say
+    // "fewer". "On average, agents save 45% of tokens" is the same claim.
+    const HEDGE = 'on average|per session|typical|typically|expect';
+    const PCT = String.raw`(\d{1,3}(?:\.\d)?)\s*%`;
+    const AVERAGE = new RegExp(`${PCT}[^.]{0,80}?(?:${HEDGE})|(?:${HEDGE})[^.]{0,80}?${PCT}`, 'i');
     const allowed = new Set(
       [bench.median_savings_pct, response.reduction_pct, response.credited_reduction_pct].map(
         String,
@@ -177,7 +196,8 @@ describe('aggregate savings claims (TRA-904)', () => {
       for (const line of typedIn(read(file)).split('\n')) {
         const hit = line.match(AVERAGE);
         if (!hit || !TOKEN_CONTEXT.test(line)) continue;
-        if (DISCLOSED.test(line) || allowed.has(hit[1])) continue;
+        // Group 1 or 2 depending on which word order matched.
+        if (DISCLOSED.test(line) || allowed.has(hit[1] ?? hit[2])) continue;
         offenders.push(`${file}: ${hit[0]}`);
       }
     }
@@ -242,6 +262,21 @@ describe('aggregate savings claims (TRA-904)', () => {
         `${file} quotes the aggregate but no longer says its baseline is an estimate (TRA-904).`,
       ).toBe(true);
     }
+  });
+
+  it('bounds the field counter at the day it started measuring', () => {
+    // refresh-savings.mjs refuses a window that starts before the corrected
+    // counter; ga4-snapshot.mjs is what sets that window. Two constants, one
+    // fact — and if they drift the refusal either never clears or never fires.
+    const constant = (file: string, name: string) =>
+      read(file).match(new RegExp(`${name} = '(\\d{4}-\\d{2}-\\d{2})'`))?.[1];
+    const gate = constant('scripts/refresh-savings.mjs', 'CORRECTED_COUNTER_SINCE');
+    const window = constant('scripts/ga4-snapshot.mjs', 'SAVINGS_SINCE');
+    expect(gate, 'refresh-savings.mjs lost CORRECTED_COUNTER_SINCE').toBeDefined();
+    expect(
+      window,
+      'ga4-snapshot.mjs must bound the savings query at the same day refresh-savings.mjs gates on',
+    ).toBe(gate);
   });
 
   it('regenerates byte-identically from its inputs', async () => {

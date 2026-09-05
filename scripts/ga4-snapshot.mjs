@@ -53,6 +53,22 @@ const OUT = 'docs/_data/adoption.yml';
  */
 const SINCE = '2025-01-01';
 
+/**
+ * First day whose `tokens_saved` is a measurement rather than arithmetic
+ * (TRA-904).
+ *
+ * Before this date the counter scored each call *before the tool ran* —
+ * `RAW_COST_ESTIMATES[tool] x 0.15`, a constant — so summing from `SINCE`
+ * would publish pre-#915 guesses forever, and no caveat under the number
+ * changes what the number is. The savings query alone starts here; every other
+ * metric still runs from `SINCE`, where the older data is fine.
+ *
+ * Set to the release date of the first version carrying `recordActualTokens`.
+ * `scripts/refresh-savings.mjs` refuses to publish a window that starts before
+ * it, and that refusal is what clears once the field has rolled onto the fix.
+ */
+const SAVINGS_SINCE = '2026-09-05';
+
 /** The daily install ping (`src/telemetry/usage-ping.ts`) — it carries `tokens_saved`. */
 const PING_EVENT = 'app_open';
 
@@ -270,7 +286,7 @@ const [
   // number — it keeps the denominator pinned to the population the numerator
   // comes from if that stops being true.
   report(token, propertyId, {
-    dateRanges: [{ startDate: SINCE, endDate: 'today' }],
+    dateRanges: [{ startDate: SAVINGS_SINCE, endDate: 'today' }],
     dimensions: [{ name: 'date' }],
     metrics: [{ name: 'customEvent:tokens_saved' }, { name: 'activeUsers' }],
     dimensionFilter: {
@@ -402,7 +418,9 @@ active_users:
 events_28d: ${num(d28, 1)}
 
 # Tokens the indexed answers saved against reading the same code raw, summed
-# across every install that has not opted out, since ${SINCE}.
+# across every install that has not opted out, since ${SAVINGS_SINCE} — the day
+# the counter started measuring responses instead of multiplying a constant
+# (TRA-904). Earlier days are deliberately outside this sum.
 #
 # \`tokens_saved\` is the sanitized figure and the only one to quote: days whose
 # per-user rate ran away from the median are capped, because the ping's
@@ -425,7 +443,7 @@ savings:
   usd_saved: ${usd(savings.tokens)}
   price_model: "${PRICE_MODEL}"
   price_usd_per_mtok: ${(PRICE_PER_TOKEN * 1_000_000).toFixed(2)}
-  since: "${SINCE}"
+  since: "${SAVINGS_SINCE}"
   days: ${savings.days}
   capped_days: ${savings.capped_days}
   raw_ratio: ${yamlNum(savings.raw_ratio)}

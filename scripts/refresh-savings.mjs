@@ -47,6 +47,10 @@ import { INFLATION_RATIO, MIN_DAYS_FOR_TRIM } from './ga4-savings.mjs';
  * every summed token is `RAW_COST_ESTIMATES[tool] x 0.15` — see the refusal
  * below. Bump it, never lower it.
  *
+ * Keep it equal to `SAVINGS_SINCE` in `scripts/ga4-snapshot.mjs`, which is what
+ * actually bounds the query — the snapshot's `since` is emitted from it, so
+ * this refusal clears when that constant and the field agree, and not before.
+ *
  * ponytail: a date, not a version-to-date lookup. The one thing this compares
  * against is a date string already in the snapshot.
  */

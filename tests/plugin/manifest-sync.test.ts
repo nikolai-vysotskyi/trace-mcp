@@ -167,8 +167,14 @@ describe('install-surface token claims stay honest', () => {
       // repositories we do not own, generated into docs/_data/pr_context_bench.json.
       // It is allowed only when the surface says which task it measures; the ban
       // on selling benchmark_project's synthetic ceiling as a headline stands.
+      // Qualified *beside* the number, not anywhere in the file: docs/tools-reference.md
+      // says "PR impact report" 240 lines away, which would have excused a bare
+      // "90.6% fewer tokens" at the top of the page.
+      const at = claim ? text.indexOf(claim[0]) : -1;
+      const nearby = claim ? text.slice(Math.max(0, at - 60), at + claim[0].length + 60) : '';
       const measuredPr =
-        claim?.[0].includes(`${PR_BENCH.median_savings_pct}%`) && /PR|pull request/i.test(text);
+        claim?.[0].includes(`${PR_BENCH.median_savings_pct}%`) &&
+        /\bPR\b|pull request/i.test(nearby);
       expect(
         measuredPr ? undefined : claim?.[0],
         `${path} advertises a peak token number as if it were the average. The measured ` +

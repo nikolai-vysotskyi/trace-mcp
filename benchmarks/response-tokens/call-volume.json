@@ -3,7 +3,7 @@
     "Real call volume behind docs/_data/response_tokens.json (TRA-904).",
     "Source: one machine's ~/.trace/savings.json, read 2026-09-05 during TRA-880 —",
     "20,187 recorded calls since the store was created, of which the 12 tools below",
-    "account for 17,947. It is committed rather than read live because the weighting",
+    "account for 17,847. It is committed rather than read live because the weighting",
     "of a published figure must be reproducible by anyone checking it out, and",
     "nobody else's store has these numbers. Re-snapshot with:",
     "  node -e \"const s=require(require('os').homedir()+'/.trace/savings.json');console.log(JSON.stringify(s))\"",
