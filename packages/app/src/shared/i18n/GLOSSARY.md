@@ -84,3 +84,45 @@ rows are still open for Hindi — fill them as each surface is reviewed.
 
 No string changes this pass — Korean read correctly on the workspace and MCP Clients
 screens. Its one defect was line breaking, fixed in CSS (Principle 6).
+
+## Chinese, Simplified (zh)
+
+Settled 2026-09-05 (TRA-953), first pass over the language. Reviewed on the running
+renderer: Workspace, MCP Clients, Settings, Project Overview (Index / Guard / Coverage /
+Quality). Layout held everywhere, including the 640×420 window minimum — the defects were
+all terminology.
+
+| English (en) | Chinese (zh) | Notes / Context |
+| :--- | :--- | :--- |
+| **Guard** | guard | Untranslated, as in every other catalogue. Two strings called it 守卫 while thirteen others in the same file said `guard` — one feature, two names, on one screen. |
+| **Enforcement** | 拦截 | Guard row label and MCP Clients' "Enforcement level". Was 强制 ("coerce"), the same word this glossary already rejects for Japanese, and it disagreed with `reason.heartbeatStale`, which had said 恢复拦截 all along. |
+| **Coach** (mode) | 指导 | Advisory, hints-only mode. Was 教练 — a sports coach — in the segmented control, the promotion row and the setup copy. |
+| **Strict** (mode) | 严格 | |
+| **Off** (mode) | 关闭 | |
+| **Daemon** | 守护进程 | Distinct from `guard`. |
+| **Quality gates** | 质量门禁 | The CI term, not a literal door. Correct — do not "fix" it. |
+| **Findings** | 项发现 | Left as is this pass; it reads thin but is not wrong, and changing it touches the filter group, the badge and the Ask hint together. Next zh pass decides. |
+
+One copy fix beyond the table: the daemon-down empty state said 启动它就能重新看到 —
+"start it and you can see again", with nothing to see. Now names the object
+(重新看到这些项目), the way the English does.
+
+## Spanish (es)
+
+Reviewed 2026-09-05 (TRA-953) on the same four screens, light appearance, 1100 pt and
+the 640×420 minimum. **No string changes.** Recorded so the next pass does not re-open
+what was already checked:
+
+| English (en) | Spanish (es) | Notes / Context |
+| :--- | :--- | :--- |
+| **Guard** | guard / el guard | Untranslated, with the article. Consistent throughout. |
+| **Enforcement** | Aplicación | |
+| **Coach** (mode) | Guía | |
+| **Healthy** (KPI) | Sanos | Fits the 96 px tile budget (Principle 5). |
+| **Needs attention** (KPI) | Requieren atención | Fits at the window minimum, where the tile becomes a single row. |
+| **Quality gates** | Puertas de calidad | The established Spanish rendering in this domain, not a literal miss. Do not "fix" it. |
+
+The `_many` plural forms added by TRA-450 carry the partitive **de** (`{{n}} de llamadas`,
+`Pausar {{count}} de minutos`). That looks wrong at a glance and is right: Spanish's `many`
+category is reached at a million, where `un millón **de** minutos` is the grammatical form.
+Leave them alone.

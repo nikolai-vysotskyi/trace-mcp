@@ -7,7 +7,7 @@ export const guard = {
     '你安装的是 <code>{{current}}</code>；本应用需要 <code>{{required}}</code> 或更高版本。请在终端执行下面这条命令，然后重新打开应用。',
   'onboarding.installPrompt.title': '设置 trace-mcp guard',
   'onboarding.installPrompt.body':
-    'guard 会把 Claude Code 的 Read、Grep、Glob 和 Bash 调用改走 trace-mcp，而不是直接读取文件，一次会话大约能省下 30–50% 的 token。新项目从教练模式开始——只提示、从不拦截——七天后转为严格模式。',
+    'guard 会把 Claude Code 的 Read、Grep、Glob 和 Bash 调用改走 trace-mcp，而不是直接读取文件，一次会话大约能省下 30–50% 的 token。新项目从指导模式开始——只提示、从不拦截——七天后转为严格模式。',
   'onboarding.installPrompt.note':
     '写入任何内容之前，<code>~/.claude/settings.json</code> 会先备份为 <code>settings.json.bak</code>。',
   'onboarding.installing.title': '正在安装 guard',
@@ -30,8 +30,8 @@ export const guard = {
   'row.mode': '模式',
   'row.promotion': '转为严格模式',
   'row.promoted': '已转为严格模式',
-  'row.promotedValue': '教练期已结束',
-  'row.enforcement': '强制',
+  'row.promotedValue': '指导期已结束',
+  'row.enforcement': '拦截',
   statusErrorWhat: 'guard 状态',
 
   'health.ok': '活跃',
@@ -39,14 +39,14 @@ export const guard = {
   'health.down': '未运行',
   'health.unknown': '未知',
 
-  'reason.neverStarted': '此项目中的编程助手还没有启动过 trace-mcp。重启助手即可让守卫生效。',
+  'reason.neverStarted': '此项目中的编程助手还没有启动过 trace-mcp。重启助手即可恢复拦截。',
   'reason.heartbeatStale': 'trace-mcp 最后一次响应是{{ago}}。重启编程助手即可恢复拦截。',
-  'reason.channelQuiet': '守卫已安装并在等待——最后一次工具调用是{{ago}}。',
+  'reason.channelQuiet': 'guard 已安装并在等待——最后一次工具调用是{{ago}}。',
 
   'mode.aria': 'guard 模式',
   'mode.strict': '严格',
   'mode.strictHelp': '当 trace-mcp 工具能回答同一个问题时，拦截 Read、Grep 和 Glob',
-  'mode.coach': '教练',
+  'mode.coach': '指导',
   'mode.coachHelp': '从不拦截——只建议改用 trace-mcp 工具',
   'mode.off': '关闭',
   'mode.offHelp': '在这个项目里不干预 Claude Code',
