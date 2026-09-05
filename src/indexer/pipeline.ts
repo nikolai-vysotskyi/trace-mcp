@@ -557,10 +557,83 @@ export class IndexingPipeline {
     })();
   }
 
+  /**
+   * Drop the paths an incremental run must not touch: traversal attempts,
+   * `config.exclude` matches, subtrees owned by a more-specific registered
+   * project, and git-ignored files. Mirrors the gates `collectFiles()`
+   * applies to the full walk, so the event-driven entry points (watcher,
+   * hooks, `register_edit`, the HTTP reindex endpoint) can't re-add rows the
+   * full walk excludes (TRA-468).
+   *
+   * Pure — no DB, no lock. That is what lets `indexFiles()` decide a batch is
+   * a no-op before it queues behind the pipeline lock (TRA-935).
+   */
+  private filterIndexablePaths(filePaths: string[]): string[] {
+    // Same exclude gate collectFiles() applies via fast-glob. Without it,
+    // event-driven entry points index runtime churn the full pipeline would
+    // never touch — e.g. Laravel storage/framework/sessions blobs arriving on
+    // every web request.
+    const isExcluded = this.getExcludeMatcher();
+    // A registered descendant owns its own subtree — drop its files so an
+    // umbrella root's watcher-driven reindex is a no-op instead of a second,
+    // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
+    const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+    const ownedByDescendant = descendantGlobs.length
+      ? picomatch(descendantGlobs, { dot: true })
+      : undefined;
+    const gitignore = this.gitignoreMatcher();
+    const relPaths: string[] = [];
+    for (const fp of filePaths) {
+      const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+      const check = validatePath(rel, this.rootPath);
+      if (check.isErr()) {
+        logger.warn({ file: fp }, 'Path traversal blocked in indexFiles');
+        continue;
+      }
+      const relPosix = rel.split(path.sep).join('/');
+      if (isExcluded(relPosix)) {
+        logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+        continue;
+      }
+      if (ownedByDescendant?.(relPosix)) {
+        logger.debug({ file: rel }, 'Skipped: owned by a more-specific registered project');
+        continue;
+      }
+      if (gitignore?.isIgnored(relPosix)) {
+        logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
+        continue;
+      }
+      relPaths.push(rel);
+    }
+    return relPaths;
+  }
+
   async indexFiles(
     filePaths: string[],
     opts: { postprocess?: PostprocessLevel } = {},
   ): Promise<IndexingResult> {
+    const enqueuedAt = Date.now();
+    const relPaths = this.filterIndexablePaths(filePaths);
+
+    // TRA-935: nothing survived the filters, so this run cannot change a
+    // single row. Return before touching `_lock` — running the pipeline
+    // anyway costs the ignore-matcher rebuilds, a scope build, and a full
+    // search + PageRank cache invalidation, and (worse) queues the no-op
+    // behind whatever real indexing is in flight. In one daemon log 29 925 of
+    // 30 000 `reindex-file` events took this path; their reported latency was
+    // lock-queue wait, which is why elapsedMs read as hours.
+    if (relPaths.length === 0) {
+      return {
+        totalFiles: 0,
+        indexed: 0,
+        skipped: 0,
+        errors: 0,
+        durationMs: Date.now() - enqueuedAt,
+        incremental: true,
+        postprocess: opts.postprocess ?? 'minimal',
+      };
+    }
+
     const result = this._lock.then(async () => {
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
@@ -572,47 +645,11 @@ export class IndexingPipeline {
       // edits. Explicit callers (the `reindex` MCP tool for indexPath param)
       // still pass 'full' explicitly when needed.
       this._postprocessLevel = opts.postprocess ?? 'minimal';
+      // TRA-935: `durationMs` must be the work, not the wait. The clock starts
+      // once the lock is ours, so callers can subtract it from their own
+      // wall-clock to get the queue time instead of reporting the two summed
+      // as reindex latency.
       const start = Date.now();
-      // Same exclude gate collectFiles() applies via fast-glob. Without it,
-      // event-driven entry points (watcher, hooks, register_edit, HTTP) index
-      // runtime churn the full pipeline would never touch — e.g. Laravel
-      // storage/framework/sessions blobs arriving on every web request.
-      const isExcluded = this.getExcludeMatcher();
-      // A registered descendant owns its own subtree — drop its files so an
-      // umbrella root's watcher-driven reindex is a no-op instead of a second,
-      // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
-      const descendantGlobs = descendantExcludeGlobs(this.rootPath);
-      const ownedByDescendant = descendantGlobs.length
-        ? picomatch(descendantGlobs, { dot: true })
-        : undefined;
-      // Same gate collectFiles() now applies. The watcher already dropped
-      // git-ignored events, but hooks, `register_edit` and the HTTP reindex
-      // endpoint reach here directly and would otherwise re-add rows the full
-      // walk excludes — putting the index straight back out of sync (TRA-468).
-      const gitignore = this.gitignoreMatcher();
-      const relPaths: string[] = [];
-      for (const fp of filePaths) {
-        const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-        const check = validatePath(rel, this.rootPath);
-        if (check.isErr()) {
-          logger.warn({ file: fp }, 'Path traversal blocked in indexFiles');
-          continue;
-        }
-        const relPosix = rel.split(path.sep).join('/');
-        if (isExcluded(relPosix)) {
-          logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
-          continue;
-        }
-        if (ownedByDescendant?.(relPosix)) {
-          logger.debug({ file: rel }, 'Skipped: owned by a more-specific registered project');
-          continue;
-        }
-        if (gitignore?.isIgnored(relPosix)) {
-          logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
-          continue;
-        }
-        relPaths.push(rel);
-      }
       const r = await this.runPipeline(relPaths, false, start);
       // The watcher/hook path only ever sees the events it was handed. Kick a
       // debounced coverage check so a project whose on-disk shape changed

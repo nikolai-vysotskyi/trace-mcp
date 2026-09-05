@@ -555,7 +555,12 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       const indexed = result.indexed ?? 0;
       const skipped = result.skipped ?? 0;
       const skippedHash = indexed === 0 && skipped > 0;
-      const elapsedMs = Math.round(performance.now() - startedAt);
+      // TRA-935: split the reindex work from the time spent waiting for the
+      // reindex lock. Reported as one number, a fast edit queued behind a full
+      // project pass looked like a pathologically slow reindex.
+      const totalMs = Math.round(performance.now() - startedAt);
+      const elapsedMs = result.durationMs ?? totalMs;
+      const queuedMs = Math.max(0, totalMs - elapsedMs);
       logger.info(
         {
           event: 'reindex-file',
@@ -568,6 +573,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           skippedHash,
           indexed,
           elapsedMs,
+          queuedMs,
         },
         'reindex-file telemetry',
       );
@@ -577,6 +583,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         skippedHash,
         indexed,
         elapsedMs,
+        queuedMs,
       });
 
       // Best-effort duplication check — never fails register_edit
