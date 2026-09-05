@@ -563,6 +563,10 @@ jobs:
         working-directory: packages/app
         run: node scripts/gen-app-icon.mjs
 
+      - name: Generate tray icons
+        working-directory: packages/app
+        run: node scripts/generate-tray-icons.mjs
+
       - name: Build app
         working-directory: packages/app
         run: pnpm run build

@@ -89,3 +89,30 @@ it('the small master draws heavier than the detail master', () => {
   const weight = (svg: string) => Number(svg.match(/stroke-width="([\d.]+)"/)?.[1]);
   expect(weight(masters.small)).toBeGreaterThan(weight(masters.detail));
 });
+
+// Every tray PNG the app loads must still have a generator (TRA-780 review).
+// Retiring generate-icons.mjs nearly took the tray art with it: the app icon
+// moved to vector masters, but the tray drawing has no master and its only
+// source was inside the deleted file.
+it('every tray icon tray.ts loads is produced by generate-tray-icons.mjs', () => {
+  const tray = fs.readFileSync(path.resolve(process.cwd(), 'src/main/tray.ts'), 'utf8');
+  const generator = fs.readFileSync(
+    path.resolve(process.cwd(), 'scripts/generate-tray-icons.mjs'),
+    'utf8',
+  );
+
+  // tray.ts names them literally and via a `${theme}` template — expand both.
+  const referenced = new Set(
+    [...tray.matchAll(/'(tray-icon[\w@.-]*)\.png'/g), ...tray.matchAll(/`(tray-icon[^`]*)\.png`/g)]
+      .map((m) => m[1])
+      .flatMap((name) =>
+        name.includes('${theme}')
+          ? ['light', 'dark'].map((t) => name.replace('${theme}', t))
+          : [name],
+      )
+      .map((name) => `${name}.png`),
+  );
+
+  expect(referenced.size).toBeGreaterThan(0);
+  for (const name of referenced) expect(generator).toContain(`'${name}'`);
+});
