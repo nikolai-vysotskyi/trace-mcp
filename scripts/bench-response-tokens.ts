@@ -45,6 +45,20 @@ const CALLS: Array<{ tool: string; args: Record<string, unknown>; warmup?: boole
   { tool: 'get_task_context', args: { task: 'reduce tool response token cost' } },
   { tool: 'get_call_graph', args: { symbol_id: '$SYMBOL' } },
   { tool: 'get_complexity_report', args: {} },
+  // TRA-945: the tail. The twelve above are 88% of recorded calls; these are the
+  // next thirteen by volume, taking coverage to 97%.
+  { tool: 'register_edit', args: { file_path: 'src/savings.ts' } },
+  { tool: 'reindex', args: {} },
+  { tool: 'get_feature_context', args: { description: 'tool response token cost' } },
+  { tool: 'get_env_vars', args: {} },
+  { tool: 'get_dead_code', args: {} },
+  { tool: 'get_changed_symbols', args: {} },
+  { tool: 'check_quality_gates', args: {} },
+  { tool: 'get_circular_imports', args: {} },
+  { tool: 'check_duplication', args: { name: 'estimateTokens' } },
+  { tool: 'check_claudemd_drift', args: {} },
+  { tool: 'scan_security', args: { rules: ['all'] } },
+  { tool: 'list_projects', args: {} },
 ];
 
 interface Row {
@@ -58,9 +72,11 @@ interface Row {
 
 function run(): Promise<Row[]> {
   return new Promise((resolve, reject) => {
-    const server = spawn('node', [join(REPO, 'dist/cli.js'), 'serve'], {
+    // `--preset full` rather than TRACE_MCP_PRESET: the flag is applied before
+    // the config loads, so it holds whatever the machine's global config says.
+    const server = spawn('node', [join(REPO, 'dist/cli.js'), 'serve', '--preset', 'full'], {
       cwd: TARGET,
-      env: { ...process.env, TRACE_MCP_NO_DAEMON: '1', TRACE_MCP_PRESET: 'full' },
+      env: { ...process.env, TRACE_MCP_NO_DAEMON: '1' },
       stdio: ['pipe', 'pipe', 'inherit'],
     });
     const send = (m: unknown): void => void server.stdin.write(`${JSON.stringify(m)}\n`);
