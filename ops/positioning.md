@@ -257,6 +257,54 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 | Directory listings (`ops/distribution.md`) | Only where copy is ours to edit, and **only together with the rename** | See Sequencing |
 | `docs/ROADMAP.md` item 8 | Superseded by this file | Roadmap autopilot's next revision |
 
+## The `<title>` is a door, not the position (TRA-950, 2026-09-05)
+
+The position sentence above has the same defect the old headline had, and it is
+worth naming before someone spends a quarter on it: **it contains nothing anyone
+searches for.** DataForSEO (Google Ads, US/English, 2026-09-05) returns no volume
+record at all for `precomputed code intelligence` or `code intelligence for ai
+agents`, and it returns none for the new sentence's vocabulary either. GSC for
+`sc-domain:trace-mcp.com`, 2026-08-06 → 2026-09-04, shows the bill: the home
+page's two largest non-brand impression sources were `traceix mcp` (61) and `mcp
+tracing` (50) — 111 impressions, zero clicks, both name lookalikes Google matched
+because there was no category phrase on the page to match instead.
+
+So the two requirements are real and they are not the same requirement:
+
+- The **hero sentence** answers "what is this", to a reader who is already here.
+- The **`<title>`, meta description and section headings** answer "is this the
+  kind of thing I typed", to a reader who is not here yet.
+
+The resolution, and the precedent to follow next time they collide: **the title
+carries the measured category term, the hero carries the position.** The home
+page title is now `trace-mcp — code graph MCP server for AI coding agents`.
+
+That is the same carve-out this file already makes for `server.json` under
+Doors, for the same reason — a channel that can only deliver door 1 gets
+described in door 1's words. A Google SERP for `code graph mcp` is that kind of
+channel. The reader arriving on it is looking for a code graph MCP server, we
+are one, and the page they land on is free to tell them we are more. The title
+is the door; the page is the pitch.
+
+Chosen cluster and why not a bigger one: `code graph mcp` / `codegraph mcp`
+(70/mo each, 10 → 140 and 10 → 260 over twelve months, LOW competition) has a
+live top-20 of standalone product sites — `code-review-graph.com` at 6,
+`depgraph.ai` at 13, `codecontextgraph.com` at 16 — and we already rank #1–2 on
+its long tail from `comparisons.html` (`serena mcp vs codegraph`, `codegraph vs
+serena`, `repomix vs codegraph`). Every non-brand click the site earned in those
+30 days came from this vocabulary. `claude code mcp server` is 12× the volume
+and was rejected: its top-10 is Anthropic's docs plus listicles, no single
+product homepage ranks, and the way into that SERP is being listed inside those
+articles — outreach, not a page.
+
+**What this does not license.** The head term went onto the title, the meta
+description, and the Product View section heading — the graph's own section,
+where it is exactly accurate. It did **not** go into the hero subhead, which
+TRA-950 originally proposed. That sentence is the position claim's instance and
+narrowing it to the graph is the specific move this file exists to prevent.
+`tests/docs/category-term.test.ts` guards the three placements that stayed;
+`tests/docs/searchable-name.test.ts` guards the brand string alongside it.
+
 ## Open
 
 - **Door 2 has no measured pitch yet.** Mirrors are verified not to break the
