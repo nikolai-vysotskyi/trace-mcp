@@ -32,7 +32,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_RAW_COST, RAW_COST_ESTIMATES } from '../src/savings.js';
+import { NO_BASELINE_TOOLS, rawCostFor } from '../src/savings.js';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const read = (p: string) => JSON.parse(readFileSync(join(REPO, p), 'utf-8'));
@@ -50,25 +50,34 @@ const volume = read('benchmarks/response-tokens/call-volume.json') as {
   calls: Record<string, number>;
 };
 
-const rows = bench.rows
+const allRows = bench.rows
   .filter((r) => r.ok && volume.calls[r.tool] !== undefined)
   .map((r) => {
     const calls = volume.calls[r.tool];
-    const baseline = RAW_COST_ESTIMATES[r.tool] ?? DEFAULT_RAW_COST;
+    const baseline = rawCostFor(r.tool);
     return {
       tool: r.tool,
       calls,
       baseline_per_call: baseline,
       measured_per_call: r.real,
-      // >1 means the response costs more than the Read/Grep it replaces.
-      measured_over_baseline: Number((r.real / baseline).toFixed(2)),
+      // >1 means the response costs more than the Read/Grep it replaces. Null
+      // when there is no baseline to be a multiple of — dividing by zero here
+      // yields Infinity, which JSON.stringify silently turns into null anyway.
+      measured_over_baseline: baseline > 0 ? Number((r.real / baseline).toFixed(2)) : null,
       baseline_tokens: calls * baseline,
       measured_tokens: calls * r.real,
     };
   })
   .sort((a, b) => b.calls - a.calls);
 
-const missing = Object.keys(volume.calls).filter((t) => !rows.some((r) => r.tool === t));
+// TRA-945: a mutation or a notification replaces no Read/Grep, so it has no
+// baseline to be a fraction of (`NO_BASELINE_TOOLS`). Folding it into the ratio
+// either invents savings (the old behaviour, ~736k tokens on this store) or
+// divides by zero. It is reported as what it is: cost with no counterfactual.
+const rows = allRows.filter((r) => !NO_BASELINE_TOOLS.has(r.tool));
+const overheadRows = allRows.filter((r) => NO_BASELINE_TOOLS.has(r.tool));
+
+const missing = Object.keys(volume.calls).filter((t) => !allRows.some((r) => r.tool === t));
 if (missing.length) {
   throw new Error(
     `call-volume.json counts ${missing.join(', ')} but response-tokens.json has no ` +
@@ -77,6 +86,8 @@ if (missing.length) {
 }
 
 const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0);
+const sumOverhead = (f: (r: (typeof rows)[number]) => number) =>
+  overheadRows.reduce((a, r) => a + f(r), 0);
 const baselineTokens = sum((r) => r.baseline_tokens);
 const measuredTokens = sum((r) => r.measured_tokens);
 const creditedTokens = sum((r) => Math.max(0, r.baseline_tokens - r.measured_tokens));
@@ -96,15 +107,27 @@ const out = {
   volume_read_at: volume.read_at,
   volume_source: volume.source,
   baseline_is_estimated: true,
-  tools_measured: rows.length,
+  tools_measured: allRows.length,
+  tools_with_baseline: rows.length,
   tools_costing_more: rows.filter((r) => r.measured_over_baseline > 1).length,
   calls_weighted: sum((r) => r.calls),
+  // Cost with no counterfactual: mutations and notifications. Credited zero.
+  overhead_tools: overheadRows.length,
+  overhead_calls: sumOverhead((r) => r.calls),
+  overhead_tokens: sumOverhead((r) => r.measured_tokens),
   calls_store_total: volume.calls_store_total,
   baseline_tokens: baselineTokens,
   measured_tokens: measuredTokens,
   reduction_pct: pct(baselineTokens - measuredTokens),
   credited_reduction_pct: pct(creditedTokens),
+  // The honest all-in number: overhead counted on the spend side, nothing on
+  // the baseline side. Lower than reduction_pct, and the one to quote when the
+  // question is "what does a session cost", not "what does a lookup cost".
+  reduction_pct_incl_overhead: pct(
+    baselineTokens - measuredTokens - sumOverhead((r) => r.measured_tokens),
+  ),
   rows,
+  overhead_rows: overheadRows,
 };
 
 // The output path is overridable so the regeneration check in
@@ -116,6 +139,7 @@ writeFileSync(
 );
 console.log(
   `${out.reduction_pct}% net reduction over ${out.calls_weighted.toLocaleString('en-US')} calls ` +
-    `(${out.credited_reduction_pct}% credited), ${out.tools_costing_more} of ${out.tools_measured} ` +
-    'tools cost more than their baseline',
+    `(${out.credited_reduction_pct}% credited, ${out.reduction_pct_incl_overhead}% including ` +
+    `${out.overhead_calls.toLocaleString('en-US')} no-baseline calls), ${out.tools_costing_more} ` +
+    `of ${out.tools_with_baseline} tools cost more than their baseline`,
 );

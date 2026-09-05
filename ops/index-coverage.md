@@ -45,6 +45,7 @@ TechArticle schema (TRA-419, 09-03).
 |---|---|---|
 | `/` | Submitted and indexed | 2026-08-28 |
 | `/analytics.html` | Submitted and indexed | 2026-08-29 |
+| `/perf/response-tokens/` | not yet asked — added to the sitemap 2026-09-05 (TRA-945) | — |
 | `/architecture.html` | Submitted and indexed | 2026-08-29 |
 | `/comparisons.html` | Submitted and indexed | 2026-08-29 |
 | `/configuration.html` | Submitted and indexed | 2026-08-29 |

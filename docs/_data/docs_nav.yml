@@ -49,3 +49,5 @@
   url: /tweakcc.html
 - title: Development
   url: /development.html
+- title: Tool response token cost
+  url: /perf/response-tokens/
