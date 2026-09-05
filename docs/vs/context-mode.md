@@ -148,7 +148,7 @@ Four things are worth stating precisely, because the marketing word "context" co
 
 **Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 28 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
 
-**Their measurement is published and ours is not, again.** This is the third head-to-head page where we have to write that sentence. We publish a conservative 40-50% and ship `get_real_savings` so you can measure your own repository, which is a defensible choice and not a substitute for a benchmark with named fixtures you can re-run.
+**Their measurement covers the session; ours covers one task in it.** We now have a benchmark with named fixtures — the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, re-runnable from the repo. It measures assembling code-review context, not a whole working session, so it does not answer the question Context Mode's numbers answer. The 40-50% we quote for general use is still our own aggregate, not a benchmark.
 
 **They are 200 times our size, and it is not only marketing.** A tool that reaches 20K stars in six months has found something people wanted. The "think in code" framing is a genuinely good idea that we do not have an equivalent of.
 
