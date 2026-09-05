@@ -115,6 +115,60 @@ This decision needs no browser login, no purchase, no paid listing edit, no
 domain and no registry re-identification. The batched ask for Nikolai that
 TRA-644 anticipated is **empty** — that is the result, not an omission.
 
+## First-party confirmation: the string is the traffic (added 2026-09-05, TRA-879)
+
+The table above decided the domain, the package and the on-page titles on the
+argument that we have no index coverage to spend. GSC now says something
+stronger — those surfaces are not merely cheap to keep, they are the entire
+funnel.
+
+Search Analytics, `sc-domain:trace-mcp.com`, 2026-08-06 → 2026-09-04:
+
+| Query | Impressions | Clicks | Avg position |
+|---|---|---|---|
+| `trace-mcp` | 89 | 24 | 1.5 |
+| `trace mcp` | 38 | 17 | 1.4 |
+| `trayce mcp` | 10 | 1 | 3.1 |
+| `"codegraphcontext"` | 2 | 2 | 1.5 |
+| `traceix mcp` | 61 | 0 | 6.0 |
+| `mcp tracing` | 54 | 0 | 13.7 |
+| everything else (10 queries) | ~21 | 0 | — |
+
+53 clicks total. 41 (77%) from the two exact strings `trace-mcp` / `trace mcp`,
+44 (83%) from some spelling of the name. **Zero** from any query describing what
+the product does — nothing containing "code graph", "context", "token" or
+"MCP server for…" earned a click.
+
+The two largest impression sources are both name collisions we already lose:
+`traceix mcp` (61 impressions, position 6.0) is a different product with the
+same prefix, and `mcp tracing` (54 impressions, position 13.7) is the
+observability category. 115 impressions, no clicks — and that is what the
+late-August impression spike was made of (10–20/day → 48 on 08-29 → 93 on
+09-02, clicks flat at 2–3, CTR ~15% → 2.2%). More impressions here is not
+growth.
+
+So `-mcp` is doing load-bearing work in the SERP: it is the token that
+disambiguates us from `traceix` and from tracing/observability, *and we are
+losing both collisions while still carrying it*. Dropping it from anything
+searchable removes the disambiguator from the only string that converts.
+
+Nothing in the disposition table changes — this is the confirmation, not a
+revision. What changes is that the three surfaces are now guarded in CI rather
+than by this document alone: `tests/docs/searchable-name.test.ts` fails if
+`site.title`, `site.url`, the home page `<title>`/`og:title`, the JSON-LD
+Organization/WebSite `name`, the npm `name`/`mcpName`/`homepage`, the
+`server.json` identity or the `trace-mcp` bin loses the string. A rename sweep
+that reaches them now breaks the build instead of the funnel.
+
+**PLAUSIBLE, not confirmed:** that a rename would cost clicks — a name cannot
+be A/B tested. Confirmed is that 100% of current clicks depend on the current
+string and that a semantically adjacent name already collides badly in this
+same SERP. No independent search-volume figure for `trace` vs `trace-mcp`
+(DataForSEO was unreachable on that runtime); GSC is first-party and enough for
+the claim above.
+
+*Measured by the SEO Agent autopilot, TRA-876 → TRA-879.*
+
 ## If someone reopens this
 
 The two facts that close it are checkable in under a minute and should be
