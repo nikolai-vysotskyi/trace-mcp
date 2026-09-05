@@ -376,8 +376,6 @@ we do not own. `server.json`, `package.json` and `plugin.json` still said
 backwards for the surface it is on: the README is read by people who then read
 the rest of the README, while these three strings are rendered verbatim by
 every registry that ingests us and by npm, with no room to qualify anything.
-The tokenomics review (PR #53 above) made the same point from the outside —
-what convinced that maintainer was evidence we did not produce ourselves.
 
 All three now lead with the measured number. Two things worth keeping:
 
