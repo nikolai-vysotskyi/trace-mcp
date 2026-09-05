@@ -195,25 +195,40 @@ function reconcileStaleBackups(npmRoot: string): void {
     return;
   }
 
-  const mainExists = fs.existsSync(mainDir);
+  let mainExists = fs.existsSync(mainDir);
 
-  for (const entry of entries) {
-    const pid = backupPid(entry);
-    if (!Number.isFinite(pid)) continue;
-    if (isPidAlive(pid)) continue; // Owned by a live updater — leave alone.
+  // Newest first. The suffix is the crashed updater's PID, so readdir order
+  // says nothing about which backup is more recent — restoring the first one
+  // found could permanently reinstate a build many versions old (TRA-881).
+  // Backups from a still-running PID are left alone: another updater owns them.
+  const candidates = entries
+    .filter((e) => Number.isFinite(backupPid(e)) && !isPidAlive(backupPid(e)))
+    .map((e) => {
+      const full = path.join(npmRoot, e);
+      let mtimeMs = 0;
+      try {
+        mtimeMs = fs.statSync(full).mtimeMs;
+      } catch {
+        // Unstatable — sorts last; the restore/delete below still handles it.
+      }
+      return { full, mtimeMs };
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-    const full = path.join(npmRoot, entry);
+  for (const { full } of candidates) {
     if (!mainExists) {
-      // Restore the first dead-PID backup we find, then stop — there can be
-      // only one canonical main dir. Any further backups become garbage and
-      // will be wiped on the next reconcile pass.
+      // Restore the newest dead-PID backup, then keep going so the remaining
+      // ones are deleted in this same pass — there can be only one canonical
+      // main dir, and a leftover backup is exactly what the launcher's
+      // swap-window fallback would serve a client next (TRA-881).
       try {
         fs.renameSync(full, mainDir);
         logger.warn(
           { backup: full, restored: mainDir },
           'Auto-update: restored package dir from stale backup of dead updater process',
         );
-        return;
+        mainExists = true;
+        continue;
       } catch (err) {
         logger.warn(
           { backup: full, error: err },

@@ -112,4 +112,4 @@ export const MIRROR_HOOK_VERSION = '0.3.0';
 // 0.6.0 (TRA-755): the resolved node is version-gated against engines.node. An
 // older one used to exec fine and die on a SyntaxError the client could only
 // report as "failed to connect" — and get pinned into launcher.env on the way.
-export const LAUNCHER_VERSION = '0.6.2';
+export const LAUNCHER_VERSION = '0.6.3';

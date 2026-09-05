@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.2
+# trace-mcp-launcher v0.6.3
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -340,7 +340,7 @@ normalise_path() {
 
 # Find dist/cli.js in any known global root. $1 = roots, newline-separated.
 probe_cli() {
-  local roots="$1" root cli bak
+  local roots="$1" root cli bak group
 
   while IFS= read -r root; do
     [ -n "$root" ] || continue
@@ -358,11 +358,27 @@ probe_cli() {
   # rest of the client's session.
   while IFS= read -r root; do
     [ -n "$root" ] || continue
-    for bak in "$root"/trace-mcp.tmcp-bak-* "$root"/.trace-mcp-*; do
-      if [ -f "$bak/dist/cli.js" ]; then
-        normalise_path "$bak/dist/cli.js"
-        return 0
-      fi
+    # Two classes, in this order: a complete backup our updater renamed aside,
+    # then npm's own staging directory. Never one combined sort — npm rewrites
+    # the staging dir throughout the unpack, so its mtime is almost always the
+    # newest, and a `dist/cli.js` that exists there may still be mid-write.
+    #
+    # Within each class, newest by mtime. The suffix is the crashed updater's
+    # PID, so glob order says nothing about which copy is more recent, and the
+    # old first-match pick could serve a build many versions old for the
+    # client's whole session (TRA-881). PATH is pinned above, and a glob that
+    # matches nothing yields an empty list rather than a literal.
+    for group in \
+      "$(ls -td "$root"/trace-mcp.tmcp-bak-* 2>/dev/null)" \
+      "$(ls -td "$root"/.trace-mcp-* 2>/dev/null)"; do
+      [ -n "$group" ] || continue
+      while IFS= read -r bak; do
+        [ -n "$bak" ] || continue
+        if [ -f "$bak/dist/cli.js" ]; then
+          normalise_path "$bak/dist/cli.js"
+          return 0
+        fi
+      done <<< "$group"
     done
   done <<< "$roots"
 
