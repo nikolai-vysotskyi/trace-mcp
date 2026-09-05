@@ -1978,6 +1978,67 @@ updated: 2026-09-04
       .sec-item:last-child { border-bottom: none; }
     }
 
+    /* ── Team ── */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      border: 1px solid var(--border-visible);
+    }
+    .team-member {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      padding: 32px 28px;
+      border-right: 1px solid var(--border);
+    }
+    .team-member:last-child { border-right: none; }
+    /* ponytail: initials monogram until real headshots land — no image, no layout shift. */
+    .team-avatar {
+      flex: none;
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: 1px solid var(--border-visible);
+      background: var(--surface-raised);
+      display: grid; place-items: center;
+      font-family: var(--font-mono);
+      font-size: 20px;
+      letter-spacing: 0.05em;
+      color: var(--text-display);
+      object-fit: cover;
+    }
+    .team-member h3 {
+      font-family: var(--font-body);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-display);
+      letter-spacing: -0.015em;
+      margin-bottom: 6px;
+    }
+    .team-role {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      display: block;
+      margin-bottom: 10px;
+    }
+    /* YC orange. #FF6600 is 3.1:1 on the light page, so light mode darkens it to 4.6:1. */
+    .team-yc {
+      color: #FF6600;
+      white-space: nowrap;
+    }
+    :root[data-theme="light"] .team-yc { color: #B34700; }
+    .team-links a {
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+    @media (max-width: 800px) {
+      .team-grid { grid-template-columns: 1fr; }
+      .team-member { border-right: none; border-bottom: 1px solid var(--border); }
+      .team-member:last-child { border-bottom: none; }
+    }
+
     /* ── Category (VC narrative moment) ── */
     .category {
       padding: 128px 0;
@@ -2832,11 +2893,42 @@ updated: 2026-09-04
     </div>
   </section>
 
+  <!-- ── TEAM ── -->
+  <section id="team">
+    <div class="container">
+      <div class="section-meta">
+        <div class="section-meta-tag"><span class="label">013 / Team</span></div>
+        <div>
+          <h2 class="section-title">Who builds <span class="em">trace-mcp.</span></h2>
+        </div>
+      </div>
+
+      <div class="team-grid reveal">
+        <div class="team-member">
+          <div class="team-avatar" aria-hidden="true">NV</div>
+          <div>
+            <h3>Nikolai Vysotskyi</h3>
+            <span class="team-role">Co-founder</span>
+            <p class="team-links"><a href="https://www.linkedin.com/in/nikolai-vysotskyi" target="_blank" rel="noopener">LinkedIn &rarr;</a></p>
+          </div>
+        </div>
+        <div class="team-member">
+          <div class="team-avatar" aria-hidden="true">MG</div>
+          <div>
+            <h3>Max Glubochansky</h3>
+            <span class="team-role">Co-founder &middot; <a class="team-yc" href="https://www.ycombinator.com/" target="_blank" rel="noopener">Y Combinator alum</a></span>
+            <p class="team-links"><a href="https://www.linkedin.com/in/maxglubochansky" target="_blank" rel="noopener">LinkedIn &rarr;</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── FAQ ── -->
   <section id="faq">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">013 / Faq</span></div>
+        <div class="section-meta-tag"><span class="label">014 / Faq</span></div>
         <div>
           <h2 class="section-title">Common questions.</h2>
         </div>
