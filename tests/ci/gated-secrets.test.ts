@@ -46,6 +46,44 @@ jobs:
     expect(gatedSecretsOf(nested)).toEqual(new Map([['CSC_LINK', 'apple-signing']]));
   });
 
+  // Reviewer B on PR #930: all three are ways the scanner could have missed or
+  // invented a gate. GitHub matches secret names case-insensitively and accepts
+  // bracket notation, so both forms name the same secret as `APPLE_ID`.
+  it('catches lowercase and bracket-notation references', () => {
+    const odd = `
+jobs:
+  sign:
+    environment: apple-signing
+    steps:
+      - run: echo \${{ secrets.apple_id }} \${{ secrets['CSC_LINK'] }}
+`;
+    expect([...gatedSecretsOf(odd).keys()].sort()).toEqual(['APPLE_ID', 'CSC_LINK']);
+  });
+
+  it('does not gate a secret that only appears in a comment', () => {
+    const commented = `
+jobs:
+  sign:
+    environment: apple-signing
+    steps:
+      # We removed \${{ secrets.OLD_UNUSED_KEY }}
+      - run: echo \${{ secrets.CSC_LINK }}
+`;
+    expect([...gatedSecretsOf(commented).keys()]).toEqual(['CSC_LINK']);
+  });
+
+  it('does not read a `name:` outside the environment block as an environment', () => {
+    const outputs = `
+jobs:
+  build:
+    outputs:
+      name: artifact-name
+    steps:
+      - run: echo \${{ secrets.REPO_SECRET }}
+`;
+    expect(gatedSecretsOf(outputs).size).toBe(0);
+  });
+
   it('finds the real apple-signing secrets in release.yml', () => {
     const gated = gatedSecretsOf(readFileSync('.github/workflows/release.yml', 'utf8'));
     expect(

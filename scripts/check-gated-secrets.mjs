@@ -45,9 +45,12 @@ export function gatedSecretsOf(yamlSource) {
   const found = new Map();
   /** @type {{env: string | null, names: Set<string>} | null} */
   let job = null;
+  // True only between an `environment:` with no value and the `name:` under it.
+  let inEnvBlock = false;
   const flush = () => {
     if (job?.env) for (const n of job.names) found.set(n, job.env);
     job = null;
+    inEnvBlock = false;
   };
   for (const line of yamlSource.split('\n')) {
     if (/^ {2}[A-Za-z0-9_-]+:\s*(#.*)?$/.test(line)) {
@@ -61,12 +64,30 @@ export function gatedSecretsOf(yamlSource) {
       continue;
     }
     if (!job) continue;
-    // `environment: name`, or `environment:` followed by an indented `name:`.
+    // A comment naming a secret is prose about it, not a use of it.
+    if (/^\s*#/.test(line)) continue;
+
     const inline = line.match(/^ {4}environment:\s*(?!$)['"]?([A-Za-z0-9_.-]+)/);
-    const nested = line.match(/^ {6}name:\s*['"]?([A-Za-z0-9_.-]+)/);
-    if (inline) job.env = inline[1];
-    else if (nested) job.env ??= nested[1];
-    for (const [, name] of line.matchAll(/secrets\.([A-Z0-9_]+)/g)) {
+    if (inline) {
+      job.env = inline[1];
+      inEnvBlock = false;
+    } else if (/^ {4}environment:\s*(#.*)?$/.test(line)) {
+      inEnvBlock = true;
+    } else if (inEnvBlock) {
+      // Only `name:` directly under `environment:` names an environment. Any
+      // other `name:` at this indent belongs to `outputs:`, `strategy:`, …
+      const nested = line.match(/^ {6}name:\s*['"]?([A-Za-z0-9_.-]+)/);
+      if (nested) job.env = nested[1];
+      if (nested || !/^ {6}/.test(line)) inEnvBlock = false;
+    }
+
+    // Both `secrets.NAME` and `secrets['NAME']`, in any case: GitHub matches
+    // secret names case-insensitively, so `secrets.apple_id` is the same secret
+    // as APPLE_ID and must be held to the same gate.
+    for (const [, dot, bracket] of line.matchAll(
+      /secrets(?:\.([A-Za-z0-9_]+)|\[['"]([A-Za-z0-9_]+)['"]\])/g,
+    )) {
+      const name = (dot ?? bracket).toUpperCase();
       if (!NOT_A_GATED_SECRET.has(name)) job.names.add(name);
     }
   }
@@ -89,7 +110,7 @@ export function auditProbes(gated, probes) {
       );
     } else if (probe !== 'false') {
       problems.push(
-        `${name}: release.yml claims this lives in environment \`${env}\`, but a job with no environment can read it — it is still a repository-level secret, readable by any workflow on any branch. Add it to the environment and delete the repository-level copy.`,
+        `${name}: a workflow claims this lives in environment \`${env}\`, but a job with no environment can read it — it is still a repository-level secret, readable by any workflow on any branch. Add it to the environment and delete the repository-level copy.`,
       );
     }
   }
