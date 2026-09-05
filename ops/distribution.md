@@ -112,6 +112,17 @@ the site, the way the arrivals reading says whether it does anything for the rep
 **What the listings emit, read from their served HTML on 2026-09-04.** Nobody had
 checked; the answer is that the ones we can read pass nothing.
 
+**Decision 2026-09-05 (TRA-905): do not chase deep-URL links through these
+surfaces.** The question was whether the `/vs/` cluster and
+`/pr-context-benchmark.html` should be pushed into the listings instead of only
+the homepage. There is nothing to win: the surfaces we can read emit either no
+`trace-mcp.com` link at all or `rel="ugc nofollow"` on every one, and GitHub
+adds `nofollow` to external links in the awesome-list READMEs too — so no
+dofollow deep link exists in this channel set to go and get. The free lever
+instead is our own README, which glama scrapes live for all 31 of its anchors;
+it gained a head-to-head line linking the six `/vs/` pages the same day.
+Rationale and the 2026-09-26 re-read in [`ops/index-coverage.md`](index-coverage.md).
+
 | Surface | Links `trace-mcp.com`? | `rel` | Read how |
 |---|---|---|---|
 | glama.ai | Yes — **31 anchors**, deep pages included (`/comparisons.html`, `/configuration.html#cli`, `/supported-frameworks.html`) | `ugc nofollow` on every one | Fetched the page, parsed the anchors |

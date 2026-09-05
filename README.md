@@ -180,6 +180,8 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 > Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [trace-mcp vs. other code intelligence MCP servers](https://trace-mcp.com/comparisons.html).
 
+> Head-to-head: [vs Repomix](https://trace-mcp.com/vs/repomix.html) · [vs Serena](https://trace-mcp.com/vs/serena.html) · [vs codegraph](https://trace-mcp.com/vs/codegraph.html) · [vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html) · [vs Claude Code context mode](https://trace-mcp.com/vs/context-mode.html) · [Repomix vs codegraph](https://trace-mcp.com/vs/repomix-vs-codegraph.html).
+
 ---
 
 ## Token reduction — what we measured
