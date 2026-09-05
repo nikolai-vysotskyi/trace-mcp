@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { BASE, DAEMON_FETCH_TIMEOUT_MS, daemonFetch } from '../daemon-fetch';
 import { useDocumentVisible } from './useDocumentVisible';
 
 // ── Types (mirrored from api-client.ts — renderer can't import main process modules) ──
@@ -133,14 +134,10 @@ type SSEEvent =
 
 // ── Constants ──────────────────────────────────────────────────────────
 
-const BASE = 'http://127.0.0.1:3741';
-
-/**
- * Cap on daemon reads. A *hung* daemon (accepting the socket but never
- * answering) would otherwise leave `loading` true indefinitely, hiding the
- * DisconnectedBanner — the one control that can restart it (TRA-264).
- */
-export const DAEMON_FETCH_TIMEOUT_MS = 8000;
+/* Re-exported for the surfaces that already import it from here. The ceiling
+   itself, and the reason every daemon read now has one, live in
+   ../daemon-fetch (TRA-264, TRA-934). */
+export { DAEMON_FETCH_TIMEOUT_MS };
 
 // ── Hook ───────────────────────────────────────────────────────────────
 
@@ -155,7 +152,7 @@ export function useDaemon() {
   // Fetch project list
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/projects`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await daemonFetch(`${BASE}/api/projects`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ProjectInfo[] = json.projects ?? json;
@@ -171,7 +168,7 @@ export function useDaemon() {
   // Fetch client list
   const fetchClients = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/clients`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await daemonFetch(`${BASE}/api/clients`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ClientInfo[] = json.clients ?? json;
@@ -184,7 +181,7 @@ export function useDaemon() {
   // Fetch settings + daemon info
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/settings`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await daemonFetch(`${BASE}/api/settings`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setSettings(data);
@@ -380,7 +377,7 @@ export function useDaemon() {
   // Actions
   const addProject = useCallback(async (root: string) => {
     try {
-      await fetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      await daemonFetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root }),
@@ -395,7 +392,7 @@ export function useDaemon() {
   const removeProject = useCallback(async (root: string) => {
     let res: Response;
     try {
-      res = await fetch(`${BASE}/api/projects?project=${encodeURIComponent(root)}`, {
+      res = await daemonFetch(`${BASE}/api/projects?project=${encodeURIComponent(root)}`, {
         method: 'DELETE',
       });
     } catch {
@@ -419,7 +416,7 @@ export function useDaemon() {
       prev.map((p) => (p.root === root ? { ...p, status: 'indexing', progress: undefined } : p)),
     );
     try {
-      await fetch(`${BASE}/api/projects/reindex?project=${encodeURIComponent(root)}`, {
+      await daemonFetch(`${BASE}/api/projects/reindex?project=${encodeURIComponent(root)}`, {
         method: 'POST',
       });
     } catch {
@@ -446,7 +443,7 @@ export function useDaemon() {
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 500));
         try {
-          const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+          const res = await daemonFetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           if (res.ok) {
             ready = true;
             break;
@@ -472,7 +469,7 @@ export function useDaemon() {
   const updateSettings = useCallback(
     async (patch: Record<string, unknown>) => {
       try {
-        await fetch(`${BASE}/api/settings`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+        await daemonFetch(`${BASE}/api/settings`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),

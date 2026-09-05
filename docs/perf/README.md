@@ -217,6 +217,77 @@ launches the built app against a throwaway `--user-data-dir`, drives it over CDP
 prints a ready-to-paste `runs[]` entry. `cold_start_ms` is process spawn → `#root` has
 painted real content; `window_interactive_ms` is the renderer's own share of that.
 
+## Per-screen time to first useful paint — TRA-934
+
+`cold_start_ms` above answers "when did the shell appear". It says nothing about when the
+user could read an answer, and those are different products: a screen that appears in
+40 ms with what we already know beats one that appears in 400 ms with complete data.
+
+Each screen declares its own useful paint in the renderer (`useUsefulPaint` in
+`packages/app/src/renderer/perf.ts`), and
+[`scripts/perf-screens.mjs`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/packages/app/scripts/perf-screens.mjs)
+reads the marks over CDP. Numbers land in `docs/perf/screens.json`.
+
+```bash
+pnpm -C packages/app run build
+node packages/app/scripts/perf-screens.mjs --samples 3 \
+  --project /path/to/an/indexed/repo --json docs/perf/screens.json
+# the run that matters — daemon accepts and never answers:
+node packages/app/scripts/perf-screens.mjs --samples 3 --wedged \
+  --profile /tmp/warm-profile --project /path/to/an/indexed/repo
+```
+
+`--wedged` pauses every renderer request to `127.0.0.1:3741` and never resumes it. That is
+the daemon's observed failure shape (TRA-922) and the only one worth testing: a *refused*
+connection fails in microseconds and every screen already handles it. `--profile` reuses a
+user-data dir across samples, which is what tells a screen that keeps a snapshot apart from
+one that does not.
+
+**Measured 2026-09-05, M5 Max, nine live agent sessions, real registry daemon.** Under a
+daemon that accepts and never answers:
+
+| Screen | Before | After |
+|---|---|---|
+| Workspace | 8 064 ms (its own 8 s ceiling) | 67 ms — opens on the metrics snapshot |
+| Overview | never useful (> 30 s, unbounded) | 22 ms — opens on the stats snapshot |
+| Activity | never useful (> 30 s, unbounded) | 8 307 ms — bounded, states the failure |
+| Memory | 303 ms, but it was the *empty state*: "no decisions yet" over a fetch still in flight | 8 305 ms — honest, bounded |
+| Clients, Ask, Notebook, Insights | ~300 ms | ~300 ms — none of them read the daemon before first paint |
+
+The shell itself is not the problem and never was: `cold_shell_ms` is 20–80 ms on every
+screen. Everything above it is waiting for the daemon.
+
+Three things produced that change, in order of how much they mattered:
+
+1. **Every daemon read has a ceiling.** 50 of the renderer's 57 `fetch` calls had none.
+   A `fetch` with no signal against a socket that accepts and never answers neither
+   resolves nor rejects — the screen behind it stays on its skeleton for the life of the
+   window. `packages/app/src/renderer/daemon-fetch.ts` is now the only place that calls
+   `fetch` at the daemon, and `src/renderer/__tests__/daemon-fetch.test.ts` fails the build
+   if a fifty-eighth appears. The ceiling itself is unchanged at 8 s: this machine's daemon
+   has been measured answering `/health` in 5.8 s while indexing, so a tighter one would
+   abort reads that were going to succeed. It is the *existence* of a ceiling that was
+   missing, not its value.
+2. **Screens open on their last known numbers.** The Workspace already did this for
+   metrics (TRA-397); Overview now does it for the index summary, through the shared
+   `loadSnapshot`/`saveSnapshot` in `src/renderer/snapshot.ts`, and says
+   "The daemon is busy. These are the last indexed numbers." until the fresh read lands.
+3. **A screen that has not loaded does not claim to be empty.** All four Memory sub-views
+   started with `loading: false`, so the frame before their first fetch resolved read as
+   "nothing here".
+
+### The 7.8-second wait is the daemon's, not the app's
+
+Worth recording because it decides where the remaining work goes. On a cold profile, all
+five of the renderer's startup reads start at 52 ms and complete at 7 832 ms — *together*,
+to the millisecond. That is not five slow requests; it is one blocking event releasing all
+of them. `curl` against the same socket at the same moment took 7.799 s, while the same
+endpoint answers in 0.7 ms when the daemon is idle.
+
+So the app's own share of a cold launch is the 20–80 ms shell. Everything past that is
+TRA-921's accept queue. What the app can do about it — bound the wait, and have something
+on screen while it runs out — is what this change did.
+
 ## The fixed workload
 
 The three workload metrics are only comparable if the scenario is byte-identical

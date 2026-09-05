@@ -55,6 +55,7 @@ import {
 } from '../lattice/ui';
 import { Skeleton } from '../workspace/components/Skeleton';
 import { type ClientInfo, useDaemon } from '../hooks/useDaemon';
+import { useUsefulPaint } from '../perf';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
 type ClientName =
@@ -470,6 +471,10 @@ export function Clients() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
+
+  /* Useful once the client list has anything to show — detection resolved,
+     or a partial list already on screen. */
+  useUsefulPaint('clients', !detecting || detected.length > 0 || statuses.length > 0);
 
   const detectClients = useCallback(async () => {
     setDetecting(true);

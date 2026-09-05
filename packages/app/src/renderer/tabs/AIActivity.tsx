@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from '../i18n';
 import { formatDate, formatNumber, relativeTime } from '../i18n/format';
+import { daemonFetch } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -374,7 +375,7 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
 
   const fetchActivity = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:3741/api/ai/activity?limit=100'); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- talks to the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await daemonFetch('http://127.0.0.1:3741/api/ai/activity?limit=100'); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- talks to the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setEntries(data.entries ?? []);

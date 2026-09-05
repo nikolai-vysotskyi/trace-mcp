@@ -22,6 +22,7 @@
  * was active at import.
  */
 
+import { DAEMON_TOOL_TIMEOUT_MS, daemonFetch } from '../daemon-fetch';
 import { t } from '../i18n';
 
 const BASE = 'http://127.0.0.1:3741';
@@ -409,7 +410,7 @@ export interface InsightsClient {
 
 export const defaultInsightsClient: InsightsClient = {
   async runReport(reportId, root) {
-    const initRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    const initRes = await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -425,12 +426,12 @@ export const defaultInsightsClient: InsightsClient = {
           clientInfo: { name: 'trace-mcp-insights', version: '0.1.0' },
         },
       }),
-    });
+    }, DAEMON_TOOL_TIMEOUT_MS);
     if (!initRes.ok) throw new Error(t('insights:errorInit', { status: initRes.status }));
     const sessionId = initRes.headers.get('mcp-session-id') ?? '';
     if (!sessionId) throw new Error(t('insights:errorNoSession'));
     await initRes.text().catch(() => '');
-    await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -438,12 +439,12 @@ export const defaultInsightsClient: InsightsClient = {
         'mcp-session-id': sessionId,
       },
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }),
-    }).then((r) => r.text().catch(() => ''));
+    }, DAEMON_TOOL_TIMEOUT_MS).then((r) => r.text().catch(() => ''));
 
     // Escalate into the report's tool before calling it — see buildLoadToolsCall.
     // A failure here is not fatal: if the tool was already in the preset the
     // call below simply runs, and if it was not, that call reports the real error.
-    await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -451,11 +452,11 @@ export const defaultInsightsClient: InsightsClient = {
         'mcp-session-id': sessionId,
       },
       body: JSON.stringify(buildLoadToolsCall(reportId)),
-    })
+    }, DAEMON_TOOL_TIMEOUT_MS)
       .then((r) => r.text().catch(() => ''))
       .catch(() => '');
 
-    const callRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+    const callRes = await daemonFetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -463,7 +464,7 @@ export const defaultInsightsClient: InsightsClient = {
         'mcp-session-id': sessionId,
       },
       body: JSON.stringify(buildRpcCall(reportId, root, 3)),
-    });
+    }, DAEMON_TOOL_TIMEOUT_MS);
     if (!callRes.ok) {
       throw new Error(
         t('insights:errorHttp', {

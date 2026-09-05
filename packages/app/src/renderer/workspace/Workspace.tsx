@@ -26,6 +26,7 @@ import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
+import { useUsefulPaint } from '../perf';
 import { DaemonDownPane } from '../components/DaemonDownPane';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -207,6 +208,9 @@ export function busyMessage(o: {
 export function Workspace() {
   const { t } = useTranslation('workspace');
   const data = useWorkspaceProjects();
+  /* First useful paint: the row list, cached metrics included. Not the
+     revalidated numbers — a snapshot on screen is the product working. */
+  useUsefulPaint('workspace', !data.loading);
 
   // ── UI state ─────────────────────────────────────────────────────────
   const [view, setView] = useState<ViewMode>(() => loadView());
