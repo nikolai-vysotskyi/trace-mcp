@@ -90,7 +90,8 @@ export function createDaemonProjectRelay(
         managed.config,
         managed.root,
         managed.progress,
-        deps,
+        // TRA-951: shared server, never a client session's own surface.
+        { ...deps, serveFullSurface: true, skipUsagePing: true },
       );
       cache.set(abs, handle);
       return handle;
@@ -143,7 +144,12 @@ export function createLightweightProjectRelay(): ProjectRelay {
       const store = new Store(db);
       const registry = PluginRegistry.createWithDefaults();
       const progress = new ProgressState(db);
-      const handle = createServer(store, registry, configResult.value, resolved.root, progress, {});
+      const handle = createServer(store, registry, configResult.value, resolved.root, progress, {
+        // TRA-951: relay target — dispatch is by name, not through a preset,
+        // and no client session sits behind it.
+        serveFullSurface: true,
+        skipUsagePing: true,
+      });
       cache.set(abs, { handle, db });
       return handle;
     },
