@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { render } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceHeader, activeFilterCount } from '../WorkspaceHeader';
 import { EMPTY_FILTER, type WorkspaceFilter, type WorkspaceKpis } from '../types';
 import { type KpiBaseline, LS_BASELINE_KEY } from '../kpiBaseline';
@@ -171,6 +171,53 @@ describe('WorkspaceHeader KPI strip', () => {
     // Not "+78 vs 5 hours ago" — a delta equal to the value restates the
     // number instead of comparing it.
     expect(kpiTile('Projects').textContent).not.toContain('+78');
+  });
+
+  /* A baseline taken minutes ago compares the workspace to itself. On a first
+     launch that produced "No change vs 34 seconds ago" on two tiles and
+     "↑ +3 vs 34 seconds ago" on a third — the three projects that finished
+     loading after the snapshot, reported as growth. */
+  it('shows no delta against a baseline taken minutes ago', () => {
+    localStorage.setItem(
+      LS_BASELINE_KEY,
+      JSON.stringify({
+        at: new Date(Date.now() - 60_000).toISOString(),
+        kpis: { ...ZERO_KPIS, totalProjects: 75 },
+      }),
+    );
+    renderHeader(false);
+    expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+    expect(kpiTile('Projects').textContent).not.toContain('seconds ago');
+    expect(kpiTile('Projects').textContent).not.toContain('minute');
+    // Kept, not discarded — it becomes the comparison an hour from now.
+    const stored = JSON.parse(localStorage.getItem(LS_BASELINE_KEY)!) as KpiBaseline;
+    expect(stored.kpis.totalProjects).toBe(75);
+  });
+
+  /* The baseline rolls once per mount, so a caption memoized on it froze the
+     age at mount time while the delta number kept tracking the 2s poll: a
+     window left open all day still said "vs 34 seconds ago" over a whole
+     day's growth. */
+  it('ages the delta caption as the window stays open', () => {
+    vi.useFakeTimers();
+    try {
+      const t0 = Date.parse('2026-09-05T12:00:00Z');
+      vi.setSystemTime(t0);
+      localStorage.setItem(
+        LS_BASELINE_KEY,
+        JSON.stringify({
+          at: new Date(t0 - 2 * 60 * 60 * 1000).toISOString(),
+          kpis: { ...ZERO_KPIS, totalProjects: 70 },
+        }),
+      );
+      const rerender = renderHeader(false);
+      expect(kpiTile('Projects').textContent).toContain('2 hours ago');
+      vi.setSystemTime(t0 + 3 * 60 * 60 * 1000);
+      rerender(false, {});
+      expect(kpiTile('Projects').textContent).toContain('5 hours ago');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('gives every tile a comparison, never a bare number', () => {

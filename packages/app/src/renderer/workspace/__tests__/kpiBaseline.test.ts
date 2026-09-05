@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASELINE_MAX_AGE_MS, rollBaseline } from '../kpiBaseline';
+import { BASELINE_MAX_AGE_MS, BASELINE_MIN_AGE_MS, rollBaseline } from '../kpiBaseline';
 import { relativeTime } from '../../i18n/format';
 import type { WorkspaceKpis } from '../types';
 
@@ -23,10 +23,26 @@ describe('rollBaseline', () => {
   });
 
   it("keeps today's snapshot and compares against it", () => {
-    const stored = { at: at(NOW - 60_000), kpis: kpis(8) };
+    const stored = { at: at(NOW - 3 * BASELINE_MIN_AGE_MS), kpis: kpis(8) };
     const { previous, next } = rollBaseline(NOW, stored, kpis(10));
     expect(previous).toBe(stored);
     expect(next).toBeNull();
+  });
+
+  /* "No change vs 34 seconds ago" is a tautology, and "↑ +3 vs 34 seconds ago"
+     is the app's own load sequence reported as workspace growth — the baseline
+     is snapshotted from the first complete-looking reading, and whatever
+     arrives after it becomes a delta. Both were on a first launch at once. */
+  it('does not compare against a snapshot taken minutes ago, but keeps it', () => {
+    const stored = { at: at(NOW - 60_000), kpis: kpis(15) };
+    const { previous, next } = rollBaseline(NOW, stored, kpis(18));
+    expect(previous).toBeNull();
+    expect(next).toBeNull();
+  });
+
+  it('starts comparing once the snapshot is old enough to mean something', () => {
+    const stored = { at: at(NOW - BASELINE_MIN_AGE_MS), kpis: kpis(15) };
+    expect(rollBaseline(NOW, stored, kpis(18)).previous).toBe(stored);
   });
 
   it('rolls a snapshot older than a day forward after comparing', () => {
