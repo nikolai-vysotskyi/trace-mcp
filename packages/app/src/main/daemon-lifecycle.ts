@@ -18,10 +18,11 @@
  *      nvm-installed binary won't be visible here.
  */
 
-import { execFileSync, execSync } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { type CliInvocation, resolveCliInvocation } from './daemon-install';
 import { getLauncherDir, getLauncherShimPath, SHIM_NAMES } from './trace-home';
 
@@ -85,10 +86,30 @@ function resolveTraceMcpBinary(): string {
   );
 }
 
-function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
+const execFileAsync = promisify(execFile);
+
+/* One daemon command at a time. Until TRA-806 this file used execFileSync, which
+   serialized these calls by freezing the process; the async version must keep the
+   serialization without the freeze — the tray poll, the update flow and the
+   renderer's "Restart daemon" button can all fire within the same second, and two
+   `daemon restart` runs racing each other is how a stale PID file gets written. */
+let queue: Promise<unknown> = Promise.resolve();
+
+async function runDaemonCommand(
+  subcommand: 'start' | 'stop' | 'restart',
+): Promise<{ ok: boolean; error?: string }> {
+  const run = queue.then(
+    () => runDaemonCommandNow(subcommand),
+    () => runDaemonCommandNow(subcommand),
+  );
+  queue = run;
+  return run;
+}
+
+async function runDaemonCommandNow(subcommand: 'start' | 'stop' | 'restart'): Promise<{
   ok: boolean;
   error?: string;
-} {
+}> {
   // TRA-638: on Windows the shim is a `.cmd`, which execFileSync cannot launch
   // without a shell — `shell: isWin` below is the only reason this path worked
   // while the identical MCP-client spawns failed. Prefer the runtime + cli.js
@@ -102,10 +123,12 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
   }
 
   try {
-    // execFileSync avoids shell-injection concerns around the resolved path.
-    // Windows paths may contain spaces; pass as single arg.
-    execFileSync(inv.file, [...inv.prefixArgs, 'daemon', subcommand], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    // execFile (not execFileSync, and not exec) avoids shell-injection concerns
+    // around the resolved path, and keeps the main process's event loop free:
+    // `daemon restart` takes 6-20 s to return, and a sync call spends all of it
+    // with every window, IPC reply and file:// asset load frozen behind it
+    // (TRA-806). Windows paths may contain spaces; pass as single arg.
+    await execFileAsync(inv.file, [...inv.prefixArgs, 'daemon', subcommand], {
       windowsHide: true,
       // Last resort only: a Windows machine with no launcher.env to point at
       // can still have a `.cmd` on PATH, and this argv is two literals.
@@ -115,10 +138,11 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
     });
     return { ok: true };
   } catch (err) {
-    // execFileSync attaches stdout/stderr buffers to the thrown error in
-    // pipe mode. Surface stderr (which the CLI uses for error reporting)
-    // back to the renderer so the menu bar can show a real reason instead
-    // of "command failed with code 1".
+    // execFile attaches stdout/stderr to the rejected error. Surface stderr
+    // (which the CLI uses for error reporting) back to the renderer so the menu
+    // bar can show a real reason instead of "command failed with code 1".
+    // `code` is where the async form puts the exit status; `status` is the sync
+    // form's name for it and is kept so a mocked-sync error still reads right.
     const e = err as NodeJS.ErrnoException & {
       stderr?: Buffer | string;
       stdout?: Buffer | string;
@@ -127,20 +151,21 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
     const stderr = e.stderr ? e.stderr.toString().trim() : '';
     const stdout = e.stdout ? e.stdout.toString().trim() : '';
     const detail = stderr || stdout || e.message;
-    const exitCode = typeof e.status === 'number' ? ` (exit ${e.status})` : '';
+    const status = typeof e.status === 'number' ? e.status : e.code;
+    const exitCode = typeof status === 'number' ? ` (exit ${status})` : '';
     return { ok: false, error: `daemon ${subcommand} failed${exitCode}: ${detail}` };
   }
 }
 
-export function ensureDaemon(): { ok: boolean; error?: string } {
+export function ensureDaemon(): Promise<{ ok: boolean; error?: string }> {
   return runDaemonCommand('start');
 }
 
-export function restartDaemon(): { ok: boolean; error?: string } {
+export function restartDaemon(): Promise<{ ok: boolean; error?: string }> {
   return runDaemonCommand('restart');
 }
 
-export function stopDaemon(): { ok: boolean; error?: string } {
+export function stopDaemon(): Promise<{ ok: boolean; error?: string }> {
   return runDaemonCommand('stop');
 }
 

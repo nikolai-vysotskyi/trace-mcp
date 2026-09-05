@@ -111,13 +111,26 @@ export class ProgressState {
         current.completedAt > 0 && current.startedAt > 0
           ? Math.round((current.completedAt - current.startedAt) / 1000)
           : 0;
-      logger.info(
-        { pipeline: name, processed: current.processed, elapsed },
-        '%s completed: %d items in %ds',
-        name,
-        current.processed,
-        elapsed,
-      );
+      // "completed: 0 items" for a non-empty queue is byte-for-byte the shape of
+      // "there was nothing to do" — which is how a two-day embedding outage read
+      // as 44 successful runs at info level (TRA-812). snapshot() already
+      // downgrades this to 'skipped'; the log line has to say it too.
+      if (current.total > 0 && current.processed === 0) {
+        logger.warn(
+          { pipeline: name, total: current.total, elapsed },
+          '%s finished without processing any of %d queued items',
+          name,
+          current.total,
+        );
+      } else {
+        logger.info(
+          { pipeline: name, processed: current.processed, elapsed },
+          '%s completed: %d items in %ds',
+          name,
+          current.processed,
+          elapsed,
+        );
+      }
     } else if (partial.phase === 'error') {
       logger.error({ pipeline: name, error: current.error }, '%s failed: %s', name, current.error);
     } else if (partial.processed !== undefined && current.total > 0) {

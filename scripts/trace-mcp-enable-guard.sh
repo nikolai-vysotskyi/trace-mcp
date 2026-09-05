@@ -43,8 +43,19 @@ else
   exit 1
 fi
 
-BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
-rm -f "$BYPASS_FILE"
+# Sentinels live under the state home, not $TMPDIR — the guard hook that reads
+# this file runs in a different process with a different $TMPDIR (TRA-869).
+# The $TMPDIR copy is kept for hooks installed before that fix.
+TRACE_STATE_HOME="${TRACE_MCP_DATA_DIR:-$HOME/.trace}"
+case "$TRACE_STATE_HOME" in
+  "~") TRACE_STATE_HOME="$HOME" ;;
+  "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;;
+esac
+STATUS_HOME="$TRACE_STATE_HOME/status"
+mkdir -p "$STATUS_HOME" 2>/dev/null || true
+BYPASS_FILE="$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}"
+BYPASS_FILE_TMP="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
+rm -f "$BYPASS_FILE" "$BYPASS_FILE_TMP"
 echo "trace-mcp guard re-enabled for: $PROJECT_ROOT"
 
 # ─── Persist TRACE_MCP_ENFORCE in the hook env block ───────────────

@@ -1,14 +1,18 @@
 /**
  * Status sentinel — bridge between trace-mcp server and guard hook.
  *
- * Two files are written:
- *   1. $TMPDIR/trace-mcp-status-{projectHash}.json — rich JSON status
- *      with PID, last heartbeat, tool-call counters, last successful call
- *      timestamp, etc. Used by the v0.8+ hook for stall detection and by
- *      the desktop app for the project status badge.
- *   2. $TMPDIR/trace-mcp-alive-{projectHash} — legacy mtime-only sentinel,
- *      kept for backward compatibility with hook v0.7.x. Removed once all
- *      installations are on v0.8+.
+ * Two files are written, each into two directories:
+ *   1. trace-mcp-status-{projectHash}.json — rich JSON status with PID, last
+ *      heartbeat, tool-call counters, last successful call timestamp, etc.
+ *      Used by the v0.8+ hook for stall detection and by the desktop app for
+ *      the project status badge.
+ *   2. trace-mcp-alive-{projectHash} — legacy mtime-only sentinel, kept for
+ *      backward compatibility with hook v0.7.x.
+ *
+ * The primary location is {@link STATUS_DIR} under the state home, which every
+ * process resolves identically. The `$TMPDIR` copies are written only so a hook
+ * installed before TRA-869 keeps working; see STATUS_DIR for why $TMPDIR alone
+ * silently broke the channel.
  *
  * The hook treats a missing/stale status as "MCP unavailable" and falls
  * back to allowing Read with a warning instead of hard-blocking. This
@@ -25,7 +29,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { projectHash } from '../global.js';
+import { projectHash, STATUS_DIR } from '../global.js';
 import { writeTmpFileSync } from '../utils/safe-fs.js';
 
 /** Flush cadence while at least one MCP session is active. */
@@ -77,12 +81,83 @@ export interface HeartbeatHandle {
   readonly legacyPath: string;
 }
 
+function statusName(projectRoot: string): string {
+  return `trace-mcp-status-${projectHash(path.resolve(projectRoot))}.json`;
+}
+
+function heartbeatName(projectRoot: string): string {
+  return `trace-mcp-alive-${projectHash(path.resolve(projectRoot))}`;
+}
+
 function statusPath(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-status-${projectHash(path.resolve(projectRoot))}.json`);
+  return path.join(STATUS_DIR, statusName(projectRoot));
 }
 
 function legacyHeartbeatPath(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-alive-${projectHash(path.resolve(projectRoot))}`);
+  return path.join(STATUS_DIR, heartbeatName(projectRoot));
+}
+
+/**
+ * `$TMPDIR` copies of the two sentinels, for hooks installed before TRA-869.
+ * ponytail: drop this pair — and the dual write below — once no supported
+ * release reads $TMPDIR.
+ */
+function tmpdirSentinelPaths(projectRoot: string): [string, string] {
+  return [
+    path.join(os.tmpdir(), statusName(projectRoot)),
+    path.join(os.tmpdir(), heartbeatName(projectRoot)),
+  ];
+}
+
+/** Age after which a sentinel left behind by a crashed server is collected. */
+const STALE_SENTINEL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Everything STATUS_DIR holds, and nothing else: the sweep below deletes by
+ * this list, so an unrelated file a user dropped in there is never touched.
+ * `trace-mcp-consulted-` is a directory, the other three are files.
+ */
+const SWEPT_SENTINEL_PREFIXES = [
+  'trace-mcp-status-',
+  'trace-mcp-alive-',
+  'trace-mcp-bypass-',
+  'trace-mcp-consulted-',
+];
+
+/**
+ * Drop sentinels from servers that died without running `stop()`.
+ *
+ * `stop()` unlinks its own files, but a killed process never gets there. In
+ * $TMPDIR that never mattered — the OS reaps it — whereas STATUS_DIR lives
+ * under the state home and is never cleaned by anyone else, so every crashed
+ * server, every project ever opened and every expired bypass would accumulate
+ * there forever. Best-effort: a sweep that cannot read the directory is not
+ * worth failing a server start over.
+ *
+ * mtime, not age-since-creation: a live server rewrites its sentinel every 5s
+ * and a bypass carries a future mtime while it is in force, so neither can be
+ * collected while it still means something.
+ */
+function sweepStaleSentinels(): void {
+  const cutoff = Date.now() - STALE_SENTINEL_MAX_AGE_MS;
+  let names: string[];
+  try {
+    names = fs.readdirSync(STATUS_DIR);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!SWEPT_SENTINEL_PREFIXES.some((p) => name.startsWith(p))) continue;
+    const full = path.join(STATUS_DIR, name);
+    try {
+      const st = fs.lstatSync(full);
+      if (st.isSymbolicLink() || st.mtimeMs > cutoff) continue;
+      if (st.isDirectory()) fs.rmSync(full, { recursive: true, force: true });
+      else if (st.isFile()) fs.unlinkSync(full);
+    } catch {
+      /* vanished under us, or not ours — skip */
+    }
+  }
 }
 
 /**
@@ -96,6 +171,13 @@ export function startHeartbeat(
 ): HeartbeatHandle {
   const file = statusPath(projectRoot);
   const legacy = legacyHeartbeatPath(projectRoot);
+  const [tmpFile, tmpLegacy] = tmpdirSentinelPaths(projectRoot);
+  try {
+    fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });
+  } catch {
+    /* best-effort — flush() below is already failure-tolerant */
+  }
+  sweepStaleSentinels();
   const startedAt = new Date().toISOString();
 
   const state: StatusState = {
@@ -119,12 +201,20 @@ export function startHeartbeat(
 
   const flush = () => {
     state.last_heartbeat_at = new Date().toISOString();
+    const payload = JSON.stringify(state);
+    const stamp = String(Date.now());
     try {
-      writeTmpFileSync(file, JSON.stringify(state));
+      writeTmpFileSync(file, payload);
       // Touch legacy sentinel for old hook installations.
-      writeTmpFileSync(legacy, String(Date.now()));
+      writeTmpFileSync(legacy, stamp);
     } catch {
       /* best-effort */
+    }
+    try {
+      writeTmpFileSync(tmpFile, payload);
+      writeTmpFileSync(tmpLegacy, stamp);
+    } catch {
+      /* best-effort — pre-TRA-869 readers only */
     }
   };
 
@@ -175,15 +265,12 @@ export function startHeartbeat(
     },
     stop() {
       clearInterval(timer);
-      try {
-        fs.unlinkSync(file);
-      } catch {
-        /* best-effort */
-      }
-      try {
-        fs.unlinkSync(legacy);
-      } catch {
-        /* best-effort */
+      for (const p of [file, legacy, tmpFile, tmpLegacy]) {
+        try {
+          fs.unlinkSync(p);
+        } catch {
+          /* best-effort */
+        }
       }
     },
   };
