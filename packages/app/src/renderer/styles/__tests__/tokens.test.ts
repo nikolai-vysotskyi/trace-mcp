@@ -12,6 +12,7 @@ import {
   contrast,
   contrastFailures,
   contrastTable,
+  parseColor,
   tokenGuard,
   tokenGuardCounts,
 } from '../../../../scripts/design-tokens.mjs';
@@ -31,6 +32,27 @@ describe('design tokens', () => {
 
   it('clears WCAG AA for every readable text token in both appearances', () => {
     expect(contrastFailures(contrastTable(tokensCss))).toEqual([]);
+  });
+
+  /* Every colour in tokens.css is 6-digit hex, so the 3-digit shorthand branch
+     of parseColor is never exercised by the checks above — a bug in it would
+     ship silently. Assert the expansion directly instead of hoping a future
+     token happens to use the short form. */
+  it('parses 3-digit hex as the same colour as its 6-digit expansion', () => {
+    expect(parseColor('#0f0')).toEqual(parseColor('#00ff00'));
+    expect(parseColor('#0f0')).toEqual([0, 255, 0, 1]);
+  });
+
+  it('defaults rgb() with no alpha channel to fully opaque', () => {
+    expect(parseColor('rgb(10 20 30)')).toEqual([10, 20, 30, 1]);
+  });
+
+  it('parses comma-separated rgba(), not just the space/slash form', () => {
+    expect(parseColor('rgba(10, 20, 30, 0.4)')).toEqual([10, 20, 30, 0.4]);
+  });
+
+  it('rejects a colour it cannot parse instead of returning garbage', () => {
+    expect(() => parseColor('not-a-colour')).toThrow('unsupported colour');
   });
 
   it('honours reduced motion, reduced transparency and increased contrast', () => {
