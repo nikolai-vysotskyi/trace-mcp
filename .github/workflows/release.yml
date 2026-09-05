@@ -251,12 +251,18 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: macos-latest
-    # The Developer ID certificate lives in this environment, not at repository
-    # level, and the environment only deploys from protected branches (TRA-628).
-    # That is what keeps the signing identity out of reach of a workflow added
-    # on some other branch — `on: push: branches: [master]` above is a property
-    # of this file, and a repository-level secret is readable by any workflow
-    # that names it. Removing this line silently un-gates the certificate.
+    # This line is half of the gate: it restricts the job to a protected branch
+    # and lets the environment hold the Developer ID certificate. The other half
+    # is where the five secrets below actually live. A repository-level secret is
+    # readable by any workflow on any branch that names it, and declaring an
+    # environment does not move it — TRA-628 added this line and the earlier
+    # version of this comment claiming the certificate had been moved, while all
+    # five stayed repository-level for four days (TRA-901).
+    #
+    # Do not restate that claim here. `scripts/check-gated-secrets.mjs`, run by
+    # the `gated-secrets` job in ci.yml, asserts it on every run: it fails if any
+    # secret this job reads is visible to a job that declares no environment.
+    # Removing this line un-gates the certificate and that check will say so.
     environment: apple-signing
     permissions:
       contents: write
