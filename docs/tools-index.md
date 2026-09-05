@@ -204,7 +204,7 @@ which excludes the framework-specific rows.
 | `list_corpora` | List every corpus saved on disk with its manifest (scope, project_root, sizes, timestamps). | always |
 | `list_graph_snapshots` | List previously captured graph snapshots, most recent first. | always |
 | `list_pins` | List all active ranking pins with weight, scope, target, expiry, and creator. | always |
-| `list_projects` | List projects registered with trace-mcp (~/.trace/registry.json), plus any known subprojects. | always |
+| `list_projects` | List projects registered with trace-mcp (~/.trace/registry.json) — the roots call_project_tool accepts. | always |
 | `load_tools` | Load tools this session's preset deferred, by preset name and/or explicit tool names. | always |
 | `mine_sessions` | Mine Claude Code / Claw Code session logs for architectural decisions, tech choices, bug root causes, and preferences. | always |
 | `pack_context` | Pack project context into a single document for external LLMs. | always |

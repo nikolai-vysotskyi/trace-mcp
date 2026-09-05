@@ -17,9 +17,10 @@
  */
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { encode } from 'gpt-tokenizer/encoding/o200k_base';
+import { DEFAULT_DAEMON_PORT } from '../src/global.js';
 import { estimateTokens } from '../src/utils/token-counter.js';
 import { measuredBuild } from './measured-build.js';
 
@@ -74,11 +75,31 @@ function run(): Promise<Row[]> {
   return new Promise((resolve, reject) => {
     // `--preset full` rather than TRACE_MCP_PRESET: the flag is applied before
     // the config loads, so it holds whatever the machine's global config says.
-    const server = spawn('node', [join(REPO, 'dist/cli.js'), 'serve', '--preset', 'full'], {
-      cwd: TARGET,
-      env: { ...process.env, TRACE_MCP_NO_DAEMON: '1' },
-      stdio: ['pipe', 'pipe', 'inherit'],
-    });
+    // TRACE_MCP_NO_DAEMON only disables auto-*spawn*; a session still attaches
+    // to a daemon that is already running, and answers at that daemon's preset
+    // (TRA-951). bench-local-only.mjs makes the daemon port unreachable for
+    // this child alone, so the run measures the surface it asked for on any
+    // machine — with or without a daemon up.
+    const server = spawn(
+      'node',
+      [
+        '--import',
+        pathToFileURL(join(REPO, 'scripts/bench-local-only.mjs')).href,
+        join(REPO, 'dist/cli.js'),
+        'serve',
+        '--preset',
+        'full',
+      ],
+      {
+        cwd: TARGET,
+        env: {
+          ...process.env,
+          TRACE_MCP_NO_DAEMON: '1',
+          TRACE_MCP_BENCH_BLOCK_PORT: String(DEFAULT_DAEMON_PORT),
+        },
+        stdio: ['pipe', 'pipe', 'inherit'],
+      },
+    );
     const send = (m: unknown): void => void server.stdin.write(`${JSON.stringify(m)}\n`);
     const rows: Row[] = [];
     const timer = setTimeout(() => {

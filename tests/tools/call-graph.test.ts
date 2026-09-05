@@ -166,4 +166,56 @@ describe('getCallGraph', () => {
     expect(graph.root.calls![0].name).toBe('UserCreated');
     expect(graph.edge_types_used).toContain('dispatches');
   });
+
+  // TRA-952: a caller's *other* callees are not part of "who calls X and what
+  // does X call". Expanding both directions at every level made depth 2 return
+  // the whole cousin neighbourhood — 75 nodes for a symbol with 12 neighbours.
+  it('expands each branch in its own direction only', () => {
+    const a = addSymbol(store, { filePath: 'src/a.ts', name: 'fnA', kind: 'function' });
+    const caller = addSymbol(store, {
+      filePath: 'src/caller.ts',
+      name: 'fnCaller',
+      kind: 'function',
+    });
+    const grandCaller = addSymbol(store, {
+      filePath: 'src/gc.ts',
+      name: 'fnGrandCaller',
+      kind: 'function',
+    });
+    const cousin = addSymbol(store, {
+      filePath: 'src/cousin.ts',
+      name: 'fnCousin',
+      kind: 'function',
+    });
+    const callee = addSymbol(store, {
+      filePath: 'src/callee.ts',
+      name: 'fnCallee',
+      kind: 'function',
+    });
+    const grandCallee = addSymbol(store, {
+      filePath: 'src/gce.ts',
+      name: 'fnGrandCallee',
+      kind: 'function',
+    });
+    const uncle = addSymbol(store, { filePath: 'src/uncle.ts', name: 'fnUncle', kind: 'function' });
+
+    store.insertEdge(caller.nodeId, a.nodeId, 'calls');
+    store.insertEdge(grandCaller.nodeId, caller.nodeId, 'calls');
+    store.insertEdge(caller.nodeId, cousin.nodeId, 'calls'); // caller's other callee
+    store.insertEdge(a.nodeId, callee.nodeId, 'calls');
+    store.insertEdge(callee.nodeId, grandCallee.nodeId, 'calls');
+    store.insertEdge(uncle.nodeId, callee.nodeId, 'calls'); // callee's other caller
+
+    const graph = getCallGraph(store, { symbolId: 'src/a.ts::fnA#function' }, 2)._unsafeUnwrap();
+
+    const callerNode = graph.root.called_by![0];
+    expect(callerNode.name).toBe('fnCaller');
+    expect(callerNode.called_by!.map((n) => n.name)).toEqual(['fnGrandCaller']);
+    expect(callerNode.calls).toBeUndefined();
+
+    const calleeNode = graph.root.calls![0];
+    expect(calleeNode.name).toBe('fnCallee');
+    expect(calleeNode.calls!.map((n) => n.name)).toEqual(['fnGrandCallee']);
+    expect(calleeNode.called_by).toBeUndefined();
+  });
 });

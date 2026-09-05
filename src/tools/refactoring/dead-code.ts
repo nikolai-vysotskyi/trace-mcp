@@ -616,7 +616,10 @@ export function getDeadCodeV2(
   const {
     filePattern,
     threshold = 0.5,
-    limit = 50,
+    // TRA-952: 25, not 50. The default answered with 50 of 341 candidates for
+    // 4 826 tokens — a ranked list where the caller verifies each entry before
+    // deleting it, so a deeper page is a second call, not a cheaper first one.
+    limit = 25,
     detectedFrameworks = [],
     projectRoot,
   } = options;
@@ -1178,7 +1181,8 @@ export function getDeadCodeReachability(
     entryPoints?: string[];
   } = {},
 ): ReachabilityDeadCodeResult {
-  const { filePattern, limit = 50, detectedFrameworks = [], projectRoot, entryPoints } = options;
+  // TRA-952: same default as the multi-signal path above.
+  const { filePattern, limit = 25, detectedFrameworks = [], projectRoot, entryPoints } = options;
 
   const TEST_FIXTURE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/fixtures?\//;
   const TEST_FILE_RE = /(?:^|\/)(?:tests?|__tests__|spec)\/|\.(?:test|spec)\.[jt]sx?$/;

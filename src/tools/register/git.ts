@@ -144,7 +144,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .min(1)
         .max(500)
         .optional()
-        .describe('Max results (default: 50, or 100 for exports_only)'),
+        .describe('Max results (default: 25, or 100 for exports_only)'),
       mode: z
         .enum(['multi-signal', 'reachability', 'exports_only'])
         .optional()

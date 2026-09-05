@@ -99,20 +99,17 @@ carrying 88.4% of recorded calls against a declared 90%. The stated fix was
 tools, **97.2%** of recorded call volume — and the bar is missed again, on the
 other half:
 
-{{ site.data.response_tokens.reduction_pct }}% net reduction
-({{ site.data.response_tokens.credited_reduction_pct }}% credited) against a
-declared **25%**. The coverage half now passes; the primary half does not.
+21.1% net reduction (32.6% credited) against a declared **25%**. The coverage
+half now passes; the primary half does not.
 
 **That is the result, and it is the opposite of what closing a coverage gap was
 expected to do.** The prediction was that the unmeasured 11.6% would move the
 figure a little in an unknown direction. It moved it 8.2 points down, because the
 tail held the two most expensive things in the product:
 
-- **The worst per-call ratios.** `list_projects` returns 10.5x the baseline it is
-  credited against, `get_dead_code` 4.0x, `check_claudemd_drift` 2.2x. The count
-  of tools costing more than they replace went from 4 of 12 to
-  {{ site.data.response_tokens.tools_costing_more }} of
-  {{ site.data.response_tokens.tools_with_baseline }}.
+- **The worst per-call ratios.** `list_projects` returned 10.5x the baseline it
+  is credited against, `get_dead_code` 4.0x, `check_claudemd_drift` 2.2x. The
+  count of tools costing more than they replace went from 4 of 12 to 10 of 22.
 - **Calls that had no baseline at all.** `register_edit` and `reindex` replace no
   file read, so `DEFAULT_RAW_COST` was inventing a counterfactual for them —
   1 731 calls and ~736k tokens across the whole store. They are now credited
@@ -120,15 +117,13 @@ tail held the two most expensive things in the product:
   that lowers the number.
 
 The bar is not moved. It said "unadjustable after seeing data. A future run at
-22% publishes as MISSED at 22%", and this run publishes as MISSED at
-{{ site.data.response_tokens.reduction_pct }}%. The figure stays on the
-storefront with the miss stated next to it, because it is not wrong — it is
-smaller than we hoped and better supported than what it replaces.
+22% publishes as MISSED at 22%", and this run publishes as MISSED at 21.1%. The
+figure stays on the storefront with the miss stated next to it, because it is not
+wrong — it is smaller than we hoped and better supported than what it replaces.
 
-A third number is published alongside for the first time:
-**{{ site.data.response_tokens.reduction_pct_incl_overhead }}%**, all-in, with
-the {{ site.data.response_tokens.overhead_calls }} no-baseline calls counted on
-the spend side and nothing on the baseline side. It answers "what does a session
+A third number is published alongside for the first time: **19.5%**, all-in,
+with the {{ site.data.response_tokens.overhead_calls }} no-baseline calls counted
+on the spend side and nothing on the baseline side. It answers "what does a session
 cost" where `reduction_pct` answers "what does a lookup cost". It is the lowest
 of the three and the right one to plan a budget against.
 
@@ -136,9 +131,26 @@ The fix this time is not more coverage. It is response shaping on the ten tools
 that cost more than they replace — one issue each, with the
 [per-tool table](./response-tokens.md) as the before number.
 
+## Re-measured after the first three were shaped (TRA-952, 2026-09-05)
+
+The three worst ratios — `list_projects` 10.5x, `get_dead_code` 4.0x,
+`get_call_graph` 3.5x — were shaped, and the whole table was re-measured on the
+same protocol at the same declared bar. The current data on this page is that
+run:
+
+{{ site.data.response_tokens.reduction_pct }}% net reduction
+({{ site.data.response_tokens.credited_reduction_pct }}% credited,
+{{ site.data.response_tokens.reduction_pct_incl_overhead }}% all-in), still
+**MISSED** against the declared 25%.
+
+The three tools dropped 65–83% each and
 {{ site.data.response_tokens.tools_costing_more }} of the
-{{ site.data.response_tokens.tools_with_baseline }} tools with a baseline return
-more tokens than it credits them.
+{{ site.data.response_tokens.tools_with_baseline }} tools with a baseline still
+return more tokens than the figure credits them. The headline moved 0.1 points,
+because those three carry 82 of
+{{ site.data.response_tokens.calls_weighted }} recorded calls: worst-ratio-first
+finds defects, volume-first moves the number, and only the second was ever going
+to clear a bar. `search` (4,441 calls, 1.54x) is where that starts.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on

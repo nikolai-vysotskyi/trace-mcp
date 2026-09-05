@@ -22,9 +22,14 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'list_projects',
-    'List projects registered with trace-mcp (~/.trace/registry.json), plus any known subprojects. Use with call_project_tool to query a project other than the one this session is attached to. Read-only. Returns JSON: { projects: [{ root, name, type, lastIndexed }], subprojects?: [{ name, repo_root, project_root }], total }.',
-    {},
-    async () => {
+    'List projects registered with trace-mcp (~/.trace/registry.json) — the roots call_project_tool accepts. Use to query a project other than the one this session is attached to. Subprojects nested inside those roots are not valid targets, so they are opt-in via include_subprojects. Read-only. Returns JSON: { projects: [{ root, name, type, lastIndexed }], subprojects?: [{ name, repo_root, project_root }], total }.',
+    {
+      include_subprojects: z
+        .boolean()
+        .optional()
+        .describe('Also list subprojects nested in registered roots (default false).'),
+    },
+    async ({ include_subprojects }) => {
       const projects = listProjects().map((p) => ({
         root: p.root,
         name: p.name,
@@ -33,11 +38,12 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
       }));
       const result: Record<string, unknown> = { projects, total: projects.length };
 
-      // Subproject registrations are cheap to include when topology is
-      // enabled for this session (ctx.topoStore is already open) — no new
-      // plumbing needed. Omitted entirely otherwise rather than surfacing an
-      // empty array.
-      if (topoStore) {
+      // TRA-952: subprojects used to ride along unconditionally, and they are
+      // the whole cost of this tool — 98 rows of three absolute paths each,
+      // 4 000 of the 5 240 measured tokens on the measurement machine. They
+      // also answer nothing the caller asked: call_project_tool only accepts
+      // registered roots, so a subproject is never a valid next call. Opt-in.
+      if (include_subprojects && topoStore) {
         const subprojects = topoStore.getAllSubprojects().map((s) => ({
           name: s.name,
           repo_root: s.repo_root,

@@ -47,6 +47,18 @@ describe('getDeadCodeV2', () => {
     expect(result.dead_symbols).toEqual([]);
   });
 
+  // TRA-952: the default page is 25. It was 50, which cost 4 826 tokens against
+  // a 1 200-token baseline for a list the caller verifies entry by entry.
+  it('defaults to 25 results and reports the full count alongside', () => {
+    const f = insertFile(store, 'src/many.ts');
+    for (let i = 0; i < 40; i++) insertExportedSymbol(store, f, `deadFn${i}`);
+
+    const result = getDeadCodeV2(store);
+    expect(result.dead_symbols).toHaveLength(25);
+    expect(result.total_dead).toBe(40);
+    expect(getDeadCodeV2(store, { limit: 40 }).dead_symbols).toHaveLength(40);
+  });
+
   it('reports fully dead symbol (all 3 signals fire) with confidence 1.0', () => {
     const fA = insertFile(store, 'src/a.ts');
     insertExportedSymbol(store, fA, 'unusedFunc');
