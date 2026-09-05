@@ -8,7 +8,7 @@ every run spends a dozen API calls re-deriving which pages are indexed, and
 then reports "positions unchanged" without noticing that Google has not
 fetched the site since the last six SEO PRs landed.
 
-Rules, same shape as `ops/distribution.md` and `ops/user-signal.md`:
+Rules, same shape as `ops/distribution.md` and `ops/user-signal.md` (private repo):
 
 - Record what the API **returned**, with the date it was asked. `coverageState`
   is Google's wording, copied verbatim, not a paraphrase.

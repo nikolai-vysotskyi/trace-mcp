@@ -262,15 +262,13 @@ describe('docs site numeric claims (TRA-174)', () => {
     // TRA-634: the Agent Plugins root manifest is a scanner-facing surface with
     // the same prose counts, so it drifts the same way the others did.
     { path: 'plugin.json', tolerance: 5 },
-    // TRA-722: the Show HN and Reddit drafts are the copy that goes out under
-    // the project's name, and both said so themselves — "nothing enforces this
-    // file … these figures go stale silently". They then sat at 169 tools for
-    // four days while counts.yml moved to 177. Same guard as every other
-    // outward-facing surface now.
-    // skipLine: the drafts cite GitHub issues by number, and "#297 tools not
-    // appearing" reads as a tool count to the scanner.
-    { path: 'ops/launch-hn.md', tolerance: 5, skipLine: /#\d+ tools/ },
-    { path: 'ops/launch-reddit.md', tolerance: 5 },
+    // TRA-722 guarded ops/launch-hn.md and ops/launch-reddit.md here, because
+    // the drafts are the copy that goes out under the project's name and had
+    // sat at 169 tools for four days while counts.yml moved to 177. Both moved
+    // to the private repo on 2026-09-05 (they name people and analyse other
+    // communities' moderation rules), and a test in this repo cannot read them
+    // any more. The guard is genuinely lost, not relocated — trace-mcp-private
+    // carries the rule as prose instead.
   ];
 
   for (const { path, tolerance, skipLine } of docs) {
@@ -543,31 +541,11 @@ describe('docs site numeric claims (TRA-174)', () => {
     }
   });
 
-  it('the launch drafts pitch the measured benchmark, not a stale figure (TRA-722)', () => {
-    // ops/launch-hn.md and ops/launch-reddit.md are the only copy that goes out
-    // under the project's name, and they are typed by hand — Jekyll never sees
-    // them. Both used to answer "show me the measurement", which they each name
-    // as the question that decides the thread, with the synthetic in-repo
-    // estimator. Pin the three figures a reader can check.
-    for (const path of ['ops/launch-hn.md', 'ops/launch-reddit.md']) {
-      const draft = readFileSync(join(REPO_ROOT, path), 'utf-8');
-      for (const [label, needle] of [
-        ['median saving', `${BENCH.median_savings_pct}%`],
-        ['PR count', `${BENCH.pr_count} merged`],
-        [
-          'median token pair',
-          `${(BENCH.baseline_median_tokens as number).toLocaleString('en-US')} → ${(BENCH.trace_median_tokens as number).toLocaleString('en-US')}`,
-        ],
-        ['method link', 'trace-mcp.com/pr-context-benchmark.html'],
-      ] as const) {
-        expect(
-          draft.includes(needle),
-          `${path} no longer states the ${label} ("${needle}") from docs/_data/pr_context_bench.json — ` +
-            're-run `npx tsx scripts/bench-pr-context.ts` and update the draft before anyone posts it',
-        ).toBe(true);
-      }
-    }
-  });
+  // TRA-722 also pinned the three checkable benchmark figures inside the two
+  // launch drafts here. The drafts left this repo on 2026-09-05; nothing in a
+  // public test can reach them now. Before either is posted, re-read
+  // docs/_data/pr_context_bench.json by hand — that instruction is the whole
+  // replacement and it lives in trace-mcp-private/README.md.
 
   it('the Jekyll surfaces read the benchmark from _data instead of hardcoding it (TRA-647)', () => {
     // Asking only whether the file contains one tag *somewhere* passes as long

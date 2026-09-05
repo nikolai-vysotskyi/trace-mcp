@@ -277,6 +277,18 @@ the same closed doors and sometimes decides the opposite of the last one.
 Numbers quoted to the outside world come from `docs/_data/counts.yml`. Never
 hand-type a tool/language/framework count into a listing, a form, or `server.json`.
 
+**The other half of that ledger is not in this repo.** Whether a listing ever
+sent a visitor, what the outside world says about us channel by channel, and the
+unposted launch drafts live in the private
+[`trace-mcp-private`](https://github.com/nikolai-vysotskyi/trace-mcp-private)
+repo (`ops/arrivals.md`, `ops/user-signal.md`, `ops/launch-*.md`), moved there on
+2026-09-05 because that material names people and analyses other communities'
+moderation rules. `ops/distribution.md` stayed here on purpose, so the read
+before a listing change still costs one file in the repo you already have. If a
+task is about *whether distribution is worth doing* rather than *how to submit*,
+read `ops/arrivals.md` there first — the answer has held across four windows and
+it should change what you decide.
+
 `ops/index-coverage.md` is the companion ledger for the site itself: per-URL
 Search Console coverage and last-crawl dates. **Read it before any SEO or docs
 work aimed at Google, and update it in the same change** — it is what tells a run

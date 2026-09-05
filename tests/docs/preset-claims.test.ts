@@ -34,10 +34,10 @@ const DOCS = [
   'docs/llms-full.txt',
   'docs/comparisons.md',
   'docs/reduce-claude-code-token-usage.md',
-  // TRA-722: the launch drafts answer "177 tools will blow up my context" with
-  // the served default, which is the same number under the same drift pressure.
-  'ops/launch-hn.md',
-  'ops/launch-reddit.md',
+  // TRA-722 added ops/launch-hn.md and ops/launch-reddit.md here. Both moved to
+  // the private repo on 2026-09-05 and this guard cannot follow them across a
+  // repository boundary; trace-mcp-private/README.md carries the replacement
+  // rule in words ("re-read counts.yml before anything here is posted").
 ];
 const PRESETS = [
   'standard',
