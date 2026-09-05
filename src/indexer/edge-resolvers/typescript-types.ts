@@ -63,7 +63,7 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
         JOIN files f ON s.file_id = f.id
        WHERE f.language IN ${TS_JS_LANGS}
          AND s.metadata IS NOT NULL
-         AND s.metadata LIKE '%"typeRefs"%'
+         AND json_extract(s.metadata, '$.typeRefs') IS NOT NULL
          AND s.file_id IN (${ph})
     `)
       .all(...scopedIds) as SymbolRow[];
@@ -75,7 +75,7 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
         JOIN files f ON s.file_id = f.id
        WHERE f.language IN ${TS_JS_LANGS}
          AND s.metadata IS NOT NULL
-         AND s.metadata LIKE '%"typeRefs"%'
+         AND json_extract(s.metadata, '$.typeRefs') IS NOT NULL
     `)
       .all() as SymbolRow[];
   }

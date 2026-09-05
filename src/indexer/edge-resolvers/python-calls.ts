@@ -62,7 +62,7 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
       LEFT JOIN symbols p ON s.parent_id = p.id
       WHERE f.language = 'python'
         AND s.metadata IS NOT NULL
-        AND s.metadata LIKE '%"callSites"%'
+        AND json_extract(s.metadata, '$.callSites') IS NOT NULL
         AND s.file_id IN (${ph})
     `)
       .all(...scopedIds) as SymbolRow[];
@@ -76,7 +76,7 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
       LEFT JOIN symbols p ON s.parent_id = p.id
       WHERE f.language = 'python'
         AND s.metadata IS NOT NULL
-        AND s.metadata LIKE '%"callSites"%'
+        AND json_extract(s.metadata, '$.callSites') IS NOT NULL
     `)
       .all() as SymbolRow[];
   }
