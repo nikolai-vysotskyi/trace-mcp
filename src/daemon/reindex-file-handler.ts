@@ -115,7 +115,12 @@ export async function handleReindexFile(
     const indexed = result?.indexed ?? 0;
     const skipped = result?.skipped ?? 0;
     const skippedHash = indexed === 0 && skipped > 0;
-    const elapsedMs = Math.round(performance.now() - startedAt);
+    // TRA-935: report the indexing work and the wait for the reindex lock as
+    // two numbers. Summed into one they made a 30 ms reindex that sat behind a
+    // full project pass look like a 40-minute reindex.
+    const totalMs = Math.round(performance.now() - startedAt);
+    const elapsedMs = result?.durationMs ?? totalMs;
+    const queuedMs = Math.max(0, totalMs - elapsedMs);
     logger.info(
       {
         event: 'reindex-file',
@@ -128,6 +133,7 @@ export async function handleReindexFile(
         skippedHash,
         indexed,
         elapsedMs,
+        queuedMs,
       },
       'reindex-file telemetry',
     );
@@ -137,6 +143,7 @@ export async function handleReindexFile(
       skippedHash,
       indexed,
       elapsedMs,
+      queuedMs,
     });
     return { ok: true, relPath: rel };
   } catch (err) {

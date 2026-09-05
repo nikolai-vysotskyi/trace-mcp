@@ -160,6 +160,9 @@ export interface DaemonEventStats {
   indexed: number;
   p50_ms: number;
   p95_ms: number;
+  /** p95 wait for the reindex lock, reported separately from the work itself
+   *  so a fast reindex stuck behind a queue is visible as such (TRA-935). */
+  p95_queued_ms: number;
 }
 
 export function renderDaemonEvents(s: DaemonEventStats): string {
@@ -174,7 +177,7 @@ export function renderDaemonEvents(s: DaemonEventStats): string {
   lines.push(`  fast (skipped_recent): ${s.fast_skipped_recent} (${pctOf(s.fast_skipped_recent)})`);
   lines.push(`  fast (skipped_hash):   ${s.fast_skipped_hash} (${pctOf(s.fast_skipped_hash)})`);
   lines.push(`  indexed:               ${s.indexed} (${pctOf(s.indexed)})`);
-  lines.push(`  per-call: p50=${s.p50_ms}ms p95=${s.p95_ms}ms`);
+  lines.push(`  per-call: p50=${s.p50_ms}ms p95=${s.p95_ms}ms  queued p95=${s.p95_queued_ms}ms`);
   return lines.join('\n');
 }
 
@@ -193,6 +196,7 @@ export async function fetchDaemonStats(port: number): Promise<DaemonEventStats |
       indexed: body.indexed ?? 0,
       p50_ms: body.p50_ms ?? 0,
       p95_ms: body.p95_ms ?? 0,
+      p95_queued_ms: body.p95_queued_ms ?? 0,
     };
   } catch {
     return null;
