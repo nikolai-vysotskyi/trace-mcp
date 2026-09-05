@@ -1,7 +1,7 @@
 export const workspace = {
   daemonDownTitle: '守护进程没有运行',
   daemonDownSubtitle:
-    'trace-mcp 在本地后台服务里索引你的项目。启动它就能重新看到——什么都没丢。',
+    'trace-mcp 在本地后台服务里索引你的项目。启动后就能重新看到这些项目——什么都没丢。',
   startDaemon: '启动守护进程',
   startingDaemon: '启动中…',
   daemonInstallingTitle: '正在设置 trace-mcp',
