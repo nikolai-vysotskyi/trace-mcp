@@ -45,8 +45,24 @@ describe.each(Object.entries(masters))('app icon master: %s', (name, svg) => {
   });
 
   it('still draws the same mark: nine nodes and twelve edges', () => {
-    expect(svg.match(/<circle /g)).toHaveLength(9);
+    // Eight satellites are <circle>; the hub is a compound <path> because the
+    // letter is punched out of it.
+    expect(svg.match(/<circle /g)).toHaveLength(8);
+    expect(svg.match(/<path fill-rule="evenodd"/g)).toHaveLength(1);
     expect(svg.match(/<line /g)).toHaveLength(12);
+  });
+
+  it('cuts the T out of the hub instead of painting over it', () => {
+    // It used to be a solid #6159E8 patch measuring 19 levels lighter than the
+    // plate behind it. A hole cannot drift from the gradient; a fill can.
+    expect(svg).not.toMatch(/#6159E8/i);
+    expect(svg).toMatch(/<path fill-rule="evenodd" fill="#FFFFFF"/);
+  });
+
+  it('sizes nodes from a three-step scale, not seven arbitrary values', () => {
+    const radii = [...svg.matchAll(/<circle [^>]*r="([\d.]+)"/g)].map((m) => Number(m[1]));
+    // hub aside, satellites carry exactly two radii: degree-3 and leaf.
+    expect(new Set(radii).size).toBeLessThanOrEqual(2);
   });
 
   it('keeps the edge over the pixel floor measured for its tier', () => {
