@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Manually disable the trace-mcp PreToolUse guard for the current project.
 #
-# Writes a bypass sentinel to $TMPDIR/trace-mcp-bypass-{projectHash} whose
+# Writes a bypass sentinel to <state home>/status/trace-mcp-bypass-{projectHash} whose
 # mtime is set N minutes into the future. The guard hook treats the sentinel
 # as valid until its mtime is reached, then ignores it (TTL).
 #
@@ -35,23 +35,33 @@ else
   exit 1
 fi
 
-BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
+# Sentinels live under the state home, not $TMPDIR — the guard hook that reads
+# this file runs in a different process with a different $TMPDIR (TRA-869).
+# The $TMPDIR copy is kept for hooks installed before that fix.
+TRACE_STATE_HOME="${TRACE_MCP_DATA_DIR:-$HOME/.trace}"
+case "$TRACE_STATE_HOME" in "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;; esac
+STATUS_HOME="$TRACE_STATE_HOME/status"
+mkdir -p "$STATUS_HOME" 2>/dev/null || true
+BYPASS_FILE="$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}"
+BYPASS_FILE_TMP="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
 
 if [[ "$MINUTES" -eq 0 ]]; then
-  rm -f "$BYPASS_FILE"
+  rm -f "$BYPASS_FILE" "$BYPASS_FILE_TMP"
   echo "trace-mcp guard re-enabled for: $PROJECT_ROOT"
   exit 0
 fi
 
 # Write the sentinel with mtime = now + MINUTES*60 seconds.
-echo "trace-mcp-bypass" > "$BYPASS_FILE"
 EXPIRY=$(( $(date +%s) + MINUTES * 60 ))
-if touch -t "$(date -r "$EXPIRY" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$EXPIRY" +%Y%m%d%H%M.%S)" "$BYPASS_FILE" 2>/dev/null; then
-  :
-else
-  # Fallback: BSD `touch -d @epoch` (macOS supports it via -t with formatted date)
-  touch -d "@$EXPIRY" "$BYPASS_FILE" 2>/dev/null || true
-fi
+for f in "$BYPASS_FILE" "$BYPASS_FILE_TMP"; do
+  echo "trace-mcp-bypass" > "$f" 2>/dev/null || continue
+  if touch -t "$(date -r "$EXPIRY" +%Y%m%d%H%M.%S 2>/dev/null || date -d "@$EXPIRY" +%Y%m%d%H%M.%S)" "$f" 2>/dev/null; then
+    :
+  else
+    # Fallback: BSD `touch -d @epoch` (macOS supports it via -t with formatted date)
+    touch -d "@$EXPIRY" "$f" 2>/dev/null || true
+  fi
+done
 
 EXPIRY_HUMAN=$(date -r "$EXPIRY" 2>/dev/null || date -d "@$EXPIRY" 2>/dev/null || echo "+${MINUTES} min")
 echo "trace-mcp guard DISABLED for ${MINUTES} minute(s) — until $EXPIRY_HUMAN"

@@ -2,8 +2,9 @@
  * Guard control — read trace-mcp guard status / mode for a project,
  * and toggle the per-project mode file.
  *
- * Status reader: parses $TMPDIR/trace-mcp-status-{projectHash}.json written
- * by the trace-mcp server (see src/server/heartbeat.ts).
+ * Status reader: parses <state home>/status/trace-mcp-status-{projectHash}.json
+ * written by the trace-mcp server (see src/server/heartbeat.ts), falling back
+ * to the $TMPDIR copy a pre-TRA-869 server wrote.
  *
  * Mode toggle: writes <projectRoot>/.trace-mcp/guard-mode (one of
  * "strict" | "coach" | "off"). The hook reads this file before each call.
@@ -76,16 +77,47 @@ function projectHash(projectRoot: string): string {
     .slice(0, 12);
 }
 
+/**
+ * Shared sentinel directory, mirroring STATUS_DIR in the CLI's src/global.ts.
+ * Duplicated rather than imported because this package does not depend on the
+ * CLI sources; keep the two in step.
+ *
+ * Not $TMPDIR: the server writes these files from a process the MCP client
+ * spawned, this app runs from one launchd started, and on macOS those hold
+ * different per-process $TMPDIR values — so the app read an empty directory and
+ * showed a live server as not running (TRA-869).
+ */
+function statusDir(): string {
+  const override = process.env.TRACE_MCP_DATA_DIR;
+  const home = override
+    ? override.startsWith('~')
+      ? path.join(os.homedir(), override.slice(1))
+      : override
+    : path.join(os.homedir(), '.trace');
+  return path.join(path.resolve(home), 'status');
+}
+
+/** State-home path first, $TMPDIR second (a server older than TRA-869). */
+function sentinelPaths(name: string): [string, string] {
+  return [path.join(statusDir(), name), path.join(os.tmpdir(), name)];
+}
+
+/** Whichever of the two exists; the state-home one when neither does. */
+function resolveSentinel(name: string): string {
+  const [primary, legacy] = sentinelPaths(name);
+  return fs.existsSync(primary) ? primary : fs.existsSync(legacy) ? legacy : primary;
+}
+
 function statusPath(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-status-${projectHash(projectRoot)}.json`);
+  return resolveSentinel(`trace-mcp-status-${projectHash(projectRoot)}.json`);
 }
 
 function legacyHeartbeatPath(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-alive-${projectHash(projectRoot)}`);
+  return resolveSentinel(`trace-mcp-alive-${projectHash(projectRoot)}`);
 }
 
 function bypassPath(projectRoot: string): string {
-  return path.join(os.tmpdir(), `trace-mcp-bypass-${projectHash(projectRoot)}`);
+  return resolveSentinel(`trace-mcp-bypass-${projectHash(projectRoot)}`);
 }
 
 function modeFile(projectRoot: string): string {
@@ -673,27 +705,38 @@ export function checkCliVersion(): CliVersionCheck {
 
 /** Toggle bypass on/off (writes the same sentinel as scripts/trace-mcp-disable-guard.sh). */
 export function setBypass(projectRoot: string, minutes: number): void {
-  const file = bypassPath(projectRoot);
+  // Both copies: the state-home one every current reader prefers, and the
+  // $TMPDIR one a hook installed before TRA-869 still looks at.
+  const files = sentinelPaths(`trace-mcp-bypass-${projectHash(projectRoot)}`);
   if (minutes <= 0) {
+    for (const file of files) {
+      try {
+        fs.unlinkSync(file);
+      } catch {
+        /* not present */
+      }
+    }
+    return;
+  }
+  try {
+    fs.mkdirSync(statusDir(), { recursive: true, mode: 0o700 });
+  } catch {
+    /* best-effort */
+  }
+  const future = new Date(Date.now() + minutes * 60_000);
+  for (const file of files) {
+    // The bypass sentinel lives at a predictable path in a shared directory,
+    // so a stat-then-write here would follow a symlink another user planted at
+    // that path. Unlink whatever is there first (unlink acts on the link
+    // itself, never the target) then create exclusively so we only ever write
+    // to a file we just created, with permissions restricted to the current
+    // user.
     try {
       fs.unlinkSync(file);
     } catch {
       /* not present */
     }
-    return;
+    fs.writeFileSync(file, 'manual', { flag: 'wx', mode: 0o600 });
+    fs.utimesSync(file, future, future);
   }
-  // The bypass sentinel lives at a predictable path in the shared OS temp
-  // dir, so a stat-then-write here would follow a symlink another user
-  // planted at that path. Unlink whatever is there first (unlink acts on
-  // the link itself, never the target) then create exclusively so we only
-  // ever write to a file we just created, with permissions restricted to
-  // the current user.
-  try {
-    fs.unlinkSync(file);
-  } catch {
-    /* not present */
-  }
-  fs.writeFileSync(file, 'manual', { flag: 'wx', mode: 0o600 });
-  const future = new Date(Date.now() + minutes * 60_000);
-  fs.utimesSync(file, future, future);
 }

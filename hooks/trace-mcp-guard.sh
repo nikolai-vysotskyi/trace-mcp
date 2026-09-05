@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.15.1
+# trace-mcp-guard v0.16
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.16 changes (TRA-869 — sentinels moved out of $TMPDIR):
+#   - The heartbeat, status, consultation-marker and bypass paths are read from
+#     <state home>/status/ first, $TMPDIR second. $TMPDIR is per-process: the
+#     server is spawned by the MCP client and this hook by the agent harness,
+#     and on macOS they routinely hold different values. Measured live: the
+#     server refreshed /var/folders/.../T/trace-mcp-alive-<hash> every 5s while
+#     the hook looked in /tmp/multica-task-<id>/, so every call reported
+#     "trace-mcp server not running" and degraded to the Read/Grep fallback,
+#     against a healthy connected session.
+#   - The $TMPDIR fallback keeps a server older than that fix discoverable.
 #
 # v0.15.1 changes (TRA-845 — Bash branch had no liveness fallback):
 #   - Read, Grep and Glob all degrade to allow-with-warning when trace-mcp is
@@ -370,11 +381,34 @@ elif command -v shasum >/dev/null 2>&1; then
 else
   PROJECT_HASH=""
 fi
-CONSULTED_DIR="${TMPDIR:-/tmp}/trace-mcp-consulted-${PROJECT_HASH}"
-HEARTBEAT_FILE="${TMPDIR:-/tmp}/trace-mcp-alive-${PROJECT_HASH}"
-STATUS_FILE="${TMPDIR:-/tmp}/trace-mcp-status-${PROJECT_HASH}.json"
-BYPASS_FILE="${TMPDIR:-/tmp}/trace-mcp-bypass-${PROJECT_HASH}"
-READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${SESSION_ID}"
+
+# The server↔hook sentinels live under the state home, NOT $TMPDIR (TRA-869).
+# $TMPDIR is per-process: the server is spawned by the MCP client, this hook by
+# the agent harness, and on macOS those routinely hold different values (a
+# per-user /var/folders/.../T vs. whatever a task runner exports). A sentinel
+# written to one is invisible in the other, so the hook reported "server not
+# running" against a live session and degraded to the Read/Grep fallback
+# trace-mcp exists to replace. $TMPDIR stays as the second choice so a server
+# installed before that fix is still found.
+TRACE_STATE_HOME="${TRACE_MCP_DATA_DIR:-$HOME/.trace}"
+case "$TRACE_STATE_HOME" in "~"/*) TRACE_STATE_HOME="$HOME/${TRACE_STATE_HOME#\~/}" ;; esac
+STATUS_HOME="$TRACE_STATE_HOME/status"
+TMP_HOME="${TMPDIR:-/tmp}"
+
+# First path that exists; the state-home one when neither does, so anything this
+# hook writes itself (the auto-degradation bypass) lands in the shared location.
+pick_path() {
+  if [[ -e "$1" ]]; then echo "$1"; else echo "$2"; fi
+}
+
+CONSULTED_DIR=$(pick_path "$STATUS_HOME/trace-mcp-consulted-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-consulted-${PROJECT_HASH}")
+HEARTBEAT_FILE=$(pick_path "$STATUS_HOME/trace-mcp-alive-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-alive-${PROJECT_HASH}")
+STATUS_FILE=$(pick_path "$STATUS_HOME/trace-mcp-status-${PROJECT_HASH}.json" "$TMP_HOME/trace-mcp-status-${PROJECT_HASH}.json")
+BYPASS_FILE=$(pick_path "$STATUS_HOME/trace-mcp-bypass-${PROJECT_HASH}" "$TMP_HOME/trace-mcp-bypass-${PROJECT_HASH}")
+mkdir -p "$STATUS_HOME" 2>/dev/null || true
+# Per-session read ledger: written and read by this hook family only, all
+# spawned by the same client, so $TMPDIR is the right home for it.
+READS_DIR="$TMP_HOME/trace-mcp-reads-${SESSION_ID}"
 DENY_AGGREGATE_FILE="$READS_DIR/.deny-aggregate"
 mkdir -p "$READS_DIR" 2>/dev/null || true
 
