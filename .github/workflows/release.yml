@@ -13,13 +13,13 @@ on:
 permissions:
   contents: read
 
-# Scorecard flags the four job-level `contents: write` grants below
-# (release-please, the macOS/Windows build jobs, and verify-release-assets).
-# They are accepted, not oversights: release-please has to push the release
-# branch and cut the tag, the build jobs upload signed installers as release
-# assets, and verify-release-assets has to be able to take an incomplete
-# release back out of `latest` (TRA-566). All are already scoped to the job,
-# never top-level (TRA-255).
+# Scorecard flags the five job-level `contents: write` grants below
+# (release-please, the macOS/Windows build jobs, verify-release-assets, and
+# sbom). They are accepted, not oversights: release-please has to push the
+# release branch and cut the tag, the build jobs upload signed installers as
+# release assets, verify-release-assets has to be able to take an incomplete
+# release back out of `latest` (TRA-566), and sbom uploads one more asset.
+# All are already scoped to the job, never top-level (TRA-255).
 
 jobs:
   release-please:
@@ -192,6 +192,12 @@ jobs:
         run: |
           set -euo pipefail
           FILE="trace-mcp-${TAG#v}.spdx.json"
+          # DEPRECATED, Sunset: 2026-11-13 (headers on the response itself;
+          # github.blog/changelog/2026-05-12-synchronous-sbom-api-deprecated).
+          # The successor is async — POST .../sbom/generate-report, then poll
+          # .../fetch-report/{uuid} — and returned 404 when probed on
+          # 2026-09-05, so it is not yet usable here. Migrate before the
+          # sunset or this step starts failing (TRA-908).
           gh api "repos/${{ github.repository }}/dependency-graph/sbom" --jq .sbom > "$FILE"
           # An empty package list means the dependency graph had not been
           # ingested for this commit yet — better to fail loudly than to ship
