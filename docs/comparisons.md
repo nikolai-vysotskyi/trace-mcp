@@ -141,7 +141,12 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 3, 2026 — current
+### Pass of September 5, 2026 — current
+
+- **First source read of LeanKG** (FreePeak, Rust, Apache-2.0), the largest remaining table entry whose architecture had never been read. Read through the GitHub API at `main`, no clone: repository metadata, `src/mcp/tools.rs`, `src/mcp/toon.rs`, `src/mcp/token_budget.rs`, `src/budget.rs`, and the per-client packaging directories. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
+- Rows for other projects were not re-checked in this pass and carry the September 3 figures.
+
+### Pass of September 3, 2026
 
 - **All five head-to-head peers re-read at source** for the per-competitor summaries above; star counts, licences and versions from the GitHub API.
 - **codegraph** — its single-advertised-tool default, eight tool names, 34 languages and 17 routing frameworks, from its own source and README.
@@ -386,11 +391,11 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder, LeanKG, CodeGraph (codegraph-ai), marm-memory.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraph (codegraph-ai), marm-memory.
 
-Still unprofiled from the previous pass's "newly spotted" list: **LeanKG** (FreePeak, 215 stars, Rust, token-reduction framing); **CodeGraph** (codegraph-ai, 74 stars, C — 42 MCP tools, 38 languages, VS Code extension); **marm-memory** (338 stars, Python — session history + codebase index + concept graph in one SQLite layer).
+Still unprofiled from the previous pass's "newly spotted" list: **CodeGraph** (codegraph-ai, 74 stars, C — 42 MCP tools, 38 languages, VS Code extension); **marm-memory** (338 stars, Python — session history + codebase index + concept graph in one SQLite layer).
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -406,7 +411,18 @@ Still unprofiled from the previous pass's "newly spotted" list: **LeanKG** (Free
 
 **All five head-to-head peers re-verified this pass** (September 3, 2026 — read through the GitHub API, no clones: each project's repository metadata, `package.json` or equivalent, README, and the specific source files behind the claims this page makes about tool surfaces). This pass exists because the per-competitor summaries above were written for the hub rather than copied from the head-to-head pages, and every figure in them had to hold at source today. Four numbers moved and are corrected throughout: codegraph 69.4K stars, codebase-memory-mcp 42.1K and 162 languages, Serena 28.8K, Context Mode 20.3K. One claim moved against a previous reading: Serena's registry now defines 50 tool classes with 22 optional, so its default surface is 28 tools rather than the 29 read on August 30 — exactly level with ours. One number was retired rather than re-quoted: Repomix no longer publishes a percentage for `--compress` in its README or its code-compress guide, so this page no longer quotes one.
 
-Priority for next deep-dive: **LeanKG** (FreePeak, 215 stars, Rust, token-reduction framing) or **Roam-Code** — the largest remaining table entries whose architecture we have never read.
+**LeanKG profiled this pass** (September 5, 2026 — read through the GitHub API at `main`, no clone: repository metadata, `src/mcp/tools.rs`, `src/mcp/toon.rs`, `src/mcp/token_budget.rs`, `src/budget.rs`, and the eight per-client packaging directories). Facts worth recording rather than re-deriving: 216 stars, Rust, Apache-2.0, v0.26.1 (2026-08-22) and pushed to daily; `ToolRegistry::list_tools()` returns **76 tools with no gating of any kind** — the opposite end of the surface axis from the peer that advertises one, and roughly 2.7× our shipped default; it ships install packages for eight separate hosts (Claude Code, Cursor, OpenCode, Kilo, Antigravity, Gemini, CommandCode, plus an `instructions/` rules tree), which is the widest per-client distribution anyone in this field ships.
+
+Four mechanisms were read at source and each got a decision:
+
+- **A tabular encoding for homogeneous object arrays — already ours, and ours is better founded.** Their `toon.rs` hoists the shared key set of an object array into a header row so field names appear once instead of *n* times. That is the same structural win trace-mcp ships as `output_format: "toon"` on 13 tools, against the published TOON spec rather than a homegrown encoder, and losslessly — theirs emits strings unquoted unless they contain a special character, and its own comment claims "~40%" with no measurement behind it. Nothing to take.
+- **A fixed per-tool token ceiling with truncation: passing, we already do better.** `TokenBudget::max_tokens_for_tool` is a hardcoded `match` from tool name to a number (800–6000, default 1000), applied by truncating the payload and appending `_token_budget` metadata. trace-mcp's `src/server/budget-defaults.ts` instead caps the *parameters* that generate the payload, at session-budget thresholds, and only when the caller did not set them explicitly — shaping the query rather than cutting the answer in half. A static per-tool ceiling would be a regression on that.
+- **A compute budget around heavy graph work: taking it.** `budget.rs` wraps every long-running algorithm in wall-clock, resident-memory and iteration ceilings, checked from inside the hot loops, so a heavy call aborts rather than "running for hours against a 600k-element graph and OOM-killing the host". We have no equivalent: our budgets are all token budgets, and `src/daemon/vitals-log.ts` exists only to leave evidence *after* an OS-level kill, not to prevent one. Filed as TRA-841, tied to the two open daemon-death issues.
+- **Enforced cross-tool routing hints: taking the enforcement, not the form.** Their overlapping search tools carry an explicit `Prefer-order (search): …` clause in the description, and a unit test asserts every member of that family still carries one. Our descriptions already carry equivalent pairwise pointers and read better than theirs, but nothing keeps them from drifting as tools are added or descriptions trimmed — and the description is the only routing mechanism that reaches clients where our hook and IDE rules do not. Filed as TRA-842, scoped to a drift test at zero net description cost.
+
+Two things deliberately passed without filing: `report_query_outcome`, a tool the agent calls to report whether a query answered its question (our session mining reconstructs the same signal without asking the agent to spend a call on it), and their unguarded 76-tool surface, which is the problem the preset work already solved for us.
+
+Priority for next deep-dive: **Roam-Code** — the largest remaining table entry whose architecture we have never read.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
