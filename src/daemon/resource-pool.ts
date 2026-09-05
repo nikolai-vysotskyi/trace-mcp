@@ -50,14 +50,26 @@ export class ProjectResourcePool {
   private shared: SharedResources | null = null;
 
   /**
-   * Create the shared resources on first call; a no-op afterwards. The first
-   * caller's config wins for whether topology tracking and the decision
-   * audit log are enabled — these are effectively daemon-wide files, so a
-   * per-project override only matters for which project happens to open them
-   * first.
+   * Create the shared resources on first call; backfills `topoStore` on
+   * later calls if it's still null and this caller's config enables
+   * topology. Without that backfill, a topology-disabled project loading
+   * first would permanently pin `topoStore` to null for the daemon's whole
+   * lifetime — silently deregistering topology tools (get_topology,
+   * get_change_impact, list_subprojects, ...) for every OTHER project too,
+   * with nothing in the log to say why (TRA-938 review). decisionStore/
+   * stateEngine have no such per-project opt-out, so the first caller's
+   * config is authoritative for those (audit log dir/retention, memo
+   * history limit) — these are effectively daemon-wide files regardless of
+   * which project opens them first.
    */
   private ensureShared(config: TraceMcpConfig): SharedResources {
-    if (this.shared) return this.shared;
+    if (this.shared) {
+      if (!this.shared.topoStore && config.topology?.enabled) {
+        ensureGlobalDirs();
+        this.shared.topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+      }
+      return this.shared;
+    }
     ensureGlobalDirs();
     const topoStore = config.topology?.enabled ? new TopologyStore(TOPOLOGY_DB_PATH) : null;
     // Opt-in JSONL audit log alongside SQLite. Best-effort writes inside

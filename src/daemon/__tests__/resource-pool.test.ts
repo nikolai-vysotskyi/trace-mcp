@@ -35,6 +35,7 @@ async function freshPool(): Promise<ProjectResourcePoolType> {
 }
 
 const topologyEnabledConfig = { topology: { enabled: true } } as TraceMcpConfig;
+const topologyDisabledConfig = { topology: { enabled: false } } as TraceMcpConfig;
 
 describe('ProjectResourcePool — daemon-wide shared resources', () => {
   it('acquire() returns the same store instances for different project roots', async () => {
@@ -54,6 +55,7 @@ describe('ProjectResourcePool — daemon-wide shared resources', () => {
     const acquired = pool.acquire('/project-a', topologyEnabledConfig);
     const viaGetShared = pool.getSharedDeps(topologyEnabledConfig);
 
+    expect(viaGetShared.topoStore).toBe(acquired.topoStore);
     expect(viaGetShared.decisionStore).toBe(acquired.decisionStore);
     expect(viaGetShared.stateEngine).toBe(acquired.stateEngine);
     // getSharedDeps() must not count as a session — only acquire()/release() do.
@@ -86,6 +88,29 @@ describe('ProjectResourcePool — daemon-wide shared resources', () => {
     const depsB = pool.acquire('/project-b', topologyEnabledConfig);
     expect(depsB.decisionStore).toBe(depsA.decisionStore);
     expect(() => depsB.decisionStore!.getStats()).not.toThrow();
+
+    pool.disposeAll();
+  });
+
+  it('a topology-disabled project loading first does not permanently disable topology for later projects', async () => {
+    const pool = await freshPool();
+
+    // A topology-disabled project acquires first — nothing to backfill from,
+    // so topoStore stays null for this call.
+    const depsDisabled = pool.acquire('/project-disabled', topologyDisabledConfig);
+    expect(depsDisabled.topoStore).toBeNull();
+
+    // A topology-enabled project acquires next. Before the TRA-938 review fix,
+    // ensureShared() short-circuited on the already-created `shared` object and
+    // returned the cached `topoStore: null` forever, regardless of this
+    // project's own config — silently deregistering topology tools daemon-wide.
+    const depsEnabled = pool.acquire('/project-enabled', topologyEnabledConfig);
+    expect(depsEnabled.topoStore).not.toBeNull();
+
+    // The backfilled instance is the one every subsequent caller gets too —
+    // including a later re-check from the disabled project.
+    const depsDisabledAgain = pool.acquire('/project-disabled', topologyDisabledConfig);
+    expect(depsDisabledAgain.topoStore).toBe(depsEnabled.topoStore);
 
     pool.disposeAll();
   });
