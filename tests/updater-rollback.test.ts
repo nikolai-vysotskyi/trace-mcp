@@ -240,13 +240,19 @@ describe('checkAndInstallUpdate — backup + rollback', () => {
   // may be many versions old. Newest on disk is the only defensible pick.
   it('restores the newest stale backup when several dead-PID backups exist', async () => {
     const older = path.join(tmpRoot, 'trace-mcp.tmcp-bak-4242');
-    const newer = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999');
+    // Both PIDs must be reliably dead on every platform, and a low one is not:
+    // on Linux PID 999 is typically a root-owned system process, so
+    // `process.kill(999, 0)` throws EPERM, which isPidAlive counts as alive.
+    // The backup was then skipped as "owned by another updater", leaving only
+    // the older one to restore — green on macOS, red on the CI runner.
+    const newer = path.join(tmpRoot, 'trace-mcp.tmcp-bak-999999998');
     fs.mkdirSync(older, { recursive: true });
     fs.writeFileSync(path.join(older, 'marker.txt'), 'stale-old-build');
     fs.mkdirSync(newer, { recursive: true });
     fs.writeFileSync(path.join(newer, 'marker.txt'), 'recent-build');
     // Make the ordering unambiguous regardless of filesystem timestamp
-    // granularity: 'trace-mcp.tmcp-bak-4242' sorts first by name, last by mtime.
+    // granularity: 'trace-mcp.tmcp-bak-4242' still sorts first by name and last
+    // by mtime, so this keeps proving that mtime order wins over readdir order.
     const old = new Date(Date.now() - 60 * 60 * 1000);
     fs.utimesSync(older, old, old);
     expect(fs.existsSync(mainDir)).toBe(false);
