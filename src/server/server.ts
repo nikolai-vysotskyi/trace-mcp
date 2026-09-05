@@ -63,7 +63,7 @@ import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
 import { installRetiredToolHints } from './retired-tools.js';
-import { resolveSessionPreset } from './tool-filter.js';
+import { createToolFilter, resolveSessionPreset } from './tool-filter.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ProjectRelay, ServerContext, ToolHandlerMap } from './types.js';
 
@@ -286,12 +286,28 @@ export function createServer(
   const has = (...names: string[]) => names.some((n) => frameworkNames.has(n));
   const detectedFrameworks = [...frameworkNames].join(', ') || 'none';
 
+  // Resolved before the instructions, because they are written against it
+  // (TRA-929): the block names only tools this session actually advertises.
+  // Single source of truth for the default, shared with the daemon proxy's
+  // per-session filter — the two used to spell it out separately. Unknown
+  // names fall back to the default surface and warn (TRA-648) — never to
+  // `full`, which silently made the cheap-by-request session the expensive one.
+  const { name: presetName, tools: activePreset } = resolveSessionPreset(config);
+
   // Create server with instructions
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';
   const agentBehavior = config.tools?.agent_behavior ?? 'off';
+  const onSurface = createToolFilter(config, activePreset);
   const server = new McpServer(
     { name: 'trace', version: PKG_VERSION },
-    { instructions: buildInstructions(detectedFrameworks, instructionsVerbosity, agentBehavior) },
+    {
+      instructions: buildInstructions(
+        detectedFrameworks,
+        instructionsVerbosity,
+        agentBehavior,
+        onSurface,
+      ),
+    },
   );
 
   // Session tracking
@@ -528,19 +544,13 @@ export function createServer(
     }
   }
 
-  // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
-  // Single source of truth for the default, shared with the daemon proxy's
-  // per-session filter — the two used to spell it out separately.
-  // Unknown names fall back to the default surface and warn (TRA-648) — never
-  // to `full`, which silently made the cheap-by-request session the expensive one.
-  const { name: presetName, tools: activePreset } = resolveSessionPreset(config);
-
   // Status sentinel — guard hook uses this to detect a live, healthy trace-mcp.
   // Records tool-call counters + last successful call timestamp so the v0.8+
   // hook can distinguish "process up but MCP channel stalled" from a healthy
   // server, and the desktop app can render the project status badge.
   const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
+  // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
   const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
     installToolGate(
       server,
