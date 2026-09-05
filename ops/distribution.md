@@ -39,7 +39,7 @@ Rules for keeping it honest:
 | Surface | Listed | What it shows | How to change it | Verified |
 |---|---|---|---|---|
 | [davila7/claude-code-templates](https://github.com/davila7/claude-code-templates) / [aitmpl.com](https://www.aitmpl.com/component/trace-mcp) | **Yes — and it is the largest surface we are on: 30,531★ / 3,459 forks, pushed daily** | `cli-tool/components/mcps/devtools/trace-mcp.json`, mirrored verbatim into `dashboard/public/component-content/mcps/devtools/trace-mcp.json` (same string, wrapped in a `content` field — both must be edited together). Ships `npx -y trace-mcp@latest` and a hand-typed description. **Already stale again**: it says "80 languages", `counts.yml` says 81 — six days after the refresh that was supposed to fix exactly this | **The entry is ours, not a third-party scrape.** Both commits are Nikolai's: [#553](https://github.com/davila7/claude-code-templates/commit/8b18c46f) 2026-04-29 added it, [#844](https://github.com/davila7/claude-code-templates/commit/bb0c681c) 2026-08-29 refreshed the counts. PRs are the route and two have been merged, so the door is open — but see the note below before spending a run on it. It hardcodes the npm name in `args`, so it belongs on the TRA-644 rename checklist; fold the 80→81 fix into that same PR rather than opening one for a digit | 2026-09-05 |
-| [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest` | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
+| [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest`. **The `description` it renders was rewritten 2026-09-05 (TRA-904)** and lands with the next release, not with the merge — see the one-liner section below | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
 | [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows. Renders 31 links to `trace-mcp.com` and rewrites every one to `rel="ugc nofollow"` — see TRA-792 below | 2026-09-04 |
 | [pulsemcp.com](https://www.pulsemcp.com/servers/nikolai-vysotskyi-trace) | Yes | **Stale: "44+ tools"** — their hand-written `server.json`, kept "until the maintainer publishes to the official registry" | Their submissions are **paused**; their own submit page says publishing to the official registry is the fix. Done 2026-08-29 — waiting on their next sync | 2026-08-29 |
 | [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h — but it said "80 languages … up to 99% fewer tokens", and master has since moved to 81 languages and (TRA-904, 2026-09-05) to the PR-benchmark headline, so re-submit once it lands. Premium $39 — declined | 2026-08-29 |
@@ -366,6 +366,37 @@ do not hand-type the number into a submission form. It is generated into
 `docs/_data/pr_context_bench.json` by `scripts/bench-pr-context.ts` and guarded
 by `tests/docs/readme-claims.test.ts` — same discipline as
 `docs/_data/counts.yml`.
+
+**The one-liner every directory renders is the widest surface we have, and it
+was the last to get the corrected number** (TRA-883 / TRA-904, 2026-09-05).
+`server.json`, `package.json` and `plugin.json` are rendered verbatim by every
+registry that ingests us and by npm, with no room to qualify anything, and they
+were still on "40–50% fewer tokens on average" — the figure TRA-880 showed was
+never a measurement — days after the storefront had moved. TRA-904 (#935)
+rewrote all three; TRA-883 reached the same conclusion independently the same
+day and its PR was rebased onto that copy rather than competing with it. Two
+runs finding the same thing on the same day is worth one note here: the install
+surfaces are nobody's home page, so they lag every wording change unless a guard
+makes them fail.
+
+What survives from TRA-883 is that guard, and the three ways of writing it that
+do not work. `tests/plugin/manifest-sync.test.ts` bans a `9x%` token claim on
+the install surfaces (TRA-393, when they advertised "up to 99% token
+reduction"), and the PR-context median has to be exempted from it. Every
+exemption keyed to the *text around* the claim was broken in review:
+
+- a neighbourhood of N characters crosses JSON fields and sentences, so an
+  unrelated "pull request" in the next field excused a bare number;
+- a per-sentence split still lets one claim shield another across a semicolon,
+  a comma or a conjunction, in either order;
+- plain span containment lets a whole peak claim hide inside the gap the
+  approved phrase itself allows.
+
+What holds: list the approved phrasings, each of which **starts** at the
+measured percentage, and exempt a claim only when it sits inside one of those
+spans *and* the single percentage it carries is that anchor. "Contains 90.6%"
+is weaker still — a nested second copy satisfies it. **Qualify a match, never a
+region.** Eleven negative cases are pinned; do not widen it back.
 
 **TRA-263's "165 tools" is stale.** `docs/_data/counts.yml` says 169 and the
 README already agreed. TRA-346's "141 schema-carrying tools" answers a different
