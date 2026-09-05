@@ -1,0 +1,102 @@
+{
+  "measured_at": "2026-09-05T08:05:50.130Z",
+  "target": "self",
+  "rows": [
+    {
+      "tool": "search_text",
+      "ok": true,
+      "chars": 6190,
+      "est": 1780,
+      "real": 1659,
+      "ms": 104
+    },
+    {
+      "tool": "get_outline",
+      "ok": true,
+      "chars": 4288,
+      "est": 1233,
+      "real": 1056,
+      "ms": 5
+    },
+    {
+      "tool": "search",
+      "ok": true,
+      "chars": 3278,
+      "est": 943,
+      "real": 921,
+      "ms": 27
+    },
+    {
+      "tool": "get_symbol",
+      "ok": true,
+      "chars": 1189,
+      "est": 342,
+      "real": 294,
+      "ms": 5
+    },
+    {
+      "tool": "find_usages",
+      "ok": true,
+      "chars": 4817,
+      "est": 1385,
+      "real": 1122,
+      "ms": 4
+    },
+    {
+      "tool": "get_project_map",
+      "ok": true,
+      "chars": 2100,
+      "est": 604,
+      "real": 568,
+      "ms": 257
+    },
+    {
+      "tool": "get_index_health",
+      "ok": true,
+      "chars": 979,
+      "est": 282,
+      "real": 298,
+      "ms": 3
+    },
+    {
+      "tool": "get_tests_for",
+      "ok": true,
+      "chars": 271,
+      "est": 78,
+      "real": 66,
+      "ms": 7
+    },
+    {
+      "tool": "get_context_bundle",
+      "ok": true,
+      "chars": 454,
+      "est": 131,
+      "real": 127,
+      "ms": 3
+    },
+    {
+      "tool": "get_task_context",
+      "ok": true,
+      "chars": 21432,
+      "est": 6162,
+      "real": 6086,
+      "ms": 10
+    },
+    {
+      "tool": "get_call_graph",
+      "ok": true,
+      "chars": 21192,
+      "est": 6093,
+      "real": 5165,
+      "ms": 4
+    },
+    {
+      "tool": "get_complexity_report",
+      "ok": true,
+      "chars": 6863,
+      "est": 1974,
+      "real": 1820,
+      "ms": 4
+    }
+  ]
+}

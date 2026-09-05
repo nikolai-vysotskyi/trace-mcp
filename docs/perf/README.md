@@ -14,6 +14,9 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
+Related measurements in this directory: [daemon idle memory](./daemon-idle-memory.md),
+[tool response token cost](./response-tokens.md).
+
 ## Current numbers (3.17.0, `121e3e9b`, darwin 25.5.0 / arm64, median of 3)
 
 Taken 2026-09-04, 30 minutes / 574 cycles / 0 cycle errors, offscreen. First pass since the

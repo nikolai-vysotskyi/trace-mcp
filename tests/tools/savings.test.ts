@@ -27,6 +27,69 @@ describe('SavingsTracker', () => {
       expect(stats.reduction_pct).toBe(0);
     });
 
+    /**
+     * TRA-880 guard. Before this, the only thing `tokens_saved` ever measured
+     * was the call count: `recordCall` runs before the tool does, so it scored
+     * every call against a flat 0.15 compression guess. Measured on this repo,
+     * that guess is 2.5-10x off on the busiest tools, and `search` /
+     * `find_usages` / `get_call_graph` / `get_complexity_report` return more
+     * tokens than the raw baseline they are credited with replacing.
+     */
+    it('scores savings against the measured response, not the compression guess', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search'); // raw estimate 600, guess 0.15 -> 90 actual
+      const guessed = tracker.getSessionStats().total_tokens_saved;
+      tracker.recordActualTokens('search', 400);
+      const stats = tracker.getSessionStats();
+      expect(guessed).toBe(510);
+      expect(stats.total_tokens_saved).toBe(200);
+      expect(stats.per_tool.search.tokens_saved).toBe(200);
+      expect(stats.total_actual_tokens).toBe(400);
+    });
+
+    it('credits nothing when the response costs more than the raw baseline', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search');
+      tracker.recordActualTokens('search', 5000);
+      const stats = tracker.getSessionStats();
+      expect(stats.total_tokens_saved).toBe(0);
+      expect(stats.per_tool.search.tokens_saved).toBe(0);
+      expect(stats.total_calls).toBe(1);
+    });
+
+    it('books nothing for a failed call, whatever its error text cost', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('get_task_context'); // raw 8000, guess 1200 -> 6800 saved
+      tracker.recordFailedCall('get_task_context', 4); // a 4-token error message
+      const stats = tracker.getSessionStats();
+      // Scored as payload this would have booked 7 996 — more than any real answer.
+      expect(stats.total_tokens_saved).toBe(0);
+      expect(stats.per_tool.get_task_context.tokens_saved).toBe(0);
+      expect(stats.total_actual_tokens).toBe(4);
+    });
+
+    it('books nothing for a call that threw before producing a response', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search');
+      tracker.recordFailedCall('search');
+      expect(tracker.getSessionStats().total_tokens_saved).toBe(0);
+    });
+
+    it('treats an empty response as a measured zero, not as missing', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordCall('search'); // raw 600
+      tracker.recordActualTokens('search', 0);
+      const stats = tracker.getSessionStats();
+      expect(stats.total_tokens_saved).toBe(600);
+      expect(stats.total_actual_tokens).toBe(0);
+    });
+
+    it('ignores a correction for a tool that was never recorded', () => {
+      const tracker = new SavingsTracker('/test/project');
+      tracker.recordActualTokens('search', 100);
+      expect(tracker.getSessionStats().total_tokens_saved).toBe(0);
+    });
+
     it('records a known tool call with estimated savings', () => {
       const tracker = new SavingsTracker('/test/project');
       tracker.recordCall('search');

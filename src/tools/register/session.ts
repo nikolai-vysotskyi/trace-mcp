@@ -965,6 +965,14 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           const response = await handler(call.args);
           // Parse the JSON text from the response to embed inline
           const text = response.content?.[0]?.text;
+          // batch dispatches handlers directly, so the gate's correction never
+          // runs here — without this every batched call keeps the pre-call
+          // compression guess (TRA-880).
+          if (typeof text === 'string') {
+            const batchTokens = Math.ceil(text.length / 4);
+            if (response.isError) savings.recordFailedCall(call.tool, batchTokens);
+            else savings.recordActualTokens(call.tool, batchTokens);
+          }
           if (text) {
             try {
               const parsed = JSON.parse(text);

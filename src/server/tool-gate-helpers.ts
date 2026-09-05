@@ -324,7 +324,9 @@ async function handleDuplicate(
     };
     ctx.stripMetaFields(dedupResponse);
     ctx.journal.record(ctx.name, params, (dupInfo.compact_result._result_count as number) ?? 1);
-    return { content: [{ type: 'text', text: ctx.j(dedupResponse) }] };
+    const dedupText = ctx.j(dedupResponse);
+    ctx.savings.recordActualTokens(ctx.name, Math.ceil(dedupText.length / 4));
+    return { content: [{ type: 'text', text: dedupText }] };
   }
 
   // Warn-only path: run the tool, annotate the response with the dup warning.
@@ -339,14 +341,29 @@ async function handleDuplicate(
     });
   }
   const count = ctx.extractResultCount(result);
+  const warnTokens = responseTokens(result);
+  if (warnTokens !== undefined) {
+    if (result?.isError) ctx.savings.recordFailedCall(ctx.name, warnTokens);
+    else ctx.savings.recordActualTokens(ctx.name, warnTokens);
+  }
   ctx.journal.record(ctx.name, params, count);
   emitJournalEntry(ctx, {
     count,
-    resultTokens: undefined,
+    resultTokens: warnTokens,
     latencyMs: warnLatency,
     isError: !!result?.isError,
   });
   return result;
+}
+
+/**
+ * Token cost of a response's text, or undefined when it has none. Deliberately
+ * `typeof`, not truthiness: an empty string is a real, measured zero-token
+ * response, not a missing one.
+ */
+function responseTokens(result: WrappedToolResponse | undefined): number | undefined {
+  const text = result?.content?.[0]?.text;
+  return typeof text === 'string' ? Math.ceil(text.length / 4) : undefined;
 }
 
 /** Enrich a successful response with optimization hint, budget defaults, warnings. */
@@ -443,6 +460,9 @@ export function createGatedCallback(
       telemetrySpan.setAttribute('duration_ms', Date.now() - normalStart);
       telemetrySpan.recordError(err);
       telemetrySpan.end();
+      // A throw returns no context at all, so it saves nothing. Without this it
+      // would keep the pre-call guess and score better than a real answer.
+      ctx.savings.recordFailedCall(ctx.name);
       throw err;
     }
     const resultObj = result as WrappedToolResponse;
@@ -457,9 +477,7 @@ export function createGatedCallback(
     ctx.recordToolCall?.(!resultObj?.isError);
     const count = ctx.extractResultCount(resultObj);
     const compactResult = ctx.extractCompactResult(ctx.name, resultObj);
-    const resultTokens = resultObj?.content?.[0]?.text?.length
-      ? Math.ceil(resultObj.content[0].text.length / 4)
-      : undefined;
+    const resultTokens = responseTokens(resultObj);
     ctx.journal.record(ctx.name, params, count, { compactResult, resultTokens });
     emitJournalEntry(ctx, {
       count,
@@ -470,6 +488,15 @@ export function createGatedCallback(
 
     enrichResponse(ctx, resultObj, params, originalParamSnapshot, appliedDefaults);
     applyWireFormat(resultObj, effectiveFormat);
+
+    // Scored last, on the bytes that actually go over the wire: `enrichResponse`
+    // adds fields and `applyWireFormat` can re-encode into a denser format, so
+    // measuring any earlier books a number the client never sees.
+    const wireTokens = responseTokens(resultObj);
+    if (wireTokens !== undefined) {
+      if (resultObj?.isError) ctx.savings.recordFailedCall(ctx.name, wireTokens);
+      else ctx.savings.recordActualTokens(ctx.name, wireTokens);
+    }
 
     return result;
   };
