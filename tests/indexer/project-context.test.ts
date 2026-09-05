@@ -3,7 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProjectContext } from '../../src/indexer/project-context.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
@@ -459,6 +459,55 @@ golang 1.22.0
   });
 
   // ========== Config files scan ==========
+
+  // ========== Syscall budget (TRA-922) ==========
+
+  describe('syscall budget', () => {
+    it('probes each scanned directory once instead of once per candidate name', () => {
+      // ~60 manifest/config names are probed per directory. Doing that with a
+      // per-name lstat/access made a single-file reindex block the daemon's
+      // event loop for 219 ms on this repo, so every session gave up on the
+      // daemon and indexed on its own (TRA-922). One readdir per directory is
+      // the budget; the ceiling below is generous but bounded by DIRECTORIES,
+      // not by the length of CONFIG_FILE_NAMES.
+      writeFixtureFile(tmpDir, 'package.json', '{}');
+      for (const sub of ['apps', 'apps/web', 'apps/api', 'libs', 'libs/ui']) {
+        fs.mkdirSync(path.join(tmpDir, sub), { recursive: true });
+        writeFixtureFile(tmpDir, `${sub}/package.json`, '{}');
+      }
+      // root + 2 level-1 + 3 level-2 = 6 scanned directories.
+      const scannedDirs = 6;
+
+      const lstat = vi.spyOn(fs, 'lstatSync');
+      const access = vi.spyOn(fs, 'accessSync');
+      const readdir = vi.spyOn(fs, 'readdirSync');
+      try {
+        buildProjectContext(tmpDir);
+        expect(readdir.mock.calls.length).toBeLessThanOrEqual(scannedDirs * 2);
+        expect(lstat.mock.calls.length).toBeLessThanOrEqual(scannedDirs * 2);
+        expect(access).not.toHaveBeenCalled();
+      } finally {
+        lstat.mockRestore();
+        access.mockRestore();
+        readdir.mockRestore();
+      }
+    });
+
+    it('still ignores symlinked manifests and config files', () => {
+      writeFixtureFile(
+        tmpDir,
+        'real-package.json',
+        JSON.stringify({ dependencies: { vue: '^3' } }),
+      );
+      fs.symlinkSync(path.join(tmpDir, 'real-package.json'), path.join(tmpDir, 'package.json'));
+      writeFixtureFile(tmpDir, 'real-tsconfig.json', '{}');
+      fs.symlinkSync(path.join(tmpDir, 'real-tsconfig.json'), path.join(tmpDir, 'tsconfig.json'));
+
+      const ctx = buildProjectContext(tmpDir);
+      expect(ctx.packageJson).toBeUndefined();
+      expect(ctx.configFiles).not.toContain('tsconfig.json');
+    });
+  });
 
   describe('configFiles', () => {
     it('detects known config files', () => {
