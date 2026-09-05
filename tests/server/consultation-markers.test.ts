@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { projectHash } from '../../src/global.js';
+import { projectHash, STATUS_DIR } from '../../src/global.js';
 import {
   __resetConsultationMarkersForTests,
   markToolConsultation,
@@ -11,8 +11,17 @@ import {
 
 const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-consultation-${process.pid}`);
 
+function markerDirName(): string {
+  return `trace-mcp-consulted-${projectHash(path.resolve(TEST_ROOT))}`;
+}
+
 function getMarkerDir(): string {
-  return path.join(os.tmpdir(), `trace-mcp-consulted-${projectHash(path.resolve(TEST_ROOT))}`);
+  return path.join(os.tmpdir(), markerDirName());
+}
+
+/** Where a current server writes markers — see STATUS_DIR (TRA-869). */
+function getStateHomeMarkerDir(): string {
+  return path.join(STATUS_DIR, markerDirName());
 }
 
 function fileHash(filePath: string): string {
@@ -20,18 +29,29 @@ function fileHash(filePath: string): string {
 }
 
 afterEach(() => {
-  // Clean up marker files
-  const dir = getMarkerDir();
-  try {
-    fs.rmSync(dir, { recursive: true, force: true });
-  } catch {
-    /* may not exist */
+  // Clean up marker files — both locations the server writes.
+  for (const dir of [getMarkerDir(), getStateHomeMarkerDir()]) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* may not exist */
+    }
   }
   // Reset the per-process dedup caches so the next test re-creates the wiped dir.
   __resetConsultationMarkersForTests();
 });
 
 describe('markToolConsultation', () => {
+  // TRA-869: the guard hook reads these markers from a process that does not
+  // share the server's $TMPDIR, so a marker written only there is invisible and
+  // the guard denies a Read the agent already consulted trace-mcp about.
+  it('writes the marker under the state home as well as $TMPDIR', () => {
+    markToolConsultation(TEST_ROOT, 'get_outline', { path: 'src/cross-tmpdir.ts' });
+    const name = fileHash('src/cross-tmpdir.ts');
+    expect(fs.existsSync(path.join(getStateHomeMarkerDir(), name))).toBe(true);
+    expect(fs.existsSync(path.join(getMarkerDir(), name))).toBe(true);
+  });
+
   describe('file extraction from tool params', () => {
     it('marks file from get_outline path param', () => {
       markToolConsultation(TEST_ROOT, 'get_outline', { path: 'src/server.ts' });

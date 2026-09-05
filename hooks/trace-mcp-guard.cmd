@@ -140,6 +140,11 @@ set "REL_FOR_HASH=%FILE_PATH%"
 set "REL_FOR_HASH=!REL_FOR_HASH:%CD%\=!"
 set "REL_FOR_HASH=!REL_FOR_HASH:\=/!"
 for /f "usebackq delims=" %%h in (`powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes('!REL_FOR_HASH!'))).Replace('-','').ToLower()"`) do set "FILE_HASH=%%h"
+REM Markers live under the state home; %TEMP% is the pre-TRA-869 location and is
+REM still checked because the server writes both while old hooks exist.
+set "TRACE_STATE_HOME=%TRACE_MCP_DATA_DIR%"
+if "!TRACE_STATE_HOME!"=="" set "TRACE_STATE_HOME=%USERPROFILE%\.trace"
+if exist "!TRACE_STATE_HOME!\status\trace-mcp-consulted-!PROJ_HASH!\!FILE_HASH!" goto :allow
 if exist "%TEMP%\trace-mcp-consulted-!PROJ_HASH!\!FILE_HASH!" goto :allow
 
 set "DENY_DIR=%TEMP%\trace-mcp-guard-%SESSION_ID%"

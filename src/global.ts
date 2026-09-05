@@ -157,6 +157,24 @@ export const STATE_DB_PATH = path.join(TRACE_MCP_HOME, 'state.db');
 /** Per-project + per-operation PID lock files (see src/utils/pid-lock.ts). */
 export const LOCKS_DIR = path.join(TRACE_MCP_HOME, 'locks');
 
+/**
+ * Cross-process sentinel directory: heartbeat/status files, consultation
+ * markers, the guard bypass file — everything the MCP server writes for the
+ * guard hook and the desktop app to read.
+ *
+ * Deliberately NOT `$TMPDIR` (TRA-869). TMPDIR is per-process, not per-machine:
+ * the writer (an MCP server the client spawned) and the readers (the guard hook
+ * the agent harness spawns, the desktop app launchd starts) routinely hold
+ * different values — macOS defaults to a per-user `/var/folders/.../T`, and any
+ * task runner sets its own. Measured on a live machine: the server was writing
+ * `/var/folders/.../T/trace-mcp-alive-d1c1b6f267c7` and refreshing it every 5s
+ * while the hook looked in `/tmp/multica-task-.../` and reported "trace-mcp
+ * server not running" on every single call — so the guard degraded to allowing
+ * the Read/Grep fallback this product exists to replace, against a healthy,
+ * connected session.
+ */
+export const STATUS_DIR = path.join(TRACE_MCP_HOME, 'status');
+
 /** Default port the daemon listens on. */
 export const DEFAULT_DAEMON_PORT = 3741;
 
