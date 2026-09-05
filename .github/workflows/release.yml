@@ -600,9 +600,10 @@ jobs:
 
       # See the matching step in build-app-mac for why the bundle is uploaded
       # as well as registered with GitHub's attestation API (TRA-902).
+      # pwsh, not bash: the action emits a Windows path with backslashes and
+      # Git Bash's handling of those is not worth relying on here.
       - name: Attach the provenance bundle to the release
-        shell: bash
-        run: cp "${{ steps.attest.outputs.bundle-path }}" "packages/app/release/trace-mcp-win.intoto.jsonl"
+        run: Copy-Item "${{ steps.attest.outputs.bundle-path }}" "packages/app/release/trace-mcp-win.intoto.jsonl"
 
       - name: Upload to release
         env:
