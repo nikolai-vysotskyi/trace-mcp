@@ -29,6 +29,7 @@ export const overview = {
   menuRemoveService: 'Удалить сервис…',
 
   sectionIndex: 'Индекс',
+  staleNumbers: 'Это последние проиндексированные значения.',
   rowStatus: 'Состояние',
   rowFiles: 'Файлов проиндексировано',
   rowSymbols: 'Символов',

@@ -21,6 +21,7 @@ export const overview = {
   menuRemoveService: 'Remover serviço…',
 
   sectionIndex: 'Índice',
+  staleNumbers: 'Estes são os últimos números indexados.',
   rowStatus: 'Estado',
   rowFiles: 'Arquivos indexados',
   rowSymbols: 'Símbolos',
