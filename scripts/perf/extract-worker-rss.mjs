@@ -27,7 +27,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const show = (label, mb, base) =>
   console.log(
     `${label.padEnd(34)} rss=${mb.toFixed(1)} MB` +
-      (base === undefined ? '' : `  (+${(mb - base).toFixed(1)}, ${((mb - base) / N).toFixed(1)}/worker)`),
+      (base === undefined
+        ? ''
+        : `  (+${(mb - base).toFixed(1)}, ${((mb - base) / N).toFixed(1)}/worker)`),
   );
 
 await sleep(300);
