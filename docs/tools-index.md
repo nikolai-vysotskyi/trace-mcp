@@ -97,7 +97,7 @@ which excludes the framework-specific rows.
 | `export_security_context` | Export security context for MCP server analysis. | always |
 | `extract_function` | Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). | always |
 | `find_usages` | Find all places that reference a symbol or file (imports, calls, renders, dispatches). | always |
-| `generate_docs` | Auto-generate project documentation from the code graph. | always |
+| `generate_docs` | Generate project documentation from the code graph — architecture, API surface, data models, components, dependencies. | always |
 | `generate_insights_report` | Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-ti… | always |
 | `generate_sbom` | Generate a Software Bill of Materials (SBOM) from package manifests and lockfiles. | always |
 | `get_api_contract` | Get API contract (OpenAPI/gRPC/GraphQL) for a service. | opt-in |
@@ -105,7 +105,7 @@ which excludes the framework-specific rows.
 | `get_artifacts` | Surface non-code knowledge from the index: DB schemas (migrations, ORM models), API specs (routes, OpenAPI endpoints), infrastructure (docker-compose service… | always |
 | `get_call_graph` | Build a bidirectional call graph centered on a symbol (who calls it + what it calls). | always |
 | `get_change_impact` | Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected… | always |
-| `get_changed_symbols` | Map a git diff to affected symbols (functions, classes, methods). | always |
+| `get_changed_symbols` | Map a git diff to affected symbols (functions, classes, methods), for PR review. | always |
 | `get_circular_imports` | Find circular dependency chains in the import graph (Kosaraju SCC algorithm). | always |
 | `get_cluster_decisions` | Return the member decisions of a cluster, plus the cluster header. | always |
 | `get_co_changes` | Find files that frequently change together in git history (temporal coupling). | always |
@@ -248,6 +248,7 @@ which excludes the framework-specific rows.
 | `tune_decision_weights` | Decision memory, not retrieval ranking (that is `tune_weights`): re-fit decision confidence weights from accumulated review feedback (approve/reject events). | always |
 | `tune_weights` | Retrieval fusion ranking for `search`, not decision memory (that is `tune_decision_weights`): read the persistent ranking ledger and learn per-repo signal-fu… | always |
 | `unpin` | Remove a ranking pin by target. | always |
+| `verify_docs` | Verify a markdown document against the code graph — the reverse of generate_docs, for catching doc drift after a rename. | always |
 | `verify_index` | Read-only structural check of the local SQLite index: SQLite integrity_check, foreign-key violations, required-table presence, FTS5 integrity-check, embeddin… | always |
 | `visualize_graph` | Open interactive HTML graph in browser showing file/symbol dependencies. | always |
 | `visualize_subproject_topology` | Open interactive HTML visualization of the subproject topology: services as nodes, API calls as edges, health/risk indicators per service. | opt-in |

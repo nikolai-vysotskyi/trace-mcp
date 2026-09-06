@@ -220,7 +220,7 @@ above has a min–max spread of 0–3 tokens.
 hand-written and unvalidated, so the savings *baseline* remains a guess even
 though the response side is now measured. That is the next measurement, not this
 one: it needs a real counterfactual (the same question answered with
-`Read`/`Grep`, tokens counted), which is what `benchmarks/pr-context-benchmark`
+`Read`/`Grep`, tokens counted), which is what `benchmarks/pr-context`
 does for PR context and nothing does for tool calls.
 
 One caveat on `get_outline`: it read 1 427 tokens against 1 056 in
