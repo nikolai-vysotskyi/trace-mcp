@@ -11,7 +11,7 @@ layout: null
 
 - [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources trace-mcp exposes, registered dynamically per detected framework.
 - [Tool index](https://trace-mcp.com/tools-index.html): Alphabetical index of every MCP tool with its one-line description, generated from the server's own registrations.
-- [What `trace init` installs](https://trace-mcp.com/what-trace-init-installs.html): The half of trace-mcp that is not an MCP tool — the startup-block audit, the guard hook, the opt-in Read/Bash mirrors, and the client config `trace init` writes.
+- [What `trace init` installs](https://trace-mcp.com/what-trace-init-installs.html): What `trace init` writes to your machine — the guard hook, the opt-in Read/Bash mirrors, the routing block, client config, and the tweakcc tiers — plus how to audit your own startup block.
 - [How trace-mcp compares](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
 - [trace-mcp vs Repomix](https://trace-mcp.com/vs/repomix.html): Head-to-head against Repomix — packing a repository into one prompt vs indexing it into a queryable graph, and when Repomix is the better pick.
 - [trace-mcp vs Serena](https://trace-mcp.com/vs/serena.html): Head-to-head against Serena — a live LSP proxy vs a precomputed framework-aware graph.

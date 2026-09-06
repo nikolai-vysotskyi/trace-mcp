@@ -582,12 +582,18 @@ reference](tools-reference.md).
 
 Door two is this page. `trace init` writes files to your machine: hooks your
 agent harness runs, a routing block in your instruction file, and an MCP entry
-per detected client. None of it is reachable through `tools/list`, so a reader
-who installed us as "an MCP server" never finds out it is there.
+per detected client. None of that is reachable through `tools/list`, so a reader
+who installed us as "an MCP server" never finds out it is there. The startup
+audit below is a door-one tool — it is here because it is where to start, not
+because `init` installs it.
 
 **The rule the whole door runs on:** we change configuration you could change
-yourself, and we tell you what we changed. We do not patch your client's
-binary, intercept its traffic, or rewrite files we do not own.
+yourself, and we tell you what we changed. We do not patch your client's binary,
+intercept its traffic, or rewrite files we do not own. The one thing that goes
+past that line is the Max tier's `tweakcc` pairing, which patches Claude Code's
+system prompts through a third-party tool that `init` invokes for you — it has
+[its own section](#the-tweakcc-pairing-and-the-line-it-sits-next-to) rather than
+a footnote, and you can decline it.
 
 ---
 
@@ -644,9 +650,12 @@ attempt inside a five-minute window (`TRACE_MCP_GUARD_NAV_MIN`,
 breaks if I change it, which tests cover it — bypass the gate and route from
 the first call.
 
-**When trace-mcp is not reachable, the guard gets out of the way.** No
-heartbeat, a stale one, a stalled channel: every branch degrades to
-allow-with-warning rather than denying a call the tools cannot answer either.
+**When trace-mcp is not reachable, the guard stops routing.** No heartbeat, a
+stale one, a stalled channel: every navigation-cost branch — `Read`, `Grep`,
+`Glob` and guarded `Bash` exploration — degrades to allow-with-warning rather
+than denying a call the tools cannot answer either. Two rules stay outside that
+fallback because they are not cost tradeoffs: the `.env` secrets rule, and the
+`Agent(Explore)` rule.
 
 ---
 
@@ -670,8 +679,10 @@ up as one. The wider character cap that takes the band to 62.6% has not been
 through a live gate yet, so it stays behind `TRACE_MCP_MIRROR_CAP`.
 
 Because it is the one hook that changes what the model reads, **it is opt-in**:
-`trace init --mirror` installs it, a plain `trace init` never does. It is a
-`bash` + `jq` pipeline, so it is not available on Windows yet.
+`trace init --mirror` installs it, and a plain `trace init` never opts you in.
+Once you have opted in, later `init` runs refresh the installed hook without the
+flag, so a fix to the script reaches you without your having to remember it. It
+is a `bash` + `jq` pipeline, so it is not available on Windows yet.
 
 ---
 
@@ -696,17 +707,24 @@ removed.
 
 ## The `tweakcc` pairing, and the line it sits next to
 
-**`tweakcc` is a third-party tool that you install and run yourself.** It
-patches Claude Code's system prompts. trace-mcp patches nothing — we document
-the pairing and generate the text you can choose to apply, and the patching is
-an action you take with someone else's tool on your own machine.
+**`tweakcc` is a third-party tool, and the Max tier runs it for you.** It is not
+ours: it is [`tweakcc`](https://github.com/Piebald-AI/tweakcc), and what it does
+is patch Claude Code's system prompts. What trace-mcp does is write prompt files
+into `~/.tweakcc/system-prompts/` and then shell out to `npx tweakcc --apply`.
+The patching is tweakcc's; the decision to invoke it, at the Max tier, is ours,
+and saying anything softer than that would be untrue of the code.
 
-We draw that distinction every time this comes up, because the boundary above
-is what makes the rest of this page safe to install: changing a config file you
-own is a product, patching a binary you did not build breaks at the vendor's
-next update. `tweakcc` is an optional amplifier on one client, not a
-foundation. If we ever could not draw the distinction honestly, the pairing
-would leave the public surfaces before the boundary moved.
+**Max is the default when `init` runs non-interactively** against Claude Code,
+Claw Code or Claude Desktop. Interactively it is the preselected option and the
+prompt says so. `--skip-hooks` turns it off, as does picking Base or Standard.
+Know which tier you are agreeing to before you agree to it.
+
+That is the one place the rest of this page's boundary is under strain, so it is
+stated here rather than smoothed over: everything else `init` touches is
+configuration you own and could edit yourself, and system prompts are not that.
+`tweakcc` is an optional amplifier on one client, not a foundation. If the
+distinction ever stopped being drawable, the honest move would be to drop the
+pairing, not to soften the boundary.
 
 What it is for and how to apply it: [system prompt routing via
 tweakcc](tweakcc.md).
@@ -720,7 +738,8 @@ if it did not say so.
 
 | Client | What door two gives it |
 |---|---|
-| Claude Code, Claw Code | Everything on this page: hooks, the guard, the mirrors, the routing block, the `tweakcc` pairing |
+| Claude Code | Everything on this page: hooks, the guard, the mirrors, the routing block, the `tweakcc` pairing |
+| Claw Code, Claude Desktop | The same hooks and tiers. `tweakcc` patches Claude Code's own installation, so the Max tier is offered here but the patch lands there |
 | Cursor, Windsurf | A rules file and the MCP entry — there is no hook equivalent in these tools |
 | Every other supported client | The MCP entry, plus whatever the tool descriptions carry |
 
@@ -737,8 +756,17 @@ Nothing on this page has been measured on a client other than Claude Code.
 - `rollback_startup_recommendations` — reverses one apply, byte-for-byte.
 - `TRACE_MCP_MIRROR_DISABLE` — any non-empty value passes tool output through
   untouched, without uninstalling anything.
-- Re-run `trace init` and pick a lower tier to drop the hooks and keep the
-  instruction block.
+- `trace setup-hooks --uninstall --global` — removes the guard hook. The
+  lifecycle four are a separate flag:
+  `trace setup-hooks --uninstall --lifecycle --global`. Pass `--global` on both:
+  `init` writes to `~/.claude/settings.json`, and without the flag these
+  commands operate on the project-level file instead.
+
+**Re-running `init` at a lower tier does not remove what a higher tier
+installed.** The tier decides what gets written, and there is no inverse branch:
+pick Base after a Standard or Max run and the guard, the lifecycle hooks and the
+`tweakcc` prompt files stay where they are. Uninstalling is the separate command
+above, and the `tweakcc` prompt files come out through `tweakcc` itself.
 
 Nothing here deletes a config key it did not write. An entry you configured
 yourself on the MCP server object survives a rename or a re-init.
