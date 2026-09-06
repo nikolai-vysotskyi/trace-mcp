@@ -13,6 +13,18 @@ export interface ResolutionTiers {
   text_matched: number;
 }
 
+/**
+ * Confidence order, best first. Exported so a tool that pages its results cuts
+ * the fuzzy end rather than an arbitrary one (TRA-1049).
+ */
+export const RESOLUTION_RANK: Record<EdgeResolution, number> = {
+  scip_resolved: 0,
+  lsp_resolved: 1,
+  ast_resolved: 2,
+  ast_inferred: 3,
+  text_matched: 4,
+};
+
 export function emptyResolutionTiers(): ResolutionTiers {
   return { scip_resolved: 0, lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
 }
