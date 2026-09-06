@@ -6,6 +6,7 @@ import { expandMethodViaCha } from '../shared/cha.js';
 import {
   emptyResolutionTiers,
   inferResolution,
+  RESOLUTION_RANK,
   type EdgeResolution,
   type ResolutionTiers,
 } from '../shared/resolution.js';
@@ -258,8 +259,20 @@ export function findReferences(
   // tokens, and a god-node in a larger repo is unbounded from there. `total`
   // and `resolution_tiers` still count every kept reference, so the shape of
   // the full answer is visible from a capped page.
+  //
+  // Confidence-ordered before the cut, because `getIncomingEdges` has no
+  // ORDER BY: it returns rows in rowid order, so an unsorted page could be
+  // fifty `text_matched` guesses while `resolution_tiers` truthfully reported
+  // ten `lsp_resolved` hits the caller then could not find. Sort is stable, so
+  // rows inside a tier keep their edge order, and it runs only when the answer
+  // is actually longer than the page.
   const limit = opts.limit ?? DEFAULT_LIMIT;
-  const page = kept.length > limit ? kept.slice(0, limit) : kept;
+  const page =
+    kept.length > limit
+      ? [...kept]
+          .sort((a, b) => RESOLUTION_RANK[a.resolution_tier] - RESOLUTION_RANK[b.resolution_tier])
+          .slice(0, limit)
+      : kept;
 
   const result: FindReferencesResult = {
     target: targetMeta,

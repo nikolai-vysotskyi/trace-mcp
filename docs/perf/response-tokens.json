@@ -1,8 +1,8 @@
 {
-  "measured_at": "2026-09-06T20:15:54.447Z",
+  "measured_at": "2026-09-06T20:43:42.745Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "ab17d0b6",
+    "commit": "8f41412e",
     "dirty": true
   },
   "target": "self",
@@ -91,11 +91,11 @@
       "ok": true,
       "chars": 977,
       "est": 281,
-      "real": 297,
-      "ms": 1,
+      "real": 299,
+      "ms": 2,
       "runs": 3,
       "real_min": 296,
-      "real_max": 298
+      "real_max": 299
     },
     {
       "tool": "get_tests_for",
@@ -122,13 +122,13 @@
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 14498,
-      "est": 4169,
-      "real": 4060,
+      "chars": 14400,
+      "est": 4140,
+      "real": 4041,
       "ms": 5,
       "runs": 3,
-      "real_min": 4042,
-      "real_max": 4060
+      "real_min": 4041,
+      "real_max": 4042
     },
     {
       "tool": "get_call_graph",
@@ -158,7 +158,7 @@
       "chars": 1189,
       "est": 342,
       "real": 345,
-      "ms": 148,
+      "ms": 145,
       "runs": 3,
       "real_min": 345,
       "real_max": 345
@@ -169,7 +169,7 @@
       "chars": 227,
       "est": 66,
       "real": 59,
-      "ms": 505,
+      "ms": 493,
       "runs": 3,
       "real_min": 59,
       "real_max": 59
@@ -177,12 +177,12 @@
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 9740,
-      "est": 2801,
-      "real": 2801,
+      "chars": 9734,
+      "est": 2799,
+      "real": 2800,
       "ms": 53,
       "runs": 3,
-      "real_min": 2801,
+      "real_min": 2799,
       "real_max": 2801
     },
     {
@@ -191,7 +191,7 @@
       "chars": 59,
       "est": 17,
       "real": 13,
-      "ms": 0,
+      "ms": 1,
       "runs": 3,
       "real_min": 13,
       "real_max": 13
@@ -202,7 +202,7 @@
       "chars": 11066,
       "est": 3182,
       "real": 2725,
-      "ms": 56,
+      "ms": 58,
       "runs": 3,
       "real_min": 2725,
       "real_max": 2725
@@ -210,13 +210,13 @@
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 163,
-      "est": 47,
-      "real": 60,
-      "ms": 37,
+      "chars": 1038,
+      "est": 299,
+      "real": 258,
+      "ms": 53,
       "runs": 3,
-      "real_min": 60,
-      "real_max": 60
+      "real_min": 258,
+      "real_max": 258
     },
     {
       "tool": "check_quality_gates",
@@ -224,7 +224,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 405,
+      "ms": 409,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -257,7 +257,7 @@
       "chars": 4437,
       "est": 1276,
       "real": 1099,
-      "ms": 20,
+      "ms": 19,
       "runs": 3,
       "real_min": 1099,
       "real_max": 1099
@@ -268,7 +268,7 @@
       "chars": 120,
       "est": 35,
       "real": 38,
-      "ms": 554,
+      "ms": 552,
       "runs": 3,
       "real_min": 38,
       "real_max": 38
@@ -279,7 +279,7 @@
       "chars": 5485,
       "est": 1577,
       "real": 2017,
-      "ms": 2,
+      "ms": 1,
       "runs": 3,
       "real_min": 2017,
       "real_max": 2017
@@ -290,10 +290,10 @@
       "chars": 2302,
       "est": 662,
       "real": 641,
-      "ms": 66,
+      "ms": 67,
       "runs": 3,
       "real_min": 638,
-      "real_max": 643
+      "real_max": 641
     },
     {
       "tool": "get_outline",
@@ -311,11 +311,11 @@
       "ok": true,
       "chars": 1469,
       "est": 423,
-      "real": 413,
-      "ms": 27,
+      "real": 414,
+      "ms": 29,
       "runs": 3,
-      "real_min": 413,
-      "real_max": 413
+      "real_min": 414,
+      "real_max": 414
     },
     {
       "tool": "find_usages",
@@ -323,10 +323,10 @@
       "chars": 2599,
       "est": 748,
       "real": 659,
-      "ms": 2,
+      "ms": 1,
       "runs": 3,
       "real_min": 659,
-      "real_max": 659
+      "real_max": 660
     }
   ],
   "items": [
@@ -351,10 +351,10 @@
     {
       "tool": "search_text",
       "item": "Error",
-      "real": 2061,
-      "real_min": 2058,
-      "real_max": 2117,
-      "chars": 7305,
+      "real": 2058,
+      "real_min": 2052,
+      "real_max": 2061,
+      "chars": 7270,
       "hits": 50
     },
     {
@@ -434,7 +434,7 @@
       "item": "Community",
       "real": 2216,
       "real_min": 2216,
-      "real_max": 2216,
+      "real_max": 2235,
       "chars": 7894,
       "hits": 50
     },
@@ -651,108 +651,108 @@
     {
       "tool": "search",
       "item": "Error",
-      "real": 1602,
-      "real_min": 1602,
-      "real_max": 1602,
+      "real": 1604,
+      "real_min": 1604,
+      "real_max": 1604,
       "chars": 6108,
       "hits": 40
     },
     {
       "tool": "search",
       "item": "ServiceInfo",
-      "real": 303,
-      "real_min": 303,
-      "real_max": 303,
+      "real": 305,
+      "real_min": 305,
+      "real_max": 305,
       "chars": 1041,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ToolResultEvent",
-      "real": 285,
-      "real_min": 285,
-      "real_max": 285,
+      "real": 287,
+      "real_min": 287,
+      "real_max": 287,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "handshakeDiagnosticLine",
-      "real": 311,
-      "real_min": 311,
-      "real_max": 311,
+      "real": 313,
+      "real_min": 313,
+      "real_max": 313,
       "chars": 1085,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "AdminRegistration",
-      "real": 459,
-      "real_min": 459,
-      "real_max": 459,
+      "real": 461,
+      "real_min": 461,
+      "real_max": 461,
       "chars": 1835,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "ZodSchema",
-      "real": 394,
-      "real_min": 394,
-      "real_max": 394,
+      "real": 396,
+      "real_min": 396,
+      "real_max": 396,
       "chars": 1390,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "extractRuneProps",
-      "real": 312,
-      "real_min": 312,
-      "real_max": 312,
+      "real": 314,
+      "real_min": 314,
+      "real_max": 314,
       "chars": 1083,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ExportOptions",
-      "real": 364,
-      "real_min": 364,
-      "real_max": 364,
+      "real": 366,
+      "real_min": 366,
+      "real_max": 366,
       "chars": 1269,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "symbolAtLine",
-      "real": 304,
-      "real_min": 304,
-      "real_max": 304,
+      "real": 306,
+      "real_min": 306,
+      "real_max": 306,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "Community",
-      "real": 423,
-      "real_min": 423,
-      "real_max": 423,
+      "real": 425,
+      "real_min": 425,
+      "real_max": 425,
       "chars": 1517,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "checkSymbol",
-      "real": 328,
-      "real_min": 328,
-      "real_max": 328,
+      "real": 330,
+      "real_min": 330,
+      "real_max": 330,
       "chars": 1149,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "matchesV4Cidr",
-      "real": 319,
-      "real_min": 319,
-      "real_max": 319,
+      "real": 321,
+      "real_min": 321,
+      "real_max": 321,
       "chars": 997,
       "hits": 1
     },
@@ -768,9 +768,9 @@
     {
       "tool": "search",
       "item": "min session bytes",
-      "real": 296,
-      "real_min": 296,
-      "real_max": 296,
+      "real": 298,
+      "real_min": 298,
+      "real_max": 298,
       "chars": 1008,
       "hits": 1
     },
@@ -804,9 +804,9 @@
     {
       "tool": "search",
       "item": "json parse",
-      "real": 288,
-      "real_min": 288,
-      "real_max": 288,
+      "real": 290,
+      "real_min": 290,
+      "real_max": 290,
       "chars": 965,
       "hits": 1
     },
@@ -815,7 +815,7 @@
       "item": "Error",
       "real": 4032,
       "real_min": 4032,
-      "real_max": 4032,
+      "real_max": 4037,
       "chars": 16251,
       "hits": 262
     },

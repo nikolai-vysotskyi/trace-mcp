@@ -275,6 +275,34 @@ describe('findReferences', () => {
       expect(v.truncated).toBeUndefined();
     });
 
+    it('cuts the fuzzy end, not an arbitrary one', () => {
+      // The noise is inserted first, so an unsorted page would be all of it —
+      // which is what `getIncomingEdges` (no ORDER BY) actually returns.
+      const target = addSymbol(store, { filePath: 'src/hot.ts', name: 'HotTarget', kind: 'class' });
+      const insert = (i: number, tier: string): void => {
+        const caller = addSymbol(store, {
+          filePath: `src/c${i}.ts`,
+          name: `caller${i}`,
+          kind: 'function',
+        });
+        store.insertEdge(caller.nodeId, target.nodeId, 'calls', true, undefined, false, tier);
+      };
+      for (let i = 0; i < 60; i += 1) insert(i, 'ast_inferred');
+      for (let i = 60; i < 70; i += 1) insert(i, 'lsp_resolved');
+
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+        // The ambiguity filter only fires on text_matched, and this target's
+        // name is unique — but pass it anyway so the test measures ordering.
+        includeAmbiguousTextMatched: true,
+      })._unsafeUnwrap();
+
+      expect(v.total).toBe(70);
+      expect(v.references).toHaveLength(50);
+      expect(v.references.filter((r) => r.resolution_tier === 'lsp_resolved')).toHaveLength(10);
+      expect(v.resolution_tiers.lsp_resolved).toBe(10);
+    });
+
     it('honours an explicit limit', () => {
       withCallers(120);
       const v = findReferences(store, {
