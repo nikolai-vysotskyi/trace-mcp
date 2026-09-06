@@ -34,7 +34,6 @@ export interface SuggestedQuestion {
 export interface SuggestedQuestionsResult {
   questions: SuggestedQuestion[];
   total: number;
-  generated_at: string;
 }
 
 interface SymbolMetaRow {
@@ -172,7 +171,6 @@ export function getSuggestedQuestions(store: Store): SuggestedQuestionsResult {
   return {
     questions: questions.slice(0, QUESTION_LIMIT),
     total: questions.length,
-    generated_at: new Date().toISOString(),
   };
 }
 

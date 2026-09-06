@@ -5,8 +5,12 @@
  * edge bottlenecks, self-audit, and edge resolution tiers into one
  * narrative payload + Markdown rendering.
  *
- * Envelope: { generated_at, totals, resolution_tiers, god_files,
+ * Envelope: { totals, resolution_tiers, god_files,
  * bridges, hotspots, gaps, markdown }
+ *
+ * No timestamps anywhere in the envelope: identical repo state must
+ * produce byte-identical output across repeated calls in a session
+ * (prompt-cache friendliness — see TRA-858).
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -54,7 +58,6 @@ describe('generateInsightsReport() — behavioural contract', () => {
     expect(result.isOk()).toBe(true);
     if (!result.isOk()) return;
     const v = result.value;
-    expect(typeof v.generated_at).toBe('string');
     expect(typeof v.totals).toBe('object');
     expect(typeof v.resolution_tiers).toBe('object');
     expect(Array.isArray(v.god_files)).toBe(true);
@@ -64,12 +67,13 @@ describe('generateInsightsReport() — behavioural contract', () => {
     expect(typeof v.markdown).toBe('string');
   });
 
-  it('generated_at is a valid ISO timestamp', () => {
-    const result = generateInsightsReport(store);
-    expect(result.isOk()).toBe(true);
-    if (!result.isOk()) return;
-    expect(Number.isNaN(Date.parse(result.value.generated_at))).toBe(false);
-    expect(result.value.generated_at).toMatch(/T/);
+  it('is byte-identical across repeated calls for unchanged repo state', () => {
+    seed(store);
+    const a = generateInsightsReport(store);
+    const b = generateInsightsReport(store);
+    expect(a.isOk() && b.isOk()).toBe(true);
+    if (!a.isOk() || !b.isOk()) return;
+    expect(JSON.stringify(a.value)).toBe(JSON.stringify(b.value));
   });
 
   it('totals carry numeric file/symbol/edge counts', () => {

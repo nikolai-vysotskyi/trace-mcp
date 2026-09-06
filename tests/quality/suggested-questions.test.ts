@@ -26,7 +26,6 @@ describe('getSuggestedQuestions — shape', () => {
     const r = getSuggestedQuestions(store);
     expect(r.questions.length).toBeGreaterThan(0);
     expect(typeof r.total).toBe('number');
-    expect(r.generated_at).toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
 
   it('every question has the documented contract fields', () => {
