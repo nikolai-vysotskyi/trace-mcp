@@ -81,7 +81,10 @@ beforeAll(async () => {
     fqn: string | null;
   }>;
   for (const sym of symbols) {
-    vectorStore.insert(sym.id, await embeddingService.embed(`${sym.name} ${sym.fqn ?? ''}`, 'document'));
+    vectorStore.insert(
+      sym.id,
+      await embeddingService.embed(`${sym.name} ${sym.fqn ?? ''}`, 'document'),
+    );
   }
   vectorStore.setMeta(embeddingService.modelName(), embeddingService.dimensions(), 'mock');
   aiOptions = { vectorStore, embeddingService, reranker: null };
@@ -92,9 +95,9 @@ const names = (r: { items: Array<{ symbol: { name: string } }> }): string[] =>
 
 describe('module-body pseudo-symbols never reach the caller', () => {
   it('the fixture really does index one, or this whole file proves nothing', () => {
-    const row = store.db
-      .prepare("SELECT name FROM symbols WHERE name GLOB '__module__*'")
-      .get() as { name: string } | undefined;
+    const row = store.db.prepare("SELECT name FROM symbols WHERE name GLOB '__module__*'").get() as
+      | { name: string }
+      | undefined;
     expect(row?.name).toMatch(/^__module__/);
   });
 
@@ -113,17 +116,9 @@ describe('module-body pseudo-symbols never reach the caller', () => {
   }
 
   it('fusion drops it on both channels', async () => {
-    const result = await search(
-      store,
-      QUERY,
-      undefined,
-      20,
-      0,
-      aiOptions,
-      undefined,
-      undefined,
-      { fusion: true },
-    );
+    const result = await search(store, QUERY, undefined, 20, 0, aiOptions, undefined, undefined, {
+      fusion: true,
+    });
     // Assert the channel actually ran: with too few embeddings fusion skips
     // similarity entirely and this case would pass without testing anything.
     expect(result._meta?.fusion?.semantic_channel).toBe('active');
@@ -142,4 +137,3 @@ describe('module-body pseudo-symbols never reach the caller', () => {
     expect(names(hybrid).some((n) => n.startsWith('__module__'))).toBe(true);
   });
 });
-
