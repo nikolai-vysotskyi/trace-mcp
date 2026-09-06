@@ -390,3 +390,10 @@ serve by construction; what it can serve is `serena mcp alternative` — **10/mo
 This does not retire `vs/serena.md`: it earns the comparative long tail, where
 it ranks #1 (TRA-1022). It retires the *arithmetic* — 2400 and 1600 are not
 volume we can address with the pages we have, and no plan should count them.
+
+Two more things for whoever writes it, one from review: link it from the home
+page and the footer, and put it in `docs/sitemap.xml`. The sitemap entry is the
+part that decides whether it gets indexed — all 13 indexed pages on this domain
+report `sitemap.xml` as the referring source and not one was reached through an
+in-body internal link (`ops/index-coverage.md`, TRA-995). The internal links are
+for the reader and for link equity, not for discovery.
