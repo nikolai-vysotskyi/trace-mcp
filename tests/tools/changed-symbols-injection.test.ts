@@ -16,8 +16,8 @@ describe('changed-symbols ref validation', () => {
   const store = new Store(db);
   const cwd = process.cwd();
 
-  it('compareBranches rejects a branch starting with a dash', () => {
-    const result = compareBranches(store, cwd, { branch: '-c=core.sshCommand=evil' });
+  it('compareBranches rejects a branch starting with a dash', async () => {
+    const result = await compareBranches(store, cwd, { branch: '-c=core.sshCommand=evil' });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.code).toBe('VALIDATION_ERROR');
@@ -25,25 +25,28 @@ describe('changed-symbols ref validation', () => {
     }
   });
 
-  it('compareBranches rejects shell metacharacters in the branch', () => {
+  it('compareBranches rejects shell metacharacters in the branch', async () => {
     for (const ref of ['main; rm -rf /', 'main && id', 'main`whoami`', 'main | nc x.y']) {
-      const result = compareBranches(store, cwd, { branch: ref });
+      const result = await compareBranches(store, cwd, { branch: ref });
       expect(result.isErr()).toBe(true);
     }
   });
 
-  it('compareBranches rejects a hostile base ref', () => {
-    const result = compareBranches(store, cwd, { branch: 'main', base: '--upload-pack=evil' });
+  it('compareBranches rejects a hostile base ref', async () => {
+    const result = await compareBranches(store, cwd, {
+      branch: 'main',
+      base: '--upload-pack=evil',
+    });
     expect(result.isErr()).toBe(true);
   });
 
-  it('getChangedSymbols rejects a hostile since ref', () => {
-    const result = getChangedSymbols(store, cwd, { since: '-x; rm -rf /' });
+  it('getChangedSymbols rejects a hostile since ref', async () => {
+    const result = await getChangedSymbols(store, cwd, { since: '-x; rm -rf /' });
     expect(result.isErr()).toBe(true);
   });
 
-  it('getChangedSymbols rejects a hostile until ref', () => {
-    const result = getChangedSymbols(store, cwd, { since: 'main', until: 'HEAD; id' });
+  it('getChangedSymbols rejects a hostile until ref', async () => {
+    const result = await getChangedSymbols(store, cwd, { since: 'main', until: 'HEAD; id' });
     expect(result.isErr()).toBe(true);
   });
 });

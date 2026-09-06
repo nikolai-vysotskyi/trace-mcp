@@ -388,7 +388,7 @@ async function runOne(entry: PrEntry): Promise<PrResult | null> {
   const indexMs = Date.now() - t0;
 
   try {
-    const changed = getChangedSymbols(store, dir, {
+    const changed = await getChangedSymbols(store, dir, {
       since: entry.base_sha,
       until: head,
     });

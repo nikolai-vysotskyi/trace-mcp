@@ -9,9 +9,10 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../../src/db/store.js';
 import { compareBranches } from '../../../src/tools/quality/changed-symbols.js';
+import { contentHash, initContentHasher } from '../../../src/util/hash.js';
 import { createTestStore } from '../../test-utils.js';
 
 vi.mock('node:child_process', () => ({
@@ -25,6 +26,8 @@ interface GitMock {
   commitCount?: string;
   nameStatus?: string;
   unified?: string;
+  /** Blob content returned for `git show <ref>:<path>`, keyed by path. */
+  show?: Record<string, string>;
 }
 
 function mockGit(g: GitMock): void {
@@ -32,14 +35,36 @@ function mockGit(g: GitMock): void {
     const a = (args ?? []) as string[];
     if (a[0] === 'merge-base') return g.mergeBase ?? 'mb-sha';
     if (a[0] === 'rev-list') return g.commitCount ?? '3';
+    if (a[0] === 'show') {
+      const spec = a[1] ?? '';
+      const path = spec.slice(spec.indexOf(':') + 1);
+      if (!g.show || !(path in g.show)) throw new Error(`no blob mocked for "${spec}"`);
+      return Buffer.from(g.show[path]);
+    }
     if (a[0] === 'diff' && a.includes('--name-status')) return g.nameStatus ?? '';
     if (a[0] === 'diff' && a.includes('--unified=0')) return g.unified ?? '';
     return '';
   }) as never);
 }
 
+// Real file contents, hashed for real, so the freshness check sees a match.
+const PAYMENTS_CONTENT = 'export function charge() {}\nexport function refund() {}\n';
+const EMAIL_CONTENT = 'export function sendEmail() {}\n';
+const API_CONTENT = 'export function route() {}\n';
+
+let PAYMENTS_HASH: string;
+let EMAIL_HASH: string;
+let API_HASH: string;
+
+beforeAll(async () => {
+  await initContentHasher();
+  PAYMENTS_HASH = contentHash(Buffer.from(PAYMENTS_CONTENT));
+  EMAIL_HASH = contentHash(Buffer.from(EMAIL_CONTENT));
+  API_HASH = contentHash(Buffer.from(API_CONTENT));
+});
+
 function seedStore(store: Store): void {
-  const f1 = store.insertFile('src/payments.ts', 'typescript', 'h-pay', 600);
+  const f1 = store.insertFile('src/payments.ts', 'typescript', PAYMENTS_HASH, 600);
   store.insertSymbol(f1, {
     symbolId: 'src/payments.ts::charge#function',
     name: 'charge',
@@ -61,7 +86,7 @@ function seedStore(store: Store): void {
     signature: 'function refund()',
   });
 
-  const f2 = store.insertFile('src/email.ts', 'typescript', 'h-em', 200);
+  const f2 = store.insertFile('src/email.ts', 'typescript', EMAIL_HASH, 200);
   store.insertSymbol(f2, {
     symbolId: 'src/email.ts::sendEmail#function',
     name: 'sendEmail',
@@ -74,7 +99,7 @@ function seedStore(store: Store): void {
   });
 
   // Added (whole-file-added) src/api.ts — touched by diff name-status A
-  const f3 = store.insertFile('src/api.ts', 'typescript', 'h-api', 100);
+  const f3 = store.insertFile('src/api.ts', 'typescript', API_HASH, 100);
   store.insertSymbol(f3, {
     symbolId: 'src/api.ts::route#function',
     name: 'route',
@@ -95,6 +120,11 @@ const ADDS_AND_MODS_DIFF = {
     '+++ b/src/payments.ts\n@@ -5,3 +5,5 @@\n' +
     '+++ b/src/payments.ts\n@@ -20,3 +20,5 @@\n' +
     '+++ b/src/email.ts\n@@ -1,3 +1,5 @@\n',
+  show: {
+    'src/payments.ts': PAYMENTS_CONTENT,
+    'src/email.ts': EMAIL_CONTENT,
+    'src/api.ts': API_CONTENT,
+  },
 };
 
 describe('compareBranches() — behavioural contract', () => {
@@ -106,10 +136,10 @@ describe('compareBranches() — behavioural contract', () => {
     seedStore(store);
   });
 
-  it('returns { branch, base, mergeBase, commitCount, changedSymbols, summary }', () => {
+  it('returns { branch, base, mergeBase, commitCount, changedSymbols, summary }', async () => {
     mockGit(ADDS_AND_MODS_DIFF);
 
-    const result = compareBranches(store, '/proj', { branch: 'feat-x', base: 'main' });
+    const result = await compareBranches(store, '/proj', { branch: 'feat-x', base: 'main' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -124,12 +154,13 @@ describe('compareBranches() — behavioural contract', () => {
       removed: expect.any(Number),
       renamed: expect.any(Number),
     });
+    expect(result.value.staleFiles).toEqual([]);
   });
 
-  it('group_by="category" buckets symbols by changeKind', () => {
+  it('group_by="category" buckets symbols by changeKind', async () => {
     mockGit(ADDS_AND_MODS_DIFF);
 
-    const result = compareBranches(store, '/proj', {
+    const result = await compareBranches(store, '/proj', {
       branch: 'feat-x',
       base: 'main',
       groupBy: 'category',
@@ -146,10 +177,10 @@ describe('compareBranches() — behavioural contract', () => {
     expect(keys.length).toBeGreaterThan(0);
   });
 
-  it('group_by="file" buckets symbols by their source file', () => {
+  it('group_by="file" buckets symbols by their source file', async () => {
     mockGit(ADDS_AND_MODS_DIFF);
 
-    const result = compareBranches(store, '/proj', {
+    const result = await compareBranches(store, '/proj', {
       branch: 'feat-x',
       base: 'main',
       groupBy: 'file',
@@ -164,10 +195,10 @@ describe('compareBranches() — behavioural contract', () => {
     }
   });
 
-  it('group_by="risk" produces low/medium/high buckets keyed by blastRadius', () => {
+  it('group_by="risk" produces low/medium/high buckets keyed by blastRadius', async () => {
     mockGit(ADDS_AND_MODS_DIFF);
 
-    const result = compareBranches(store, '/proj', {
+    const result = await compareBranches(store, '/proj', {
       branch: 'feat-x',
       base: 'main',
       groupBy: 'risk',
@@ -181,10 +212,10 @@ describe('compareBranches() — behavioural contract', () => {
     }
   });
 
-  it('includeBlastRadius=true + maxBlastDepth is propagated to per-symbol blastRadius', () => {
+  it('includeBlastRadius=true + maxBlastDepth is propagated to per-symbol blastRadius', async () => {
     mockGit(ADDS_AND_MODS_DIFF);
 
-    const result = compareBranches(store, '/proj', {
+    const result = await compareBranches(store, '/proj', {
       branch: 'feat-x',
       base: 'main',
       includeBlastRadius: true,
@@ -198,5 +229,32 @@ describe('compareBranches() — behavioural contract', () => {
       expect(typeof s.blastRadius).toBe('number');
     }
     expect(Array.isArray(result.value.riskAssessment)).toBe(true);
+  });
+
+  // --- Freshness gate (TRA-1075) ---
+  // compareBranches accepts an arbitrary `branch` argument and joins the diff
+  // against whatever the index happened to hold at last reindex — the branch
+  // never has to have been checked out. The content_hash gate is what makes
+  // that safe: a divergent file is excluded and reported, not silently joined.
+
+  it('excludes stale files from the diff and reports them in staleFiles, without failing the whole comparison', async () => {
+    mockGit({
+      ...ADDS_AND_MODS_DIFF,
+      show: {
+        ...ADDS_AND_MODS_DIFF.show,
+        // src/payments.ts drifted from what the index recorded — e.g. the
+        // index was built against a different checkout of `feat-x`.
+        'src/payments.ts': 'export function charge(extra) {}\n',
+      },
+    });
+
+    const result = await compareBranches(store, '/proj', { branch: 'feat-x', base: 'main' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.staleFiles).toEqual(['src/payments.ts']);
+    expect(result.value.changedSymbols.some((s) => s.file === 'src/payments.ts')).toBe(false);
+    // The rest of the comparison still resolves normally.
+    expect(result.value.changedSymbols.some((s) => s.file === 'src/email.ts')).toBe(true);
   });
 });
