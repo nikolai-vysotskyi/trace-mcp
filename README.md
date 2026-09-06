@@ -392,23 +392,18 @@ trace-mcp runs entirely on your machine. Nothing about your source code is uploa
 - **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
 - **Index lives in `~/.trace/`** (falling back to `~/.trace-mcp/` if that's what you already have), never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
-- **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
+- **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below and on the [privacy page](https://trace-mcp.com/privacy.html) — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
 - **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
 - **To wipe everything**, delete `~/.trace/` (or `~/.trace-mcp/` on an install that hasn't migrated yet) — that directory is the whole footprint.
 
 ### Usage telemetry
 
-trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
+trace-mcp sends at most one anonymous ping per day, per install, so we can count active installs: version, OS, MCP client, and aggregate counts. No code, no paths, no IP address, and no per-install identifier beyond a UUID generated locally on your machine. It is suppressed in CI, and its GA4 credentials ship as plaintext in the published bundle so you can verify where the ping goes.
 
-- **Anonymous** — a random install id (`~/.trace/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, the country your machine's timezone belongs to (`DE`, not a city and not an IP), the name of the MCP client that connected (`claude-code`), the model it mostly drove (`claude-opus-4-6`), how many repositories you have indexed (the number, never their names or paths), whether this run is a first install or a version change (and which version you came from), your machine's class (CPU architecture, core count, RAM in whole gigabytes, OS version), the tool preset the session ran with (`minimal`, `dev`, `full`, …) and how many tools that preset advertised (the count, never which ones), two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp analytics savings` prints), and two more for background-daemon reliability: how many times the daemon started and how many of those starts followed a run that died without shutting down (the counts only — no exit codes, no timestamps, no reasons, and nothing about what was running).
-- **Not sent from CI** — the ping is suppressed when `CI` is set, so build jobs don't count as installs.
-- **Never collected** — no IP address (`ip_override` is left unset, so Google derives nothing from the connection), no device fingerprint, no demographics, no account, email, hostname, username, repository name or file path, no query content and no code. The only per-install identifier is a UUID generated locally on your machine.
-- **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.
-- **Small blast radius by construction** — transport is [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4), a single HTTP POST, not a custom backend or SDK.
-- **Its credentials are public by design** — the GA4 measurement id and write-only `api_secret` are compiled into the published bundle, so you can read exactly where the ping goes. See [SECURITY.md](SECURITY.md#telemetry-credentials--public-by-design).
+Turn it off with `TRACE_MCP_TELEMETRY=off`, or with `"telemetry": { "usage_ping": false }` in `~/.trace/.config.json`.
 
-Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
+The complete field list, both opt-outs and how to delete local state are on the [privacy page](https://trace-mcp.com/privacy.html). Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
 
 For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
 

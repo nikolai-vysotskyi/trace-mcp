@@ -6,6 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.19.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.18.0...v3.19.0) (2026-09-05)
+
+
+### Features
+
+* **app:** ship the reworked icon and retire the bitmap generator (TRA-780) ([#949](https://github.com/nikolai-vysotskyi/trace-mcp/issues/949)) ([6f6c413](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f6c4137f96534726e17f98e42f3b7c991acb0ad))
+
+
+### Bug Fixes
+
+* **app:** a KPI baseline needs an age, and its caption has to keep one (TRA-960) ([#974](https://github.com/nikolai-vysotskyi/trace-mcp/issues/974)) ([7465060](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7465060ed09683a16c561619641cb6b8be442794))
+* **app:** tell a busy daemon from a missing one (TRA-939) ([#963](https://github.com/nikolai-vysotskyi/trace-mcp/issues/963)) ([d88864d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d88864d480c48b15a9f41cd5f0b22cc27bc510be))
+* **app:** the Chinese guard card stops calling itself two names (TRA-953) ([#975](https://github.com/nikolai-vysotskyi/trace-mcp/issues/975)) ([c8976d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c8976d70155e0580e2b0e25a5fb707a1aa37de5e))
+* **app:** the Index card states one condition, not two (TRA-964) ([#980](https://github.com/nikolai-vysotskyi/trace-mcp/issues/980)) ([89449e6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/89449e6b1034282be4fcc7e39609f0487c722e5e))
+* **daemon:** share TopologyStore/DecisionStore/StateEngine across the whole daemon, not per project ([#954](https://github.com/nikolai-vysotskyi/trace-mcp/issues/954)) ([a9429c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9429c7a5bf7a07702494afa724722077ec876be))
+* **daemon:** stop a running daemon from overriding the session's preset (TRA-951) ([#967](https://github.com/nikolai-vysotskyi/trace-mcp/issues/967)) ([345043c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/345043c285da52ac71f413752a4f3a76db82ac6c))
+* **indexer:** index the metadata-existence checks in edge resolvers ([#952](https://github.com/nikolai-vysotskyi/trace-mcp/issues/952)) ([1fe7a70](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1fe7a70f633d1f5e0144c2dcc7309af804369711))
+* **indexer:** stop rebuilding the TS/JS call-edge universe with an N+1 per symbol (TRA-923) ([#961](https://github.com/nikolai-vysotskyi/trace-mcp/issues/961)) ([699ec36](https://github.com/nikolai-vysotskyi/trace-mcp/commit/699ec3611040cb6ac5157944f23fae0155f7e871))
+* **launcher:** reprobe past an app runtime shim whose target is gone ([#982](https://github.com/nikolai-vysotskyi/trace-mcp/issues/982)) ([3e749a0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3e749a02b3e2bbaa8fca9174c1b3fbdc034ba963))
+* **server:** scope instructions to the session's advertised tool surface ([#947](https://github.com/nikolai-vysotskyi/trace-mcp/issues/947)) ([b34b1ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b34b1bac422ace610a38ef6ce6b2771201028037))
+* **tools:** publish get_change_impact's optional params as actually optional (TRA-962) ([#979](https://github.com/nikolai-vysotskyi/trace-mcp/issues/979)) ([d021ede](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d021edea336e50aab1e93dd3038fd9a36f378fe9))
+
+
+### Performance
+
+* **app:** measure and fix time to first useful paint, per screen ([#955](https://github.com/nikolai-vysotskyi/trace-mcp/issues/955)) ([f977d75](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f977d75fe1cb95164e062a652ab76155cd602dcd))
+* **indexer:** make a reindex that finds nothing cost nothing (TRA-935) ([#964](https://github.com/nikolai-vysotskyi/trace-mcp/issues/964)) ([0066fcf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0066fcf5480ae1c5f7a2391781123c7edf3d183c))
+* **indexer:** stop probing every manifest name with its own syscall ([#950](https://github.com/nikolai-vysotskyi/trace-mcp/issues/950)) ([f5fdb5e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f5fdb5ec598da4fdc34f5e80fa59e73e84d60cae))
+* **savings:** close the response-token measurement tail and stop crediting mutations (TRA-945) ([#965](https://github.com/nikolai-vysotskyi/trace-mcp/issues/965)) ([27f6808](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27f6808552179ceb104bfa21121daedf44ba39f7))
+* **session:** measure the per-session baseline instead of guessing at it (TRA-925) ([#962](https://github.com/nikolai-vysotskyi/trace-mcp/issues/962)) ([f27a723](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f27a723e8011744ce9252b6d62f907db071b950f))
+* **tools:** stop three tools answering more than they were asked (TRA-952) ([#969](https://github.com/nikolai-vysotskyi/trace-mcp/issues/969)) ([93b3f7c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/93b3f7c5ac49f01e0bdc100daebe9241bd5949f0))
+
+
+### Documentation
+
+* **antipatterns:** record TRA-944 decision — leave detectMemoryLeak's LIKE group unindexed ([#960](https://github.com/nikolai-vysotskyi/trace-mcp/issues/960)) ([01b62d1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/01b62d1bb219b9ba1ee1d7483464aec0cfc95ad7))
+* **comparisons:** read the largest table entry at source for the first time ([#945](https://github.com/nikolai-vysotskyi/trace-mcp/issues/945)) ([7f320dc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f320dc97799593f4ae09e9aff7370ff7cb9fe42))
+* **comparisons:** the session-memory entry does not index code — it delegates ([#948](https://github.com/nikolai-vysotskyi/trace-mcp/issues/948)) ([44af510](https://github.com/nikolai-vysotskyi/trace-mcp/commit/44af510fa473c16f042e986f5e150eb6f00b4cda))
+* make the home page eligible for the code graph mcp cluster ([#966](https://github.com/nikolai-vysotskyi/trace-mcp/issues/966)) ([8fcf9ff](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8fcf9ff59e296304df80ac6edb4b603a6e27c443))
+* **ops:** inventory every persistent state change trace-mcp makes on a machine ([#953](https://github.com/nikolai-vysotskyi/trace-mcp/issues/953)) ([2f49b39](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2f49b3927eb75c78b460870fe690382b8d6232e1))
+* **ops:** keep the issue-search readout in the private ledger, not the public one ([#958](https://github.com/nikolai-vysotskyi/trace-mcp/issues/958)) ([60e6637](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60e6637f5ce4d8122c3df4d5062e8b7405811508))
+* **ops:** record best-of-mcp-servers [#384](https://github.com/nikolai-vysotskyi/trace-mcp/issues/384), the third-party plugin surface, and how both were found (TRA-909) ([#938](https://github.com/nikolai-vysotskyi/trace-mcp/issues/938)) ([61ba971](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61ba971acb2644ccb2807eb7d417b231f1b1cf7a))
+* **ops:** two new list submissions and what the second seed of the competitor-README search returns (TRA-915) ([#941](https://github.com/nikolai-vysotskyi/trace-mcp/issues/941)) ([03af5f5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03af5f5831cfeb773337ce947056771df312e2f9))
+* recapture the app screenshots so the dark frame stops photographing the harness (TRA-958) ([#978](https://github.com/nikolai-vysotskyi/trace-mcp/issues/978)) ([ad03c8d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad03c8de9dce980c83afce34182aea7d055fbaa2))
+* refresh the app screenshots and correct a stale checklist claim (TRA-955) ([#970](https://github.com/nikolai-vysotskyi/trace-mcp/issues/970)) ([e8f1ee3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8f1ee31d5c14edd13321038ca66dc9996f1fd2c))
+
+
+### Tests
+
+* **design-tokens:** cover parseColor edge cases directly ([#971](https://github.com/nikolai-vysotskyi/trace-mcp/issues/971)) ([964a943](https://github.com/nikolai-vysotskyi/trace-mcp/commit/964a943108a010e2a15bcc3a328ce45b6dce2567))
+* **launcher:** give the node-probe tests a budget that clears CI contention ([#973](https://github.com/nikolai-vysotskyi/trace-mcp/issues/973)) ([ab14512](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ab1451241609d75727cd4c4f2243447171b05a64))
+* **manifests:** anchor the PR-benchmark exemption to the claim, not its neighbourhood (TRA-883) ([#914](https://github.com/nikolai-vysotskyi/trace-mcp/issues/914)) ([8ef271a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8ef271a09cd1ad8a1eebaf1207c63dff08ef2e8d))
+
 ## [3.18.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.17.1...v3.18.0) (2026-09-05)
 
 

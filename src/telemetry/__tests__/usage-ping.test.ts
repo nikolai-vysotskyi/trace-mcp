@@ -3,12 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('node:fs');
 vi.mock('../top-model.js', () => ({ topModelLastDay: () => 'claude-opus-4-6' }));
 
+/** Global config the file-based opt-out reads; per-test via `globalConfig`. */
+let globalConfig: Record<string, unknown> = {};
+vi.mock('../../config.js', () => ({ loadGlobalConfigRaw: () => globalConfig }));
+
 import fs from 'node:fs';
 import {
+  printTelemetryNoticeOnce,
   recordDaemonCleanStop,
   recordDaemonStart,
   recordUsagePingClient,
+  resetUsagePingConfigCache,
   sendUsagePing,
+  TELEMETRY_NOTICE,
 } from '../usage-ping.js';
 
 function makeFetchSpy(): {
@@ -386,5 +393,89 @@ describe('daemon reliability counters (TRA-671)', () => {
       .events[0]!.params;
     expect(params.daemon_starts).toBe(0);
     expect(params.daemon_unclean_stops).toBe(0);
+  });
+});
+
+describe('file-based opt-out and first-run notice (TRA-887)', () => {
+  /** Back the mocked fs with one in-memory string, so writes are readable back. */
+  function statefulFs(initial: string | null): { read: () => Record<string, unknown> } {
+    let state = initial;
+    vi.mocked(fs.readFileSync).mockImplementation(() => {
+      if (state === null) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return state;
+    });
+    vi.mocked(fs.writeFileSync).mockImplementation((_p, data) => {
+      state = String(data);
+    });
+    return { read: () => JSON.parse(String(state)) as Record<string, unknown> };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
+    globalConfig = {};
+    resetUsagePingConfigCache();
+  });
+
+  it('sends nothing when telemetry.usage_ping is false in the global config', async () => {
+    statefulFs(null);
+    globalConfig = { telemetry: { usage_ping: false } };
+    resetUsagePingConfigCache();
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('keeps pinging when telemetry.enabled is false — that key is the local sink', async () => {
+    statefulFs(null);
+    globalConfig = { telemetry: { enabled: false } };
+    resetUsagePingConfigCache();
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('prints the notice once and never again', () => {
+    const store = statefulFs(null);
+    const lines: string[] = [];
+
+    printTelemetryNoticeOnce(CONFIGURED_ENV, (s) => lines.push(s));
+    expect(lines).toEqual([TELEMETRY_NOTICE]);
+    expect(store.read().noticeShown).toBe(true);
+
+    printTelemetryNoticeOnce(CONFIGURED_ENV, (s) => lines.push(s));
+    expect(lines).toHaveLength(1);
+  });
+
+  it('says nothing in a build that has no GA credentials and therefore never pings', () => {
+    statefulFs(null);
+    const lines: string[] = [];
+    printTelemetryNoticeOnce({}, (s) => lines.push(s));
+    expect(lines).toEqual([]);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('names both opt-outs and the privacy page', () => {
+    expect(TELEMETRY_NOTICE).toContain('TRACE_MCP_TELEMETRY=off');
+    expect(TELEMETRY_NOTICE).toContain('telemetry.usage_ping');
+    expect(TELEMETRY_NOTICE).toContain('https://trace-mcp.com/privacy.html');
+  });
+
+  it('stays silent when telemetry is already off — there is nothing to disclose', () => {
+    statefulFs(null);
+    const lines: string[] = [];
+    printTelemetryNoticeOnce({ TRACE_MCP_TELEMETRY: 'off' }, (s) => lines.push(s));
+    expect(lines).toEqual([]);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the install id and ping state while marking the notice shown', () => {
+    const store = statefulFs(JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01' }));
+    printTelemetryNoticeOnce(CONFIGURED_ENV, () => {});
+    expect(store.read()).toMatchObject({
+      installId: 'fixed-id',
+      lastPingDate: '2000-01-01',
+      noticeShown: true,
+    });
   });
 });
