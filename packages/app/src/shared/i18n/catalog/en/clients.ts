@@ -22,14 +22,16 @@ export const clients = {
   sessionIdle: 'Idle',
   sessionStale: 'Stale',
 
+  configured: 'Configured',
+  configuredHint:
+    'trace-mcp is in the config for this client; this format cannot be checked for updates',
+  noConfigFile: 'No config file found',
   connected: 'Connected',
   connect: 'Connect',
   connecting: 'Connecting…',
-  updateAvailable: 'Update available',
   update: 'Update',
   updating: 'Updating…',
   updateAll: 'Update all',
-  legacyEntry: 'Legacy',
   legacyHint: 'Registered as trace-mcp; init now writes trace',
   migrate: 'Migrate',
   migrating: 'Migrating…',

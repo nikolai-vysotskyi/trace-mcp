@@ -46,6 +46,8 @@ declare global {
           status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
           staleReason?: string;
           level?: 'base' | 'standard' | 'max' | null;
+          /** Whether `configPath` exists on disk (TRA-479). */
+          configExists?: boolean;
         }>;
       }>;
       configureMcpClient: (
