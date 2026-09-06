@@ -74,7 +74,9 @@ export function setupProject(
     // is still the moment the user claims it, so promote it out of the capped
     // implicit class even though there is nothing else left to set up.
     const entry =
-      opts?.explicit && !existing.explicit ? registerProject(absRoot, { explicit: true }) : existing;
+      opts?.explicit && !existing.explicit
+        ? registerProject(absRoot, { explicit: true })
+        : existing;
     return {
       entry,
       detection: {

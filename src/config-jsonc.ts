@@ -215,9 +215,7 @@ export const MAX_UNREGISTERED_SECTIONS = 100;
  * `removeProjectConfigJsonc` would keep the comments but re-read and rewrite
  * the file once per section; this keeps both properties.
  */
-export function pruneProjectConfigSections(
-  maxUnregistered = MAX_UNREGISTERED_SECTIONS,
-): string[] {
+export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SECTIONS): string[] {
   // Held across the whole read-edit-write cycle. Without it, a section written
   // by a concurrent `setupProject()` after our read is erased by our write —
   // and if that lands between an agent run's save and its immediate

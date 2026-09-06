@@ -70,7 +70,11 @@ describe('implicit project cap (TRA-706)', () => {
     );
     const roots = scratch.map((s) => s.entry.root);
 
-    expect(listProjects().map((p) => p.root).sort()).toEqual([named, ...roots].sort());
+    expect(
+      listProjects()
+        .map((p) => p.root)
+        .sort(),
+    ).toEqual([named, ...roots].sort());
 
     // `scratch-a` is the least recently used: nothing has indexed any of them,
     // so the tiebreak is registration order.
@@ -86,9 +90,11 @@ describe('implicit project cap (TRA-706)', () => {
     // jsonc, not JSON — the file is documented as comment-bearing.
     const { parse } = await import('jsonc-parser');
     const sections = Object.keys(
-      (parse(fs.readFileSync(path.join(fakeHome, '.config.json'), 'utf-8')) as {
-        projects: Record<string, unknown>;
-      }).projects,
+      (
+        parse(fs.readFileSync(path.join(fakeHome, '.config.json'), 'utf-8')) as {
+          projects: Record<string, unknown>;
+        }
+      ).projects,
     );
     expect(sections).toContain(named);
     expect(sections).not.toContain(roots[0]);

@@ -213,9 +213,11 @@ export function registerProject(
     // TRA-706: promote an implicitly auto-registered row the first time the
     // user names it deliberately — that is what takes it out of the capped
     // class for good.
+    // Mutated in place: `existing` is the very object `reg.projects` holds, so
+    // there is nothing to assign back — and assigning to a computed property
+    // name derived from a path is what `js/remote-property-injection` flags.
     if (explicit && !existing.explicit && !ephemeral) {
       existing.explicit = true;
-      reg.projects[absRoot] = existing;
       saveRegistry(reg);
     }
     // Already registered: the dbPath decision was made on a previous run, but
