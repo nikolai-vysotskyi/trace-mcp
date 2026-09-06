@@ -49,9 +49,16 @@ const INK = { top: 675, bottom: 210 }; // of the rendered string, above/below ba
 
 // The accent is the only colour the wordmark carries, and it differs per theme
 // so the step keeps its contrast on either ground (DESIGN-WEB §1).
+//
+// `inherit` is the variant for inlining into a page: the site switches themes
+// with `data-theme` off localStorage, so a `prefers-color-scheme` swap would
+// override the reader's own choice. Ink follows `currentColor` and the step
+// follows the page's `--accent`, which means one file serves both themes and
+// changes with the toggle rather than with the OS.
 const THEMES = {
   light: { ink: '#000000', accent: '#1E4FCB' },
   dark: { ink: '#FFFFFF', accent: '#5B8CFF' },
+  inherit: { ink: 'currentColor', accent: 'var(--accent, #5B8CFF)' },
 };
 
 /** The mark, lifted whole out of the app icon and namespaced so its gradient

@@ -74,3 +74,28 @@ describe('lockup geometry', () => {
     for (const s of steps) expect(s).toBe(612);
   });
 });
+
+describe('the site header', () => {
+  const layout = readFileSync(join(REPO_ROOT, 'docs/_layouts/default.html'), 'utf-8');
+
+  it('inlines the inherit lockup rather than linking a themed file', () => {
+    // The site switches themes from `data-theme` off localStorage. An <img> in a
+    // <picture> keyed to prefers-color-scheme would follow the OS and silently
+    // override the reader's own toggle — the same class of bug the README hit
+    // with GitHub's themed-picture. Inlined, the ink is currentColor and the
+    // step is var(--accent), so the lockup follows the toggle for free.
+    expect(layout).toContain('class="nav-lockup"');
+    expect(layout).toContain('currentColor');
+    expect(layout).toContain('var(--accent');
+    expect(layout).not.toMatch(/nav-lockup[\s\S]{0,400}prefers-color-scheme/);
+  });
+
+  it('keeps the header lockup in step with the generator', () => {
+    // Hand-editing the inlined copy is the obvious shortcut and it silently
+    // forks the logo. The markup has to be what gen-lockup.mjs emits.
+    const generated = readFileSync(join(LOGO_DIR, 'lockup-row-inherit.svg'), 'utf-8');
+    const paths = [...generated.matchAll(/<path d="([^"]{40,})"/g)].map((m) => m[1]);
+    expect(paths.length).toBeGreaterThan(4);
+    for (const d of paths) expect(layout).toContain(d);
+  });
+});
