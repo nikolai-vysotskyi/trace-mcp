@@ -240,6 +240,86 @@ export function recordPkgRoot(cliPath: string): void {
   }
 }
 
+export type LauncherPathStatus =
+  | 'ok'
+  | 'missing'
+  | 'dangling_symlink'
+  | 'not_a_file'
+  | 'not_executable'
+  | 'foreign'
+  | 'unchecked';
+
+export interface LauncherPathCheck {
+  path: string;
+  status: LauncherPathStatus;
+  detail: string;
+}
+
+/**
+ * Everything a client needs to be true of the file it spawns, in the order the
+ * OS would hit it: the path exists, resolves, is a regular file, and is
+ * executable. `foreign` is last and is not a breakage — a hand-rolled wrapper
+ * still runs; it just is not a file we may repair.
+ */
+export function checkLauncherFile(file: string): LauncherPathCheck {
+  // A bare command name ("npx", "trace") is resolved by the client through
+  // PATH, which we cannot reproduce faithfully — say so instead of guessing.
+  if (!path.isAbsolute(file)) {
+    return { path: file, status: 'unchecked', detail: 'not an absolute path — resolved via PATH' };
+  }
+  let link: fs.Stats;
+  try {
+    link = fs.lstatSync(file);
+  } catch {
+    return { path: file, status: 'missing', detail: 'no such file' };
+  }
+  let target = file;
+  if (link.isSymbolicLink()) {
+    try {
+      target = fs.realpathSync(file);
+    } catch {
+      const dest = (() => {
+        try {
+          return fs.readlinkSync(file);
+        } catch {
+          return '?';
+        }
+      })();
+      return { path: file, status: 'dangling_symlink', detail: `symlink target missing: ${dest}` };
+    }
+  }
+  const stat = fs.statSync(target);
+  if (!stat.isFile()) {
+    return {
+      path: file,
+      status: 'not_a_file',
+      detail: stat.isDirectory() ? 'is a directory' : 'not a regular file',
+    };
+  }
+  // Windows has no execute bit — the extension decides, and the client spawns
+  // it either way, so there is nothing here to check.
+  if (!IS_WINDOWS) {
+    try {
+      fs.accessSync(target, fs.constants.X_OK);
+    } catch {
+      return {
+        path: file,
+        status: 'not_executable',
+        detail: `mode ${(stat.mode & 0o777).toString(8)} — missing execute bit`,
+      };
+    }
+  }
+  if (!isOwnedShim(target)) {
+    return { path: file, status: 'foreign', detail: 'not a trace-mcp launcher — left alone' };
+  }
+  return { path: file, status: 'ok', detail: 'executable trace-mcp launcher' };
+}
+
+/** Statuses that mean the client gets `Failed to connect` with an empty log. */
+export function isBroken(status: LauncherPathStatus): boolean {
+  return status !== 'ok' && status !== 'foreign' && status !== 'unchecked';
+}
+
 export interface InstallLauncherOpts {
   dryRun?: boolean;
   force?: boolean;
@@ -249,7 +329,7 @@ export interface InstallLauncherOpts {
 const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
 
 /** True only for a shim this project wrote, so we never clobber a user's file. */
-function isOwnedShim(file: string): boolean {
+export function isOwnedShim(file: string): boolean {
   try {
     const fd = fs.openSync(file, 'r');
     try {
@@ -383,7 +463,11 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
   const dryRun = !!opts.dryRun;
 
   const installedVersion = readInstalledLauncherVersion();
-  const isCurrent = installedVersion === LAUNCHER_VERSION;
+  // A shim whose header reads current can still be unspawnable — most often it
+  // lost its execute bit — and version alone would skip right past it, leaving
+  // every client failing with a launcher.log that never got written (TRA-913).
+  const isCurrent =
+    installedVersion === LAUNCHER_VERSION && !isBroken(checkLauncherFile(dest).status);
 
   if (isCurrent && !opts.force) {
     // The shim in the current home is up to date, but the legacy compat path is

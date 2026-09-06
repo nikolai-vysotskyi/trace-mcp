@@ -264,7 +264,9 @@ function scanMcpServerConfigs(projectRoot?: string): Conflict[] {
   return conflicts;
 }
 
-function getMcpConfigPaths(projectRoot?: string): { clientName: string; configPath: string }[] {
+export function getMcpConfigPaths(
+  projectRoot?: string,
+): { clientName: string; configPath: string }[] {
   const paths: { clientName: string; configPath: string }[] = [];
   const platform = os.platform();
 
