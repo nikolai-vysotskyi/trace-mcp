@@ -14,8 +14,12 @@ $LogPath    = Join-Path $TraceHome 'launcher.log'
 # Rotate once per invocation, before the first append (TRA-702). Mirrors
 # rotate_log in trace-mcp-launcher.sh. Bounds the log at 2 x the limit across
 # both generations; without it the file only ever grew.
-$LogMaxBytes = if ($env:TRACE_MCP_LOG_MAX_BYTES) { [int64]$env:TRACE_MCP_LOG_MAX_BYTES } else { 5242880 }
+$LogMaxBytes = 5242880
 try {
+    # Inside the try on purpose: $ErrorActionPreference is 'Stop', so a
+    # non-numeric override would throw on the cast and abort the whole shim
+    # before it ever execs node - a logging knob must never cost a start.
+    if ($env:TRACE_MCP_LOG_MAX_BYTES) { $LogMaxBytes = [int64]$env:TRACE_MCP_LOG_MAX_BYTES }
     $existing = Get-Item -LiteralPath $LogPath -ErrorAction SilentlyContinue
     if ($existing -and $existing.Length -gt $LogMaxBytes) {
         Move-Item -LiteralPath $LogPath -Destination "$LogPath.1" -Force -ErrorAction SilentlyContinue

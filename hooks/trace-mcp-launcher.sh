@@ -30,6 +30,13 @@ PKG_ROOTS_FILE="$TRACE_HOME/pkg-roots"
 # costs one stat and bounds the file at 2 x LOG_MAX_BYTES across both
 # generations. Without it launcher.log only ever grew — 9.7 MB observed.
 LOG_MAX_BYTES=${TRACE_MCP_LOG_MAX_BYTES:-5242880}
+# The override is user input. `[ x -gt y ]` on a non-numeric operand prints
+# "integer expression expected" straight to the MCP client's stderr, which is
+# exactly the leak TRA-797 closed elsewhere — bound it here, as the shim
+# already does for NODE_MIN_MAJOR below.
+case "$LOG_MAX_BYTES" in
+  ''|*[!0-9]*) LOG_MAX_BYTES=5242880 ;;
+esac
 rotate_log() {
   [ -f "$LOG" ] || return 0
   # stat is not portable between GNU and BSD, and the two disagree in a way a

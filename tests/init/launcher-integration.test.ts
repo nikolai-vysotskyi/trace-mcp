@@ -1065,4 +1065,26 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     expect(fs.existsSync(`${logPath}.1`)).toBe(false);
     expect(fs.readFileSync(logPath, 'utf-8')).toContain('old entry');
   });
+
+  // The ceiling override is user input, and `[ x -gt y ]` on a non-numeric
+  // operand prints "integer expression expected" straight to the client's
+  // stderr — the leak TRA-797 closed elsewhere in this shim. A logging knob
+  // must never cost a start, nor corrupt the MCP stderr channel.
+  it('falls back to the default ceiling when the override is not a number', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    fs.writeFileSync(logPath, 'old entry\n');
+
+    const { status, stdout, stderr } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: 'not-a-number' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    // Default 5 MB applies, so a one-line log is nowhere near it.
+    expect(fs.existsSync(`${logPath}.1`)).toBe(false);
+  });
 });

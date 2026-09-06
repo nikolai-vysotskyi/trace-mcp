@@ -125,7 +125,19 @@ write_stat() {
   # keep their fd alive; data loss is acceptable for telemetry.
   if [[ -f "$STATS_FILE" ]]; then
     local size
-    size=$(stat -f%z "$STATS_FILE" 2>/dev/null || stat -c%s "$STATS_FILE" 2>/dev/null || echo 0)
+    # Same GNU/BSD split as rotate_log in trace-mcp-launcher.sh (TRA-707): GNU
+    # stat reads `-f%z FILE` as a filesystem query, prints a report on stdout
+    # and exits 1, so a single `a || b` substitution captures that report with
+    # the fallback's number stuck on the end. Here it was worse than a missed
+    # rotation — `[[ x -gt y ]]` on that string prints a bash syntax error to
+    # stderr. Try each form separately and require a plain number.
+    size=$(stat -c%s "$STATS_FILE" 2>/dev/null) || size=''
+    case "$size" in
+      ''|*[!0-9]*) size=$(stat -f%z "$STATS_FILE" 2>/dev/null) || size='' ;;
+    esac
+    case "$size" in
+      ''|*[!0-9]*) size=0 ;;
+    esac
     if [[ "$size" -gt "$STATS_MAX_BYTES" ]]; then
       : > "$STATS_FILE" 2>/dev/null || true
     fi
