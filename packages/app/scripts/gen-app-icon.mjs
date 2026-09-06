@@ -56,12 +56,26 @@ function masterFor(size) {
 }
 
 /** Render the right master at `size`, natively — never a resize of a bigger one. */
+// macOS draws every dock icon in the same slot, and a conforming icon leaves
+// margin inside its own canvas rather than filling it — Apple's grid puts the
+// rounded square at 824 of 1024, 80.5%. TRA-780 removed the artwork's padding on
+// the reasoning that our plate came out smaller than its neighbours', and got it
+// backwards: measured off a real dock, every neighbour's plate is 94px and ours
+// shipped at 116, a fifth too big.
+//
+// The padding belongs here rather than in the master. It is a packaging
+// convention for one platform, not part of the mark — the lockups inline the
+// same master and must not inherit a dock margin.
+const DOCK_MARGIN_RATIO = 824 / 1024;
+const CANVAS = 1024;
+const PADDED = Math.round(CANVAS / DOCK_MARGIN_RATIO); // 1273
+const INSET = (PADDED - CANVAS) / 2; // 124.5
+
 function render(size) {
   const src = masters[masterFor(size)];
-  const scaled = src.replace(
-    /width="\d+" height="\d+"/,
-    `width="${size}" height="${size}"`,
-  );
+  const scaled = src
+    .replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`)
+    .replace(/viewBox="0 0 1024 1024"/, `viewBox="${-INSET} ${-INSET} ${PADDED} ${PADDED}"`);
   return sharp(Buffer.from(scaled)).png({ compressionLevel: 9 }).toBuffer();
 }
 
