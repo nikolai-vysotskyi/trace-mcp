@@ -276,6 +276,35 @@ the homepage onto `/telemetry.html` and the average position should improve on
 13.7. Perceived-authority fixes take a recrawl; Request Indexing for
 `/telemetry.html` is queued with TRA-633's batch of Nikolai-clicks.
 
+### Re-derived independently as TRA-1025, same day — read this before filing a third
+
+TRA-1025 arrived 2026-09-06 from the same GSC window with the same conclusion
+and a remedy that was already merged in #990 hours earlier. Two corrections it
+adds, and one it gets wrong:
+
+**A fourth page carries the query.** Its breakdown lists `/tools-reference.html`
+at 2 impressions, position 92 — not in the table above. It was the only one of
+the four with no in-body link to `/telemetry.html`; added in the same change as
+this note. The homepage anchor rows (`/#capabilities`, `/#install`, `/#problem`,
+`/#product`, 28 impressions each) are the same homepage impressions counted
+per in-page anchor, not extra pages.
+
+**"Remove the tracing wording from the homepage" has no target.** The string
+`tracing` appears exactly once in `docs/index.html` (line 2705) and it is the
+outbound anchor to `/telemetry.html` that #990 added. There is nothing to
+de-optimize; the homepage wins this query on domain/entity match
+(`trace-mcp` ≈ `mcp tracing`) plus host crowding, not on copy. Any future
+proposal to strip words from the homepage for this query should be rejected on
+this line unless it names a specific string that exists.
+
+**CTR 0 is not evidence here, and both issues leaned on it.** 51 impressions at
+position 8.3 has an expected yield of roughly one click. Zero is inside the
+noise floor of that sample — it does not demonstrate that the served result was
+wrong for the searcher. The load-bearing fact is the *page split* (the profile
+page taking 1 impression against the homepage's 51), not the CTR. Same trap as
+the `/vs/` inference two sections down: a number too small to distinguish a
+result from nothing.
+
 ## Reading 2026-09-06 (TRA-995): sitemap is the only discovery channel that has produced an index entry
 
 URL Inspection over all 28 sitemap URLs: 13 submitted-and-indexed, 10 unknown
