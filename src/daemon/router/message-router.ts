@@ -7,6 +7,17 @@ export interface MessageRouterOptions {
   sendToClient: (msg: JSONRPCMessage) => Promise<void> | void;
   /** Max time to wait for pending responses during swap (ms). */
   drainTimeoutMs?: number;
+  /**
+   * Last chance to rescue a client request whose send to the active backend
+   * threw (TRA-1080). Return `true` when the frame has been re-issued through
+   * another backend and will be answered there; the router then leaves the id
+   * alone. Return `false` (or throw) and the router answers it with the
+   * synthetic error it always did.
+   *
+   * Called only for requests — a failed notification has no id to answer and
+   * nothing to replay.
+   */
+  onSendFailure?: (msg: JSONRPCMessage, err: unknown) => Promise<boolean>;
 }
 
 type ClientMessage = JSONRPCMessage;
@@ -45,6 +56,7 @@ function isResponse(msg: JSONRPCMessage): msg is JSONRPCMessage & { id: string |
 export class MessageRouter {
   private readonly sendToClient: (msg: JSONRPCMessage) => Promise<void> | void;
   private readonly drainTimeoutMs: number;
+  private readonly onSendFailure?: (msg: JSONRPCMessage, err: unknown) => Promise<boolean>;
 
   private activeBackend: Backend | null = null;
   private transitioning = false;
@@ -55,6 +67,7 @@ export class MessageRouter {
   constructor(opts: MessageRouterOptions) {
     this.sendToClient = opts.sendToClient;
     this.drainTimeoutMs = opts.drainTimeoutMs ?? 5_000;
+    this.onSendFailure = opts.onSendFailure;
   }
 
   /** Returns the current active backend (or null if between backends). */
@@ -104,6 +117,20 @@ export class MessageRouter {
       // re-issue it elsewhere; answering anyway would give the client two
       // responses for one id.
       if (isRequest(msg) && this.pendingRequestIds.has(msg.id)) {
+        // Offer the owner a rescue before answering with an error. The handler
+        // is expected to `forgetPending` the id itself before it swaps, so the
+        // swap's drain does not answer the frame it is about to replay — which
+        // is why `clearPending` below is a no-op on the handled path and still
+        // correct on the unhandled one.
+        if (this.onSendFailure) {
+          let handled = false;
+          try {
+            handled = await this.onSendFailure(msg, err);
+          } catch (rescueErr) {
+            logger.warn({ err: String(rescueErr) }, 'MessageRouter: send-failure rescue threw');
+          }
+          if (handled) return;
+        }
         this.clearPending(msg.id);
         await this.sendErrorResponseSafely(msg.id, -32603, `Backend send failed: ${String(err)}`);
       }
