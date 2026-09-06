@@ -10,6 +10,8 @@ import { stripRedundantSchemaKeyword } from '../../server/schema-shim.js';
 import { ClientProfileGate } from '../../server/client-profile.js';
 import { createToolFilter, resolveSessionPreset } from '../../server/tool-filter.js';
 import { disarmStdoutGuard } from '../../server/transport-hardening.js';
+import { armBoundedExit } from '../../server/bounded-shutdown.js';
+import { startParentDeathWatch } from '../../server/parent-death-watch.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
 import {
@@ -17,10 +19,20 @@ import {
   type HandshakeWatchdog,
   resolveHandshakeTimeout,
 } from './handshake-watchdog.js';
-import { LocalBackend } from './local-backend.js';
+// Type-only: the value is dynamic-imported in buildLocalBackend() so a
+// proxy-only session (the common case once a daemon is up) never pulls in
+// LocalBackend's dependency tree (PluginRegistry, better-sqlite3, tree-sitter,
+// the full MCP tool surface) — see TRA-970.
+import type { LocalBackend } from './local-backend.js';
 import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
-import { SnapshotBackend } from './snapshot-backend.js';
+// Type-only for the same reason as LocalBackend above: SnapshotBackend pulls
+// in the identical heavy tree (PluginRegistry, better-sqlite3, createServer's
+// full MCP tool surface) to open the daemon's index directly, and the
+// "instant path" in bootstrap() below calls buildSnapshotBackend() on every
+// session — a static import here would undo TRA-970's proxy.js size fix the
+// moment TRA-948's snapshot path actually fires.
+import type { SnapshotBackend } from './snapshot-backend.js';
 import type { Backend } from './types.js';
 
 declare const PKG_VERSION_INJECTED: string;
@@ -89,6 +101,35 @@ export interface StdioSessionOptions {
   autoSpawnDaemon?: boolean;
   /** ms to wait for an auto-spawned daemon's /health to respond. */
   autoSpawnTimeoutMs?: number;
+  /**
+   * Try SnapshotBackend's instant, read-only answer before negotiating the
+   * real backend (TRA-948). Default true.
+   *
+   * Set false when the caller already has good reason to believe a daemon is
+   * reachable (the thin proxy entry, TRA-970, only launches after the
+   * launcher shim's own liveness check) — the snapshot's whole value is
+   * covering an *uncertain* daemon state, and both it and `loadSnapshotBackend`
+   * below can be skipped entirely.
+   */
+  trySnapshotFastPath?: boolean;
+  /**
+   * How to obtain the `SnapshotBackend` class when `trySnapshotFastPath`
+   * needs it. Defaults to `await import('./snapshot-backend.js')`.
+   *
+   * SnapshotBackend pulls in the same heavy dependency tree as LocalBackend
+   * (PluginRegistry, better-sqlite3, the full MCP tool surface) — TRA-948's
+   * <400ms budget for the snapshot path only holds when that tree is already
+   * resident in memory, which is true for `trace-mcp serve` (cli.js already
+   * statically imports the same tree for its other commands) but not for the
+   * thin proxy entry (TRA-970), which must not load it at all unless asked.
+   * `trace-mcp serve` (src/cli.ts) passes a loader that resolves instantly
+   * from its own already-loaded static import instead of relying on the
+   * default's dynamic import, which — same as `buildLocalBackend()` below —
+   * is a genuine first-load the moment anything actually calls it.
+   */
+  loadSnapshotBackend?: () => Promise<{
+    SnapshotBackend: typeof import('./snapshot-backend.js').SnapshotBackend;
+  }>;
   /**
    * Wall-clock budget for the MCP client to send its first JSON-RPC frame
    * after stdio comes up. If exceeded, write a one-line diagnostic to stderr
@@ -215,8 +256,11 @@ export class StdioSession {
     // from it directly instead of blocking stdio on the daemon /health check,
     // HTTP session registration, and SSE handshake (measured 2.7-3.6s cold,
     // TRA-931). The real backend is negotiated off the critical path below
-    // and takes over via MessageRouter.swap() the moment it's ready.
-    const snapshot = this.buildSnapshotBackend();
+    // and takes over via MessageRouter.swap() the moment it's ready. Skipped
+    // when the caller already trusts the daemon is up (TRA-970) — see
+    // `trySnapshotFastPath` on StdioSessionOptions.
+    const snapshot =
+      this.opts.trySnapshotFastPath !== false ? await this.buildSnapshotBackend() : null;
     if (snapshot) {
       try {
         await snapshot.start();
@@ -267,7 +311,7 @@ export class StdioSession {
     // Pick a backend from the daemon state we already know. Spawning a daemon
     // is an optimization and must never gate the handshake (TRA-704) — it runs
     // in the background, and the watcher swaps us onto it when it lands.
-    let backend: Backend = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
+    let backend: Backend = daemonActive ? this.buildProxyBackend() : await this.buildLocalBackend();
     try {
       await backend.start();
     } catch (err) {
@@ -278,7 +322,7 @@ export class StdioSession {
         { err: String(err) },
         'StdioSession: proxy backend failed to start, falling back to local mode',
       );
-      backend = this.buildLocalBackend();
+      backend = await this.buildLocalBackend();
       await backend.start();
     }
     return { backend, daemonActive };
@@ -298,14 +342,14 @@ export class StdioSession {
     await this.watcher.start();
     const daemonActive = this.watcher.getCurrentState();
     await this.swapTo(
-      daemonActive ? this.buildProxyBackend() : this.buildLocalBackend(),
+      daemonActive ? this.buildProxyBackend() : await this.buildLocalBackend(),
       'snapshot-settled',
     );
     // Daemon answered /health but wouldn't take the session — swapTo() already
     // logged and cleaned up the failed attempt; retry once in-process rather
     // than leaving the session stuck on the read-only snapshot forever.
     if (daemonActive && this.router.getActiveKind() !== 'proxy') {
-      await this.swapTo(this.buildLocalBackend(), 'snapshot-settled-fallback');
+      await this.swapTo(await this.buildLocalBackend(), 'snapshot-settled-fallback');
     }
     this.watcher.onStableChange((nowActive) => {
       void this.onDaemonStateChange(nowActive);
@@ -482,7 +526,7 @@ export class StdioSession {
     // Drop the in-flight id so the swap does not answer it with a synthetic
     // error; the replay below is the response the client actually receives.
     this.router.forgetPending(id);
-    await this.swapTo(this.buildLocalBackend(), reason);
+    await this.swapTo(await this.buildLocalBackend(), reason);
     if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
     await this.router.ingestFromClient(this.cachedInitialize);
   }
@@ -496,7 +540,7 @@ export class StdioSession {
       await this.swapTo(this.buildProxyBackend(), 'daemon-appeared');
     } else {
       if (currentKind === 'local') return; // already local
-      await this.swapTo(this.buildLocalBackend(), 'daemon-disappeared');
+      await this.swapTo(await this.buildLocalBackend(), 'daemon-disappeared');
     }
   }
 
@@ -566,7 +610,7 @@ export class StdioSession {
       try {
         logger.info('StdioSession: wake up from idle');
         const daemonActive = this.watcher.getCurrentState() && !this.proxyDisabled;
-        const next = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
+        const next = daemonActive ? this.buildProxyBackend() : await this.buildLocalBackend();
         await next.start();
         this.desiredMode = next.kind;
         this.router.setInitialBackend(next);
@@ -620,7 +664,8 @@ export class StdioSession {
     });
   }
 
-  private buildLocalBackend(): LocalBackend {
+  private async buildLocalBackend(): Promise<LocalBackend> {
+    const { LocalBackend } = await import('./local-backend.js');
     return new LocalBackend({
       projectRoot: this.opts.projectRoot,
       indexRoot: this.opts.indexRoot,
@@ -630,12 +675,77 @@ export class StdioSession {
   }
 
   /** Null when there's nothing on disk yet to read instantly (safe fallback, TRA-948). */
-  private buildSnapshotBackend(): SnapshotBackend | null {
+  private async buildSnapshotBackend(): Promise<SnapshotBackend | null> {
     if (!fs.existsSync(this.opts.sharedDbPath)) return null;
+    const load = this.opts.loadSnapshotBackend ?? (() => import('./snapshot-backend.js'));
+    const { SnapshotBackend } = await load();
     return new SnapshotBackend({
       projectRoot: this.opts.projectRoot,
       config: this.opts.config,
       sharedDbPath: this.opts.sharedDbPath,
     });
   }
+}
+
+/**
+ * Standard process-lifecycle wiring for a stdio-transport MCP server process:
+ * signal/stdin/parent-death shutdown handlers with a bounded hard-exit
+ * fallback, then bootstrap. Resolves once stdio closes (the session ended
+ * normally) — every exit path has already called `session.shutdown()`.
+ *
+ * Shared by the full CLI's `serve` command and the thin proxy entry
+ * (src/proxy-entry.ts) so both processes exit exactly the same way (TRA-970).
+ */
+export async function runStdioSession(session: StdioSession): Promise<void> {
+  let shuttingDown = false;
+  const shutdown = async (reason: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ reason }, 'Shutting down trace-mcp server');
+    // #236 defect 2: orphaned sessions survived SIGTERM because graceful
+    // shutdown could hang — only SIGKILL worked. Arm a bounded hard-exit so a
+    // wedged session cannot outlive its shutdown signal. Unref'd, so it never
+    // keeps the process alive on its own.
+    // TRA-849: exit 0 — every reason that reaches here is a requested stop
+    // (signal, or the client closing stdin), not a crash.
+    armBoundedExit(reason, {
+      exitCode: 0,
+      onTimeout: () => {
+        logger.warn({ reason }, 'Session shutdown exceeded its deadline — forcing exit');
+      },
+    });
+    try {
+      await session.shutdown(reason);
+    } catch (err) {
+      logger.warn({ err: String(err) }, 'Session shutdown errored');
+    }
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT');
+  });
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM');
+  });
+  // Orphan prevention: when the MCP client exits, stdin closes.
+  process.stdin.on('end', () => {
+    void shutdown('stdin-end');
+  });
+  process.stdin.on('close', () => {
+    void shutdown('stdin-close');
+  });
+  // #236 defect 1b: stdin close is the primary parent-death signal, but in the
+  // field some orphans kept running with their stdin fd held open via an
+  // inherited pipe. Poll ppid as a cheap fallback so a reparented-to-init
+  // session shuts itself down.
+  startParentDeathWatch((reason) => {
+    logger.warn({ reason }, 'Detected orphaned session (parent died) — shutting down');
+    void shutdown(reason);
+  });
+
+  await session.bootstrap();
+  // bootstrap() called stdio.start() which resolves when stdin closes. The
+  // process stays alive on the stdin event loop; shutdown handlers above take
+  // care of exit.
 }

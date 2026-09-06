@@ -391,6 +391,17 @@ export function getProject(root: string): RegistryEntry | null {
   return reg.projects[absRoot] ?? null;
 }
 
+/**
+ * Resolve DB path for a project:
+ * 1. Check registry for the project root
+ * 2. Fall back to global path computed from project root
+ */
+export function resolveDbPath(projectRoot: string): string {
+  const entry = getProject(projectRoot);
+  if (entry) return entry.dbPath;
+  return getDbPath(projectRoot);
+}
+
 export interface RegistryOverlap {
   ancestor: RegistryEntry;
   descendant: RegistryEntry;
