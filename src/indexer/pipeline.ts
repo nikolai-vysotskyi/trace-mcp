@@ -547,7 +547,11 @@ export class IndexingPipeline {
     if (filePaths.length === 0) return;
     this.store.db.transaction(() => {
       for (const fp of filePaths) {
-        const relPath = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+        const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+        // Store paths are always posix-separated (collectFiles() via
+        // fast-glob) — an unconverted backslash on Windows misses the row
+        // entirely, silently no-op'ing the delete (TRA-1045).
+        const relPath = rel.split(path.sep).join('/');
         const file = this.store.getFile(relPath);
         if (file) {
           this.store.deleteFile(file.id);
@@ -603,7 +607,11 @@ export class IndexingPipeline {
         logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
         continue;
       }
-      relPaths.push(rel);
+      // Store paths are always posix-separated (collectFiles() via
+      // fast-glob) — pushing `rel` instead of `relPosix` inserted a phantom
+      // duplicate file row on Windows instead of matching the existing one,
+      // breaking every downstream mtime/existing-row lookup (TRA-1045).
+      relPaths.push(relPosix);
     }
     return relPaths;
   }
