@@ -116,3 +116,33 @@ it('every tray icon tray.ts loads is produced by generate-tray-icons.mjs', () =>
   expect(referenced.size).toBeGreaterThan(0);
   for (const name of referenced) expect(generator).toContain(`'${name}'`);
 });
+
+// The masters draw the plate edge to edge; the dock margin is applied when the
+// set is rasterised, because it is a packaging convention for one platform and
+// the lockups inline the same master without it.
+describe('the shipped icon set', () => {
+  it('leaves macOS its dock margin — the plate is 80.5% of the canvas', async () => {
+    // Shipped once at 100% and it stood a fifth taller than every neighbour in
+    // a real dock: measured off a screenshot, their plates were 94px and ours
+    // 116. Apple's grid puts the rounded square at 824 of 1024.
+    const sharp = (await import('sharp')).default;
+    const png = path.resolve(process.cwd(), 'build/icon-1024.png');
+    const { data, info } = await sharp(png)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    let left = info.width;
+    let right = 0;
+    const row = Math.floor(info.height / 2);
+    for (let x = 0; x < info.width; x++) {
+      const alpha = data[(row * info.width + x) * info.channels + 3];
+      if (alpha > 127) {
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+      }
+    }
+    const plate = right - left + 1;
+    expect(plate / info.width).toBeCloseTo(824 / 1024, 2);
+  });
+});
