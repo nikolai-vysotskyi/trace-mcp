@@ -588,6 +588,25 @@ const EPHEMERAL_WORKDIR_PATTERN =
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
 
 /**
+ * Dead end, so the next run does not re-walk it (TRA-992). The same runtime has
+ * a second one-shot layout the pattern above does not see — a task given a
+ * scratch directory instead of a workspace checkout lands in
+ * `<tmp>/multica-task-<run-id>/...` — and 17 of the 37 rows in the reported
+ * registry.json were exactly that: dead within the hour, each pinning a
+ * `.config.json` section for the full 7-day `sweepMissingRoots` grace.
+ *
+ * Adding `/[/\\]multica-task-\d+[/\\]/` here does fix that, and it must not be
+ * done: on a machine whose agent runtime exports `TMPDIR` as its own task
+ * directory — which is how the leak arises in the first place — `os.tmpdir()`
+ * IS a `multica-task-<id>` path, so the rule reclassifies every fixture the
+ * test suite builds under it. Seven registry tests fail locally and pass in CI,
+ * which is worse than the leak: the leak is bounded and self-healing, since the
+ * grace period expires and `pruneProjectConfigSections` then drops the sections
+ * it was holding. Anchoring the shape at the temp root instead does not help —
+ * `os.tmpdir()` is the task directory, not its parent.
+ */
+
+/**
  * True when `root` is a one-shot agent-run checkout (see
  * {@link EPHEMERAL_WORKDIR_PATTERN}). Such roots are never persisted to
  * registry.json — see the `_ephemeralEntries` note above.
