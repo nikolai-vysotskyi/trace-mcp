@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.16
+# trace-mcp-guard v0.17
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.17 changes (TRA-763 — StateEngine discovery hint):
+#   - Counts guarded tool calls per session and, on the 30th (default,
+#     TRACE_MCP_STATE_HINT_TURNS), emits one advisory additionalContext
+#     pointing at load_tools + trace_state_init. TRA-724 measured the
+#     break-even for that loop at turns 25-28; the seven schemas are kept off
+#     the default `minimal` preset for the short sessions that lose, which
+#     left the feature unreachable in the long ones that win.
+#   - Silent when the channel is dead, when TRACE_MCP_PRESET already
+#     advertises the tools, when state.db has been written since the session
+#     started, and after the one shot. Never blocks.
 #
 # v0.16 changes (TRA-869 — sentinels moved out of $TMPDIR):
 #   - The heartbeat, status, consultation-marker and bypass paths are read from
@@ -683,6 +694,58 @@ maybe_auto_degrade() {
 if any_consultation_markers; then
   rm -f "$DENY_AGGREGATE_FILE" 2>/dev/null || true
 fi
+
+
+# ─── StateEngine discovery hint (TRA-763) ──────────────────────────
+# TRA-724 put the break-even for the trace_state_* loop at turns 25-28: below
+# it the state block costs more than the history it replaces (median -5.6% to
+# -8.4% billed), from turn 30 on 667 of 669 real sessions came out ahead
+# (+33.2% billed at 50-99 turns, +68.7% at 200+). The seven schemas (838
+# tokens) are therefore kept off the default `minimal` preset — which leaves
+# the feature unreachable in exactly the sessions it pays off in. This counts
+# guarded tool calls and, once past the threshold, points the agent at
+# load_tools. Once per session, advisory only, never blocks.
+STATE_HINT_TURNS=${TRACE_MCP_STATE_HINT_TURNS:-30}
+# A non-numeric value here is not a bad hint, it is a dead guard: under
+# `set -u` bash reads the string inside (( )) as a variable name and aborts
+# the hook with no JSON on stdout, which fails open for every remaining
+# guarded call in the session. Fall back to the default instead.
+[[ "$STATE_HINT_TURNS" =~ ^-?[0-9]+$ ]] || STATE_HINT_TURNS=30
+STATE_HINT_FILE="$READS_DIR/.state-hint-emitted"
+STATE_SESSION_START="$READS_DIR/.session-start"
+STATE_TURN_COUNTER="$READS_DIR/.session-turn-count"
+
+state_hint_if_due() {
+  (( STATE_HINT_TURNS <= 0 )) && return 0        # 0 or negative disables the hint
+  (( HEARTBEAT_DEAD == 1 )) && return 0          # no live channel to enable it on
+  [[ -f "$STATE_HINT_FILE" ]] && return 0        # one shot per session
+  case "${TRACE_MCP_PRESET:-}" in state|full) return 0 ;; esac  # already advertised
+
+  local count=0
+  [[ -f "$STATE_TURN_COUNTER" ]] && count=$(cat "$STATE_TURN_COUNTER" 2>/dev/null || echo 0)
+  [[ "$count" =~ ^[0-9]+$ ]] || count=0
+  count=$((count + 1))
+  (( count == 1 )) && touch "$STATE_SESSION_START" 2>/dev/null
+  true
+  echo "$count" > "$STATE_TURN_COUNTER" 2>/dev/null || true
+  (( count < STATE_HINT_TURNS )) && return 0
+
+  # ponytail: "state is already in use" is inferred from state.db having been
+  # written since this session started, not from watching the calls — the
+  # guard's matcher is Read|Grep|Glob|Bash|Agent, so trace_state_* calls never
+  # reach this hook. A concurrent session writing state.db swallows one soft
+  # hint; a marker written by the server is the upgrade if that ever matters.
+  if [[ -f "$STATE_SESSION_START" ]] && \
+     [[ -n "$(find "$TRACE_STATE_HOME/state.db" -newer "$STATE_SESSION_START" 2>/dev/null)" ]]; then
+    touch "$STATE_HINT_FILE" 2>/dev/null || true
+    return 0
+  fi
+
+  touch "$STATE_HINT_FILE" 2>/dev/null || true
+  allow_with_context "[trace-mcp] This session has passed ${count} tool calls. Past ~30 turns the ReAct transcript is the dominant prompt cost; carrying a compact state block instead measured 67% lower billed prompt tokens on real sessions of this length. To switch: load_tools({ tools: [\\\"trace_state_init\\\", \\\"trace_state_patch\\\", \\\"trace_state_get\\\", \\\"trace_state_add_dead_end\\\"] }), then trace_state_init with the goal and plan steps, and patch it per step instead of restating progress. Ignore this if the task is nearly done."
+}
+
+state_hint_if_due || true
 
 # ─── Read ──────────────────────────────────────────────────────────
 if [[ "$TOOL_NAME" == "Read" ]]; then
