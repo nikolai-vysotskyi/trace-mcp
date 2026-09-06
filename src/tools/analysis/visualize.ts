@@ -370,8 +370,9 @@ function buildFileGraph(
   const fileIdSet = new Set(seedFiles.map((f) => f.id));
   const _fileByIdMap = new Map(seedFiles.map((f) => [f.id, f]));
 
-  // Get symbol→nodeId mapping for seed files
-  const allSymbols = store.getSymbolsByFileIds([...fileIdSet]);
+  // Get symbol→nodeId mapping for seed files. Only (id, file_id) is used
+  // below — this is a file-level graph, symbol rows never reach the payload.
+  const allSymbols = store.getSymbolFileRefsByFileIds([...fileIdSet]);
   const symRefIds = allSymbols.map((s) => s.id);
   const symNodeMap = store.getNodeIdsBatch('symbol', symRefIds); // refId → nodeId
   const symbolNodeIds = [...symNodeMap.values()];
