@@ -20,12 +20,15 @@
 // drops to 200, but the rendered string "trace"/"mcp" inks 675 above the
 // baseline and 210 below.
 //
-//   ROW    mark 885 tall, its centre 300 above the baseline, 275 before the
-//          word. Chosen on a sweep: at 232 the mark is centred on the ink block
-//          including the descender, which reads as hanging — the word has to
+//   ROW    mark exactly one em tall, its centre 300 above the baseline, 275
+//          before the word. It shipped at 885 first and read light against the
+//          word; one em is the same relation with one fewer arbitrary number,
+//          and it puts the mark's bottom (-200) on the descender of `p` (-210).
+//          The 300 is from a sweep: at 232 the mark is centred on the ink block
+//          including that descender, which reads as hanging — the word has to
 //          drop against the mark for the line to sit straight.
 //   STACK  mark 3600 (3.6 em), 800 under it.
-const ROW = { mark: 885, anchor: 300, gap: 275 };
+const ROW = { mark: 1000, anchor: 300, gap: 275 };
 const STACK = { mark: 3600, gap: 800 };
 
 // The step that replaces the hyphen — DESIGN-WEB §1a, in the same units.
