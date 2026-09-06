@@ -1,0 +1,133 @@
+{
+  "generatedAt": "2026-09-05T18:35:58.550Z",
+  "fixtureCommit": "fc47c10f44eb539cbb01b0bb2e4ff633c59b7151",
+  "node": "v22.22.3",
+  "platform": "darwin 25.5.0 / arm64",
+  "cpuCount": 18,
+  "runs": [
+    {
+      "label": "cold_production_pooled",
+      "wallMs": 3051.07125,
+      "filesTotal": 1903,
+      "filesIndexed": 1903,
+      "filesPerSec": 623.7153589907151,
+      "peakRssMb": 1167.859375,
+      "steadyRssMb": 532.078125,
+      "stages": {
+        "collectMs": 126.83012500000001,
+        "extractMs": 11073.891654999989,
+        "extractCalls": 1903,
+        "parseMs": 0,
+        "parseCalls": 0,
+        "persistMs": 518.7676249999998,
+        "persistCalls": 20,
+        "edgesMs": 633.011,
+        "lspMs": 0.024957999999969616,
+        "scipMs": 0.012708000000202446,
+        "envMs": 7.590500000000247
+      },
+      "workerWarmup": {
+        "firstBatchMedianMs": 2.2806870000000004,
+        "steadyMedianMs": 3.289249999999811,
+        "poolSize": 8
+      }
+    },
+    {
+      "label": "cold_daemon_keepalive_pool",
+      "wallMs": 3749.3235000000004,
+      "filesTotal": 1903,
+      "filesIndexed": 1903,
+      "filesPerSec": 507.55823017138954,
+      "peakRssMb": 1047.5625,
+      "steadyRssMb": 565.484375,
+      "stages": {
+        "collectMs": 111.52979200000027,
+        "extractMs": 8653.51014500006,
+        "extractCalls": 1903,
+        "parseMs": 0,
+        "parseCalls": 0,
+        "persistMs": 525.7452900000017,
+        "persistCalls": 20,
+        "edgesMs": 636.394416000001,
+        "lspMs": 0.0015000000003055902,
+        "scipMs": 0.00033400000029359944,
+        "envMs": 8.730250000000524
+      },
+      "workerWarmup": {
+        "firstBatchMedianMs": 3.9495205000002898,
+        "steadyMedianMs": 2.739749999999731,
+        "poolSize": 4
+      }
+    },
+    {
+      "label": "cold_single_threaded_diagnostic",
+      "wallMs": 7783.390708999999,
+      "filesTotal": 1903,
+      "filesIndexed": 1903,
+      "filesPerSec": 244.49498568786294,
+      "peakRssMb": 694.3125,
+      "steadyRssMb": 677.9375,
+      "stages": {
+        "collectMs": 111.89962500000001,
+        "extractMs": 48573.46641300011,
+        "extractCalls": 1903,
+        "parseMs": 2292.5222699998812,
+        "parseCalls": 3506,
+        "persistMs": 516.9805009999964,
+        "persistCalls": 20,
+        "edgesMs": 609.7301670000015,
+        "lspMs": 0.0014169999994919635,
+        "scipMs": 0.00029099999665049836,
+        "envMs": 8.357332999999926
+      },
+      "workerWarmup": null
+    },
+    {
+      "label": "incremental_1_file",
+      "wallMs": 1033.4300839999996,
+      "filesTotal": 1903,
+      "filesIndexed": 1,
+      "filesPerSec": 0.967651334601558,
+      "peakRssMb": 1266.34375,
+      "steadyRssMb": 796.421875,
+      "stages": {
+        "collectMs": 108.62662499999715,
+        "extractMs": 2651.043387999958,
+        "extractCalls": 1903,
+        "parseMs": 0,
+        "parseCalls": 0,
+        "persistMs": 0.3932910000003176,
+        "persistCalls": 1,
+        "edgesMs": 392.8575419999979,
+        "lspMs": 0.0015000000021245796,
+        "scipMs": 0.0003749999996216502,
+        "envMs": 6.0931669999990845
+      },
+      "workerWarmup": null
+    },
+    {
+      "label": "incremental_100_files",
+      "wallMs": 1343.3445839999986,
+      "filesTotal": 1903,
+      "filesIndexed": 100,
+      "filesPerSec": 74.44106388714937,
+      "peakRssMb": 1492.671875,
+      "steadyRssMb": 886.546875,
+      "stages": {
+        "collectMs": 109.47091699999874,
+        "extractMs": 3893.9776679999522,
+        "extractCalls": 1903,
+        "parseMs": 0,
+        "parseCalls": 0,
+        "persistMs": 83.742209,
+        "persistCalls": 2,
+        "edgesMs": 443.7922920000019,
+        "lspMs": 0.0014999999984866008,
+        "scipMs": 0.0002499999973224476,
+        "envMs": 8.683833999999479
+      },
+      "workerWarmup": null
+    }
+  ],
+  "diagnosticExtractRemainderMs": 46280.94414300023
+}
