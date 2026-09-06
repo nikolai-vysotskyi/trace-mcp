@@ -2,7 +2,7 @@
   "issue": "TRA-993",
   "generated_by": "scripts/gen-response-token-frame.mjs",
   "generated_from": {
-    "repo_commit": "e910bad7",
+    "repo_commit": "324761ed",
     "symbols": 7351,
     "source_files": 762,
     "directories": 158
@@ -18,9 +18,10 @@
   },
   "rules": {
     "word": "directory basenames under src/ matching ^[a-z][a-z0-9]{3,}$, deduped, sorted, every Nth",
-    "identifier": "symbol names from the index (no pseudo-symbols, >3 chars, [A-Za-z0-9_] only, not all-lowercase), ordered by symbol_id, every Nth",
+    "identifier": "symbol names returned by identifier_sql below, minus the all-lowercase ones (those are the word stratum), every Nth",
     "phrase": "symbol names split on camelCase/snake_case into >=2 lowercase words, deduped, ordered by symbol_id, every Nth",
-    "file": "indexed non-test .ts files under src/, path-sorted, every Nth"
+    "file": "indexed non-test .ts files under src/, path-sorted, every Nth",
+    "identifier_sql": "SELECT name FROM symbols\n          WHERE name NOT GLOB '__module__*' AND length(name) > 3 AND kind != 'namespace'\n            AND name GLOB '[A-Za-z_]*' AND name NOT GLOB '*[^A-Za-z0-9_]*'\n          ORDER BY symbol_id"
   },
   "queries": [
     {

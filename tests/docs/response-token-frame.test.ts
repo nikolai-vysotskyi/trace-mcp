@@ -18,6 +18,7 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
 const FRAME = 'benchmarks/response-tokens/frame.json';
 
 interface Frame {
+  rules: { identifier_sql: string };
   query_shape: {
     word: number;
     identifier: number;
@@ -103,6 +104,21 @@ describe('response-token sampling frame', () => {
       );
       expect(fs.existsSync(path.join(REPO_ROOT, p)), `${p} does not exist`).toBe(true);
     }
+  });
+
+  it('states the identifier filter as the query the generator runs, not a paraphrase', () => {
+    // Review of TRA-993 found `kind != 'namespace'` in the generator and absent
+    // from the stated rule — a rule describing a filter the code does not run is
+    // the same defect as the provenance sentence TRA-985 published untrue. The
+    // rule now travels as the query itself, and this keeps the two identical.
+    const generator = fs.readFileSync(
+      path.join(REPO_ROOT, 'scripts/gen-response-token-frame.mjs'),
+      'utf8',
+    );
+    expect(
+      generator.includes(frame.rules.identifier_sql),
+      'frame.json states an identifier query the generator does not run verbatim',
+    ).toBe(true);
   });
 
   it('is the frame the published measurement actually ran on', () => {

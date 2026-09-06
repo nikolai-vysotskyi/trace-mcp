@@ -99,15 +99,21 @@ const dirNames = [
 // Strata "identifier" and "phrase": real symbol names from the index. Symbols
 // are never named after files, so neither stratum can be aimed at a
 // `__module__:<filename>` pseudo-symbol.
+//
+// The query is the rule. It is copied verbatim into `frame.json` rather than
+// paraphrased there, because a prose paraphrase is exactly what drifts: review
+// caught `kind != 'namespace'` present in this filter and missing from the
+// stated rule, which is the same class of defect as TRA-985's false provenance
+// sentence. `tests/docs/response-token-frame.test.ts` asserts the two are the
+// same string, so the rule cannot describe a filter the generator does not run.
+const SYMBOL_QUERY = `SELECT name FROM symbols
+          WHERE name NOT GLOB '__module__*' AND length(name) > 3 AND kind != 'namespace'
+            AND name GLOB '[A-Za-z_]*' AND name NOT GLOB '*[^A-Za-z0-9_]*'
+          ORDER BY symbol_id`;
 const symbolNames = [
   ...new Set(
     db
-      .prepare(
-        `SELECT name FROM symbols
-          WHERE name NOT GLOB '__module__*' AND length(name) > 3 AND kind != 'namespace'
-            AND name GLOB '[A-Za-z_]*' AND name NOT GLOB '*[^A-Za-z0-9_]*'
-          ORDER BY symbol_id`,
-      )
+      .prepare(SYMBOL_QUERY)
       .all()
       .map((r) => r.name),
   ),
@@ -165,10 +171,16 @@ const frame = {
   rules: {
     word: 'directory basenames under src/ matching ^[a-z][a-z0-9]{3,}$, deduped, sorted, every Nth',
     identifier:
-      'symbol names from the index (no pseudo-symbols, >3 chars, [A-Za-z0-9_] only, not all-lowercase), ordered by symbol_id, every Nth',
+      'symbol names returned by identifier_sql below, minus the all-lowercase ones (those are the word stratum), every Nth',
     phrase:
       'symbol names split on camelCase/snake_case into >=2 lowercase words, deduped, ordered by symbol_id, every Nth',
     file: 'indexed non-test .ts files under src/, path-sorted, every Nth',
+    // Verbatim, not paraphrased: the filter list is the claim, so it travels as
+    // the query itself. `kind != 'namespace'` drops real namespace-kind symbols
+    // as well as pseudo-symbols; it is redundant for the latter, which the
+    // punctuation filter already excludes, and it is stated here rather than
+    // removed because this frame was measured with it in place.
+    identifier_sql: SYMBOL_QUERY,
   },
   queries,
   files: everyNth(files, FILE_COUNT).map((path) => ({ path, stratum: 'file' })),
