@@ -959,3 +959,48 @@ contributor without it can still regenerate; the run says so when it skips.
 
 **Badges: five maximum, real sources only.** Currently three — CI, npm version,
 licence. No badge for a number we could state in words.
+
+---
+
+## 11. The two doors block
+
+The landing carries one IA block the sections either side of it do not: a pair
+of cards naming **how** the product is installed, not what it does. The product
+ships through two doors — the MCP tool surface, and what `trace init` writes to
+the reader's machine — and door two had no name on any public surface, so a
+reader who installed us as "an MCP server" never learned that half of what they
+installed exists.
+
+**Two cards, never four.** One card per door, not one per mechanism. Splitting
+it per-mechanism — graph, decision memory, mirrors, guard — re-creates the "two
+products in one binary" reading the block exists to prevent. A new mechanism
+joins an existing card's copy or it does not go here.
+
+**It sits below the metrics strip, not above it.** §8's first screen is a
+measurement: hero, then the metrics strip already showing underneath at
+1440×900. Anything inserted between the two moves that measurement, and this
+block is not first-screen material — it is where a reader goes after the
+evidence, not before it. Measured after the change: `.hero` and
+`.metrics-strip` occupy exactly the bands they did before, and `.doors` starts
+at the metrics strip's bottom edge.
+
+**No section number and no `.section-meta`.** It is a band like `.trust-strip`
+and `.app-banner`, not a numbered chapter — numbering it would renumber the
+fourteen sections below for an insertion that is navigation, not argument.
+
+**The card.** `1px solid var(--border-visible)` on `--surface`, 32px padding,
+square corners, monochrome throughout; hover raises the outline to
+`--text-display` and that is the only state, the same treatment as `.app-frame`
+(§3). No accent fill — the accent is spent on actions (§4), and a door is a
+link, not the page's action.
+
+**Both links land on the same baseline.** The card is a flex column with
+`margin-bottom: auto` on the last paragraph, so copy of different lengths still
+puts the two `.door-go` labels on one line. Without it the shorter card's link
+floats up mid-card and the pair reads as two unrelated blocks rather than two
+of one thing — measured at 1440px, both labels bottom at 575px inside cards
+bottoming at 608px.
+
+**Below 800px it is one column with a 16px gap**, never a two-column grid
+squeezed — the same floor as `.pipeline`. Measured at 390px: 350px cards, no
+horizontal overflow.
