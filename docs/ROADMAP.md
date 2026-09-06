@@ -74,10 +74,13 @@ this is a category question, not a feature list.
 reopening it** (TRA-879). Thirty days of GSC data for `sc-domain:trace-mcp.com`:
 53 clicks total, 41 of them (77%) from the exact strings `trace-mcp` and
 `trace mcp`, 83% from some variant of the name, and **zero clicks from any
-query describing what the product does**. Two of the three largest
-impression sources are collisions we already lose — `traceix mcp` (61
-impressions, 0 clicks) and `mcp tracing` (54 impressions, 0 clicks, a
-different category entirely). So the boundary fixed in
+query describing what the product does**. The largest
+impression source is a collision we already lose — `traceix mcp` (61
+impressions, 0 clicks), a different product sharing our prefix. The
+second, `mcp tracing` (54 impressions, 0 clicks), is **not** a collision:
+it is our own observability intent, `/telemetry.html` targets it, and the
+homepage was cannibalizing it — see `ops/index-coverage.md` (TRA-974). So
+the boundary fixed in
 `ops/rename-to-trace.md` — short name only on things that live on a
 developer's own disk, `trace-mcp` everywhere public — is now backed by
 search data, not just by the 0.74–1.23% token measurement. Nothing that a

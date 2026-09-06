@@ -182,8 +182,8 @@ neither would ever appear in a catalogue.
 The query is `gh search issues "trace-mcp" --limit 40 --json url,title,updatedAt,repository,state`,
 run with our own org filtered out. **Expect a poor signal ratio and budget for it:**
 of 40 hits on 2026-09-05, 38 were the `trace`/tracing name collision — OTel spans,
-Jaeger, Langfuse, stack traces — the same collision TRA-879 measures on the search
-side (`traceix mcp`, `mcp tracing`, 115 impressions, zero clicks). One hit was ours.
+Jaeger, Langfuse, stack traces — the same kind of collision TRA-879 measures on the
+search side as `traceix mcp` (61 impressions, zero clicks). One hit was ours.
 One was the find. Scan the repository names first; anything with `otel`, `trace-id`,
 `observability` or `span` in the title is the collision, not us.
 
@@ -238,9 +238,10 @@ that "detects schema mismatches between data producers and consumers"; it names
 nothing of ours and links nothing of ours. The GitHub repo behind it now **404s**
 while the account (`Mnehmos`, 65 public repos) is live, so it was renamed or
 taken down. Same collision is already recorded in the LobeHub row. Nothing to
-correct, but it is the likely source of the `traceix mcp` / `mcp tracing`
-impressions-without-clicks, and it means the bare name "Trace MCP" is not ours to
-claim on directories.
+correct, but it is the likely source of the `traceix mcp` impressions-without-clicks,
+and it means the bare name "Trace MCP" is not ours to claim on directories. Do not
+fold `mcp tracing` into that bucket: those impressions are our own observability
+intent, misrouted to the homepage (`ops/index-coverage.md`, TRA-974).
 
 ## macOS code signing and notarization
 

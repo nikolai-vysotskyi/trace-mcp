@@ -139,19 +139,25 @@ Search Analytics, `sc-domain:trace-mcp.com`, 2026-08-06 → 2026-09-04:
 the product does — nothing containing "code graph", "context", "token" or
 "MCP server for…" earned a click.
 
-The two largest impression sources are both name collisions we already lose:
-`traceix mcp` (61 impressions, position 6.0) is a different product with the
-same prefix, and `mcp tracing` (54 impressions, position 13.7) is the
-observability category — but see `ops/index-coverage.md` (TRA-974): that second
-one is our own category, we own a page for it, and we were losing it to our own
-homepage, not to a competitor. 115 impressions, no clicks — and that is what the
-late-August impression spike was made of (10–20/day → 48 on 08-29 → 93 on
-09-02, clicks flat at 2–3, CTR ~15% → 2.2%). More impressions here is not
-growth.
+The largest impression source is a name collision we already lose: `traceix mcp`
+(61 impressions, position 6.0) is a different product with the same prefix. Its
+61 impressions at zero clicks are not growth.
+
+The second, `mcp tracing` (54 impressions, position 13.7), is a different case
+and must not be pooled with it: it is **our own** observability intent — we emit
+OTel spans per MCP tool call and `/telemetry.html` targets that phrase — and we
+were losing it to our own homepage, not to a competitor. Zero clicks there is an
+internal-cannibalization defect, not a wrong audience. See
+`ops/index-coverage.md` (TRA-974).
+
+Together those 115 clickless impressions are what the late-August spike was made
+of (10–20/day → 48 on 08-29 → 93 on 09-02, clicks flat at 2–3, CTR ~15% → 2.2%).
+For the `traceix mcp` half, more impressions is not growth and no money goes
+there. For the `mcp tracing` half it is winnable demand we were mishandling.
 
 So `-mcp` is doing load-bearing work in the SERP: it is the token that
-disambiguates us from `traceix` and from tracing/observability, *and we are
-losing both collisions while still carrying it*. Dropping it from anything
+disambiguates us from `traceix` and from generic tracing/observability, *and we
+are losing that collision while still carrying it*. Dropping it from anything
 searchable removes the disambiguator from the only string that converts.
 
 Nothing in the disposition table changes — this is the confirmation, not a
