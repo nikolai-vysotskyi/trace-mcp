@@ -601,3 +601,63 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
   });
 });
+
+/* TRA-1015: the hook stopped the running daemon on every install, including a
+   `pnpm install` inside a source checkout — which links its bin into the
+   checkout's own node_modules/.bin and therefore gives the launchd daemon no
+   new binary to respawn with. On the maintainer's machine that accounted for
+   118 of 155 daemon stops in 48h, with 68 shutdowns landing inside two minutes
+   of the daemon's own start. */
+describe('postinstall-app.mjs daemon stop', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-daemon-stop-'));
+    fs.mkdirSync(path.join(tmp, '.trace'), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  /** Run a copy of the script from `scriptPath` and return what it appended to daemon.log. */
+  function runAndReadLog(scriptPath: string): Promise<string> {
+    const child = spawn(process.execPath, [scriptPath], {
+      env: {
+        ...process.env,
+        TRACE_HOME: path.join(tmp, '.trace'),
+        // Never touch the real launchd daemon or the real /Applications.
+        TRACE_MCP_LAUNCHCTL_BIN: '/usr/bin/true',
+        TRACE_MCP_APP_DIRS: path.join(tmp, 'Applications'),
+        TRACE_MCP_MDFIND_BIN: '/usr/bin/false',
+        TRACE_MCP_PGREP_BIN: '/usr/bin/false',
+        TRACE_MCP_PS_BIN: '/usr/bin/false',
+        TRACE_MCP_NO_AUTO_UPDATE: '',
+      },
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return new Promise((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', () => {
+        const log = path.join(tmp, '.trace', 'daemon.log');
+        resolve(fs.existsSync(log) ? fs.readFileSync(log, 'utf-8') : '');
+      });
+    });
+  }
+
+  it('stops the daemon when installed into a node_modules tree', async () => {
+    const pkg = path.join(tmp, 'node_modules', 'trace-mcp');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.cpSync(path.join(REPO_ROOT, 'scripts'), path.join(pkg, 'scripts'), { recursive: true });
+
+    const log = await runAndReadLog(path.join(pkg, 'scripts', 'postinstall-app.mjs'));
+
+    expect(log).toContain('Daemon stop requested');
+  });
+
+  it('leaves the daemon alone when run from a source checkout', async () => {
+    const log = await runAndReadLog(SCRIPT_PATH);
+
+    expect(log).not.toContain('Daemon stop requested');
+  });
+});
