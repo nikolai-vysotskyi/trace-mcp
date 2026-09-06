@@ -2,9 +2,11 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 
 /**
  * A backend is what processes MCP messages behind the MessageRouter.
- * Two implementations:
+ * Three implementations:
  *   - ProxyBackend: forwards to a running daemon via HTTP/SSE
  *   - LocalBackend: runs a full in-process McpServer + indexer
+ *   - SnapshotBackend: instant read-only view of the daemon's on-disk index,
+ *     used only until one of the above is ready (TRA-948)
  *
  * Router owns a single StdioServerTransport and swaps backends beneath it
  * so the MCP client never sees a disconnect.
@@ -28,7 +30,7 @@ export interface Backend {
   backgroundDispose?: Promise<void>;
 }
 
-export type BackendKind = 'proxy' | 'local';
+export type BackendKind = 'proxy' | 'local' | 'snapshot';
 
 export type Mode = 'proxy' | 'local' | 'idle' | 'transitioning';
 

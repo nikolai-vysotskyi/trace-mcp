@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import type { Readable, Writable } from 'node:stream';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
@@ -19,6 +20,7 @@ import {
 import { LocalBackend } from './local-backend.js';
 import { MessageRouter } from './message-router.js';
 import { ProxyBackend } from './proxy-backend.js';
+import { SnapshotBackend } from './snapshot-backend.js';
 import type { Backend } from './types.js';
 
 declare const PKG_VERSION_INJECTED: string;
@@ -119,7 +121,7 @@ export class StdioSession {
   private shuttingDown = false;
   private bootstrapped = false;
   /** Tracks the mode we *intend* to have — may differ briefly from router.getActiveKind() during swap. */
-  private desiredMode: 'proxy' | 'local' | 'dormant' = 'dormant';
+  private desiredMode: 'proxy' | 'local' | 'snapshot' | 'dormant' = 'dormant';
   /** Guards against concurrent wakeUp() calls when multiple stdin messages arrive in the dormant window. */
   private wakePromise: Promise<void> | null = null;
   /**
@@ -208,39 +210,119 @@ export class StdioSession {
       logger.warn({ err: String(err) }, 'StdioSession: stdio transport error');
     };
 
+    // Instant path (TRA-948): if the daemon has already indexed this project,
+    // its snapshot is sitting on disk — serve the client's first requests
+    // from it directly instead of blocking stdio on the daemon /health check,
+    // HTTP session registration, and SSE handshake (measured 2.7-3.6s cold,
+    // TRA-931). The real backend is negotiated off the critical path below
+    // and takes over via MessageRouter.swap() the moment it's ready.
+    const snapshot = this.buildSnapshotBackend();
+    if (snapshot) {
+      try {
+        await snapshot.start();
+        this.router.setInitialBackend(snapshot);
+        this.desiredMode = 'snapshot';
+        await this.finishBootstrap();
+        void this.settleRealBackend();
+        return;
+      } catch (err) {
+        logger.warn(
+          { err: String(err) },
+          'StdioSession: snapshot backend failed to start, falling back to full bootstrap',
+        );
+        try {
+          await snapshot.stop();
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+
+    const { backend: initialBackend, daemonActive } = await this.selectAndStartBackend();
+    this.router.setInitialBackend(initialBackend);
+    this.desiredMode = initialBackend.kind;
+    this.watcher.onStableChange((nowActive) => {
+      void this.onDaemonStateChange(nowActive);
+    });
+    this.resetIdleTimer();
+    await this.finishBootstrap();
+
+    // Now that the client can be answered, try to bring a daemon up. Success
+    // is picked up by the watcher, which swaps this session onto a proxy
+    // backend; failure just leaves us in local mode.
+    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
+      void this.backgroundAutoSpawn();
+    }
+  }
+
+  /**
+   * Poll the daemon and start whichever backend its state implies. This is
+   * the slow path: `watcher.start()` blocks on a real `/health` round trip,
+   * and a proxy backend blocks on HTTP session registration + SSE handshake.
+   */
+  private async selectAndStartBackend(): Promise<{ backend: Backend; daemonActive: boolean }> {
     await this.watcher.start();
     const daemonActive = this.watcher.getCurrentState();
 
     // Pick a backend from the daemon state we already know. Spawning a daemon
     // is an optimization and must never gate the handshake (TRA-704) — it runs
-    // in the background below, and the watcher swaps us onto it when it lands.
-    let initialBackend: Backend = daemonActive
-      ? this.buildProxyBackend()
-      : this.buildLocalBackend();
+    // in the background, and the watcher swaps us onto it when it lands.
+    let backend: Backend = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
     try {
-      await initialBackend.start();
+      await backend.start();
     } catch (err) {
-      if (initialBackend.kind === 'local') throw err;
+      if (backend.kind === 'local') throw err;
       // Daemon answered /health but wouldn't take the session — serve this
       // session in-process rather than failing the whole connection.
       logger.warn(
         { err: String(err) },
         'StdioSession: proxy backend failed to start, falling back to local mode',
       );
-      initialBackend = this.buildLocalBackend();
-      await initialBackend.start();
+      backend = this.buildLocalBackend();
+      await backend.start();
     }
-    this.router.setInitialBackend(initialBackend);
-    this.desiredMode = initialBackend.kind;
+    return { backend, daemonActive };
+  }
 
-    // Subscribe to stable daemon state changes.
+  /**
+   * Runs after the snapshot backend has already answered the client's first
+   * requests and stdio is live: negotiate the real backend the same way the
+   * no-snapshot path does, then hand off via `swapTo()` — which drains
+   * in-flight requests, replays the cached `initialize` into the new backend
+   * (seeded via `cachedInitialize`, see buildProxyBackend), and stops (closes)
+   * the snapshot's readonly connection. Mirrors onDaemonStateChange: the
+   * candidate backend is handed to `swapTo` *unstarted* — `router.swap()`
+   * starts it — instead of pre-starting it here and starting it again.
+   */
+  private async settleRealBackend(): Promise<void> {
+    await this.watcher.start();
+    const daemonActive = this.watcher.getCurrentState();
+    await this.swapTo(
+      daemonActive ? this.buildProxyBackend() : this.buildLocalBackend(),
+      'snapshot-settled',
+    );
+    // Daemon answered /health but wouldn't take the session — swapTo() already
+    // logged and cleaned up the failed attempt; retry once in-process rather
+    // than leaving the session stuck on the read-only snapshot forever.
+    if (daemonActive && this.router.getActiveKind() !== 'proxy') {
+      await this.swapTo(this.buildLocalBackend(), 'snapshot-settled-fallback');
+    }
     this.watcher.onStableChange((nowActive) => {
       void this.onDaemonStateChange(nowActive);
     });
-
-    // Install idle timer (non-lethal).
     this.resetIdleTimer();
+    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
+      void this.backgroundAutoSpawn();
+    }
+  }
 
+  /**
+   * Everything after a backend is active: release the early-init stdout
+   * guard, start the stdio transport, the version-drift probe, the handshake
+   * watchdog, and the bootstrap log line. Runs exactly once per session,
+   * regardless of which path picked the first backend.
+   */
+  private async finishBootstrap(): Promise<void> {
     // Release the early-init stdout guard now that the MCP transport owns
     // the stream. Anything that writes to stdout from this point on is
     // expected to be a JSON-RPC frame.
@@ -282,13 +364,6 @@ export class StdioSession {
       },
       'StdioSession bootstrapped',
     );
-
-    // Now that the client can be answered, try to bring a daemon up. Success
-    // is picked up by the watcher, which swaps this session onto a proxy
-    // backend; failure just leaves us in local mode.
-    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
-      void this.backgroundAutoSpawn();
-    }
   }
 
   /**
@@ -549,6 +624,16 @@ export class StdioSession {
     return new LocalBackend({
       projectRoot: this.opts.projectRoot,
       indexRoot: this.opts.indexRoot,
+      config: this.opts.config,
+      sharedDbPath: this.opts.sharedDbPath,
+    });
+  }
+
+  /** Null when there's nothing on disk yet to read instantly (safe fallback, TRA-948). */
+  private buildSnapshotBackend(): SnapshotBackend | null {
+    if (!fs.existsSync(this.opts.sharedDbPath)) return null;
+    return new SnapshotBackend({
+      projectRoot: this.opts.projectRoot,
       config: this.opts.config,
       sharedDbPath: this.opts.sharedDbPath,
     });
