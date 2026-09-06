@@ -902,15 +902,19 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
 // exited 126. The client lost all ~170 tools for the session, and the daily
 // "zero ERROR lines in launcher.log" health check read clean, because from the
 // shim's own side the exec had succeeded.
-describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling target', () => {
-  /** The real generator, so the launcher's marker can never drift from it. */
-  function plantRuntimeShim(dir: string, execPath: string): string {
-    fs.mkdirSync(dir, { recursive: true });
-    const shim = path.join(dir, 'node-runtime');
-    fs.writeFileSync(shim, runtimeShimContent(execPath), { mode: 0o755 });
-    return shim;
-  }
+/**
+ * The real generator, so the launcher's marker can never drift from it. Module
+ * scope because two suites plant this shim: the dangling-target one below and
+ * the app-only recovery one at the end of the file.
+ */
+function plantRuntimeShim(dir: string, execPath: string): string {
+  fs.mkdirSync(dir, { recursive: true });
+  const shim = path.join(dir, 'node-runtime');
+  fs.writeFileSync(shim, runtimeShimContent(execPath), { mode: 0o755 });
+  return shim;
+}
 
+describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling target', () => {
   function plantFallbackPrefix(home: string, traceHome: string): { cli: string } {
     const prefix = path.join(home, 'fallback-prefix');
     fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
@@ -1087,4 +1091,137 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     // Default 5 MB applies, so a one-line log is nowhere near it.
     expect(fs.existsSync(`${logPath}.1`)).toBe(false);
   });
+});
+
+// TRA-996: the mirror image of the dangling-shim outage above, on the other
+// half of the pair. A DMG install carries its own Node and its own cli.js and
+// needs neither npm nor a system node — but every recovery path in the shim
+// searched npm prefixes only. So the moment launcher.env stopped describing
+// reality (the app was dragged to another folder, the file was lost), an
+// app-only machine had no second source: the probe found nothing and the
+// client lost all ~170 tools until someone re-launched the app. Both failures
+// were reproduced against a sandboxed app-only install before the fix.
+describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)', () => {
+  /** A minimal trace-mcp.app: one main binary, one bundled dist/cli.js. */
+  function plantAppBundle(root: string, marker = 'APP_NODE'): { app: string; cli: string } {
+    const app = path.join(root, 'trace-mcp.app');
+    const macos = path.join(app, 'Contents', 'MacOS');
+    const dist = path.join(app, 'Contents', 'Resources', 'server', 'dist');
+    fs.mkdirSync(macos, { recursive: true });
+    fs.mkdirSync(dist, { recursive: true });
+    // Echoes ELECTRON_RUN_AS_NODE so the tests can prove the shim exports it —
+    // without it the Electron binary is an app, not a Node runtime, and the
+    // exec would open a window instead of serving MCP.
+    fs.writeFileSync(
+      path.join(macos, 'trace-mcp'),
+      `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo "v24.0.0"; exit 0; fi\necho "${marker}:\${ELECTRON_RUN_AS_NODE:-unset}:$*"\n`,
+      { mode: 0o755 },
+    );
+    const cli = path.join(dist, 'cli.js');
+    fs.writeFileSync(cli, '// bundled cli\n');
+    return { app, cli: fs.realpathSync(cli) };
+  }
+
+  function writeAppLocation(traceHome: string, appPath: string): void {
+    fs.writeFileSync(
+      path.join(traceHome, 'app-location.json'),
+      `${JSON.stringify({ appPath, bundleId: 'com.trace-mcp.app', version: '3.8.0' }, null, 2)}\n`,
+    );
+  }
+
+  it('finds the bundled cli.js when no npm prefix holds the package', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const { app, cli } = plantAppBundle(home);
+    writeAppLocation(traceHome, app);
+    // Node is fine; only the cli.js pointer went stale — the shape left behind
+    // when the app moves but a system node is present.
+    writeConfig(traceHome, node, path.join(home, 'gone.app', 'cli.js'));
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+  });
+
+  it('does not reach for the bundle while the configured cli.js still exists', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    const { app } = plantAppBundle(home);
+    writeAppLocation(traceHome, app);
+    writeConfig(traceHome, node, cli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+  });
+
+  it('ignores an app-location file naming a bundle that is gone', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    writeAppLocation(traceHome, path.join(home, 'never-installed.app'));
+    writeConfig(traceHome, node, path.join(home, 'gone.js'));
+
+    const { status, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(127);
+    expect(stderr).toContain('trace-mcp package not found');
+  });
+
+  // The node half needs the machine to have no standard node, or the probe
+  // rightly prefers it — same guard the pkg-roots node suite uses.
+  describe.skipIf(fs.existsSync('/opt/homebrew/bin/node') || fs.existsSync('/usr/local/bin/node'))(
+    'node resolves from the bundle',
+    () => {
+      it('recovers a moved app end to end, with no node and no npm anywhere', () => {
+        const { home, traceHome } = setupFakeHome();
+        // The stale pair: a runtime shim pointing into the app's OLD location,
+        // and a launcher.env carrying the cached major, so nothing on the fast
+        // path would spawn `node -v` and notice.
+        const shim = plantRuntimeShim(
+          path.join(traceHome, 'bin'),
+          path.join(home, 'Downloads', 'trace-mcp.app', 'Contents', 'MacOS', 'trace-mcp'),
+        );
+        const { app, cli } = plantAppBundle(path.join(home, 'Applications'));
+        fs.mkdirSync(path.join(home, 'Applications'), { recursive: true });
+        writeAppLocation(traceHome, app);
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          [
+            `TRACE_MCP_NODE="${shim}"`,
+            `TRACE_MCP_CLI="${path.join(home, 'Downloads', 'trace-mcp.app', 'cli.js')}"`,
+            'TRACE_MCP_NODE_MAJOR="24"',
+            '',
+          ].join('\n'),
+        );
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        expect(status).toBe(0);
+        // `1`, not `unset`: the app binary is only a Node runtime with this set.
+        expect(stdout.trim()).toBe(`APP_NODE:1:${cli} serve`);
+      });
+
+      it('prefers a real node over the app binary', () => {
+        const { home, traceHome } = setupFakeHome();
+        const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
+        fs.mkdirSync(nvmBin, { recursive: true });
+        fs.writeFileSync(path.join(nvmBin, 'node'), fakeNodeBody('22.22.2', 'NVM_NODE'), {
+          mode: 0o755,
+        });
+        fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v22.22.2\n');
+        const { app, cli } = plantAppBundle(home);
+        writeAppLocation(traceHome, app);
+        writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NVM_NODE:${cli} serve`);
+      });
+    },
+  );
 });
