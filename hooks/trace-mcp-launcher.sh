@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.5
+# trace-mcp-launcher v0.6.6
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -24,6 +24,10 @@ CONFIG="$TRACE_HOME/launcher.env"
 LOG="$TRACE_HOME/launcher.log"
 # One global node_modules root per line, appended by each install.
 PKG_ROOTS_FILE="$TRACE_HOME/pkg-roots"
+# Where the desktop app last saw itself, written by the app on every launch
+# (packages/app/src/main/install-path.ts). The only pointer to an app-only
+# install that survives the app being moved.
+APP_LOCATION_FILE="$TRACE_HOME/app-location.json"
 
 # Rotate once per invocation, before the first append (TRA-702). The shim runs
 # once per MCP client launch and writes a couple of lines, so a size check here
@@ -153,7 +157,10 @@ is_bounded_major() {
 # Major version of a node binary, or non-zero if it will not run at all.
 node_major() {
   local v
-  v=$("$1" -v 2>/dev/null) || return 1
+  # `ELECTRON_RUN_AS_NODE` is meaningless to a real node binary and is what
+  # makes the app's own binary answer `-v` as the Node it embeds, so one form
+  # covers both kinds of candidate.
+  v=$(ELECTRON_RUN_AS_NODE=1 "$1" -v 2>/dev/null) || return 1
   v="${v#v}"
   v="${v%%.*}"
   is_bounded_major "$v" || return 1
@@ -273,6 +280,76 @@ node_from_pkg_roots() {
   return 0
 }
 
+# Absolute path of the desktop app bundle, per the location file the app
+# rewrites on every launch. Parsed with builtins — the shim never spawns a
+# JSON tool, and the value is an opaque path, never evaluated.
+app_bundle() {
+  local line path=''
+  [ -f "$APP_LOCATION_FILE" ] && [ -r "$APP_LOCATION_FILE" ] || return 1
+  # `|| [ -n "${line:-}" ]` — the same guard the config parser and pkg_roots
+  # use, for the same reason: `read` reports failure on a final line with no
+  # trailing newline, so a plain loop silently drops it. Today the writer emits
+  # `appPath` first and pretty-printed, so only a closing brace would be lost —
+  # but that is an accident of key order, not something this parser checks
+  # (review of #1011).
+  while IFS= read -r line || [ -n "${line:-}" ]; do
+    case "$line" in
+      *'"appPath"'*)
+        path="${line#*\"appPath\"}"
+        path="${path#*:}"
+        path="${path#"${path%%[![:space:]]*}"}"   # ltrim
+        path="${path#\"}"
+        path="${path%%\"*}"
+        ;;
+    esac
+  done < "$APP_LOCATION_FILE"
+  case "$path" in
+    /*) [ -d "$path" ] && echo "$path" && return 0 ;;
+  esac
+  return 1
+}
+
+# node and cli.js from inside the app bundle (TRA-996).
+#
+# A DMG install carries its own Node and its own cli.js and needs neither npm
+# nor a system node — that is the whole point of `bin/node-runtime`. But every
+# recovery path in this shim searched npm prefixes only, so the moment
+# launcher.env stopped describing reality the machine had no second source:
+# `probe_node` found nothing and the client lost all ~170 tools until someone
+# re-launched the app. Reproduced two ways on an app-only sandbox: dragging
+# trace-mcp.app to another folder (TRA-965's shim check fires, then dies at the
+# probe), and deleting launcher.env. Both now recover without the app running.
+#
+# Bundle layout is macOS-only, matching daemon-install.ts, which is the only
+# platform that ships an .app. `Contents/MacOS/*` rather than a hardcoded
+# binary name: a bundle has exactly one main executable and the app is free to
+# rename it.
+# ponytail: glob the one binary instead of parsing Info.plist — CFBundleExecutable
+# if a bundle ever ships a second executable there.
+node_from_app_bundle() {
+  local app c
+  app=$(app_bundle) || return 1
+  for c in "$app"/Contents/MacOS/*; do
+    [ -f "$c" ] && [ -x "$c" ] && normalise_path "$c" && return 0
+  done
+  return 1
+}
+
+cli_from_app_bundle() {
+  local app cli
+  app=$(app_bundle) || return 1
+  cli="$app/Contents/Resources/server/dist/cli.js"
+  [ -f "$cli" ] && normalise_path "$cli"
+}
+
+# True when $1 is the app's own binary, which only runs as Node with this set.
+is_app_runtime() {
+  case "$1" in
+    *.app/Contents/MacOS/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Every node worth trying, one per line, most-likely-first.
 node_candidates() {
   local n fnm_dir candidate
@@ -298,6 +375,11 @@ node_candidates() {
 
   # 4f. Last resort: prefixes that only pkg_roots knows about.
   node_from_pkg_roots
+
+  # 4g. The Node embedded in the desktop app. Last, because a real node needs
+  # no `ELECTRON_RUN_AS_NODE` dance — but on a DMG-only machine it is the only
+  # one there is.
+  node_from_app_bundle
 
   return 0
 }
@@ -449,6 +531,10 @@ probe_cli() {
     done
   done <<< "$roots"
 
+  # No npm prefix holds us: this is an app-only install (TRA-996). The bundle
+  # ships the same dist/cli.js, so serve that rather than ending the session.
+  cli_from_app_bundle && return 0
+
   return 1
 }
 
@@ -548,6 +634,7 @@ fi
 if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
   log "exec(config) node=$NODE_PATH cli=$CLI_PATH argc=$#"
   PATH="$CLIENT_PATH"
+  is_app_runtime "$NODE_PATH" && export ELECTRON_RUN_AS_NODE=1
   exec "$NODE_PATH" "$CLI_PATH" "$@"
 fi
 
@@ -580,4 +667,7 @@ fi
 
 log "exec(probe) node=$NODE_PATH cli=$CLI_PATH argc=$#"
 PATH="$CLIENT_PATH"
+# Set only for the app's own binary, never globally: the server spawns git and
+# LSP children, and an inherited ELECTRON_RUN_AS_NODE would follow them.
+is_app_runtime "$NODE_PATH" && export ELECTRON_RUN_AS_NODE=1
 exec "$NODE_PATH" "$CLI_PATH" "$@"
