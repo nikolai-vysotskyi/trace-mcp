@@ -269,9 +269,9 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 
 | Surface | Change | Note |
 |---|---|---|
-| `docs/index.html` hero | Headline → the sentence. Boundary line under it. 90.6% stays as the evidence | Keep the `Recomputation → Reuse` eyebrow — it was right all along |
-| `README.md` first screen + banner PNGs | Same sentence, verbatim | Banner is generated: `scripts/gen-readme-banner.mjs`, never retouched by hand |
-| `docs/_config.yml` `description` | Same sentence | Feeds meta description on every page |
+| `docs/index.html` hero | **Done (TRA-918).** Headline → the sentence. Boundary line under it. 90.6% moved to the subhead as evidence | Eyebrow kept — it was right all along. Category term stays on the `<title>` and the Product View heading, not the hero |
+| `README.md` first screen + banner PNGs | **Done (TRA-918).** Same sentence, verbatim, plus the boundary line | Banner regenerated from `scripts/gen-readme-banner.mjs` — the tagline lives in that script, not in the PNG |
+| `docs/_config.yml` `description` | **Done (TRA-918).** Sentence first, then the category term; no hand-typed number | Feeds meta description on every page, so it is cut to 155 characters |
 | Site IA | Two second-level entries, one per door; door 2 has no page today | The real gap; see Doors |
 | `comparisons.md` | Compares graph-to-graph today. The `/vs/` claim changes shape | Coordinate with SEO — TRA-876 just landed benchmark copy on three `/vs/` pages |
 | `server.json` `description` | **Tools only** — do not carry the category sentence | Deliberate; see Doors |

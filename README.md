@@ -16,7 +16,7 @@
     <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
     <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
-    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp — precomputed code intelligence for AI coding agents. Index the repo once so the agent stops re-reading the same files. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 177 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
+    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 178 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
   </picture>
 </p>
 
@@ -41,9 +41,17 @@
 </p>
 
 <!-- The banner carries this sentence as a picture; this line carries it as text,
-     so search and screen readers get the same claim. Keep the two in sync. -->
+     so search and screen readers get the same claim. Keep the two in sync, and keep
+     both verbatim with the hero on trace-mcp.com and with docs/_config.yml —
+     ops/positioning.md holds the sentence. The boundary line under it is not a
+     footnote: it travels with the claim wherever the claim goes. -->
 <p align="center">
-  <strong>trace-mcp</strong> is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
+  <strong>trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.</strong><br />
+  <strong>90.6% fewer input tokens</strong> to review a pull request &mdash; median over 60 merged pull requests in open-source repos we don't own.
+</p>
+
+<p align="center">
+  <sub>We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files.</sub>
 </p>
 
 <p align="center">
@@ -74,7 +82,7 @@ trace add                  # index the repo you are in
 
 AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 
-trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
+trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 178 tools.
 
 The binding constraint is **recomputation**, not model capability: token bills, latency, and hallucinations all grow with project size instead of with task complexity. trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
 
@@ -561,7 +569,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         177 tools · 10 resources
+         178 tools · 10 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
