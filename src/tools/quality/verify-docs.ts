@@ -205,13 +205,16 @@ export function verifyDocs(store: Store, options: VerifyDocsOptions): VerifyDocs
     const exported = store
       .getExportedSymbols(pattern ? `${pattern}%` : undefined)
       .filter((s) => !pattern || s.file_path.startsWith(pattern));
+    // Plain-text mention counts: a page may name a symbol without a code span.
+    // Tokenised once rather than one regex per symbol — a name is untrusted
+    // input, and a set lookup is both safe and cheaper on a large scope.
+    const words = new Set(markdown.match(/[A-Za-z_$][\w$]*/g) ?? []);
     const seen = new Set<string>();
     const unmentioned: { name: string; kind: string; file: string }[] = [];
     for (const sym of exported) {
       if (seen.has(sym.name)) continue;
       seen.add(sym.name);
-      // Plain-text mention counts: a page may name a symbol without a code span.
-      if (new RegExp(`\\b${sym.name.replace(/[$]/g, '\\$&')}\\b`).test(markdown)) continue;
+      if (words.has(sym.name)) continue;
       unmentioned.push({ name: sym.name, kind: sym.kind, file: sym.file_path });
     }
     result.reverse = {
