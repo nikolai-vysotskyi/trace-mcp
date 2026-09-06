@@ -178,3 +178,38 @@ Read that as: outside people who already know the name, search sends the site
 nothing. It is not a ranking problem — position 5.9 with 0% CTR is a *wrong
 audience* problem — and it will not move until the pages that target real
 intent are in the index.
+
+## `mcp tracing` is ours, and the homepage was eating it (TRA-974, 2026-09-06)
+
+Correction to the line above and to `docs/ROADMAP.md` item 19: `mcp tracing` is
+**not** an out-of-category collision. trace-mcp emits OpenTelemetry spans for
+every MCP tool call, `/telemetry.html` has targeted that exact phrase since
+2026-05-13, and GSC URL Inspection on 2026-09-06 reports it `Submitted and
+indexed` (last crawl 2026-08-28). `traceix mcp` is the real foreign-brand
+collision; leave it alone.
+
+What the page breakdown showed for the query over 2026-08-07 → 2026-09-05
+(54 impressions, position 13.7, CTR 0):
+
+| Page | Impressions |
+|---|---|
+| homepage | ~51 |
+| `/configuration.html` | 2 (position 70.5) |
+| `/telemetry.html` | 1 |
+
+Internal cannibalization: the dedicated page is indexed and still loses to the
+homepage, which does not discuss tracing at all. Cause: `/telemetry.html` had
+**zero** in-body inbound links — only the flat footer nav — and the one
+homepage link that looked like an exception (`href="telemetry"` in the savings
+note) sits inside `{% if site.data.savings %}`, a data file that does not
+exist, so it never rendered.
+
+Fixed in the same change: contextual in-body links with the anchor text
+**"MCP tracing"** from the three indexed pages that can carry it — homepage
+(tools section), `configuration.html`, `analytics.html` — plus the broken
+relative href.
+
+Verify in GSC, not by inspection: impressions for `mcp tracing` should move off
+the homepage onto `/telemetry.html` and the average position should improve on
+13.7. Perceived-authority fixes take a recrawl; Request Indexing for
+`/telemetry.html` is queued with TRA-633's batch of Nikolai-clicks.

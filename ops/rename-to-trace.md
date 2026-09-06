@@ -142,7 +142,9 @@ the product does — nothing containing "code graph", "context", "token" or
 The two largest impression sources are both name collisions we already lose:
 `traceix mcp` (61 impressions, position 6.0) is a different product with the
 same prefix, and `mcp tracing` (54 impressions, position 13.7) is the
-observability category. 115 impressions, no clicks — and that is what the
+observability category — but see `ops/index-coverage.md` (TRA-974): that second
+one is our own category, we own a page for it, and we were losing it to our own
+homepage, not to a competitor. 115 impressions, no clicks — and that is what the
 late-August impression spike was made of (10–20/day → 48 on 08-29 → 93 on
 09-02, clicks flat at 2–3, CTR ~15% → 2.2%). More impressions here is not
 growth.
