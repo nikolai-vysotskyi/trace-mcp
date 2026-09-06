@@ -86,8 +86,8 @@ section.
 Three things the table says:
 
 1. **0.15 is wrong on every tool that matters.** The busiest four are 88% of all
-   calls, and not one of them lands near it. The assumption is off by several
-   multiples on every one.
+   calls, and not one of them lands on it: the closest, `search_text`, is 1.3x
+   off, and the other three are 2.2x to 4.7x off.
 2. **{{ site.data.response_tokens.tools_costing_more }} of the
    {{ site.data.response_tokens.tools_with_baseline }} cost more than the
    baseline they replace** — and, before the counter was corrected, were still

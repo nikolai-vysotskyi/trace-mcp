@@ -33,7 +33,12 @@ describe('response-tokens page', () => {
   it('has no hand-typed per-tool measurement row', () => {
     const tools = [...data.rows, ...data.overhead_rows].map((r) => r.tool);
     const offenders = tools.filter((tool) =>
-      new RegExp(`^\\|\\s*\`${tool}\`\\s*\\|\\s*[\\d,]+\\s*\\|\\s*[\\d,]+\\s*\\|`, 'm').test(page),
+      new RegExp(
+        // The overhead rows write their (absent) baseline as an em-dash, so the
+        // middle cell has to admit one or they stay unguarded.
+        `^\\|\\s*\`${tool}\`\\s*\\|\\s*[\\d,]+\\s*\\|\\s*(?:[\\d,]+|[—-]+)\\s*\\|`,
+        'm',
+      ).test(page),
     );
     expect(
       offenders,
