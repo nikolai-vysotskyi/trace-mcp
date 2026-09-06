@@ -84,11 +84,16 @@ uv__run_check
 ```
 
 The mechanism: when the parent that owned our stdout/stderr pipe exits without killing us, every
-write to those fds fails with `EPIPE`. The `uncaughtException` safety net in
+write to those fds fails with `EPIPE` — emitted as an `error` event on the stream. Nothing listened
+for it, so it became an uncaught exception. The `uncaughtException` safety net in
 `src/server/process-safety-net.ts` exists to keep a long-lived server alive through stray errors,
-and it does that by *logging* — to the same dead pipe. That write throws `EPIPE`, which re-enters
-the handler, which formats a stack trace, which logs, forever. The process never exits and never
-releases its port.
+and it does that by *logging* — the logger's destination is `process.stderr`, the same dead pipe.
+That write fails again, re-enters the handler, formats a stack trace, logs, forever. The process
+never exits and never releases its port.
+
+An instrumented run of the reproduction settles where the error is raised: with an `error` listener
+attached to `process.stderr`, every failure arrives there and the `uncaughtException` handler never
+fires at all. That is what makes the fix narrow — see below.
 
 Reproduction, deterministic in about six seconds:
 
@@ -106,6 +111,10 @@ setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); }, 6000);
 | RSS | 853 MB | 0 |
 | Lifetime | unbounded | ends at the first `EPIPE` |
 
-The fix is to treat a dead log sink as the one error the safety net must not swallow: there is
-nowhere left to report to, so the process leaves. Guarded by
+The fix listens on `process.stdout` and `process.stderr` themselves and exits on a broken pipe
+there. The stream that raised the error is the proof of ownership, which matters: `EPIPE` and
+friends are generic codes that any socket can raise, and exiting on the code alone would take a
+healthy daemon down over an unrelated HTTP response. Any other write failure on those streams
+(`ENOSPC`, `EACCES`) is still swallowed — a logger must not stop the server, which is the call
+`attachFileLogging` already makes for its own stream. Both branches are guarded in
 `src/server/__tests__/process-safety-net.test.ts`.
