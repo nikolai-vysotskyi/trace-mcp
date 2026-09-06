@@ -329,16 +329,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # No cache: 'pnpm' here: install below is conditional on the
+      # node_modules cache below missing, so a warm node_modules cache with a
+      # cold pnpm-store cache would skip install entirely and leave the store
+      # directory never created — actions/cache's post-job save then hard-
+      # errors on a path that doesn't exist. node_modules caching already
+      # covers the common case; a lockfile bump pays a plain (uncached-store)
+      # install instead.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - uses: ./.github/actions/setup-pnpm
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22'
-          cache: 'pnpm'
 
       - id: keys
         name: Compute cache key
@@ -686,17 +688,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # No cache: 'pnpm' here: "Install app dependencies" below is
+      # conditional on the node_modules cache below missing, so a warm
+      # node_modules cache with a cold pnpm-store cache would skip install
+      # entirely and leave the store directory never created —
+      # actions/cache's post-job save then hard-errors on a path that
+      # doesn't exist. node_modules caching already covers the common case;
+      # a lockfile bump pays a plain (uncached-store) install instead.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - uses: ./.github/actions/setup-pnpm
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-          cache-dependency-path: packages/app/pnpm-lock.yaml
 
       - name: Restore app node_modules cache
         id: app-nm-cache
