@@ -140,7 +140,7 @@ describe('checkRegisteredLaunchers', () => {
     const checks = checkRegisteredLaunchers(
       raw(
         'config.toml',
-        `[other]\ncommand = "unrelated"\n\n[mcp_servers.trace]\ncommand = "${cmd}"\nargs = []\n\n[mcp_servers.other]\ncommand = "nope"\n`,
+        `[other]\ncommand = "unrelated"\n\n[mcp_servers.trace]\ncommand = '${cmd}'\nargs = []\n\n[mcp_servers.other]\ncommand = "nope"\n`,
       ),
     );
     expect(checks.map((c) => c.path)).toContain(cmd);
@@ -160,7 +160,7 @@ describe('checkRegisteredLaunchers', () => {
     const checks = checkRegisteredLaunchers(
       raw(
         'settings.jsonc',
-        `{\n  // a comment JSON.parse would choke on\n  "amp.mcpServers": { "trace": { "command": "${cmd}" } }\n}\n`,
+        `{\n  // a comment JSON.parse would choke on\n  "amp.mcpServers": { "trace": { "command": ${JSON.stringify(cmd)} } }\n}\n`,
       ),
     );
     expect(checks.map((c) => c.path)).toContain(cmd);
