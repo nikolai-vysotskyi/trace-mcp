@@ -49,6 +49,18 @@ function makeEphemeralWorkdir(): string {
 }
 
 /**
+ * The runtime's other one-shot layout: `<tmp>/multica-task-<run-id>/<scratch>`
+ * (TRA-992). No `multica_workspaces` segment anywhere in it.
+ */
+function makeEphemeralTaskDir(): string {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-task-'));
+  const dir = path.join(base, 'multica-task-3265850447', 'tmpl06qk62l');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+  return dir;
+}
+
+/**
  * Write a registry row for an ephemeral workdir the way versions before
  * TRA-396 did. `registerProject` no longer persists these at all, but field
  * registries are full of them and `findEphemeralProjects` is what drains them.
@@ -347,6 +359,37 @@ describe('ephemeral workdirs are never persisted', () => {
     // an empty one is what keeps a foreground metrics call off the queue.
     expect(Object.keys(registryProjects())).toHaveLength(0);
     expect(listProjects()).toEqual([]);
+  });
+
+  // TRA-992: the tmp-dir layout was invisible to the ephemeral check, so these
+  // rows were persisted, then sat out the full 7-day `sweepMissingRoots` grace
+  // — 17 of 37 rows on the reported machine, each pinning a `.config.json`
+  // section that `pruneProjectConfigSections` will not touch while a registry
+  // entry claims it.
+  it('keeps a one-shot task scratch dir out of registry.json', () => {
+    const dir = makeEphemeralTaskDir();
+    registerProject(dir);
+
+    expect(registryProjects()).toEqual({});
+    // Still resolvable for the run that registered it, like the other layout.
+    expect(getProject(dir)?.root).toBe(dir);
+  });
+
+  it('still persists an ordinary project fixture built under the temp root', () => {
+    const repo = makeTmpRepo();
+    registerProject(repo);
+
+    expect(Object.keys(registryProjects())).toEqual([repo]);
+  });
+
+  it('leaves a directory that merely says "multica-task" alone', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-real-'));
+    const dir = path.join(base, 'multica-task-notes');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+    registerProject(dir);
+
+    expect(Object.keys(registryProjects())).toEqual([dir]);
   });
 
   it('still persists a workdir-shaped root registered as an explicit multi-root', () => {
