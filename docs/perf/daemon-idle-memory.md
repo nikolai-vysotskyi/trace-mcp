@@ -74,3 +74,9 @@ Expected steady-state effect on an idle daemon with 8 workers: about **-420 MB**
 taking the idle median from ~950 MB toward ~530 MB. Not yet confirmed in the field; the
 daemon on the measuring machine restarts every ~3 min (TRA-809), so it never sits idle
 long enough to cross the 5-minute window there.
+
+**TRA-971 follow-up:** 5 minutes was still long enough that a daemon idle for under an
+hour of a workday kept the pool warm the whole time. `KEEPALIVE_IDLE_TERMINATE_MS` is now
+45 seconds — comfortably inside the 60s idle bar from the acceptance criteria — with a
+per-instance `keepAliveIdleMs` override on `ExtractPoolOptions` so tests don't have to
+wait out the real default.

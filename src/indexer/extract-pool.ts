@@ -7,9 +7,9 @@
  * files actually proceeds in parallel.
  *
  * Lifecycle: lazy. The first `extract()` call spawns workers; they are released
- * again after an idle window (milliseconds for CLI, minutes for the daemon —
- * see IDLE_TERMINATE_MS / KEEPALIVE_IDLE_TERMINATE_MS) and `terminate()` shuts
- * them down for good. Worker spawn cost is non-trivial (~150-300 ms each
+ * again after an idle window (milliseconds for CLI, tens of seconds for the
+ * daemon — see IDLE_TERMINATE_MS / KEEPALIVE_IDLE_TERMINATE_MS) and
+ * `terminate()` shuts them down for good. Worker spawn cost is non-trivial (~150-300 ms each
  * because of WASM init + plugin loading), so callers should gate use by batch
  * size.
  *
@@ -101,6 +101,10 @@ export interface ExtractPoolOptions {
    *  one, so workers stay warm across bursty edits. CLI/tests pass false so the
    *  process can exit cleanly the moment the pool drains. */
   keepAlive?: boolean;
+  /** Override KEEPALIVE_IDLE_TERMINATE_MS for this instance. Only tests pass
+   *  this — so an integration test can assert on scale-to-zero without
+   *  waiting out the real 45s default. Ignored when `keepAlive` is false. */
+  keepAliveIdleMs?: number;
 }
 
 /**
@@ -131,13 +135,15 @@ const IDLE_TERMINATE_MS = 200;
 /**
  * Idle teardown delay for keepAlive (daemon) pools. Measured on TRA-811: each
  * live worker costs ~35 MB just to boot and ~50 MB once it has parsed a file
- * (own V8 isolate + tree-sitter WASM + loaded grammars), so a pool of 8 held
- * ~430 MB resident for the daemon's whole lifetime whether or not anything was
- * being indexed. Five minutes is long enough that a burst of edits never pays
- * the ~150-300 ms × N respawn cost twice, short enough that a daemon nobody is
- * indexing against gives the memory back.
+ * (own V8 isolate + tree-sitter WASM + loaded grammars), so a pool of 4 held
+ * ~300 MB resident for the daemon's whole lifetime whether or not anything was
+ * being indexed. TRA-971 shortened this from 5 minutes to 45 seconds — long
+ * enough that a burst of edits never pays the ~150-300 ms × N respawn cost
+ * twice, short enough that a daemon idle for 60s has already given the memory
+ * back. Overridable per-instance via `ExtractPoolOptions.keepAliveIdleMs` so
+ * tests don't have to wait out the real default.
  */
-export const KEEPALIVE_IDLE_TERMINATE_MS = 5 * 60_000;
+export const KEEPALIVE_IDLE_TERMINATE_MS = 45_000;
 
 /** Crash-loop guard tunables. Defaults are conservative — five fast crashes
  *  in a row almost certainly mean the worker entry is unrecoverable (missing
@@ -179,6 +185,7 @@ export class ExtractPool {
   private idleTimer: NodeJS.Timeout | null = null;
   public readonly size: number;
   public readonly keepAlive: boolean;
+  private readonly keepAliveIdleMs: number;
 
   constructor(opts: ExtractPoolOptions | number = {}) {
     // Legacy positional-int signature kept so existing call sites that pass a
@@ -187,6 +194,7 @@ export class ExtractPool {
     this.keepAlive = o.keepAlive ?? false;
     this.size = o.size ?? (this.keepAlive ? DEFAULT_KEEPALIVE_WORKER_COUNT : DEFAULT_WORKER_COUNT);
     this.workerEntry = o.workerEntry ?? resolveWorkerEntry();
+    this.keepAliveIdleMs = o.keepAliveIdleMs ?? KEEPALIVE_IDLE_TERMINATE_MS;
   }
 
   /** True when workers are usable in the current runtime (bundled build). */
@@ -300,7 +308,7 @@ export class ExtractPool {
           this.idleTeardown().catch(() => 0);
         }
       },
-      this.keepAlive ? KEEPALIVE_IDLE_TERMINATE_MS : IDLE_TERMINATE_MS,
+      this.keepAlive ? this.keepAliveIdleMs : IDLE_TERMINATE_MS,
     );
     // Don't keep the parent process alive on the timer alone.
     this.idleTimer.unref();
