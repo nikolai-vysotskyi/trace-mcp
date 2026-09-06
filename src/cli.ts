@@ -63,7 +63,7 @@ import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
 import { subprojectCommand } from './cli/subproject.js';
 import { upgradeCommand } from './cli/upgrade.js';
-import { sweepMissingRoots } from './registry.js';
+import { sweepImplicitProjects, sweepMissingRoots } from './registry.js';
 import { visualizeCommand } from './cli/visualize.js';
 import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
@@ -268,6 +268,24 @@ function softGcSweep(): void {
     }
   } catch (err) {
     logger.warn({ err }, 'sweepMissingRoots soft-prune failed (non-fatal)');
+  }
+
+  // TRA-706: the ceiling that does not depend on recognising a workdir layout.
+  // `serve` auto-registers whatever directory it was started in, so a runtime
+  // that scatters live scratch checkouts under an unrecognised path shape adds
+  // a registry row and a config section per run and neither sweep above
+  // reaches them. Runs before the config prune so the rows it drops already
+  // read as unclaimed when the section cap below is applied.
+  try {
+    const evicted = sweepImplicitProjects();
+    if (evicted.length > 0) {
+      logger.info(
+        { evicted: evicted.length },
+        `Deregistered ${evicted.length} auto-registered project(s) over the implicit cap`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'sweepImplicitProjects soft-prune failed (non-fatal)');
   }
 
   // TRA-702: same job as the registry prune above, on the other registration

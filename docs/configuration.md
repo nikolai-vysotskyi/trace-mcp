@@ -58,15 +58,21 @@ All trace state lives in `~/.trace/` (with automatic backwards compatibility and
     my-app-a1b2c3d4e5f6.db  # per-project databases
 ```
 
-### Pruning of per-project sections
+### Pruning of projects
 
-The server writes one `projects[...]` section per directory it indexes, and reparses
-every section on start. An hourly sweep drops the sections nothing needs: a root that
-no longer exists and no registry entry claims, and a one-shot agent-run workdir. On top
-of that, at most **100 sections not claimed by `registry.json`** are kept, oldest first
-— so the unregistered half of the file stays around 170 KB no matter how many throwaway
-directories have been indexed. Projects added with `trace add` / `trace init` are
-registered and are never pruned.
+Starting the server in a directory auto-registers it, so both `registry.json` and the
+`projects[...]` map in `.config.json` grow on their own — and both are read on every
+server start. An hourly sweep bounds them:
+
+- a root that no longer exists (after a 7-day grace, so an unmounted drive keeps its
+  registration) and one-shot agent-run workdirs are dropped;
+- at most **100 auto-registered projects** are kept, least recently indexed first;
+- at most **100 config sections that no registry entry claims** are kept, oldest first.
+
+Projects you registered yourself with `trace add` or `trace init` are exempt from the
+caps and are only removed by `trace remove` / `trace-mcp doctor --fix`. Eviction only
+deregisters — your directory and its index database are left alone, so an evicted
+project is re-registered the next time you open it.
 
 ### Config merge order
 

@@ -856,7 +856,7 @@ async function registerAndIndexProject(
     };
   }
 
-  const { entry } = setupProject(projectRoot, { force: opts.force, migrateOldDb: true });
+  const { entry } = setupProject(projectRoot, { force: opts.force, migrateOldDb: true, explicit: true });
 
   // Run indexing immediately
   const indexResult = await runIndexingForProject(projectRoot);

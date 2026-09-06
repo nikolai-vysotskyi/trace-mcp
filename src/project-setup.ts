@@ -54,7 +54,7 @@ export interface ProjectSetupResult {
  */
 export function setupProject(
   projectRoot: string,
-  opts?: { force?: boolean; migrateOldDb?: boolean },
+  opts?: { force?: boolean; migrateOldDb?: boolean; explicit?: boolean },
 ): ProjectSetupResult {
   const absRoot = path.resolve(projectRoot);
 
@@ -70,8 +70,13 @@ export function setupProject(
 
   const existing = getProject(absRoot);
   if (existing && !opts?.force) {
+    // TRA-706: a deliberate `add`/`init` on an already auto-registered project
+    // is still the moment the user claims it, so promote it out of the capped
+    // implicit class even though there is nothing else left to set up.
+    const entry =
+      opts?.explicit && !existing.explicit ? registerProject(absRoot, { explicit: true }) : existing;
     return {
-      entry: existing,
+      entry,
       detection: {
         projectRoot: absRoot,
         languages: [],
@@ -85,7 +90,7 @@ export function setupProject(
         hasGuardHook: false,
         guardHookVersion: null,
       },
-      dbPath: existing.dbPath,
+      dbPath: entry.dbPath,
       migrated: false,
       isNew: false,
     };
@@ -144,7 +149,10 @@ export function setupProject(
   // place, rather than creating-then-abandoning an empty DB file at a
   // path-based location nothing ends up using.
   ensureGlobalDirs();
-  const entry = registerProject(absRoot);
+  // TRA-706: only pass an `opts` object when the registration is deliberate —
+  // `registerProject` reads the *presence* of `opts` as "not a one-shot
+  // workdir", so a `{ explicit: false }` would persist agent-run checkouts.
+  const entry = registerProject(absRoot, opts?.explicit ? { explicit: true } : undefined);
   const dbPath = entry.dbPath;
 
   // 4. Migrate old local DB if requested. We treat an EMPTY (0-byte) local
