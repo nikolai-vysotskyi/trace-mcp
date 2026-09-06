@@ -218,6 +218,27 @@ accurately and with numbers from `counts.yml`. The category claim is carried by
 `trace-mcp.com` and `README.md`, which are the surfaces that can also deliver
 door 2.
 
+**The tool count came out of it anyway (TRA-761, 2026-09-06).** Describing the
+tools is not the same as counting them, and the count was the line's most
+prominent number. Three reasons it went: codegraph (68.7k stars) advertises one
+tool of eight *deliberately*, because presence itself steers mis-picks — so to
+an audience that reads tool count as a context-budget cost, leading with a big
+one advertises the thing our own role presets were built to stop; no install
+ever sees the printed number (`counts.yml` is the registered surface minus
+framework-gated tools — measured 150 / 165 / 172 across three environments, and
+lower again under a preset), which is defensible as documentation and
+misleading as a storefront; and it was stale at 177 against 178 anyway, passing
+only on `readme-claims.test.ts`'s ±5 tolerance. What replaced it is `code graph
+MCP server`, the measured category term from the TRA-950 cluster — a door-1
+phrase on a door-1 channel, the same carve-out this section already makes.
+Languages and frameworks stay: they measure coverage a registry reader is
+actually shopping for, not surface they will pay for. The description reads:
+
+> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 90.6% fewer PR-review tokens
+
+The registry caps `description` at 100 characters (`manifest-sync.test.ts`), so
+anything added here costs something already in the line.
+
 ## Sequencing against the rename
 
 TRA-879 fixed that nothing public may move its name. **Nothing here moves a
