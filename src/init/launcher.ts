@@ -241,6 +241,159 @@ export function recordPkgRoot(cliPath: string): void {
   }
 }
 
+export type LauncherPathStatus =
+  | 'ok'
+  | 'missing'
+  | 'dangling_symlink'
+  | 'not_a_file'
+  | 'not_executable'
+  | 'broken_interpreter'
+  | 'broken_delegate'
+  | 'foreign'
+  | 'unchecked';
+
+export interface LauncherPathCheck {
+  path: string;
+  status: LauncherPathStatus;
+  detail: string;
+}
+
+/**
+ * Everything a client needs to be true of the file it spawns, in the order the
+ * OS would hit it: the path exists, resolves, is a regular file, and is
+ * executable. `foreign` is last and is not a breakage — a hand-rolled wrapper
+ * still runs; it just is not a file we may repair.
+ */
+export function checkLauncherFile(file: string): LauncherPathCheck {
+  // A bare command name ("npx", "trace") is resolved by the client through
+  // PATH, which we cannot reproduce faithfully — say so instead of guessing.
+  if (!path.isAbsolute(file)) {
+    return { path: file, status: 'unchecked', detail: 'not an absolute path — resolved via PATH' };
+  }
+  let link: fs.Stats;
+  try {
+    link = fs.lstatSync(file);
+  } catch {
+    return { path: file, status: 'missing', detail: 'no such file' };
+  }
+  let target = file;
+  if (link.isSymbolicLink()) {
+    try {
+      target = fs.realpathSync(file);
+    } catch {
+      const dest = (() => {
+        try {
+          return fs.readlinkSync(file);
+        } catch {
+          return '?';
+        }
+      })();
+      return { path: file, status: 'dangling_symlink', detail: `symlink target missing: ${dest}` };
+    }
+  }
+  const stat = fs.statSync(target);
+  if (!stat.isFile()) {
+    return {
+      path: file,
+      status: 'not_a_file',
+      detail: stat.isDirectory() ? 'is a directory' : 'not a regular file',
+    };
+  }
+  // Windows has no execute bit — the extension decides, and the client spawns
+  // it either way, so there is nothing here to check.
+  if (!IS_WINDOWS) {
+    try {
+      fs.accessSync(target, fs.constants.X_OK);
+    } catch {
+      return {
+        path: file,
+        status: 'not_executable',
+        detail: `mode ${(stat.mode & 0o777).toString(8)} — missing execute bit`,
+      };
+    }
+  }
+  if (!isOwnedShim(target)) {
+    return { path: file, status: 'foreign', detail: 'not a trace-mcp launcher — left alone' };
+  }
+  // Mode bits are not the last gate: the kernel still has to find the shim's
+  // interpreter, and the Windows compat shim still has to find the launcher it
+  // execs. Both fail with the shim never running a line, so neither reaches
+  // launcher.log — the exact class of failure this check exists for.
+  const interpreter = missingInterpreter(target);
+  if (interpreter) {
+    return {
+      path: file,
+      status: 'broken_interpreter',
+      detail: `interpreter missing: ${interpreter}`,
+    };
+  }
+  const delegate = missingDelegate(target);
+  if (delegate) {
+    return {
+      path: file,
+      status: 'broken_delegate',
+      detail: `delegates to a missing launcher: ${delegate}`,
+    };
+  }
+  return { path: file, status: 'ok', detail: 'executable trace-mcp launcher' };
+}
+
+/** First line of a file, or '' when it cannot be read. */
+function firstLines(file: string, count: number): string[] {
+  try {
+    return fs.readFileSync(file, 'utf-8').split(/\r?\n/, count);
+  } catch {
+    return [];
+  }
+}
+
+/** Is `name` an executable file on PATH? */
+function onPath(name: string): boolean {
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  return dirs.some((d) => {
+    try {
+      fs.accessSync(path.join(d, name), fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * The interpreter a `#!` line names, when that interpreter is not there.
+ * `exec` fails with ENOENT pointing at the *shim*, so the user sees a file that
+ * plainly exists refusing to run — worth naming explicitly. Returns null when
+ * the line is absent (a Windows `.cmd` has none) or the interpreter resolves.
+ */
+function missingInterpreter(file: string): string | null {
+  const [first] = firstLines(file, 1);
+  if (!first?.startsWith('#!')) return null;
+  const parts = first.slice(2).trim().split(/\s+/).filter(Boolean);
+  const [interp, arg] = parts;
+  if (!interp) return null;
+  if (!fs.existsSync(interp)) return interp;
+  // `#!/usr/bin/env bash` fails just as hard when `bash` is not on PATH.
+  if (path.basename(interp) === 'env' && arg && !arg.startsWith('-') && !onPath(arg)) {
+    return arg;
+  }
+  return null;
+}
+
+/** Path a compat shim execs, when that path is gone. See legacyCompatCmdBody(). */
+function missingDelegate(file: string): string | null {
+  for (const line of firstLines(file, 8)) {
+    const m = line.match(/^"([^"]+)"\s+%\*\s*$/);
+    if (m?.[1] && !fs.existsSync(m[1])) return m[1];
+  }
+  return null;
+}
+
+/** Statuses that mean the client gets `Failed to connect` with an empty log. */
+export function isBroken(status: LauncherPathStatus): boolean {
+  return status !== 'ok' && status !== 'foreign' && status !== 'unchecked';
+}
+
 export interface InstallLauncherOpts {
   dryRun?: boolean;
   force?: boolean;
@@ -250,7 +403,7 @@ export interface InstallLauncherOpts {
 const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
 
 /** True only for a shim this project wrote, so we never clobber a user's file. */
-function isOwnedShim(file: string): boolean {
+export function isOwnedShim(file: string): boolean {
   try {
     const fd = fs.openSync(file, 'r');
     try {
@@ -389,7 +542,11 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
   const dryRun = !!opts.dryRun;
 
   const installedVersion = readInstalledLauncherVersion();
-  const isCurrent = installedVersion === LAUNCHER_VERSION;
+  // A shim whose header reads current can still be unspawnable — most often it
+  // lost its execute bit — and version alone would skip right past it, leaving
+  // every client failing with a launcher.log that never got written (TRA-913).
+  const isCurrent =
+    installedVersion === LAUNCHER_VERSION && !isBroken(checkLauncherFile(dest).status);
 
   if (isCurrent && !opts.force) {
     // The shim in the current home is up to date, but the legacy compat path is
