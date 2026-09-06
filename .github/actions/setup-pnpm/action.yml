@@ -1,0 +1,37 @@
+name: Setup pnpm (corepack, cached)
+description: >-
+  Activates the pnpm version pinned in package.json's "packageManager" field
+  via Node's built-in corepack, and caches corepack's download directory so
+  the pnpm tarball is fetched from the npm registry at most once per pnpm
+  version bump instead of once per job. Requires actions/setup-node (Node
+  >=22) to have already run.
+runs:
+  using: composite
+  steps:
+    # Job-wide (not just this step) via $GITHUB_ENV, so every later `pnpm`
+    # invocation in the calling job reads from the same cached directory
+    # instead of corepack's default per-user location.
+    - name: Point corepack's download cache at a cacheable path
+      shell: bash
+      run: echo "COREPACK_HOME=${{ runner.temp }}/corepack-home" >> "$GITHUB_ENV"
+
+    - name: Enable corepack
+      shell: bash
+      run: corepack enable
+
+    - name: Resolve pinned pnpm version
+      id: pnpm-version
+      shell: bash
+      run: echo "value=$(node -p "require('./package.json').packageManager")" >> "$GITHUB_OUTPUT"
+
+    # Keyed on the pnpm version string, not on the lockfile or package.json
+    # hash — a dependency bump shouldn't bust this, only a pnpm upgrade should.
+    - name: Cache pnpm download
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/corepack-home
+        key: corepack-${{ runner.os }}-${{ steps.pnpm-version.outputs.value }}
+
+    - name: Activate pinned pnpm version
+      shell: bash
+      run: corepack prepare --activate
