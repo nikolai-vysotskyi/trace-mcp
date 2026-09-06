@@ -439,4 +439,50 @@ namespace Acme.App
       removeTmpDir(fixtureDir);
     }
   });
+
+  it('prunes a stale edge even when the removed type was the last C# type in the whole index', async () => {
+    // Top-level statements (C# 9+): App.cs declares no type of its own, so
+    // once Store.cs stops declaring Repo, `byType` is empty across the
+    // entire index. An earlier version early-returned on an empty `byType`
+    // before the revalidation pass ever ran, leaving this edge stale.
+    const fixtureDir = createTmpFixture(
+      {
+        'src/App.cs': `using static Acme.Store.Repo;
+
+Run();
+`,
+        'src/Store.cs': `namespace Acme.Store
+{
+    public static class Repo
+    {
+        public static void Run() {}
+    }
+}
+`,
+      },
+      'trace-mcp-csharp-empty-bytype-',
+    );
+    try {
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerLanguagePlugin(new CSharpLanguagePlugin());
+      const pipeline = new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir);
+      await pipeline.indexAll();
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/Store.cs']));
+
+      const storePath = path.join(fixtureDir, 'src/Store.cs');
+      fs.writeFileSync(
+        storePath,
+        `namespace Acme.Store
+{
+}
+`,
+      );
+      await pipeline.indexFiles([storePath]);
+
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set());
+    } finally {
+      removeTmpDir(fixtureDir);
+    }
+  });
 });

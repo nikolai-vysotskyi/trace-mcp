@@ -135,7 +135,11 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   for (const { fileId, fqn } of rows) {
     addTo(byType, fqn, fileId);
   }
-  if (byType.size === 0) return;
+  // No early return on an empty `byType`: the last C# type in the whole
+  // index can be deleted/renamed in this very batch, and an empty map is
+  // exactly what should make `resolve()` treat every specifier as external —
+  // skipping the revalidation pass below would instead leave a now-wrong
+  // incoming edge on the file that just lost its only type.
 
   const importsEdgeType = store.db
     .prepare('SELECT id FROM edge_types WHERE name = ?')
