@@ -88,7 +88,7 @@ describe('docs footer nav covers every indexed page', () => {
    * Google under an April date. `pnpm docs:sitemap` refreshes them from git.
    */
   it('every lastmod is at least the source page last commit date', async () => {
-    const { sourceFor, gitDate, isShallow, refresh } = await import(
+    const { sourceFor, gitDate, isShallow, isStale } = await import(
       '../../scripts/gen-sitemap.mjs'
     );
     // A shallow clone dates every file to the single fetched commit, which would
@@ -102,8 +102,10 @@ describe('docs footer nav covers every indexed page', () => {
       .map(([, path, lastmod]) => ({ path, lastmod, git: gitDate(sourceFor(path)) }))
       // Not `lastmod < git`: a squash-merge dates every page in the PR by its
       // LAST commit, so a one-day-old sitemap is the normal, unavoidable state
-      // of a freshly merged docs PR. Stale is what the generator would rewrite.
-      .filter((e) => refresh(e.lastmod, e.git) !== e.lastmod);
+      // of a freshly merged docs PR. `isStale`, not `refresh` — the generator
+      // now advances every date it can, so comparing against it would fail on
+      // that residue (TRA-995).
+      .filter((e) => isStale(e.lastmod, e.git));
     expect(
       stale,
       `sitemap lastmod older than the page's last commit — run \`pnpm docs:sitemap\`: ${stale
@@ -165,7 +167,7 @@ describe('docs footer nav covers every indexed page', () => {
    * the tolerance is what closes it, not a stricter generator (TRA-800).
    */
   it('stays quiet when a multi-commit squash dates a page after the sitemap', async () => {
-    const { gitDate, refresh } = await import('../../scripts/gen-sitemap.mjs');
+    const { gitDate, isStale } = await import('../../scripts/gen-sitemap.mjs');
     const repo = mkdtempSync(join(tmpdir(), 'sitemap-multisquash-'));
     const env = { ...process.env, GIT_AUTHOR_DATE: '', GIT_COMMITTER_DATE: '' };
     const git = (...args: string[]) =>
@@ -203,8 +205,8 @@ describe('docs footer nav covers every indexed page', () => {
     expect(afterMerge, 'the squash carries the last commit date, not the edit date').toBe(
       '2026-09-04',
     );
-    expect(refresh('2026-09-03', afterMerge), 'merge-date residue must not read as stale').toBe(
-      '2026-09-03',
+    expect(isStale('2026-09-03', afterMerge), 'merge-date residue must not read as stale').toBe(
+      false,
     );
   });
 
@@ -220,18 +222,36 @@ describe('docs footer nav covers every indexed page', () => {
     const { refresh, rewrite, isShallow } = await import('../../scripts/gen-sitemap.mjs');
     expect(refresh('2026-08-30', '2026-08-29')).toBe('2026-08-30');
     expect(refresh(undefined, '2026-08-30')).toBe('2026-08-30');
-    // Within the drift window the committed date stands; past it, git wins.
-    expect(refresh('2026-08-29', '2026-08-30')).toBe('2026-08-29');
-    expect(refresh('2026-08-29', '2026-09-05')).toBe('2026-08-29');
-    expect(refresh('2026-08-29', '2026-09-06')).toBe('2026-09-06');
     expect(refresh('2026-04-01', '2026-08-30')).toBe('2026-08-30');
 
     if (isShallow()) return; // gitDate is meaningless on one fetched commit
     const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
-    expect(
-      rewrite(xml),
-      'run `pnpm docs:sitemap` — the committed sitemap is not a fixed point',
-    ).toBe(xml);
+    const dates = (x: string) =>
+      [...x.matchAll(/<loc>([^<]*)<\/loc>\s*<lastmod>([^<]*)<\/lastmod>/g)].map(
+        ([, loc, lastmod]) => [loc, lastmod.trim()] as const,
+      );
+    const before = new Map(dates(xml));
+    const regressed = dates(rewrite(xml)).filter(([loc, d]) => d < before.get(loc)!);
+    expect(regressed, 'regenerating revised a published date backwards').toEqual([]);
+  });
+
+  /**
+   * The 7-day tolerance used to gate the *generator* as well as the guard, so
+   * a page edited today kept publishing a date up to a week old and `pnpm
+   * docs:sitemap` was a no-op on it — 14 of 28 pages at the time TRA-995 was
+   * filed, including every page PR #935 had just rewritten. The sitemap is the
+   * only channel that has ever got a page on this domain indexed, so a
+   * `<lastmod>` that declines to move is a re-crawl that never happens.
+   */
+  it('advances a lastmod the moment git moves, not a tolerance later', async () => {
+    const { refresh, isStale } = await import('../../scripts/gen-sitemap.mjs');
+    expect(refresh('2026-08-29', '2026-08-30')).toBe('2026-08-30');
+    expect(refresh('2026-09-04', '2026-09-06')).toBe('2026-09-06');
+    // The guard stays laxer than the generator — that is what absorbs the
+    // merge-date residue without freezing the published date.
+    expect(isStale('2026-08-29', '2026-08-30')).toBe(false);
+    expect(isStale('2026-08-29', '2026-08-31')).toBe(false);
+    expect(isStale('2026-08-29', '2026-09-01')).toBe(true);
   });
 
   /**
