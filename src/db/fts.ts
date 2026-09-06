@@ -38,6 +38,21 @@ export interface FtsFilters {
  *  default-exclusion guard stays in sync with the plugin. */
 export const MARKDOWN_SYMBOL_KINDS: ReadonlySet<string> = new Set(['heading', 'tag']);
 
+/**
+ * Synthetic module-body pseudo-symbols are named `__module__…` by every plugin
+ * that emits them. The SQL guard below covers the lexical path; the vector and
+ * fusion paths produce candidates that never touch this query, so they filter
+ * with this predicate after merging. One definition, so the two cannot drift.
+ */
+export function isModuleBodyName(name: string): boolean {
+  return name.startsWith('__module__');
+}
+
+/** True when the caller asked for module bodies by name, which bypasses the guard. */
+export function queryWantsModuleBodies(query: string): boolean {
+  return query.includes('__module__');
+}
+
 export function searchFts(
   db: Database.Database,
   query: string,
@@ -85,7 +100,7 @@ export function searchFts(
 
   // Same shape as the markdown guard above: a default exclusion the caller can
   // bypass by asking for the thing by name.
-  if (filters?.excludeModuleBodies && !query.includes('__module__')) {
+  if (filters?.excludeModuleBodies && !queryWantsModuleBodies(query)) {
     conditions.push("s.name NOT GLOB '__module__*'");
   }
 

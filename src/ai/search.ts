@@ -53,7 +53,12 @@ export async function hybridSearch(
   // lexical_only: skip vector entirely when weight is 0
   const skipVector = semanticWeight <= 0.001;
   // 1. FTS5 search (skipped in pure-semantic mode)
-  const ftsResults = skipFts ? [] : searchFts(db, query, limit * 3);
+  // Same default exclusion as the lexical path: synthetic module-body
+  // pseudo-symbols are not search answers, and spending candidate slots on rows
+  // the caller will never see starves the real ones (TRA-985).
+  const ftsResults = skipFts
+    ? []
+    : searchFts(db, query, limit * 3, 0, { excludeModuleBodies: true });
 
   // Build FTS rank map: symbolId -> rank position (0-based)
   const ftsRanked = new Map<number, { rank: number; result: FtsResult }>();
