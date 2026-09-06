@@ -272,6 +272,60 @@ function autoLabel(files: string[]): string {
   return bestSegment;
 }
 
+/** Most frequent directory path of a file set, as segments. Ties break lexicographically. */
+function dominantDir(files: string[]): string[] {
+  const dirs = new Map<string, number>();
+  for (const file of files) {
+    const cut = file.lastIndexOf('/');
+    if (cut <= 0) continue;
+    const dir = file.slice(0, cut);
+    dirs.set(dir, (dirs.get(dir) ?? 0) + 1);
+  }
+  let best = '';
+  let bestCount = 0;
+  for (const [dir, count] of dirs) {
+    if (count > bestCount || (count === bestCount && dir < best)) {
+      bestCount = count;
+      best = dir;
+    }
+  }
+  return best === '' ? [] : best.split('/');
+}
+
+/**
+ * Assign a unique label to each community, shortest-first.
+ *
+ * `autoLabel()` alone collides whenever two unrelated communities share their
+ * most common path segment (`indexer`, `packages`, …) — the on-canvas cluster
+ * label and the graph legend then can't tell them apart (TRA-1078). So each
+ * community offers a ladder of candidates — the bare segment, then growing
+ * tails of its dominant directory — and the first free one wins. Callers pass
+ * groups in priority order (largest community first), so the biggest cluster
+ * keeps the short name.
+ */
+export function labelCommunities(fileGroups: string[][]): string[] {
+  const used = new Set<string>();
+  return fileGroups.map((files) => {
+    const base = autoLabel(files);
+    const dir = dominantDir(files);
+    const candidates = [base];
+    for (let k = 1; k <= dir.length; k++) {
+      const tail = dir.slice(dir.length - k).join('/');
+      if (!candidates.includes(tail)) candidates.push(tail);
+    }
+
+    let label = candidates.find((c) => !used.has(c));
+    if (label === undefined) {
+      const longest = candidates[candidates.length - 1];
+      let n = 2;
+      while (used.has(`${longest} (${n})`)) n++;
+      label = `${longest} (${n})`;
+    }
+    used.add(label);
+    return label;
+  });
+}
+
 // ─── Two-phase cohesion pass ──────────────────────────────
 
 /**
@@ -436,11 +490,9 @@ export async function detectCommunities(
     const cohesion =
       internal + external > 0 ? Math.round((internal / (internal + external)) * 100) / 100 : 0;
 
-    const label = autoLabel(files);
-
     communities.push({
       id: commId,
-      label,
+      label: '', // assigned below, once all communities are known (needs cross-community uniqueness)
       fileCount: files.length,
       cohesion,
       internalEdges: internal,
@@ -451,6 +503,12 @@ export async function detectCommunities(
 
   // Sort by file count descending
   communities.sort((a, b) => b.fileCount - a.fileCount);
+
+  // Label after sorting so the biggest community wins the short name on a collision.
+  const labels = labelCommunities(communities.map((c) => communityFiles.get(c.id) ?? []));
+  communities.forEach((c, i) => {
+    c.label = labels[i];
+  });
 
   // Persist to DB (single transaction)
   store.db.transaction(() => {

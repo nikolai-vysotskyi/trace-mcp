@@ -6,6 +6,7 @@ import {
   detectCommunities,
   getCommunities,
   getCommunityDetail,
+  labelCommunities,
 } from '../../src/tools/analysis/communities.js';
 
 describe('Community Detection', () => {
@@ -228,5 +229,30 @@ describe('Community Detection', () => {
       // pass the hub's edges typically collapse this into one.
       expect(result.communities.length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe('labelCommunities', () => {
+  it('keeps distinct labels as-is', () => {
+    expect(
+      labelCommunities([
+        ['src/auth/a.ts', 'src/auth/b.ts'],
+        ['src/payments/c.ts', 'src/payments/d.ts'],
+      ]),
+    ).toEqual(['auth', 'payments']);
+  });
+
+  it('extends colliding labels with their dominant directory (TRA-1078)', () => {
+    const labels = labelCommunities([
+      ['src/indexer/a.ts', 'src/indexer/b.ts'],
+      ['core/indexer/c.ts', 'core/indexer/d.ts', 'misc/indexer/e.ts'],
+      ['tools/indexer/f.ts', 'tools/indexer/g.ts', 'other/indexer/h.ts'],
+    ]);
+    expect(labels).toEqual(['indexer', 'core/indexer', 'tools/indexer']);
+  });
+
+  it('falls back to numeric suffixes when the paths are identical', () => {
+    const labels = labelCommunities([['src/api/a.ts'], ['src/api/b.ts'], ['src/api/c.ts']]);
+    expect(labels).toEqual(['api', 'src/api', 'src/api (2)']);
   });
 });
