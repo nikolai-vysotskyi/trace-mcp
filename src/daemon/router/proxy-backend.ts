@@ -210,7 +210,7 @@ export class ProxyBackend implements Backend {
 
   async start(): Promise<void> {
     if (this.started) return;
-    this.projectRoot = this.resolveProjectRoot();
+    this.projectRoot = await this.resolveProjectRoot();
     await this.registerWithDaemon(this.projectRoot);
     const transport = this.buildTransport(this.projectRoot);
     this.wire(transport);
@@ -341,7 +341,7 @@ export class ProxyBackend implements Backend {
   private reestablishSession(): Promise<void> {
     if (this.reestablishing) return this.reestablishing;
     this.reestablishing = (async () => {
-      const projectRoot = this.projectRoot ?? this.resolveProjectRoot();
+      const projectRoot = this.projectRoot ?? (await this.resolveProjectRoot());
       this.projectRoot = projectRoot;
       // Re-register in case the respawned daemon lost its in-memory state.
       await this.registerWithDaemon(projectRoot);
@@ -653,12 +653,12 @@ export class ProxyBackend implements Backend {
    * Resolve the project root this session should bind to: a registered ancestor
    * (nested package in a monorepo) or the canonical repo behind a git worktree.
    */
-  private resolveProjectRoot(): string {
+  private async resolveProjectRoot(): Promise<string> {
     // Prefer the deepest KNOWN root: a registered subproject (e.g.
     // the/fair/fair-front) beats its container ancestor (the) so the session
     // binds to the subproject's own scoped index instead of the container's
     // mixed blob (#209 — "ругается на зонтик").
-    const known = resolveDeepestKnownRoot(this.opts.projectRoot);
+    const known = await resolveDeepestKnownRoot(this.opts.projectRoot);
     if (known && known !== this.opts.projectRoot) {
       logger.info(
         { requested: this.opts.projectRoot, resolved: known },

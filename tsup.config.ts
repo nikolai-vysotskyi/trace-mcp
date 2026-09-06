@@ -1,9 +1,16 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Plugin } from 'esbuild';
 import { defineConfig } from 'tsup';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+
+// tsup runs every config object in the array below concurrently, each as its
+// own esbuild pass. A per-config `clean: true` races the other pass's writes
+// — whichever runs its "clean" step last wins, and can delete outputs the
+// other pass already finished writing. Wipe dist/ exactly once here, before
+// either pass starts, and leave `clean: false` on both configs below.
+rmSync('dist', { recursive: true, force: true });
 
 /**
  * Node's ESM loader mis-resolves CJS packages when the install path contains
@@ -76,18 +83,46 @@ ${namedExportsSrc}`,
   };
 }
 
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-    cli: 'src/cli.ts',
-    // Worker entry. Built next to cli.js so the pool can resolve it via
-    // `new URL('./extract-worker.js', import.meta.url)`.
-    'extract-worker': 'src/indexer/extract-worker.ts',
-  },
+/**
+ * Keep `./local-backend.js` and `./snapshot-backend.js` (StdioSession's
+ * dynamic imports in session.ts) genuine runtime imports instead of inlined
+ * modules — used ONLY for the `proxy` build below.
+ *
+ * `external: [...]` alone does not do this: it only takes effect where esbuild
+ * resolves the specifier itself, and the catch-all `noExternal` wins that
+ * resolution for every path, native packages included — which is exactly why
+ * they need `cjsViaCreateRequire()`'s onResolve above to get a real, if
+ * different, escape hatch. This plugin is the equivalent one for plain
+ * project files: it intercepts resolution before `noExternal` ever gets a say
+ * and marks the result `external: true` directly, so proxy.js keeps a literal
+ * `import('./local-backend.js')` / `import('./snapshot-backend.js')` instead
+ * of inlining either one's whole dependency tree (PluginRegistry,
+ * better-sqlite3, tree-sitter, the full MCP tool surface) — TRA-970.
+ *
+ * Deliberately NOT applied to the cli/index build below: cli.js already pulls
+ * in that whole tree through its own commands (`add`, `search`, `serve-http`,
+ * ...), so externalizing there buys zero RSS and only adds first-use latency —
+ * which would blow TRA-948's <400ms snapshot-fast-path budget the moment a
+ * session actually takes that path. Scoping this to the proxy build is what
+ * keeps both budgets: proxy.js never pays either tree unless it needs to,
+ * cli.js's snapshot path stays exactly as fast as TRA-948 shipped it.
+ */
+function heavyBackendsExternal(): Plugin {
+  return {
+    name: 'heavy-backends-external',
+    setup(build) {
+      build.onResolve({ filter: /^\.\/(local|snapshot)-backend\.js$/ }, (args) => {
+        if (args.kind === 'entry-point') return null;
+        return { path: args.path, external: true };
+      });
+    },
+  };
+}
+
+const common = {
   format: ['esm'],
   dts: true,
   sourcemap: true,
-  clean: true,
   target: process.env.TSUP_TARGET || 'node22',
   splitting: false,
   // Force-bundle all dependencies into the output. Natives matched by the
@@ -95,7 +130,6 @@ export default defineConfig({
   // is inlined so the runtime never resolves node_modules.
   noExternal: [/.*/],
   external: NATIVE_EXTERNALS,
-  esbuildPlugins: [cjsViaCreateRequire()],
   // Bundled CJS modules call `require('events')` etc. at runtime. In an ESM
   // output there is no real `require`, so esbuild stubs one that throws on
   // dynamic calls. Inject a real CJS require via createRequire so built-in
@@ -126,4 +160,46 @@ const require = __tmcpCreateRequire(import.meta.url);`,
     GA_MEASUREMENT_ID_INJECTED: JSON.stringify(process.env.TRACE_MCP_GA_MEASUREMENT_ID ?? ''),
     GA_API_SECRET_INJECTED: JSON.stringify(process.env.TRACE_MCP_GA_API_SECRET ?? ''),
   },
-});
+} as const;
+
+export default defineConfig([
+  {
+    ...common,
+    entry: {
+      index: 'src/index.ts',
+      cli: 'src/cli.ts',
+      // Worker entry. Built next to cli.js so the pool can resolve it via
+      // `new URL('./extract-worker.js', import.meta.url)`.
+      'extract-worker': 'src/indexer/extract-worker.ts',
+    },
+    // dist/ is wiped once above, before either config runs — see the rmSync
+    // comment at the top of this file.
+    clean: false,
+    esbuildPlugins: [cjsViaCreateRequire()],
+  },
+  {
+    ...common,
+    entry: {
+      // Thin stdio<->daemon proxy (TRA-970). The launcher shim execs this
+      // directly instead of cli.js when a daemon is already reachable, so it
+      // must never drag in Commander, PluginRegistry, better-sqlite3 or
+      // tree-sitter — see `heavyBackendsExternal()` above, which is what
+      // actually keeps that tree out of this bundle.
+      proxy: 'src/proxy-entry.ts',
+      // StdioSession's local (non-daemon) fallback, built as its own sibling
+      // file in flat dist/ (same convention extract-worker.js relies on) so
+      // proxy.js's dynamic `import('./local-backend.js')` resolves to a real,
+      // separately-loaded chunk instead of being inlined.
+      'local-backend': 'src/daemon/router/local-backend.ts',
+      // StdioSession's instant-snapshot backend (TRA-948) — same reasoning.
+      // Only reachable from proxy.js: proxy-entry.ts disables the snapshot
+      // fast path (`trySnapshotFastPath: false`), since the launcher shim
+      // already confirmed a daemon is reachable before launching it, so
+      // there's nothing here for it to actually swap in from.
+      'snapshot-backend': 'src/daemon/router/snapshot-backend.ts',
+    },
+    // dist/ is wiped once above, before either config runs.
+    clean: false,
+    esbuildPlugins: [cjsViaCreateRequire(), heavyBackendsExternal()],
+  },
+]);

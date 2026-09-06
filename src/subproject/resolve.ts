@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
 import { resolveRegisteredAncestor } from '../registry.js';
@@ -17,12 +17,20 @@ function isAncestorOrSelf(ancestor: string, p: string): boolean {
  * an ancestor-or-self of `cwd`. Read-only, best-effort: returns null when
  * topology.db is missing/unreadable or nothing matches. Cheap — one indexed
  * query, run only at session bootstrap / recovery.
+ *
+ * `better-sqlite3` is dynamic-imported so callers that never hit an existing
+ * topology.db (e.g. the thin proxy entry, TRA-970) never load the native
+ * addon just by importing this module.
  */
-export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH): string | null {
+export async function findSubprojectRootForPath(
+  cwd: string,
+  dbPath = TOPOLOGY_DB_PATH,
+): Promise<string | null> {
   const abs = toPosixAbsolute(cwd);
   if (!fs.existsSync(dbPath)) return null;
   let db: Database.Database | null = null;
   try {
+    const { default: Database } = await import('better-sqlite3');
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
     const rows = db.prepare('SELECT DISTINCT repo_root FROM subprojects').all() as {
       repo_root: string;
@@ -58,8 +66,8 @@ export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH
  * subprojects (#209). `findSubprojectRootForPath` returns the deepest ancestor,
  * which equals `root` exactly when `root` is the registered subproject.
  */
-export function isKnownSubproject(root: string, dbPath = TOPOLOGY_DB_PATH): boolean {
-  return findSubprojectRootForPath(root, dbPath) === toPosixAbsolute(root);
+export async function isKnownSubproject(root: string, dbPath = TOPOLOGY_DB_PATH): Promise<boolean> {
+  return (await findSubprojectRootForPath(root, dbPath)) === toPosixAbsolute(root);
 }
 
 /**
@@ -75,10 +83,10 @@ export function isKnownSubproject(root: string, dbPath = TOPOLOGY_DB_PATH): bool
  * longer path is the deeper one. Returns null when neither covers the path
  * (caller falls back to worktree-aware resolution / raw cwd).
  */
-export function resolveDeepestKnownRoot(cwd: string): string | null {
+export async function resolveDeepestKnownRoot(cwd: string): Promise<string | null> {
   const abs = path.resolve(cwd);
   const registryAncestor = resolveRegisteredAncestor(abs)?.root ?? null;
-  const subprojectRoot = findSubprojectRootForPath(abs);
+  const subprojectRoot = await findSubprojectRootForPath(abs);
   if (registryAncestor && subprojectRoot) {
     return subprojectRoot.length > registryAncestor.length ? subprojectRoot : registryAncestor;
   }
