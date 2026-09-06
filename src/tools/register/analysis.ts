@@ -266,7 +266,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_coupling',
-    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }]. Set `output_format: "toon"` for lossless, cheaper tabular encoding.',
     {
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default: all)'),
       assessment: z
@@ -331,7 +331,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_pagerank',
-    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. By default markdown files (.md/.mdx/.markdown/.qmd) are excluded — their cross-link patterns dominate the graph and bury real code. Pass `include_markdown: true` to keep them. Read-only. Returns JSON: [{ file, score }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. By default markdown files (.md/.mdx/.markdown/.qmd) are excluded — their cross-link patterns dominate the graph and bury real code. Pass `include_markdown: true` to keep them. Read-only. Returns JSON: [{ file, score }]. Set `output_format: "toon"` for lossless, cheaper tabular encoding.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       include_markdown: z
@@ -398,7 +398,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_refactor_candidates',
-    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }]. Set `output_format: "toon"` for lossless, cheaper tabular encoding.',
     {
       min_cyclomatic: z
         .number()

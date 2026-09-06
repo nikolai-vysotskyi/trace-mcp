@@ -8,6 +8,7 @@ import { detectCommunities, getCommunities, getCommunityDetail } from '../analys
 import { getControlFlow } from '../analysis/control-flow.js';
 import { getSurprises } from '../analysis/surprises.js';
 import { generateDocs } from '../project/generate-docs.js';
+import { verifyDocs } from '../quality/verify-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
 import { auditConfig, scanInstalledSkills } from '../quality/audit-config.js';
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
@@ -118,7 +119,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Changed Symbols ---
   server.tool(
     'get_changed_symbols',
-    'Map a git diff to affected symbols (functions, classes, methods). For PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. Use for PR review to see which symbols changed. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Map a git diff to affected symbols (functions, classes, methods), for PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }. Set `output_format: "toon"` for lossless, cheaper tabular encoding.',
     {
       since: z
         .string()
@@ -163,7 +164,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
 
   server.tool(
     'compare_branches',
-    'Compare two branches at symbol level: what was added, modified, removed. Resolves merge-base automatically, groups by category/file/risk, includes blast radius and risk assessment. Requires git. Use for comprehensive PR comparison. For a quick list of changed symbols without risk analysis use get_changed_symbols instead. Read-only. Returns JSON: { branch, base, mergeBase, changes: [{ symbol_id, category, risk }], summary }.',
+    'Compare two branches at symbol level: what was added, modified, removed. Resolves merge-base automatically, groups by category/file/risk, includes blast radius and risk assessment. Requires git. For a quick list of changed symbols without risk analysis use get_changed_symbols instead. Read-only. Returns JSON: { branch, base, mergeBase, changes: [{ symbol_id, category, risk }], summary }.',
     {
       branch: z.string().min(1).max(256).describe('Branch to compare (e.g. "feature/payments")'),
       base: optionalNonEmptyString(256).describe('Base branch (default: "main")'),
@@ -411,10 +412,51 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
     },
   );
 
+  // --- Documentation Verification ---
+  server.tool(
+    'verify_docs',
+    'Verify a markdown document against the code graph — the reverse of generate_docs, for catching doc drift after a rename. forward: backticked paths and identifiers that no longer resolve, each with its heading path. reverse: public symbols in a scope the document never mentions. Read-only. Returns JSON: { doc, forward: { checked, resolved, misses }, reverse: { unmentioned } }.',
+    {
+      path: z.string().min(1).max(512).describe('Markdown document, relative to the project root'),
+      direction: z
+        .enum(['forward', 'reverse', 'both'])
+        .optional()
+        .describe('doc→code (default), code→doc, or both'),
+      scope: optionalNonEmptyString(512).describe('File-path prefix for the reverse direction'),
+      compact: z.boolean().optional().describe('Counts and misses only (default: false)'),
+    },
+    async ({ path: docPath, direction, scope, compact }) => {
+      try {
+        const result = verifyDocs(store, {
+          path: docPath,
+          projectRoot,
+          direction: direction ?? 'forward',
+          scope,
+          compact: compact ?? false,
+        });
+        return { content: [{ type: 'text', text: j(result) }] };
+      } catch (err) {
+        // Almost always a path that is not a readable file under the project root.
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: j({
+                code: 'NOT_FOUND',
+                message: `Cannot read '${docPath}': ${err instanceof Error ? err.message : String(err)}`,
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
   // --- Documentation Generation ---
   server.tool(
     'generate_docs',
-    'Auto-generate project documentation from the code graph. Produces structured docs with architecture, API surface, data models, components, and dependency analysis. Writes output file (markdown or HTML). Use when you need a comprehensive documentation snapshot. Returns JSON: { format, sections, outputPath }.',
+    'Generate project documentation from the code graph — architecture, API surface, data models, components, dependencies. For checking an existing document instead, use verify_docs. Returns JSON: { format, sections, outputPath }.',
     {
       scope: z
         .enum(['project', 'module', 'directory'])

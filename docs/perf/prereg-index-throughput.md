@@ -40,7 +40,7 @@ outside, with zero production code changes. Two runs:
 
 1. **Production run** — worker pool enabled (the pool's own worker entry,
    `dist/extract-worker.js`, is temporarily copied next to
-   `src/indexer/extract-worker.js` so `ExtractPool`'s `import.meta.url`-relative
+   `src/indexer/extract-worker.ts` so `ExtractPool`'s `import.meta.url`-relative
    lookup finds it under `tsx`; deleted afterward, never committed). Gives
    realistic wall time, throughput, and peak/steady RSS. Stage split covers
    extract (worker dispatch, wall time as seen from the main thread) + persist

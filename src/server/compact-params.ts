@@ -112,6 +112,7 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   check_architecture: ['preset'],
   check_claudemd_drift: [],
   generate_docs: ['scope', 'path'],
+  verify_docs: ['path', 'direction'],
   generate_sbom: ['format'],
   analyze_perf: ['tool', 'window'],
 
