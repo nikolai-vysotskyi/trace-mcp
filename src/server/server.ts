@@ -35,7 +35,11 @@ import {
   getGlobalTelemetrySink,
   setGlobalTelemetrySink,
 } from '../telemetry/index.js';
-import { recordUsagePingClient, sendUsagePing } from '../telemetry/usage-ping.js';
+import {
+  printTelemetryNoticeOnce,
+  recordUsagePingClient,
+  sendUsagePing,
+} from '../telemetry/usage-ping.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { CodexSessionProvider } from '../session/providers/codex.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
@@ -782,6 +786,10 @@ export function createServer(
   // about what reached the client. Identical on the local path, where
   // `registeredToolNames` passed exactly this filter.
   if (!deps?.skipUsagePing) {
+    // Fallback disclosure for an install that only ever runs under an MCP
+    // client and never types a CLI command (TRA-887). stderr lands in the
+    // client's own log there, which is why the CLI hook is the primary site.
+    printTelemetryNoticeOnce();
     void sendUsagePing({
       version: PKG_VERSION,
       preset: presetName,

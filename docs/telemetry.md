@@ -43,11 +43,10 @@ otherwise limited to the current session ([analytics](analytics.md)).
 
 > **This page is about spans you export to your own collector.** It is not the
 > anonymous daily install ping, which is a separate subsystem reporting to the
-> maintainer. That one's published field list — everything it sends and how to
-> turn it off — lives in the README under
-> [Usage telemetry](https://github.com/nikolai-vysotskyi/trace-mcp#usage-telemetry),
-> with the source in `src/telemetry/usage-ping.ts`. Nothing on this page
-> phones home.
+> maintainer. That one's published field list — everything it sends, both ways
+> to turn it off, and how to delete the state it keeps — is on the
+> [privacy page](privacy.md), with the source in `src/telemetry/usage-ping.ts`.
+> Nothing on this page phones home.
 
 ## Quickstart (3 commands)
 

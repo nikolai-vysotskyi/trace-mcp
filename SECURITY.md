@@ -315,7 +315,9 @@ The anonymous active-install ping (`src/telemetry/usage-ping.ts`) uses GA4's
 Measurement Protocol. Its two credentials — a measurement id and an
 `api_secret` — are **inlined into the published bundle at build time**
 (`tsup.config.ts`, `define` block) and are therefore readable as plaintext by
-anyone who runs `npm install trace-mcp`. This is intended, not a leak.
+anyone who runs `npm install trace-mcp`. This is intended, not a leak. What the
+ping sends, and both ways to turn it off, are published at
+<https://trace-mcp.com/privacy.html>.
 
 * **A GA4 `api_secret` is write-only.** It can send events to the property; it
   cannot read reports, users, or any other data. Baking one into a distributed

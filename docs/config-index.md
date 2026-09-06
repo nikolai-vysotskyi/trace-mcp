@@ -259,6 +259,7 @@ supply it.
 | `quality_gates.rules.max_code_smell_count.message` | string | _unset_ |
 | `telemetry` | object | — |
 | `telemetry.enabled` | boolean | `false` |
+| `telemetry.usage_ping` | boolean | `true` |
 | `telemetry.max_rows` | number (≥ 0, ≤ 10000000) | `500000` |
 | `telemetry.observability` | object | `{}` |
 | `telemetry.observability.enabled` | boolean | `false` |

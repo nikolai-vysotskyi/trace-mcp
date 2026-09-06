@@ -43,6 +43,8 @@
   url: /toon-savings.html
 - title: MCP tracing
   url: /telemetry.html
+- title: Privacy
+  url: /privacy.html
 - title: Daemon memory
   url: /daemon-memory.html
 - title: tweakcc routing
