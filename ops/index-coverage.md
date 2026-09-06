@@ -305,9 +305,10 @@ corrected it.
 ## Sitemap resubmission is an agent action, not a Nikolai-click (TRA-1022, 2026-09-06)
 
 Two runs in a row recorded "Google's copy of the sitemap is stale" and filed the
-fix as out of mandate. It is not. The service account in
-`~/.config/claude-seo/google-api.json` holds `siteFullUser` on
-`sc-domain:trace-mcp.com`, which is enough for `sitemaps.submit`:
+fix as out of mandate. It is not. `~/.config/claude-seo/google-api.json` is a
+pointer config — its `service_account_path` field names the key file, which is
+what to look at when rotating — and that service account holds `siteFullUser`
+on `sc-domain:trace-mcp.com`, which is enough for `sitemaps.submit`:
 
 ```python
 from google.oauth2 import service_account
@@ -365,6 +366,8 @@ indexed and unindexed URLs. Fetched live as Googlebot, all six `/vs/` pages and
   carries no freshness information here at all, which is the other half of why
   sitemap `<lastmod>` is the only re-crawl signal this domain responds to.
 
-Subdirectory hosting is ruled out. What remains is what the sections above
-already name: page age and crawl demand. The 2026-09-26 re-read stands, and now
-starts from a sitemap Google actually holds.
+Subdirectory hosting is ruled out, and that is the whole of what this check
+established: it tested the serving layer only. Page quality, update frequency
+and perceived inventory stay open and stay unmeasured, same as the two sections
+above say. The 2026-09-26 re-read stands, and now starts from a sitemap Google
+actually holds.
