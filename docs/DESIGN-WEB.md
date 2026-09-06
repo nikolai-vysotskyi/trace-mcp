@@ -346,9 +346,21 @@ scales the whole lockup** and there is no second constant to keep in sync.
 
 | | Row | Stack |
 |---|---|---|
-| mark | `885` tall | `3600` (3.6 em) |
+| mark | `1220` | `3600` (3.6 em) |
 | gap | `275` before the word | `800` under the mark |
 | mark centre | `300` above the baseline | centred on the word |
+
+**The mark and the word are one knob, not two.** The mark drives the lockup's
+own height, so at a fixed placement height a bigger mark grows the icon *and*
+shrinks the word. Asking for "+15-20% icon and -15% text" is therefore a single
+number, and it needs the placement height moved with it or the icon barely grows
+while the word collapses.
+
+It shipped at `885` in a `952.5`-tall lockup. At `1220` the lockup is `1220`
+tall, and raising the placement ~7% — the README banner from `54px` to `58px`,
+the site header from `26px` to `28px` — lands **+16% on the icon and -16% on the
+word**. Change one of the two and recompute the other; the ratio alone is not
+the spec.
 
 **Why 300 and not the centre of the ink.** Centring the mark on the word's ink
 block puts it at `232` — and it reads as hanging, because the ink block is
