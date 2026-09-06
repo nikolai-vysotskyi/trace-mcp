@@ -5,9 +5,17 @@
  * into `metadata.from` (`extractImportEdges`), but no pipeline pass consumed
  * them, so a C# repo indexed with zero import edges even though the matrix
  * claimed none. Unlike Java, C# namespaces don't have to mirror the directory
- * layout, so resolution matches against declared `namespace` symbols instead
- * of path suffixes — these tests put `Store.cs` at a path that would break
- * suffix matching to prove that.
+ * layout, so resolution matches against declared `namespace`/type symbols
+ * instead of path suffixes — these tests put `Store.cs` at a path that would
+ * break suffix matching to prove that.
+ *
+ * Two shapes are here specifically because review caught the first version
+ * getting them wrong: a namespace with more than one file in it (`Acme.Store`
+ * spans `Store.cs` and `Db.cs`), so a type-level `using` can be checked to
+ * resolve to only its declaring file rather than fanning out to every file in
+ * the namespace; and an unindexed sub-namespace (`Acme.Store.Missing`), so
+ * trimming a miss can be checked to never fall back onto the parent
+ * namespace — `using Acme.Store.Missing` does not import `Acme.Store`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -20,6 +28,7 @@ import { createTestStore, createTmpFixture, removeTmpDir } from '../test-utils.j
 const FILES: Record<string, string> = {
   'src/App.cs': `using System;
 using Acme.Store;
+using Acme.Store.Missing;
 using static Acme.Util.Ids;
 using Db = Acme.Store.Db;
 
@@ -40,6 +49,13 @@ namespace Acme.App
   'src/nested/deep/Store.cs': `namespace Acme.Store
 {
     public class Repo {}
+}
+`,
+  // A second file in the same namespace as Store.cs — proves a type-level
+  // `using` (static or aliased) resolves to only the file declaring that
+  // type, not every file in the namespace.
+  'src/nested/deep/Db.cs': `namespace Acme.Store
+{
     public class Db {}
 }
 `,
@@ -49,6 +65,13 @@ namespace Acme.App
     {
         public static int Next() => 0;
     }
+}
+`,
+  // Shares a namespace with Ids.cs but declares nothing App.cs imports —
+  // proves `using static Acme.Util.Ids` doesn't leak an edge here.
+  'src/util/Other.cs': `namespace Acme.Util
+{
+    public class Other {}
 }
 `,
 };
@@ -91,25 +114,35 @@ describe('C# import resolution E2E', () => {
     removeTmpDir(fixtureDir);
   });
 
-  it('resolves a plain namespace import to the file declaring it, regardless of its path', () => {
+  it('resolves a plain namespace import to every file declaring it, regardless of path', () => {
     expect(importTargets(store, 'src/App.cs')).toContain('src/nested/deep/Store.cs');
+    expect(importTargets(store, 'src/App.cs')).toContain('src/nested/deep/Db.cs');
   });
 
-  it('resolves a `using static` member import to the namespace holding the type', () => {
-    expect(importTargets(store, 'src/App.cs')).toContain('src/util/Ids.cs');
+  it('resolves a `using static` member import to only the file declaring that type', () => {
+    const targets = importTargets(store, 'src/App.cs');
+    expect(targets).toContain('src/util/Ids.cs');
+    expect(targets).not.toContain('src/util/Other.cs');
   });
 
-  it('resolves an aliased import to its target namespace', () => {
-    // `using Db = Acme.Store.Db;` trims to `Acme.Store`, same target as the
-    // plain import above — already covered by the first assertion.
+  it('resolves an aliased type import to only the file declaring that type', () => {
+    // `using Db = Acme.Store.Db;` must resolve to Db.cs specifically, not fan
+    // out via the namespace to every file in Acme.Store.
+    expect(importTargets(store, 'src/App.cs')).toContain('src/nested/deep/Db.cs');
+  });
+
+  it('does not fall back to the parent namespace for an unindexed sub-namespace', () => {
+    // `using Acme.Store.Missing;` names a namespace that isn't declared
+    // anywhere in the repo. It must not be treated as `Acme.Store`.
     expect(importTargets(store, 'src/App.cs')).toEqual(
-      new Set(['src/nested/deep/Store.cs', 'src/util/Ids.cs']),
+      new Set(['src/nested/deep/Store.cs', 'src/nested/deep/Db.cs', 'src/util/Ids.cs']),
     );
   });
 
   it('skips BCL imports rather than inventing targets', () => {
-    // App.cs also imports `System`, which is not in the repo, so only the two
-    // first-party targets may appear.
-    expect(importTargets(store, 'src/App.cs').size).toBe(2);
+    // App.cs also imports `System` (BCL) and `Acme.Store.Missing` (unindexed
+    // sub-namespace) — neither may appear, so only the three first-party
+    // targets above are here.
+    expect(importTargets(store, 'src/App.cs').size).toBe(3);
   });
 });

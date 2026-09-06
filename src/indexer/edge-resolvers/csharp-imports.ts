@@ -1,26 +1,42 @@
 /**
- * Resolve C# `using` directive edges to the file declaring the namespace
- * (TRA-1027 — next after Ruby in the C#/Kotlin/Swift/Elixir/Lua backlog
+ * Resolve C# `using` directive edges to the file declaring the namespace or
+ * type (TRA-1027 — next after Ruby in the C#/Kotlin/Swift/Elixir/Lua backlog
  * `import-capable-languages.ts` names as "extract but nothing consumes").
  *
  * Unlike Java, C# does not force the namespace to mirror the directory
  * layout — `namespace Acme.Store` can live at any path — so suffix-matching
  * the specifier against file paths (the Java/Go approach) would silently
  * under-resolve any project that doesn't follow the folder-per-namespace
- * convention. Resolution instead uses the `namespace` symbols the plugin
- * already extracts (`CSharpLanguagePlugin.extractNamespace`, kind
- * `namespace`, `fqn` set to the dotted namespace path):
+ * convention. Resolution instead uses the symbols the plugin already
+ * extracts (`namespace` from `CSharpLanguagePlugin.extractNamespace`, plus
+ * `class`/`interface`/`enum`/`type` for the type-level cases below), each
+ * with `fqn` set to its dotted path:
  *
  *     using Acme.Store;             // → every file declaring `namespace Acme.Store`
- *     using static Acme.Store.Ids;  // → trims the trailing type to the namespace
- *     using Alias = Acme.Store.Db;  // → same trim; alias doesn't change the target
+ *     using static Acme.Store.Ids;  // → only the file declaring type `Acme.Store.Ids`
+ *     using Alias = Acme.Store.Db;  // → only the file declaring type `Acme.Store.Db`
  *
- * A namespace with no declaring file in the index (BCL, NuGet package) simply
- * fails to resolve rather than inventing a node.
+ * A namespace is not a directory: `using Acme.Store.Billing` does not import
+ * `Acme.Store`, so an exact-namespace or exact-type match is required before
+ * falling back — trimming to a *namespace* match on a miss would treat a
+ * plain `using` of an unindexed sub-namespace as if it named the parent,
+ * linking to every file in it. The one place trimming is still safe is a
+ * type miss, where it recovers a nested type's enclosing type. A specifier
+ * matching neither (BCL, NuGet package) simply fails to resolve rather than
+ * inventing a node.
  */
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+
+function addTo(map: Map<string, number[]>, key: string, id: number): void {
+  const list = map.get(key);
+  if (list) {
+    if (!list.includes(id)) list.push(id);
+  } else {
+    map.set(key, [id]);
+  }
+}
 
 export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeScope): void {
   // WHY: driven by `state.pendingImports`, already scoped to re-extracted files.
@@ -33,22 +49,23 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   const hasCSharp = pendingFileIds.some((id) => fileMap.get(id)?.language === 'csharp');
   if (!hasCSharp) return;
 
-  // Namespace name → the files that declare it via a `namespace` block.
+  // Namespace name → the files declaring it via a `namespace` block.
   const byNamespace = new Map<string, number[]>();
+  // Type FQN → the file(s) declaring that class/struct/record/interface/enum/delegate.
+  const byType = new Map<string, number[]>();
   const rows = store.db
     .prepare(
-      `SELECT s.file_id AS fileId, s.fqn AS fqn
+      `SELECT s.file_id AS fileId, s.fqn AS fqn, s.kind AS kind
        FROM symbols s
        JOIN files f ON f.id = s.file_id
-       WHERE s.kind = 'namespace' AND f.language = 'csharp' AND s.fqn IS NOT NULL`,
+       WHERE f.language = 'csharp' AND s.fqn IS NOT NULL
+         AND s.kind IN ('namespace', 'class', 'interface', 'enum', 'type')`,
     )
-    .all() as Array<{ fileId: number; fqn: string }>;
-  for (const { fileId, fqn } of rows) {
-    const list = byNamespace.get(fqn);
-    if (list) list.push(fileId);
-    else byNamespace.set(fqn, [fileId]);
+    .all() as Array<{ fileId: number; fqn: string; kind: string }>;
+  for (const { fileId, fqn, kind } of rows) {
+    addTo(kind === 'namespace' ? byNamespace : byType, fqn, fileId);
   }
-  if (byNamespace.size === 0) return;
+  if (byNamespace.size === 0 && byType.size === 0) return;
 
   const importsEdgeType = store.db
     .prepare('SELECT id FROM edge_types WHERE name = ?')
@@ -56,10 +73,13 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   if (!importsEdgeType) return;
 
   const nodeIds = new Map<number, number>();
-  const allNamespaceFileIds = Array.from(byNamespace.values()).flat().concat(pendingFileIds);
+  const allTargetFileIds = Array.from(byNamespace.values())
+    .concat(Array.from(byType.values()))
+    .flat()
+    .concat(pendingFileIds);
   const CHUNK = 500;
-  for (let i = 0; i < allNamespaceFileIds.length; i += CHUNK) {
-    for (const [k, v] of store.getNodeIdsBatch('file', allNamespaceFileIds.slice(i, i + CHUNK))) {
+  for (let i = 0; i < allTargetFileIds.length; i += CHUNK) {
+    for (const [k, v] of store.getNodeIdsBatch('file', allTargetFileIds.slice(i, i + CHUNK))) {
       nodeIds.set(k, v);
     }
   }
@@ -72,15 +92,20 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   );
 
   /**
-   * `Acme.Store` resolves directly. `using static Acme.Store.Ids` and aliased
-   * `using X = Acme.Store.Ids` name a type, not a namespace, so fall back to
-   * the specifier with its last segment trimmed.
+   * `Acme.Store` resolves as a namespace directly. `using static
+   * Acme.Store.Ids` and aliased `using X = Acme.Store.Ids` name a type, so
+   * try an exact type match before trimming — and trim only into `byType`
+   * (a nested type's enclosing type), never back into `byNamespace`: a miss
+   * on a real namespace means an external/unindexed sub-namespace, not the
+   * parent.
    */
   const resolve = (specifier: string): number[] => {
-    const direct = byNamespace.get(specifier);
-    if (direct) return direct;
+    const ns = byNamespace.get(specifier);
+    if (ns) return ns;
+    const type = byType.get(specifier);
+    if (type) return type;
     const cut = specifier.lastIndexOf('.');
-    return (cut > 0 && byNamespace.get(specifier.slice(0, cut))) || [];
+    return (cut > 0 && byType.get(specifier.slice(0, cut))) || [];
   };
 
   let created = 0;
