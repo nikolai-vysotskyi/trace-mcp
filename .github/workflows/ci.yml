@@ -179,18 +179,26 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   biome:
     runs-on: ubuntu-latest
-    # Every job that runs pnpm/action-setup pays for its self-installer, which
-    # has been measured between 84s and 6m28s depending on npm registry health.
-    # A budget that only fits the fast case turns a slow registry into a red
-    # gate — 12 is the floor already used by the report jobs below.
+    # pnpm setup used to pay for pnpm/action-setup's self-installer on every
+    # job (measured 84s-6m28s depending on npm registry health). It's now
+    # activated via corepack with its download cached (.github/actions/
+    # setup-pnpm) — a cache hit after the first job/run. 12 stays as the
+    # floor for a cold cache and for the report jobs below.
     timeout-minutes: 12
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
 
+      - uses: ./.github/actions/setup-pnpm
+
+      # Second call: cache: 'pnpm' shells out to `pnpm store path`, so pnpm
+      # must already be on PATH — which the setup-pnpm step above just put
+      # there. This call is a near-instant tool-cache hit for Node itself.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -229,13 +237,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
       # No `cache: 'pnpm'` here on purpose: this job never installs, so the
       # pnpm store never exists and the post-job cache save fails the run.
+      # (setup-pnpm's own corepack-download cache is unaffected — it's
+      # populated by activation alone, not by `pnpm install`.)
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+
+      - uses: ./.github/actions/setup-pnpm
 
       # Audits the lockfile; no install needed.
       #
@@ -307,10 +317,10 @@ jobs:
     if: needs.changes.outputs.core == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     # Safety cap. Cold cache build is ~90s; warm ~30s. 6 min absorbs npm/registry slowdowns.
-    # Every job that runs pnpm/action-setup pays for its self-installer, which
-    # has been measured between 84s and 6m28s depending on npm registry health.
-    # A budget that only fits the fast case turns a slow registry into a red
-    # gate — 12 is the floor already used by the report jobs below.
+    # pnpm setup no longer pays a per-job self-installer download (see
+    # .github/actions/setup-pnpm) — corepack's own cache makes this a hit
+    # after the first job/run. 12 stays as the floor for a cold cache and
+    # for the report jobs below.
     timeout-minutes: 12
     permissions:
       contents: read
@@ -319,7 +329,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/setup-pnpm
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -412,12 +426,12 @@ jobs:
           # stale-lastmod guard could never fail where it matters.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           # No pnpm cache here — we're downloading the prebuilt node_modules.
+
+      - uses: ./.github/actions/setup-pnpm
 
       - name: Download build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -485,8 +499,8 @@ jobs:
         with:
           fetch-depth: 0 # Needed for git diff base..head.
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
+      # No pnpm setup: these steps only run `node dist/cli.js` against the
+      # downloaded artifact below, never `pnpm`.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -555,8 +569,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
+      # No pnpm setup: these steps only run `node dist/cli.js` against the
+      # downloaded artifact below, never `pnpm`.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -623,8 +637,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-
+      # No pnpm setup: these steps only run `node dist/cli.js` against the
+      # downloaded artifact below, never `pnpm`.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
@@ -662,17 +676,21 @@ jobs:
     needs: changes
     if: needs.changes.outputs.app == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    # Every job that runs pnpm/action-setup pays for its self-installer, which
-    # has been measured between 84s and 6m28s depending on npm registry health.
-    # A budget that only fits the fast case turns a slow registry into a red
-    # gate — 12 is the floor already used by the report jobs below.
+    # pnpm setup no longer pays a per-job self-installer download (see
+    # .github/actions/setup-pnpm) — corepack's own cache makes this a hit
+    # after the first job/run. 12 stays as the floor for a cold cache and
+    # for the report jobs below.
     timeout-minutes: 12
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/setup-pnpm
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -719,17 +737,21 @@ jobs:
     needs: changes
     if: needs.changes.outputs.vscode == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
-    # Every job that runs pnpm/action-setup pays for its self-installer, which
-    # has been measured between 84s and 6m28s depending on npm registry health.
-    # A budget that only fits the fast case turns a slow registry into a red
-    # gate — 12 is the floor already used by the report jobs below.
+    # pnpm setup no longer pays a per-job self-installer download (see
+    # .github/actions/setup-pnpm) — corepack's own cache makes this a hit
+    # after the first job/run. 12 stays as the floor for a cold cache and
+    # for the report jobs below.
     timeout-minutes: 12
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - uses: ./.github/actions/setup-pnpm
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -785,6 +807,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Deliberately still pnpm/action-setup, not .github/actions/setup-pnpm:
+      # this job only runs on release-please PRs, nightly, dispatch, or an
+      # opt-in label, so the redundant download isn't the everyday cost that
+      # TRA-790 targeted, and mac/windows are exactly the runners where an
+      # unverified change to pnpm activation is riskiest to land blind.
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
