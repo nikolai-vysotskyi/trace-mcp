@@ -12,8 +12,13 @@ import {
   getLauncherPath,
   installLauncher,
   isBroken,
+  legacyCompatCmdBody,
 } from '../../src/init/launcher.js';
-import { checkRegisteredLaunchers } from '../../src/init/launcher-health.js';
+import {
+  checkRegisteredLaunchers,
+  launcherConfigLocations,
+} from '../../src/init/launcher-health.js';
+import { ALL_MCP_CLIENT_NAMES, getConfigPath } from '../../src/init/mcp-client.js';
 import { LAUNCHER_VERSION } from '../../src/init/types.js';
 
 const SHIM = `#!/bin/bash\n# trace-mcp-launcher v${LAUNCHER_VERSION}\nexit 0\n`;
@@ -82,7 +87,7 @@ describe.skipIf(process.platform === 'win32')('checkLauncherFile', () => {
   });
 });
 
-describe.skipIf(process.platform === 'win32')('checkRegisteredLaunchers', () => {
+describe('checkRegisteredLaunchers', () => {
   let dir: string;
 
   beforeEach(() => {
@@ -98,13 +103,22 @@ describe.skipIf(process.platform === 'win32')('checkRegisteredLaunchers', () => 
     return [{ clientName: 'claude-code', configPath }];
   }
 
-  it('checks the path a client is actually registered at', () => {
-    const dead = path.join(dir, 'bin', 'trace-mcp');
-    fs.mkdirSync(path.dirname(dead));
-    fs.symlinkSync(path.join(dir, 'gone'), dead);
-    const checks = checkRegisteredLaunchers(config({ mcpServers: { trace: { command: dead } } }));
-    expect(checks.find((c) => c.path === dead)?.status).toBe('dangling_symlink');
-  });
+  function raw(name: string, text: string): { clientName: string; configPath: string }[] {
+    const configPath = path.join(dir, name);
+    fs.writeFileSync(configPath, text);
+    return [{ clientName: 'other', configPath }];
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'checks the path a client is actually registered at',
+    () => {
+      const dead = path.join(dir, 'bin', 'trace-mcp');
+      fs.mkdirSync(path.dirname(dead));
+      fs.symlinkSync(path.join(dir, 'gone'), dead);
+      const checks = checkRegisteredLaunchers(config({ mcpServers: { trace: { command: dead } } }));
+      expect(checks.find((c) => c.path === dead)?.status).toBe('dangling_symlink');
+    },
+  );
 
   it('reads the legacy server key too', () => {
     const checks = checkRegisteredLaunchers(
@@ -119,6 +133,37 @@ describe.skipIf(process.platform === 'win32')('checkRegisteredLaunchers', () => 
       config({ projects: { '/some/repo': { mcpServers: { trace: { command: cmd } } } } }),
     );
     expect(checks.find((c) => c.path === cmd)?.status).toBe('missing');
+  });
+
+  it('reads a Codex TOML section', () => {
+    const cmd = path.join(dir, 'codex-launcher');
+    const checks = checkRegisteredLaunchers(
+      raw(
+        'config.toml',
+        `[other]\ncommand = "unrelated"\n\n[mcp_servers.trace]\ncommand = "${cmd}"\nargs = []\n\n[mcp_servers.other]\ncommand = "nope"\n`,
+      ),
+    );
+    expect(checks.map((c) => c.path)).toContain(cmd);
+    expect(checks.map((c) => c.path)).not.toContain('nope');
+  });
+
+  it('reads a Hermes YAML block', () => {
+    const cmd = path.join(dir, 'hermes-launcher');
+    const checks = checkRegisteredLaunchers(
+      raw('config.yaml', `mcp_servers:\n  trace:\n    command: ${cmd}\n    args: []\n`),
+    );
+    expect(checks.map((c) => c.path)).toContain(cmd);
+  });
+
+  it("reads AMP's literal-dot key out of commented JSONC", () => {
+    const cmd = path.join(dir, 'amp-launcher');
+    const checks = checkRegisteredLaunchers(
+      raw(
+        'settings.jsonc',
+        `{\n  // a comment JSON.parse would choke on\n  "amp.mcpServers": { "trace": { "command": "${cmd}" } }\n}\n`,
+      ),
+    );
+    expect(checks.map((c) => c.path)).toContain(cmd);
   });
 
   it('always includes the installed launcher path, even with no client configured', () => {
@@ -181,5 +226,114 @@ describe.skipIf(process.platform === 'win32')('installLauncher repairs an unspaw
   it('still skips the rewrite when the shim is healthy', () => {
     installLauncher({});
     expect(installLauncher({}).action).toBe('already_configured');
+  });
+});
+
+/**
+ * A shim can carry the current version header, be executable, and still never
+ * run a line — the reviewer's case on #988. Nothing about it reaches
+ * launcher.log, so it has to be caught here or not at all.
+ */
+describe.skipIf(process.platform === 'win32')('unspawnable but well-formed shims', () => {
+  let dir: string;
+  let home: string;
+  let prevHome: string | undefined;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-interp-'));
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-home-'));
+    prevHome = process.env.TRACE_MCP_HOME;
+    process.env.TRACE_MCP_HOME = home;
+  });
+  afterEach(() => {
+    if (prevHome === undefined) delete process.env.TRACE_MCP_HOME;
+    else process.env.TRACE_MCP_HOME = prevHome;
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  function shim(shebang: string): string {
+    const p = path.join(dir, 'trace');
+    fs.writeFileSync(p, `${shebang}\n# trace-mcp-launcher v${LAUNCHER_VERSION}\nexit 0\n`, {
+      mode: 0o755,
+    });
+    fs.chmodSync(p, 0o755);
+    return p;
+  }
+
+  it('reports an absolute interpreter that is not installed', () => {
+    const check = checkLauncherFile(shim('#!/nope/bin/bash'));
+    expect(check.status).toBe('broken_interpreter');
+    expect(check.detail).toContain('/nope/bin/bash');
+  });
+
+  it('reports an env-resolved interpreter that is not on PATH', () => {
+    expect(checkLauncherFile(shim('#!/usr/bin/env definitely-not-a-real-shell')).status).toBe(
+      'broken_interpreter',
+    );
+  });
+
+  it('accepts the interpreter the shipped shim actually uses', () => {
+    expect(checkLauncherFile(shim('#!/bin/sh')).status).toBe('ok');
+  });
+
+  it('trace init rewrites a current-version shim whose interpreter is gone', () => {
+    installLauncher({});
+    const dest = getLauncherPath();
+    const body = fs.readFileSync(dest, 'utf-8').replace(/^#![^\n]*/, '#!/nope/bin/bash');
+    fs.writeFileSync(dest, body, { mode: 0o755 });
+    expect(checkLauncherFile(dest).status).toBe('broken_interpreter');
+
+    expect(installLauncher({}).action).not.toBe('already_configured');
+    expect(checkLauncherFile(dest).status).toBe('ok');
+  });
+});
+
+/**
+ * The Windows compat shim delegates by exec instead of by symlink, so its
+ * equivalent of a dangling link is a quoted path that no longer exists. Checked
+ * on every platform: the file is text either way, and the Windows CI job is
+ * conditional.
+ */
+describe('windows compat shim delegate', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-delegate-'));
+  });
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function cmd(target: string): string {
+    const p = path.join(dir, 'trace-mcp.cmd');
+    fs.writeFileSync(p, legacyCompatCmdBody(target), { mode: 0o755 });
+    fs.chmodSync(p, 0o755);
+    return p;
+  }
+
+  it('reports a delegate target that is gone', () => {
+    const gone = path.join(dir, 'gone', 'trace.cmd');
+    const check = checkLauncherFile(cmd(gone));
+    expect(check.status).toBe('broken_delegate');
+    expect(check.detail).toContain(gone);
+  });
+
+  it('accepts a delegate target that exists', () => {
+    const target = path.join(dir, 'trace.cmd');
+    fs.writeFileSync(target, legacyCompatCmdBody('x'), { mode: 0o755 });
+    expect(checkLauncherFile(cmd(target)).status).toBe('ok');
+  });
+});
+
+describe('config discovery covers every supported client', () => {
+  it('finds a config file for every client that has one', () => {
+    const found = new Set(launcherConfigLocations('/tmp/some-project').map((l) => l.clientName));
+    for (const name of ALL_MCP_CLIENT_NAMES) {
+      const hasConfig =
+        getConfigPath(name, '/tmp/some-project', 'global') !== null ||
+        getConfigPath(name, '/tmp/some-project', 'project') !== null;
+      expect(hasConfig ? found.has(name) : !found.has(name)).toBe(true);
+    }
   });
 });

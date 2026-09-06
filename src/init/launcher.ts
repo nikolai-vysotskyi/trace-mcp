@@ -246,6 +246,8 @@ export type LauncherPathStatus =
   | 'dangling_symlink'
   | 'not_a_file'
   | 'not_executable'
+  | 'broken_interpreter'
+  | 'broken_delegate'
   | 'foreign'
   | 'unchecked';
 
@@ -312,7 +314,78 @@ export function checkLauncherFile(file: string): LauncherPathCheck {
   if (!isOwnedShim(target)) {
     return { path: file, status: 'foreign', detail: 'not a trace-mcp launcher — left alone' };
   }
+  // Mode bits are not the last gate: the kernel still has to find the shim's
+  // interpreter, and the Windows compat shim still has to find the launcher it
+  // execs. Both fail with the shim never running a line, so neither reaches
+  // launcher.log — the exact class of failure this check exists for.
+  const interpreter = missingInterpreter(target);
+  if (interpreter) {
+    return {
+      path: file,
+      status: 'broken_interpreter',
+      detail: `interpreter missing: ${interpreter}`,
+    };
+  }
+  const delegate = missingDelegate(target);
+  if (delegate) {
+    return {
+      path: file,
+      status: 'broken_delegate',
+      detail: `delegates to a missing launcher: ${delegate}`,
+    };
+  }
   return { path: file, status: 'ok', detail: 'executable trace-mcp launcher' };
+}
+
+/** First line of a file, or '' when it cannot be read. */
+function firstLines(file: string, count: number): string[] {
+  try {
+    return fs.readFileSync(file, 'utf-8').split(/\r?\n/, count);
+  } catch {
+    return [];
+  }
+}
+
+/** Is `name` an executable file on PATH? */
+function onPath(name: string): boolean {
+  const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  return dirs.some((d) => {
+    try {
+      fs.accessSync(path.join(d, name), fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * The interpreter a `#!` line names, when that interpreter is not there.
+ * `exec` fails with ENOENT pointing at the *shim*, so the user sees a file that
+ * plainly exists refusing to run — worth naming explicitly. Returns null when
+ * the line is absent (a Windows `.cmd` has none) or the interpreter resolves.
+ */
+function missingInterpreter(file: string): string | null {
+  const [first] = firstLines(file, 1);
+  if (!first?.startsWith('#!')) return null;
+  const parts = first.slice(2).trim().split(/\s+/).filter(Boolean);
+  const [interp, arg] = parts;
+  if (!interp) return null;
+  if (!fs.existsSync(interp)) return interp;
+  // `#!/usr/bin/env bash` fails just as hard when `bash` is not on PATH.
+  if (path.basename(interp) === 'env' && arg && !arg.startsWith('-') && !onPath(arg)) {
+    return arg;
+  }
+  return null;
+}
+
+/** Path a compat shim execs, when that path is gone. See legacyCompatCmdBody(). */
+function missingDelegate(file: string): string | null {
+  for (const line of firstLines(file, 8)) {
+    const m = line.match(/^"([^"]+)"\s+%\*\s*$/);
+    if (m?.[1] && !fs.existsSync(m[1])) return m[1];
+  }
+  return null;
 }
 
 /** Statuses that mean the client gets `Failed to connect` with an empty log. */
