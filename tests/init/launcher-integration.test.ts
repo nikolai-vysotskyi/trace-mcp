@@ -1025,6 +1025,11 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
   // TRA-707: launcher.log takes a line on every MCP start and nothing else
   // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
   // daemon's own rotation cannot reach a file written from bash.
+  //
+  // This has to run on both CI runners, not one: the size probe is the part
+  // that broke, and GNU and BSD `stat` disagree about the flags it uses. The
+  // first cut of this test passed on macOS while the Linux job caught the shim
+  // silently never rotating at all.
   it('rotates launcher.log once it is past the ceiling', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     writeConfig(traceHome, node, cli);
