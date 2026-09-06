@@ -91,7 +91,13 @@ PowerShell shim appends to — so each states its own limit:
 | `daemon.log` | 20 MB, checked every 60 s by the running daemon | `src/daemon/lifecycle.ts` |
 | `launcher.log` | 5 MB, override with `TRACE_MCP_LOG_MAX_BYTES` | `hooks/trace-mcp-launcher.sh`, `.ps1` |
 | `update.log` | 2 MB | `packages/app/src/main/update-log.ts` |
-| `run.log` (opt-in `logging.file`) | `logging.max_size_mb`, default 10 MB | `src/logger.ts` |
+
+`logging.max_size_mb` (default 10 MB) governs none of these three. It caps the
+opt-in `logging.file` transport in `src/logger.ts`, whose `logging.path` still
+defaults to **`~/.trace-mcp/run.log`** — the pre-TRA-611 directory. That path is
+expanded with a plain `~` substitution, not the rename-aware `getLauncherDir()`
+the three logs above use, so on a migrated machine it writes outside `~/.trace`.
+Off by default, so nothing is written there unless a user opts in.
 
 Rotation is best-effort everywhere: a rotation failure is swallowed rather than
 allowed to abort an MCP start or an update. `postinstall.log` is unbounded, and

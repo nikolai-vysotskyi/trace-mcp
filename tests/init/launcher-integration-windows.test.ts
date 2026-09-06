@@ -292,6 +292,7 @@ Write-Output "EXIT:$LASTEXITCODE"`;
     const q = (p: string) => p.replace(/'/g, "''");
     const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
 $env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
 $env:TRACE_MCP_LOG_MAX_BYTES = '1024'
 & powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
 Write-Output "EXIT:$LASTEXITCODE"`;
@@ -315,6 +316,7 @@ Write-Output "EXIT:$LASTEXITCODE"`;
     const q = (p: string) => p.replace(/'/g, "''");
     const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
 $env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
 $env:TRACE_MCP_LOG_MAX_BYTES = '1048576'
 & powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
 Write-Output "EXIT:$LASTEXITCODE"`;
