@@ -7,12 +7,27 @@
  * lights and a native vibrancy view behind the sidebar, none of which a browser
  * tab has. This script is the launch path for that.
  *
- *   node scripts/electron-cdp.mjs launch            # build + run with CDP on :9222
+ *   pnpm run build                                  # launch does NOT build
+ *   node scripts/electron-cdp.mjs launch            # run with CDP on :9222
  *   node scripts/electron-cdp.mjs launch --visible  # …and put it on screen
  *   node scripts/electron-cdp.mjs shot out.png      # screenshot the current page
- *   node scripts/electron-cdp.mjs shot out.png --view=project --tab=graph --dark
+ *   node scripts/electron-cdp.mjs shot out.png --click=Insights --dark
  *   node scripts/electron-cdp.mjs shot out.png --locale=zh --size=640x420
  *   node scripts/electron-cdp.mjs shot out.png --offline   # daemon-down states
+ *
+ * `shot` flags, in full: `--url` `--click` `--eval` `--dark` `--light`
+ * `--locale` `--size=WxH` `--settle` `--offline` `--reduce-transparency`
+ * `--increase-contrast`. Which surface is on screen is React state, so reach a
+ * sidebar destination with `--click=<row label>` and a project surface by URL:
+ *
+ *   --url="file://$PWD/dist/renderer/index.html?view=project&root=<abs path>"
+ *
+ * Both query params are required — `getUrlParams` in `App.tsx` defaults `view`
+ * to `menu`, so `?root=` alone silently renders the Workspace instead.
+ *
+ * Build first, and mean it: `launch` only spawns Electron. Started without
+ * `dist/main/index.js` it comes up with no main script, no CDP endpoint and no
+ * error on stdout, which reads exactly like a slow boot.
  *
  * `launch` uses its own --user-data-dir so it does not fight the installed
  * trace-mcp.app for Electron's single-instance lock. Once it is up, an external
