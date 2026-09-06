@@ -14,6 +14,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * singleton (`pipelineInstance`/`pipelineModel`) that would otherwise leak
  * across tests.
  */
+
+// TRA-961: the first isAvailable() test does a cold `import('../../src/ai/onnx.js')`,
+// which pulls in @huggingface/transformers — a large dependency whose first-import
+// cost (~2s uncontended) can exceed vitest's default 10s testTimeout under full-suite
+// worker contention. Not a product bug; keep the budget clear of contention.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('OnnxProvider', () => {
   afterEach(() => {
     vi.doUnmock('@huggingface/transformers');
