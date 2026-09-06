@@ -588,31 +588,34 @@ const EPHEMERAL_WORKDIR_PATTERN =
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
 
 /**
- * Dead end, so the next run does not re-walk it (TRA-992). The same runtime has
- * a second one-shot layout the pattern above does not see — a task given a
- * scratch directory instead of a workspace checkout lands in
- * `<tmp>/multica-task-<run-id>/...` — and 17 of the 37 rows in the reported
- * registry.json were exactly that: dead within the hour, each pinning a
- * `.config.json` section for the full 7-day `sweepMissingRoots` grace.
+ * The same runtime's other one-shot layout: a task given a scratch directory
+ * instead of a workspace checkout lands in `<tmp>/multica-task-<run-id>/...`.
+ * `EPHEMERAL_WORKDIR_PATTERN` above never matched those, so each was persisted
+ * like a real project — 17 of the 37 rows in the reported registry.json, all
+ * dead within the hour, each pinning a `.config.json` section for the full
+ * 7-day `sweepMissingRoots` grace (TRA-992).
  *
- * Adding `/[/\\]multica-task-\d+[/\\]/` here does fix that, and it must not be
- * done: on a machine whose agent runtime exports `TMPDIR` as its own task
- * directory — which is how the leak arises in the first place — `os.tmpdir()`
- * IS a `multica-task-<id>` path, so the rule reclassifies every fixture the
- * test suite builds under it. Seven registry tests fail locally and pass in CI,
- * which is worse than the leak: the leak is bounded and self-healing, since the
- * grace period expires and `pruneProjectConfigSections` then drops the sections
- * it was holding. Anchoring the shape at the temp root instead does not help —
- * `os.tmpdir()` is the task directory, not its parent.
+ * The container is matched, not the leaf: a run drops several roots under it
+ * (its own scratch dirs, benchmark fixtures) and none outlive the run. The
+ * numeric run id keeps this off a user directory that merely says
+ * "multica-task".
+ *
+ * Note for tests: such a runtime also exports TMPDIR as its own task
+ * directory, so `os.tmpdir()` itself can match this. A fixture that must stay
+ * persistent has to be built outside it — see `tmpRootOutsideTaskDir` in
+ * tests/test-utils.ts.
  */
+const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
 
 /**
- * True when `root` is a one-shot agent-run checkout (see
- * {@link EPHEMERAL_WORKDIR_PATTERN}). Such roots are never persisted to
+ * True when `root` is a one-shot agent-run checkout, in either layout the
+ * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
+ * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
  * registry.json — see the `_ephemeralEntries` note above.
  */
 export function isEphemeralProjectRoot(root: string): boolean {
-  return EPHEMERAL_WORKDIR_PATTERN.test(path.resolve(root));
+  const abs = path.resolve(root);
+  return EPHEMERAL_WORKDIR_PATTERN.test(abs) || EPHEMERAL_TASK_DIR_PATTERN.test(abs);
 }
 
 export interface EphemeralProjectCandidate {
@@ -638,7 +641,7 @@ export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandida
   const now = Date.now();
   const out: EphemeralProjectCandidate[] = [];
   for (const entry of listProjects()) {
-    if (!EPHEMERAL_WORKDIR_PATTERN.test(entry.root)) continue;
+    if (!isEphemeralProjectRoot(entry.root)) continue;
     const addedMs = Date.parse(entry.addedAt);
     if (Number.isNaN(addedMs)) continue;
     const ageHours = (now - addedMs) / (60 * 60 * 1000);
