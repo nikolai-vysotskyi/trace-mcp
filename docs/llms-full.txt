@@ -824,11 +824,11 @@ So the two products solve different halves of the same budget. Context Mode comp
 ### trace-mcp vs CodeGraphContext — the peer that drives the most SCIP indexers
 {: #vs-codegraphcontext}
 
-[CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) (CodeGraphContext/CodeGraphContext, started by Shashankss1205, 4,155 stars, Python, MIT, v0.6.10 — self-classified `Development Status :: 3 - Alpha`, last pushed September 2, 2026) goes further on compiler-grade references than anyone else here, ourselves included. Read at source today: tree-sitter parsers for the 23 languages its README lists, plus an opt-in SCIP path (`SCIP_INDEXER=true` in `~/.codegraphcontext/.env`) that shells out to **nine** Sourcegraph indexer families — scip-python, scip-typescript, scip-go, scip-java, scip-clang, scip-dotnet, scip-php, scip-ruby and scip-ctags, covering more than twenty file extensions — folds their symbol data into the same property graph, and supplements with tree-sitter for the files SCIP did not cover. We ship SCIP too and the table below says so, but our bridge auto-runs **three** (scip-typescript, scip-python, rust-analyzer) and otherwise ingests a `.scip` index you produced yourself, so their coverage of the driven-indexer path is three times ours. Both sides are opt-in and both cost the same thing: every language needs its indexer binary installed first, and C/C++ additionally need a `compile_commands.json` compilation database or CodeGraphContext logs a warning and falls back to tree-sitter for that repo. It also ships two things nobody else here has. **Bundles** are portable `.cgc` pre-indexed graph snapshots — exportable, importable, and downloadable from a public registry hosted as a Hugging Face dataset (`cgc bundle load flask`) — so you can skip indexing a dependency by fetching someone else's graph of it; no other peer, ours included, offers that. And its datasource ingesters pull **MySQL, Redis and Cassandra** structure into the graph alongside the code.
+[CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) (CodeGraphContext/CodeGraphContext, started by Shashankss1205, {{ site.data.competitors.codegraphcontext.stars }} stars, Python, MIT, v0.6.13 — self-classified `Development Status :: 3 - Alpha`, last pushed September 2, 2026) goes further on compiler-grade references than anyone else here, ourselves included. Read at source today: tree-sitter parsers for the 23 languages its README lists, plus an opt-in SCIP path (`SCIP_INDEXER=true` in `~/.codegraphcontext/.env`) that shells out to **eleven** Sourcegraph indexer families — scip-python, scip-typescript, scip-go, scip-rust, scip-java, scip-clang, scip-dotnet, scip-php, scip-ruby, scip-swift and scip-ctags, covering more than twenty file extensions (nine at the September 4 reading; scip-rust and scip-swift landed since) — folds their symbol data into the same property graph, and supplements with tree-sitter for the files SCIP did not cover. We ship SCIP too and the table below says so, but our bridge auto-runs **three** (scip-typescript, scip-python, rust-analyzer) and otherwise ingests a `.scip` index you produced yourself, so their coverage of the driven-indexer path is three times ours. Both sides are opt-in and both cost the same thing: every language needs its indexer binary installed first, and C/C++ additionally need a `compile_commands.json` compilation database or CodeGraphContext logs a warning and falls back to tree-sitter for that repo. It also ships two things nobody else here has. **Bundles** are portable `.cgc` pre-indexed graph snapshots — exportable, importable, and downloadable from a public registry hosted as a Hugging Face dataset (`cgc bundle load flask`) — so you can skip indexing a dependency by fetching someone else's graph of it; no other peer, ours included, offers that. And its datasource ingesters pull **MySQL, Redis and Cassandra** structure into the graph alongside the code.
 
 Where it differs from us is surface, storage and scope. Its `tool_definitions.py` defines **29 tools and advertises all 29** — about 3.7K tokens of schema against our ~9.8K of schema, ~11.6K once the server-instructions block we also pay at session start is counted — with an `mcp.json` `disabledTools` **denylist** as the only trimming knob, the exact opposite of codegraph's one-tool opt-in allowlist and of our presets. Storage is a decision you have to make rather than a detail you never see: six backend options (FalkorDB Lite, FalkorDB Remote, KuzuDB, LadybugDB, Neo4j, Nornic DB), defaulting to FalkorDB Lite on Unix with Python 3.12+ and documented with unusual honesty — their own dependency comments record that Kùzu was archived upstream in October 2025 and that redis-py is pinned to 5.x to keep FalkorDB Lite's Unix-socket path working. trace-mcp ships one embedded SQLite+FTS5 store and no backend question at all. Framework awareness stops at two hardcoded Java Spring tools (`find_java_spring_endpoints`, `find_java_spring_beans`) rather than {{ site.data.counts.frameworks }} integrations resolving route → handler, controller → template and model → table. And it reads and analyses rather than writes: `find_dead_code`, cyclomatic complexity and `simulate_architectural_change` all report — no refactoring, codemods, taint analysis, SARIF output or code-linked decision memory. One thing it has that our fixed tool set does not: `execute_cypher_query`, a raw graph query escape hatch, if you are willing to write Cypher.
 
-Pick CodeGraphContext when compiler-grade references on a mainstream language justify installing an indexer toolchain, or when a pre-built bundle saves you an index you would otherwise build. If you are looking for a CodeGraphContext alternative, pick trace-mcp when you want one embedded store, framework edges and a write path. _(Covered here on the hub only — this peer has no dedicated page.)_
+Pick CodeGraphContext when compiler-grade references on a mainstream language justify installing an indexer toolchain, or when a pre-built bundle saves you an index you would otherwise build. If you are looking for a CodeGraphContext alternative, pick trace-mcp when you want one embedded store, framework edges and a write path. The full head-to-head, including where their reference resolution beats ours: [trace-mcp vs CodeGraphContext](/vs/codegraphcontext.html).
 
 ### If you are comparing two of the alternatives to each other
 
@@ -1116,7 +1116,7 @@ Still unprofiled from the previous pass's "newly spotted" list: **CodeGraph** (c
 
 **codegraph re-verified this pass** (September 2, 2026 at commit `b9ca4b7981116909900368cc1686a1074cd4d4c1`, source re-read rather than carried forward from the August 28 reading this page had been quoting). The claim holds exactly: `src/mcp/tools.ts` defines eight tools and `DEFAULT_MCP_TOOLS` is literally `new Set(['explore'])`, with the other seven reachable only through `CODEGRAPH_MCP_TOOLS`. One caveat for anyone re-checking: a comment inside `getTools()` says "the default 4-tool surface" and is stale prose — the set it points at contains one entry. Stars 69.2K at that reading, re-checked at 69.4K on September 3, 2026.
 
-**CodeGraphContext profiled this pass** (September 4, 2026 — read through the GitHub API at `main`, no clone: repository metadata, `pyproject.toml`, `README.md`, `src/codegraphcontext/tool_definitions.py`, `server.py`, `tools/scip_indexer.py`, `tools/indexing/scip_pipeline.py`, `core/bundle_registry.py`). It had been a table row since April on README and stars alone; this pass exists because `/comparisons.html` ranks first for `codegraphcontext` in Search Console on two passing mentions, which is a poor reason for a reader to arrive and find nothing (measured by the SEO Agent during review of PR #842). Facts worth recording rather than re-deriving: the repo moved from `Shashankss1205/CodeGraphContext` to its own `CodeGraphContext` org, 4,155 stars at this reading, v0.6.10 and still self-classified alpha; 29 tools defined and all 29 advertised, trimmable only by an `mcp.json` `disabledTools` denylist; the SCIP path is off by default and needs a per-language Sourcegraph indexer binary, with C/C++ additionally requiring `compile_commands.json`; and its `.cgc` bundle registry is a Hugging Face dataset (`codegraphcontext/registry`), the only shareable pre-built graph distribution anyone in this field ships. Deliberately no `/vs/` spoke this pass — not because the format underperforms, but because none of the six existing spokes has been indexed yet (GSC URL Inspection, September 6, 2026: two "Discovered — currently not indexed", four unknown to Google). Their zero impressions measure crawl coverage, not reader demand. The hub carries this profile until the spokes are in the index.
+**CodeGraphContext profiled this pass** (September 4, 2026 — read through the GitHub API at `main`, no clone: repository metadata, `pyproject.toml`, `README.md`, `src/codegraphcontext/tool_definitions.py`, `server.py`, `tools/scip_indexer.py`, `tools/indexing/scip_pipeline.py`, `core/bundle_registry.py`). It had been a table row since April on README and stars alone; this pass exists because `/comparisons.html` ranks first for `codegraphcontext` in Search Console on two passing mentions, which is a poor reason for a reader to arrive and find nothing (measured by the SEO Agent during review of PR #842). Facts worth recording rather than re-deriving: the repo moved from `Shashankss1205/CodeGraphContext` to its own `CodeGraphContext` org, 4,155 stars at this reading, v0.6.10 and still self-classified alpha; 29 tools defined and all 29 advertised, trimmable only by an `mcp.json` `disabledTools` denylist; the SCIP path is off by default and needs a per-language Sourcegraph indexer binary, with C/C++ additionally requiring `compile_commands.json`; and its `.cgc` bundle registry is a Hugging Face dataset (`codegraphcontext/registry`), the only shareable pre-built graph distribution anyone in this field ships. The September 4 pass deliberately shipped no `/vs/` spoke — not because the format underperforms, but because none of the six existing spokes has been indexed yet (GSC URL Inspection, September 6, 2026: two "Discovered — currently not indexed", four unknown to Google). **Reversed on September 6, 2026**, and only for this peer: TRA-1022 established the same day that Google's copy of the sitemap was five days stale and one spoke had never been in it at all, so "the spokes are not indexed" was partly a submission fact rather than a demand fact, and the sitemap has since been resubmitted and refetched. This is also the one peer with a measured brand query arriving on the hub, which gives the spoke a landing target the other six were built without. [/vs/codegraphcontext.html](/vs/codegraphcontext.html) re-verifies the facts above at repository head on September 6, 2026 — 0.6.13, eleven SCIP families, {{ site.data.competitors.codegraphcontext.stars }} stars. Structure and internal linking of the spoke remain the SEO autopilot's call; the content is this page's.
 
 **All five head-to-head peers re-verified this pass** (September 3, 2026 — read through the GitHub API, no clones: each project's repository metadata, `package.json` or equivalent, README, and the specific source files behind the claims this page makes about tool surfaces). This pass exists because the per-competitor summaries above were written for the hub rather than copied from the head-to-head pages, and every figure in them had to hold at source today. Four numbers moved and are corrected throughout: codegraph 69.4K stars, codebase-memory-mcp 42.1K and 162 languages, Serena 28.8K, Context Mode 20.3K. One claim moved against a previous reading: Serena's registry now defines 50 tool classes with 22 optional, so its default surface is 28 tools rather than the 29 read on August 30 — exactly level with ours. One number was retired rather than re-quoted: Repomix no longer publishes a percentage for `--compress` in its README or its code-compress guide, so this page no longer quotes one.
 
@@ -1430,6 +1430,106 @@ Only trace-mcp. codebase-memory-mcp is read-only analysis.
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
 - The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
 - [Decision memory](/decision-memory.html) — how code-linked decisions differ from a notes file.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# CodeGraphContext alternative: trace-mcp vs CodeGraphContext
+
+Source: https://trace-mcp.com/vs/codegraphcontext.html
+
+
+
+**TL;DR.** CodeGraphContext is the peer that drives the most compiler-grade indexers, and that is the thing to understand before comparing anything else. Turn on `SCIP_INDEXER=true` and it shells out to **eleven** Sourcegraph SCIP indexer families, folds their symbol data into its property graph, and falls back to tree-sitter for whatever SCIP did not cover. Nobody else here does that, us included: our bridge auto-runs three.
+
+The price is set-up. Every SCIP language needs its indexer binary installed first, C/C++ additionally need a `compile_commands.json`, and the graph itself lives in one of six database backends you pick between. trace-mcp asks none of those questions — one embedded SQLite+FTS5 store, no binaries, no backend — and spends its complexity budget elsewhere: {{ site.data.counts.frameworks }} framework integrations resolving route → handler, controller → template and model → table, plus a write path.
+
+Pick CodeGraphContext when reference precision on a mainstream language justifies installing a toolchain. Pick trace-mcp when the job continues past reading.
+
+## Head-to-head
+
+| Capability | trace-mcp | CodeGraphContext |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.codegraphcontext.stars }} |
+| License | MIT | MIT |
+| Written in | TypeScript | Python |
+| Maturity self-classified | stable releases | `Development Status :: 3 - Alpha` |
+| Languages (tree-sitter) | {{ site.data.counts.languages }} | 23 |
+| SCIP indexers driven for you | 3 (scip-typescript, scip-python, rust-analyzer) | **11 families**, opt-in via `SCIP_INDEXER=true` |
+| Ingests a `.scip` index you built | ✓ | ✓ |
+| Framework integrations | ✓ {{ site.data.counts.frameworks }} | 2 tools, Java Spring only |
+| Framework edges beyond routing | ✓ controller → template, model → table, component → component | ✗ |
+| Storage | embedded SQLite + FTS5, no choice to make | 6 backends: FalkorDB Lite / Remote, KuzuDB, LadybugDB, Nornic DB, Neo4j |
+| Runs fully local, no API key | ✓ | ✓ (embedded backends) |
+| MCP tools defined | {{ site.data.counts.tools }} | 29 |
+| MCP tools advertised by default | 28 (~11.6K tok) | **29** (~3.7K tok) |
+| Trimming the surface | ✓ presets + `load_tools` allowlist | `disabledTools` denylist |
+| Raw graph query escape hatch | ✗ fixed tool set | ✓ `execute_cypher_query` |
+| Portable pre-indexed bundles | ✗ | ✓ `.cgc` snapshots, Hugging Face registry |
+| Database structure as graph nodes | ✗ | ✓ MySQL, Redis, Cassandra ingesters |
+| Impact analysis | ✓ reverse traversal + decorator filter | ✓ `simulate_architectural_change` (reports only) |
+| Dead code / complexity | ✓ detect **and** remove | ✓ detect only |
+| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✗ |
+| Security scanning | ✓ OWASP Top-10, type-aware taint | ✗ |
+| SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
+| Session memory | ✓ code-linked decision graph | ✗ |
+| Published token benchmark | ✓ [PR review context](/pr-context-benchmark.html), {{ site.data.pr_context_bench.pr_count }} merged PRs | ✗ |
+
+Verified on September 6, 2026 against CodeGraphContext's source at repository head (`pyproject.toml` 0.6.13, latest tagged release v0.5.7, pushed that day). Tool count and names come from `src/codegraphcontext/tool_definitions.py`, the denylist from `server.py`, the indexer families from `tools/scip_indexer.py`, backends and language count from the README's own tables.
+
+## When to pick CodeGraphContext
+
+- **You want references a heuristic parser cannot give you, across a lot of languages.** Eleven SCIP families — python, typescript, go, rust, java, clang, dotnet, php, ruby, swift, ctags — is more driven indexers than any other project in this comparison, and the fallback to tree-sitter for uncovered files means turning it on does not cost you coverage.
+- **Someone else has already indexed the dependency you care about.** `.cgc` bundles are downloadable graph snapshots from a public registry. Skipping an index entirely is a capability nobody else here offers.
+- **Your graph question is not one of the shipped tools.** `execute_cypher_query` hands you the database. Our tool set is fixed by design; theirs has a back door, if you write Cypher.
+- **Your data layer is part of the architecture question.** Their MySQL, Redis and Cassandra ingesters put schema structure in the same graph as the code. We model code only.
+- **You want the whole surface listed without opting in.** All 29 tools are advertised, for about 3.7K tokens of schema — a third of what our default preset costs.
+
+## When to pick trace-mcp
+
+- **You want it working in one command with nothing else installed.** No indexer binaries, no `compile_commands.json`, no graph database and no backend decision. That difference is the whole first-run experience.
+- **The edges you care about are framework edges.** {{ site.data.counts.frameworks }} integrations resolving route → handler, controller → template, model → table. CodeGraphContext's framework awareness is two hardcoded Java Spring tools.
+- **The job goes past reading.** Rename across a repository, move a symbol with its imports, an AST codemod, dead-code removal, a taint scan, SARIF for CI. They detect and report; they do not write.
+- **Your stack is polyglot beyond the mainstream.** {{ site.data.counts.languages }} grammars against 23.
+- **You want memory that outlives the session and is tied to code.** trace-mcp's decisions link to symbol IDs, are checked for staleness before recall, and surface inside `get_change_impact`. CodeGraphContext has no cross-session memory.
+- **You want a published, re-runnable number.** The [PR review context benchmark](/pr-context-benchmark.html): a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction across {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} repositories nobody here maintains, shipping base and head SHAs, the cases where it lost, and one command to re-run it.
+
+## Where we are not being smug
+
+**Their reference resolution beats ours where SCIP is installed.** Eleven driven indexer families against our three is not a rounding difference, and compiler-grade symbol data is more accurate than any tree-sitter heuristic, ours included. We publish our own limits per language as a `resolution_tier` rather than claiming parity.
+
+**Their default tool surface is cheaper than ours.** 29 tools for ~3.7K tokens against our 28 for ~11.6K including the server-instructions block. Our surface is trimmable per role and theirs only per denylist, which is the argument in our favour — but on the number itself they win.
+
+**Bundles are a genuinely good idea we do not have.** Downloading a pre-built graph of a dependency instead of indexing it is the kind of thing that only looks obvious afterwards.
+
+**They document their own dependency pain in public.** Their comments record that Kùzu was archived upstream and that redis-py is pinned to 5.x to keep FalkorDB Lite's Unix-socket path working. Projects that write that down are easier to trust than projects that do not.
+
+**Our security scanning has a ceiling.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical rather than a real dataflow engine. Type-aware pruning cuts false positives; it does not make this a dataflow analyser.
+
+If you maintain CodeGraphContext and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
+
+## FAQ
+
+**What is the core difference between CodeGraphContext and trace-mcp?**
+They buy reference precision with setup — eleven SCIP indexer families and a graph database of your choosing. We buy zero setup and framework-level edges, and we write code as well as reading it.
+
+**Does CodeGraphContext need a graph database installed?**
+One of six backends. FalkorDB Lite is the default on Unix with Python 3.12+, and the embedded options are a pip install rather than a server — but KuzuDB and LadybugDB default to a 4 GiB buffer pool, so it is a decision with consequences. trace-mcp's index is an embedded SQLite file.
+
+**Which one has the larger MCP tool surface?**
+They define 29 and advertise 29 (~3.7K tokens), trimmable through a `disabledTools` denylist. We advertise 28 (~11.6K including server instructions) and keep the other {{ site.data.counts.tools }}-minus-28 one `load_tools` call away. Cheaper default: theirs.
+
+**Can CodeGraphContext refactor code or scan for vulnerabilities?**
+No. Source read at head on September 6, 2026: no rename/move/codemod, no taint analysis, no SARIF, no cross-session memory. It finds dead code and computes complexity, and reports both.
+
+**What are CodeGraphContext bundles?**
+Portable `.cgc` graph snapshots, published to a Hugging Face-hosted registry and pulled with `load_bundle` / `search_registry_bundles`, so a dependency's graph can be fetched instead of built. Nobody else in this field ships that.
+
+## Next steps
+
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- [Language matrix](/language-matrix.html) — what resolution tier each language actually reaches.
 - [Get started](/#install) — no configuration required.
 
 ---
