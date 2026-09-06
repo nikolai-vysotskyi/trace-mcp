@@ -21,6 +21,9 @@ import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { runNamedSearchMode } from '../../src/tools/register/retrieval.js';
+import type { ServerContext } from '../../src/server/types.js';
+import { SEARCH_MODE_NAMES } from '../../src/retrieval/modes/registry.js';
 import { search } from '../../src/tools/navigation/navigation.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -135,5 +138,54 @@ describe('module-body pseudo-symbols never reach the caller', () => {
       semantic: 'auto',
     });
     expect(names(hybrid).some((n) => n.startsWith('__module__'))).toBe(true);
+  });
+});
+
+/**
+ * `search { retriever: "..." }` early-returns through `runNamedSearchMode` and
+ * never reaches `search()` or the fusion dispatcher, so neither convergence
+ * guard above covers it — its lexical retriever calls `searchFts` without the
+ * SQL filter and its semantic one reads the vector store directly. Found in the
+ * second round of review, after the PR had already claimed "every retrieval
+ * path".
+ */
+describe('named-retriever modes drop them too', () => {
+  const ctx = (): ServerContext =>
+    ({
+      store,
+      embeddingService: aiOptions.embeddingService,
+      vectorStore: aiOptions.vectorStore,
+    }) as unknown as ServerContext;
+
+  for (const mode of SEARCH_MODE_NAMES) {
+    it(`retriever="${mode}" returns no module bodies`, async () => {
+      const result = await runNamedSearchMode(ctx(), { query: QUERY, mode, limit: 20 });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.items.some((i) => i.name !== null && i.name.startsWith('__module__'))).toBe(
+        false,
+      );
+    });
+  }
+
+  it("resolves the semantic retriever's numeric ids to real symbols", async () => {
+    const result = await runNamedSearchMode(ctx(), { query: QUERY, mode: 'semantic', limit: 20 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Before this fix every semantic item came back as `{ name: null }`, which
+    // is also why the guard could not see them.
+    expect(result.items.length).toBeGreaterThan(0);
+    expect(result.items.some((i) => i.name !== null)).toBe(true);
+  });
+
+  it('still returns them when the query names __module__', async () => {
+    const result = await runNamedSearchMode(ctx(), {
+      query: '__module__',
+      mode: 'lexical',
+      limit: 20,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items.some((i) => i.name?.startsWith('__module__'))).toBe(true);
   });
 });
