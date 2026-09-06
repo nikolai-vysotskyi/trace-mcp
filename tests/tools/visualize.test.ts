@@ -353,3 +353,44 @@ describe('buildGraphData subproject filtering', () => {
     expect(result.nodes.every((n) => n.repo !== 'trace-mcp')).toBe(true);
   });
 });
+
+describe('buildGraphData community labels (TRA-1078)', () => {
+  it('assigns unique labels across communities that collide on their dominant segment', () => {
+    // Regression for the Graph tab (not detect_communities/get_communities):
+    // three disconnected clusters that all share "indexer" as their most
+    // frequent path segment used to render two "src" legend rows and repeat
+    // "indexer" across unrelated clusters.
+    const store = createTestStore();
+
+    const cluster = (files: string[]) => {
+      const nodeIds = files.map(
+        (f, i) => store.getNodeId('file', store.insertFile(f, 'typescript', `h-${f}-${i}`, 10))!,
+      );
+      for (let i = 1; i < nodeIds.length; i++) {
+        store.insertEdge(nodeIds[0], nodeIds[i], 'imports');
+      }
+    };
+
+    cluster(['src/indexer/a.ts', 'src/indexer/b.ts']);
+    cluster(['core/indexer/c.ts', 'core/indexer/d.ts', 'misc/indexer/e.ts']);
+    cluster([
+      'tools/indexer/f.ts',
+      'tools/indexer/g.ts',
+      'other/indexer/h.ts',
+      'other/indexer/i.ts',
+    ]);
+
+    const result = buildGraphData(store, { scope: 'project' });
+
+    const labels = result.communities.map((c) => c.label);
+    expect(new Set(labels).size).toBe(labels.length); // no legend duplicates
+
+    const labelForFile = (file: string) => {
+      const node = result.nodes.find((n) => n.id === file);
+      return result.communities.find((c) => c.id === node?.community)?.label;
+    };
+    expect(labelForFile('tools/indexer/f.ts')).toBe('indexer'); // largest cluster keeps the short name
+    expect(labelForFile('core/indexer/c.ts')).toBe('core/indexer');
+    expect(labelForFile('src/indexer/a.ts')).toBe('src/indexer');
+  });
+});
