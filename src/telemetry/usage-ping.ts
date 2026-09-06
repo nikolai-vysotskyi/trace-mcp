@@ -118,6 +118,14 @@ function isDisabled(env: NodeJS.ProcessEnv): boolean {
   return disabledByConfig();
 }
 
+/** GA4 credentials for this process: runtime env first, build-time bake second. */
+function credentials(env: NodeJS.ProcessEnv): { measurementId: string; apiSecret: string } {
+  return {
+    measurementId: env.TRACE_MCP_GA_MEASUREMENT_ID || GA_MEASUREMENT_ID_DEFAULT,
+    apiSecret: env.TRACE_MCP_GA_API_SECRET || GA_API_SECRET_DEFAULT,
+  };
+}
+
 function utcDate(nowMs: number): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
@@ -268,6 +276,10 @@ export function printTelemetryNoticeOnce(
   write: (s: string) => void = (s) => process.stderr.write(s),
 ): void {
   if (isDisabled(env)) return;
+  // A build with no baked-in credentials never pings — a source checkout, most
+  // CI images — so there is nothing to disclose and the line would be a lie.
+  const { measurementId, apiSecret } = credentials(env);
+  if (!measurementId || !apiSecret) return;
   try {
     const state = loadOrCreateState();
     if (state.noticeShown) return;
@@ -356,8 +368,7 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const env = opts.env ?? process.env;
   if (isDisabled(env)) return;
 
-  const measurementId = env.TRACE_MCP_GA_MEASUREMENT_ID || GA_MEASUREMENT_ID_DEFAULT;
-  const apiSecret = env.TRACE_MCP_GA_API_SECRET || GA_API_SECRET_DEFAULT;
+  const { measurementId, apiSecret } = credentials(env);
   if (!measurementId || !apiSecret) return;
 
   const state = loadOrCreateState();

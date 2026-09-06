@@ -396,7 +396,6 @@ describe('daemon reliability counters (TRA-671)', () => {
   });
 });
 
-
 describe('file-based opt-out and first-run notice (TRA-887)', () => {
   /** Back the mocked fs with one in-memory string, so writes are readable back. */
   function statefulFs(initial: string | null): { read: () => Record<string, unknown> } {
@@ -446,6 +445,14 @@ describe('file-based opt-out and first-run notice (TRA-887)', () => {
 
     printTelemetryNoticeOnce(CONFIGURED_ENV, (s) => lines.push(s));
     expect(lines).toHaveLength(1);
+  });
+
+  it('says nothing in a build that has no GA credentials and therefore never pings', () => {
+    statefulFs(null);
+    const lines: string[] = [];
+    printTelemetryNoticeOnce({}, (s) => lines.push(s));
+    expect(lines).toEqual([]);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('names both opt-outs and the privacy page', () => {
