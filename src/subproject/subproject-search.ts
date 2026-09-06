@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 import { searchFts } from '../db/fts.js';
 import { logger } from '../logger.js';
 import type { TopologyStore } from '../topology/topology-db.js';
+import { minMax } from '../util/minmax.js';
 
 export interface SubprojectSearchItem {
   repo: string;
@@ -49,8 +50,8 @@ function searchRepoDb(
   });
   if (ftsResults.length === 0) return [];
 
-  const minRank = Math.min(...ftsResults.map((r) => r.rank));
-  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+  const minRank = minMax(ftsResults.map((r) => r.rank)).min;
+  const maxRank = minMax(ftsResults.map((r) => r.rank)).max;
   const rankSpread = maxRank - minRank || 1;
 
   const symbolIds = ftsResults.map((r) => r.symbolId);

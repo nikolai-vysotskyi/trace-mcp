@@ -14,6 +14,7 @@ import {
   classifyNumericConfidence,
   type Methodology,
 } from '../shared/confidence.js';
+import { minMax } from '../../util/minmax.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1365,8 +1366,8 @@ function maxIndentDepth(body: string): number {
     return n;
   });
 
-  const base = Math.min(...indents);
-  const maxIndent = Math.max(...indents);
+  const base = minMax(indents).min;
+  const maxIndent = minMax(indents).max;
   const depthLevels = Math.floor((maxIndent - base) / 2); // assume 2-space step minimum
   return depthLevels;
 }
