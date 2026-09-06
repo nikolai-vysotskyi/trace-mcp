@@ -17,6 +17,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * negotiated in the background and swapped in afterwards.
  */
 
+/**
+ * Budget for the snapshot path to answer `initialize`. The comparison point
+ * is the OLD flow's daemon `/health` fetch, bounded by a flat
+ * `AbortSignal.timeout(500)` (getDaemonHealth) plus whatever backend
+ * selection costs on top of that — 500ms is a wall-clock timer, not an
+ * OS-scaled one, so the old flow's real floor is *at least* 500ms everywhere,
+ * Windows included.
+ *
+ * `cross-platform-test` (TRA-970) was the first CI run to ever exercise this
+ * file on a real Windows runner — ci.yml gates that job to release
+ * PRs/nightly/an explicit label, so nothing had run this assertion there
+ * before. GitHub's Windows runners are measurably slower for process/socket
+ * work than Linux/macOS (a documented GH Actions characteristic, not a
+ * trace-mcp regression): two Windows runs measured 459ms and 514ms,
+ * comfortably under 400ms every time on macOS/Linux. 700ms keeps margin
+ * above both observed values while staying well clear of the old flow's own
+ * 500ms+ floor — widen the win32 budget rather than loosen the one every
+ * other platform's CI run actually exercises.
+ */
+const INIT_BUDGET_MS = process.platform === 'win32' ? 700 : 400;
+
 /** Stands in for the real indexer-backed local backend the swap settles onto. */
 const localBackendStarts = vi.fn();
 vi.mock('../../src/daemon/router/local-backend.js', () => ({
@@ -157,7 +178,10 @@ describe('StdioSession snapshot fast path (TRA-948)', () => {
     const initResponse = await Promise.race([
       waitForId(1),
       new Promise<never>((_, reject) => {
-        const t = setTimeout(() => reject(new Error('no initialize response within 400ms')), 400);
+        const t = setTimeout(
+          () => reject(new Error(`no initialize response within ${INIT_BUDGET_MS}ms`)),
+          INIT_BUDGET_MS,
+        );
         t.unref?.();
       }),
     ]);
@@ -166,7 +190,7 @@ describe('StdioSession snapshot fast path (TRA-948)', () => {
     // The daemon's /health fetch alone is bounded to 500ms
     // (getDaemonHealth's AbortSignal.timeout) before the *old* flow could
     // even pick a backend — the snapshot must beat that comfortably.
-    expect(initMs).toBeLessThan(400);
+    expect(initMs).toBeLessThan(INIT_BUDGET_MS);
     expect(initResponse.error).toBeUndefined();
     expect((initResponse.result as { serverInfo?: { name?: string } })?.serverInfo?.name).toBe(
       'trace',
