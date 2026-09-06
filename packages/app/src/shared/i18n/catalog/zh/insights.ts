@@ -10,6 +10,7 @@ export const insights = {
   errorNoSession: '守护进程创建了会话，但没有返回会话名。',
   errorHttp: '报告请求失败（HTTP {{status}}）。{{detail}}',
   errorToolFailed: '报告没有运行。',
+  errorUnrecognizedShape: '报告已运行，但其响应与预期格式不匹配——这看起来像是一个错误，而不是空项目。',
 
   reportDriftTitle: 'CLAUDE.md 偏移',
   reportDriftDescription: '智能体配置文件中失效的路径和不存在的符号引用。',

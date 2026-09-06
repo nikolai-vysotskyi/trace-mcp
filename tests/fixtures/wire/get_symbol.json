@@ -1,0 +1,50 @@
+{
+  "symbol_id": "src/daemon/project-manager.ts::ProjectManager#class",
+  "name": "ProjectManager",
+  "kind": "class",
+  "signature": "export class ProjectManager",
+  "file": "src/daemon/project-manager.ts",
+  "line_start": 163,
+  "line_end": 1300,
+  "source": "  };\n// ... truncated",
+  "truncated": true,
+  "_freshness": "fresh",
+  "_meta": {
+    "freshness": {
+      "fresh": 1,
+      "edited_uncommitted": 0,
+      "stale_index": 0,
+      "repo_is_stale": false
+    },
+    "confidence": 1,
+    "confidence_signals": {
+      "top1_strength": 1,
+      "top_gap": 1,
+      "identity_match": 1,
+      "freshness": 1
+    }
+  },
+  "_hints": [
+    {
+      "tool": "get_call_graph",
+      "args": {
+        "symbol_id": "src/daemon/project-manager.ts::ProjectManager#class"
+      },
+      "why": "See who calls this and what it calls"
+    },
+    {
+      "tool": "get_change_impact",
+      "args": {
+        "symbol_id": "src/daemon/project-manager.ts::ProjectManager#class"
+      },
+      "why": "Check what breaks if you change this"
+    },
+    {
+      "tool": "get_tests_for",
+      "args": {
+        "symbol_id": "src/daemon/project-manager.ts::ProjectManager#class"
+      },
+      "why": "Find tests covering this symbol"
+    }
+  ]
+}

@@ -19,6 +19,11 @@ export const insights = {
   errorNoSession: 'The daemon started a session but did not name it.',
   errorHttp: 'The report request failed (HTTP {{status}}). {{detail}}',
   errorToolFailed: 'The report did not run.',
+  /* TRA-1068: the daemon answered with real data, but this report's parser
+     did not recognise the response shape (a field-name mismatch, not an
+     empty project). Showing "Nothing to report" here would assert something
+     false about the user's data, so it surfaces as an error instead. */
+  errorUnrecognizedShape: "The report ran, but its response didn't match the shape this report expects — this looks like a bug, not an empty project.",
 
   reportDriftTitle: 'CLAUDE.md drift',
   reportDriftDescription: 'Stale paths and dead symbol references in agent config files.',

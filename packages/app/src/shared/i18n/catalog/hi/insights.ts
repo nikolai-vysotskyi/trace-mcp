@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: 'डेमन ने सेशन शुरू किया पर उसका नाम नहीं दिया।',
   errorHttp: 'रिपोर्ट की रिक्वेस्ट विफल रही (HTTP {{status}})। {{detail}}',
   errorToolFailed: 'रिपोर्ट नहीं चली।',
+  errorUnrecognizedShape:
+    'रिपोर्ट चली, लेकिन उसका जवाब अपेक्षित रूप से मेल नहीं खाया — यह खाली प्रोजेक्ट नहीं, बग जैसा लगता है।',
 
   reportDriftTitle: 'CLAUDE.md drift',
   reportDriftDescription: 'एजेंट कॉन्फ़िग फ़ाइलों में पुराने पाथ और मृत सिंबल संदर्भ।',

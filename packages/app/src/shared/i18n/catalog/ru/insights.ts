@@ -13,6 +13,8 @@ export const insights = {
   errorNoSession: 'Служба начала сеанс, но не сообщила его идентификатор.',
   errorHttp: 'Запрос отчёта не прошёл (HTTP {{status}}). {{detail}}',
   errorToolFailed: 'Отчёт не выполнился.',
+  errorUnrecognizedShape:
+    'Отчёт выполнился, но его ответ не совпал с ожидаемой формой — это похоже на баг, а не на пустой проект.',
 
   reportDriftTitle: 'Расхождения в CLAUDE.md',
   reportDriftDescription:

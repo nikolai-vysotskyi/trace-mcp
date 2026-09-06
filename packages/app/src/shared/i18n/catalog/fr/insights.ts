@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: 'Le démon a ouvert une session mais ne l’a pas nommée.',
   errorHttp: 'La demande de rapport a échoué (HTTP {{status}}). {{detail}}',
   errorToolFailed: 'Le rapport n’a pas été exécuté.',
+  errorUnrecognizedShape:
+    'Le rapport s’est exécuté, mais sa réponse ne correspondait pas à la forme attendue — cela ressemble à un bug, pas à un projet vide.',
 
   reportDriftTitle: 'Dérive de CLAUDE.md',
   reportDriftDescription:
