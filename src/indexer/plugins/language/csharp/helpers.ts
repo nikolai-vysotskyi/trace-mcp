@@ -129,59 +129,72 @@ export function extractBaseTypes(node: TSNode): string[] {
   return bases;
 }
 
-/** Extract using directive edges from the root compilation_unit. */
+/**
+ * Collect every `using_directive` node anywhere under `node` — both file-level
+ * (top of the compilation unit) and namespace-scoped (`namespace X { using Y; }`,
+ * legal and common in the block-namespace form). `using_directive` cannot occur
+ * inside a type body, so a plain recursive walk is sufficient and never needs
+ * to special-case which container it found one in.
+ */
+function collectUsingDirectives(node: TSNode, out: TSNode[]): void {
+  for (const child of node.namedChildren) {
+    if (child.type === 'using_directive') {
+      out.push(child);
+    } else {
+      collectUsingDirectives(child, out);
+    }
+  }
+}
+
+/** Extract using directive edges anywhere in the file (root- or namespace-scoped). */
 export function extractImportEdges(root: TSNode): RawEdge[] {
   const edges: RawEdge[] = [];
+  const directives: TSNode[] = [];
+  collectUsingDirectives(root, directives);
 
-  for (const node of root.namedChildren) {
-    if (node.type === 'using_directive') {
-      let namespaceName = '';
-      let isStatic = false;
-      let alias: string | undefined;
+  for (const node of directives) {
+    let namespaceName = '';
+    let isStatic = false;
+    let alias: string | undefined;
 
-      for (let i = 0; i < node.childCount; i++) {
-        const child = node.child(i);
-        if (!child) continue;
-        if (child.text === 'static') isStatic = true;
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (!child) continue;
+      if (child.text === 'static') isStatic = true;
+    }
+
+    // Check for alias: using Alias = Namespace;
+    const nameAssignment = node.childForFieldName('alias');
+    if (nameAssignment) {
+      alias = nameAssignment.text;
+    }
+
+    // The namespace/type name
+    for (const child of node.namedChildren) {
+      if (child.type === 'qualified_name' || child.type === 'identifier' || child.type === 'name') {
+        namespaceName = child.text;
       }
+    }
 
-      // Check for alias: using Alias = Namespace;
-      const nameAssignment = node.childForFieldName('alias');
-      if (nameAssignment) {
-        alias = nameAssignment.text;
-      }
+    // Fallback: extract from text if tree-sitter node types differ
+    if (!namespaceName) {
+      const match = node.text.match(/using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/);
+      if (match) namespaceName = match[1];
+    }
 
-      // The namespace/type name
-      for (const child of node.namedChildren) {
-        if (
-          child.type === 'qualified_name' ||
-          child.type === 'identifier' ||
-          child.type === 'name'
-        ) {
-          namespaceName = child.text;
-        }
-      }
+    if (namespaceName) {
+      const parts = namespaceName.split('.');
+      const simpleName = alias ?? parts[parts.length - 1];
 
-      // Fallback: extract from text if tree-sitter node types differ
-      if (!namespaceName) {
-        const match = node.text.match(/using\s+(?:static\s+)?(?:\w+\s*=\s*)?([\w.]+)\s*;/);
-        if (match) namespaceName = match[1];
-      }
-
-      if (namespaceName) {
-        const parts = namespaceName.split('.');
-        const simpleName = alias ?? parts[parts.length - 1];
-
-        edges.push({
-          edgeType: 'imports',
-          metadata: {
-            from: namespaceName,
-            specifiers: [simpleName],
-            ...(isStatic ? { static: true } : {}),
-            ...(alias ? { alias } : {}),
-          },
-        });
-      }
+      edges.push({
+        edgeType: 'imports',
+        metadata: {
+          from: namespaceName,
+          specifiers: [simpleName],
+          ...(isStatic ? { static: true } : {}),
+          ...(alias ? { alias } : {}),
+        },
+      });
     }
   }
 

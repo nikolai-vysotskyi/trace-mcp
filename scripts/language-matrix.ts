@@ -260,6 +260,17 @@ without one the extracted import never becomes an edge. This column counts the
 second thing, so it is much shorter than the language list — see
 \`src/indexer/edge-resolvers/import-capable-languages.ts\`.
 
+**"Yes" is not "every import."** C# is the narrowest case in this column today:
+its resolver only trusts \`using\` forms that name a specific type (\`using
+static X.Y.Type\`, an aliased \`using A = X.Y.Type\`) and deliberately leaves a
+plain \`using Namespace;\` — the overwhelming majority of real C# imports —
+unresolved, because a namespace can span most of a codebase and a file-level
+edge to all of it would be closer to noise than signal. On a large real repo
+(Newtonsoft.Json, ~5,000 \`using\` directives) this column's "yes" for C#
+produced edges for 12 of them — roughly 0.2%. See
+\`src/indexer/edge-resolvers/csharp-imports.ts\` for the reasoning and
+\`src/indexer/plugins/language/csharp/helpers.ts\` for extraction.
+
 ## Matrix
 
 | Language | Extensions | Parser | Default | Imports | Calls | Types | Tests |
