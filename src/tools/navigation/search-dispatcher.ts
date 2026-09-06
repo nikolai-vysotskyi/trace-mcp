@@ -60,6 +60,7 @@ export async function runFlatSearch(
     // when the caller explicitly asks for markdown via kind / language /
     // file_pattern.
     excludeMarkdown: true,
+    excludeModuleBodies: true,
   });
   if (ftsResults.length === 0) {
     return { items: [], total: 0, search_mode: 'flat' };

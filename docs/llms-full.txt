@@ -6137,6 +6137,41 @@ TRA-880, on the same target file, because the change that added
 live repository, so its own commits move its numbers. That is a property of the
 corpus, not noise, and it is why the corpus size is stated at the top.
 
+## Two things TRA-985 found, one shipped and one suspended (2026-09-06)
+
+**Shipped: `search` was returning three quarters noise on filename-shaped
+queries.** The language plugins emit a synthetic `__module__` pseudo-symbol per
+file so the call graph can attribute module-body call sites
+(`metadata.synthetic = true`, signature `(module body) <path>`). Its name embeds
+the file's basename and FTS weights the name column 10x, so on any
+filename-shaped query these outrank every real symbol. Across fifteen such
+queries, **145 of 192 top-20 rows (75.5%) were pseudo-symbols**: `search`
+for `indexer` returned twenty of them and nothing else, `daemon` four of its top
+five. They are excluded now on every retrieval path — lexical, hybrid, fusion,
+pure-semantic and the six named `retriever` modes — bypassed when the query
+names `__module__` itself. That list took three rounds of review to get right:
+the first fix covered only the lexical SQL, the second added the hybrid and
+fusion merge points, and the third covered `search { retriever }`, which
+early-returns before either. Each round the claim "every retrieval path" was
+made before it was true.
+
+That is a retrieval-quality fix. `daemon` used to answer with four module bodies
+and one real constant; it answers with five real symbols now.
+
+**Suspended: what that is worth in tokens depends entirely on which queries you
+ask.** On the filename-shaped basket it reads −39.3%. On a basket of symbol
+names — which cannot be aimed at a pseudo-symbol named after a *file* — the same
+fix reads **−4.9%**. The aggregate on this page was not updated, because three
+defensible frames for the three volume-heavy tools (76% of the weight) produce
+21.0%, 30.7% and 56.0% on one build. The [preregistration](./prereg-response-tokens.md)
+records all three and why none of them was published; the numbers below are still
+TRA-952's.
+
+The honest summary of the sampling problem: `search_text`, `get_outline` and
+`search` are each priced from **one sample**, the store holds recorded arguments
+for only one of the three, and even those are not replayable here. Fixing that
+needs a frame registered before the measurement, not after.
+
 ## What shaping the three worst tools did (TRA-952)
 
 The first three tools on that follow-up list have been reshaped, and the table
