@@ -268,6 +268,13 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<MetricsErrorKind | null>(null);
   const [computing, setComputing] = useState(false);
+  /**
+   * Bumped after every metrics fetch. `computing` alone cannot re-arm the
+   * poll below: React bails out of a `setComputing(true)` while the state is
+   * already `true`, so the effect would fire exactly once and then leave the
+   * screen on counts-only until the five-minute fallback.
+   */
+  const [pollTick, setPollTick] = useState(0);
 
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,6 +294,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
       setComputing,
     });
     if (ok) setMetricsLoaded(true);
+    setPollTick((n) => n + 1);
   }, []);
 
   // Initial fetch + 5-min polling fallback.
@@ -309,7 +317,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     if (!computing) return;
     const id = setTimeout(() => void fetchMetrics(), COMPUTING_POLL_INTERVAL_MS);
     return () => clearTimeout(id);
-  }, [computing, fetchMetrics]);
+  }, [computing, pollTick, fetchMetrics]);
 
   // Reactive invalidation: when any daemon project completes a pipeline,
   // schedule a debounced metrics refetch.

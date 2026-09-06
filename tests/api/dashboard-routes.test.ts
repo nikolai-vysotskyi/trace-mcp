@@ -97,3 +97,37 @@ describe('GET /api/dashboard/projects', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('indexFingerprint', () => {
+  /**
+   * The staleness key for the expensive pass. `RegistryEntry.lastIndexed` was
+   * the obvious choice and is wrong: it is written once, at registration, and
+   * the file watcher's incremental reindex never touches it — so keying off it
+   * froze every actively-edited project's metrics for the daemon's lifetime.
+   * This asserts the replacement actually moves when the index is written.
+   */
+  it('moves when the index is written, including through the WAL sidecar', async () => {
+    const { indexFingerprint } = await import('../../src/api/dashboard-routes.js');
+    const dbPath = path.join(tmpHome, 'fingerprint.db');
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.exec('CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+    const before = indexFingerprint(dbPath);
+    expect(before).toBeGreaterThan(0);
+
+    // A later mtime needs a later clock tick on filesystems with coarse
+    // timestamps; write until it moves rather than sleeping a fixed amount.
+    let after = before;
+    for (let i = 0; i < 50 && after === before; i++) {
+      db.prepare('INSERT INTO t (v) VALUES (?)').run(`row${i}`);
+      after = indexFingerprint(dbPath);
+    }
+    db.close();
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it('returns 0 for a database that is not there', async () => {
+    const { indexFingerprint } = await import('../../src/api/dashboard-routes.js');
+    expect(indexFingerprint(path.join(tmpHome, 'nope.db'))).toBe(0);
+  });
+});

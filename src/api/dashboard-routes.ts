@@ -249,6 +249,8 @@ const DASHBOARD_CACHE_PATH = path.join(TRACE_MCP_HOME, 'dashboard-cache.json');
 const CACHE_TTL_MS = 300_000; // 5 minutes
 
 const cache = new Map<string, ProjectHealth>();
+/** dbPath fingerprint at the time each project's expensive pass last ran. */
+const enrichedAt = new Map<string, number>();
 let computedAt = 0;
 let computing = false;
 let loadedFromDisk = false;
@@ -260,8 +262,10 @@ function loadCacheFromDisk(): void {
     const raw = JSON.parse(fs.readFileSync(DASHBOARD_CACHE_PATH, 'utf-8')) as {
       computedAt?: number;
       projects?: ProjectHealth[];
+      enrichedAt?: Array<[string, number]>;
     };
     for (const p of raw.projects ?? []) if (p?.root) cache.set(p.root, p);
+    for (const [root, at] of raw.enrichedAt ?? []) enrichedAt.set(root, at);
     if (typeof raw.computedAt === 'number') computedAt = raw.computedAt;
   } catch {
     /* no usable cache on disk — the first background pass writes one */
@@ -271,7 +275,14 @@ function loadCacheFromDisk(): void {
 function saveCacheToDisk(): void {
   try {
     const tmp = `${DASHBOARD_CACHE_PATH}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ computedAt, projects: [...cache.values()] }));
+    fs.writeFileSync(
+      tmp,
+      JSON.stringify({
+        computedAt,
+        projects: [...cache.values()],
+        enrichedAt: [...enrichedAt],
+      }),
+    );
     fs.renameSync(tmp, DASHBOARD_CACHE_PATH);
   } catch {
     /* best effort — the in-memory cache still serves this process */
@@ -293,22 +304,32 @@ async function refreshAll(force = false): Promise<void> {
   try {
     const entries = Object.values(readRegistry().projects);
     const roots = new Set(entries.map((e) => e.root));
-    for (const root of [...cache.keys()]) if (!roots.has(root)) cache.delete(root);
+    for (const root of [...cache.keys()])
+      if (!roots.has(root)) {
+        cache.delete(root);
+        enrichedAt.delete(root);
+      }
 
     const stale = new Set<string>();
+    const fingerprints = new Map<string, number>();
 
     // Pass 1 — cheap counts for everything, so numbers appear early.
     for (const entry of entries) {
       const prev = cache.get(entry.root);
+      const basics = queryBasics(entry);
+      // Fingerprint *after* the open above: a read-only open of a WAL database
+      // creates the `-wal` sidecar if it is missing, so taking it first would
+      // record a pre-creation value and force one redundant pass.
+      const fingerprint = indexFingerprint(entry.dbPath);
+      fingerprints.set(entry.root, fingerprint);
       if (
         force ||
         prev === undefined ||
         prev.status !== 'ok' ||
-        prev.lastIndexed !== entry.lastIndexed
+        enrichedAt.get(entry.root) !== fingerprint
       ) {
         stale.add(entry.root);
       }
-      const basics = queryBasics(entry);
       cache.set(entry.root, {
         ...basics,
         // Carry the previous run's expensive metrics rather than blanking the
@@ -327,7 +348,9 @@ async function refreshAll(force = false): Promise<void> {
       if (!stale.has(entry.root)) continue;
       const basics = cache.get(entry.root);
       if (!basics || basics.status === 'not_loaded' || basics.status === 'error') continue;
-      cache.set(entry.root, await enrich(entry, basics));
+      const enriched = await enrich(entry, basics);
+      cache.set(entry.root, enriched);
+      if (enriched.status === 'ok') enrichedAt.set(entry.root, fingerprints.get(entry.root) ?? 0);
       await tick();
     }
 
@@ -346,6 +369,34 @@ function placeholder(entry: RegistryEntry): ProjectHealth {
     status: 'computing',
     ...ZERO,
   };
+}
+
+/**
+ * Cheapest honest answer to "has this index moved since we last analysed it".
+ *
+ * Not `RegistryEntry.lastIndexed`: that is written once, at registration and
+ * daemon-startup indexing, and never again — the file watcher's `indexFiles()`
+ * path does not touch it. Keying off it froze every actively-edited project's
+ * metrics for the life of the daemon, with `status: 'ok'` and nothing on
+ * screen to say so. The codebase already documents that trap in
+ * `project-manager.ts` and the TRA-468 note in `pipeline.ts`; this is the
+ * third place to walk into it.
+ *
+ * The `-wal` sidecar is included because the index is written in WAL mode, so
+ * the main DB file's mtime only moves on checkpoint. `-shm` is deliberately
+ * excluded: it moves on every *read*, including ours, which would make this
+ * pass permanently invalidate itself.
+ */
+export function indexFingerprint(dbPath: string): number {
+  let newest = 0;
+  for (const p of [dbPath, `${dbPath}-wal`]) {
+    try {
+      newest = Math.max(newest, fs.statSync(p).mtimeMs);
+    } catch {
+      /* absent sidecar is normal */
+    }
+  }
+  return newest;
 }
 
 /** Read the cache, kicking off a background refresh when it has gone stale. */
