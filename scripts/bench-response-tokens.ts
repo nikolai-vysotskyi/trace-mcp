@@ -37,6 +37,45 @@ const TARGET = process.argv[2] ?? REPO;
  * are the fifteen most common subsystem nouns in this repo's own directory
  * names, chosen before any of them was measured.
  */
+/**
+ * `get_outline` (4 461 calls) and `search_text` (5 125 calls) carried the same
+ * one-sample defect `search` did, and TRA-985's first pass left them alone to
+ * keep that run's aggregate attributable. Measuring them showed the single
+ * samples were not close: `get_outline` was published from `src/savings.ts`,
+ * which is the **most expensive of fifteen files spanning a 17x spread** —
+ * 1 427 tokens against a 558 basket mean. `search_text` went the other way,
+ * 1 722 published against a 2 053 mean over a 1.7x spread.
+ *
+ * The two errors point in opposite directions, which is the argument for
+ * baskets: a single sample is noise, not a consistent bias anyone could correct
+ * for after the fact.
+ *
+ * Files are a size-stratified sample of this repo's own source: every
+ * non-test `src/**\/*.ts` sorted by line count, fourteen taken at even
+ * percentiles, plus `src/savings.ts` so the row stays comparable with the runs
+ * that published only it. Fixed before any of them was measured. Outline cost
+ * tracks symbol count and signature length rather than file length — the
+ * 3 684-line `src/cli.ts` outlines in 370 tokens — so stratifying by size
+ * spreads the sample without aiming it.
+ */
+const OUTLINE_BASKET = [
+  'src/session/tracker.ts',
+  'src/tools/_common/output-format.ts',
+  'src/daemon/vitals-log.ts',
+  'src/tools/analysis/module-graph.ts',
+  'src/analytics/session-analytics.ts',
+  'src/ai/voyage.ts',
+  'src/indexer/plugins/integration/tooling/data-fetching/index.ts',
+  'src/analytics/startup-watch.ts',
+  'src/tools/advanced/intent.ts',
+  'src/indexer/plugins/integration/messaging/kafka/index.ts',
+  'src/tools/analysis/graph-timeline.ts',
+  'src/indexer/plugins/language/kotlin/helpers.ts',
+  'src/indexer/plugins/integration/tooling/electron/index.ts',
+  'src/cli.ts',
+  'src/savings.ts',
+];
+
 const SEARCH_BASKET = [
   'savings',
   'search',
@@ -67,8 +106,8 @@ const CALLS: Array<{
   { tool: 'reindex', args: {}, warmup: true },
   // Not measured: resolves a real symbol_id for the symbol-scoped tools below.
   { tool: 'search', args: { query: 'estimateTokens', kind: 'function', limit: 1 }, warmup: true },
-  { tool: 'search_text', args: { query: 'estimateTokens' } },
-  { tool: 'get_outline', args: { path: 'src/savings.ts' } },
+  ...SEARCH_BASKET.map((query) => ({ tool: 'search_text', args: { query }, group: 'search_text' })),
+  ...OUTLINE_BASKET.map((path) => ({ tool: 'get_outline', args: { path }, group: 'get_outline' })),
   ...SEARCH_BASKET.map((query) => ({ tool: 'search', args: { query }, group: 'search' })),
   { tool: 'get_symbol', args: { symbol_id: '$SYMBOL' } },
   { tool: 'find_usages', args: { symbol_id: '$SYMBOL' } },
