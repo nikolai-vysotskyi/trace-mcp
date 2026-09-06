@@ -179,6 +179,6 @@ Yes, and for a codebase-heavy agent that also drives browsers or CI, that is pro
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — seven tactics, ordered by measured impact.
 - [Get started](/#install) — no configuration required.
