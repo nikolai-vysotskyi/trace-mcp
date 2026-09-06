@@ -28,7 +28,40 @@ const REPO = fileURLToPath(new URL('..', import.meta.url));
 const TARGET = process.argv[2] ?? REPO;
 
 /** Tool + args, ordered by real call volume from `~/.trace/savings.json`. */
-const CALLS: Array<{ tool: string; args: Record<string, unknown>; warmup?: boolean }> = [
+/**
+ * TRA-985: `search` is 24% of all recorded calls, and its cost depends far more
+ * on the query than on the tool. One query decided a quarter of the published
+ * aggregate: `savings` measured 363 tokens where the 15-query basket below
+ * averages 859. Volume-heavy tools get a basket; the row published for them is
+ * the mean over it, not one lucky sample. Provenance for the basket: the terms
+ * are the fifteen most common subsystem nouns in this repo's own directory
+ * names, chosen before any of them was measured.
+ */
+const SEARCH_BASKET = [
+  'savings',
+  'search',
+  'indexer',
+  'daemon',
+  'token',
+  'config',
+  'preset',
+  'telemetry',
+  'embedding',
+  'watcher',
+  'launcher',
+  'outline',
+  'graph',
+  'cache',
+  'session',
+];
+
+const CALLS: Array<{
+  tool: string;
+  args: Record<string, unknown>;
+  warmup?: boolean;
+  /** Rows sharing a group collapse into one row holding their mean. */
+  group?: string;
+}> = [
   // Not measured: the session DB is seeded per-session, so index in-session to
   // make the run self-contained instead of depending on a prior `trace index`.
   { tool: 'reindex', args: {}, warmup: true },
@@ -36,7 +69,7 @@ const CALLS: Array<{ tool: string; args: Record<string, unknown>; warmup?: boole
   { tool: 'search', args: { query: 'estimateTokens', kind: 'function', limit: 1 }, warmup: true },
   { tool: 'search_text', args: { query: 'estimateTokens' } },
   { tool: 'get_outline', args: { path: 'src/savings.ts' } },
-  { tool: 'search', args: { query: 'savings' } },
+  ...SEARCH_BASKET.map((query) => ({ tool: 'search', args: { query }, group: 'search' })),
   { tool: 'get_symbol', args: { symbol_id: '$SYMBOL' } },
   { tool: 'find_usages', args: { symbol_id: '$SYMBOL' } },
   { tool: 'get_project_map', args: {} },
@@ -71,6 +104,35 @@ interface Row {
   ms: number;
 }
 
+/**
+ * Collapse every grouped row into one row holding the group's mean. Mean, not
+ * median: the aggregate multiplies this by a call count, so it has to be the
+ * average cost of a call.
+ */
+function collapseGroups(rows: Array<Row & { group?: string }>): Row[] {
+  const out: Row[] = [];
+  const groups = new Map<string, Array<Row & { group?: string }>>();
+  for (const r of rows) {
+    if (!r.group) {
+      out.push(r);
+      continue;
+    }
+    (groups.get(r.group) ?? groups.set(r.group, []).get(r.group)!).push(r);
+  }
+  const mean = (xs: number[]): number => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
+  for (const [, rs] of groups) {
+    out.push({
+      tool: rs[0].tool,
+      ok: rs.every((r) => r.ok),
+      chars: mean(rs.map((r) => r.chars)),
+      est: mean(rs.map((r) => r.est)),
+      real: mean(rs.map((r) => r.real)),
+      ms: mean(rs.map((r) => r.ms)),
+    });
+  }
+  return out;
+}
+
 function run(): Promise<Row[]> {
   return new Promise((resolve, reject) => {
     // `--preset full` rather than TRACE_MCP_PRESET: the flag is applied before
@@ -101,7 +163,7 @@ function run(): Promise<Row[]> {
       },
     );
     const send = (m: unknown): void => void server.stdin.write(`${JSON.stringify(m)}\n`);
-    const rows: Row[] = [];
+    const rows: Array<Row & { group?: string }> = [];
     const timer = setTimeout(() => {
       server.kill();
       reject(new Error('timed out'));
@@ -114,7 +176,7 @@ function run(): Promise<Row[]> {
       if (i >= CALLS.length) {
         clearTimeout(timer);
         server.kill();
-        resolve(rows);
+        resolve(collapseGroups(rows));
         return;
       }
       started = Date.now();
@@ -164,6 +226,7 @@ function run(): Promise<Row[]> {
               est: estimateTokens(text),
               real: encode(text).length,
               ms: Date.now() - started,
+              group: CALLS[i].group,
             });
           i += 1;
           next();

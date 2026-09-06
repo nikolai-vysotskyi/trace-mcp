@@ -22,6 +22,16 @@ export interface FtsFilters {
    * names. Default: false (no exclusion) — callers opt in explicitly.
    */
   excludeMarkdown?: boolean;
+  /**
+   * If true, exclude the synthetic `__module__` pseudo-symbols the language
+   * plugins emit so the call graph can attribute module-body call sites
+   * (`metadata.synthetic = true`). They carry no source an agent can read —
+   * their signature is `(module body) <path>`, which the `file` field already
+   * says — but their name embeds the file's basename at FTS weight 10, so they
+   * outrank real symbols on any filename-shaped query. Bypassed when the query
+   * itself names `__module__`. Default: false — callers opt in explicitly.
+   */
+  excludeModuleBodies?: boolean;
 }
 
 /** Kinds emitted by the markdown plugin. Kept in one place so the FTS-level
@@ -71,6 +81,12 @@ export function searchFts(
   ) {
     conditions.push(`s.kind NOT IN (${[...MARKDOWN_SYMBOL_KINDS].map(() => '?').join(',')})`);
     for (const k of MARKDOWN_SYMBOL_KINDS) params.push(k);
+  }
+
+  // Same shape as the markdown guard above: a default exclusion the caller can
+  // bypass by asking for the thing by name.
+  if (filters?.excludeModuleBodies && !query.includes('__module__')) {
+    conditions.push("s.name NOT GLOB '__module__*'");
   }
 
   const needsFileJoin = filters?.language || filters?.filePattern;

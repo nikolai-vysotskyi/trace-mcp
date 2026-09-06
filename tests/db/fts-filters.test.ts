@@ -208,6 +208,33 @@ describe('escapeFtsQuery', () => {
   });
 });
 
+describe('searchFts excludeModuleBodies', () => {
+  // The Vue fixture emits one synthetic module-body pseudo-symbol
+  // (`__module___setup:UserCard`) so the call graph can attribute its
+  // top-level calls. It is not an answer to a search (TRA-985): on this repo
+  // 75% of a top-20 `search` page was these rows, because their name embeds
+  // the file basename at FTS name-weight 10.
+  it('drops synthetic module-body symbols when asked', () => {
+    const all = searchFts(store.db, 'UserCard', 50, 0);
+    const filtered = searchFts(store.db, 'UserCard', 50, 0, { excludeModuleBodies: true });
+
+    expect(all.some((r) => r.name.startsWith('__module__'))).toBe(true);
+    expect(filtered.some((r) => r.name.startsWith('__module__'))).toBe(false);
+    // Only the pseudo-symbols go: every real hit survives.
+    expect(filtered.length).toBe(all.filter((r) => !r.name.startsWith('__module__')).length);
+  });
+
+  it('keeps them when the query names __module__ explicitly', () => {
+    const results = searchFts(store.db, '__module__', 50, 0, { excludeModuleBodies: true });
+    expect(results.some((r) => r.name.startsWith('__module__'))).toBe(true);
+  });
+
+  it('is off by default', () => {
+    const results = searchFts(store.db, 'UserCard', 50, 0, {});
+    expect(results.some((r) => r.name.startsWith('__module__'))).toBe(true);
+  });
+});
+
 describe('filePatternToLike', () => {
   it('converts * to the SQL wildcard %', () => {
     expect(filePatternToLike('*.ts')).toBe('%.ts');

@@ -415,6 +415,8 @@ export async function search(
       // Bypassed inside searchFts when the caller explicitly asked for a
       // markdown kind / language / file_pattern.
       excludeMarkdown: true,
+      // Synthetic module-body pseudo-symbols are not search answers (TRA-985).
+      excludeModuleBodies: true,
     };
     const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
     if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
@@ -569,6 +571,7 @@ async function runFusionSearch(
     // Same default-exclusion as the single-channel `search()` path — keeps
     // markdown headings/tags from polluting the lexical channel of fusion.
     excludeMarkdown: true,
+    excludeModuleBodies: true,
   };
 
   // ── Channel 1: Lexical (BM25) ──────────────────────────────
