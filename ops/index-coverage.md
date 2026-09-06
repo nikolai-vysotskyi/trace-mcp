@@ -301,3 +301,70 @@ Do not re-derive "the `/vs/` format underperforms" from those pages' zero
 impressions — none of the six is in the index, so the number measures crawl
 coverage. `docs/comparisons.md` carried that inference until this reading
 corrected it.
+
+## Sitemap resubmission is an agent action, not a Nikolai-click (TRA-1022, 2026-09-06)
+
+Two runs in a row recorded "Google's copy of the sitemap is stale" and filed the
+fix as out of mandate. It is not. The service account in
+`~/.config/claude-seo/google-api.json` holds `siteFullUser` on
+`sc-domain:trace-mcp.com`, which is enough for `sitemaps.submit`:
+
+```python
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_PATH, scopes=['https://www.googleapis.com/auth/webmasters'])
+svc = build('searchconsole', 'v1', credentials=creds, cache_discovery=False)
+svc.sitemaps().submit(siteUrl='sc-domain:trace-mcp.com',
+                      feedpath='https://trace-mcp.com/sitemap.xml').execute()
+```
+
+Called 2026-09-06 12:08 UTC. Google refetched **within one second**:
+
+| | before | after |
+|---|---|---|
+| `lastSubmitted` | 2026-08-28T14:41Z | 2026-09-06T12:08Z |
+| `lastDownloaded` | 2026-09-02T07:00Z | 2026-09-06T12:08Z |
+| `submitted` URLs | 23 | 28 |
+| errors / warnings | 0 / 0 | 0 / 0 |
+
+The five URLs Google did not have, from `git log -S` against `docs/sitemap.xml`
+since the 09-02T07:00Z download:
+
+`/what-trace-init-installs.html`, `/config-index.html`, `/privacy.html`,
+`/perf/response-tokens/`, and — this is the one that matters —
+**`/vs/repomix-vs-codegraph.html`**, added by `34ffdf88` at 2026-09-02T16:51Z,
+about ten hours after Google fetched the file.
+
+So one member of the `/vs/` cluster was never in the sitemap Google held, and the
+statement "all six are in the sitemap" is true of the repo and was false of
+Google's copy. Any reading that treated the six as one uniformly-submitted block
+— including this ledger's own 09-04 and 09-06 tables — was comparing five
+submitted URLs against one that had not been offered. Do not re-derive a
+per-page conclusion for that URL from readings taken before today.
+
+Do not file the resubmit as a Nikolai-click again: run it in the same change that
+lands a docs update, and record before/after here. The old
+`google.com/ping?sitemap=` endpoint was deprecated in 2023, so this API call is
+the only way to trigger a refetch. `contents[].indexed` stays `0` after a
+successful fetch — that field is unmaintained, exactly as the 09-04 section says.
+
+### GitHub Pages does not treat `/vs/` differently (checked 2026-09-06)
+
+TRA-1022 asked whether the subdirectory is the structural difference between the
+indexed and unindexed URLs. Fetched live as Googlebot, all six `/vs/` pages and
+`/comparisons.html` return the same serving shape: `200`, no `X-Robots-Tag`, no
+`<meta name="robots">`, own `<title>`, self-referencing canonical, identical
+`cache-control: max-age=600`. Two asymmetries exist and neither blocks anything:
+
+- `https://trace-mcp.com/vs/` is a **404** — no directory index. Nothing links to
+  it and it is not in the sitemap.
+- GitHub Pages stamps `last-modified` with the **deploy time**, identical across
+  every file on the site including the indexed ones. Uniform, so it cannot
+  explain a per-page split — but it does mean the HTTP `last-modified` header
+  carries no freshness information here at all, which is the other half of why
+  sitemap `<lastmod>` is the only re-crawl signal this domain responds to.
+
+Subdirectory hosting is ruled out. What remains is what the sections above
+already name: page age and crawl demand. The 2026-09-26 re-read stands, and now
+starts from a sitemap Google actually holds.
