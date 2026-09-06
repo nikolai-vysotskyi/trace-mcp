@@ -648,21 +648,68 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         expect(cfg).toContain(`TRACE_MCP_CLI="${cli}"`);
       });
 
-      it('caches the verified major so the next start spawns nothing extra', () => {
-        const { home, traceHome, node, cli } = setupFakeHome();
-        writeConfig(traceHome, node, cli); // legacy config: no recorded major
-
-        runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
-
-        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
-          'TRACE_MCP_NODE_MAJOR="22"',
+      // TRA-1040: the cached major used to stand in for "this node still works",
+      // so the fast path exec'd a binary that no longer runs — a Node broken by
+      // a Homebrew dylib bump, an arch mismatch after a machine migration, an
+      // invalidated code signature. The exec succeeds from the shim's side, so
+      // nothing was logged and nothing healed: the client lost every tool for
+      // the rest of the session, and every later start repeated it, with a
+      // working node and cli.js sitting on the same disk.
+      it('reprobes when the configured node exists but no longer runs', () => {
+        const { home, traceHome, cli } = setupFakeHome();
+        const dead = path.join(home, 'dead-node');
+        // +x, but dies on exec the way a missing dylib makes a real node die.
+        fs.writeFileSync(dead, '#!/bin/bash\necho "dyld: Library not loaded" >&2\nexit 1\n', {
+          mode: 0o755,
+        });
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          [`TRACE_MCP_NODE="${dead}"`, `TRACE_MCP_CLI="${cli}"`, ''].join('\n'),
         );
-        // Second start takes the fast path on the cached value alone.
-        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
-          'serve',
-        ]);
+        const good = plantNvm(home, '99.0.0');
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        // Only the node is replaced — the configured cli.js is still on disk,
+        // and any working node runs any cli.js.
         expect(status).toBe(0);
         expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).toContain(`TRACE_MCP_NODE="${good.node}"`);
+        expect(cfg).not.toContain(dead);
+      });
+
+      // Same binary, but with the major a previous start recorded: the cached
+      // value must not buy it a pass.
+      it('does not let a cached major vouch for a node that stopped running', () => {
+        const { home, traceHome, cli } = setupFakeHome();
+        const dead = path.join(home, 'dead-node');
+        fs.writeFileSync(dead, '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+        fs.writeFileSync(
+          path.join(traceHome, 'launcher.env'),
+          [
+            `TRACE_MCP_NODE="${dead}"`,
+            `TRACE_MCP_CLI="${cli}"`,
+            'TRACE_MCP_NODE_MAJOR="99"',
+            '',
+          ].join('\n'),
+        );
+        const good = plantNvm(home, '99.0.0');
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+          `TRACE_MCP_NODE="${good.node}"`,
+        );
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8')).toContain('ERROR');
       });
     });
 

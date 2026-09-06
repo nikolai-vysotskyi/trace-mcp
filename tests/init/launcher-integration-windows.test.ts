@@ -214,8 +214,8 @@ try {
       [
         `TRACE_MCP_NODE="${shim.replace(/\\/g, '\\\\')}"`,
         `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
-        // Cached, so nothing on the fast path would have run `node -v` and
-        // noticed - the exact shape the app writes.
+        // The shape the app used to write. The launcher no longer reads it,
+        // but the fixture keeps it so the parser stays exercised on it.
         'TRACE_MCP_NODE_MAJOR="24"',
         '',
       ].join('\r\n'),
@@ -275,6 +275,41 @@ Write-Output "EXIT:$LASTEXITCODE"`;
 
     const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
     expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
+  });
+
+  // TRA-1040: the cached major used to stand in for "this node still works",
+  // so a node broken in place - a runtime uninstalled from under its own path,
+  // an arch mismatch after a machine migration - was started anyway. Nothing
+  // failed on the launcher's own side, so nothing was logged and nothing
+  // healed, and every later start repeated it.
+  it('reprobes when the configured node exists but no longer runs', () => {
+    const { home, traceHome, cli } = setupFakeHome();
+    const dead = path.join(home, 'dead-node.cmd');
+    fs.writeFileSync(dead, '@echo off\r\nexit /b 1\r\n');
+    fs.writeFileSync(
+      path.join(traceHome, 'launcher.env'),
+      [
+        `TRACE_MCP_NODE="${dead.replace(/\\/g, '\\\\')}"`,
+        `TRACE_MCP_CLI="${cli.replace(/\\/g, '\\\\')}"`,
+        'TRACE_MCP_NODE_MAJOR="24"',
+        '',
+      ].join('\r\n'),
+    );
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: config node=.*cannot run/);
   });
 
   // TRA-707: launcher.log takes a line on every MCP start and nothing else

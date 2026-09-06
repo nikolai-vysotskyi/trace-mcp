@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.7
+# trace-mcp-launcher v0.6.8
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -93,7 +93,6 @@ esac
 # --- 1. Parse config safely (no `source` — RCE-safe, whitelist keys) ---
 NODE_PATH=""
 CLI_PATH=""
-NODE_MAJOR=""
 
 # `-f` as well as `-r`: `-r` is true for a directory too, and reading one is
 # an error, not an empty config (TRA-797).
@@ -118,10 +117,8 @@ if [ -f "$CONFIG" ] && [ -r "$CONFIG" ]; then
     case "$key" in
       TRACE_MCP_NODE) NODE_PATH="$value" ;;
       TRACE_MCP_CLI)  CLI_PATH="$value" ;;
-      # Major version of TRACE_MCP_NODE, verified when the pair was recorded.
-      # Cached so the fast path never has to spawn node just to check it.
-      TRACE_MCP_NODE_MAJOR) NODE_MAJOR="$value" ;;
-      # TRACE_MCP_VERSION exists but is informational only
+      # TRACE_MCP_NODE_MAJOR and TRACE_MCP_VERSION may appear in configs
+      # written by older versions; both are informational only.
     esac
   done < "$CONFIG"
 fi
@@ -183,10 +180,9 @@ node_major() {
 #
 #  1. The basename. RUNTIME_SHIM_NAME in daemon-install.ts is always
 #     `node-runtime`, so anything else — every real node binary — is answered
-#     without opening the file at all. The fast path must stay fork-free: the
-#     cached TRACE_MCP_NODE_MAJOR exists precisely so a normal start spawns no
-#     process, and a `head | grep` pair on every start would have quietly
-#     undone that (review of #982).
+#     without opening the file at all. Still worth having now that the fast
+#     path verifies the node for real (TRA-1040): probing a shim means starting
+#     Electron, and two builtin string tests are far cheaper than that.
 #  2. The marker, matched anywhere in the header rather than on a fixed line:
 #     the shim has gained comment lines before and may again, and a
 #     line-number match would silently stop recognising it.
@@ -541,7 +537,7 @@ probe_cli() {
 # Persist a freshly probed pair so the next start takes the fast path, and so
 # a client that never reaches `trace-mcp init` still stops paying for the probe.
 heal_config() {
-  local node="$1" cli="$2" major="${3:-}" tmp old_umask
+  local node="$1" cli="$2" tmp old_umask
   # The shim strips exactly one pair of quotes and never expands; a literal
   # quote in a path would corrupt the file, so skip rather than mangle.
   case "$node$cli" in *'"'*) return 0 ;; esac
@@ -580,11 +576,6 @@ heal_config() {
     printf '# Rewritten by the launcher after a successful probe.\n'
     printf 'TRACE_MCP_NODE="%s"\n' "$node"
     printf 'TRACE_MCP_CLI="%s"\n' "$cli"
-    # Cache the verified major so the fast path stays a pure stat check.
-    case "$major" in
-      ''|*[!0-9]*) ;;
-      *) printf 'TRACE_MCP_NODE_MAJOR="%s"\n' "$major" ;;
-    esac
     # TRACE_MCP_VERSION is deliberately dropped: the probed cli.js may be a
     # different build than the one the stale config described, and a wrong
     # version is worse than none. `trace-mcp init` restores it.
@@ -649,10 +640,9 @@ resolve_exec_target() {
 
 # --- 3. Fast path: config is good → exec directly ---
 #
-# A config recorded before the version gate existed carries no verified major.
-# Check it once here (one `node -v`), then cache it, so the check costs nothing
-# from the next start on — and an already-poisoned config heals itself instead
-# of failing forever.
+# "Good" means the recorded pair still exists AND the recorded node still runs;
+# a config that stopped describing reality heals itself here instead of failing
+# forever.
 # Only the NODE override exempts a run from the gate. Sharing one flag with
 # TRACE_MCP_CLI_OVERRIDE would let a CLI-only debugging override carry the
 # configured node past the check — the exact failure this gate exists to stop.
@@ -660,22 +650,35 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
   if ! node_runtime_shim_ok "$NODE_PATH"; then
     log "ERROR: config node=$NODE_PATH is an app runtime shim whose target is gone (app updated, moved or removed) — reprobing"
     NODE_PATH=""
-    NODE_MAJOR=""
   fi
 fi
 
+# The version gate is also the liveness gate, and it runs on EVERY start.
+#
+# It used to be skipped whenever launcher.env carried a cached
+# TRACE_MCP_NODE_MAJOR, on the theory that a node's major never changes. True —
+# but the question the fast path actually needs answered is not "which major is
+# this" but "does this binary still run at all", and `[ -x ]` cannot answer it.
+# A node broken in place — a Homebrew dylib bump, an arch mismatch after a
+# machine migration, a code signature macOS stopped honouring — is still +x, so
+# the shim exec'd it, the exec succeeded from its own side, and nothing was
+# logged and nothing healed. The client lost all ~170 tools for the session and
+# every later start repeated it, with a working node and cli.js on the same disk
+# (TRA-1040, reproduced). TRA-965 closed one instance of this — a `node-runtime`
+# shim with a dead target — by name; this closes the class.
+#
+# The cost is one `node -v` per client start (~12 ms measured), which is the
+# price of the pair being real rather than merely recorded, on a path that is
+# about to load a whole Node process anyway. TRACE_MCP_NODE_MAJOR is no longer
+# read or written; older configs still carrying it are simply ignored.
 if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ]; then
-  if ! is_bounded_major "$NODE_MAJOR"; then
-    NODE_MAJOR=$(node_major "$NODE_PATH") || NODE_MAJOR=0
-    # Cache only a pair we are actually going to use — never write back a
-    # node we are about to reject, and never an override: CLI_PATH may be a
-    # throwaway debug path, and baking it in would outlive the debug session.
-    if [ "$USING_OVERRIDE" = 0 ] && [ "$NODE_MAJOR" -ge "$NODE_MIN_MAJOR" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
-      heal_config "$NODE_PATH" "$CLI_PATH" "$NODE_MAJOR"
+  VERIFIED_MAJOR=$(node_major "$NODE_PATH") || VERIFIED_MAJOR=0
+  if [ "$VERIFIED_MAJOR" -lt "$NODE_MIN_MAJOR" ]; then
+    if [ "$VERIFIED_MAJOR" = 0 ]; then
+      log "ERROR: config node=$NODE_PATH exists but cannot run (broken install, moved runtime or arch mismatch) — reprobing"
+    else
+      log "config node=$NODE_PATH is node $VERIFIED_MAJOR, need >= $NODE_MIN_MAJOR — reprobing"
     fi
-  fi
-  if [ "$NODE_MAJOR" -lt "$NODE_MIN_MAJOR" ]; then
-    log "config node=$NODE_PATH is node $NODE_MAJOR, need >= $NODE_MIN_MAJOR — reprobing"
     NODE_PATH=""
   fi
 fi
@@ -698,8 +701,7 @@ if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ]; then
     fi
     die "node binary not found — install Node.js (brew install node / nvm / volta) or set TRACE_MCP_NODE_OVERRIDE"
   fi
-  NODE_MAJOR=$(node_major "$NODE_PATH") || NODE_MAJOR=""
-  log "probe: node=$NODE_PATH (v$NODE_MAJOR)"
+  log "probe: node=$NODE_PATH"
   HEALED=1
 fi
 
@@ -712,7 +714,7 @@ fi
 
 # Overrides are a debugging escape hatch; never bake them into the config.
 if [ "$HEALED" = 1 ] && [ "$USING_OVERRIDE" = 0 ]; then
-  heal_config "$NODE_PATH" "$CLI_PATH" "$NODE_MAJOR"
+  heal_config "$NODE_PATH" "$CLI_PATH"
 fi
 
 EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
