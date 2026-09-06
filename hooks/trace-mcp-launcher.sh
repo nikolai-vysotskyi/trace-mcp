@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.4
+# trace-mcp-launcher v0.6.5
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -30,10 +30,27 @@ PKG_ROOTS_FILE="$TRACE_HOME/pkg-roots"
 # costs one stat and bounds the file at 2 x LOG_MAX_BYTES across both
 # generations. Without it launcher.log only ever grew — 9.7 MB observed.
 LOG_MAX_BYTES=${TRACE_MCP_LOG_MAX_BYTES:-5242880}
+# The override is user input. `[ x -gt y ]` on a non-numeric operand prints
+# "integer expression expected" straight to the MCP client's stderr, which is
+# exactly the leak TRA-797 closed elsewhere — bound it here, as the shim
+# already does for NODE_MIN_MAJOR below.
+case "$LOG_MAX_BYTES" in
+  ''|*[!0-9]*) LOG_MAX_BYTES=5242880 ;;
+esac
 rotate_log() {
   [ -f "$LOG" ] || return 0
-  # stat is not portable between GNU and BSD; try both, give up quietly.
-  size=$(stat -f %z "$LOG" 2>/dev/null || stat -c %s "$LOG" 2>/dev/null || echo 0)
+  # stat is not portable between GNU and BSD, and the two disagree in a way a
+  # single `a || b` substitution cannot survive: GNU reads `-f %z FILE` as a
+  # request for the filesystem holding `%z`, prints a multi-line report for
+  # FILE on *stdout* and exits 1 — so the fallback runs but its number is
+  # captured appended to that report, and the numeric guard below then rejects
+  # the lot. That is why this never rotated on Linux (TRA-707). Try each form
+  # separately and check for a plain number after each; BSD rejects `-c` on
+  # stderr only, so nothing leaks either way.
+  size=$(stat -c %s "$LOG" 2>/dev/null) || size=''
+  case "$size" in
+    ''|*[!0-9]*) size=$(stat -f %z "$LOG" 2>/dev/null) || size='' ;;
+  esac
   case "$size" in
     ''|*[!0-9]*) return 0 ;;
   esac

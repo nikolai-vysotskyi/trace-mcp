@@ -1021,4 +1021,70 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     expect(status).toBe(0);
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
+
+  // TRA-707: launcher.log takes a line on every MCP start and nothing else
+  // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
+  // daemon's own rotation cannot reach a file written from bash.
+  //
+  // This has to run on both CI runners, not one: the size probe is the part
+  // that broke, and GNU and BSD `stat` disagree about the flags it uses. The
+  // first cut of this test passed on macOS while the Linux job caught the shim
+  // silently never rotating at all.
+  it('rotates launcher.log once it is past the ceiling', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    const oversize = 'old entry\n'.repeat(200);
+    fs.writeFileSync(logPath, oversize);
+
+    const { status } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: '1024' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    // Oversized content moved aside, live log restarted from this run's lines.
+    expect(fs.readFileSync(`${logPath}.1`, 'utf-8')).toBe(oversize);
+    const live = fs.readFileSync(logPath, 'utf-8');
+    expect(live).not.toContain('old entry');
+    expect(live).toMatch(/exec\(config\)/);
+  });
+
+  it('keeps appending while under the ceiling', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    fs.writeFileSync(logPath, 'old entry\n');
+
+    const { status } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: '1048576' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    expect(fs.existsSync(`${logPath}.1`)).toBe(false);
+    expect(fs.readFileSync(logPath, 'utf-8')).toContain('old entry');
+  });
+
+  // The ceiling override is user input, and `[ x -gt y ]` on a non-numeric
+  // operand prints "integer expression expected" straight to the client's
+  // stderr — the leak TRA-797 closed elsewhere in this shim. A logging knob
+  // must never cost a start, nor corrupt the MCP stderr channel.
+  it('falls back to the default ceiling when the override is not a number', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    fs.writeFileSync(logPath, 'old entry\n');
+
+    const { status, stdout, stderr } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: 'not-a-number' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    expect(stderr).toBe('');
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    // Default 5 MB applies, so a one-line log is nowhere near it.
+    expect(fs.existsSync(`${logPath}.1`)).toBe(false);
+  });
 });

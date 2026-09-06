@@ -276,4 +276,56 @@ Write-Output "EXIT:$LASTEXITCODE"`;
     const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
     expect(log).toMatch(/ERROR: config node=.*runtime shim whose target is gone/);
   });
+
+  // TRA-707: launcher.log takes a line on every MCP start and nothing else
+  // trims it. The ps1 rotates it itself - the daemon's own rotation cannot
+  // reach a file written from PowerShell. Driven through powershell.exe
+  // directly, like the tests above: the cmd shim does not spawn on the runner.
+  it('rotates launcher.log once it is past the ceiling', () => {
+    const { home, traceHome, nodeExe, cli } = setupFakeHome();
+    writeConfig(traceHome, nodeExe, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    const oversize = 'old entry\r\n'.repeat(200);
+    fs.writeFileSync(logPath, oversize);
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+$env:TRACE_MCP_LOG_MAX_BYTES = '1024'
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    // Oversized content moved aside; the live log restarts from this run.
+    expect(fs.readFileSync(`${logPath}.1`, 'utf-8')).toBe(oversize);
+    expect(fs.readFileSync(logPath, 'utf-8')).not.toContain('old entry');
+  });
+
+  it('keeps appending to launcher.log while under the ceiling', () => {
+    const { home, traceHome, nodeExe, cli } = setupFakeHome();
+    writeConfig(traceHome, nodeExe, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    fs.writeFileSync(logPath, 'old entry\r\n');
+
+    const ps1 = path.join(HOOKS_DIR, 'trace-mcp-launcher.ps1');
+    const q = (p: string) => p.replace(/'/g, "''");
+    const script = `$env:TRACE_MCP_HOME = '${q(traceHome)}'
+$env:USERPROFILE = '${q(home)}'
+$env:NPM_CONFIG_PREFIX = ''
+$env:TRACE_MCP_LOG_MAX_BYTES = '1048576'
+& powershell.exe -NoProfile -NonInteractive -File '${q(ps1)}' serve
+Write-Output "EXIT:$LASTEXITCODE"`;
+    spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf-8',
+      timeout: 30_000,
+    });
+
+    expect(fs.existsSync(`${logPath}.1`)).toBe(false);
+    expect(fs.readFileSync(logPath, 'utf-8')).toContain('old entry');
+  });
 });
