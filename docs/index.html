@@ -608,6 +608,16 @@ updated: 2026-09-04
     /* The payoff half of the subtitle separates on colour, not weight — a second
        weight here would spend a budget slot on what one shade already says. */
     .hero-desc .accent-text { color: var(--text-display); }
+    /* The boundary line reads as the quiet half of the same paragraph: same
+       measure, one step down in size and shade, so it is carried with the claim
+       without competing with it. */
+    .hero-boundary {
+      margin: 14px auto 0;
+      max-width: 660px;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
     /* The three mono caps rows of the hero — eyebrow above the headline, the
        alternative platforms under the button, the trust line at the fold — are one
        treatment at three opacities, not three components. Only the distance from the
@@ -683,6 +693,7 @@ updated: 2026-09-04
       .hero { padding: 64px 0 40px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
+      .hero-boundary { margin-top: 12px; font-size: 14px; }
       /* Full width, one button: on a phone the download is a target, not a pill
          floating in the middle of a 390px row. */
       .hero-cta { margin-top: 28px; }
@@ -2180,16 +2191,28 @@ updated: 2026-09-04
         <span>MIT</span>
       </p>
 
+      <!-- The position sentence, verbatim from ops/positioning.md and identical on
+           README.md's first screen, the banner PNGs and _config.yml's description:
+           two paraphrases of one claim read as two claims to anything extracting
+           them. Do not narrow it back to the graph — that is what the old headline
+           ("Precomputed code intelligence for AI coding agents") did, and the
+           category term lives on the title and the Product View heading instead
+           (tests/docs/category-term.test.ts). -->
       <h1 class="hero-headline">
-        Precomputed code intelligence for AI coding agents
+        trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.
       </h1>
 
-      <!-- Same verbatim wording as README.md's first screen and as the metrics tile
-           below: two paraphrases of one number read as two claims to anything
-           extracting them. -->
+      <!-- The evidence, not a second claim. Same verbatim number as README.md's
+           first screen and the metrics tile below. -->
       <p class="hero-desc">
-        trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash;
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request.</span>
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request</span> &mdash;
+        median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own.
+      </p>
+
+      <!-- The honesty boundary travels with the claim, not as a footnote further down
+           the page (ops/positioning.md &sect; The boundary, carried with the claim). -->
+      <p class="hero-boundary">
+        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files.
       </p>
 
       <div class="hero-cta">
