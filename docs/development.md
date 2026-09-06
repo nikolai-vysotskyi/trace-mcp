@@ -347,7 +347,7 @@ export const MyFrameworkPlugin: FrameworkPlugin = {
 };
 ```
 
-3. Register the plugin in `src/indexer/plugins/integration/framework/index.ts` (or the appropriate category index).
+3. Register the plugin in `src/indexer/plugins/integration/all.ts` (or the appropriate category index).
 
 4. Write tests in `tests/frameworks/my-framework.test.ts`.
 
@@ -442,7 +442,7 @@ the manifest is the same string that belongs in `README.md` and
 stale alt text is both an accessibility bug and an SEO one.
 
 **Freshness.** `docs/images/screenshots.json` records the app version and the
-commit of the last change under `packages/app/src/renderer` / `src/main`.
+commit of the last change under `packages/app/src/renderer` / `packages/app/src/main`.
 `--check` compares that against HEAD and exits non-zero with a reason when the
 UI has moved on — that is the signal the docs and SEO autopilots read, so they
 never have to eyeball an image to know whether it is current.

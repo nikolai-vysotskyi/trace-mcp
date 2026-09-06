@@ -83,7 +83,7 @@ really does cost that much resident while it is being served.
 ### The run never shows a window
 
 Every pass launches the app with `TRACE_MCP_AGENT_RUN=1`, which leaves the window unmapped
-(`HIDDEN_WINDOWS` in `src/main/tray.ts`). A 55-minute pass runs on the machine somebody is
+(`HIDDEN_WINDOWS` in `packages/app/src/main/tray.ts`). A 55-minute pass runs on the machine somebody is
 working on and must not steal their screen or drag them off their Space.
 
 The cost is that `first-contentful-paint` does not exist: Chromium emits a paint entry only
@@ -91,7 +91,7 @@ for a frame the compositor presented, and an unmapped window presents none. So
 `renderer_fcp_ms` is null on every agent run. The replacement is
 **`renderer_first_content_ms`** — a `performance.mark('app-first-content')` the renderer
 sets itself when React commits the first content under `#root`
-(`src/renderer/main.tsx`). Same clock, same absence of CDP round-trip, one step earlier in
+(`packages/app/src/renderer/main.tsx`). Same clock, same absence of CDP round-trip, one step earlier in
 the pipeline. **It starts a new series: 97 ms here is not comparable to the 136 ms
 `renderer_fcp_ms` of the 2026-09-01 entry, which ran with a visible window.**
 
@@ -228,7 +228,7 @@ user could read an answer, and those are different products: a screen that appea
 
 Each screen declares its own useful paint in the renderer (`useUsefulPaint` in
 `packages/app/src/renderer/perf.ts`), and
-[`scripts/perf-screens.mjs`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/packages/app/scripts/perf-screens.mjs)
+[`packages/app/scripts/perf-screens.mjs`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/packages/app/scripts/perf-screens.mjs)
 reads the marks over CDP. Numbers land in `docs/perf/screens.json`.
 
 ```bash
@@ -266,14 +266,14 @@ Three things produced that change, in order of how much they mattered:
    A `fetch` with no signal against a socket that accepts and never answers neither
    resolves nor rejects — the screen behind it stays on its skeleton for the life of the
    window. `packages/app/src/renderer/daemon-fetch.ts` is now the only place that calls
-   `fetch` at the daemon, and `src/renderer/__tests__/daemon-fetch.test.ts` fails the build
+   `fetch` at the daemon, and `packages/app/src/renderer/__tests__/daemon-fetch.test.ts` fails the build
    if a fifty-eighth appears. The ceiling itself is unchanged at 8 s: this machine's daemon
    has been measured answering `/health` in 5.8 s while indexing, so a tighter one would
    abort reads that were going to succeed. It is the *existence* of a ceiling that was
    missing, not its value.
 2. **Screens open on their last known numbers.** The Workspace already did this for
    metrics (TRA-397); Overview now does it for the index summary, through the shared
-   `loadSnapshot`/`saveSnapshot` in `src/renderer/snapshot.ts`, and says
+   `loadSnapshot`/`saveSnapshot` in `packages/app/src/renderer/snapshot.ts`, and says
    "The daemon is busy. These are the last indexed numbers." until the fresh read lands.
 3. **A screen that has not loaded does not claim to be empty.** All four Memory sub-views
    started with `loading: false`, so the frame before their first fetch resolved read as
@@ -377,7 +377,7 @@ See the detector bullet above: observer armed after the action, 42.5% of searche
 as exactly 0 ms, `ui_p95_ms` roughly 20% low. Found by noticing that the 30-minute run
 reported a search *median* of 0 against 64 in the previous entry while p95 barely moved —
 a median that collapses while the tail does not is a measurement fault, not a speed-up.
-Fixed by arming the observer first; the primitive moved into `scripts/perf-lib.mjs` as
+Fixed by arming the observer first; the primitive moved into `packages/app/scripts/perf-lib.mjs` as
 `MEASURE_SRC` so a jsdom test can run the same text the renderer runs.
 
 **2026-09-02 — four secondary tabs were sitting in the startup chunk (TRA-593).**

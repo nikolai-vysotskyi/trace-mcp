@@ -21,11 +21,13 @@ Claims that a test already guards need no re-audit; the guard is the record:
 | every docs page is indexed or `noindex`, and linked from the footer nav | `tests/docs/internal-links.test.ts` |
 | reader-visible `updated:` dates match `sitemap.xml` | `tests/docs/page-dates.test.ts` |
 | breaking changes appear in the changelog | `tests/docs/changelog-breaking-changes.test.ts` |
+| every backticked repository path in `README.md` and `docs/**` exists | `tests/docs/doc-path-refs.test.ts` |
 
 ## Audited
 
 | Date | Scope | Verified against | Outcome |
 | --- | --- | --- | --- |
+| 2026-09-06 | every backticked repository path in `README.md` and `docs/**` | the filesystem, via `extractDocRefs` (`verify_docs`) | 59 paths did not exist. Ten were real drift and are fixed here: `src/indexer/extract-worker.js` (it is `.ts`), `benchmarks/pr-context-benchmark` (it is `benchmarks/pr-context`), `src/indexer/plugins/integration/framework/index.ts` (no such file — plugins register in `src/indexer/plugins/integration/all.ts`), and seven `packages/app/` paths written as if repo-root in `docs/perf/README.md` and `docs/development.md`. The rest are other projects' trees quoted in `docs/comparisons.md`, generated or gitignored files, files correctly named as deleted, and add-a-plugin placeholders — all enumerated with a reason in `tests/docs/doc-path-refs.test.ts`, which now gates this. |
 | 2026-08-30 | `docs/tools-reference.md` — completeness of the tool listing | every `server.tool(...)` registration under `src/tools/register`, captured live via `_capture-tools.ts` | 101 of the 151 tools a default install registers were listed nowhere. Fixed by generating `docs/tools-index.md` (#642) and dropping the page's "full reference" claim. |
 | 2026-08-30 | tool names quoted anywhere in `docs/tools-reference.md` | the same registration scan, plus `src/tools/ai/ai-tools.ts` | No ghosts. The five AI-backed tools live outside `src/tools/register`, which is why they are absent from `counts.yml` — that is correct, not drift. |
 | 2026-09-02 | every CLI command and long flag quoted in a code span or fenced block across `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`, `DESIGN.md`, `SECURITY.md`, `docs/**`, `skills/**` | `--help` output of the real binary — every top-level command and every subcommand of `clients`, `bundles`, `subproject`, `memory`, `analytics`, `daemon`, `eval`, `consent` | One ghost: `README.md` documented `trace-mcp savings`, which does not exist (it is `trace-mcp analytics savings`; an unknown verb falls through to the default `serve` command and errors with `too many arguments for 'serve'`). **Every documented long flag exists** — no drift in the flag surface. |
@@ -35,6 +37,40 @@ Claims that a test already guards need no re-audit; the guard is the record:
 | 2026-09-02 | `SECURITY.md` default-exclude list | `src/config.ts:879` | Claimed `.trace-mcp` and `.turbo` are excluded by default. Neither is in the schema default. Also claimed the index DB defaults to a project-relative `.trace-mcp/index.db`; real DBs are resolved by `getDbPath()` into `~/.trace/index/`. Both fixed. |
 | 2026-09-05 | `docs/images/` freshness and content, and the screenshot claims in `docs/DESIGN-WEB.md` | `node scripts/capture-screenshots.mjs --check`, then a re-capture and a look at all six frames; the pairing check the checklist itself prescribes, run against `docs/index.html` | The committed set was two markers stale — app UI `150a59fd → d88864d4` (9 commits under `packages/app/src/{renderer,main}`) and app version 3.17.0 → 3.18.0. Re-captured; all six frames publishable (no error banners, skeletons, personal paths). The checklist's own un-paired-shot measurement stated "It is 2 today" — it is 0: all six shots have been paired since TRA-851, so the line taught the reader to expect a failure that no longer exists. Fixed. Remaining defect, not fixed here: in `app-dark-projects` the three headline tiles read "No change vs 2 seconds ago" because the light shot seeds the delta baseline moments earlier, while the same tiles in the light shot read "tracking from today". Capture-script fix, filed separately (script is owned by Design/UX). |
 | 2026-09-04 | `db.path` / `TRACE_MCP_DB_PATH` as a configurable index location (`SECURITY.md:150`) | `src/global.ts` `getDbPath()`, every `new Store(...)` call site | Neither the key nor the env var reached the code that opens the database — the only reader was `get_index_health`, which reported the schema default `.trace-mcp/index.db` as `dbPath`. Removed the key, the env override and the `SECURITY.md` claim; `get_index_health` now reports `store.db.name` (TRA-802). |
+
+## The symbol half of doc-to-code verification — measured, and not gating (2026-09-06, TRA-1023)
+
+`verify_docs` resolves both backticked *paths* and backticked *identifiers*
+against the index. Only the path half gates CI. This is why.
+
+Measured on `README.md` plus every page under `docs/`, against a full index of
+this repo at `7f53f325`:
+
+| Corpus | Identifier code spans | Unresolved | Rate |
+| --- | --- | --- | --- |
+| `README.md` + `docs/**` | 2 661 | 2 406 | **90.4%** |
+| `docs/comparisons.md` alone | 223 | 210 | **94.2%** |
+| camelCase/PascalCase spans only, whole corpus | 321 | 222 | **69.2%** |
+
+Almost none of that is drift. The unresolved set is led by MCP tool names
+(`search_text` ×28, `load_tools` ×25, `get_change_impact` ×23 — real product
+concepts, registered as string literals rather than as symbols), preset and
+enum values (`minimal` ×32, `full` ×24, `scip_resolved`, `EXTRACTED`), JSON
+field and metric names (`symbol_id`, `ui_p95_ms`, `renderer_fcp_ms`), config
+keys (`tools.preset`), and bare `true` / `false` / `null`.
+
+Narrowing to camelCase/PascalCase — which drops tool names, prose words, dotted
+config keys and SCREAMING_CASE env vars in one rule — still leaves 69.2%, now
+led by the host's own tools (`Read` ×21, `Grep` ×17, `Glob`, `Bash`), platform
+globals (`MutationObserver`, `setTimeout`, `EventSource`), competitors' symbols
+quoted from their source (`SolidLanguageServer`, `buildGatewayWireSchema`,
+`CodeCompressor`), and hook event names (`SessionStart`, `PostToolUse`).
+
+**Conclusion: the symbol half stays a tool, not a gate.** No filter cheap enough
+to state in one rule gets the false-positive rate near the ~0% the path half
+reaches, because most of what our prose backticks is a name in a namespace the
+index does not hold. Re-measure before revisiting; the numbers above are the
+baseline.
 
 ## Not audited yet
 
