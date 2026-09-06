@@ -18,7 +18,11 @@ import {
   startDaemonLogRotation,
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
-import { recordDaemonCleanStop, recordDaemonStart } from './telemetry/usage-ping.js';
+import {
+  printTelemetryNoticeOnce,
+  recordDaemonCleanStop,
+  recordDaemonStart,
+} from './telemetry/usage-ping.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -393,7 +397,16 @@ const program = new Command();
 program
   .name('trace')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
-  .version(PKG_VERSION, '-v, --version');
+  .version(PKG_VERSION, '-v, --version')
+  // Disclose the anonymous ping once, from the place a human is actually
+  // looking at a terminal — `trace init` is in every install instruction we
+  // publish (TRA-887). Server startup prints the same line as a fallback for
+  // installs that never touch the CLI; the shared `noticeShown` flag means
+  // whichever runs first is the only one that speaks. Skipped for
+  // `classify-env`, which the shell guard runs on every tool call.
+  .hook('preAction', (_program, actionCommand) => {
+    if (actionCommand.name() !== 'classify-env') printTelemetryNoticeOnce();
+  });
 
 program
   .command('serve', { isDefault: true })

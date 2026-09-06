@@ -26,12 +26,15 @@
  * public by design — they ship as plaintext in the published bundle, and a
  * GA4 api_secret is write-only. The counts they produce are therefore
  * unauthenticated and inflatable; see SECURITY.md "Telemetry Credentials".
- * See README "Usage telemetry" for how to opt out (TRACE_MCP_TELEMETRY=off).
+ * See https://trace-mcp.com/privacy.html (docs/privacy.md) for the published
+ * field list and the two opt-outs: TRACE_MCP_TELEMETRY=off, or
+ * `telemetry.usage_ping: false` in ~/.trace/.config.json.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { loadGlobalConfigRaw } from '../config.js';
 import { logger } from '../logger.js';
 import { loadPersistentSavings } from '../savings.js';
 import { topModelLastDay } from './top-model.js';
@@ -68,6 +71,41 @@ interface TelemetryState {
   daemonStarts?: number;
   /** Of those starts, how many found `daemonRunning` still true. */
   daemonUncleanStops?: number;
+  /**
+   * The one-time disclosure notice has been printed. Set by
+   * {@link printTelemetryNoticeOnce}; nothing ever clears it, so an install
+   * sees the sentence once and never again (TRA-887).
+   */
+  noticeShown?: boolean;
+}
+
+/**
+ * `telemetry.usage_ping: false` in `~/.trace/.config.json`, the file-based
+ * opt-out beside `TRACE_MCP_TELEMETRY=off` (TRA-887).
+ *
+ * Deliberately NOT `telemetry.enabled` — that key already exists and gates the
+ * local latency sink in `~/.trace/telemetry.db`, so reusing it would turn one
+ * setting into two meanings. Global config only: this is an install-scoped
+ * choice, and the project-config reader is async while every caller here is
+ * sync and best-effort. Memoized — a config edit takes effect on the next
+ * process, same as every other key.
+ */
+let usagePingDisabledByConfig: boolean | undefined;
+function disabledByConfig(): boolean {
+  if (usagePingDisabledByConfig === undefined) {
+    try {
+      const telemetry = loadGlobalConfigRaw().telemetry as { usage_ping?: unknown } | undefined;
+      usagePingDisabledByConfig = telemetry?.usage_ping === false;
+    } catch {
+      usagePingDisabledByConfig = false;
+    }
+  }
+  return usagePingDisabledByConfig;
+}
+
+/** Test seam: forget the memoized config answer. */
+export function resetUsagePingConfigCache(): void {
+  usagePingDisabledByConfig = undefined;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
@@ -76,7 +114,8 @@ function isDisabled(env: NodeJS.ProcessEnv): boolean {
   // A fresh container per job means a fresh install id: counting CI would
   // inflate "new installs" without adding a single user. Opt CI out entirely
   // rather than pay for a correction factor later.
-  return env.CI === 'true' || env.CI === '1';
+  if (env.CI === 'true' || env.CI === '1') return true;
+  return disabledByConfig();
 }
 
 function utcDate(nowMs: number): string {
@@ -99,6 +138,7 @@ function loadOrCreateState(): TelemetryState {
         daemonRunning: parsed.daemonRunning,
         daemonStarts: parsed.daemonStarts,
         daemonUncleanStops: parsed.daemonUncleanStops,
+        noticeShown: parsed.noticeShown,
       };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
@@ -209,6 +249,40 @@ export function recordDaemonCleanStop(env: NodeJS.ProcessEnv = process.env): voi
     logger.debug({ err }, 'telemetry.daemon_stop_record_failed');
   }
 }
+
+/**
+ * One line, on stderr, once per install — the disclosure the ping itself
+ * cannot give (TRA-887).
+ *
+ * Called from the CLI, where a human is looking at a terminal, and from server
+ * startup as the fallback for an install that only ever runs under an MCP
+ * client. stderr, not stdout: `armStdoutGuard()` reroutes stdout to keep the
+ * JSON-RPC framing clean, and stderr is what survives on both paths.
+ *
+ * Silent when telemetry is off — there is nothing to disclose — and silent
+ * after the first time, gated on `noticeShown` in the telemetry state file.
+ * Never throws: a failed write costs the notice, not the command.
+ */
+export function printTelemetryNoticeOnce(
+  env: NodeJS.ProcessEnv = process.env,
+  write: (s: string) => void = (s) => process.stderr.write(s),
+): void {
+  if (isDisabled(env)) return;
+  try {
+    const state = loadOrCreateState();
+    if (state.noticeShown) return;
+    saveState({ ...state, noticeShown: true });
+    write(TELEMETRY_NOTICE);
+  } catch (err) {
+    logger.debug({ err }, 'telemetry.notice_failed');
+  }
+}
+
+export const TELEMETRY_NOTICE =
+  'trace-mcp sends one anonymous ping a day: version, OS, MCP client, counts. ' +
+  'No code, no paths, no IP. Turn it off with TRACE_MCP_TELEMETRY=off or ' +
+  '`telemetry.usage_ping: false` in ~/.trace/.config.json — ' +
+  'details: https://trace-mcp.com/privacy.html\n';
 
 /**
  * ISO country of the machine, derived from its timezone setting — this is what
