@@ -231,10 +231,18 @@ structurally identical rows, and for the h2 section rule.
 
 ## 1a. The logo is the word
 
-Nikolai's decision, 2026-09-04 (TRA-777): **the wordmark is the logo.** There
-is no emblem standing beside it. The square surfaces macOS, Windows and the
-browser force on us are served by a *fragment of the wordmark*, never by a
-second mark drawn on its own.
+Nikolai's decision, 2026-09-04 (TRA-777): **the wordmark is the logo.** The
+square surfaces macOS, Windows and the browser force on us are served by the
+app mark.
+
+**Superseded on 2026-09-05 (TRA-780): the mark and the wordmark do stand
+together.** The earlier version of this section forbade "a second mark drawn on
+its own" beside the word. That held while the square was being redrawn from
+scratch; once the existing graph mark was reworked instead and approved, the two
+were set as a pair and the prohibition went with it. Read the rest of this
+section as: the wordmark is the logo *on its own*, the mark is the logo *in a
+square*, and §1b is how they sit together when both appear. Nothing else about
+the wordmark changed.
 
 ### What it is
 
@@ -323,6 +331,46 @@ redundant.
 - Do not use the word below 144px wide.
 
 ---
+
+---
+
+## 1b. The lockups
+
+Two, and only two. Generated — `node scripts/gen-lockup.mjs` — into
+`docs/images/logo/lockup-{row,stack}-{light,dark}.svg`. Never hand-place the
+mark next to the word: the numbers below are the whole spec, and eyeballing them
+is what produced four rejected rounds in TRA-780.
+
+Everything is in the wordmark's own units, 1000 per em, so **one `font-size`
+scales the whole lockup** and there is no second constant to keep in sync.
+
+| | Row | Stack |
+|---|---|---|
+| mark | `885` tall | `3600` (3.6 em) |
+| gap | `275` before the word | `800` under the mark |
+| mark centre | `300` above the baseline | centred on the word |
+
+**Why 300 and not the centre of the ink.** Centring the mark on the word's ink
+block puts it at `232` — and it reads as hanging, because the ink block is
+dragged down by the descender of `p` while the eye reads the line off `t` and
+the x-height. The word has to drop against the mark for the line to sit
+straight. `232` was rejected on sight, `442` (mark bottom on the baseline) lifts
+the mark clear of the line and reads as two objects. `300` is the settled value.
+
+**Measure the string, not the glyphs.** The rendered word inks `675` above the
+baseline and `210` below. Per-glyph metrics say `700` and `200` — `t` and `p`
+measured alone — and using those put the mark 18.5px off centre on a 328px
+lockup. Every vertical number in this section is off the rasteriser.
+
+**The files carry no `<text>`.** Letters are the font's own contours, extracted
+once into `scripts/wordmark-glyphs.mjs`; the mark is inlined from
+`packages/app/assets/icon/icon.svg` with its ids namespaced so it can be dropped
+into a larger document without colliding. Nothing reads a woff2 at build time —
+that dependency is exactly what made the app icon's `T` render differently
+depending on which font the rasteriser found (§10, TRA-780).
+
+`tests/docs/lockup.test.ts` pins the geometry, both themes, and the absence of
+`<text>`.
 
 ## 2. Documentation page anatomy
 
