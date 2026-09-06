@@ -76,9 +76,26 @@ it, which is why that file doubles as the checklist for this one.
 | `topology.db`, `decisions.db`, `state.db`, `sessions/`, `corpora/`, `bundles/`, `locks/`, `status/`, `embed-watermarks.json`, `startup-watch.json` | normal operation | no | `rm -rf ~/.trace` | Silent |
 | `startup-backups/` | `apply_startup_recommendations` | yes, it is the undo manifest | `rollback…` | Silent |
 | `telemetry-state.json` (install UUID) | first server start | **no** | `TRACE_MCP_TELEMETRY=off` | Notice (state) / **Consent** (the ping — below) |
-| `daemon.log`, `postinstall.log`, `launcher.log` | daemon / install | no | `rm` | Silent |
+| `daemon.log`, `postinstall.log`, `launcher.log`, `update.log` | daemon / install / update | no | `rm` | Silent |
 | `daemon.disabled` sentinel | `daemon stop` | yes | `daemon start` | Silent |
 | `~/.trace-mcp` → `~/.trace` rename | first run after TRA-611 | no | — (compat symlink kept) | Notice |
+
+
+**Log ceilings.** Every log under `~/.trace` is size-bounded and keeps exactly one
+previous generation (`<name>.1`), so the pair can never exceed twice the ceiling.
+The writers are independent — the daemon cannot rotate a file the bash /
+PowerShell shim appends to — so each states its own limit:
+
+| Log | Ceiling | Set in |
+|---|---|---|
+| `daemon.log` | 20 MB, checked every 60 s by the running daemon | `src/daemon/lifecycle.ts` |
+| `launcher.log` | 5 MB, override with `TRACE_MCP_LOG_MAX_BYTES` | `hooks/trace-mcp-launcher.sh`, `.ps1` |
+| `update.log` | 2 MB | `packages/app/src/main/update-log.ts` |
+| `run.log` (opt-in `logging.file`) | `logging.max_size_mb`, default 10 MB | `src/logger.ts` |
+
+Rotation is best-effort everywhere: a rotation failure is swallowed rather than
+allowed to abort an MCP start or an update. `postinstall.log` is unbounded, and
+stays that way — it gains a few lines per `npm install`, not per run.
 
 ### B. Leaves the machine
 

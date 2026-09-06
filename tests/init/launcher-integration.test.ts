@@ -1021,4 +1021,43 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     expect(status).toBe(0);
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
+
+  // TRA-707: launcher.log takes a line on every MCP start and nothing else
+  // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
+  // daemon's own rotation cannot reach a file written from bash.
+  it('rotates launcher.log once it is past the ceiling', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    const oversize = 'old entry\n'.repeat(200);
+    fs.writeFileSync(logPath, oversize);
+
+    const { status } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: '1024' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    // Oversized content moved aside, live log restarted from this run's lines.
+    expect(fs.readFileSync(`${logPath}.1`, 'utf-8')).toBe(oversize);
+    const live = fs.readFileSync(logPath, 'utf-8');
+    expect(live).not.toContain('old entry');
+    expect(live).toMatch(/exec\(config\)/);
+  });
+
+  it('keeps appending while under the ceiling', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    writeConfig(traceHome, node, cli);
+    const logPath = path.join(traceHome, 'launcher.log');
+    fs.writeFileSync(logPath, 'old entry\n');
+
+    const { status } = runLauncher(
+      { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_LOG_MAX_BYTES: '1048576' },
+      ['serve'],
+    );
+
+    expect(status).toBe(0);
+    expect(fs.existsSync(`${logPath}.1`)).toBe(false);
+    expect(fs.readFileSync(logPath, 'utf-8')).toContain('old entry');
+  });
 });
