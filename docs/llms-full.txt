@@ -156,7 +156,9 @@ Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decis
 
 ## Session Analytics
 
-See [Analytics](analytics.md) for full documentation.
+See [Analytics](analytics.md) for full documentation. Those tools read session
+logs after the fact; for a live span per tool call exported to your own Jaeger
+or Langfuse, see [MCP tracing](telemetry.md).
 
 | Tool | What it does |
 |---|---|

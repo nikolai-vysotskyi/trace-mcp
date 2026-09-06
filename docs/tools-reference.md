@@ -1,7 +1,7 @@
 ---
 title: "MCP Tools Reference — code-intelligence tools by task and framework"
 description: "The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries."
-updated: 2026-09-04
+updated: 2026-09-06
 ---
 
 # Tools reference
@@ -170,7 +170,9 @@ Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decis
 
 ## Session Analytics
 
-See [Analytics](analytics.md) for full documentation.
+See [Analytics](analytics.md) for full documentation. Those tools read session
+logs after the fact; for a live span per tool call exported to your own Jaeger
+or Langfuse, see [MCP tracing](telemetry.md).
 
 | Tool | What it does |
 |---|---|
