@@ -281,6 +281,12 @@ function summarise(rows: Row[], arm: 'baseline' | 'trace') {
 }
 
 async function main(limit?: number, concurrency = 3): Promise<void> {
+  if (!fs.existsSync(PROMPTS_DIR)) {
+    throw new Error(
+      `No prompts at ${PROMPTS_DIR}. They are regenerable and gitignored — run:\n` +
+        '  tsx scripts/bench-pr-context.ts --dump-prompts benchmarks/pr-context/prompts',
+    );
+  }
   fs.mkdirSync(SANDBOX, { recursive: true });
   const dirs = fs
     .readdirSync(PROMPTS_DIR)
@@ -344,7 +350,10 @@ async function main(limit?: number, concurrency = 3): Promise<void> {
         failed_count: failed.length,
         baseline_understood: pct(b.understood_rate),
         trace_understood: pct(t.understood_rate),
-        understood_delta_pp: ((t.understood_rate - b.understood_rate) * 100).toFixed(0),
+        // A positive count of points lost, so the docs page reads "N points
+        // less often" without a double negative. Signed deltas belong in
+        // quality.json, not in prose.
+        understood_drop_pp: ((b.understood_rate - t.understood_rate) * 100).toFixed(0),
         baseline_false_positives: b.false_positives_per_pr.toFixed(2),
         trace_false_positives: t.false_positives_per_pr.toFixed(2),
         baseline_findings: b.findings_per_pr.toFixed(1),

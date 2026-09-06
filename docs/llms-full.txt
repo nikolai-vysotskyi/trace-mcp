@@ -4026,7 +4026,7 @@ the change can break visible, not less.
 
 It also produces a **worse review**. Sending both contexts to the same model on
 the same PRs, the trace-mcp arm understood the change
-{{ site.data.pr_context_quality.understood_delta_pp }} percentage points less
+{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
 often and asserted about twice as many problems that are not there — a
 preregistered bar this run [missed]({{ '/perf/prereg-pr-quality/' | relative_url }}).
 Both halves are below; neither number should be quoted without the other.
@@ -4145,7 +4145,7 @@ Two further limits worth stating plainly:
 That question used to live in a "what this does not measure" section. It is
 measured now, and **the answer went against us**: on the same pull requests,
 the review written from trace-mcp's context understood the change
-{{ site.data.pr_context_quality.understood_delta_pp }} percentage points less
+{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
 often than the review written from the full files, and asserted roughly twice
 as many problems that are not there. The
 [preregistered bar]({{ '/perf/prereg-pr-quality/' | relative_url }}) — no more

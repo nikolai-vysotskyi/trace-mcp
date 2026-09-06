@@ -647,7 +647,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const limit = li >= 0 ? Number(argv[li + 1]) : undefined;
     const di = argv.indexOf('--dump-prompts');
     if (di >= 0) {
-      DUMP_DIR = path.resolve(argv[di + 1] ?? path.join(BENCH_DIR, 'prompts'));
+      // `--dump-prompts --limit 10` must not create a directory called "--limit".
+      const next = argv[di + 1];
+      DUMP_DIR = path.resolve(
+        next && !next.startsWith('-') ? next : path.join(BENCH_DIR, 'prompts'),
+      );
       fs.mkdirSync(DUMP_DIR, { recursive: true });
     }
     await run(limit);

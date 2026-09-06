@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-06T10:01:51.297Z",
+  "generated_at": "2026-09-06T10:13:13.988Z",
   "model": "claude-sonnet-4-5",
   "judge_model": "claude-sonnet-4-5",
   "transport": "claude CLI headless (-p), no tools, no MCP, no settings sources",
