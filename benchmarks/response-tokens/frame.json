@@ -1,0 +1,169 @@
+{
+  "issue": "TRA-993",
+  "generated_by": "scripts/gen-response-token-frame.mjs",
+  "generated_from": {
+    "repo_commit": "e910bad7",
+    "symbols": 7351,
+    "source_files": 762,
+    "directories": 158
+  },
+  "query_shape": {
+    "source": "1,133 recorded `search` arguments, ~/.trace/analytics.db, one machine",
+    "word": 10.3,
+    "identifier": 60.7,
+    "phrase": 28.9,
+    "sample": 1133,
+    "mean_words": 1.69,
+    "note": "Strings not committed: they name symbols in private repositories. Only the shape crosses over."
+  },
+  "rules": {
+    "word": "directory basenames under src/ matching ^[a-z][a-z0-9]{3,}$, deduped, sorted, every Nth",
+    "identifier": "symbol names from the index (no pseudo-symbols, >3 chars, [A-Za-z0-9_] only, not all-lowercase), ordered by symbol_id, every Nth",
+    "phrase": "symbol names split on camelCase/snake_case into >=2 lowercase words, deduped, ordered by symbol_id, every Nth",
+    "file": "indexed non-test .ts files under src/, path-sorted, every Nth"
+  },
+  "queries": [
+    {
+      "q": "advanced",
+      "stratum": "word"
+    },
+    {
+      "q": "nestjs",
+      "stratum": "word"
+    },
+    {
+      "q": "Error",
+      "stratum": "identifier"
+    },
+    {
+      "q": "ServiceInfo",
+      "stratum": "identifier"
+    },
+    {
+      "q": "ToolResultEvent",
+      "stratum": "identifier"
+    },
+    {
+      "q": "handshakeDiagnosticLine",
+      "stratum": "identifier"
+    },
+    {
+      "q": "AdminRegistration",
+      "stratum": "identifier"
+    },
+    {
+      "q": "ZodSchema",
+      "stratum": "identifier"
+    },
+    {
+      "q": "extractRuneProps",
+      "stratum": "identifier"
+    },
+    {
+      "q": "ExportOptions",
+      "stratum": "identifier"
+    },
+    {
+      "q": "symbolAtLine",
+      "stratum": "identifier"
+    },
+    {
+      "q": "Community",
+      "stratum": "identifier"
+    },
+    {
+      "q": "checkSymbol",
+      "stratum": "identifier"
+    },
+    {
+      "q": "matchesV4Cidr",
+      "stratum": "identifier"
+    },
+    {
+      "q": "event emitter",
+      "stratum": "phrase"
+    },
+    {
+      "q": "min session bytes",
+      "stratum": "phrase"
+    },
+    {
+      "q": "extract signal names",
+      "stratum": "phrase"
+    },
+    {
+      "q": "extract subscript",
+      "stratum": "phrase"
+    },
+    {
+      "q": "ingest scip index",
+      "stratum": "phrase"
+    },
+    {
+      "q": "json parse",
+      "stratum": "phrase"
+    }
+  ],
+  "files": [
+    {
+      "path": "src/ai/abort.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/bundles.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/daemon/project-relay.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/edge-resolvers/imports.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/plugins/integration/framework/laravel/broadcasting.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/plugins/integration/tooling/commander/index.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/plugins/language/assembly/index.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/plugins/language/kotlin/index.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/indexer/plugins/language/xml/index.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/memory/decision-consolidator.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/retrieval/index.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/server/parent-death-watch.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/tools/advanced/subproject-clone.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/tools/navigation/related.ts",
+      "stratum": "file"
+    },
+    {
+      "path": "src/tools/register/navigation/lookup-tools.ts",
+      "stratum": "file"
+    }
+  ]
+}
