@@ -62,17 +62,19 @@ describe('getSuggestedQuestions() — behavioural contract', () => {
     store = createTestStore();
   });
 
-  it('envelope shape: { questions, total }', () => {
+  it('envelope shape: { questions, total, generated_at }', () => {
     const result = getSuggestedQuestions(store);
     expect(Array.isArray(result.questions)).toBe(true);
     expect(typeof result.total).toBe('number');
+    expect(typeof result.generated_at).toBe('string');
   });
 
-  it('is byte-identical across repeated calls for unchanged repo state', () => {
-    seedWithSignals(store);
-    const a = getSuggestedQuestions(store);
-    const b = getSuggestedQuestions(store);
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  it('generated_at is a valid ISO timestamp', () => {
+    const result = getSuggestedQuestions(store);
+    // Date.parse returns NaN for invalid input.
+    expect(Number.isNaN(Date.parse(result.generated_at))).toBe(false);
+    // ISO format always carries a "T".
+    expect(result.generated_at).toMatch(/T/);
   });
 
   it('each question has id/severity/question/reason/follow_up.tool', () => {

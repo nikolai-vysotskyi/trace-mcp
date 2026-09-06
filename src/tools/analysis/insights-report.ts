@@ -18,6 +18,7 @@ import { getPageRank, type PageRankResult } from './graph-analysis.js';
 import { selfAudit } from './introspect.js';
 
 export interface InsightsReport {
+  generated_at: string;
   totals: {
     files: number;
     symbols: number;
@@ -87,7 +88,7 @@ function countResolutionTiers(store: Store): InsightsReport['resolution_tiers'] 
 
 function renderMarkdown(report: Omit<InsightsReport, 'markdown'>): string {
   const lines: string[] = [];
-  lines.push('# Project insights');
+  lines.push(`# Project insights — ${report.generated_at}`);
   lines.push('');
   lines.push(
     `**Totals:** ${report.totals.files} files · ${report.totals.symbols} symbols · ${report.totals.edges} edges`,
@@ -221,6 +222,7 @@ export function generateInsightsReport(
   };
 
   const base: Omit<InsightsReport, 'markdown'> = {
+    generated_at: new Date().toISOString(),
     totals: {
       files: stats.totalFiles,
       symbols: stats.totalSymbols,

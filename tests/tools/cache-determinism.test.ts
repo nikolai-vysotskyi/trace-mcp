@@ -1,34 +1,43 @@
 /**
- * TRA-858 — prompt-cache determinism.
+ * TRA-858 — same repo state, same bytes.
  *
- * Anthropic prompt caching keys off byte-identical prefixes. A tool that
- * embeds wall-clock data (`generated_at`, `duration_ms`, request ids) in an
- * otherwise-static response busts the cache on every repeated call, even
- * when the underlying repo state hasn't changed — turning a cheap cache
- * read into a full-price cache write for that block and everything after
- * it in the conversation.
+ * What this is NOT guarding. TRA-858 was filed on the theory that a
+ * wall-clock field inside a tool result invalidates the Anthropic prompt
+ * cache "for all subsequent turns in the session". That mechanism does not
+ * hold: the cache matches a *prefix*, and a tool result is appended after
+ * everything already cached. Two identical calls that answer with different
+ * bytes produce two separate messages; neither rewrites the other, and the
+ * prefix in front of both is untouched. Nothing is re-written, so nothing is
+ * re-paid. The surfaces where a moving byte really does force a cache write
+ * are the ones that sit *in* the prefix and get re-sent — the server
+ * `instructions` string, and the tool list (which `load_tools` mutates
+ * mid-session by design). Those are a separate, measurable question; this
+ * file does not answer it.
  *
- * This drives a real MCP `Client` over an in-memory transport (same
- * pattern as tests/server/optional-params-schema-required.test.ts) and
- * calls each tool once against two independent, freshly-booted server
- * instances seeded with identical store state, asserting the serialized
- * text is byte-for-byte identical.
+ * What this IS guarding. A read-only tool that answers the same question
+ * with different bytes makes every consumer that diffs or replays its output
+ * unreadable: the replay-eval baselines (scripts/replay-eval.ts), the
+ * state-trace harness, and a human comparing two runs to see what the index
+ * actually changed. That is reason enough to hold the line, and it is the
+ * reason stated here so a later run does not re-derive the cache claim from
+ * a test name.
  *
- * Deliberately two independent sessions rather than two calls on one
- * client: `SessionJournal`'s dedup/duplicate-warning wrapper (see
- * src/server/tool-gate-helpers.ts `handleDuplicate`) intentionally rewrites
- * a *second* call to the same tool+args within one session into either a
- * compact stub or a response with `_duplicate_warning` appended — a
- * separate, deliberate token-savings mechanism, not the bug this suite
- * targets. That mechanism itself is a real cache-busting source (a repeat
- * call is defined to return different bytes) — see the TRA-858 closing
- * comment for why it's flagged for Lead Engineer rather than changed here.
+ * Method: drives a real MCP `Client` over an in-memory transport (same
+ * pattern as tests/server/optional-params-schema-required.test.ts) and calls
+ * each tool once against two independent, freshly-booted server instances
+ * seeded with identical store state, asserting the serialized text is
+ * byte-for-byte identical. Two sessions rather than two calls on one client,
+ * because `SessionJournal`'s dedup wrapper (src/server/tool-gate-helpers.ts
+ * `handleDuplicate`) deliberately answers a repeat call with a compact stub
+ * or an appended `_duplicate_warning` — a token saving that costs nothing in
+ * cache terms, for the reason above, and is not what this suite measures.
  *
- * Scope: a representative sample of read-only, repeatedly-called tools
- * (search/navigation/health-report surface), not every advertised tool.
- * Tools that are inherently one-shot/mutating by design (`embed_repo`,
- * `graph_snapshot`) legitimately return real timing/point-in-time data and
- * are out of scope — see the TRA-858 closing comment for why.
+ * Out of scope, deliberately: tools whose timestamp is the artifact's
+ * identity rather than decoration — `generate_insights_report` and
+ * `get_suggested_questions` (`generated_at`), `graph_snapshot`
+ * (`captured_at`), `embed_repo` (`duration_ms`), and the trend tools whose
+ * `date` is the data point. Stripping those would delete information a
+ * reader wants and buy nothing.
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -104,8 +113,6 @@ describe('TRA-858: identical repo state produces byte-identical tool output', ()
   const cases: Array<{ name: string; args: Record<string, unknown> }> = [
     { name: 'self_audit', args: {} },
     { name: 'get_project_map', args: { summary_only: true } },
-    { name: 'get_suggested_questions', args: {} },
-    { name: 'generate_insights_report', args: {} },
     { name: 'search', args: { query: 'doA' } },
     { name: 'get_outline', args: { path: 'src/a.ts' } },
     { name: 'get_symbol', args: { symbol_id: 'src/a.ts::doA#function' } },

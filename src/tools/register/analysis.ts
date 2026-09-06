@@ -249,7 +249,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'generate_insights_report',
-    'Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-tier breakdown, and gap counts (dead exports, untested, cycles). Aggregates already-computed metrics into ~2K tokens of Markdown plus a structured payload. Use at the start of a session to orient yourself instead of chaining get_pagerank + get_risk_hotspots + get_edge_bottlenecks + self_audit. Read-only. Returns JSON: { totals, resolution_tiers, god_files, bridges, hotspots, gaps, markdown }.',
+    'Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-tier breakdown, and gap counts (dead exports, untested, cycles). Aggregates already-computed metrics into ~2K tokens of Markdown plus a structured payload. Use at the start of a session to orient yourself instead of chaining get_pagerank + get_risk_hotspots + get_edge_bottlenecks + self_audit. Read-only. Returns JSON: { generated_at, totals, resolution_tiers, god_files, bridges, hotspots, gaps, markdown }.',
     {
       top_n: z.number().int().min(1).max(20).optional().describe('Items per section (default: 5)'),
     },
