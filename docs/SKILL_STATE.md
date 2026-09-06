@@ -82,6 +82,21 @@ long sessions, and the one short session in the set lost. Until the crossover is
 located, paying schema tokens for these seven tools in every session — most of
 which are short — is not justified by anything measured.
 
+### The hint that closes the gap (TRA-763)
+
+Off the default preset also means unreachable: an agent cannot ask for tools it
+cannot see, so the sessions the measurement says would profit never enter the
+loop. The guard hook counts guarded tool calls and, on the 30th, emits a single
+advisory `additionalContext` naming the `load_tools` call above. It fires once
+per session, never blocks, and stays silent when the MCP channel is dead, when
+`TRACE_MCP_PRESET` is already `state`/`full`, or when `state.db` has been
+written since the session started. `TRACE_MCP_STATE_HINT_TURNS` moves the
+threshold; `0` turns the hint off.
+
+Turn 30 is where TRA-724 put the profitable regime, not a round number: over 669
+real sessions past that mark, 667 came out ahead on billed tokens (+33.2% at
+50–99 turns, +68.7% at 200+), while sessions under ~28 turns lost 5.6–8.4%.
+
 ## MCP Prompt: `state`
 
 The tools do not start the loop on their own — an agent has to be told to run

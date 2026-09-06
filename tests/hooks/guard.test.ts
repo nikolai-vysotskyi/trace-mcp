@@ -1544,3 +1544,66 @@ describe.skipIf(process.platform === 'win32')('navigation streak gate (TRA-711)'
     expect(decision.reason ?? '').toMatch(/Agent\(Explore\)/);
   });
 });
+
+/**
+ * StateEngine discovery hint (TRA-763). The trace_state_* tools are off the
+ * default `minimal` preset because TRA-724 measured them losing below ~turn
+ * 28 — which also makes them unreachable in the long sessions where the same
+ * measurement puts them 33-69% ahead. The guard closes that gap with one
+ * advisory nudge, so what matters is that it fires exactly once and only past
+ * the threshold.
+ */
+describe.skipIf(process.platform === 'win32')('guard StateEngine hint (TRA-763)', () => {
+  const projectDir = path.join(TMP_BASE, `trace-mcp-state-hint-${Date.now()}`);
+  let sessionId: string;
+
+  beforeEach(() => {
+    fs.mkdirSync(projectDir, { recursive: true });
+    sessionId = `vitest-state-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    setHeartbeatAlive(projectDir);
+  });
+
+  afterEach(() => {
+    const readsDir = path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
+    if (fs.existsSync(readsDir)) fs.rmSync(readsDir, { recursive: true, force: true });
+    if (fs.existsSync(projectDir)) {
+      const real = fs.realpathSync(projectDir);
+      fs.rmSync(path.join(TMP_BASE, `trace-mcp-alive-${projectHash(real)}`), { force: true });
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  /** One ordinary, non-navigational Bash call — silent unless the hint fires. */
+  function call(extraEnv: Record<string, string> = {}): HookDecision {
+    return runGuard('Bash', { command: 'echo hi' }, sessionId, projectDir, {
+      TRACE_MCP_STATE_HINT_TURNS: '3',
+      ...extraEnv,
+    });
+  }
+
+  it('stays silent below the threshold and nudges once at it', () => {
+    expect(call().context).toBeUndefined();
+    expect(call().context).toBeUndefined();
+
+    const hinted = call();
+    expect(hinted.allowed).toBe(true);
+    expect(hinted.context ?? '').toMatch(/load_tools/);
+    expect(hinted.context ?? '').toMatch(/trace_state_init/);
+
+    // One shot: the next calls are silent again.
+    expect(call().context).toBeUndefined();
+    expect(call().context).toBeUndefined();
+  });
+
+  it('says nothing when the session already advertises the state tools', () => {
+    for (let i = 0; i < 5; i++) {
+      expect(call({ TRACE_MCP_PRESET: 'state' }).context).toBeUndefined();
+    }
+  });
+
+  it('is disabled by setting the threshold to zero', () => {
+    for (let i = 0; i < 5; i++) {
+      expect(call({ TRACE_MCP_STATE_HINT_TURNS: '0' }).context).toBeUndefined();
+    }
+  });
+});

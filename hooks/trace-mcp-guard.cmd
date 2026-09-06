@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-guard v0.15.0
+REM trace-mcp-guard v0.16.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -48,6 +48,14 @@ if "%TOOL_NAME%"=="" goto :allow
 REM Extract session id once — needed by .md doc-tour helper and the code-file branch.
 set "SESSION_ID=default"
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { (Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).session_id } catch { 'default' }"`) do set "SESSION_ID=%%i"
+
+REM StateEngine discovery hint (TRA-763) - parity with trace-mcp-guard.sh.
+REM TRA-724 put the break-even for the trace_state_* loop at turns 25-28; from
+REM turn 30 on, 667 of 669 real sessions came out ahead on billed tokens. The
+REM seven schemas stay off the default `minimal` preset, which leaves the
+REM feature unreachable in exactly those long sessions - so nudge once.
+call :state_hint
+if "%STATE_HINT_FIRED%"=="1" goto :cleanup
 
 REM --- Read ---
 if /i not "%TOOL_NAME%"=="Read" goto :check_grep
@@ -375,6 +383,36 @@ if !NAV_LAST! EQU 0 (
 set /a NAV_COUNT=NAV_COUNT+1 >nul 2>&1
 > "!NAV_DIR!\.nav-streak" echo !NAV_COUNT! !NAV_NOW!
 if !NAV_COUNT! LSS !NAV_MIN! set "NAV_BELOW=1"
+goto :eof
+
+:state_hint
+REM Sets STATE_HINT_FIRED=1 (and prints the advisory JSON) on the call that
+REM crosses the threshold; silent otherwise. One shot per session.
+set "STATE_HINT_FIRED=0"
+set "STATE_TURNS=30"
+if defined TRACE_MCP_STATE_HINT_TURNS set "STATE_TURNS=%TRACE_MCP_STATE_HINT_TURNS%"
+set /a STATE_TURNS=STATE_TURNS+0 >nul 2>&1
+if !STATE_TURNS! LEQ 0 goto :eof
+if /i "%TRACE_MCP_PRESET%"=="state" goto :eof
+if /i "%TRACE_MCP_PRESET%"=="full" goto :eof
+set "STATE_DIR=%TEMP%\trace-mcp-reads-%SESSION_ID%"
+if not exist "!STATE_DIR!" mkdir "!STATE_DIR!" >nul 2>&1
+if exist "!STATE_DIR!\.state-hint-emitted" goto :eof
+set "STATE_COUNT=0"
+if exist "!STATE_DIR!\.session-turn-count" (
+    for /f "usebackq tokens=1" %%a in ("!STATE_DIR!\.session-turn-count") do set "STATE_COUNT=%%a"
+)
+set /a STATE_COUNT=STATE_COUNT+1 >nul 2>&1
+> "!STATE_DIR!\.session-turn-count" echo !STATE_COUNT!
+if !STATE_COUNT! LSS !STATE_TURNS! goto :eof
+> "!STATE_DIR!\.state-hint-emitted" echo 1
+set "STATE_HINT_FIRED=1"
+echo {
+echo   "hookSpecificOutput": {
+echo     "hookEventName": "PreToolUse",
+echo     "additionalContext": "[trace-mcp] This session has passed !STATE_COUNT! tool calls. Past ~30 turns the ReAct transcript is the dominant prompt cost; carrying a compact state block instead measured 67%% lower billed prompt tokens on real sessions of this length. To switch: load_tools({ tools: [\"trace_state_init\", \"trace_state_patch\", \"trace_state_get\", \"trace_state_add_dead_end\"] }), then trace_state_init with the goal and plan steps, and patch it per step instead of restating progress. Ignore this if the task is nearly done."
+echo   }
+echo }
 goto :eof
 
 :is_env_example
