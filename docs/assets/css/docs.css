@@ -183,7 +183,7 @@ body::before {
    the wordmark's 1000 units, so 26px here puts the word at roughly the 13px
    the nav used to set it in. */
 .nav-lockup {
-  height: 26px;
+  height: 28px;
   width: auto;
   display: block;
 }

@@ -20,12 +20,18 @@
 // drops to 200, but the rendered string "trace"/"mcp" inks 675 above the
 // baseline and 210 below.
 //
-//   ROW    mark 885 tall, its centre 300 above the baseline, 275 before the
-//          word. Chosen on a sweep: at 232 the mark is centred on the ink block
-//          including the descender, which reads as hanging — the word has to
-//          drop against the mark for the line to sit straight.
+//   ROW    mark 1220, its centre 300 above the baseline, 275 before the word.
+//          It shipped at 885 and read light against a heavy monospaced word.
+//          Note the mark drives the lockup's own height, so at a fixed placement
+//          height a bigger mark shrinks the word as well as growing the icon —
+//          the two are one knob, not two. 1220 with the placement raised ~7%
+//          lands +16% on the icon and -16% on the word, which is the change that
+//          was asked for; the arithmetic is in DESIGN-WEB §1b.
+//          The 300 is from a separate sweep: at 232 the mark is centred on the
+//          ink block including the descender of `p`, which reads as hanging —
+//          the word has to drop against the mark for the line to sit straight.
 //   STACK  mark 3600 (3.6 em), 800 under it.
-const ROW = { mark: 885, anchor: 300, gap: 275 };
+const ROW = { mark: 1220, anchor: 300, gap: 275 };
 const STACK = { mark: 3600, gap: 800 };
 
 // The step that replaces the hyphen — DESIGN-WEB §1a, in the same units.

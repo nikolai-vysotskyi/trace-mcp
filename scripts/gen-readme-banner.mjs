@@ -226,7 +226,7 @@ function bannerHtml(t, narrow = false) {
   return `<div class="banner${narrow ? ' narrow' : ''}" id="shot">
     <div class="top">
       <div class="brandcol">
-        ${lockup(t, narrow ? 46 : 54)}
+        ${lockup(t, narrow ? 49 : 58)}
         <div class="tagline">trace-mcp indexes what your agent keeps re-reading, and <b>serves the answer instead</b>.</div>
       </div>
       <div class="receipt">
