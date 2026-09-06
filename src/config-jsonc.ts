@@ -6,7 +6,16 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
+import {
+  applyEdits,
+  findNodeAtLocation,
+  type Node,
+  type ModificationOptions,
+  modify,
+  parse,
+  parseTree,
+  visit,
+} from 'jsonc-parser';
 import {
   DEFAULT_CONFIG_JSONC,
   ensureGlobalDirs,
@@ -170,6 +179,61 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
 }
 
 /**
+ * How many per-project sections with no registry entry survive a sweep
+ * (TRA-706). A section runs ~1.7 KB on the reported machine, so this is the
+ * stated ceiling on the unregistered half of `.config.json`: ~170 KB, against
+ * the 1 MB / 591 sections that prompted the issue. Well past any plausible
+ * count of projects a person opens without ever running `add`/`init`.
+ */
+export const MAX_UNREGISTERED_SECTIONS = 100;
+
+/** Exactly the keys `setupProject` writes into a generated section. */
+const GENERATED_SECTION_KEYS = new Set(['root', 'include', 'exclude']);
+
+/**
+ * True when a section carries no evidence of a human having touched it — the
+ * only sections the cap is allowed to evict (TRA-706).
+ *
+ * `projects[...]` is a supported place to configure a project by hand: nothing
+ * requires `trace add` first, so "no registry entry claims it" is not the same
+ * as "nobody needs it". Position in the file is a fine tiebreak among
+ * throwaway sections and a terrible reason to delete someone's settings. So
+ * the cap only reaches a section that still looks exactly like what
+ * `setupProject` generated: no key beyond {@link GENERATED_SECTION_KEYS}, and
+ * no comment inside its range.
+ *
+ * The comment test asks the parser rather than scanning the text: the first
+ * draft looked for `/*` in the section's source and read the `**\/` of a
+ * perfectly ordinary `"include": ["src/**"]` as a comment, which kept every
+ * section and made the cap inert. Both checks still fail *towards keeping* the
+ * section, which is the side to be wrong on.
+ */
+function isGeneratedSection(
+  node: Node | undefined,
+  commentRanges: Array<[number, number]>,
+  value: unknown,
+): boolean {
+  if (!isPlainObject(value)) return false;
+  for (const key of Object.keys(value)) {
+    if (!GENERATED_SECTION_KEYS.has(key)) return false;
+  }
+  if (!node) return true; // nothing to inspect — the key-set check already passed
+  const end = node.offset + node.length;
+  return !commentRanges.some(([start, stop]) => start >= node.offset && stop <= end);
+}
+
+/** Offsets of every comment in the file, collected in one pass. */
+function findCommentRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  visit(text, {
+    onComment: (offset, length) => {
+      ranges.push([offset, offset + length]);
+    },
+  });
+  return ranges;
+}
+
+/**
  * Drop dead per-project sections from `.config.json` (TRA-702).
  *
  * `projects` is the only unbounded map in the global config, and it was the
@@ -190,6 +254,14 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
  *    and an existence check alone never reaches them. An explicitly registered
  *    workdir-shaped root is a deliberate act (`add`/`init`) and is kept.
  *
+ * A third rule (TRA-706) puts a ceiling under the file rather than a heuristic
+ * over it: at most {@link MAX_UNREGISTERED_SECTIONS} sections that no registry
+ * entry claims survive a sweep, oldest first. The two rules above only reach
+ * roots that are gone or workdir-shaped; a runtime that scatters live scratch
+ * checkouts under some other path still grows this map without bound, and each
+ * section costs a reparse on every server start. Registered projects are never
+ * evicted — that map is bounded by deliberate `add`/`init` calls.
+ *
  * Removal is per-key against one in-memory buffer, then a single atomic write.
  * Replacing the whole `projects` object in one edit would be shorter, but it
  * reserialises every *retained* section too and so drops the comments a user
@@ -198,7 +270,7 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
  * `removeProjectConfigJsonc` would keep the comments but re-read and rewrite
  * the file once per section; this keeps both properties.
  */
-export function pruneProjectConfigSections(): string[] {
+export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SECTIONS): string[] {
   // Held across the whole read-edit-write cycle. Without it, a section written
   // by a concurrent `setupProject()` after our read is erased by our write —
   // and if that lands between an agent run's save and its immediate
@@ -211,15 +283,36 @@ export function pruneProjectConfigSections(): string[] {
       const projects = parsed?.projects;
       if (!projects || typeof projects !== 'object') return [];
 
+      // Parsed once for the whole file, not once per section.
+      const tree = parseTree(text);
+      const commentRanges = findCommentRanges(text);
+
       const registered = new Set(listProjects().map((p) => p.root));
       const removed: string[] = [];
+      // Survivors of the two rules above, in file order. `modify` appends a new
+      // key at the end and edits an existing one in place, so this is insertion
+      // order — oldest first, which is what makes the overflow slice below the
+      // right end to cut.
+      const keptUnregistered: string[] = [];
 
       for (const root of Object.keys(projects)) {
         const claimed = registered.has(root);
         const dead = !claimed && !fs.existsSync(root);
         const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
         if (dead || orphanWorkdir) removed.push(root);
+        else if (
+          !claimed &&
+          isGeneratedSection(
+            tree ? findNodeAtLocation(tree, ['projects', root]) : undefined,
+            commentRanges,
+            projects[root],
+          )
+        )
+          keptUnregistered.push(root);
       }
+
+      const overflow = keptUnregistered.length - maxUnregistered;
+      if (overflow > 0) removed.push(...keptUnregistered.slice(0, overflow));
 
       if (removed.length === 0) return []; // don't rewrite a healthy config
 

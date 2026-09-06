@@ -196,6 +196,96 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     expect(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')).toBe(before);
   });
 
+  it('caps unregistered sections at MAX_UNREGISTERED_SECTIONS, dropping the oldest first', () => {
+    // TRA-706: the two rules above only reach roots that are gone or
+    // workdir-shaped. A runtime that scatters live scratch checkouts anywhere
+    // else keeps this map growing, and every section is reparsed on each server
+    // start. The cap is what makes the file's size a stated number rather than
+    // a bet on the heuristics.
+    const { MAX_UNREGISTERED_SECTIONS } = configJsonc;
+    const roots: string[] = [];
+    const projects: Record<string, unknown> = {};
+    for (let i = 0; i < MAX_UNREGISTERED_SECTIONS + 5; i++) {
+      const root = path.join(tmpHome, `scratch-${String(i).padStart(3, '0')}`);
+      fs.mkdirSync(root, { recursive: true }); // live on disk, not workdir-shaped
+      roots.push(root);
+      projects[root] = { root: '.' };
+    }
+    writeConfig(projects);
+
+    // File order is insertion order, so the five evicted are the five written first.
+    expect(configJsonc.pruneProjectConfigSections()).toEqual(roots.slice(0, 5));
+    expect(Object.keys(readProjects())).toEqual(roots.slice(5));
+  });
+
+  it('never evicts a registered project to satisfy the cap', () => {
+    // Registration is a deliberate `add`/`init`, and registry.json already
+    // bounds that set. Only the sections nothing claims are subject to the cap.
+    const { MAX_UNREGISTERED_SECTIONS } = configJsonc;
+    const registered = path.join(tmpHome, 'a-registered-project'); // sorts first
+    fs.mkdirSync(registered, { recursive: true });
+    registerRoot(registered);
+
+    const projects: Record<string, unknown> = { [registered]: { root: '.' } };
+    const scratch: string[] = [];
+    for (let i = 0; i < MAX_UNREGISTERED_SECTIONS + 1; i++) {
+      const root = path.join(tmpHome, `scratch-${String(i).padStart(3, '0')}`);
+      fs.mkdirSync(root, { recursive: true });
+      scratch.push(root);
+      projects[root] = { root: '.' };
+    }
+    writeConfig(projects);
+
+    expect(configJsonc.pruneProjectConfigSections()).toEqual([scratch[0]]);
+    expect(Object.keys(readProjects())).toEqual([registered, ...scratch.slice(1)]);
+  });
+
+  it('never evicts a section a human has touched, however old it is', () => {
+    // TRA-706 review finding. `projects[...]` is a supported place to configure
+    // a project by hand — nothing requires `trace add` first — so "no registry
+    // entry claims it" does not mean "nobody needs it". Position in the file is
+    // a fine tiebreak among throwaway sections and a terrible reason to delete
+    // someone's settings, so the cap only reaches sections that still look
+    // exactly like what `setupProject` generated.
+    const { MAX_UNREGISTERED_SECTIONS } = configJsonc;
+    const tuned = path.join(tmpHome, 'aaa-hand-configured'); // written first = oldest
+    const commented = path.join(tmpHome, 'aab-hand-commented');
+    for (const root of [tuned, commented]) fs.mkdirSync(root, { recursive: true });
+
+    const generated: string[] = [];
+    for (let i = 0; i < MAX_UNREGISTERED_SECTIONS + 2; i++) {
+      const root = path.join(tmpHome, `scratch-${String(i).padStart(3, '0')}`);
+      fs.mkdirSync(root, { recursive: true });
+      generated.push(root);
+    }
+
+    fs.mkdirSync(path.dirname(GLOBAL_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(
+      GLOBAL_CONFIG_PATH,
+      `{
+  "projects": {
+    ${JSON.stringify(tuned)}: { "root": ".", "ai": { "enabled": true } },
+    ${JSON.stringify(commented)}: {
+      // indexing the fixtures on purpose
+      "root": ".",
+      "include": ["fixtures/**"]
+    },
+${generated.map((r) => `    ${JSON.stringify(r)}: { "root": ".", "include": ["src/**"] }`).join(',\n')}
+  }
+}
+`,
+    );
+
+    // Four candidates over the cap, but only the generated ones may go.
+    expect(configJsonc.pruneProjectConfigSections()).toEqual(generated.slice(0, 2));
+    const left = Object.keys(readProjects());
+    expect(left).toContain(tuned);
+    expect(left).toContain(commented);
+    expect(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')).toContain(
+      '// indexing the fixtures on purpose',
+    );
+  });
+
   it('leaves a config with no dead sections untouched', () => {
     const live = fs.mkdtempSync(path.join(tmpHome, 'live-'));
     writeConfig({ [live]: { root: '.' } });

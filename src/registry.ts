@@ -68,6 +68,19 @@ export interface RegistryEntry {
    * Multica ephemeral checkout) — see `findRegisteredEntryByRemote` (TRA-38).
    */
   remoteIdentity?: string;
+  /**
+   * True when the user registered this root deliberately (`trace add` /
+   * `trace init`), as opposed to the implicit auto-registration `serve` does
+   * for whatever directory it was started in. Only the implicit class is
+   * subject to {@link sweepImplicitProjects}'s cap (TRA-706); a deliberate
+   * registration is kept until the user removes it.
+   *
+   * Absent on rows written before TRA-706. Those are treated as implicit — the
+   * cap only reaches them once there are more than `max` of them, and the
+   * least recently indexed ones go first, so a project in daily use survives
+   * regardless of when it was registered.
+   */
+  explicit?: boolean;
 }
 
 interface Registry {
@@ -177,7 +190,7 @@ function claimSharedDb(siblingDbPath: string, absRoot: string): boolean {
 
 export function registerProject(
   root: string,
-  opts?: { type?: 'single' | 'multi-root'; children?: string[] },
+  opts?: { type?: 'single' | 'multi-root'; children?: string[]; explicit?: boolean },
 ): RegistryEntry {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
@@ -187,9 +200,26 @@ export function registerProject(
   // explicit multi-root `add`/`init`, which is a deliberate act and stays
   // persistent even for a workdir-shaped path.
   const ephemeral = !opts && isEphemeralProjectRoot(absRoot);
+  // TRA-706: a multi-root `opts` has only ever come from `add`/`init`, so its
+  // presence is itself the deliberate signal; `explicit` carries the same
+  // signal for the single-root form of those commands.
+  const explicit = Boolean(opts && (opts.explicit || opts.type || opts.children));
 
   const existing = ephemeral ? _ephemeralEntries.get(absRoot) : reg.projects[absRoot];
-  if (existing && !opts) {
+  // A multi-root `opts` still falls through and re-registers, as it always
+  // has; `explicit` on its own must not, or `trace add` on an already-known
+  // project would silently rebuild its dbPath and reset `addedAt`.
+  if (existing && !opts?.type && !opts?.children) {
+    // TRA-706: promote an implicitly auto-registered row the first time the
+    // user names it deliberately — that is what takes it out of the capped
+    // class for good.
+    // Mutated in place: `existing` is the very object `reg.projects` holds, so
+    // there is nothing to assign back — and assigning to a computed property
+    // name derived from a path is what `js/remote-property-injection` flags.
+    if (explicit && !existing.explicit && !ephemeral) {
+      existing.explicit = true;
+      saveRegistry(reg);
+    }
     // Already registered: the dbPath decision was made on a previous run, but
     // this process is about to open that DB, so re-announce the holder (TRA-304)
     // — that is what stops a *sibling* checkout from sharing it while we're up.
@@ -250,6 +280,7 @@ export function registerProject(
     ...(remoteIdentity && { remoteIdentity }),
     ...(opts?.type && { type: opts.type }),
     ...(opts?.children && { children: opts.children }),
+    ...(explicit && { explicit: true }),
   };
 
   // TRA-396: process-local only — never written to registry.json.
@@ -611,6 +642,48 @@ export function pruneStaleProjects(): string[] {
   }
 
   if (removed.length > 0) saveRegistry(reg);
+  return removed;
+}
+
+/**
+ * Cap on implicitly registered projects (TRA-706).
+ *
+ * `serve` auto-registers whatever directory it was started in, so every agent
+ * run against a fresh checkout adds a registry row *and* a `.config.json`
+ * section — and both files are read on every server start. TRA-702's sweeps
+ * collect the roots that are gone or that match the known one-shot workdir
+ * layout; neither reaches a runtime that scatters live scratch checkouts under
+ * some other path shape, which is how the reported machine reached 1 MB.
+ *
+ * This is the ceiling that does not depend on recognising the layout: at most
+ * `max` rows the user never asked for, least recently indexed first. A row the
+ * user created with `trace add` / `trace init` carries `explicit` and is never
+ * touched. Eviction only unregisters — the index DB and the directory stay, so
+ * the cost of getting it wrong is one re-registration on next open.
+ */
+export const MAX_IMPLICIT_PROJECTS = 100;
+
+/** Sort key for the cap: last indexed if we ever indexed it, else registration time. */
+function projectRecency(entry: RegistryEntry): number {
+  const stamp = Date.parse(entry.lastIndexed ?? entry.addedAt);
+  return Number.isNaN(stamp) ? 0 : stamp;
+}
+
+/**
+ * Deregister implicit projects beyond {@link MAX_IMPLICIT_PROJECTS}, oldest
+ * use first. Returns the roots removed. See the constant for why.
+ */
+export function sweepImplicitProjects(max = MAX_IMPLICIT_PROJECTS): string[] {
+  const reg = loadRegistry();
+  const implicit = Object.values(reg.projects).filter(
+    (e) => !e.explicit && e.type !== 'multi-root' && !e.children?.length,
+  );
+  if (implicit.length <= max) return [];
+
+  implicit.sort((a, b) => projectRecency(a) - projectRecency(b));
+  const removed = implicit.slice(0, implicit.length - max).map((e) => e.root);
+  for (const root of removed) delete reg.projects[root];
+  saveRegistry(reg);
   return removed;
 }
 
