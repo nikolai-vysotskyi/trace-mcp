@@ -17,16 +17,16 @@
  *    `sweepOrphanedSessionDbs` removes leftovers whose owning process is
  *    gone, using the `server_state.pid` row each backend writes at startup.
  */
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { logger } from "../../logger.js";
+import fs from 'node:fs';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import { logger } from '../../logger.js';
 
 /** Matches `<anything>-session-<8 hex>.db` (but not -wal/-shm sidecars). */
 const SESSION_DB_RE = /-session-[0-9a-f]{8}\.db$/;
 
 /** Sidecar suffixes removed together with a session DB. */
-const SIDECARS = ["", "-wal", "-shm"];
+const SIDECARS = ['', '-wal', '-shm'];
 
 /**
  * Age threshold for deleting session DBs whose owner PID cannot be
@@ -42,7 +42,7 @@ function processIsAlive(pid: number): boolean {
     return true;
   } catch (e) {
     // EPERM = exists but not ours — alive.
-    return (e as NodeJS.ErrnoException).code === "EPERM";
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
   }
 }
 
@@ -51,9 +51,9 @@ function readOwnerPid(dbPath: string): number | null {
   let db: Database.Database | null = null;
   try {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
-    const row = db
-      .prepare(`SELECT value FROM server_state WHERE key = 'pid'`)
-      .get() as { value?: string } | undefined;
+    const row = db.prepare(`SELECT value FROM server_state WHERE key = 'pid'`).get() as
+      | { value?: string }
+      | undefined;
     if (!row?.value) return null;
     const pid = Number.parseInt(row.value, 10);
     return Number.isInteger(pid) ? pid : null;
@@ -71,8 +71,7 @@ function readOwnerPid(dbPath: string): number | null {
 /** Rows in `files`, or 0 when the table is missing/unreadable (fresh DB). */
 function countIndexedFiles(db: Database.Database): number {
   try {
-    const row = db.prepare("SELECT COUNT(*) AS n FROM files").get() as
-      { n?: number } | undefined;
+    const row = db.prepare('SELECT COUNT(*) AS n FROM files').get() as { n?: number } | undefined;
     return row?.n ?? 0;
   } catch {
     return 0;
@@ -105,7 +104,7 @@ export async function seedSessionDbFromShared(
   } catch (err) {
     logger.warn(
       { sharedDbPath, error: String(err) },
-      "Session DB seeding failed — falling back to a fresh index",
+      'Session DB seeding failed — falling back to a fresh index',
     );
     for (const suffix of SIDECARS) {
       try {
@@ -156,8 +155,7 @@ export function sweepOrphanedSessionDbs(indexDir: string): {
       // Unreadable owner (corrupt, locked, ancient schema) — only reclaim
       // when the file is old enough that a live session is implausible.
       try {
-        orphaned =
-          Date.now() - fs.statSync(dbPath).mtimeMs > UNKNOWN_OWNER_MAX_AGE_MS;
+        orphaned = Date.now() - fs.statSync(dbPath).mtimeMs > UNKNOWN_OWNER_MAX_AGE_MS;
       } catch {
         orphaned = false;
       }
@@ -177,7 +175,7 @@ export function sweepOrphanedSessionDbs(indexDir: string): {
   }
 
   if (removed > 0) {
-    logger.info({ indexDir, removed, scanned }, "Swept orphaned session DBs");
+    logger.info({ indexDir, removed, scanned }, 'Swept orphaned session DBs');
   }
   return { scanned, removed };
 }
