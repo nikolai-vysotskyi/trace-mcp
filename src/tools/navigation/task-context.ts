@@ -18,6 +18,7 @@ import { computePageRank } from '../../scoring/pagerank.js';
 import { assembleStructuredContext } from '../../scoring/structured-assembly.js';
 import { readByteRange } from '../../utils/source-reader.js';
 import { tokenizeDescription } from './context.js';
+import { minMax } from '../../util/minmax.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -295,8 +296,8 @@ export async function getTaskContext(
     }
 
     // Normalize ranks to scores (0-1)
-    const minRank = Math.min(...ftsRows.map((r) => r.rank));
-    const maxRank = Math.max(...ftsRows.map((r) => r.rank));
+    const minRank = minMax(ftsRows.map((r) => r.rank)).min;
+    const maxRank = minMax(ftsRows.map((r) => r.rank)).max;
     const spread = maxRank - minRank || 1;
 
     seeds = ftsRows.slice(0, seedLimit).map((r) => ({

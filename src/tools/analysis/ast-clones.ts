@@ -18,6 +18,7 @@ import type { Tree } from 'web-tree-sitter';
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 import { getParser, type TSNode } from '../../parser/tree-sitter.js';
+import { minMax } from '../../util/minmax.js';
 
 /** Parsed tree-sitter syntax tree — owns a WASM heap that must be `delete()`d. */
 type TSTree = Tree;
@@ -364,7 +365,7 @@ export async function detectAstClones(
     // LOC sanity filter: a Type-2 clone group should have members of roughly
     // the same size. Drop any member whose LOC differs from the smallest by
     // more than 2x — they slipped in via a hash collision, not real cloning.
-    const minMemberLoc = Math.min(...members.map((m) => Math.max(1, m.loc)));
+    const minMemberLoc = minMax(members.map((m) => Math.max(1, m.loc))).min;
     const sized = members.filter((m) => Math.max(1, m.loc) <= minMemberLoc * 2);
     if (sized.length < 2) continue;
 
@@ -385,7 +386,7 @@ export async function detectAstClones(
     groups.push({
       hash,
       size: sized.length,
-      loc: Math.max(...sized.map((m) => m.loc)),
+      loc: minMax(sized.map((m) => m.loc)).max,
       symbols: sized.map((m) => ({
         symbol_id: m.symbol_id,
         name: m.name,

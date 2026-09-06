@@ -11,6 +11,7 @@ import { logger } from '../../logger.js';
 import { isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 import { isGitRepo } from '../git/git-analysis.js';
 import { computeCyclomatic, computeMaxNesting } from './complexity.js';
+import { minMax } from '../../util/minmax.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -152,7 +153,7 @@ function computeSnapshot(content: string, commitHash: string, date: string): Com
     maxNesting = Math.max(maxNesting, computeMaxNesting(block));
   }
 
-  const maxCc = Math.max(...complexities);
+  const maxCc = minMax(complexities).max;
   const avgCc =
     Math.round((complexities.reduce((a, b) => a + b, 0) / complexities.length) * 100) / 100;
 
@@ -193,12 +194,12 @@ export function getComplexityTrend(
 
   let currentSnapshot: ComplexitySnapshot;
   if (currentSymbols.length > 0) {
-    const maxCc = Math.max(...currentSymbols.map((s) => s.cyclomatic));
+    const maxCc = minMax(currentSymbols.map((s) => s.cyclomatic)).max;
     const avgCc =
       Math.round(
         (currentSymbols.reduce((sum, s) => sum + s.cyclomatic, 0) / currentSymbols.length) * 100,
       ) / 100;
-    const maxNest = Math.max(...currentSymbols.map((s) => s.max_nesting));
+    const maxNest = minMax(currentSymbols.map((s) => s.max_nesting)).max;
     currentSnapshot = {
       date: new Date().toISOString().split('T')[0],
       commit: 'HEAD',
