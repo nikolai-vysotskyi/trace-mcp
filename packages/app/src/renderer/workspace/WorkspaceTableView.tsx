@@ -38,6 +38,8 @@ import {
 
 export interface WorkspaceTableViewProps {
   projects: ProjectViewModel[];
+  /** Disambiguated display label per root — see Workspace.tsx (TRA-1058). */
+  labelByRoot: Map<string, string>;
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
@@ -183,6 +185,7 @@ function SelectAllCheckbox({
 
 interface RowProps {
   project: ProjectViewModel;
+  label: string;
   selected: boolean;
   cursored: boolean;
   canMutate: boolean;
@@ -198,6 +201,7 @@ interface RowProps {
 
 function Row({
   project,
+  label,
   selected,
   cursored,
   canMutate,
@@ -243,7 +247,7 @@ function Row({
         <Checkbox
           checked={selected}
           onChange={(next) => onSelectChange(project.root, next)}
-          aria-label={t('selectProject', { name: project.name })}
+          aria-label={t('selectProject', { name: label })}
         />
       </td>
 
@@ -251,8 +255,8 @@ function Row({
         className="px-3 max-w-[240px]"
         style={{ color: 'var(--label)', ...stickyCell('left', SELECT_COL_W, bg) }}
       >
-        <div className="truncate font-medium" title={project.name}>
-          {project.name}
+        <div className="truncate font-medium" title={label}>
+          {label}
         </div>
         {/* Head-truncated: sibling checkouts differ in the tail, not the head. */}
         <ProjectPath root={project.root} className="text-[11px] text-[var(--label-secondary)]" />
@@ -364,6 +368,7 @@ function Row({
 
 export function WorkspaceTableView({
   projects,
+  labelByRoot,
   sortKey,
   sortDir,
   onSort,
@@ -543,6 +548,7 @@ export function WorkspaceTableView({
             <Row
               key={p.root}
               project={p}
+              label={labelByRoot.get(p.root) ?? p.name}
               selected={selected.has(p.root)}
               cursored={start + i === cursor}
               canMutate={canMutate}

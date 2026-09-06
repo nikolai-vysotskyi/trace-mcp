@@ -31,6 +31,7 @@ function renderTable() {
   const { container } = render(
     <WorkspaceTableView
       projects={[PROJECT]}
+      labelByRoot={new Map([[PROJECT.root, PROJECT.name]])}
       sortKey="name"
       sortDir="asc"
       onSort={() => {}}

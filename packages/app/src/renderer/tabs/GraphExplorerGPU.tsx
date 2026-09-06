@@ -3691,6 +3691,21 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           background: var(--fill-quaternary);
           outline: none;
         }
+        /* Search results are content (file matches), not chrome — over the
+           canvas's own dark labels-on-light-tiles, any transparency turns the
+           list into a double exposure (TRA-1058 #4). Opaque, same recipe as
+           .ws-ctx-menu. z-index above the Filter popover (60): the two aren't
+           mutually exclusive, and a buried "Select all N matches" is worse
+           than a buried filter panel the user just opened and can re-open. */
+        .cosmos-gpu-search-results {
+          position: absolute;
+          z-index: 65;
+          background: var(--surface-raised);
+          border: 0.5px solid var(--separator);
+          box-shadow: var(--shadow-panel);
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+        }
         /* Legend — bottom-left, opposite the stats readout so neither moves
            when the other grows. */
         .cosmos-gpu-legend {
@@ -3958,7 +3973,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           </div>
           {searchMatches.length > 0 && (
             <ul
-              className="viz-glass absolute z-40 mt-1.5 w-80 max-h-80 overflow-y-auto"
+              className="cosmos-gpu-search-results mt-1.5 w-80 max-h-80 overflow-y-auto"
               style={{ borderRadius: 'var(--radius-popover)', padding: 'var(--space-4)' }}
             >
               {searchTotal > 1 && (
