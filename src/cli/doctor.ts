@@ -16,9 +16,11 @@ import {
   getLauncherConfigPath,
   getLauncherDir,
   getLauncherPath,
+  isBroken,
   readInstalledLauncherVersion,
   readLauncherConfig,
 } from '../init/launcher.js';
+import { checkRegisteredLaunchers, type RegisteredLauncherCheck } from '../init/launcher-health.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
 import {
@@ -923,6 +925,13 @@ interface LauncherReport {
   nodeExists: boolean;
   cliExists: boolean;
   executionCheck: { ok: boolean; detail: string };
+  /**
+   * The paths MCP clients are actually registered at. The execution check above
+   * only ever spawns the path we install to, so a client frozen on some other
+   * path — the pre-rename legacy one, a hand-edited entry — can be dead while
+   * everything here reads healthy (TRA-913).
+   */
+  registeredPaths: RegisteredLauncherCheck[];
   ok: boolean;
 }
 
@@ -961,14 +970,17 @@ function diagnoseLauncher(opts: { json?: boolean }): 0 | 1 {
     nodeExists,
     cliExists,
     executionCheck,
+    registeredPaths: checkRegisteredLaunchers(),
     ok: false,
   };
+  const brokenPaths = report.registeredPaths.filter((c) => isBroken(c.status));
   report.ok =
     installedVersion === LAUNCHER_VERSION &&
     report.configExists &&
     nodeExists &&
     cliExists &&
-    executionCheck.ok;
+    executionCheck.ok &&
+    brokenPaths.length === 0;
 
   if (opts.json) {
     console.log(JSON.stringify(report, null, 2));
@@ -992,11 +1004,21 @@ function diagnoseLauncher(opts: { json?: boolean }): 0 | 1 {
     '',
     `Execution check:    ${executionCheck.ok ? 'OK' : 'FAIL'}`,
     `  ${executionCheck.detail}`,
+    '',
+    `Registered paths:   ${brokenPaths.length === 0 ? 'OK' : `${brokenPaths.length} BROKEN`}`,
+    ...report.registeredPaths.map(
+      (c) => `  [${c.status}] ${shortPath(c.path)} — ${c.detail} (${c.client})`,
+    ),
   ];
   p.note(lines.join('\n'), report.ok ? 'Launcher healthy' : 'Launcher issues detected');
 
   if (report.ok) {
     p.outro('MCP clients can spawn trace-mcp via the stable shim.');
+  } else if (brokenPaths.length > 0) {
+    p.outro(
+      'A registered launcher path cannot be spawned — clients fail before the shim runs, ' +
+        'so launcher.log stays empty. Fix: run `trace-mcp init`.',
+    );
   } else {
     p.outro('Fix: run `trace-mcp init` to reinstall the launcher and refresh config.');
   }

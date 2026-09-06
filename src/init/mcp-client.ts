@@ -692,7 +692,7 @@ function writeFactoryJsonEntry(
  * `m` so `^` anchors to line starts when tested against full file content,
  * not just the single already-isolated lines stripCodexTomlSection tests.
  */
-function codexSectionHeaderPattern(key: string): RegExp {
+export function codexSectionHeaderPattern(key: string): RegExp {
   return new RegExp(`^\\[mcp_servers\\s*\\.\\s*["']?${key}["']?(\\s*\\.[^\\]]*)?\\s*\\]`, 'm');
 }
 
@@ -840,7 +840,7 @@ function detectEnforcementLevel(name: DetectedMcpClient['name']): EnforcementLev
 }
 
 /** Every client we know how to surface in `clients status`. */
-const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
+export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'claude-code',
   'claw-code',
   'claude-desktop',
@@ -1067,7 +1067,7 @@ export function getMcpClientStatuses(
   });
 }
 
-function getConfigPath(
+export function getConfigPath(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
