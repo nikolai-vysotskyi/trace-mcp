@@ -1,58 +1,63 @@
 /**
- * Resolve C# `using` directive edges to the file declaring the namespace or
- * type (TRA-1027 — next after Ruby in the C#/Kotlin/Swift/Elixir/Lua backlog
- * `import-capable-languages.ts` names as "extract but nothing consumes").
+ * Resolve C# `using` directive edges to the file declaring the specific type
+ * a directive names (TRA-1027 — next after Ruby in the C#/Kotlin/Swift/
+ * Elixir/Lua backlog `import-capable-languages.ts` names as "extract but
+ * nothing consumes").
  *
- * Unlike Java, C# does not force the namespace to mirror the directory
- * layout — `namespace Acme.Store` can live at any path — so suffix-matching
- * the specifier against file paths (the Java/Go approach) would silently
- * under-resolve any project that doesn't follow the folder-per-namespace
- * convention. Resolution instead uses the symbols the plugin already
- * extracts (`namespace` from `CSharpLanguagePlugin.extractNamespace`, plus
- * `class`/`interface`/`enum`/`type` for the type-level cases below), each
+ * A plain `using Acme.Store;` is deliberately left unresolved — it does not
+ * mean the importing file depends on every file that happens to declare
+ * `namespace Acme.Store`, it only makes unqualified names from that
+ * namespace available. Two rounds of review rejected file-edges for this
+ * form, for two separate reasons that both hold regardless of how many files
+ * declare the namespace:
+ *
+ * - **Volume:** a real repo (Newtonsoft.Json) averaged 86 resolved edges per
+ *   importing file when this was tried, because C# namespaces routinely span
+ *   most of a codebase — nothing like Java's `import a.b.*`, where a
+ *   directory-scoped package keeps the fan-out small and wildcard imports are
+ *   rare in idiomatic code to begin with.
+ * - **Even the single-declarer case is unsound incrementally:** resolving to
+ *   the one file when a namespace has exactly one declarer looked safe in
+ *   isolation, but review found it depends on the rest of the codebase in a
+ *   way the incremental resolver can't track — adding a second file to that
+ *   namespace elsewhere leaves the old "unique" edge stale (nothing re-checks
+ *   an unrelated, unchanged file just because some other file made its
+ *   namespace ambiguous), and the reverse transition never creates the edge
+ *   at all without a full reindex either. The edge's existence would depend
+ *   on file-count trivia elsewhere in the repo, not on anything the
+ *   `using` directive itself said.
+ *
+ * Resolution instead only trusts forms that name a **specific type**, via the
+ * `class`/`interface`/`enum`/`type` symbols the plugin already extracts, each
  * with `fqn` set to its dotted path:
  *
- *     using Acme.Store;             // → the file declaring `namespace Acme.Store`,
- *                                    //   only when exactly one file declares it
- *     using static Acme.Store.Ids;  // → only the file declaring type `Acme.Store.Ids`
- *     using Alias = Acme.Store.Db;  // → only the file declaring type `Acme.Store.Db`
+ *     using Acme.Store;             // → unresolved (see above)
+ *     using static Acme.Store.Ids;  // → the file(s) declaring type `Acme.Store.Ids`
+ *     using Alias = Acme.Store.Db;  // → the file(s) declaring type `Acme.Store.Db`
  *
- * A namespace is not a directory: `using Acme.Store.Billing` does not import
- * `Acme.Store`, so an exact-namespace or exact-type match is required before
- * falling back — trimming to a *namespace* match on a miss would treat a
- * plain `using` of an unindexed sub-namespace as if it named the parent,
- * linking to every file in it. The one place trimming is still safe is a
- * type miss, where it recovers a nested type's enclosing type.
+ * A type FQN can legitimately map to more than one file for a `partial`
+ * type — every piece is a real declaring file for it, unlike an unrelated
+ * namespace fan-out, so all of them stay targets. A miss on an exact type
+ * FQN falls back to trimming the last segment, recovering a nested type's
+ * enclosing type (`using static Acme.Store.Outer.Inner;`). A specifier
+ * matching no type (BCL, NuGet package, or a plain namespace) simply fails to
+ * resolve rather than inventing a node.
  *
- * A plain namespace import naming more than one declaring file is left
- * unresolved rather than fanned out to all of them (review caught this: a
- * real repo averaged 86 resolved edges per importing file, because C#
- * namespaces routinely span most of a codebase — nothing like Java's
- * `import a.b.*`, where a directory-scoped package keeps the fan-out small
- * and wildcard imports are rare in idiomatic code to begin with). A file
- * that is the sole declarer of a namespace is still a precise target, same
- * as any other language's plain import. The fully precise fix — resolving
- * only the types a file's body actually references — is real usage-tracking
- * and belongs in its own pass, not this one.
- *
- * A specifier matching neither a namespace nor a type (BCL, NuGet package)
- * simply fails to resolve rather than inventing a node.
- *
- * Incremental reindexing: a C# file's declared namespace/type identity is
- * ordinary file content, not derived from its path, so it can change without
- * the file moving — unlike Java/Go, where the resolver never even reads the
- * `package` statement. If only the declaring file gets reindexed (its own
- * `namespace` edited), files that import it are untouched this batch and
- * never get a chance to notice their edge is now wrong. This resolver closes
- * that gap for the files that DO get reindexed here: for every C# file in
+ * Incremental reindexing: a C# file's declared type identity is ordinary
+ * file content, not derived from its path, so it can change (renamed,
+ * removed) without the file moving — unlike Java/Go, where the resolver
+ * never even reads the `package` statement. If only the declaring file gets
+ * reindexed, files that import it are untouched this batch and never get a
+ * chance to notice their edge is now wrong. This resolver closes that gap for
+ * the files that DO get reindexed here: for every C# file in
  * `state.changedFileIds` — deliberately wider than `pendingImports`, which
  * only has an entry for a file that itself has `using` directives, and a
- * namespace-declaring file usually doesn't — its current incoming `imports`
- * edges are re-validated against the fresh namespace/type maps, and any
- * whose stored specifier no longer resolves to it are deleted. A file that
- * never gets reindexed again keeps a stale edge until it does — full
- * self-healing needs a full reindex, which already recomputes every C# file's
- * imports from scratch.
+ * type-declaring file need not have any — its current incoming `imports`
+ * edges are re-validated against the fresh type map, and any whose stored
+ * specifier no longer resolves to it are deleted. A file that never gets
+ * reindexed again keeps a stale edge until it does — full self-healing needs
+ * a full reindex, which already recomputes every C# file's imports from
+ * scratch.
  */
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
@@ -70,8 +75,8 @@ function addTo(map: Map<string, number[]>, key: string, id: number): void {
 export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeScope): void {
   // WHY: driven by `state.changedFileIds` — wider than `state.pendingImports`,
   // which only has an entry for a file that itself has `using` directives. A
-  // file that only DECLARES a namespace (no imports of its own) still needs
-  // to be in the revalidation loop below when its declaration changes.
+  // file that only DECLARES a type (no imports of its own) still needs to be
+  // in the revalidation loop below when its declaration changes.
   void _scope;
   const { store } = state;
   if (state.changedFileIds.size === 0) return;
@@ -81,23 +86,21 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   const hasCSharp = changedFileIds.some((id) => fileMap.get(id)?.language === 'csharp');
   if (!hasCSharp) return;
 
-  // Namespace name → the files declaring it via a `namespace` block.
-  const byNamespace = new Map<string, number[]>();
   // Type FQN → the file(s) declaring that class/struct/record/interface/enum/delegate.
   const byType = new Map<string, number[]>();
   const rows = store.db
     .prepare(
-      `SELECT s.file_id AS fileId, s.fqn AS fqn, s.kind AS kind
+      `SELECT s.file_id AS fileId, s.fqn AS fqn
        FROM symbols s
        JOIN files f ON f.id = s.file_id
        WHERE f.language = 'csharp' AND s.fqn IS NOT NULL
-         AND s.kind IN ('namespace', 'class', 'interface', 'enum', 'type')`,
+         AND s.kind IN ('class', 'interface', 'enum', 'type')`,
     )
-    .all() as Array<{ fileId: number; fqn: string; kind: string }>;
-  for (const { fileId, fqn, kind } of rows) {
-    addTo(kind === 'namespace' ? byNamespace : byType, fqn, fileId);
+    .all() as Array<{ fileId: number; fqn: string }>;
+  for (const { fileId, fqn } of rows) {
+    addTo(byType, fqn, fileId);
   }
-  if (byNamespace.size === 0 && byType.size === 0) return;
+  if (byType.size === 0) return;
 
   const importsEdgeType = store.db
     .prepare('SELECT id FROM edge_types WHERE name = ?')
@@ -105,10 +108,7 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   if (!importsEdgeType) return;
 
   const nodeIds = new Map<number, number>();
-  const allTargetFileIds = Array.from(byNamespace.values())
-    .concat(Array.from(byType.values()))
-    .flat()
-    .concat(changedFileIds);
+  const allTargetFileIds = Array.from(byType.values()).flat().concat(changedFileIds);
   const CHUNK = 500;
   for (let i = 0; i < allTargetFileIds.length; i += CHUNK) {
     for (const [k, v] of store.getNodeIdsBatch('file', allTargetFileIds.slice(i, i + CHUNK))) {
@@ -124,18 +124,12 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   );
 
   /**
-   * `Acme.Store` resolves as a namespace directly, but only when it names
-   * exactly one file — more than one is the ambiguous "which of these did
-   * you actually mean" case this resolver declines to guess (see file
-   * header). `using static Acme.Store.Ids` and aliased `using X =
-   * Acme.Store.Ids` name a type, so try an exact type match before
-   * trimming — and trim only into `byType` (a nested type's enclosing
-   * type), never back into `byNamespace`: a miss on a real namespace means
-   * an external/unindexed sub-namespace, not the parent.
+   * `using static Acme.Store.Ids` and aliased `using X = Acme.Store.Ids`
+   * name a type directly. A miss trims the last segment to recover a nested
+   * type's enclosing type. A plain namespace import never matches here — see
+   * the file header for why that's deliberate, not a gap.
    */
   const resolve = (specifier: string): number[] => {
-    const ns = byNamespace.get(specifier);
-    if (ns && ns.length === 1) return ns;
     const type = byType.get(specifier);
     if (type) return type;
     const cut = specifier.lastIndexOf('.');
@@ -147,10 +141,10 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
   let pruned = 0;
 
   store.db.transaction(() => {
-    // A file's declared namespace/type identity is content, not path — it
-    // can change without the file moving, and unlike the source-driven loop
-    // below, importers that weren't re-extracted this batch never revisit
-    // it. Re-validate every C# file's *incoming* `imports` edges here so a
+    // A file's declared type identity is content, not path — it can change
+    // without the file moving, and unlike the source-driven loop below,
+    // importers that weren't re-extracted this batch never revisit it.
+    // Re-validate every C# file's *incoming* `imports` edges here so a
     // rename at least stops lying, even when it can't insert the new one
     // without re-extracting the importer.
     const deleteStmt = store.db.prepare('DELETE FROM edges WHERE id = ?');

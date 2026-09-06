@@ -4,24 +4,24 @@
  * Same gap TRA-483 closed for Java: the C# plugin extracts `using` directives
  * into `metadata.from` (`extractImportEdges`), but no pipeline pass consumed
  * them, so a C# repo indexed with zero import edges even though the matrix
- * claimed none. Unlike Java, C# namespaces don't have to mirror the directory
- * layout, so resolution matches against declared `namespace`/type symbols
- * instead of path suffixes — these tests put `Store.cs` at a path that would
- * break suffix matching to prove that.
+ * claimed none. Unlike Java, resolution only trusts forms that name a
+ * specific type — a plain `using Namespace;` is deliberately never resolved
+ * to a file edge, regardless of how many (or how few) files declare that
+ * namespace. See the resolver's file header for why: two rounds of review
+ * rejected namespace-level file edges, first for volume (a real repo averaged
+ * 86 resolved edges per importing file) and then because even the
+ * single-declarer case depends on unrelated files elsewhere in the repo in a
+ * way the incremental resolver can't track soundly.
  *
- * Several shapes below exist specifically because two rounds of review caught
- * the earlier versions getting them wrong:
- * - a namespace with more than one file in it (`Acme.Store` spans `Store.cs`
- *   and `Db.cs`), so a plain `using` of it can be checked to resolve to
- *   NEITHER file (ambiguous — see the resolver's file header) while a
- *   type-level `using` of a specific type in that same namespace still
- *   resolves precisely;
- * - a namespace with exactly one file (`Acme.Config`), so a plain `using` of
- *   an unambiguous namespace can be checked to still resolve;
- * - an unindexed sub-namespace (`Acme.Store.Missing`), so trimming a miss can
- *   be checked to never fall back onto the parent namespace;
+ * Several shapes below exist specifically because review caught earlier
+ * versions getting them wrong:
+ * - a plain namespace import with only one declaring file (`Acme.Config`)
+ *   must still stay unresolved — the earlier version treated this as
+ *   precise, which review found unsound;
+ * - an unindexed sub-namespace (`Acme.Store.Missing`), so trimming a miss
+ *   can be checked to never fall back onto a namespace;
  * - a `using` inside a namespace block (not just at the top of the file);
- * - an incremental reindex that renames a namespace without touching the
+ * - an incremental reindex that renames a type without touching the
  *   importing file, so a stale edge can be checked to get pruned rather than
  *   surviving forever.
  */
@@ -58,8 +58,18 @@ function importTargets(store: Store, sourcePath: string): Set<string> {
   return targets;
 }
 
-const FILES: Record<string, string> = {
-  'src/App.cs': `using System;
+async function indexFixture(files: Record<string, string>, prefix: string) {
+  const fixtureDir = createTmpFixture(files, prefix);
+  const store = createTestStore();
+  const registry = new PluginRegistry();
+  registry.registerLanguagePlugin(new CSharpLanguagePlugin());
+  await new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir).indexAll();
+  return { store, fixtureDir };
+}
+
+describe('C# import resolution E2E', () => {
+  const FILES: Record<string, string> = {
+    'src/App.cs': `using System;
 using Acme.Store;
 using Acme.Store.Missing;
 using Acme.Config;
@@ -78,26 +88,26 @@ namespace Acme.App
     }
 }
 `,
-  // Deliberately not under a store/ directory — proves resolution follows the
-  // declared namespace, not the file path, unlike the Java suffix approach.
-  // Acme.Store spans two files, so a plain `using Acme.Store;` is ambiguous.
-  'src/nested/deep/Store.cs': `namespace Acme.Store
+    // Deliberately not under a store/ directory — proves resolution follows
+    // the declared type, not the file path, unlike the Java suffix approach.
+    'src/nested/deep/Store.cs': `namespace Acme.Store
 {
     public class Repo {}
 }
 `,
-  'src/nested/deep/Db.cs': `namespace Acme.Store
+    'src/nested/deep/Db.cs': `namespace Acme.Store
 {
     public class Db {}
 }
 `,
-  // The sole file declaring Acme.Config — a plain `using` of it is precise.
-  'src/config/Settings.cs': `namespace Acme.Config
+    // The sole file declaring Acme.Config — still must NOT resolve, since a
+    // plain namespace import never names a specific type.
+    'src/config/Settings.cs': `namespace Acme.Config
 {
     public class Settings {}
 }
 `,
-  'src/util/Ids.cs': `namespace Acme.Util
+    'src/util/Ids.cs': `namespace Acme.Util
 {
     public static class Ids
     {
@@ -105,40 +115,30 @@ namespace Acme.App
     }
 }
 `,
-  // Shares a namespace with Ids.cs but declares nothing App.cs imports —
-  // proves `using static Acme.Util.Ids` doesn't leak an edge here.
-  'src/util/Other.cs': `namespace Acme.Util
+    // Shares a namespace with Ids.cs but declares nothing App.cs imports —
+    // proves `using static Acme.Util.Ids` doesn't leak an edge here.
+    'src/util/Other.cs': `namespace Acme.Util
 {
     public class Other {}
 }
 `,
-};
+  };
 
-describe('C# import resolution E2E', () => {
   let store: Store;
   let fixtureDir: string;
 
   beforeAll(async () => {
-    fixtureDir = createTmpFixture(FILES, 'trace-mcp-csharp-imports-');
-    store = createTestStore();
-    const registry = new PluginRegistry();
-    registry.registerLanguagePlugin(new CSharpLanguagePlugin());
-    await new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir).indexAll();
+    ({ store, fixtureDir } = await indexFixture(FILES, 'trace-mcp-csharp-imports-'));
   });
 
   afterAll(() => {
     removeTmpDir(fixtureDir);
   });
 
-  it('does not resolve a plain namespace import when more than one file declares it', () => {
-    // `using Acme.Store;` — Acme.Store spans Store.cs and Db.cs, so neither
-    // is a precise target; the resolver must not guess which one was meant.
+  it('never resolves a plain namespace import to a file edge, even with a single declaring file', () => {
     const targets = importTargets(store, 'src/App.cs');
     expect(targets).not.toContain('src/nested/deep/Store.cs');
-  });
-
-  it('resolves a plain namespace import to its sole declaring file', () => {
-    expect(importTargets(store, 'src/App.cs')).toContain('src/config/Settings.cs');
+    expect(targets).not.toContain('src/config/Settings.cs');
   });
 
   it('resolves a `using static` member import to only the file declaring that type', () => {
@@ -147,36 +147,36 @@ describe('C# import resolution E2E', () => {
     expect(targets).not.toContain('src/util/Other.cs');
   });
 
-  it('resolves an aliased type import to only the file declaring that type, even in an ambiguous namespace', () => {
-    // `using Db = Acme.Store.Db;` must resolve to Db.cs specifically — the
-    // type-level match is precise regardless of Acme.Store being ambiguous
-    // for the plain-namespace case above.
+  it('resolves an aliased type import to only the file declaring that type', () => {
+    // `using Db = Acme.Store.Db;` must resolve to Db.cs specifically, even
+    // though the plain `using Acme.Store;` above stays unresolved.
     expect(importTargets(store, 'src/App.cs')).toContain('src/nested/deep/Db.cs');
   });
 
-  it('does not fall back to the parent namespace for an unindexed sub-namespace', () => {
+  it('does not fall back to a namespace for an unindexed sub-namespace', () => {
     // `using Acme.Store.Missing;` names a namespace that isn't declared
     // anywhere in the repo. It must not be treated as `Acme.Store`.
     expect(importTargets(store, 'src/App.cs')).toEqual(
-      new Set(['src/config/Settings.cs', 'src/util/Ids.cs', 'src/nested/deep/Db.cs']),
+      new Set(['src/util/Ids.cs', 'src/nested/deep/Db.cs']),
     );
   });
 
-  it('skips BCL imports rather than inventing targets', () => {
-    // App.cs also imports `System` (BCL), the ambiguous `Acme.Store`, and the
-    // unindexed `Acme.Store.Missing` — none may appear, so only the three
-    // precise targets above are here.
-    expect(importTargets(store, 'src/App.cs').size).toBe(3);
+  it('skips BCL and plain-namespace imports rather than inventing targets', () => {
+    // App.cs also imports `System` (BCL), `Acme.Store` and `Acme.Config`
+    // (plain namespace — never resolved), and `Acme.Store.Missing`
+    // (unindexed sub-namespace) — none may appear, so only the two
+    // type-precise targets above are here.
+    expect(importTargets(store, 'src/App.cs').size).toBe(2);
   });
 });
 
 describe('C# import resolution: namespace-scoped using directives', () => {
   it('extracts a `using` declared inside a namespace block, not just at file scope', async () => {
-    const fixtureDir = createTmpFixture(
+    const { store, fixtureDir } = await indexFixture(
       {
         'src/App.cs': `namespace Acme.App
 {
-    using Acme.Store;
+    using static Acme.Store.Repo;
 
     public class Program
     {
@@ -193,11 +193,6 @@ describe('C# import resolution: namespace-scoped using directives', () => {
       'trace-mcp-csharp-ns-scoped-using-',
     );
     try {
-      const store = createTestStore();
-      const registry = new PluginRegistry();
-      registry.registerLanguagePlugin(new CSharpLanguagePlugin());
-      await new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir).indexAll();
-
       expect(importTargets(store, 'src/App.cs')).toContain('src/Store.cs');
     } finally {
       removeTmpDir(fixtureDir);
@@ -206,10 +201,10 @@ describe('C# import resolution: namespace-scoped using directives', () => {
 });
 
 describe('C# import resolution: incremental reindex', () => {
-  it('prunes a stale edge after the target file renames its namespace, without reindexing the importer', async () => {
+  it('prunes a stale edge after the target file renames its type, without reindexing the importer', async () => {
     const fixtureDir = createTmpFixture(
       {
-        'src/App.cs': `using Acme.Store;
+        'src/App.cs': `using static Acme.Store.Repo;
 
 namespace Acme.App
 {
@@ -235,20 +230,20 @@ namespace Acme.App
       await pipeline.indexAll();
       expect(importTargets(store, 'src/App.cs')).toContain('src/Store.cs');
 
-      // Rename the namespace — App.cs, the importer, is untouched.
+      // Rename the type — App.cs, the importer, is untouched.
       const storePath = path.join(fixtureDir, 'src/Store.cs');
       fs.writeFileSync(
         storePath,
-        `namespace Acme.Other
+        `namespace Acme.Store
 {
-    public class Repo {}
+    public class Other {}
 }
 `,
       );
       await pipeline.indexFiles([storePath]);
 
-      // Acme.Store no longer has a declaring file — the edge must be gone,
-      // not left pointing at a file that no longer means what it did.
+      // Acme.Store.Repo no longer has a declaring file — the edge must be
+      // gone, not left pointing at a file that no longer means what it did.
       expect(importTargets(store, 'src/App.cs')).not.toContain('src/Store.cs');
     } finally {
       removeTmpDir(fixtureDir);
