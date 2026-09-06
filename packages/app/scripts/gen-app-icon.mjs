@@ -68,8 +68,8 @@ function masterFor(size) {
 // same master and must not inherit a dock margin.
 const DOCK_MARGIN_RATIO = 824 / 1024;
 const CANVAS = 1024;
-const PADDED = Math.round(CANVAS / DOCK_MARGIN_RATIO); // 1272
-const INSET = (PADDED - CANVAS) / 2; // 124
+const PADDED = Math.round(CANVAS / DOCK_MARGIN_RATIO); // 1273
+const INSET = (PADDED - CANVAS) / 2; // 124.5
 
 function render(size) {
   const src = masters[masterFor(size)];
