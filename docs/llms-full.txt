@@ -566,7 +566,7 @@ which excludes the framework-specific rows.
 
 ---
 
-# How trace-mcp compares
+# Serena, Repomix and 20+ code graph MCP servers compared
 
 Source: https://trace-mcp.com/comparisons.html
 
