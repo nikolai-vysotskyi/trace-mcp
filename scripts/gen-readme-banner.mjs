@@ -225,7 +225,7 @@ function bannerHtml(t, narrow = false) {
           <img src="data:image/png;base64,${LOGO}" alt="" />
           <span class="wordmark">trace-mcp</span>
         </div>
-        <div class="tagline">Precomputed code intelligence for AI coding agents. Index the repo once so the agent <b>stops re-reading the same files</b>.</div>
+        <div class="tagline">trace-mcp indexes what your agent keeps re-reading, and <b>serves the answer instead</b>.</div>
       </div>
       <div class="receipt">
         <div class="label head">Context to review one pull request</div>
