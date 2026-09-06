@@ -54,7 +54,13 @@ describe('getMcpClientStatuses', () => {
   it('reports `unmanageable` for warp and jetbrains-ai (UI-only configs)', () => {
     const result = getMcpClientStatuses(projectRoot, 'global', ['warp', 'jetbrains-ai']);
     expect(result).toEqual([
-      { client: 'warp', configPath: null, status: 'unmanageable', level: null, configExists: false },
+      {
+        client: 'warp',
+        configPath: null,
+        status: 'unmanageable',
+        level: null,
+        configExists: false,
+      },
       {
         client: 'jetbrains-ai',
         configPath: null,
@@ -224,7 +230,10 @@ describe('getMcpClientStatuses', () => {
       path.join(fakeHome, '.claude.json'),
       JSON.stringify({ mcpServers: { 'other-server': { command: 'x', args: [] } } }, null, 2),
     );
-    const [present, absent] = getMcpClientStatuses(projectRoot, 'global', ['claude-code', 'cursor']);
+    const [present, absent] = getMcpClientStatuses(projectRoot, 'global', [
+      'claude-code',
+      'cursor',
+    ]);
     expect(present.status).toBe('missing');
     expect(present.configExists).toBe(true);
     expect(absent.status).toBe('missing');
