@@ -139,6 +139,11 @@ type SSEEvent =
    ../daemon-fetch (TRA-264, TRA-934). */
 export { DAEMON_FETCH_TIMEOUT_MS };
 
+/** How often `/api/projects` is re-polled while the window is visible, on top
+ *  of the mount + SSE-reconnect fetches — see the reconciliation effect below
+ *  (TRA-1067). */
+export const PROJECT_STATUS_POLL_INTERVAL_MS = 15_000;
+
 // ── Hook ───────────────────────────────────────────────────────────────
 
 export function useDaemon() {
@@ -248,19 +253,28 @@ export function useDaemon() {
       } else if (event.type === 'indexing_progress') {
         const total = event.total || 1;
         const current = event.processed ?? event.current ?? 0;
+        // The initial indexAll() chain has no dedicated "done" event of its
+        // own (unlike reindex_completed/embed_completed) — its last progress
+        // tick, `phase: 'completed'` at `current === total`, IS the terminal
+        // signal. Unconditionally setting status:'indexing' here meant that
+        // tick landed the row in "Indexing · completed 100%" and nothing
+        // after it ever moved the status to 'ready' (TRA-1067).
+        const done = event.phase === 'completed' || current >= total;
         setProjects((prev) =>
           prev.map((p) =>
             p.root === event.project
-              ? {
-                  ...p,
-                  status: 'indexing',
-                  progress: {
-                    phase: event.phase,
-                    current,
-                    total,
-                    percent: Math.round((current / total) * 100),
-                  },
-                }
+              ? done
+                ? { ...p, status: 'ready', progress: undefined }
+                : {
+                    ...p,
+                    status: 'indexing',
+                    progress: {
+                      phase: event.phase,
+                      current,
+                      total,
+                      percent: Math.round((current / total) * 100),
+                    },
+                  }
               : p,
           ),
         );
@@ -373,6 +387,20 @@ export function useDaemon() {
       eventSourceRef.current = null;
     };
   }, [visible, fetchProjects, fetchClients]);
+
+  /* Periodic reconciliation (TRA-1067). Mount + SSE `onopen` alone leave a
+     permanent gap: if any terminal event (indexing_progress's completed tick,
+     indexing_done, reindex_completed…) is ever dropped, misordered, or racing
+     a reconnect, nothing else ever asks the daemon again — `/api/projects` is
+     the daemon's own answer and it stays un-consulted until the window
+     reloads. This is the safety net under every event-driven status update
+     above: whatever an event gets wrong, the next poll corrects within one
+     interval. Gated on `visible` for the same reason SSE is (TRA-526). */
+  useEffect(() => {
+    if (!visible) return;
+    const id = setInterval(() => void fetchProjects(), PROJECT_STATUS_POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [visible, fetchProjects]);
 
   // Actions
   const addProject = useCallback(async (root: string) => {

@@ -28,7 +28,7 @@ import { useDaemon } from '../hooks/useDaemon';
 import { deriveDaemonState } from '../workspace/useWorkspaceProjects';
 import { t } from '../i18n';
 import { formatDate, formatList, formatNumber, relativeTime } from '../i18n/format';
-import { daemonFetch } from '../daemon-fetch';
+import { daemonFetch, daemonFetchProject } from '../daemon-fetch';
 import { loadSnapshot, saveSnapshot } from '../snapshot';
 import { Icon } from '../lattice/icons';
 import { useUsefulPaint } from '../perf';
@@ -316,7 +316,9 @@ export function ProjectOverview({
   const fetchStats = useCallback(async () => {
     setStatsLoad('loading');
     try {
-      const res = await daemonFetch(`${BASE}/api/projects/stats?project=${encodeURIComponent(root)}`);
+      const res = await daemonFetchProject(
+        `${BASE}/api/projects/stats?project=${encodeURIComponent(root)}`,
+      );
       if (!res.ok) throw new Error(String(res.status));
       const fresh = (await res.json()) as ProjectStats;
       setStats(fresh);
@@ -360,7 +362,7 @@ export function ProjectOverview({
       setSmellsLoad('loading');
       try {
         const params = new URLSearchParams({ project: root, category, limit: '500' });
-        const res = await daemonFetch(`${BASE}/api/projects/smells?${params}`);
+        const res = await daemonFetchProject(`${BASE}/api/projects/smells?${params}`);
         if (!res.ok) throw new Error(String(res.status));
         setSmells(await res.json());
         setSmellsLoad('ready');

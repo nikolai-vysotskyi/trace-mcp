@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { relativeTime } from '../i18n/format';
-import { daemonFetch } from '../daemon-fetch';
+import { daemonFetch, daemonFetchProject } from '../daemon-fetch';
 import { Icon } from '../lattice/icons';
 import { useUsefulPaint } from '../perf';
 import {
@@ -171,8 +171,19 @@ export function AskTab({ root }: { root: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await daemonFetch(`${BASE}/api/ask/provider?project=${encodeURIComponent(root)}`);
-        if (cancelled || !r.ok) return;
+        const r = await daemonFetchProject(
+          `${BASE}/api/ask/provider?project=${encodeURIComponent(root)}`,
+        );
+        if (cancelled) return;
+        // A failed response (project genuinely gone, or still 503 after
+        // daemonFetchProject's retry budget) is still an ANSWER — the panel
+        // must not stay on "Connecting…" forever waiting for one that already
+        // arrived (TRA-1052). `provider` stays null, which the toolbar and the
+        // no-provider CTA below already render correctly.
+        if (!r.ok) {
+          setProviderReady(true);
+          return;
+        }
         const d = await r.json();
         if (!cancelled) {
           setProvider(d.provider ?? null);
