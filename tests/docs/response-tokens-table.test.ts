@@ -40,5 +40,4 @@ describe('response-tokens page', () => {
       `${PAGE} states these tools' numbers as literals — render them from ${DATA} instead`,
     ).toEqual([]);
   });
-
 });
