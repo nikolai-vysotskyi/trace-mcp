@@ -152,6 +152,32 @@ because those three carry 82 of
 finds defects, volume-first moves the number, and only the second was ever going
 to clear a bar. `search` (4,441 calls, 1.54x) is where that starts.
 
+## Verdict — MISSED a third time, and the run that would have passed is the one we stopped trusting (TRA-985, 2026-09-06)
+
+`search` carries 4 441 of 18 319 recorded calls — 24% of the weight in this
+metric — and every run above published it from **a single query**. Measured
+over a fifteen-query basket, that query turns out to sit at the cheap end of a
+3.6x spread: 924 tokens against a 1 417-token basket mean.
+
+The response-shaping fix in this run (synthetic `__module__` pseudo-symbols were
+75% of a top-20 `search` page) cuts the basket by 39.3%. Scored the old way it
+takes the metric to **30.1%** and clears the declared 25% bar for the first
+time. Scored over the basket it goes 13.2% → **{{
+site.data.response_tokens.reduction_pct }}%** and misses again.
+
+**Same commit, same tools, same call weights — the sampling protocol decides the
+verdict.** The basket is what is published, the pass is not claimed, and the bar
+is still not moved. A metric this sensitive to one query's choice was not
+measuring the tool; it was measuring the query, and it had been doing so since
+TRA-880.
+
+The basket is now part of the harness, so this cannot silently revert. The
+remaining sampling debt is the same one, unfixed, on every other tool: `get_outline`
+(4 461 calls) is still one file, `search_text` (5 125 calls) is still one query.
+Both are cheap to widen and neither was widened here, because widening them
+changes the aggregate again and one protocol change per run is enough to keep
+attributable.
+
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on
 {{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.
