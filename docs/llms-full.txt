@@ -4784,7 +4784,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 18
+- **import edges:** 19
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 68
@@ -4846,7 +4846,7 @@ second thing, so it is much shorter than the language list — see
 | cobol | .cob .cbl .cpy .cobol | regex (multi-pass) | yes | — | — | — | yes |
 | common-lisp | .lisp .lsp .cl .asd | regex (multi-pass) | yes | — | — | — | yes |
 | cpp | .cpp .cxx .cc .hpp | tree-sitter | yes | yes | — | — | yes |
-| csharp | .cs | tree-sitter | yes | — | — | — | yes |
+| csharp | .cs | tree-sitter | yes | yes | — | — | yes |
 | css | .css .scss .sass .less | tree-sitter | yes | yes | — | — | yes |
 | cuda | .cu .cuh | regex | yes | — | — | — | — |
 | d | .d .di | regex (multi-pass) | yes | — | — | — | yes |
