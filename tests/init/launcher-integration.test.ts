@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,6 +44,32 @@ function runLauncher(env: Record<string, string>, args: string[] = ['serve']): R
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
+/** Concurrent counterpart to {@link runLauncher} — spawnSync cannot overlap. */
+function runLauncherAsync(
+  env: Record<string, string>,
+  args: string[] = ['serve'],
+): Promise<RunResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(LAUNCHER_SRC, args, {
+      env: { ...env, PATH: '/usr/bin:/bin' },
+      timeout: LAUNCHER_TIMEOUT_MS,
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    child.on('error', reject);
+    child.on('close', (status, signal) => {
+      assertNotKilled({ signal }, args);
+      resolve({ status, stdout, stderr });
+    });
+  });
+}
+
 function fakeNodeBody(version: string, marker = 'NODE_ARGS'): string {
   return `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo "v${version}"; exit 0; fi\necho "${marker}:$*"\n`;
 }
@@ -72,6 +98,25 @@ function writeConfig(traceHome: string, node: string, cli: string) {
       '\n',
     ),
   );
+}
+
+// Plants an nvm-layout tree under the fake HOME holding node + the package,
+// so the probe has a prefix to find that is NOT the configured node's.
+function plantNvmPackage(home: string, cliBody = '// fake cli\n'): string {
+  const version = 'v22.22.2';
+  const prefix = path.join(home, '.nvm', 'versions', 'node', version);
+  fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(prefix, 'bin', 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+  fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), `${version}\n`);
+  const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  const cli = path.join(pkgDir, 'cli.js');
+  fs.writeFileSync(cli, cliBody);
+  // The launcher normalises probed paths through realpath; on macOS the
+  // temp dir lives behind the /var → /private/var symlink, so compare
+  // against the resolved form.
+  return fs.realpathSync(cli);
 }
 
 beforeAll(() => {
@@ -176,25 +221,6 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
   // package in a different npm prefix lost the MCP server outright (3576 fatal
   // launcher errors in the field).
   describe('cli.js resolves independently of the selected node', () => {
-    // Plants an nvm-layout tree under the fake HOME holding node + the package,
-    // so the probe has a prefix to find that is NOT the configured node's.
-    function plantNvmPackage(home: string, cliBody = '// fake cli\n'): string {
-      const version = 'v22.22.2';
-      const prefix = path.join(home, '.nvm', 'versions', 'node', version);
-      fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
-      fs.writeFileSync(path.join(prefix, 'bin', 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
-      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
-      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), `${version}\n`);
-      const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
-      fs.mkdirSync(pkgDir, { recursive: true });
-      const cli = path.join(pkgDir, 'cli.js');
-      fs.writeFileSync(cli, cliBody);
-      // The launcher normalises probed paths through realpath; on macOS the
-      // temp dir lives behind the /var → /private/var symlink, so compare
-      // against the resolved form.
-      return fs.realpathSync(cli);
-    }
-
     it('finds the package in another prefix when the configured node has none', () => {
       const { home, traceHome, node } = setupFakeHome();
       const otherCli = plantNvmPackage(home);
@@ -1066,6 +1092,47 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
   // that broke, and GNU and BSD `stat` disagree about the flags it uses. The
   // first cut of this test passed on macOS while the Linux job caught the shim
   // silently never rotating at all.
+  // TRA-1029: several MCP clients routinely start at the same moment — a
+  // Claude Code window, a Codex run and the desktop app all exec this shim
+  // within the same second, and after an npm upgrade every one of them takes
+  // the probe+heal path at once. Nothing covered that overlap; every other
+  // test here runs the shim alone.
+  //
+  // What this pins is the state the racers leave behind, not the ordering
+  // between them. A torn config is deliberately *not* asserted on: the shim
+  // self-heals from any unparseable launcher.env (see the stale/unreadable
+  // config tests above), so a half-written one costs a probe, never a start —
+  // rewriting the heal to a non-atomic truncate still passes this test. The
+  // invariant that does bite is the tmp file: each heal writes
+  // `launcher.env.tmp.<pid>.<hex>` and renames it away, and a heal that leaks
+  // one instead leaves a pile of them in the state home under contention,
+  // exactly the orphan accumulation TRA-797 gave the sweeper a pattern for.
+  it('concurrent starts all reach the server and leave a readable config', async () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const probedCli = plantNvmPackage(home);
+    // cli.js is gone from the configured pair, so every one of these probes
+    // and then heals — the contended path, not the fast one.
+    writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+    const results = await Promise.all(
+      Array.from({ length: 20 }, () => runLauncherAsync({ HOME: home, TRACE_MCP_HOME: traceHome })),
+    );
+
+    for (const { status, stdout } of results) {
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${probedCli} serve`);
+    }
+    // No half-written config, and nothing left in the state home for the
+    // orphan sweeper to find.
+    const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+    expect(cfg).toContain(`TRACE_MCP_CLI="${probedCli}"`);
+    expect(fs.readdirSync(traceHome).filter((f) => f.includes('.tmp.'))).toEqual([]);
+    // And the config those racers left still drives a plain fast-path start.
+    expect(runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }).stdout.trim()).toBe(
+      `NODE_ARGS:${probedCli} serve`,
+    );
+  });
+
   it('rotates launcher.log once it is past the ceiling', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     writeConfig(traceHome, node, cli);
