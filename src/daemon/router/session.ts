@@ -212,6 +212,7 @@ export class StdioSession {
         return this.sendAndSettleListChanged(msg);
       },
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
+      onSendFailure: (msg, err) => this.rescueFailedProxySend(msg, err),
     });
     this.watcher = new PollingDaemonWatcher({
       port: opts.daemonPort,
@@ -529,6 +530,41 @@ export class StdioSession {
     await this.swapTo(await this.buildLocalBackend(), reason);
     if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
     await this.router.ingestFromClient(this.cachedInitialize);
+  }
+
+  /**
+   * A request whose send to the daemon threw: promote to local mode now and
+   * replay the frame there (TRA-1080).
+   *
+   * `PollingDaemonWatcher` would get here eventually, but it is built to
+   * debounce — 10 s poll plus a 30 s stability window — and that delay is only
+   * free in the local → proxy direction. Going the other way, every request in
+   * the window is answered `-32603 Backend send failed`, and an agent that
+   * sees that stops calling the tools for the rest of the session. Measured on
+   * a real daemon killed mid-session: 45 s, eight dead calls.
+   *
+   * `ProxyBackend.send` has already retried the transport three times by the
+   * time it throws, so this is not a blip — it is the same evidence the poller
+   * is still collecting, arriving earlier and for free. Deliberately *not*
+   * setting `proxyDisabled`: unlike a daemon that fails the handshake, one that
+   * merely died deserves to be proxied to again once the watcher sees it back.
+   */
+  private async rescueFailedProxySend(msg: JSONRPCMessage, err: unknown): Promise<boolean> {
+    const id = (msg as { id?: string | number }).id;
+    if (id === undefined || id === null) return false;
+    if (this.shuttingDown || this.proxyDisabled) return false;
+    if (this.router.getActiveKind() !== 'proxy') return false;
+    logger.warn(
+      { id, err: String(err) },
+      'StdioSession: proxy send failed — promoting to local mode and replaying the request',
+    );
+    // Claim the id before swapping, or the swap's drain answers it with a
+    // synthetic error and the client gets two responses for one request.
+    this.router.forgetPending(id);
+    await this.swapTo(await this.buildLocalBackend(), 'proxy-send-failed');
+    if (this.router.getActiveKind() !== 'local') return false;
+    await this.router.ingestFromClient(msg);
+    return true;
   }
 
   private async onDaemonStateChange(nowActive: boolean): Promise<void> {
