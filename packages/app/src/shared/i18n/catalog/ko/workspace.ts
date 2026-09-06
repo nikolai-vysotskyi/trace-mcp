@@ -16,6 +16,7 @@ export const workspace = {
   busyIndexingFresh_other:
     '프로젝트 {{total}}개 중 {{indexing}}개를 인덱싱 중입니다. 수치는 끝나면 표시됩니다.',
   busyStale: '데몬이 작업 중입니다. 아래는 마지막으로 인덱싱한 수치입니다.',
+  metricsAge: '이 수치는 {{age}} 계산된 값입니다. 지금 갱신하고 있습니다.',
   busyFresh: '데몬이 작업 중입니다. 수치는 끝나면 표시됩니다.',
   tryAgain: '다시 시도',
   retrying: '다시 시도하는 중…',
