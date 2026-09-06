@@ -11,8 +11,10 @@ name: CI
 #     ├── test-shard 4/4   ~30-60s
 #     └── impact-report    ~30s     (PR only; reuses dist)
 #   app-typecheck (parallel, path-filtered) ~30-60s when triggered, skipped otherwise
-#   cross-platform-test (matrix mac+windows) — only on release-please PR, nightly,
-#                                              workflow_dispatch, or "cross-platform" label
+#   cross-platform-test (matrix mac+windows) — on any PR touching shipped code
+#                                              (see the `platform` filter), plus
+#                                              release PRs, nightly, dispatch,
+#                                              and the "cross-platform" label
 #
 # Strategy:
 #   1. ONE install + ONE build on ubuntu, fan-out the dist/ via artifact.
@@ -90,55 +92,32 @@ jobs:
             vscode:
               - 'packages/vscode-extension/**'
               - '.github/workflows/ci.yml'
-            # Path/OS-sensitive code. TRA-236: the dangerous-root guard shipped
-            # a Windows-shaped hole because cross-platform-test only ran on
-            # release PRs — nothing exercised these files on Windows until the
-            # release was already cut.
-            # TRA-326: the registry/global/db-holder files do raw fs work
-            # (mtime caching, holder files, pid liveness) whose semantics differ
-            # on Windows — #477 broke master there while showing all-green here.
-            # TRA-375: same hole, third time. The import rewriter behind
-            # `apply_move` does path arithmetic on `path.relative` output, so
-            # its separator handling is Windows-shaped by construction — #527
-            # was all-green here and broke the release PR on Windows.
-            # TRA-567: fourth Windows-shaped hole, and the first one that came
-            # from a dependency rather than our code — a better-sqlite3 bump
-            # made pnpm compile it from source, which only fails on Windows.
-            # Any lockfile change can move a native binding, so dep bumps now
-            # pay the cross-platform run instead of the release job doing it.
+            # Cross-platform (mac+windows) gate. Anything we ship, or test what
+            # we ship with, can be Windows-shaped: seven releases in a row were
+            # blocked by a path/fs/spawn bug that was fully green on ubuntu
+            # (TRA-236, 326, 375, 567, 638, 755, 1045).
+            #
+            # This used to be an allowlist of the exact files each of those
+            # incidents happened to touch — i.e. a list of yesterday's bugs. It
+            # was extended six times and missed the seventh anyway: #1041 broke
+            # on src/indexer/pipeline.ts, which nothing had ever put on a
+            # Windows runner. TRA-1048 replaced it with "code that ships, or
+            # tests it". That costs ~6 min of extra wall clock on those PRs;
+            # GitHub runners are free on a public repo, and a release train
+            # blocked on a Windows-only bisect costs far more than that.
+            #
+            # Deliberately NOT a required status check: it is skipped on
+            # docs-only PRs, and a required check that can be skipped is an
+            # unsatisfiable gate (see TRA-255/257 under `core` below).
             platform:
-              - 'pnpm-lock.yaml'
-              - 'package.json'
-              - 'tests/db/native-prebuild.test.ts'
-              - 'src/tools/refactoring/**'
-              - 'tests/refactoring/**'
-              - 'src/dangerous-root.ts'
-              - 'src/project-setup.ts'
-              - 'src/topology/**'
-              - 'src/registry.ts'
-              - 'src/global.ts'
-              - 'src/db-holders.ts'
-              - 'tests/project-setup/dangerous-root.test.ts'
-              - 'tests/topology/**'
-              - 'tests/registry.test.ts'
-            # TRA-638: fifth Windows-shaped hole. The app's main process spawns
-            # the CLI, and on Windows the launcher it resolves is a `.cmd` that
-            # execFile cannot launch — three MCP-client IPCs were dead there for
-            # months. The app's own test job is ubuntu-only, so the regression
-            # test lives in tests/app/ and this filter is what puts it on a
-            # Windows runner.
-              - 'packages/app/src/main/daemon-install.ts'
-              - 'packages/app/src/main/daemon-lifecycle.ts'
-              - 'packages/app/src/main/trace-home.ts'
-              - 'tests/app/**'
-            # TRA-755: sixth. The launcher has a separate PowerShell backend,
-            # and nothing here ever put it on a Windows runner — a syntax error
-            # in it breaks the MCP connection for every Windows install at once,
-            # and its two end-to-end tests are skipped for a runner issue. The
-            # shim files are the most Windows-shaped code we ship.
+              - 'src/**'
+              - 'tests/**'
               - 'hooks/**'
-              - 'src/init/launcher.ts'
-              - 'tests/init/**'
+              - 'scripts/**'
+              - 'packages/app/src/main/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
             core:
               - 'src/**'
               - 'scripts/**'
@@ -778,11 +757,11 @@ jobs:
   # Cross-platform test — macOS + Windows.
   #
   # Trigger logic (any one fires it):
-  #   1. release-please PR branch     — full validation before publishing.
-  #   2. nightly schedule (04:00 UTC) — catch OS regressions overnight.
-  #   3. workflow_dispatch            — manual ad-hoc verification.
-  #   4. PR labeled "cross-platform"  — opt-in per PR when needed.
-  #   5. PR touching path/OS-sensitive code — see the `platform` filter above.
+  #   1. PR touching shipped code     — the common case; see `platform` above.
+  #   2. release-please PR branch     — full validation before publishing.
+  #   3. nightly schedule (04:00 UTC) — catch OS regressions overnight.
+  #   4. workflow_dispatch            — manual ad-hoc verification.
+  #   5. PR labeled "cross-platform"  — opt-in for a PR the filter misses.
   #
   # Ubuntu coverage already happens in the `test` job above; this matrix is
   # mac+windows only. Each runner does its own install+build+test (the
@@ -811,10 +790,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Deliberately still pnpm/action-setup, not .github/actions/setup-pnpm:
-      # this job only runs on release-please PRs, nightly, dispatch, or an
-      # opt-in label, so the redundant download isn't the everyday cost that
-      # TRA-790 targeted, and mac/windows are exactly the runners where an
-      # unverified change to pnpm activation is riskiest to land blind.
+      # mac/windows are exactly the runners where an unverified change to pnpm
+      # activation is riskiest to land blind, and the redundant download is
+      # seconds against an 8-minute job (TRA-790 targeted the ubuntu shards).
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
