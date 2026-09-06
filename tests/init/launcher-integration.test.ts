@@ -246,6 +246,14 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         // Nothing may leak onto the client's stderr — a healthy server that
         // looks broken in the client log is the TRA-797 failure mode.
         expect(stderr).toBe('');
+        // A read-only *directory* still allows truncating a 0644 file already
+        // inside it, so the chmod above does not by itself catch a heal that
+        // dropped the tmp-then-rename and writes $CONFIG in place (review of
+        // #1021). Pin the config as untouched: on this run the heal cannot
+        // land, so the stale path it named must still be there.
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+          path.join(home, 'gone', 'cli.js'),
+        );
       } finally {
         fs.chmodSync(traceHome, 0o755);
       }
