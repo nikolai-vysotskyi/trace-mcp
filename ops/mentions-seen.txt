@@ -1,0 +1,64 @@
+# Repos the GitHub code-search sweep has already returned and someone has
+# already read. `scripts/mention-sweep.sh` subtracts this list from its results,
+# so a sweep only prints what nobody has looked at yet.
+#
+# One repo per line, `owner/name`, exact. A line here means "read and
+# classified", not "unimportant" — the classification itself lives in
+# ops/distribution.md for anything that turned out to be a real surface.
+#
+# Adding a repo here without reading its matched file defeats the whole file:
+# it silences the hit permanently. Read first.
+
+# --- Surfaces carrying us, all with rows in ops/distribution.md ---
+SAIRAMANALADI/vybe-intelligence-vault
+Arnon-hs/open-source
+Chat2AnyLLM/awesome-claude-plugins
+linny006/mcp-servers-live
+linny006/trending-claude-skills
+gabrielmoreira/awesome-ai-rabbit-holes
+patrickclery/awesomer
+QuesmaOrg/awesome-ai-tokenomics
+hashgraph-online/awesome-ai-plugins
+mattbutlerengineering/ai-tooling
+axisrow/trace-mcp-plugin
+
+# --- Name collisions: somebody else's "trace", "mcp" or both (2026-09-05) ---
+btraceio/btrace
+oisee/odata_mcp
+oisee/odata_mcp_go
+korwabs/playwright-trace-mcp
+imj01y/trace-ui
+aleutian-ai/AleutianFOSS
+g-shevchenko/mcp-token-savers
+
+# --- Swept and classified 2026-09-06 ---
+# Genuine, rows added to ops/distribution.md:
+aibot88/sec_skill_store
+savanna0425/skillhot
+bormaxi8080/osint-timeline
+blackwell-systems/gcf
+
+# Genuine but nothing to do: a keyword bot's run log and a Chinese trend
+# report, both quoting claims we have since retired. Read up in the ledger
+# under "the derivative count for the retired '~42 minutes' claim".
+Nuel-code/Defi-discovery-
+Jouryjc/blogs
+
+# Collisions on somebody else's "trace" or "mcp":
+ZhuoZhuoCrayon/ai-workspace          # BlueKing observability, file alarm-trace-mcp-new-tools
+MCPJam/inspector                     # trace-mcp-error-code test id in their trace-timeline
+Mnehmos/mnehmos.multi-agent.framework # the author's own Mnehmos/mnehmos.trace.mcp
+wdnmdtonyma/SOTA-Agent-LLM-Wiki      # their docs id for "trace of an MCP call"
+pr1m8/haive-mcp                      # references korwabs/playwright-trace-mcp
+mtuska/ue-trace-mcp                  # Unreal Engine trace
+incursa/spec-trace
+0xFlicker/influence-game
+CyberCRI/projects-frontend
+JohnSL/Bowties
+RefugesInfo/www.refuges.info
+rust-lang/crates.io-index
+semaj90/deeds_web_app
+wimpysworld/nix-config
+
+# Found on the 2026-09-06 re-run, row in ops/distribution.md:
+hotaru-ritsuki/ai-daily-briefings
