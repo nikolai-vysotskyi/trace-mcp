@@ -65,3 +65,47 @@ The before/after gap is dominated by lock-queue wait, which is also why `reindex
 telemetry used to report elapsed times in the hours: `elapsedMs` summed the wait with the work.
 It is now the work alone, with the wait beside it as `queuedMs` (`daemon stats` renders it as
 `queued p95`).
+
+## The most expensive idle process is the one nobody owns
+
+Measured 2026-09-06 on the M5 Max. A `serve-http` daemon left over from an earlier benchmark run
+(port 37497, in another agent's workdir) was holding **517 MB and 97% of a core, with zero
+clients, 5h56m after its parent exited** — 356 minutes of CPU spent on nothing.
+
+`sample(1)` on it, and again on a fresh reproduction, showed the same loop and no SQLite at all:
+
+```
+uv__run_check
+  node::Environment::CheckImmediate
+    v8::internal::Isolate::ReportPendingMessages
+      node::errors::TriggerUncaughtException
+        v8::internal::Accessors::ErrorStackGetter
+          v8::internal::ErrorUtils::FormatStackTrace   <- and round again
+```
+
+The mechanism: when the parent that owned our stdout/stderr pipe exits without killing us, every
+write to those fds fails with `EPIPE`. The `uncaughtException` safety net in
+`src/server/process-safety-net.ts` exists to keep a long-lived server alive through stray errors,
+and it does that by *logging* — to the same dead pipe. That write throws `EPIPE`, which re-enters
+the handler, which formats a stack trace, which logs, forever. The process never exits and never
+releases its port.
+
+Reproduction, deterministic in about six seconds:
+
+```js
+const child = spawn('node', [CLI, 'serve-http', '-p', PORT], {
+  stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+});
+child.unref();
+setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); }, 6000);
+```
+
+| Orphaned `serve-http`, 17 s after the pipes close | Before | After |
+|---|---|---|
+| CPU | 88–106% | process has exited |
+| RSS | 853 MB | 0 |
+| Lifetime | unbounded | ends at the first `EPIPE` |
+
+The fix is to treat a dead log sink as the one error the safety net must not swallow: there is
+nowhere left to report to, so the process leaves. Guarded by
+`src/server/__tests__/process-safety-net.test.ts`.

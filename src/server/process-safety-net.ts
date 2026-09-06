@@ -33,6 +33,18 @@ export function formatErr(e: unknown): { message: string; stack?: string } | { v
 }
 
 /**
+ * True when the error means the process can no longer write its own logs —
+ * a closed/destroyed stdout or stderr pipe. Keeping the process alive in that
+ * state is what produces the 100%-CPU orphan described in the handler below.
+ */
+export function isBrokenLogSink(e: unknown): boolean {
+  const code = (e as NodeJS.ErrnoException | undefined)?.code;
+  return (
+    code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED' || code === 'ERR_STREAM_WRITE_AFTER_END'
+  );
+}
+
+/**
  * Install `unhandledRejection` + `uncaughtException` handlers that log and keep
  * the process alive. Idempotent — safe to call from multiple entry points.
  *
@@ -50,6 +62,15 @@ export function installProcessSafetyNet(context: string): void {
   });
 
   process.on('uncaughtException', (err) => {
+    // EPIPE here means our own log sink is gone: the parent that owned our
+    // stdout/stderr pipe exited without killing us. Logging writes to the dead
+    // pipe, which throws EPIPE again, which re-enters this handler — the process
+    // spins at ~100% CPU forever and never releases its port. Measured on an
+    // orphaned `serve-http`: 356 CPU-minutes over 5h56m with zero clients
+    // (TRA-921). There is nowhere left to report to, so leave.
+    if (isBrokenLogSink(err)) {
+      process.exit(0);
+    }
     logger.error(
       { err: formatErr(err), context },
       'Uncaught exception — server kept alive (safety net)',
