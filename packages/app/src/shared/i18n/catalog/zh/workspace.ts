@@ -15,6 +15,7 @@ export const workspace = {
     '正在索引 {{total}} 个项目中的 {{indexing}} 个。以下是上次索引的数字。',
   busyIndexingFresh_other: '正在索引 {{total}} 个项目中的 {{indexing}} 个。索引完成后会给出数字。',
   busyStale: '守护进程正忙。以下是上次索引的数字。',
+  metricsAge: '这些数字计算于{{age}}。正在刷新。',
   busyFresh: '守护进程正忙。完成后会给出数字。',
   tryAgain: '重试',
   retrying: '重试中…',

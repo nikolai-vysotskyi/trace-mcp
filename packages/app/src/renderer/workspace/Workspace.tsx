@@ -23,7 +23,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from '../i18n';
-import { formatNumber } from '../i18n/format';
+import { formatNumber, relativeTime } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { useUsefulPaint } from '../perf';
@@ -184,6 +184,15 @@ function openProjectWindow(root: string): void {
  * someone they are looking at the last indexed numbers over a row of em dashes
  * is the same lie the old copy told, in the other direction.
  */
+/**
+ * How old the metrics may be before the screen has to say so. The daemon's own
+ * cache TTL is five minutes, so anything inside an hour is ordinary lag; past
+ * that, the numbers on screen are almost certainly a snapshot restored across
+ * a daemon restart, and a snapshot that does not date itself is the defect
+ * (TRA-1072).
+ */
+export const METRICS_AGE_BANNER_MS = 3_600_000;
+
 export function busyMessage(o: {
   connected: boolean;
   indexing: number;
@@ -342,7 +351,13 @@ export function Workspace() {
               haveNumbers: !data.metricsLoading,
             }),
           }
-        : null;
+        : // Nothing is wrong, but the numbers are old enough that saying so is
+          // the honest thing. `metricsComputedAt === 0` means the daemon has
+          // never finished a pass, which `metricsLoading` already covers.
+          data.metricsComputedAt > 0 &&
+            Date.now() - data.metricsComputedAt > METRICS_AGE_BANNER_MS
+          ? { message: t('workspace:metricsAge', { age: relativeTime(data.metricsComputedAt) }) }
+          : null;
 
   const viewProps = {
     projects: visible,

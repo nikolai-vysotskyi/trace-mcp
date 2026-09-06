@@ -89,3 +89,30 @@ describe('metrics polling while the daemon reports computing', () => {
     expect(dashboardCalls()).toBe(settled);
   });
 });
+
+describe('metrics age', () => {
+  it('carries computedAt out of the response so the screen can date the numbers', async () => {
+    const { fetchMetricsOnce } = await import('../useWorkspaceProjects');
+    const setComputedAt = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [], computing: false, computedAt: 1234 }),
+      }),
+    );
+    await fetchMetricsOnce({ setMetrics: vi.fn(), setErrorKind: vi.fn(), setComputedAt });
+    expect(setComputedAt).toHaveBeenCalledWith(1234);
+  });
+
+  it('falls back to 0 when an older daemon omits computedAt', async () => {
+    const { fetchMetricsOnce } = await import('../useWorkspaceProjects');
+    const setComputedAt = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ projects: [] }) }),
+    );
+    await fetchMetricsOnce({ setMetrics: vi.fn(), setErrorKind: vi.fn(), setComputedAt });
+    expect(setComputedAt).toHaveBeenCalledWith(0);
+  });
+});

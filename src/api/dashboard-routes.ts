@@ -2,7 +2,7 @@
  * Dashboard API routes — aggregate health overview across all registered projects.
  *
  * Endpoint: GET /api/dashboard/projects
- * Returns: { projects: ProjectHealth[], computing: boolean }
+ * Returns: { projects: ProjectHealth[], computing: boolean, computedAt: number }
  *
  * Endpoint: POST /api/dashboard/refresh
  * Returns: 200 — starts a background recompute.
@@ -399,13 +399,20 @@ export function indexFingerprint(dbPath: string): number {
   return newest;
 }
 
-/** Read the cache, kicking off a background refresh when it has gone stale. */
-function snapshot(): { projects: ProjectHealth[]; computing: boolean } {
+/**
+ * Read the cache, kicking off a background refresh when it has gone stale.
+ *
+ * `computedAt` goes out with the numbers (0 = never computed). Since the cache
+ * survives a daemon restart, the screen can now be handed values it has no
+ * other way to date — and a stale value that says how stale it is works, while
+ * one that is silent about it is the trap TRA-1072 and TRA-695 are both about.
+ */
+function snapshot(): { projects: ProjectHealth[]; computing: boolean; computedAt: number } {
   loadCacheFromDisk();
   const entries = Object.values(readRegistry().projects);
   const projects = entries.map((e) => cache.get(e.root) ?? placeholder(e));
   if (!computing && Date.now() - computedAt > CACHE_TTL_MS) void refreshAll();
-  return { projects, computing };
+  return { projects, computing, computedAt };
 }
 
 // ---------------------------------------------------------------------------

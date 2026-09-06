@@ -80,8 +80,12 @@ describe('GET /api/dashboard/projects', () => {
     const parsed = JSON.parse(first.body) as {
       projects: Array<{ root: string; status: string }>;
       computing: boolean;
+      computedAt: number;
     };
     expect(parsed.projects).toHaveLength(PROJECT_COUNT);
+    // The cache outlives a daemon restart, so the age of the numbers has to
+    // travel with them — a snapshot that cannot date itself is TRA-1072.
+    expect(typeof parsed.computedAt).toBe('number');
     // Every row is present from the first response — a project the background
     // pass has not reached yet says so rather than being missing.
     expect(parsed.computing).toBe(true);

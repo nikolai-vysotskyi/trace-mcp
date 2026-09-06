@@ -107,6 +107,12 @@ export interface UseWorkspaceProjectsResult {
   errorKind: MetricsErrorKind | null;
   /** One reading of how much the daemon is answering. */
   daemonState: DaemonState;
+  /**
+   * When the daemon last finished a metrics pass, epoch ms; 0 = never. The
+   * cache outlives a daemon restart, so the screen would otherwise be handed
+   * numbers of unknowable age (TRA-1072).
+   */
+  metricsComputedAt: number;
   connected: boolean;
   restarting: boolean;
   addProject(root: string): Promise<void>;
@@ -215,6 +221,8 @@ interface MetricsSetters {
   setErrorKind: (k: MetricsErrorKind | null) => void;
   /** True while the daemon is still filling in the expensive metrics. */
   setComputing?: (v: boolean) => void;
+  /** When the daemon last finished a metrics pass; 0 = never. */
+  setComputedAt?: (v: number) => void;
 }
 
 /** Classify a fetch rejection. A timeout means slow, not gone. */
@@ -245,10 +253,12 @@ export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean
     const data = (await res.json()) as {
       projects: ProjectHealthMetrics[];
       computing?: boolean;
+      computedAt?: number;
     };
     setters.setMetrics(data.projects ?? []);
     setters.setErrorKind(null);
     setters.setComputing?.(data.computing === true);
+    setters.setComputedAt?.(typeof data.computedAt === 'number' ? data.computedAt : 0);
     return true;
   } catch (err) {
     setters.setErrorKind(classifyMetricsError(err));
@@ -275,6 +285,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
    * screen on counts-only until the five-minute fallback.
    */
   const [pollTick, setPollTick] = useState(0);
+  const [metricsComputedAt, setComputedAt] = useState(0);
 
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -292,6 +303,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
       },
       setErrorKind,
       setComputing,
+      setComputedAt,
     });
     if (ok) setMetricsLoaded(true);
     setPollTick((n) => n + 1);
@@ -411,6 +423,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     error,
     errorKind,
     daemonState,
+    metricsComputedAt,
     connected: daemon.connected,
     restarting: daemon.restarting,
     addProject: daemon.addProject,
