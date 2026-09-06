@@ -400,3 +400,26 @@ established: it tested the serving layer only. Page quality, update frequency
 and perceived inventory stay open and stay unmeasured, same as the two sections
 above say. The 2026-09-26 re-read stands, and now starts from a sitemap Google
 actually holds.
+
+## Tracked query set: the category cluster (TRA-1024, 2026-09-06)
+
+Every GSC reading in this file so far has looked at whatever queries happened to
+appear. From now on this set is checked by name each pass, present or absent,
+because absence is the finding — at 2026-09-06 all four return **zero
+impressions over 30 days**, which is what "we are not in this SERP at all" looks
+like in GSC and is indistinguishable from "we did not look".
+
+| Query | Volume (DataForSEO, Google Ads, US, 2026-09-06) | Competition | 12-mo trend | Our impressions, 30 d |
+|---|---:|---|---|---:|
+| `code graph mcp` | 70/mo | LOW (4) | 30 → 140 | 0 |
+| `codegraph mcp` | 70/mo | LOW (6) | 10 → 260 | 0 |
+| `code knowledge graph mcp` | no volume record | — | — | 0 |
+| `serena mcp alternative` | 10/mo | — | — | 0 |
+
+The last row is there as the ceiling on the `/vs/serena.html` bet, not as a
+target: `serena mcp` itself is 2400/mo of "what is this / how do I install it"
+intent that a comparison page cannot serve. Reasoning in `ops/positioning.md`.
+
+Read this set together with the two collisions already tracked above
+(`traceix mcp`, `mcp tracing`): those measure impressions we get and do not
+want, this set measures a SERP we want and do not appear in.
