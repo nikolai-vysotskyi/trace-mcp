@@ -842,7 +842,13 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 5, 2026 — current
+### Pass of September 7, 2026 — current
+
+- **First source read of CodeGraph** (codegraph-ai, Rust, Apache-2.0, v0.20.1), the last entry from the previous pass's priority queue. Read through the GitHub API at `main`, no clone and nothing executed: root metadata, `Cargo.toml`, `crates/codegraph/`, `crates/codegraph-server/` (the dual LSP/MCP backend and tool registrar), `crates/codegraph-memory/` (storage and vector embeddings), and the individual parser crates. It corrected the table: written in **Rust** (43-crate Cargo workspace, edition 2021), not C as GitHub's linguist tag implied from vendored grammars. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
+- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp 158 → 159, Serena 28.8K → 28.9K (28,902), codebase-memory-mcp 42.1K → 42.4K (42,445), codegraph 69.4K → 69.8K (69,841), Context Mode 20.3K → 20.5K (20,487), code-review-graph 31.2K (31,219), CodeGraphContext 4.2K (4,168), CodeGraph (codegraph-ai) 80.
+- Rows for other projects were not re-checked in this pass and carry the September 5 figures.
+
+### Pass of September 5, 2026
 
 - **First source read of LeanKG** (FreePeak, Rust, Apache-2.0), the largest remaining table entry whose architecture had never been read. Read through the GitHub API at `main`, no clone: repository metadata, `src/mcp/tools.rs`, `src/mcp/toon.rs`, `src/mcp/token_budget.rs`, `src/budget.rs`, and the per-client packaging directories. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
 - **First source read of Roam-Code** (Cranot/roam-code, Python, Apache-2.0), the largest table entry whose architecture had never been read. Read through the GitHub API at `main` plus the published release artefacts, no clone and nothing executed: repository metadata, `src/roam/mcp_server.py` (the preset tables and the tool registrar), `docs/mcp-tools.md`, `README.md`, and the two benchmark trees under `benchmarks/`. Three table cells moved and the one method gap it exposed was closed the same day; findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
@@ -956,7 +962,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5K); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 21 | 90 | 246 defined / 17 default `core` (8 presets) |
+| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 21 | 90 | 246 defined / 17 default `core` (8 presets) |
 | Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | ✗ | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | partial (`query_project`, optional, no cross-repo edges) | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
@@ -1100,11 +1106,9 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai).
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** SocratiCode, Narsil-MCP, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraph (codegraph-ai).
-
-Still unprofiled from the previous pass's "newly spotted" list: **CodeGraph** (codegraph-ai, 74 stars, C — 42 MCP tools, 38 languages, VS Code extension). marm-memory has since been read at source — see below.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** SocratiCode, Narsil-MCP, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -1158,7 +1162,21 @@ The decision that matters is not about a feature:
 - **The code-graph slot under a memory layer is a real socket with a written contract, and it is the second one we have found.** A memory-first project would rather delegate indexing than build it. That makes "which code-graph server gets plugged in" a distribution question — one this page can record but not answer. Filed internally with the six-tool contract, the two known instances, and a costed recommendation; nothing shipped on the strength of one reading.
 - **Their concept graph and compaction are the half they do build**, and they are notes-over-sessions rather than code-linked — the same distinction this page already draws for the largest LSP-native peer's markdown memories. Nothing to take: our decisions bind to symbol IDs and are staleness-verified.
 
-Priority for next deep-dive: **CodeGraph** (codegraph-ai, 74 stars, C — 42 MCP tools, 38 languages, VS Code extension), the last entry from the "newly spotted" list that has never been read at source.
+**CodeGraph (codegraph-ai) profiled this pass** (September 7, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `Cargo.toml`, `crates/codegraph/src/storage/`, `crates/codegraph-server/src/mcp/tools.rs`, `crates/codegraph-server/src/backend.rs`, `crates/codegraph-memory/src/storage.rs`). 80 stars (GitHub API, this pass), Apache-2.0, Rust, v0.20.1 (last pushed August 2026). The row this page carried described it as C; reading the source corrects it: it is a **43-crate Cargo workspace in Rust (edition 2021)**, with the C classification arising from vendored tree-sitter grammars. It runs a dual LSP server (`tower_lsp`) + MCP stdio/SSE server (`codegraph-server`), backed by RocksDB with namespaced keys and column families (`rocksdb_backend.rs`) plus an in-memory graph store.
+
+What the row was missing:
+- **MCP tool profiles**: `crates/codegraph-server/src/mcp/tools.rs` defines **42 community tools** and exposes a `ToolProfile` selector: `All` (default, all 42 advertised), `Core` (8 tools: symbol search, symbol info, detailed symbol, ai context, edit context, curated context, search by pattern, search by error), `Graph` (17 navigation/impact tools), `Memory` (doc indexing, search, memory nodes, architecture doc generation, verify design, design gaps), and `Security`.
+- **Closed-source pro edition boundary**: The `Security` profile filters community tools to empty — its security analysis (taint analysis, vulnerability scanning, coupling analysis, git mining) is gated behind closed-source "pro hooks" (`pro_hooks.rs`, `lsp_pro_hooks.rs`). In contrast, trace-mcp includes OWASP Top-10 taint analysis with type-aware pruning and OASIS SARIF 2.1.0 output 100% free and open-source (MIT).
+- **Memory architecture**: `codegraph-memory` combines RocksDB storage with LZ4 compression and instant-distance HNSW for O(log n) semantic vector search (`MemoryStore`). Like Serena and MemPalace, however, its memory nodes are documentation/note-based rather than bound to symbol IDs and verified for code staleness.
+- **Zero framework awareness**: 38 tree-sitter language parsers are modularized into individual crates (`codegraph-python`, `codegraph-rust`, `codegraph-typescript`, etc.), but none resolves framework semantics (no route → handler, controller → template, or model → table edges).
+- **PR context generation**: `codegraph_pr_context` computes blast radius, risk summary, and test gaps from `git diff <baseBranch>...HEAD`, outputting JSON or ready-to-post Markdown PR comments.
+
+Three mechanisms were read at source and each got a decision:
+- **Dual LSP + MCP server architecture: passing on unifying with LSP.** Running a full Language Server Protocol implementation (`tower_lsp`) alongside MCP allows IDEs with LSP support to query the graph natively. However, trace-mcp focuses on agentic CLI workflows (Claude Code, Codex) where an MCP stdio server is the native integration, and opt-in SCIP ingestion provides compiler-grade precision without maintaining a full LSP server daemon.
+- **HNSW indexing over RocksDB for memory: passing, we already do better.** RocksDB introduces C++ compilation and native linking overhead that complicates cross-platform distribution. trace-mcp's embedded SQLite+FTS5 plus bundled ONNX embeddings provide zero-dependency local search with single-file portability.
+- **`codegraph_pr_context` markdown generator: already covered, and ours is benchmarked.** trace-mcp's PR context generation is the core of our PR benchmark ({{ site.data.pr_context_bench.median_savings_pct }}% input token reduction across {{ site.data.pr_context_bench.pr_count }} open-source PRs). Nothing to take.
+
+Priority for next deep-dive: **SocratiCode** (~900 stars, TypeScript — 21 MCP tools, 19 languages, polyglot dep graph), the highest-star direct code-graph MCP peer remaining unprofiled at source.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 

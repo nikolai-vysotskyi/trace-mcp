@@ -10,41 +10,42 @@
 #
 # Dated prose elsewhere on the page ("41.1K -> 41.2K this pass") is a historical
 # record of a verification pass, not a live figure: leave those alone.
-verified: 2026-09-04
+verified: 2026-09-07
 
-# trace_mcp and codegraphcontext re-read 2026-09-06 (TRA-1034); the rest still
-# carry the 09-04 reading.
+# Re-read 2026-09-07 (TRA-1074) across all tracked competitors.
 trace_mcp:
   repo: nikolai-vysotskyi/trace-mcp
-  stars_exact: 158
-  stars: "158"
+  stars_exact: 159
+  stars: "159"
 repomix:
   repo: yamadashy/repomix
-  stars_exact: 28180
+  stars_exact: 28221
   stars: "28.2K"
 serena:
   repo: oraios/serena
-  stars_exact: 28781
-  stars: "28.8K"
+  stars_exact: 28902
+  stars: "28.9K"
 codebase_memory_mcp:
   repo: DeusData/codebase-memory-mcp
-  stars_exact: 42058
-  stars: "42.1K"
+  stars_exact: 42445
+  stars: "42.4K"
 code_review_graph:
   repo: tirth8205/code-review-graph
-  stars_exact: 31151
+  stars_exact: 31219
   stars: "31.2K"
-# Re-read 2026-09-06 for /vs/codegraphcontext.html, two days after the pass
-# above; every other entry still carries the 09-04 reading.
 codegraphcontext:
   repo: CodeGraphContext/CodeGraphContext
   stars_exact: 4168
   stars: "4.2K"
 codegraph:
   repo: colbymchenry/codegraph
-  stars_exact: 69443
-  stars: "69.4K"
+  stars_exact: 69841
+  stars: "69.8K"
 context_mode:
   repo: mksglu/context-mode
-  stars_exact: 20335
-  stars: "20.3K"
+  stars_exact: 20487
+  stars: "20.5K"
+codegraph_ai:
+  repo: codegraph-ai/CodeGraph
+  stars_exact: 80
+  stars: "80"

@@ -94,6 +94,7 @@ Rules for keeping it honest:
 | [savanna0425/skillhot](https://github.com/savanna0425/skillhot) (37★) | **Yes — never submitted** | Chinese-language skill/repo directory. Carries our record in `public/data/details/nikolai__vysotskyi__trace__mcp.json`, plus `manifest.json` and `topics/claude-code-skill.json`, with `homepage` and the **current** description string — the measured 90.6% PR figure, not the retired one | Same scraper family as the `linny006` rows: verbatim copy of the GitHub description, so fixing the string fixes it. Useful as a control — it is the first auto-index observed carrying the corrected wording, which is evidence the 2026-09-05 fix propagates | 2026-09-06 |
 | [bormaxi8080/osint-timeline](https://github.com/bormaxi8080/osint-timeline) (151★) | **Yes — never submitted** | A dated newsletter roundup, `timelines/osintech-timeline_159_23.04.2026.md`: "**Trace MCP.** MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" | Nothing to submit. It is a **frozen dated issue** — the file is an archive entry, so unlike the scrapers it will never refresh. See the derivatives note below | 2026-09-06 |
 | [blackwell-systems/gcf](https://github.com/blackwell-systems/gcf) (46★) | **Yes — never submitted, and not a directory** | `outreach/tier1-discovery-2026-06-17.md`, a competitive-discovery sheet somebody else keeps: "\| 88 \| [nikolai-vysotskyi/trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) \| MCP exploration server \| TOON output format option \|" — a scored tier-1 row in someone else's outreach list | Nothing to submit; the point is what put us on it. Their column says **TOON output**, not code intelligence, not token savings. A feature we have never led with is what made us legible to an outside prospector's filter. Worth knowing before the next positioning pass — it is the only observed case of an outsider naming why they picked us | 2026-09-06 |
+| [aitoolrank.io](https://aitoolrank.io) | **No** — checked 2026-09-07 | — | Curated AI tools directory by Dan Kornas (author of the 09-05 viral X post). Free submission available at `/submit/` (tool name, URL, short description, category, free/paid, contact email). No OAuth or payment required. Handed off to GitHub Distribution & Outreach per ledger boundaries | 2026-09-07 |
 
 ### The auto-index layer stopped copying us and started paraphrasing us (2026-09-06)
 
@@ -187,10 +188,17 @@ to, and anything claimed above it owes an argument.
 
 Two things follow for this file:
 
-- **The `t.co` / `x.com` referrer read on 09-07 is a hypothesis test**, not a
-  routine reading. If they do not appear, the lag is worse than 2 days or the
-  aggregation swallowed them — either way the referrer method is weaker than
-  four "nothing arrived" windows made it look.
+- **The `t.co` / `x.com` referrer read on 09-07 — HYPOTHESIS CONFIRMED (TRA-1074).**
+  Read on 2026-09-07: `t.co` appeared at **#1 in the entire referrer list** (77 views /
+  57 uniques), overtaking Google (66/45), reddit.com (60/30), trace-mcp.com (52/21)
+  and github.com (48/15). The ~2-day lag held cleanly: the 09-05 viral post converted
+  to referral traffic on GitHub within the expected reporting window. Furthermore,
+  **Facebook** emerged simultaneously as a major external referrer (46 views / 33 uniques
+  across `l.facebook.com`, `facebook.com`, `lm.facebook.com`), and single-day traffic on
+  09-05 hit 327 views / 196 uniques (lifting the 14-day total from 796/192 to 1,098/371).
+  The earlier finding that "only search and Reddit send traffic" is therefore retired: viral
+  off-GitHub placement moves numbers faster and higher than four fortnights of directory
+  submissions combined.
 - **Method for any future off-GitHub mention, three unauthenticated calls:**
   `api.fxtwitter.com/<handle>/status/<id>` for the post's own reach, then the
   stargazer timestamp series
