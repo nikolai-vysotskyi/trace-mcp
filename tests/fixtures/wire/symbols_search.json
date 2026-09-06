@@ -1,7 +1,7 @@
 {
   "symbols": [
     {
-      "id": 1891,
+      "id": 1898,
       "name": "ProjectManager",
       "fqn": null,
       "kind": "class",
@@ -10,7 +10,7 @@
       "line_end": 1300
     },
     {
-      "id": 6782,
+      "id": 6789,
       "name": "SubprojectManager",
       "fqn": null,
       "kind": "class",

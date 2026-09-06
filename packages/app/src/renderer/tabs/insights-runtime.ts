@@ -189,7 +189,10 @@ export function flattenDriftRows(payload: unknown): InsightRows {
       fix?: string;
     }>;
   };
-  if (!Array.isArray(p.issues)) return unrecognizedShape();
+  if (!Array.isArray(p.issues)) {
+    if (Object.keys(p).length === 0) return { rows: [] };
+    return unrecognizedShape();
+  }
   const rows = p.issues.map((it) => {
     const location = it.line ? `${shortFile(it.file ?? '?')}:${it.line}` : shortFile(it.file ?? '?');
     return {

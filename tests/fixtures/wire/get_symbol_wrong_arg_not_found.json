@@ -3,6 +3,6 @@
     "code": "NOT_FOUND",
     "message": "'src/daemon/project-manager.ts::ProjectManager#class' is not in the index",
     "reason": "unknown_symbol",
-    "help": "If this is a file path, it may not match the configured include globs \u2014 check `include`/`exclude` in .trace-mcp.json and reindex. Otherwise use search() to locate the symbol."
+    "help": "If this is a file path, it may not match the configured include globs — check `include`/`exclude` in .trace-mcp.json and reindex. Otherwise use search() to locate the symbol."
   }
 }
