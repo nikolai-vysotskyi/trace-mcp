@@ -25,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
-import { addRecentProject, removeRecentProject } from '../recent-projects';
+import { addRecentProject, disambiguateProjectLabels, removeRecentProject } from '../recent-projects';
 import { useUsefulPaint } from '../perf';
 import { DaemonDownPane } from '../components/DaemonDownPane';
 import { AddProjectControl } from './AddProjectControl';
@@ -243,6 +243,15 @@ export function Workspace() {
     [filtered, sortKey, sortDir],
   );
   const kpis = useMemo(() => deriveKpis(data.projects), [data.projects]);
+  // Same fix as the sidebar's Recent list (TRA-1058): `project.name` is a bare
+  // basename, and two roots that share a folder name (agent workdirs are the
+  // common case) render as identical, unselectable-by-eye rows. Keyed by root
+  // so it works whether or not the dashboard sent a name at all.
+  const labelByRoot = useMemo(() => {
+    const roots = visible.map((p) => p.root);
+    const labels = disambiguateProjectLabels(roots);
+    return new Map(roots.map((r, i) => [r, labels[i]]));
+  }, [visible]);
 
   // ── Selection ────────────────────────────────────────────────────────
   const getId = useCallback((p: { root: string }) => p.root, []);
@@ -346,6 +355,7 @@ export function Workspace() {
 
   const viewProps = {
     projects: visible,
+    labelByRoot,
     selected: selection.selected,
     canMutate: data.connected,
     onSelectChange: selection.set,

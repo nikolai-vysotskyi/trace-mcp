@@ -17,6 +17,8 @@ import { type ProjectViewModel, statusLabel, statusToDot } from './types';
 
 export interface WorkspaceCompactViewProps {
   projects: ProjectViewModel[];
+  /** Disambiguated display label per root — see Workspace.tsx (TRA-1058). */
+  labelByRoot: Map<string, string>;
   selected: Set<string>;
   onSelectChange: (root: string, selected: boolean) => void;
   onOpen: (root: string) => void;
@@ -31,14 +33,9 @@ export interface WorkspaceCompactViewProps {
 /** Matches the table so switching views does not change row rhythm. */
 export const COMPACT_ROW_H = 46;
 
-function basename(root: string): string {
-  const trimmed = root.replace(/\/+$/, '');
-  const idx = trimmed.lastIndexOf('/');
-  return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
-}
-
 interface RowProps {
   project: ProjectViewModel;
+  label: string;
   selected: boolean;
   cursored: boolean;
   canMutate: boolean;
@@ -54,6 +51,7 @@ interface RowProps {
 
 function CompactRow({
   project,
+  label,
   selected,
   cursored,
   canMutate,
@@ -93,7 +91,7 @@ function CompactRow({
         <Checkbox
           checked={selected}
           onChange={(next) => onSelectChange(project.root, next)}
-          aria-label={t('selectProject', { name: project.name || basename(project.root) })}
+          aria-label={t('selectProject', { name: label })}
         />
       </span>
       <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
@@ -104,9 +102,9 @@ function CompactRow({
           <div
             className="text-[13px] font-medium truncate"
             style={{ color: 'var(--label)' }}
-            title={project.name}
+            title={label}
           >
-            {project.name || basename(project.root)}
+            {label}
           </div>
           <div className="text-[11px] shrink-0" style={{ color: 'var(--label-secondary)' }}>
             {statusLabel(project.displayStatus)}
@@ -143,6 +141,7 @@ function CompactRow({
 
 export function WorkspaceCompactView({
   projects,
+  labelByRoot,
   selected,
   canMutate,
   onSelectChange,
@@ -203,6 +202,7 @@ export function WorkspaceCompactView({
         <CompactRow
           key={p.root}
           project={p}
+          label={labelByRoot.get(p.root) ?? p.name}
           selected={selected.has(p.root)}
           cursored={i === cursor}
           canMutate={canMutate}
