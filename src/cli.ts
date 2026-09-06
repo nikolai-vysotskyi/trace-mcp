@@ -767,6 +767,130 @@ program
       subscribeToProjectProgress(p.root);
     }
 
+    // ── Lazy HTTP project loading (TRA-1052) ──────────────────────────────
+    // The MCP path (createSessionTransport's caller, above) has always been
+    // able to auto-register/reload a project on first connect. The REST API
+    // never had an equivalent: every `/api/projects/*` read 404'd the moment
+    // `projectManager.getProject()` came back empty, which is the daemon's
+    // resident-in-memory set — a strict subset of what's registered on disk
+    // (idle-unloaded projects, or ones dropped from memory by a daemon
+    // restart, stay registered but aren't in that set). On a real workspace
+    // with 40+ registered projects and a handful resident, that made most of
+    // the project list open broken (404 banners, a raw "Project not found:
+    // <path>" string on Graph, Ask stuck on "Connecting…").
+    //
+    // One in-flight load per root, shared across concurrent requests for the
+    // same project — without this, N tabs/fetches racing a cold project would
+    // each fire their own addProject() (redundant DB opens/watcher starts).
+    const projectLoadPromises = new Map<string, Promise<void>>();
+
+    type ProjectResolution =
+      | { ok: true; managed: ManagedProject }
+      | {
+          ok: false;
+          status: 404 | 503;
+          reason: 'not_registered' | 'folder_missing' | 'loading' | 'indexing';
+          message: string;
+          retryAfterSec?: number;
+        };
+
+    /**
+     * Resolve a REST request's `?project=` to a resident `ManagedProject`,
+     * kicking off a background reload when it's registered but currently
+     * unloaded — mirrors the MCP auto-register path. Never throws; callers
+     * turn a non-ok result into a response via `writeProjectResolutionError`.
+     *
+     * `requireReady`: for routes that need a fully-indexed project (Ask),
+     * a resident-but-still-indexing project also answers "not ready yet"
+     * rather than racing a half-built index.
+     */
+    function resolveProjectForRest(
+      root: string,
+      opts?: { requireReady?: boolean },
+    ): ProjectResolution {
+      const managed = projectManager.getProject(root);
+      if (managed) {
+        if (opts?.requireReady && managed.status !== 'ready') {
+          return {
+            ok: false,
+            status: 503,
+            reason: 'indexing',
+            message: `"${path.basename(root)}" is still indexing — try again in a few seconds.`,
+            retryAfterSec: 3,
+          };
+        }
+        return { ok: true, managed };
+      }
+
+      const registryEntry = getProject(root);
+      if (!registryEntry) {
+        return {
+          ok: false,
+          status: 404,
+          reason: 'not_registered',
+          message: `"${path.basename(root)}" isn't registered with this daemon. Add it from the app's project list.`,
+        };
+      }
+      if (!fs.existsSync(root)) {
+        return {
+          ok: false,
+          status: 404,
+          reason: 'folder_missing',
+          message: `"${path.basename(root)}"'s folder no longer exists on disk. Remove it from the project list.`,
+        };
+      }
+
+      // Registered but idle-unloaded (or dropped by a daemon restart) — kick
+      // off (or join) a reload. `addProject()` itself is idempotent (returns
+      // the existing entry if one raced in first), but starting it twice from
+      // here would still pay setup cost twice, hence the shared promise map.
+      if (!projectLoadPromises.has(root)) {
+        const promise = projectManager
+          .addProject(root)
+          .then(() => {
+            subscribeToProjectProgress(root);
+            broadcastEvent({ type: 'project_status', project: root, status: 'indexing' });
+          })
+          .catch((err) => {
+            logger.warn(
+              { err: String(err), projectRoot: root },
+              'Lazy reload for REST request failed',
+            );
+          })
+          .finally(() => {
+            projectLoadPromises.delete(root);
+          });
+        projectLoadPromises.set(root, promise);
+      }
+      return {
+        ok: false,
+        status: 503,
+        reason: 'loading',
+        message: `Loading "${path.basename(root)}"…`,
+        retryAfterSec: 5,
+      };
+    }
+
+    /** Write a non-ok `ProjectResolution` as the HTTP response. */
+    function writeProjectResolutionError(
+      res: http.ServerResponse,
+      resolution: Extract<ProjectResolution, { ok: false }>,
+      contentType: 'json' | 'text' = 'json',
+    ): void {
+      const headers: Record<string, string> = {
+        'Content-Type': contentType === 'json' ? 'application/json' : 'text/plain',
+      };
+      if (resolution.retryAfterSec != null) {
+        headers['Retry-After'] = String(resolution.retryAfterSec);
+      }
+      res.writeHead(resolution.status, headers);
+      res.end(
+        contentType === 'json'
+          ? JSON.stringify({ error: resolution.message, reason: resolution.reason })
+          : resolution.message,
+      );
+    }
+
     // Shared project-level resources (TopologyStore, DecisionStore) — avoids per-session SQLite overhead
     const { ProjectResourcePool } = await import('./daemon/resource-pool.js');
     const resourcePool = new ProjectResourcePool();
@@ -1367,12 +1491,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const db = managed.store.db;
           let sql: string;
@@ -1434,12 +1558,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= or ?id= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const db = managed.store.db;
           const symbol = db
@@ -1499,12 +1623,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const scope = url.searchParams.get('scope') ?? 'project';
           const depth = parseInt(url.searchParams.get('depth') ?? '2', 10);
@@ -1570,12 +1694,12 @@ program
           res.end('Missing ?project= query param');
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end(`Project not found: ${projectRoot}`);
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution, 'text');
           return;
         }
+        const managed = resolution.managed;
         try {
           const scope = url.searchParams.get('scope') ?? 'project';
           const depth = parseInt(url.searchParams.get('depth') ?? '2', 10);
@@ -1661,12 +1785,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const db = managed.store.db;
           const totalSymbols =
@@ -1727,12 +1851,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const db = managed.store.db;
           const files =
@@ -1767,12 +1891,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         const categoryParam = url.searchParams.get('category');
         const categories = categoryParam
           ? categoryParam
@@ -1887,12 +2011,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const db = managed.store.db;
           let sql: string;
@@ -2201,11 +2325,33 @@ program
 
       // REST API: list projects
       if (req.method === 'GET' && url.pathname === '/api/projects') {
-        const projects = projectManager.listProjects().map((p) => ({
-          root: p.root,
-          status: p.status,
-          error: p.error,
-        }));
+        // Resident (in-memory) projects are a strict subset of what's
+        // registered on disk — idle-unloaded projects and ones a daemon
+        // restart hasn't reloaded yet stay registered but aren't resident.
+        // Reporting only the resident set here made the app's CTA read the
+        // *daemon's memory pressure* instead of the project's actual state:
+        // an already-indexed, merely-unloaded project showed "+ Index
+        // project" instead of "Reindex" (TRA-1052). A registered entry was
+        // indexed at least once to get registered, so 'ready' is the correct
+        // last-known status until a resident reload (via
+        // resolveProjectForRest, above) says otherwise over SSE.
+        const resident = new Map(projectManager.listProjects().map((p) => [p.root, p]));
+        const projects: { root: string; status: string; error?: string }[] = listProjects().map(
+          (entry) => {
+            const managed = resident.get(entry.root);
+            return managed
+              ? { root: managed.root, status: managed.status, error: managed.error }
+              : { root: entry.root, status: 'ready' };
+          },
+        );
+        // Resident projects the registry doesn't know about (read-mostly
+        // subprojects served with `persist: false` — see addProject()) still
+        // need to appear so their live status reaches the UI.
+        for (const managed of resident.values()) {
+          if (!projects.some((p) => p.root === managed.root)) {
+            projects.push({ root: managed.root, status: managed.status, error: managed.error });
+          }
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ projects }));
         return;
@@ -2219,12 +2365,16 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+        // A registered-but-idle-unloaded project answers "Reindex" from the
+        // app's CTA (its last known status is 'ready') — resolving it here
+        // lazily reloads it instead of 404ing; the reload's own indexAll()
+        // covers the user's intent even though it isn't a forced rebuild.
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         // R09 v2: lifecycle events around the reindex call.
         // started is fire-and-forget; completed/errored fire on the
         // async settlement of the pipeline promise.
@@ -2649,12 +2799,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= parameter' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed || managed.status !== 'ready') {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project not found or not ready' }));
+        const resolution = resolveProjectForRest(projectRoot, { requireReady: true });
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
         try {
           const { resolveProvider } = await import('./ai/ask-shared.js');
           // Reload config from disk so we pick up settings changed via the UI
@@ -2682,12 +2832,12 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= parameter' }));
           return;
         }
-        const managed = projectManager.getProject(projectRoot);
-        if (!managed || managed.status !== 'ready') {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Project not found or not ready' }));
+        const resolution = resolveProjectForRest(projectRoot, { requireReady: true });
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
           return;
         }
+        const managed = resolution.managed;
 
         let body: {
           messages?: { role: string; content: string }[];
