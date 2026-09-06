@@ -14,6 +14,7 @@
  */
 
 import type { FreshnessLevel, FreshnessSummary } from './freshness.js';
+import { minMax } from '../util/minmax.js';
 
 export interface ConfidenceWeights {
   top1_strength: number;
@@ -79,7 +80,7 @@ export function computeRetrievalConfidence(input: ConfidenceInput): ConfidenceBr
 
   const top1 = input.scores[0] ?? 0;
   const top2 = input.scores[1] ?? 0;
-  const maxScore = Math.max(...input.scores);
+  const maxScore = minMax(input.scores).max;
 
   const top1Strength = clamp01(maxScore > 0 ? top1 / maxScore : 0);
   const topGap = clamp01(maxScore > 0 ? Math.max(0, top1 - top2) / maxScore : 0);
