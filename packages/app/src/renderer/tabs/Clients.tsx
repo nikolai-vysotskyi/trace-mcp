@@ -42,7 +42,6 @@ import { relativeTime } from '../i18n/format';
 import { DaemonDownPane } from '../components/DaemonDownPane';
 import { Icon } from '../lattice/icons';
 import {
-  Badge,
   Button,
   EmptyState,
   Menu,
@@ -135,6 +134,14 @@ interface RichClientStatus {
    * ask the user rather than reuse a level.
    */
   level?: EnforcementLevel | null;
+  /**
+   * Whether the client's config file exists (TRA-479). Splits the one thing a
+   * `missing` row could not say: a config sitting there without a trace-mcp
+   * entry is one click from working, an absent one usually means the client
+   * isn't installed here. Absent on a daemon older than the field, which reads
+   * as "we don't know" and shows neither caption.
+   */
+  configExists?: boolean;
 }
 
 // ── Enforcement levels ────────────────────────────────────────────
@@ -298,6 +305,7 @@ function SupportedClientRow({
   label,
   status,
   configPath,
+  configExists,
   staleReason,
   error,
   configuring,
@@ -309,16 +317,23 @@ function SupportedClientRow({
   name: ClientName;
   label: string;
   /**
-   * Drives the right-hand control:
+   * Drives the right-hand control, and the control is the only thing that names
+   * the state (TRA-479). A row used to carry an "Update available" badge next to
+   * an "Update" button, six times in a column, under a header already counting
+   * them — one condition said three ways, which DESIGN.md §5 forbids. The verb
+   * says it once:
    *   missing       → "Connect" (level menu for the Claude family)
    *   up_to_date    → a green dot + the word "Connected"
-   *   stale         → "Update available" badge + "Update"
-   *   legacy        → "Legacy" badge + "Migrate"
+   *   stale         → "Update", with the drifted field on its tooltip
+   *   legacy        → "Migrate", with the rename on its tooltip
    *   unmanageable  → "Set up manually…", which discloses the steps
-   *   unknown       → "Connected" (presence-only — Codex TOML, can't compare)
+   *   unknown       → a neutral dot + "Configured" — the entry is there and the
+   *                   format (Codex TOML) cannot be compared, which is not the
+   *                   same claim as "Connected" and no longer looks like it
    */
   status: ClientConfigStatus;
   configPath?: string | null;
+  configExists?: boolean;
   staleReason?: string;
   /** What the last write for this row said when it failed. */
   error?: string;
@@ -334,7 +349,11 @@ function SupportedClientRow({
   const levelMenu = useMenuAnchor();
   const [showSteps, setShowSteps] = useState(false);
 
-  const connected = status === 'up_to_date' || status === 'unknown';
+  const connected = status === 'up_to_date';
+  /* Presence-only detection (Codex TOML): the entry is there, drift cannot be
+     compared. It gets its own word, not "Connected" borrowed from a row we
+     actually verified. */
+  const presenceOnly = status === 'unknown';
   /* Connect asks; Update does not. Setting trace-mcp up for the first time is
      the moment the enforcement level is chosen — repairing a config that
      drifted on the next upgrade is not, and re-asking could only overwrite the
@@ -346,22 +365,36 @@ function SupportedClientRow({
 
   /* One caption slot, and only when there is something to say. A failed write
      outranks the path: the path is where the entry lives, which the row also
-     implies, and the error is the only thing here the user can act on. */
+     implies, and the error is the only thing here the user can act on.
+
+     An unconfigured row used to be the one row on this screen with nothing in
+     this slot — a bare "Windsurf · Connect" that could not tell an installed
+     client one click from working apart from one that is not on the machine at
+     all (TRA-479). It now says which: the file Connect will write into, or that
+     there is no such file. */
   const caption = error
     ? error
     : isManual && showSteps
       ? MANUAL_HINTS[name]
-      : (connected || status === 'stale' || status === 'legacy') && configPath
-        ? shortPath(configPath)
-        : null;
+      : status === 'missing'
+        ? configExists === true && configPath
+          ? shortPath(configPath)
+          : configExists === false
+            ? t('noConfigFile')
+            : null
+        : (connected || presenceOnly || status === 'stale' || status === 'legacy') && configPath
+          ? shortPath(configPath)
+          : null;
 
   return (
     <div
       className="flex items-center gap-2.5 px-3"
       style={{
-        minHeight: 44,
-        paddingTop: caption ? 8 : 0,
-        paddingBottom: caption ? 8 : 0,
+        /* 44 bare, 48 with a caption — both on the 4pt grid. Padding used to
+           set this height and landed the row on 46, which is off the scale and
+           now sets the rhythm for the whole list: after TRA-479 almost every
+           row carries a caption. */
+        minHeight: caption ? 48 : 44,
         borderBottom: last ? 'none' : '0.5px solid var(--separator)',
       }}
     >
@@ -384,40 +417,35 @@ function SupportedClientRow({
         )}
       </div>
 
-      {connected ? (
-        /* Colour alone never carries the state: the dot is paired with the word. */
+      {connected || presenceOnly ? (
+        /* Colour alone never carries the state: the dot is paired with the word.
+           Neutral for presence-only — a grey dot next to "Configured" claims
+           exactly what we checked, where a green one next to "Connected" would
+           claim a comparison we never ran. */
         <span
           className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
           style={{ color: 'var(--label-secondary)' }}
+          title={presenceOnly ? t('configuredHint') : undefined}
         >
-          <StatusDot tone="green" />
-          {t('connected')}
+          <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
+          {presenceOnly ? t('configured') : t('connected')}
         </span>
       ) : status === 'legacy' ? (
-        /* Blue, not orange: nothing is broken or drifted here — the entry names
-           the server `trace-mcp` where init now writes `trace`, and both reach
-           the same binary. The word carries the state; the tone only sorts it
-           away from the amber "something needs repairing" rows above. */
-        <>
-          <Badge tone="blue" title={t('legacyHint')}>
-            {t('legacyEntry')}
-          </Badge>
-          <Button disabled={configuring} onClick={onUpdate}>
-            {configuring ? t('migrating') : t('migrate')}
-          </Button>
-        </>
+        /* Nothing is broken or drifted here — the entry names the server
+           `trace-mcp` where init now writes `trace`, and both reach the same
+           binary. The verb says it, and the tooltip says why; the row used to
+           say it a second time in a blue badge beside the same button. */
+        <Button disabled={configuring} onClick={onUpdate} title={t('legacyHint')}>
+          {configuring ? t('migrating') : t('migrate')}
+        </Button>
       ) : status === 'stale' ? (
-        <>
-          <Badge
-            tone="orange"
-            title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
-          >
-            {t('updateAvailable')}
-          </Badge>
-          <Button disabled={configuring} onClick={onUpdate}>
-            {configuring ? t('updating') : t('update')}
-          </Button>
-        </>
+        <Button
+          disabled={configuring}
+          onClick={onUpdate}
+          title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
+        >
+          {configuring ? t('updating') : t('update')}
+        </Button>
       ) : isManual ? (
         <Button
           active={showSteps}
@@ -717,6 +745,7 @@ export function Clients() {
                       label={c.label}
                       status={s.status}
                       configPath={s.configPath}
+                      configExists={s.configExists}
                       staleReason={s.staleReason}
                       error={errors[c.name]}
                       configuring={

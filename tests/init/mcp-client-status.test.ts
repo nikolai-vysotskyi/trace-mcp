@@ -54,8 +54,20 @@ describe('getMcpClientStatuses', () => {
   it('reports `unmanageable` for warp and jetbrains-ai (UI-only configs)', () => {
     const result = getMcpClientStatuses(projectRoot, 'global', ['warp', 'jetbrains-ai']);
     expect(result).toEqual([
-      { client: 'warp', configPath: null, status: 'unmanageable', level: null },
-      { client: 'jetbrains-ai', configPath: null, status: 'unmanageable', level: null },
+      {
+        client: 'warp',
+        configPath: null,
+        status: 'unmanageable',
+        level: null,
+        configExists: false,
+      },
+      {
+        client: 'jetbrains-ai',
+        configPath: null,
+        status: 'unmanageable',
+        level: null,
+        configExists: false,
+      },
     ]);
   });
 
@@ -206,6 +218,26 @@ describe('getMcpClientStatuses', () => {
     );
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
     expect(s.status).toBe('missing');
+  });
+
+  /* TRA-479: `missing` folds two facts a reader acts on differently — a config
+     sitting there without a trace entry is one click from working, an absent
+     one usually means the client is not installed. The app's Clients screen
+     rendered both as the same bare "Connect" row because this was the only
+     place that knew, and it did not say. */
+  it('distinguishes a config file that exists without a trace entry from no config at all', () => {
+    fs.writeFileSync(
+      path.join(fakeHome, '.claude.json'),
+      JSON.stringify({ mcpServers: { 'other-server': { command: 'x', args: [] } } }, null, 2),
+    );
+    const [present, absent] = getMcpClientStatuses(projectRoot, 'global', [
+      'claude-code',
+      'cursor',
+    ]);
+    expect(present.status).toBe('missing');
+    expect(present.configExists).toBe(true);
+    expect(absent.status).toBe('missing');
+    expect(absent.configExists).toBe(false);
   });
 
   it('does not set alwaysLoad on cursor, so a cursor entry without it is up_to_date', () => {

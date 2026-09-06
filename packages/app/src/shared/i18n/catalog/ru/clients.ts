@@ -15,14 +15,16 @@ export const clients = {
   sessionIdle: 'Простаивает',
   sessionStale: 'Давно молчит',
 
+  configured: 'Настроен',
+  configuredHint:
+    'trace-mcp есть в конфигурации клиента; этот формат нельзя проверить на обновления',
+  noConfigFile: 'Файл конфигурации не найден',
   connected: 'Подключён',
   connect: 'Подключить',
   connecting: 'Подключаем…',
-  updateAvailable: 'Есть обновление',
   update: 'Обновить',
   updating: 'Обновляем…',
   updateAll: 'Обновить все',
-  legacyEntry: 'Старый ключ',
   legacyHint: 'Записан как trace-mcp; init теперь пишет trace',
   migrate: 'Перенести',
   migrating: 'Переносим…',

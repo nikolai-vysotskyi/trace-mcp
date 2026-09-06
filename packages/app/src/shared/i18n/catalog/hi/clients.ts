@@ -15,14 +15,16 @@ export const clients = {
   sessionIdle: 'निष्क्रिय',
   sessionStale: 'पुराना',
 
+  configured: 'कॉन्फ़िगर किया गया',
+  configuredHint:
+    'इस क्लाइंट के कॉन्फ़िग में trace-mcp है; इस प्रारूप में अपडेट जाँचे नहीं जा सकते',
+  noConfigFile: 'कोई कॉन्फ़िग फ़ाइल नहीं मिली',
   connected: 'कनेक्टेड',
   connect: 'कनेक्ट करें',
   connecting: 'कनेक्ट हो रहा है…',
-  updateAvailable: 'अपडेट उपलब्ध',
   update: 'अपडेट',
   updating: 'अपडेट हो रहा है…',
   updateAll: 'सभी अपडेट करें',
-  legacyEntry: 'पुराना',
   legacyHint: 'trace-mcp के रूप में पंजीकृत; init अब trace लिखता है',
   migrate: 'माइग्रेट करें',
   migrating: 'माइग्रेट हो रहा है…',
