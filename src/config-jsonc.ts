@@ -170,6 +170,15 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
 }
 
 /**
+ * How many per-project sections with no registry entry survive a sweep
+ * (TRA-706). A section runs ~1.7 KB on the reported machine, so this is the
+ * stated ceiling on the unregistered half of `.config.json`: ~170 KB, against
+ * the 1 MB / 591 sections that prompted the issue. Well past any plausible
+ * count of projects a person opens without ever running `add`/`init`.
+ */
+export const MAX_UNREGISTERED_SECTIONS = 100;
+
+/**
  * Drop dead per-project sections from `.config.json` (TRA-702).
  *
  * `projects` is the only unbounded map in the global config, and it was the
@@ -189,6 +198,14 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
  *    runtime abandons its checkout *in place*, so these stay on disk forever
  *    and an existence check alone never reaches them. An explicitly registered
  *    workdir-shaped root is a deliberate act (`add`/`init`) and is kept.
+ *
+ * A third rule (TRA-706) puts a ceiling under the file rather than a heuristic
+ * over it: at most {@link MAX_UNREGISTERED_SECTIONS} sections that no registry
+ * entry claims survive a sweep, oldest first. The two rules above only reach
+ * roots that are gone or workdir-shaped; a runtime that scatters live scratch
+ * checkouts under some other path still grows this map without bound, and each
+ * section costs a reparse on every server start. Registered projects are never
+ * evicted — that map is bounded by deliberate `add`/`init` calls.
  *
  * Removal is per-key against one in-memory buffer, then a single atomic write.
  * Replacing the whole `projects` object in one edit would be shorter, but it
@@ -213,13 +230,22 @@ export function pruneProjectConfigSections(): string[] {
 
       const registered = new Set(listProjects().map((p) => p.root));
       const removed: string[] = [];
+      // Survivors of the two rules above, in file order. `modify` appends a new
+      // key at the end and edits an existing one in place, so this is insertion
+      // order — oldest first, which is what makes the overflow slice below the
+      // right end to cut.
+      const keptUnregistered: string[] = [];
 
       for (const root of Object.keys(projects)) {
         const claimed = registered.has(root);
         const dead = !claimed && !fs.existsSync(root);
         const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
         if (dead || orphanWorkdir) removed.push(root);
+        else if (!claimed) keptUnregistered.push(root);
       }
+
+      const overflow = keptUnregistered.length - MAX_UNREGISTERED_SECTIONS;
+      if (overflow > 0) removed.push(...keptUnregistered.slice(0, overflow));
 
       if (removed.length === 0) return []; // don't rewrite a healthy config
 

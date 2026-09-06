@@ -58,6 +58,16 @@ All trace state lives in `~/.trace/` (with automatic backwards compatibility and
     my-app-a1b2c3d4e5f6.db  # per-project databases
 ```
 
+### Pruning of per-project sections
+
+The server writes one `projects[...]` section per directory it indexes, and reparses
+every section on start. An hourly sweep drops the sections nothing needs: a root that
+no longer exists and no registry entry claims, and a one-shot agent-run workdir. On top
+of that, at most **100 sections not claimed by `registry.json`** are kept, oldest first
+— so the unregistered half of the file stays around 170 KB no matter how many throwaway
+directories have been indexed. Projects added with `trace add` / `trace init` are
+registered and are never pruned.
+
 ### Config merge order
 
 1. **Global defaults** — `~/.trace/.config.json` (or `~/.trace-mcp/.config.json` fallback)
