@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: 'El daemon inició una sesión pero no la identificó.',
   errorHttp: 'La petición del informe falló (HTTP {{status}}). {{detail}}',
   errorToolFailed: 'El informe no llegó a ejecutarse.',
+  errorUnrecognizedShape:
+    'El informe se ejecutó, pero su respuesta no coincidió con la forma esperada — esto parece un error, no un proyecto vacío.',
 
   reportDriftTitle: 'Desvío de CLAUDE.md',
   reportDriftDescription:

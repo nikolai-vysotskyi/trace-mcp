@@ -83,10 +83,10 @@ export const NOTEBOOK_TOOLS: ToolDef[] = [
     descriptionKey: 'notebook:symbolDescription',
     fields: [
       {
-        key: 'fqn',
-        labelKey: 'notebook:fqnLabel',
-        placeholderKey: 'notebook:fqnPlaceholder',
-        missingKey: 'notebook:fqnMissing',
+        key: 'symbol_id',
+        labelKey: 'notebook:symbolIdLabel',
+        placeholderKey: 'notebook:symbolIdPlaceholder',
+        missingKey: 'notebook:symbolIdMissing',
         required: true,
       },
     ],

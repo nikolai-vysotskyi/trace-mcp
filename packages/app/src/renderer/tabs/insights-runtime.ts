@@ -159,9 +159,12 @@ export function buildLoadToolsCall(reportId: ReportId, id: number = 2): JsonRpcC
 
 // ── Result shaping ───────────────────────────────────────────────────
 // Each MCP tool returns a slightly different payload. The renderer needs
-// a uniform shape, so we flatten here. Defensive — if the payload is
-// missing or malformed we return an empty rows array rather than throwing,
-// because the renderer surfaces "0 rows" as the empty state.
+// a uniform shape, so we flatten here. A missing/`null` payload (the daemon
+// truly has nothing to say) flattens to zero rows — that's the real empty
+// state. A payload that IS present but doesn't match any shape we know
+// throws instead (TRA-1068): five bugs in production were a mapping
+// silently returning [] on a field-name mismatch and the renderer drawing
+// "nothing to report" over what was actually broken parsing.
 
 function shortFile(file: string): string {
   // Strip a leading project root if it leaked through (the tool usually
@@ -169,7 +172,13 @@ function shortFile(file: string): string {
   return file.replace(/^.*?\/(?=src\/|packages\/|tests\/|plans\/|docs\/)/, '');
 }
 
+/** Nullish payload = genuinely nothing to report; anything else must resolve to a real shape. */
+function unrecognizedShape(): never {
+  throw new Error(t('insights:errorUnrecognizedShape'));
+}
+
 export function flattenDriftRows(payload: unknown): InsightRows {
+  if (payload === null || payload === undefined) return { rows: [] };
   const p = payload as {
     issues?: Array<{
       file?: string;
@@ -180,8 +189,8 @@ export function flattenDriftRows(payload: unknown): InsightRows {
       fix?: string;
     }>;
   };
-  const issues = Array.isArray(p?.issues) ? p.issues : [];
-  const rows = issues.map((it) => {
+  if (!Array.isArray(p.issues)) return unrecognizedShape();
+  const rows = p.issues.map((it) => {
     const location = it.line ? `${shortFile(it.file ?? '?')}:${it.line}` : shortFile(it.file ?? '?');
     return {
       primary: t('insights:rowIssue', {
@@ -196,14 +205,25 @@ export function flattenDriftRows(payload: unknown): InsightRows {
 }
 
 export function flattenPagerankRows(payload: unknown): InsightRows {
-  // Tool returns a bare array; the JSON-RPC content unwrap in the client
-  // produces either an array directly or an envelope { items: [...] }.
-  const arr = Array.isArray(payload)
-    ? payload
-    : Array.isArray((payload as { items?: unknown[] })?.items)
-      ? (payload as { items: Array<{ file?: string; score?: number }> }).items
-      : [];
-  const rows = (arr as Array<{ file?: string; score?: number }>).map((it) => ({
+  if (payload === null || payload === undefined) return { rows: [] };
+  // get_pagerank's own code returns a bare array, but the tool-gate layer
+  // (src/server/tool-gate-helpers.ts:rewriteResponseJson) wraps any
+  // non-object top-level result as `{ data: [...] }` when it attaches hints
+  // or budget metadata — which happens on effectively every call. `items` is
+  // kept as a second envelope for tools that wrap that way natively.
+  let arr: Array<{ file?: string; score?: number }>;
+  if (Array.isArray(payload)) {
+    arr = payload;
+  } else if (typeof payload === 'object') {
+    const obj = payload as { data?: unknown; items?: unknown };
+    if (Array.isArray(obj.data)) arr = obj.data as Array<{ file?: string; score?: number }>;
+    else if (Array.isArray(obj.items)) arr = obj.items as Array<{ file?: string; score?: number }>;
+    else if (Object.keys(obj).length === 0) arr = [];
+    else return unrecognizedShape();
+  } else {
+    return unrecognizedShape();
+  }
+  const rows = arr.map((it) => ({
     primary: shortFile(it.file ?? '?'),
     secondary:
       typeof it.score === 'number'
@@ -215,26 +235,32 @@ export function flattenPagerankRows(payload: unknown): InsightRows {
 }
 
 export function flattenRiskHotspotRows(payload: unknown): InsightRows {
+  if (payload === null || payload === undefined) return { rows: [] };
+  if (typeof payload !== 'object') return unrecognizedShape();
   const p = payload as {
     hotspots?: Array<{
       file?: string;
       score?: number;
-      complexity?: number;
+      max_cyclomatic?: number;
       commits?: number;
-      confidence_level?: string;
+      assessment?: string;
     }>;
+    // get_risk_hotspots' own "nothing found" shape (src/tools/register/git.ts)
+    // has no `hotspots` key at all — a real empty result, not a parse miss.
+    message?: string;
   };
-  const hotspots = Array.isArray(p?.hotspots) ? p.hotspots : [];
+  let hotspots: NonNullable<typeof p.hotspots>;
+  if (Array.isArray(p.hotspots)) hotspots = p.hotspots;
+  else if (typeof p.message === 'string') hotspots = [];
+  else if (Object.keys(p).length === 0) hotspots = [];
+  else return unrecognizedShape();
   const rows = hotspots.map((it) => ({
     primary: shortFile(it.file ?? '?'),
-    secondary: t(
-      it.confidence_level ? 'insights:rowHotspotConfidence' : 'insights:rowHotspot',
-      {
-        complexity: it.complexity ?? '?',
-        commits: it.commits ?? '?',
-        confidence: it.confidence_level,
-      },
-    ),
+    secondary: t(it.assessment ? 'insights:rowHotspotConfidence' : 'insights:rowHotspot', {
+      complexity: it.max_cyclomatic ?? '?',
+      commits: it.commits ?? '?',
+      confidence: it.assessment,
+    }),
     badge: typeof it.score === 'number' ? it.score.toFixed(1) : undefined,
   }));
   return { rows };

@@ -145,6 +145,7 @@ import { handleDashboardRequest } from './api/dashboard-routes.js';
 import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
 import { handleMemoryRequest } from './api/memory-routes.js';
 import { handleProjectStatsRequest } from './api/project-stats-routes.js';
+import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
@@ -1375,43 +1376,7 @@ program
         }
         try {
           const db = managed.store.db;
-          let sql: string;
-          let params: unknown[];
-
-          if (isolated) {
-            sql = `SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
-                   FROM symbols s
-                   JOIN files f ON f.id = s.file_id
-                   LEFT JOIN nodes n ON n.ref_id = s.id AND n.node_type = 'symbol'
-                   LEFT JOIN edges e_out ON e_out.source_node_id = n.id
-                   LEFT JOIN edges e_in ON e_in.target_node_id = n.id
-                   WHERE e_out.id IS NULL AND e_in.id IS NULL`;
-            params = [];
-            if (query) {
-              sql += ` AND s.fqn LIKE ?`;
-              params.push(`%${query}%`);
-            }
-            if (kind) {
-              sql += ` AND s.kind = ?`;
-              params.push(kind);
-            }
-            sql += ` LIMIT ?`;
-            params.push(limit);
-          } else {
-            sql = `SELECT s.id, s.fqn, s.kind, f.path as file_path, s.line_start, s.line_end
-                   FROM symbols s JOIN files f ON f.id = s.file_id WHERE 1=1`;
-            params = [];
-            if (query) {
-              sql += ` AND s.fqn LIKE ?`;
-              params.push(`%${query}%`);
-            }
-            if (kind) {
-              sql += ` AND s.kind = ?`;
-              params.push(kind);
-            }
-            sql += ` ORDER BY s.fqn LIMIT ?`;
-            params.push(limit);
-          }
+          const { sql, params } = buildSymbolsSearchQuery(query, kind, limit, isolated);
 
           const symbols = db.prepare(sql).all(...params);
           res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: '데몬이 세션을 시작했지만 이름을 반환하지 않았습니다.',
   errorHttp: '리포트 요청이 실패했습니다 (HTTP {{status}}). {{detail}}',
   errorToolFailed: '리포트가 실행되지 않았습니다.',
+  errorUnrecognizedShape:
+    '리포트는 실행되었지만 응답이 예상한 형식과 일치하지 않았습니다 — 빈 프로젝트가 아니라 버그로 보입니다.',
 
   reportDriftTitle: 'CLAUDE.md 불일치',
   reportDriftDescription: '에이전트 설정 파일의 오래된 경로와 사라진 심볼 참조.',

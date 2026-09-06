@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: 'デーモンはセッションを開始しましたが、名前を返しませんでした。',
   errorHttp: 'レポートのリクエストが失敗しました（HTTP {{status}}）。{{detail}}',
   errorToolFailed: 'レポートは実行されませんでした。',
+  errorUnrecognizedShape:
+    'レポートは実行されましたが、レスポンスが想定される形式と一致しませんでした — これは空のプロジェクトではなく、不具合のように見えます。',
 
   reportDriftTitle: 'CLAUDE.md のずれ',
   reportDriftDescription: 'エージェント設定ファイル内の古いパスと存在しないシンボル参照。',

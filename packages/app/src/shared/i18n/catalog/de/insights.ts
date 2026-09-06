@@ -10,6 +10,8 @@ export const insights = {
   errorNoSession: 'Der Daemon hat eine Sitzung gestartet, sie aber nicht benannt.',
   errorHttp: 'Die Berichtsanfrage ist fehlgeschlagen (HTTP {{status}}). {{detail}}',
   errorToolFailed: 'Der Bericht wurde nicht ausgeführt.',
+  errorUnrecognizedShape:
+    'Der Bericht wurde ausgeführt, aber die Antwort entsprach nicht der erwarteten Form — das sieht nach einem Fehler aus, nicht nach einem leeren Projekt.',
 
   reportDriftTitle: 'CLAUDE.md-Abweichungen',
   reportDriftDescription: 'Veraltete Pfade und tote Symbolverweise in Agenten-Konfigurationsdateien.',

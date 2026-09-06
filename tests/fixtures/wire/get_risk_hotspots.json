@@ -1,0 +1,59 @@
+{
+  "hotspots": [
+    {
+      "file": "src/daemon/project-manager.ts",
+      "max_cyclomatic": 175,
+      "commits": 20,
+      "score": 532.79,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    },
+    {
+      "file": "src/indexer/pipeline.ts",
+      "max_cyclomatic": 143,
+      "commits": 28,
+      "score": 481.52,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    },
+    {
+      "file": "packages/app/src/renderer/tabs/ProjectOverview.tsx",
+      "max_cyclomatic": 149,
+      "commits": 18,
+      "score": 438.72,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    },
+    {
+      "file": "packages/app/src/renderer/App.tsx",
+      "max_cyclomatic": 95,
+      "commits": 35,
+      "score": 340.43,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    },
+    {
+      "file": "src/server/server.ts",
+      "max_cyclomatic": 118,
+      "commits": 15,
+      "score": 327.17,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    },
+    {
+      "file": "src/memory/decision-store.ts",
+      "max_cyclomatic": 126,
+      "commits": 11,
+      "score": 313.1,
+      "assessment": "high",
+      "confidence_level": "medium",
+      "signals_fired": 2
+    }
+  ],
+  "total": 6
+}
