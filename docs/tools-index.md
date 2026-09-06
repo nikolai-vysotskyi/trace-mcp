@@ -96,7 +96,7 @@ which excludes the framework-specific rows.
 | `export_graph` | Export the dependency graph in formats external tools understand. | always |
 | `export_security_context` | Export security context for MCP server analysis. | always |
 | `extract_function` | Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). | always |
-| `find_usages` | Find all places that reference a symbol or file (imports, calls, renders, dispatches). | always |
+| `find_usages` | Find all references to a symbol or file (imports, calls, renders, dispatches). | always |
 | `generate_docs` | Generate project documentation from the code graph — architecture, API surface, data models, components, dependencies. | always |
 | `generate_insights_report` | Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-ti… | always |
 | `generate_sbom` | Generate a Software Bill of Materials (SBOM) from package manifests and lockfiles. | always |

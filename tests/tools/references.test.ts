@@ -241,4 +241,76 @@ describe('findReferences', () => {
       expect(v.ambiguous_filtered).toBeUndefined();
     });
   });
+  describe('response ceiling (TRA-1049)', () => {
+    function withCallers(n: number): void {
+      const target = addSymbol(store, { filePath: 'src/hot.ts', name: 'HotTarget', kind: 'class' });
+      for (let i = 0; i < n; i += 1) {
+        const caller = addSymbol(store, {
+          filePath: `src/c${i}.ts`,
+          name: `caller${i}`,
+          kind: 'function',
+        });
+        store.insertEdge(caller.nodeId, target.nodeId, 'calls');
+      }
+    }
+
+    it('caps the page at 50 by default while total still counts every reference', () => {
+      withCallers(120);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(50);
+      expect(v.total).toBe(120);
+      expect(v.truncated).toEqual({ returned: 50, of: 120 });
+      // The tier summary describes the whole answer, not the page.
+      expect(v.resolution_tiers.ast_resolved + v.resolution_tiers.ast_inferred).toBe(120);
+    });
+
+    it('leaves a short answer whole and unmarked', () => {
+      withCallers(3);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(3);
+      expect(v.truncated).toBeUndefined();
+    });
+
+    it('cuts the fuzzy end, not an arbitrary one', () => {
+      // The noise is inserted first, so an unsorted page would be all of it —
+      // which is what `getIncomingEdges` (no ORDER BY) actually returns.
+      const target = addSymbol(store, { filePath: 'src/hot.ts', name: 'HotTarget', kind: 'class' });
+      const insert = (i: number, tier: string): void => {
+        const caller = addSymbol(store, {
+          filePath: `src/c${i}.ts`,
+          name: `caller${i}`,
+          kind: 'function',
+        });
+        store.insertEdge(caller.nodeId, target.nodeId, 'calls', true, undefined, false, tier);
+      };
+      for (let i = 0; i < 60; i += 1) insert(i, 'ast_inferred');
+      for (let i = 60; i < 70; i += 1) insert(i, 'lsp_resolved');
+
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+        // The ambiguity filter only fires on text_matched, and this target's
+        // name is unique — but pass it anyway so the test measures ordering.
+        includeAmbiguousTextMatched: true,
+      })._unsafeUnwrap();
+
+      expect(v.total).toBe(70);
+      expect(v.references).toHaveLength(50);
+      expect(v.references.filter((r) => r.resolution_tier === 'lsp_resolved')).toHaveLength(10);
+      expect(v.resolution_tiers.lsp_resolved).toBe(10);
+    });
+
+    it('honours an explicit limit', () => {
+      withCallers(120);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+        limit: 200,
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(120);
+      expect(v.truncated).toBeUndefined();
+    });
+  });
 });
