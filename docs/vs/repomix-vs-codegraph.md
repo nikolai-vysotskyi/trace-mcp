@@ -172,5 +172,5 @@ Yes. Repomix for a remote repository you want to look at once; codegraph for the
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers, with the same sourcing discipline.
-- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html)
+- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with any of these tools.

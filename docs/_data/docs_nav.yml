@@ -19,6 +19,8 @@
   url: /vs/codegraph.html
 - title: vs Context Mode
   url: /vs/context-mode.html
+- title: vs code-review-graph
+  url: /vs/code-review-graph.html
 - title: Repomix vs codegraph
   url: /vs/repomix-vs-codegraph.html
 - title: PR review context benchmark
