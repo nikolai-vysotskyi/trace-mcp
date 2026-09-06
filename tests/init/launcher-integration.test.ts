@@ -64,8 +64,15 @@ function runLauncherAsync(
     });
     child.on('error', reject);
     child.on('close', (status, signal) => {
-      assertNotKilled({ signal }, args);
-      resolve({ status, stdout, stderr });
+      // assertNotKilled throws, and a throw inside an EventEmitter handler
+      // escapes the promise chain as an unhandled exception instead of
+      // rejecting it — the timeout would surface as a hung test, not a failure.
+      try {
+        assertNotKilled({ signal }, args);
+        resolve({ status, stdout, stderr });
+      } catch (err) {
+        reject(err);
+      }
     });
   });
 }
@@ -1084,14 +1091,6 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
 
-  // TRA-707: launcher.log takes a line on every MCP start and nothing else
-  // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
-  // daemon's own rotation cannot reach a file written from bash.
-  //
-  // This has to run on both CI runners, not one: the size probe is the part
-  // that broke, and GNU and BSD `stat` disagree about the flags it uses. The
-  // first cut of this test passed on macOS while the Linux job caught the shim
-  // silently never rotating at all.
   // TRA-1029: several MCP clients routinely start at the same moment — a
   // Claude Code window, a Codex run and the desktop app all exec this shim
   // within the same second, and after an npm upgrade every one of them takes
@@ -1133,6 +1132,14 @@ describe.skipIf(process.platform === 'win32')('app runtime shim with a dangling 
     );
   });
 
+  // TRA-707: launcher.log takes a line on every MCP start and nothing else
+  // trims it — 9.7 MB observed in the field. The shim rotates it itself; the
+  // daemon's own rotation cannot reach a file written from bash.
+  //
+  // This has to run on both CI runners, not one: the size probe is the part
+  // that broke, and GNU and BSD `stat` disagree about the flags it uses. The
+  // first cut of this test passed on macOS while the Linux job caught the shim
+  // silently never rotating at all.
   it('rotates launcher.log once it is past the ceiling', () => {
     const { home, traceHome, node, cli } = setupFakeHome();
     writeConfig(traceHome, node, cli);
