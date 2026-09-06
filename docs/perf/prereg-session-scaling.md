@@ -20,6 +20,7 @@ and control condition were declared and frozen before recording the v3.18.0 base
 ## Question
 
 As concurrent stdio AI coding agent sessions scale (N = 1, 4, 9) working on a shared repository:
+
 1. What is the cold-start latency, peak RSS, and thread cost to first tool response (`get_project_map`)?
 2. What is the steady-state idle cost at 60s (RSS and thread count) comparing a healthy daemon versus an unmanaged local fallback?
 3. What is the CPU seconds and wall time consumed across the daemon and all sessions when an edit changes a single file?
@@ -28,6 +29,7 @@ As concurrent stdio AI coding agent sessions scale (N = 1, 4, 9) working on a sh
 ## Metric
 
 All metrics are measured from real process trees using system primitives (`ps -o rss=`, `ps -M`, `ps -o cputime=`):
+
 - **Cold start wall time:** Milliseconds elapsed from session spawn until JSON-RPC stdio response to `tools/call` (`get_project_map`) arrives.
 - **Cold start peak RSS & threads:** Peak resident set size (MB) and thread count observed during session initialization.
 - **Steady-state idle (60s):** Per-session RSS (MB), daemon RSS (MB), total system RSS (MB), and total thread count measured after a 60-second idle hold to permit garbage collection and event loops to reach steady-state.
@@ -38,7 +40,8 @@ Emitted by `scripts/bench-session-scaling.ts` directly into `docs/perf/session-s
 
 ## Corpus
 
-- **Fixed, version-stamped corpus:** `trace-mcp` v3.18.0 release at commit `9256cf184370cc7175e076baf2c142c4054d0d6c` (898+ TypeScript files, 11,134 symbols).
+- **Fixed, version-stamped corpus:** `trace-mcp` v3.18.0 release at commit `9256cf184370cc7175e076baf2c142c4054d0d6c` (2,277 indexed files, 898 of them TypeScript under `src/`;
+  11,156 symbols — both counts read from the index at run time, not hand-written).
 - **Isolated standalone fixture:** Extracted via `git archive` into an independent temporary repository for each benchmark run, ensuring no lock contention, DB aliasing, or unmanaged git worktree interference.
 
 ## Pass bar
@@ -63,16 +66,52 @@ Arm B is a real measured control arm (`TRACE_MCP_NO_DAEMON=1`), not an estimate 
 Both Arm A and Arm B run against the exact same corpus, at the exact same concurrency steps (N = 1, 4, 9),
 with the exact same 60-second idle period and identical file edit trigger.
 
+## Amendment — 2026-09-06 (control arm corrected)
+
+The first baseline recorded under this preregistration did not measure its control arm. Arm B pointed
+every session at one pre-indexed data directory, which puts `LocalBackend` on its read-only seeded
+path: no `indexAll`, no `FileWatcher`. Nothing reindexed after the edit, and the harness recorded a
+fixed `sleep(3500)` as the reindex wall time. Found in review of PR #956; that baseline is discarded,
+not amended.
+
+The control arm now runs as declared, with three procedural changes:
+
+1. **One private data directory per session, nothing pre-indexed** — so each session runs the full
+   local indexing stack and its own watcher, which is what "daemon absent" is supposed to mean.
+2. **A daemon port nothing listens on** — a session left on the default port connects to whatever
+   daemon the developer already runs on 3741, which silently turns the control arm into a second
+   treatment arm.
+3. **Reindexing is verified, not timed out.** After the edit, each session is polled through `search`
+   until the newly added marker symbol appears in its index; that observed time is the recorded wall
+   time. A session that never surfaces the symbol fails the run. No fixed sleeps remain in either arm.
+
+Readiness is also verified before the idle sample: the daemonless arm polls `get_index_health` until
+each session's own index holds the corpus, so idle RSS is steady state rather than a mid-indexing
+snapshot. Corpus file and symbol counts are read from the index at run time instead of being written
+into the script by hand.
+
+Reaching the declared control condition required one product fix, kept in the same change:
+`seedSessionDbFromShared` treated an existing-but-empty shared DB as a valid snapshot. Project
+registration creates that file before anything is indexed, so on a machine with no daemon the first
+session seeded itself from zero files, latched read-only, and served an empty index forever.
+
 ## Threats to validity
 
 - **macOS ps resolution:** `cputime` resolution on macOS is bounded to integer seconds or clock ticks; we sample the full recursive child process tree (`pgid`/`ppid` walk) to capture all worker threads and helper processes.
-- **Pre-indexing:** The repository is pre-indexed before sessions attach to isolate warm steady-state scaling from one-off initial repository ingestion.
+- **Pre-indexing:** Only Arm A attaches to a pre-indexed corpus, which is what a healthy daemon means. Arm B indexes per session by design, so its idle sample waits for each session's index to be ready first.
 - **JIT & GC variance:** Running each step with a 60-second idle hold allows Node.js V8 heap and garbage collection to stabilize before sampling.
 
-## Verdict — MET
+## Verdict — MET (on the corrected run of 2026-09-06)
 
-The benchmark harness (`scripts/bench-session-scaling.ts`) reliably reproduces the concurrency matrix and records
-both absolute values and delta comparisons against prior runs into `docs/perf/session-scaling.json`.
-The baseline on v3.18.0 demonstrates that a healthy daemon provides strict CPU isolation during reindexing and
-predictable per-session proxy scaling, while verifying that the absence of a daemon produces severe thread and
-reindex amplification across concurrent agent sessions.
+The harness (`scripts/bench-session-scaling.ts`) reproduces the concurrency matrix and records absolute
+values plus deltas against prior runs into `docs/perf/session-scaling.json`.
+
+The v3.18.0 baseline shows the predicted amplification, now measured rather than assumed: a one-file
+change costs the daemon 0.71 CPU seconds at N=9 (1.26× its N=1 cost) with sessions at 0.02 s, while
+the daemonless arm burns 15.68 CPU seconds across nine sessions — 19.1× its own N=1 cost — with every
+session's reindex confirmed by querying its index. Idle RSS at N=9 is 1,975.8 MB daemon-backed versus
+4,433.6 MB daemonless.
+
+The prediction of ~140–190 MB per proxy session held (139.9–141.5 MB). The prediction that daemonless
+sessions differ mainly in thread count did not: threads grow 9.00× as predicted, but per-session idle
+RSS is 398–482 MB, roughly 3× a proxy session, and that is where most of the machine cost sits.

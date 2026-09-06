@@ -8,111 +8,152 @@ noindex: true
 
 # Concurrency & Session Scaling Benchmark Report (TRA-931)
 
-Automated benchmark evaluation of multi-session concurrency scaling for stdio AI coding agent sessions.
+Automated benchmark of multi-session concurrency for stdio AI coding agent sessions.
 Tracking issue: **TRA-931** (parent umbrella tracking issue: **TRA-921**).
 
 ## Executive Summary
 
-When multiple AI coding agent sessions (e.g. Claude Code, Cursor, Cline, Roo) run concurrently on the same machine and codebase, their architectural backing determines whether system resources scale sub-linearly or explode linearly.
+When several AI coding agent sessions (Claude Code, Cursor, Cline, Roo) run at once on the same
+machine and codebase, what backs them decides whether machine cost grows sub-linearly or linearly.
 
-This benchmark harness (`scripts/bench-session-scaling.ts`) measures cold start, 60s steady-state idle resource consumption, 1-file edit cost, and concurrency scaling across $N \in \{1, 4, 9\}$ simultaneous stdio sessions.
+The harness (`scripts/bench-session-scaling.ts`) measures cold start, 60 s steady-state idle cost,
+the cost of a one-file change, and how all three scale across N ∈ {1, 4, 9} concurrent stdio
+sessions, in two arms: with a healthy daemon, and daemonless.
 
-Key baseline findings on `trace-mcp` v3.18.0:
-1. **Sub-linear Scaling with Daemon (Arm A):** Total resident memory scales by only **3.64×** between $N=1$ (673.6 MB) and $N=9$ (2,449.2 MB) despite a 9× increase in concurrent agents. Total thread count scales by **4.20×** (30 -> 126 threads).
-2. **Linear Memory & Thread Explosion Without Daemon (Arm B):** When falling back to unmanaged local mode, total RSS explodes by **9.06×** (181.6 MB -> 1,645.1 MB), and thread count scales by exactly **9.00×** (12 -> 108 threads).
-3. **Strict CPU Isolation on File Edits:** In daemon-healthy mode, reindexing a 1-file change consumes **2.66s – 3.79s CPU** exclusively in the persistent background daemon, while all active stdio sessions burn **0.00s CPU**.
-4. **Local Cold-Start Degradation Under Concurrency:** In daemon-absent mode, concurrent cold start p50 degrades by **+132%** (from 932 ms at N=1 to 2,164 ms at N=9) due to SQLite file locking and disk contention across 9 uncoordinated database openers.
+Baseline on `trace-mcp` v3.18.0, N=9:
+
+1. **Idle memory.** Daemon-backed: 1,975.8 MB total (9 sessions + daemon), 141.5 MB per session.
+   Daemonless: 4,433.6 MB, 481.8 MB per session — 2.2× the machine cost for the same nine agents.
+2. **One-file change.** Daemon-backed: 0.73 s total CPU, effectively flat from N=1 (0.58 s) to
+   N=9 — the daemon reindexes once and the sessions burn ~0.02 s between them. Daemonless: 15.68 s,
+   a **19.1×** increase over N=1 (0.82 s), because each of the nine sessions reindexes the same
+   file in its own process.
+3. **Threads.** 126 (daemon-backed) vs 162 (daemonless) at N=9.
+4. **Cold start** stays sub-second in both arms; what the daemonless arm pays instead is a full
+   local index per session (6.9 s at N=9, 2,277 files each) before it can answer anything.
+
+Every reindex number above is verified, not assumed: after the edit the harness polls each session
+until the newly added symbol is returned by `search`, and records the time that took. A session that
+never surfaces the symbol fails the run instead of contributing a number.
 
 ---
 
 ## Benchmark Corpus & Environment
 
-- **Corpus:** `trace-mcp` repository at pinned v3.18.0 release commit [`9256cf184370cc7175e076baf2c142c4054d0d6c`](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9256cf184370cc7175e076baf2c142c4054d0d6c).
-  - 898+ TypeScript files, 11,134 symbols.
-- **Fixture Isolation:** Standalone git repository extracted via `git archive` per test run into a fresh temporary directory, avoiding lock interference or shared worktree index aliasing.
+- **Corpus:** `trace-mcp` at the pinned v3.18.0 commit
+  [`9256cf184370cc7175e076baf2c142c4054d0d6c`](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9256cf184370cc7175e076baf2c142c4054d0d6c)
+  — 2,277 indexed files (898 TypeScript files under `src/`), 11,156 symbols. Both counts are read
+  out of the index at run time, never hand-written.
+- **Fixture isolation:** extracted with `git archive` into a fresh temporary directory per run
+  (path canonicalized — on macOS an uncanonicalized `/var` root makes watcher events miss).
 - **Hardware & OS:** macOS Darwin arm64 (Apple Silicon).
-- **Measurement Primitives:**
-  - RSS: Sampled via `ps -o rss=` over the full recursive process tree (`ppid` walk).
-  - Threads: Sampled via `ps -M -p <pid>`.
-  - CPU: Sampled via `ps -o cputime=` tracking accumulated user + system seconds.
-  - Cold start: JSON-RPC stdio initialization handshake (`initialize` -> `notifications/initialized` -> `tools/call: get_project_map`).
-  - Idle stabilization: 60-second hold before steady-state sampling to allow V8 garbage collection and Node.js event loops to settle.
+- **Measurement primitives:**
+  - RSS: `ps -o rss=` over the full process tree.
+  - Threads: `ps -M -p <pid>`.
+  - CPU: `ps -o cputime=`, accumulated user + system seconds.
+  - Cold start: stdio JSON-RPC handshake (`initialize` → `notifications/initialized` →
+    `tools/call: get_project_map`).
+  - Index readiness (daemonless arm): `get_index_health` polled until the session's own index
+    holds the corpus, so the idle sample is steady state and not a mid-indexing snapshot.
+  - Reindex: `search` polled per session until the edit's marker symbol appears.
+
+### What the two arms are
+
+|                  | Arm A — daemon healthy                                  | Arm B — daemonless                                    |
+| ---------------- | ------------------------------------------------------- | ----------------------------------------------------- |
+| Daemon           | one `serve-http` daemon, project registered and indexed | none; sessions point at a port nothing listens on     |
+| Session data dir | shared with the daemon                                  | one private data dir per session, nothing pre-indexed |
+| Indexing         | daemon only                                             | every session indexes the corpus itself               |
+| Watcher          | daemon only                                             | one `@parcel/watcher` per session                     |
+
+Arm B is the real daemonless configuration, and getting there took two fixes worth noting, because
+both silently produced a benchmark that measured nothing:
+
+- Sessions seeded from a _shared_ DB take the read-only fallback path — no `indexAll`, no watcher.
+  Pointing all sessions at one pre-indexed directory therefore measures a daemon hiccup, not
+  daemonless operation, and no reindexing happens at all.
+- A session left on the default daemon port connects to whatever daemon the developer already runs
+  on 3741, so a "daemonless" arm quietly becomes a second daemon-backed arm.
 
 ---
 
-## Baseline Measurements Matrix (v3.18.0)
+## Baseline Measurements (v3.18.0)
 
-Data source: [`docs/perf/session-scaling.json`](./session-scaling.json) (Run timestamp: `2026-09-05T16:21:04.489Z`).
+Data source: [`docs/perf/session-scaling.json`](./session-scaling.json), run `2026-09-06T01:21:27Z`.
 
-### 1. Single Session Metrics (N = 1)
+### 1. Single session (N = 1)
 
-| Metric | Arm A: Daemon Healthy (Proxy) | Arm B: Daemon Absent (Local Fallback) | Note |
-|---|---|---|---|
-| **Cold Start to `get_project_map`** | 2,699 ms | **932 ms** | Local opens SQLite directly; proxy connects over HTTP |
-| **Cold Start Peak RSS** | **192.4 MB** | 216.9 MB | Proxy peak is lower than local standalone engine |
-| **Startup Threads** | 12 | 12 | Node.js runtime baseline |
-| **Idle RSS at 60s (per session)** | **145.5 MB** | 181.6 MB | Proxy session drops to 145.5 MB after GC |
-| **Idle Daemon RSS** | 528.1 MB | N/A | Daemon retains shared symbol graph & DB connection |
-| **Total System RSS (Idle)** | 673.6 MB | **181.6 MB** | Daemon pays one-time base cost for shared index |
-| **Total System Threads (Idle)** | 30 | **12** | Daemon adds 18 background management threads |
-| **1-File Change Wall Time** | **2,489 ms** | 3,501 ms | Incremental reindex of `src/util/debounce.ts` |
-| **1-File Change Daemon CPU** | 2.66 s | N/A | Background daemon absorbs all indexing workload |
-| **1-File Change Sessions CPU** | **0.00 s** | 0.00 s | Sessions burn 0 CPU during background reindex |
+| Metric                           | Arm A: daemon healthy        | Arm B: daemonless      |
+| -------------------------------- | ---------------------------- | ---------------------- |
+| Cold start to `get_project_map`  | 277 ms                       | 302 ms                 |
+| Local index ready                | n/a (daemon already indexed) | 3,135 ms (2,277 files) |
+| Cold-start peak RSS              | 165.7 MB                     | 215.8 MB               |
+| Startup threads                  | 12                           | 14                     |
+| Idle RSS at 60 s (per session)   | 140.5 MB                     | 398.1 MB               |
+| Idle daemon RSS                  | 476.4 MB                     | n/a                    |
+| Total RSS (idle)                 | 616.9 MB                     | 398.1 MB               |
+| Total threads (idle)             | 30                           | 18                     |
+| One-file change, time to visible | 466 ms                       | 879 ms                 |
+| One-file change, daemon CPU      | 0.58 s                       | n/a                    |
+| One-file change, sessions CPU    | 0.00 s                       | 0.82 s                 |
 
----
+At N=1 the daemon is a net cost: it pays a 476 MB base to hold the shared index for a single
+session. It stops being a cost at N=4 and is decisive at N=9.
 
-### 2. Concurrency Scaling Matrix (N = 1, 4, 9)
+### 2. Concurrency scaling (N = 1, 4, 9)
 
-| N | Mode | Cold Start (p50 / max) | Per-Sess RSS | Total System RSS | Total Threads | 1-File Change CPU (Daemon / Sess) |
-|---|---|---|---|---|---|---|
-| **1** | `daemon_healthy` | 2,699 ms / 2,699 ms | 145.5 MB | 673.6 MB | 30 | 2.66 s / 0.00 s |
-| **1** | `daemon_absent` | 932 ms / 932 ms | 181.6 MB | 181.6 MB | 12 | N/A / 0.00 s |
-| **4** | `daemon_healthy` | 3,721 ms / 3,762 ms | 173.8 MB | 1,501.8 MB | 66 | 3.79 s / 0.00 s |
-| **4** | `daemon_absent` | 1,133 ms / 1,186 ms | 182.1 MB | 728.4 MB | 48 | N/A / 0.00 s |
-| **9** | `daemon_healthy` | 3,608 ms / 3,712 ms | 175.0 MB | 2,449.2 MB | 126 | 3.69 s / 0.00 s |
-| **9** | `daemon_absent` | 2,164 ms / 2,341 ms | 182.5 MB | 1,645.1 MB | 108 | N/A / 0.00 s |
+| N     | Mode             | Cold start (p50 / max) | Per-session idle RSS | Total idle RSS | Total threads | One-file change CPU (daemon / sessions) |
+| ----- | ---------------- | ---------------------- | -------------------- | -------------- | ------------- | --------------------------------------- |
+| **1** | `daemon_healthy` | 277 / 277 ms           | 140.5 MB             | 616.9 MB       | 30            | 0.58 s / 0.00 s                         |
+| **1** | `daemon_absent`  | 302 / 302 ms           | 398.1 MB             | 398.1 MB       | 18            | — / 0.82 s                              |
+| **4** | `daemon_healthy` | 410 / 439 ms           | 139.9 MB             | 1,119.8 MB     | 66            | 0.64 s / 0.01 s                         |
+| **4** | `daemon_absent`  | 468 / 497 ms           | 411.5 MB             | 1,644.7 MB     | 72            | — / 4.04 s                              |
+| **9** | `daemon_healthy` | 659 / 788 ms           | 141.5 MB             | 1,975.8 MB     | 126           | 0.71 s / 0.02 s                         |
+| **9** | `daemon_absent`  | 1,036 / 1,334 ms       | 481.8 MB             | 4,433.6 MB     | 162           | — / 15.68 s                             |
 
----
+Daemonless local index readiness: 3,135 ms at N=1, 4,366 ms at N=4, 6,879 ms at N=9 (median per
+session, 2,277 files each time).
 
-### 3. Scaling Multipliers (N=9 vs N=1)
+### 3. Multipliers (N=9 vs N=1)
 
-$$\text{Multiplier} = \frac{\text{Metric}(N=9)}{\text{Metric}(N=1)}$$
-
-| Dimension | Daemon Healthy (Arm A) | Daemon Absent (Arm B) | Advantage of Daemon |
-|---|---|---|---|
-| **Total System RSS** | **3.64×** | 9.06× | **2.49× less memory growth** ($3.64\times$ vs $9.06\times$) |
-| **Total Thread Count** | **4.20×** | 9.00× | **2.14× less thread growth** ($4.20\times$ vs $9.00\times$) |
-| **1-File Edit Total CPU** | **1.39×** | N/A (0s idle) | Daemon reindex cost is flat regardless of session count |
-| **Cold Start Latency** | 1.34× | 2.32× | Local cold start degrades by 2.32× under disk contention |
-
----
-
-## Architectural Analysis
-
-### Why the Daemon Model Scales
-1. **Shared Graph & Single Database Handle:** In Arm A, the daemon holds the parsed AST cache, SQLite connections, and symbol graph in a single resident process (~528–875 MB). Stdio sessions act strictly as thin JSON-RPC-to-HTTP proxies consuming only ~145–175 MB resident memory.
-2. **Deterministic Reindex Workload:** When a source file changes, the daemon executes a single scoped incremental reindex pass (~2.66–3.79 CPU seconds). The N sessions consume 0 CPU seconds because they never inspect files or re-parse ASTs directly.
-3. **No File Lock Contention:** Because only the daemon writes to the SQLite database, concurrent read operations do not contend for WAL locks.
-
-### Failure Modes in Daemon-Absent Mode
-1. **Linear Resource Proliferation:** In Arm B, every newly spawned agent session brings its own SQLite engine, tree-sitter parsers, and file watcher. At N=9, this consumes 108 OS threads and 1.65 GB of memory.
-2. **Cold-Start Degradation:** At N=9, concurrent initialization of 9 SQLite databases contending for the same file system and page cache increases p50 cold start latency by **+132%** (from 932 ms to 2,164 ms).
+| Dimension                 | Daemon healthy | Daemonless |
+| ------------------------- | -------------- | ---------- |
+| Total idle RSS            | 3.20×          | 11.14×     |
+| Total threads             | 4.20×          | 9.00×      |
+| One-file change total CPU | 1.26×          | 19.12×     |
+| Cold start p50            | 2.38×          | 3.43×      |
 
 ---
 
-## Reproduction & CI Commands
+## Reading the result
 
-The benchmark is registered in `package.json` and can be re-run at any time:
+The daemon's value is not memory per session — a proxy session (140 MB) and a local session
+(400–480 MB) differ by less than the daemon's own base cost. It is that **write work stays flat**.
+Nine agents editing one file cost the daemon 0.71 CPU seconds once; the same nine agents daemonless
+cost 15.68 CPU seconds, and that number keeps climbing linearly with the number of open sessions,
+because each session parses the same file into its own database.
+
+That is the number TRA-922, TRA-923, TRA-924 and TRA-925 have to move, and the number a regression
+would put back.
+
+---
+
+## Reproduction
 
 ```bash
-# Full benchmark run (N = 1, 4, 9 with 60s idle hold):
+# Full run (N = 1, 4, 9, 60s idle hold) — about 20 minutes:
 pnpm run bench:session-scaling
 
-# Smoke test run (N = 1, 4 with 5s idle hold):
+# Smoke run (N = 1, 4, 5s idle hold):
 npx tsx scripts/bench-session-scaling.ts --quick
 
-# Custom configuration:
+# Custom:
 npx tsx scripts/bench-session-scaling.ts --steps 1,2,4,8 --idle 30 --port 37425
+
+# Stream session logs while debugging the harness itself:
+BENCH_VERBOSE=1 npx tsx scripts/bench-session-scaling.ts --quick
 ```
 
-The script writes version-stamped JSON to `docs/perf/session-scaling.json` and automatically computes regression deltas against previous runs.
+The script appends a version-stamped run to `docs/perf/session-scaling.json` and reports the delta
+against the previous run. Absolute numbers and deltas only — there is no pass/fail threshold,
+because we do not yet know what good looks like.
