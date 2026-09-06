@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.7 (Windows)
+# trace-mcp-launcher v0.6.8 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -60,19 +60,9 @@ if ($env:TRACE_MCP_NODE_MIN_MAJOR) {
     }
 }
 
-# A cached major is usable only if it parses into a real integer. Digits alone
-# are not enough - an overflowing numeric string would throw on the cast.
-function Get-BoundedMajor {
-    param([string]$Value)
-    $parsed = 0
-    if ([int]::TryParse($Value, [ref]$parsed) -and $parsed -ge 0) { return $parsed }
-    return $null
-}
-
 # --- 1. Parse config safely (no Invoke-Expression, whitelist keys) ---
 $NodePath = ''
 $CliPath  = ''
-$NodeMajor = ''
 $UsingOverride = $false
 $UsingNodeOverride = $false
 
@@ -104,10 +94,8 @@ if ($configLines.Count -gt 0) {
         switch ($key) {
             'TRACE_MCP_NODE' { $NodePath = $val }
             'TRACE_MCP_CLI'  { $CliPath  = $val }
-            # Major version of TRACE_MCP_NODE, verified when the pair was
-            # recorded. Cached so the fast path never has to run node -v.
-            'TRACE_MCP_NODE_MAJOR' { $NodeMajor = $val }
-            # TRACE_MCP_VERSION ignored (informational only)
+            # TRACE_MCP_NODE_MAJOR and TRACE_MCP_VERSION ignored
+            # (informational only; older configs may still carry them)
         }
     }
 }
@@ -180,7 +168,7 @@ function Test-CliFile {
 
 # Persist a probed (or freshly verified) pair so the next start takes the fast path.
 function Save-LauncherConfig {
-    param([string]$NodeExe, [string]$Cli, [string]$Major = '')
+    param([string]$NodeExe, [string]$Cli)
     # The parser strips exactly one pair of quotes and never expands; a literal
     # quote in a path would corrupt the file, so skip rather than mangle.
     if ($NodeExe.Contains('"') -or $Cli.Contains('"')) { return }
@@ -207,8 +195,6 @@ function Save-LauncherConfig {
             # wrong version is worse than none. `trace-mcp init` restores it.
             ('TRACE_MCP_CLI="{0}"' -f ($Cli -replace '\\', '/'))
         )
-        # Cache the verified major so the fast path stays a pure file check.
-        if ($Major -match '^\d+$') { $lines += ('TRACE_MCP_NODE_MAJOR="{0}"' -f $Major) }
         # `.tmp.<pid>.<12 hex>` is the shape sweepOrphanTmpFiles collects
         # (src/utils/atomic-write.ts) - its pattern requires the trailing hex.
         # The catch below only runs for a caught failure; a process killed
@@ -238,9 +224,8 @@ function Get-NodeMajor {
 
 # --- 3. Fast path: config is good -> exec directly ---
 #
-# A config recorded before the version gate existed carries no verified major.
-# Check it once here, then cache it, so the check costs nothing from the next
-# start on - and an already-poisoned config heals itself instead of failing
+# "Good" means the recorded pair still exists AND the recorded node still runs;
+# a config that stopped describing reality heals itself here instead of failing
 # forever.
 # Only the NODE override exempts a run from the gate. Sharing one flag with
 # TRACE_MCP_CLI_OVERRIDE would let a CLI-only debugging override carry the
@@ -248,24 +233,28 @@ function Get-NodeMajor {
 if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath) -and -not (Test-RuntimeShim $NodePath)) {
     Write-LauncherLog "ERROR: config node=$NodePath is an app runtime shim whose target is gone (app updated, moved or removed) - reprobing"
     $NodePath = ''
-    $NodeMajor = ''
 }
 
+# The version gate is also the liveness gate, and it runs on EVERY start.
+#
+# It used to be skipped whenever the config carried a cached
+# TRACE_MCP_NODE_MAJOR. But the question the fast path needs answered is not
+# "which major is this" but "does this binary still run at all", and a file
+# check cannot answer it: a node broken in place - a runtime uninstalled from
+# under its own shim, an arch mismatch after a machine migration - still passes
+# Test-NodeBinary, so the launcher started it, the start succeeded from its own
+# side, and nothing was logged and nothing healed. The client lost every tool
+# for the rest of the session and each later start repeated it (TRA-1040).
+# TRACE_MCP_NODE_MAJOR is no longer read or written.
 if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath)) {
-    $cached = Get-BoundedMajor $NodeMajor
-    if ($null -eq $cached) {
-        $probed = Get-NodeMajor $NodePath
-        $cached = if ($null -eq $probed) { 0 } else { $probed }
-        $NodeMajor = "$cached"
-        # Cache only a pair we are actually going to use - never write back a
-        # node we are about to reject, and never an override: $CliPath may be a
-        # throwaway debug path, and baking it in would outlive the session.
-        if (-not $UsingOverride -and $cached -ge $NodeMinMajor -and (Test-CliFile $CliPath)) {
-            Save-LauncherConfig $NodePath $CliPath $NodeMajor
+    $probed = Get-NodeMajor $NodePath
+    $verified = if ($null -eq $probed) { 0 } else { $probed }
+    if ($verified -lt $NodeMinMajor) {
+        if ($verified -eq 0) {
+            Write-LauncherLog "ERROR: config node=$NodePath exists but cannot run (broken install, moved runtime or arch mismatch) - reprobing"
+        } else {
+            Write-LauncherLog "config node=$NodePath is node $verified, need >= $NodeMinMajor - reprobing"
         }
-    }
-    if ($cached -lt $NodeMinMajor) {
-        Write-LauncherLog "config node=$NodePath is node $cached, need >= $NodeMinMajor - reprobing"
         $NodePath = ''
     }
 }
@@ -450,9 +439,7 @@ if (-not (Test-NodeBinary $NodePath)) {
         }
         Die 'node binary not found - install Node.js (nodejs.org / nvs / nvm-windows / volta) or set TRACE_MCP_NODE_OVERRIDE'
     }
-    $probedMajor = Get-NodeMajor $NodePath
-    $NodeMajor = if ($null -eq $probedMajor) { '' } else { "$probedMajor" }
-    Write-LauncherLog "probe: node=$NodePath (v$NodeMajor)"
+    Write-LauncherLog "probe: node=$NodePath"
     $Healed = $true
 }
 
@@ -466,7 +453,7 @@ if (-not (Test-CliFile $CliPath)) {
 }
 
 # Overrides are a debugging escape hatch; never bake them into the config.
-if ($Healed -and -not $UsingOverride) { Save-LauncherConfig $NodePath $CliPath $NodeMajor }
+if ($Healed -and -not $UsingOverride) { Save-LauncherConfig $NodePath $CliPath }
 
 Write-LauncherLog "exec(probe) node=$NodePath cli=$CliPath argc=$($args.Count)"
 & $NodePath $CliPath @args
