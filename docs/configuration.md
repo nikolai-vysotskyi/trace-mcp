@@ -36,7 +36,7 @@ Configuration is optional — trace-mcp works out of the box for standard projec
 This page is the reference for the file itself: where it lives, how the layers
 merge, and what the keys you reach for actually do. Several sections of it are
 big enough to have their own page — the [quality gates](quality-gates.md)
-thresholds, the [telemetry](telemetry.md) span exporter, the memory knobs that
+thresholds, the [MCP tracing](telemetry.md) span exporter, the memory knobs that
 bound the [daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement
 tier that `trace-mcp init` writes here on your behalf.
 

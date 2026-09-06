@@ -182,8 +182,8 @@ neither would ever appear in a catalogue.
 The query is `gh search issues "trace-mcp" --limit 40 --json url,title,updatedAt,repository,state`,
 run with our own org filtered out. **Expect a poor signal ratio and budget for it:**
 of 40 hits on 2026-09-05, 38 were the `trace`/tracing name collision — OTel spans,
-Jaeger, Langfuse, stack traces — the same collision TRA-879 measures on the search
-side (`traceix mcp`, `mcp tracing`, 115 impressions, zero clicks). One hit was ours.
+Jaeger, Langfuse, stack traces — the same kind of collision TRA-879 measures on the
+search side as `traceix mcp` (61 impressions, zero clicks). One hit was ours.
 One was the find. Scan the repository names first; anything with `otel`, `trace-id`,
 `observability` or `span` in the title is the collision, not us.
 
@@ -205,7 +205,7 @@ on-page work, however good they get.
 | [sverklo.com](https://sverklo.com/blog/practical-guide-mcp-code-intelligence/) | **No** | "Honest Comparison of 12 Options", May 2026 | **Not a third party — it is a competitor's own blog.** Sverklo is one of the twelve it compares and discloses that outright ("the project that wrote this guide"). Corrections would go to `github.com/sverklo/sverklo` issues. Treat as a competitor page we might be added to out of goodwill, not as an editorial door | 2026-09-02 |
 | [chatforest.com](https://chatforest.com/reviews/code-intelligence-codebase-graph-mcp-servers/) | **No** | GitNexus, code-review-graph, codebase-memory-mcp, Claude Context, CodeGraphContext, SocratiCode, sverklo, and others down to 18 stars | Self-described "AI-native publication", agent-authored, and it **re-verifies star counts against live GitHub** (published 2026-04-25, re-verified 2026-08-24). No contact form and no submit page, newsletter only; agent-authored with named human editorial oversight. The lever is being discoverable to their next re-verification pass, not pitching anyone. It already lists tools at 18 and 77 stars, so its bar is not adoption | 2026-09-02 |
 | [builder.io/blog](https://www.builder.io/blog/best-mcp-servers-2026) | **No** | 40+ MCP servers over 11 categories — Context7, GitHub, Figma, Playwright, Stripe. Published 2025-12-10 | **Not our category page.** A general MCP roundup with no code-intelligence section; it ranks for our head term on breadth. Company blog, no correction or suggestion path. Lowest value of the five | 2026-09-02 |
-| [mattbutlerengineering/ai-tooling](https://github.com/mattbutlerengineering/ai-tooling/blob/main/evaluations/trace-mcp.md) | **Yes** — evaluated, verdict `discovery-log — tentative read` | A 2026-06-22 hands-off source review of v1.43.1. Credits the framework-aware cross-language edges as the real differentiator over codegraph, but blocks on the unverified "~42 minutes" headline, scope sprawl, small adoption and the strict guard hook. Also states **"no telemetry"** twice — in the What-worked bullet and in the Safety row — which stopped being true at v1.47.0 | Corrections go in issues; the maintainer runs the catalog from daily `scan:` issues. We filed [#585](https://github.com/mattbutlerengineering/ai-tooling/issues/585) on 2026-09-04 correcting the telemetry claim and pointing at the PR-context benchmark, which is the hands-on re-evaluation trigger the eval itself named. One message, no verdict ask — **do not follow up** (TRA-857) | 2026-09-04 |
+| [mattbutlerengineering/ai-tooling](https://github.com/mattbutlerengineering/ai-tooling/blob/main/evaluations/trace-mcp.md) | **Yes** — evaluated, verdict `discovery-log — tentative read` | A 2026-06-22 hands-off source review of v1.43.1. Credits the framework-aware cross-language edges as the real differentiator over codegraph, but blocks on the unverified "~42 minutes" headline, scope sprawl, small adoption and the strict guard hook. Also states **"no telemetry"** twice — in the What-worked bullet and in the Safety row — which stopped being true at v1.47.0 | Corrections go in issues; the maintainer runs the catalog from daily `scan:` issues. We filed [#585](https://github.com/mattbutlerengineering/ai-tooling/issues/585) on 2026-09-04 correcting the telemetry claim and pointing at the PR-context benchmark, which is the hands-on re-evaluation trigger the eval itself named. One message, no verdict ask — **do not follow up** (TRA-857). Since TRA-887 there is a citable page for this: <https://trace-mcp.com/privacy.html> — use it instead of a README anchor whenever an outside listing asks what we send | 2026-09-04 |
 
 `skillsllm.com` was the sixth URL in that set and is **not** an article at all —
 it is an auto-generated directory, we are already in it, and it has moved to the
@@ -238,9 +238,10 @@ that "detects schema mismatches between data producers and consumers"; it names
 nothing of ours and links nothing of ours. The GitHub repo behind it now **404s**
 while the account (`Mnehmos`, 65 public repos) is live, so it was renamed or
 taken down. Same collision is already recorded in the LobeHub row. Nothing to
-correct, but it is the likely source of the `traceix mcp` / `mcp tracing`
-impressions-without-clicks, and it means the bare name "Trace MCP" is not ours to
-claim on directories.
+correct, but it is the likely source of the `traceix mcp` impressions-without-clicks,
+and it means the bare name "Trace MCP" is not ours to claim on directories. Do not
+fold `mcp tracing` into that bucket: those impressions are our own observability
+intent, misrouted to the homepage (`ops/index-coverage.md`, TRA-974).
 
 ## macOS code signing and notarization
 

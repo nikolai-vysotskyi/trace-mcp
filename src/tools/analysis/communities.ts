@@ -10,6 +10,7 @@
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 import { maybeYield } from '../../utils/event-loop.js';
+import { minMax } from '../../util/minmax.js';
 
 interface Community {
   id: number;
@@ -349,7 +350,7 @@ async function refineLowCohesionCommunities(
 
     // Vary the seed so we do not just reproduce the parent partition.
     const subAssignments = await leidenDetect(subGraph, resolution, 20, seed ^ commId ^ 0x9e3779b1);
-    const numSub = Math.max(...subAssignments) + 1;
+    const numSub = minMax(subAssignments).max + 1;
     if (numSub <= 1) continue; // nothing learned — keep original
 
     // First sub-cluster keeps the parent id, the rest get fresh ids beyond
@@ -400,7 +401,7 @@ export async function detectCommunities(
   // CLAUDE.md or barrel file could merge unrelated subsystems into one
   // useless community. Same bug pattern applies here.
   await refineLowCohesionCommunities(graph, assignments, resolution, seed);
-  const _numCommunities = Math.max(...assignments) + 1;
+  const _numCommunities = minMax(assignments).max + 1;
 
   // Group files by community
   const communityFiles = new Map<number, string[]>();

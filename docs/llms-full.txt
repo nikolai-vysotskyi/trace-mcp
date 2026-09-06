@@ -773,7 +773,7 @@ yourself on the MCP server object survives a rename or a re-init.
 
 ---
 
-# How trace-mcp compares
+# Serena, Repomix and 20+ code graph MCP servers compared
 
 Source: https://trace-mcp.com/comparisons.html
 
@@ -1869,7 +1869,7 @@ Configuration is optional — trace-mcp works out of the box for standard projec
 This page is the reference for the file itself: where it lives, how the layers
 merge, and what the keys you reach for actually do. Several sections of it are
 big enough to have their own page — the [quality gates](quality-gates.md)
-thresholds, the [telemetry](telemetry.md) span exporter, the memory knobs that
+thresholds, the [MCP tracing](telemetry.md) span exporter, the memory knobs that
 bound the [daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement
 tier that `trace-mcp init` writes here on your behalf.
 
@@ -3109,6 +3109,7 @@ supply it.
 | `quality_gates.rules.max_code_smell_count.message` | string | _unset_ |
 | `telemetry` | object | — |
 | `telemetry.enabled` | boolean | `false` |
+| `telemetry.usage_ping` | boolean | `true` |
 | `telemetry.max_rows` | number (≥ 0, ≤ 10000000) | `500000` |
 | `telemetry.observability` | object | `{}` |
 | `telemetry.observability.enabled` | boolean | `false` |
@@ -3693,7 +3694,7 @@ Both formats are auto-detected during sync. No configuration needed.
 
 ### Local-machine scoping
 
-`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in [config](configuration.md) (off by default) and returns an explicit `error` when it's off — that flag is the same span emitter documented under [telemetry](telemetry.md).
+`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in [config](configuration.md) (off by default) and returns an explicit `error` when it's off — that flag is the same span emitter documented under [MCP tracing](telemetry.md).
 
 ### JSONL format differences
 
@@ -4950,11 +4951,10 @@ otherwise limited to the current session ([analytics](analytics.md)).
 
 > **This page is about spans you export to your own collector.** It is not the
 > anonymous daily install ping, which is a separate subsystem reporting to the
-> maintainer. That one's published field list — everything it sends and how to
-> turn it off — lives in the README under
-> [Usage telemetry](https://github.com/nikolai-vysotskyi/trace-mcp#usage-telemetry),
-> with the source in `src/telemetry/usage-ping.ts`. Nothing on this page
-> phones home.
+> maintainer. That one's published field list — everything it sends, both ways
+> to turn it off, and how to delete the state it keeps — is on the
+> [privacy page](privacy.md), with the source in `src/telemetry/usage-ping.ts`.
+> Nothing on this page phones home.
 
 ## Quickstart (3 commands)
 
@@ -5083,6 +5083,86 @@ rm .trace.json   # if you don't want telemetry enabled going forward
 - **Container can't reach trace-mcp.** This direction never happens — the
   SDK is the client; Jaeger is the server. Always `http://localhost:4318`
   from the trace-mcp side.
+
+---
+
+# Privacy
+
+Source: https://trace-mcp.com/privacy.html
+
+
+
+trace-mcp runs entirely on your machine. Indexing is local, the index lives in `~/.trace/`, and semantic search uses bundled ONNX embeddings with no API keys and no outbound calls. There is no account and no server of ours in the path — see [Architecture](architecture.md) for what runs where.
+
+Exactly one thing leaves your machine on its own: an anonymous daily ping that counts active installs. This page is the complete description of it.
+
+---
+
+## The daily ping
+
+At most one per day, per install. Sent from `src/telemetry/usage-ping.ts` at server startup, over [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4) — a single HTTP POST, not a custom backend or an SDK.
+
+### Everything it sends
+
+- A random install id — a UUID generated locally, stored in `~/.trace/telemetry-state.json`. This is the only per-install identifier.
+- The trace-mcp version, and the version the previous ping came from.
+- Whether this run is a first install, an upgrade, a downgrade, or another day on the same version.
+- Node major version and OS platform (`darwin`, `linux`, `win32`).
+- The country your machine's timezone belongs to — `DE`, not a city and not an IP.
+- The name of the MCP client that connected (`claude-code`, `cursor`), and the model it mostly drove (`claude-opus-4-6`).
+- How many repositories you have indexed — the number, never their names or paths.
+- Your machine's class: CPU architecture, core count, RAM in whole gigabytes, OS kernel version.
+- The tool preset the session ran with (`minimal`, `dev`, `full`, …) and how many tools it advertised — the count, never which ones.
+- Two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved. These are the same totals `trace-mcp analytics savings` prints locally.
+- Two counters for background-daemon reliability: how many times the daemon started, and how many of those starts followed a run that died without shutting down. Counts only — no exit codes, no timestamps, no reasons, and nothing about what was running.
+
+### What it never sends
+
+No IP address — `ip_override` is deliberately left unset, so Google derives nothing about your network from the request. No device fingerprint, no demographics, no account, email, hostname or username. No repository name, no file path, no query content, and no code. No per-tool or per-project breakdown.
+
+It is also suppressed entirely when `CI` is set, so build jobs never count as installs.
+
+### Its credentials are public by design
+
+The GA4 measurement id and its write-only `api_secret` are compiled into the published bundle as plaintext, so anyone can read exactly where the ping goes and verify this page against the wire. The trade is deliberate and its consequence is stated in [SECURITY.md](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/SECURITY.md#telemetry-credentials--public-by-design): the counts are unauthenticated and therefore inflatable.
+
+---
+
+## Turning it off
+
+Either one disables the ping completely:
+
+```bash
+# Environment variable — also accepts 0 and false.
+export TRACE_MCP_TELEMETRY=off
+```
+
+```jsonc
+// ~/.trace/.config.json
+{
+  "telemetry": { "usage_ping": false }
+}
+```
+
+**`telemetry.usage_ping` is not `telemetry.enabled`.** The `enabled` key next to it switches on a *local* latency database in `~/.trace/telemetry.db` that never leaves your machine, and `telemetry.observability.*` exports spans to a collector *you* configure — see [MCP tracing](telemetry.md). Neither of those has anything to do with the ping. Every key is listed in the [config index](config-index.md).
+
+The first time trace-mcp runs, it prints one line to stderr naming the ping and both opt-outs, then records that it has done so and never prints it again.
+
+## Deleting local state
+
+`~/.trace/` is the whole footprint — index, telemetry state file, savings totals, logs. Deleting it removes everything trace-mcp has stored about you, including the install id, which means a later ping counts as a new install rather than as you.
+
+```bash
+rm -rf ~/.trace          # or ~/.trace-mcp on an install that hasn't migrated
+```
+
+To remove a single project's index instead, use `trace-mcp remove <path>` — details in [Configuration](configuration.md).
+
+## Your AI client is a separate question
+
+trace-mcp returns graph results over MCP. What your client (Claude Code, Cursor, Codex, Windsurf) then forwards to a model, and under whose privacy policy, is governed by that client, not by us.
+
+Outbound calls to a remote LLM provider — used by a few optional features — require explicit consent first: `trace-mcp consent grant <provider>`. Nothing calls a remote provider without it.
 
 ---
 

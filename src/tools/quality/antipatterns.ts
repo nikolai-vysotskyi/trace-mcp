@@ -14,6 +14,7 @@ import {
   classifyNumericConfidence,
   type Methodology,
 } from '../shared/confidence.js';
+import { minMax } from '../../util/minmax.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -662,7 +663,7 @@ function detectEventListenerLeak(store: Store, data: PreFetchedData): Antipatter
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
     .all() as Array<{
@@ -1089,7 +1090,7 @@ function detectMemoryLeak(store: Store, data: PreFetchedData): AntipatternFindin
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
     .all() as Array<{
@@ -1365,8 +1366,8 @@ function maxIndentDepth(body: string): number {
     return n;
   });
 
-  const base = Math.min(...indents);
-  const maxIndent = Math.max(...indents);
+  const base = minMax(indents).min;
+  const maxIndent = minMax(indents).max;
   const depthLevels = Math.floor((maxIndent - base) / 2); // assume 2-space step minimum
   return depthLevels;
 }
@@ -1477,7 +1478,7 @@ export function detectAntipatterns(
     FROM symbols s
     JOIN files f ON s.file_id = f.id
     WHERE s.metadata IS NOT NULL
-      AND s.metadata LIKE '%"callSites"%'
+      AND json_extract(s.metadata, '$.callSites') IS NOT NULL
       AND f.gitignored = 0
   `)
         .get() as { n: number } | undefined

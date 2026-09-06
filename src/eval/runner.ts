@@ -30,6 +30,7 @@ import type {
   MetricResult,
   MetricRollup,
 } from './types.js';
+import { minMax } from '../util/minmax.js';
 
 export interface RunOptions {
   /** Path to the SQLite index for the project the dataset targets. */
@@ -167,8 +168,8 @@ export class BenchmarkRunner {
       rollups.push({
         metric,
         mean: sum / filtered.length,
-        min: Math.min(...filtered),
-        max: Math.max(...filtered),
+        min: minMax(filtered).min,
+        max: minMax(filtered).max,
         n: filtered.length,
       });
     }

@@ -30,6 +30,7 @@ import {
   signalFusion,
 } from '../../scoring/signal-fusion.js';
 import { readSymbolSource } from '../../utils/source-reader.js';
+import { minMax } from '../../util/minmax.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
 
@@ -418,8 +419,8 @@ export async function search(
     const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
     if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
     // BM25 ranks are negative: lower = better match
-    const minRank = Math.min(...ftsResults.map((r) => r.rank));
-    const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+    const minRank = minMax(ftsResults.map((r) => r.rank)).min;
+    const maxRank = minMax(ftsResults.map((r) => r.rank)).max;
     const rankSpread = maxRank - minRank || 1;
     candidates = ftsResults.map((r) => ({
       symbolIdStr: r.symbolIdStr,
@@ -430,7 +431,7 @@ export async function search(
 
   // Build PageRank map
   const pagerankMap = computePageRank(store.db);
-  const maxPr = Math.max(...pagerankMap.values(), 0.001);
+  const maxPr = Math.max(minMax(pagerankMap.values()).max, 0.001);
   const now = new Date();
   const scored: SearchResultItem[] = [];
 
@@ -743,7 +744,7 @@ async function runFusionSearch(
   }
 
   // Structural channel: sort all valid candidates by PageRank descending
-  const maxPr = Math.max(...pagerankMap.values(), 0.001);
+  const maxPr = Math.max(minMax(pagerankMap.values()).max, 0.001);
   const structuralItems = validCandidates
     .map((c) => ({
       id: c.id,

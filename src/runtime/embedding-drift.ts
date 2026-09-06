@@ -19,6 +19,7 @@ import type { EmbeddingService } from '../ai/interfaces.js';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { minMax } from '../util/minmax.js';
 
 export const CANARY_PATH = path.join(TRACE_MCP_HOME, 'embedding-canary.json');
 
@@ -135,7 +136,7 @@ export async function checkEmbeddingDrift(
     perString.push({ text: CANARY_STRINGS[i] ?? '', distance: cosineDistance(a, b) });
   }
   const distances = perString.map((p) => p.distance);
-  const max = Math.max(...distances);
+  const max = minMax(distances).max;
   const mean = distances.reduce((acc, d) => acc + d, 0) / (distances.length || 1);
   const drifted = max >= threshold;
 

@@ -327,6 +327,11 @@ const TelemetryConfigSchema = z
     /** When true, persist tool-call latency to ~/.trace-mcp/telemetry.db. Off by default to avoid
      *  unsolicited disk writes — analyze_perf works without the sink (in-memory ring). */
     enabled: z.boolean().default(false),
+    /** Anonymous daily active-install ping to the maintainer — the file-based twin of
+     *  `TRACE_MCP_TELEMETRY=off`. Set false to disable it. Unrelated to `enabled` above,
+     *  which is the *local* latency sink, and to `observability.*`, which exports to a
+     *  backend you configure. Published field list: https://trace-mcp.com/privacy.html */
+    usage_ping: z.boolean().default(true),
     /** Maximum rows to retain. Older rows are pruned when exceeded. 0 disables pruning. */
     max_rows: z.number().int().min(0).max(10_000_000).default(500_000),
     /** Observability bridge: emits OpenTelemetry/Langfuse spans for AI calls + tool execution.
