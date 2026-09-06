@@ -43,6 +43,14 @@
  * matching no type (BCL, NuGet package, or a plain namespace) simply fails to
  * resolve rather than inventing a node.
  *
+ * One file→file edge can be the collapsed target of more than one `using`
+ * (two `using static` directives from the same importer naming two types in
+ * the same file). `metadata.froms` holds the full set, not the single latest
+ * specifier — review caught an earlier version that stored just one, so a
+ * second specifier's revalidation silently clobbered the first's, losing the
+ * edge for a type that was still validly imported. Every write here merges
+ * into that set rather than replacing it wholesale.
+ *
  * Incremental reindexing: a C# file's declared type identity is ordinary
  * file content, not derived from its path, so it can change (renamed, moved
  * to another file, removed) without the file moving — unlike Java/Go, where
@@ -52,22 +60,32 @@
  * resolver closes that gap for the files that DO get reindexed here: for
  * every C# file in `state.changedFileIds` — deliberately wider than
  * `pendingImports`, which only has an entry for a file that itself has
- * `using` directives, and a type-declaring file need not have any — its
- * current incoming `imports` edges are re-validated against the fresh type
- * map. An edge whose stored specifier no longer resolves to it is not just
- * dropped: the edge itself already carries its source node and the raw
- * specifier (`metadata.from`), which is enough to re-resolve and relink to
- * wherever that specifier resolves NOW, with no need to re-extract the
- * importer — this is what makes a type *move* (not just a rename-to-nothing)
- * converge without a full reindex.
+ * `using` directives, and a type-declaring file need not have any — each
+ * incoming `imports` edge is split specifier-by-specifier against the fresh
+ * type map: a specifier still resolving to this file is kept, one that
+ * doesn't is relinked using the edge's own source node — the edge itself is
+ * enough to notice a type moved and follow it, with no need to re-extract
+ * the importer.
  *
- * One case this can't close: a specifier that was unresolved (external) when
- * the importer was last extracted never got an edge to begin with, so there
- * is nothing here to notice if the type it names shows up later in a file
- * that ISN'T the importer. Recovering that needs the importer's own raw
- * specifiers to survive past its own extraction batch, or a re-extraction —
- * neither happens today. A full reindex already recomputes every C# file's
- * imports from scratch and is unaffected by any of this.
+ * Two cases still don't converge without a full reindex, and are not
+ * silently "mostly working" — they simply don't happen here:
+ *
+ * - A specifier that was unresolved (external) when the importer was last
+ *   extracted never got an edge, so there is nothing to notice if the type
+ *   it names shows up later in some file that ISN'T the importer.
+ * - A file *delete followed by a separate create* — the shape a real watcher
+ *   uses for a rename/move, via `deleteFiles` then `indexFiles` as two
+ *   distinct calls — destroys the old file's node (and every edge touching
+ *   it, cascaded) before the new file's `indexFiles` call ever runs. By the
+ *   time this resolver sees the create, the edge this pass depends on to
+ *   relink is already gone; there is nothing left to read a source node or a
+ *   specifier off of. Recovering this needs raw import facts to survive
+ *   independently of the resolved edge (a durable store keyed by specifier,
+ *   not by edge id) — real persistence work, and a decision about who owns
+ *   it, deliberately left to a follow-up rather than bolted on here.
+ *
+ * A full reindex already recomputes every C# file's imports from scratch and
+ * is unaffected by either limitation.
  */
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
@@ -80,6 +98,13 @@ function addTo(map: Map<string, number[]>, key: string, id: number): void {
   } else {
     map.set(key, [id]);
   }
+}
+
+/** A desired (source, target) edge and every specifier that collapses onto it. */
+interface DesiredEdge {
+  sourceNodeId: number;
+  targetNodeId: number;
+  froms: Set<string>;
 }
 
 export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeScope): void {
@@ -132,6 +157,7 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
      ON CONFLICT(source_node_id, target_node_id, edge_type_id)
      DO UPDATE SET metadata = excluded.metadata`,
   );
+  const deleteStmt = store.db.prepare('DELETE FROM edges WHERE id = ?');
 
   /**
    * `using static Acme.Store.Ids` and aliased `using X = Acme.Store.Ids`
@@ -146,51 +172,67 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
     return (cut > 0 && byType.get(specifier.slice(0, cut))) || [];
   };
 
-  let created = 0;
+  const desired = new Map<string, DesiredEdge>();
+  const addDesired = (sourceNodeId: number, targetNodeId: number, from: string): void => {
+    if (sourceNodeId === targetNodeId) return;
+    const key = `${sourceNodeId}:${targetNodeId}`;
+    let entry = desired.get(key);
+    if (!entry) {
+      entry = { sourceNodeId, targetNodeId, froms: new Set() };
+      desired.set(key, entry);
+    }
+    entry.froms.add(from);
+  };
+
   let external = 0;
   let pruned = 0;
 
   store.db.transaction(() => {
     // A file's declared type identity is content, not path — it can change
-    // without the file moving, and unlike the source-driven loop below,
+    // without the file moving, and unlike the source-driven pass below,
     // importers that weren't re-extracted this batch never revisit it.
-    // Re-validate every C# file's *incoming* `imports` edges here, and
-    // relink (not just prune) using the edge's own source + specifier — see
-    // file header for what this does and doesn't converge without a full
-    // reindex.
-    const deleteStmt = store.db.prepare('DELETE FROM edges WHERE id = ?');
+    // Re-validate every C# file's *incoming* `imports` edges here,
+    // specifier by specifier: one still resolving here is kept, one that
+    // doesn't is relinked using the edge's own source node — see file
+    // header for what this does and doesn't converge without a full reindex.
     for (const fileId of changedFileIds) {
       if (fileMap.get(fileId)?.language !== 'csharp') continue;
       const targetNodeId = nodeIds.get(fileId);
       if (targetNodeId == null) continue;
       for (const edge of store.getIncomingEdges(targetNodeId)) {
         if (edge.edge_type_name !== 'imports' || !edge.metadata) continue;
-        let from: string | undefined;
+        let froms: string[];
         try {
-          from = (JSON.parse(edge.metadata) as { from?: string }).from;
+          const parsed = JSON.parse(edge.metadata) as { froms?: string[]; from?: string };
+          froms = parsed.froms ?? (parsed.from ? [parsed.from] : []);
         } catch {
           continue;
         }
-        if (!from) continue;
-        const freshTargets = resolve(from);
-        if (freshTargets.includes(fileId)) continue;
+        if (froms.length === 0) continue;
 
-        deleteStmt.run(edge.id);
-        pruned++;
-        for (const newTargetId of freshTargets) {
-          const newTargetNodeId = nodeIds.get(newTargetId);
-          if (newTargetNodeId == null || newTargetNodeId === edge.source_node_id) continue;
-          insertStmt.run(
-            edge.source_node_id,
-            newTargetNodeId,
-            importsEdgeType.id,
-            JSON.stringify({ from }),
-          );
-          created++;
+        let changed = false;
+        for (const from of froms) {
+          const freshTargets = resolve(from);
+          if (freshTargets.includes(fileId)) {
+            addDesired(edge.source_node_id, targetNodeId, from);
+            continue;
+          }
+          changed = true;
+          for (const newTargetId of freshTargets) {
+            const newTargetNodeId = nodeIds.get(newTargetId);
+            if (newTargetNodeId == null) continue;
+            addDesired(edge.source_node_id, newTargetNodeId, from);
+          }
+        }
+        if (changed) {
+          deleteStmt.run(edge.id);
+          pruned++;
         }
       }
     }
 
+    // A file whose own extraction changed carries its complete, current
+    // specifier list — authoritative for every edge it's the source of.
     for (const [fileId, imports] of state.pendingImports) {
       if (fileMap.get(fileId)?.language !== 'csharp') continue;
       const sourceNodeId = nodeIds.get(fileId);
@@ -208,15 +250,23 @@ export function resolveCSharpImportEdges(state: PipelineState, _scope?: ChangeSc
         }
         for (const targetId of targets) {
           const targetNodeId = nodeIds.get(targetId);
-          if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-          insertStmt.run(sourceNodeId, targetNodeId, importsEdgeType.id, JSON.stringify({ from }));
-          created++;
+          if (targetNodeId == null) continue;
+          addDesired(sourceNodeId, targetNodeId, from);
         }
       }
     }
+
+    for (const { sourceNodeId, targetNodeId, froms } of desired.values()) {
+      insertStmt.run(
+        sourceNodeId,
+        targetNodeId,
+        importsEdgeType.id,
+        JSON.stringify({ froms: Array.from(froms).sort() }),
+      );
+    }
   })();
 
-  if (created > 0 || external > 0 || pruned > 0) {
-    logger.info({ edges: created, external, pruned }, 'C# import edges resolved');
+  if (desired.size > 0 || external > 0 || pruned > 0) {
+    logger.info({ edges: desired.size, external, pruned }, 'C# import edges resolved');
   }
 }

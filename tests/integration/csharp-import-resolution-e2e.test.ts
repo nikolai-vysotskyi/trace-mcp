@@ -309,4 +309,134 @@ namespace Acme.App
       removeTmpDir(fixtureDir);
     }
   });
+
+  it('keeps a still-valid specifier when another specifier collapsed onto the same edge moves', async () => {
+    const fixtureDir = createTmpFixture(
+      {
+        'src/App.cs': `using static Acme.Store.A;
+using static Acme.Store.B;
+
+namespace Acme.App
+{
+    public class Program
+    {
+        A a;
+        B b;
+    }
+}
+`,
+        'src/Types.cs': `namespace Acme.Store
+{
+    public class A {}
+    public class B {}
+}
+`,
+      },
+      'trace-mcp-csharp-multi-specifier-',
+    );
+    try {
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerLanguagePlugin(new CSharpLanguagePlugin());
+      const pipeline = new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir);
+      await pipeline.indexAll();
+      // Both `using static` directives collapse onto the same file edge.
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/Types.cs']));
+
+      // Move only A out to its own file — B stays in Types.cs. App.cs, the
+      // importer, is untouched.
+      const typesPath = path.join(fixtureDir, 'src/Types.cs');
+      const aPath = path.join(fixtureDir, 'src/A.cs');
+      fs.writeFileSync(
+        typesPath,
+        `namespace Acme.Store
+{
+    public class B {}
+}
+`,
+      );
+      fs.writeFileSync(
+        aPath,
+        `namespace Acme.Store
+{
+    public class A {}
+}
+`,
+      );
+      await pipeline.indexFiles([typesPath, aPath]);
+
+      // Types.cs must survive (B still resolves there) alongside the new
+      // A.cs edge — an earlier version stored only the single latest
+      // specifier per edge, so revalidating B against a metadata blob that
+      // actually held "A" wiped the whole edge instead of keeping it.
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/Types.cs', 'src/A.cs']));
+    } finally {
+      removeTmpDir(fixtureDir);
+    }
+  });
+
+  it('does not invent a stale edge after a real delete-then-create rename, but does not self-heal without a full reindex either', async () => {
+    // Documents a known, deliberate limitation (see the resolver's file
+    // header): unlike the in-place edits above, a real file watcher renames
+    // by calling `deleteFiles` and `indexFiles` as two separate calls, and
+    // `deleteFiles` cascades away the old edge before the create is ever
+    // seen — there is nothing left to relink from. The graph ends up
+    // missing an edge, not lying with a wrong one, and a full reindex
+    // recovers it.
+    const fixtureDir = createTmpFixture(
+      {
+        'src/App.cs': `using static Acme.Store.Repo;
+
+namespace Acme.App
+{
+    public class Program
+    {
+        Repo repo;
+    }
+}
+`,
+        'src/One.cs': `namespace Acme.Store
+{
+    public class Repo {}
+}
+`,
+      },
+      'trace-mcp-csharp-delete-create-',
+    );
+    try {
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerLanguagePlugin(new CSharpLanguagePlugin());
+      const pipeline = new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir);
+      await pipeline.indexAll();
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/One.cs']));
+
+      const onePath = path.join(fixtureDir, 'src/One.cs');
+      const twoPath = path.join(fixtureDir, 'src/Two.cs');
+      fs.rmSync(onePath);
+      fs.writeFileSync(
+        twoPath,
+        `namespace Acme.Store
+{
+    public class Repo {}
+}
+`,
+      );
+      pipeline.deleteFiles([onePath]);
+      await pipeline.indexFiles([twoPath]);
+
+      // No stale pointer at the deleted One.cs — but no proactive edge to
+      // Two.cs either, since deleteFiles already destroyed the edge this
+      // resolver would otherwise have relinked from.
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set());
+
+      // A forced full reindex recomputes from scratch and recovers it (a
+      // plain `indexAll()` would hash-skip both untouched files and prove
+      // nothing).
+      await pipeline.indexAll(true);
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/Two.cs']));
+    } finally {
+      removeTmpDir(fixtureDir);
+    }
+  });
 });
