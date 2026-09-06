@@ -12,10 +12,12 @@
 # record of a verification pass, not a live figure: leave those alone.
 verified: 2026-09-04
 
+# trace_mcp and codegraphcontext re-read 2026-09-06 (TRA-1034); the rest still
+# carry the 09-04 reading.
 trace_mcp:
   repo: nikolai-vysotskyi/trace-mcp
-  stars_exact: 103
-  stars: "103"
+  stars_exact: 158
+  stars: "158"
 repomix:
   repo: yamadashy/repomix
   stars_exact: 28180
@@ -32,6 +34,12 @@ code_review_graph:
   repo: tirth8205/code-review-graph
   stars_exact: 31151
   stars: "31.2K"
+# Re-read 2026-09-06 for /vs/codegraphcontext.html, two days after the pass
+# above; every other entry still carries the 09-04 reading.
+codegraphcontext:
+  repo: CodeGraphContext/CodeGraphContext
+  stars_exact: 4168
+  stars: "4.2K"
 codegraph:
   repo: colbymchenry/codegraph
   stars_exact: 69443

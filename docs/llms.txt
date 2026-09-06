@@ -16,6 +16,7 @@ layout: null
 - [trace-mcp vs Repomix](https://trace-mcp.com/vs/repomix.html): Head-to-head against Repomix — packing a repository into one prompt vs indexing it into a queryable graph, and when Repomix is the better pick.
 - [trace-mcp vs Serena](https://trace-mcp.com/vs/serena.html): Head-to-head against Serena — a live LSP proxy vs a precomputed framework-aware graph.
 - [trace-mcp vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html): Head-to-head against the closest peer — same knowledge-graph premise, opposite bets on language breadth vs framework depth.
+- [trace-mcp vs CodeGraphContext](https://trace-mcp.com/vs/codegraphcontext.html): Head-to-head against the peer that drives the most SCIP indexers — eleven indexer families and a graph database you choose vs one embedded store, framework edges and a write path.
 - [trace-mcp vs codegraph](https://trace-mcp.com/vs/codegraph.html): Head-to-head against the largest peer by stars — one advertised tool optimised for orientation vs a broad surface that continues past navigation.
 - [trace-mcp vs Context Mode](https://trace-mcp.com/vs/context-mode.html): Head-to-head against the adjacent lane — compressing what tool calls return vs making structural questions about code cheap to ask.
 - [trace-mcp vs code-review-graph](https://trace-mcp.com/vs/code-review-graph.html): Head-to-head against the incremental SQLite graph peer — blast-radius CI analysis and uncertainty handling vs framework awareness and refactoring.
