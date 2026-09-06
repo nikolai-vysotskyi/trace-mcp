@@ -75,8 +75,18 @@ describe('lockup geometry', () => {
   });
 });
 
-describe('the site header', () => {
-  const layout = readFileSync(join(REPO_ROOT, 'docs/_layouts/default.html'), 'utf-8');
+// The home page paints its own header instead of the layout's, so "the site
+// header" is two files. A preview build is what surfaced that: the layout was
+// updated and index.html still showed the bracketed wordmark.
+describe.each([
+  ['layout', 'docs/_layouts/default.html'],
+  ['home page', 'docs/index.html'],
+])('the site header (%s)', (_where, file) => {
+  const layout = readFileSync(join(REPO_ROOT, file), 'utf-8');
+
+  it('no longer paints the bracketed wordmark', () => {
+    expect(layout).not.toMatch(/<span class="bracket">/);
+  });
 
   it('inlines the inherit lockup rather than linking a themed file', () => {
     // The site switches themes from `data-theme` off localStorage. An <img> in a
