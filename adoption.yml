@@ -19,18 +19,20 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-05T06:36:18.158Z"
+updated: "2026-09-06T06:36:41.292Z"
 active_users:
-  day: 22
-  week: 107
-  month: 107
+  day: 34
+  week: 120
+  month: 127
   first_ping_date: "2026-08-29"
-  days_observed: 8
+  days_observed: 9
   month_window_full: false
-events_28d: 527
+events_28d: 612
 
 # Tokens the indexed answers saved against reading the same code raw, summed
-# across every install that has not opted out, since 2025-01-01.
+# across every install that has not opted out, since 2026-09-05 — the day
+# the counter started measuring responses instead of multiplying a constant
+# (TRA-904). Earlier days are deliberately outside this sum.
 #
 # `tokens_saved` is the sanitized figure and the only one to quote: days whose
 # per-user rate ran away from the median are capped, because the ping's
@@ -48,16 +50,16 @@ events_28d: 527
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 39074384
-  tokens_saved_raw: 147786695
-  usd_saved: 39.07
+  tokens_saved: 14402995
+  tokens_saved_raw: 14402995
+  usd_saved: 14.4
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
-  since: "2025-01-01"
-  days: 7
-  capped_days: 2
-  raw_ratio: 3.78
-  inflation_suspected: true
+  since: "2026-09-05"
+  days: 1
+  capped_days: 0
+  raw_ratio: 1
+  inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
 # SEO, outreach or design change can be graded against something instead of
@@ -83,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 64
+  new_installs_28d: 89
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -152,29 +154,31 @@ usage:
 
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
-# site carries no analytics, and Reddit, our largest referrer, cannot be read
-# from a run at all (`ops/user-signal.md`). Cross-check these names against the
-# "Arrivals" column of `ops/distribution.md` before adding another directory.
+# site carries no analytics, and the largest external referrer cannot be read
+# from a run at all (`ops/user-signal.md`, private repo). Cross-check these names
+# against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
   error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "(not set)": 263
-  "upgrade": 108
-  "new": 64
-  "active": 46
-  "unknown": 43
+  "(not set)": 268
+  "upgrade": 134
+  "new": 89
+  "active": 71
+  "unknown": 48
   "downgrade": 1
 by_version:
   "(not set)": 36
   "3.10.0": 28
-  "3.11.0": 24
-  "3.15.0": 23
+  "3.11.0": 25
+  "3.15.0": 25
+  "3.17.1": 22
   "3.8.0": 21
   "3.14.0": 16
-  "3.17.1": 5
+  "3.18.0": 13
+  "3.19.0": 2
   "3.7.0": 2
   "3.12.0": 1
   "3.13.0": 1
@@ -197,11 +201,11 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 46
-  below: 77
+  at_or_above: 80
+  below: 78
   unknown: 36
-  pct: 37
-  readable: false
+  pct: 51
+  readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
 # advertises (TRA-643). `preset-surface-budget.test.ts` measures the same basis
@@ -243,32 +247,38 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 59
-  "United States": 10
-  "Russia": 7
-  "Chile": 4
+  "(not set)": 61
+  "United States": 13
+  "Russia": 8
+  "Chile": 5
   "Denmark": 4
+  "Poland": 4
   "Sweden": 4
+  "United Arab Emirates": 4
   "Brazil": 3
+  "Thailand": 3
   "Australia": 2
+  "Hong Kong": 2
   "Italy": 2
   "Malta": 2
-  "Poland": 2
-  "United Arab Emirates": 2
+  "Netherlands": 2
   "Argentina": 1
   "Austria": 1
   "Germany": 1
-  "Hong Kong": 1
   "Indonesia": 1
   "Iran": 1
+  "Pakistan": 1
+  "Romania": 1
+  "South Korea": 1
   "Spain": 1
-  "United Kingdom": 1
 by_client:
-  "unknown": 71
+  "unknown": 89
   "(not set)": 36
-  "claude-code": 17
-  "codex-mcp-client": 7
-  "antigravity-client": 1
+  "claude-code": 22
+  "codex-mcp-client": 8
+  "antigravity-client": 2
+  "opencode": 2
+  "rmcp": 2
   "grok-shell-trace-mcp": 1
-  "opencode": 1
+  "mcp": 1
   "pi-mcp-trace-mcp": 1
