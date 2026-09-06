@@ -7,13 +7,15 @@
  *
  * Complements the existing injection-only suite
  * (tests/tools/changed-symbols-injection.test.ts) — this file covers the
- * happy-path shape, filter semantics, and change-type classification.
+ * happy-path shape, filter semantics, change-type classification, and the
+ * content_hash freshness gate (TRA-1075).
  */
 
 import { execFileSync } from 'node:child_process';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Store } from '../../../src/db/store.js';
 import { getChangedSymbols } from '../../../src/tools/quality/changed-symbols.js';
+import { contentHash, initContentHasher } from '../../../src/util/hash.js';
 import { createTestStore } from '../../test-utils.js';
 
 vi.mock('node:child_process', () => ({
@@ -35,6 +37,8 @@ interface GitMock {
   upstream?: string;
   /** Base-branch names that fail merge-base (simulates "branch doesn't exist"). */
   mergeBaseFailsFor?: string[];
+  /** Blob content returned for `git show <ref>:<path>`, keyed by path. */
+  show?: Record<string, string>;
 }
 
 function mockGit(g: GitMock): void {
@@ -54,15 +58,40 @@ function mockGit(g: GitMock): void {
         throw new Error(`unknown revision: ${candidate}`);
       return g.mergeBase ?? 'abc1234';
     }
+    if (a[0] === 'show') {
+      // args[1] is "<ref>:<path>" — match by path only, mock ignores the ref.
+      const spec = a[1] ?? '';
+      const path = spec.slice(spec.indexOf(':') + 1);
+      if (!g.show || !(path in g.show)) throw new Error(`no blob mocked for "${spec}"`);
+      return Buffer.from(g.show[path]);
+    }
     if (a[0] === 'diff' && a.includes('--name-status')) return g.nameStatus ?? '';
     if (a[0] === 'diff' && a.includes('--unified=0')) return g.unified ?? '';
     return '';
   }) as never);
 }
 
+// Real file contents, hashed for real via the same xxh64 hasher the indexer
+// uses — so the freshness check in getChangedSymbols sees a genuine match
+// unless a test deliberately mocks a different `show` blob.
+const LOGIN_CONTENT = 'export function login() {}\nexport function logout() {}\n';
+const SSO_CONTENT = 'export function ssoEntry() {}\n';
+const OLD_CONTENT = 'export function oldFn() {}\n';
+
+let LOGIN_HASH: string;
+let SSO_HASH: string;
+let OLD_HASH: string;
+
+beforeAll(async () => {
+  await initContentHasher();
+  LOGIN_HASH = contentHash(Buffer.from(LOGIN_CONTENT));
+  SSO_HASH = contentHash(Buffer.from(SSO_CONTENT));
+  OLD_HASH = contentHash(Buffer.from(OLD_CONTENT));
+});
+
 function seedFiles(store: Store): void {
   // Modified file with two symbols
-  const modFile = store.insertFile('src/auth/login.ts', 'typescript', 'h-mod', 500);
+  const modFile = store.insertFile('src/auth/login.ts', 'typescript', LOGIN_HASH, 500);
   store.insertSymbol(modFile, {
     symbolId: 'src/auth/login.ts::login#function',
     name: 'login',
@@ -85,7 +114,7 @@ function seedFiles(store: Store): void {
   });
 
   // Added file
-  const addFile = store.insertFile('src/auth/sso.ts', 'typescript', 'h-add', 300);
+  const addFile = store.insertFile('src/auth/sso.ts', 'typescript', SSO_HASH, 300);
   store.insertSymbol(addFile, {
     symbolId: 'src/auth/sso.ts::ssoEntry#function',
     name: 'ssoEntry',
@@ -98,7 +127,7 @@ function seedFiles(store: Store): void {
   });
 
   // Removed file
-  const delFile = store.insertFile('src/legacy/old.ts', 'typescript', 'h-del', 200);
+  const delFile = store.insertFile('src/legacy/old.ts', 'typescript', OLD_HASH, 200);
   store.insertSymbol(delFile, {
     symbolId: 'src/legacy/old.ts::oldFn#function',
     name: 'oldFn',
@@ -120,14 +149,19 @@ describe('getChangedSymbols() — behavioural contract', () => {
     seedFiles(store);
   });
 
-  it('classifies adds/modifies/removes from git diff into changeKind', () => {
+  it('classifies adds/modifies/removes from git diff into changeKind', async () => {
     mockGit({
       nameStatus: 'A\tsrc/auth/sso.ts\nM\tsrc/auth/login.ts\nD\tsrc/legacy/old.ts',
       unified:
         '+++ b/src/auth/sso.ts\n@@ -0,0 +1,10 @@\n' + '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: {
+        'src/auth/sso.ts': SSO_CONTENT,
+        'src/auth/login.ts': LOGIN_CONTENT,
+        'src/legacy/old.ts': OLD_CONTENT,
+      },
     });
 
-    const result = getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -141,15 +175,17 @@ describe('getChangedSymbols() — behavioural contract', () => {
     expect(summary.added).toBeGreaterThanOrEqual(1);
     expect(summary.modified).toBeGreaterThanOrEqual(1);
     expect(summary.removed).toBeGreaterThanOrEqual(1);
+    expect(result.value.staleFiles).toEqual([]);
   });
 
-  it('result envelope carries since/until/changedFiles/changedSymbols/summary', () => {
+  it('result envelope carries since/until/changedFiles/changedSymbols/summary/staleFiles', async () => {
     mockGit({
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -157,6 +193,7 @@ describe('getChangedSymbols() — behavioural contract', () => {
     expect(result.value.until).toBe('HEAD');
     expect(typeof result.value.changedFiles).toBe('number');
     expect(Array.isArray(result.value.changedSymbols)).toBe(true);
+    expect(Array.isArray(result.value.staleFiles)).toBe(true);
     expect(result.value.summary).toMatchObject({
       added: expect.any(Number),
       modified: expect.any(Number),
@@ -174,13 +211,14 @@ describe('getChangedSymbols() — behavioural contract', () => {
     }
   });
 
-  it('includeBlastRadius=true populates blastRadius on each changed symbol', () => {
+  it('includeBlastRadius=true populates blastRadius on each changed symbol', async () => {
     mockGit({
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', {
+    const result = await getChangedSymbols(store, '/proj', {
       since: 'main',
       until: 'HEAD',
       includeBlastRadius: true,
@@ -195,26 +233,28 @@ describe('getChangedSymbols() — behavioural contract', () => {
     }
   });
 
-  it('empty diff (since == until) yields zero changed symbols + zero summary', () => {
+  it('empty diff (since == until) yields zero changed symbols + zero summary', async () => {
     mockGit({ nameStatus: '', unified: '' });
 
-    const result = getChangedSymbols(store, '/proj', { since: 'HEAD', until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { since: 'HEAD', until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
     expect(result.value.changedSymbols).toEqual([]);
     expect(result.value.changedFiles).toBe(0);
+    expect(result.value.staleFiles).toEqual([]);
     expect(result.value.summary).toEqual({ added: 0, modified: 0, removed: 0, renamed: 0 });
   });
 
-  it('auto-detects base branch when "since" is omitted (calls git merge-base)', () => {
+  it('auto-detects base branch when "since" is omitted (calls git merge-base)', async () => {
     mockGit({
       mergeBase: 'merge-base-sha',
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -227,15 +267,16 @@ describe('getChangedSymbols() — behavioural contract', () => {
     expect(result.value.since).toBe('merge-base-sha');
   });
 
-  it('falls back to origin/HEAD when default branch is neither main nor master', () => {
+  it('falls back to origin/HEAD when default branch is neither main nor master', async () => {
     mockGit({
       originHead: 'origin/trunk',
       mergeBase: 'trunk-merge-base',
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -244,16 +285,17 @@ describe('getChangedSymbols() — behavioural contract', () => {
     expect((mergeBaseCall?.[1] as string[])[1]).toBe('origin/trunk');
   });
 
-  it('falls back to the upstream branch when origin/HEAD is unset', () => {
+  it('falls back to the upstream branch when origin/HEAD is unset', async () => {
     mockGit({
       // no originHead → symbolic-ref throws
       upstream: 'origin/develop',
       mergeBase: 'develop-merge-base',
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
@@ -262,30 +304,31 @@ describe('getChangedSymbols() — behavioural contract', () => {
     expect((mergeBaseCall?.[1] as string[])[1]).toBe('origin/develop');
   });
 
-  it('still falls back to main/master when origin/HEAD and upstream are both unset', () => {
+  it('still falls back to main/master when origin/HEAD and upstream are both unset', async () => {
     mockGit({
       // no originHead, no upstream → both probes throw
       mergeBaseFailsFor: ['main'],
       mergeBase: 'master-merge-base',
       nameStatus: 'M\tsrc/auth/login.ts',
       unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
     });
 
-    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    const result = await getChangedSymbols(store, '/proj', { until: 'HEAD' });
     expect(result.isOk()).toBe(true);
     if (result.isErr()) return;
 
     expect(result.value.since).toBe('master-merge-base');
   });
 
-  it('an explicit defaultBaseBranch config is tried exclusively (no main/master fallback)', () => {
+  it('an explicit defaultBaseBranch config is tried exclusively (no main/master fallback)', async () => {
     mockGit({
       mergeBaseFailsFor: ['release'],
       nameStatus: '',
       unified: '',
     });
 
-    const result = getChangedSymbols(store, '/proj', {
+    const result = await getChangedSymbols(store, '/proj', {
       until: 'HEAD',
       defaultBaseBranch: 'release',
     });
@@ -293,5 +336,58 @@ describe('getChangedSymbols() — behavioural contract', () => {
     if (!result.isErr()) return;
     expect(result.error.message).toContain('"release"');
     expect(result.error.message).not.toContain('"main"');
+  });
+
+  // --- Freshness gate (TRA-1075) ---
+  // The bug this test class catches: an indexed symbol's line_start/line_end
+  // reflect the tree at the last reindex, not necessarily the tree at
+  // `until`. Without a content_hash check, a diff hunk silently resolves to
+  // whatever symbol used to occupy that line range.
+
+  it('excludes a modified file from changedSymbols and reports it in staleFiles when its blob no longer matches the indexed content_hash', async () => {
+    mockGit({
+      nameStatus: 'M\tsrc/auth/login.ts',
+      unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      // Blob at `until` no longer matches LOGIN_HASH recorded at index time —
+      // e.g. 20 lines were inserted above `login()` since the last reindex.
+      show: { 'src/auth/login.ts': 'totally different content now\n' },
+    });
+
+    const result = await getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.staleFiles).toEqual(['src/auth/login.ts']);
+    expect(result.value.changedSymbols.some((s) => s.file === 'src/auth/login.ts')).toBe(false);
+  });
+
+  it('excludes an added file whose blob at "until" cannot be resolved (git show fails)', async () => {
+    mockGit({
+      nameStatus: 'A\tsrc/auth/sso.ts',
+      unified: '+++ b/src/auth/sso.ts\n@@ -0,0 +1,10 @@\n',
+      show: {}, // no blob mocked → git show throws → treated as stale, not dropped silently
+    });
+
+    const result = await getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.staleFiles).toEqual(['src/auth/sso.ts']);
+    expect(result.value.changedSymbols).toEqual([]);
+  });
+
+  it('still joins a fresh file normally when content_hash matches the blob at "until"', async () => {
+    mockGit({
+      nameStatus: 'M\tsrc/auth/login.ts',
+      unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+      show: { 'src/auth/login.ts': LOGIN_CONTENT },
+    });
+
+    const result = await getChangedSymbols(store, '/proj', { since: 'main', until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.staleFiles).toEqual([]);
+    expect(result.value.changedSymbols.some((s) => s.file === 'src/auth/login.ts')).toBe(true);
   });
 });

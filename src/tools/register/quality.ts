@@ -144,7 +144,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
       output_format: OutputFormatSchema,
     },
     async ({ since, until, include_blast_radius, max_blast_depth, output_format }) => {
-      const result = getChangedSymbols(store, projectRoot, {
+      const result = await getChangedSymbols(store, projectRoot, {
         since,
         until,
         includeBlastRadius: include_blast_radius,
@@ -187,7 +187,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         ),
     },
     async ({ branch, base, include_blast_radius, max_blast_depth, group_by }) => {
-      const result = compareBranches(store, projectRoot, {
+      const result = await compareBranches(store, projectRoot, {
         branch,
         base,
         includeBlastRadius: include_blast_radius,

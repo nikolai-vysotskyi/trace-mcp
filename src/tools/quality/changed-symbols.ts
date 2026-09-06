@@ -7,6 +7,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult } from '../../errors.js';
+import { contentHash, initContentHasher } from '../../util/hash.js';
 import { findUnsafeRef, isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 
 type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
@@ -28,6 +29,13 @@ interface ChangedSymbolsResult {
   changedFiles: number;
   changedSymbols: ChangedSymbolEntry[];
   summary: { added: number; modified: number; removed: number; renamed: number };
+  /**
+   * Files whose indexed content_hash no longer matches the git blob at the
+   * ref we joined against — the index was built on a different tree, so
+   * their symbols were excluded rather than joined against stale spans.
+   * Reindex these files and retry for full coverage.
+   */
+  staleFiles: string[];
 }
 
 interface ChangedSymbolsOptions {
@@ -158,14 +166,54 @@ function detectBaseBranch(
 }
 
 /**
+ * Fetch a file's raw bytes as they existed in a specific git tree. Returns
+ * null if the ref/path pair doesn't resolve (e.g. the path never existed at
+ * that ref).
+ */
+function getBlobBytes(rootPath: string, ref: string, filePath: string): Buffer | null {
+  try {
+    return execFileSync('git', ['show', `${ref}:${filePath}`], {
+      cwd: rootPath,
+      maxBuffer: 20 * 1024 * 1024,
+      timeout: 15_000,
+      env: safeGitEnv(),
+      stdio: 'pipe',
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when the indexed row's content_hash still matches the blob at `ref`.
+ * This is the guard against joining diff hunks onto spans from a stale
+ * index: without it, an edit that shifts line numbers (e.g. inserting lines
+ * above a function) silently resolves to whatever symbol used to occupy
+ * that span. A row with no recorded content_hash (legacy index, predates
+ * the hashing column) can't be verified either way — treated as fresh so
+ * old indexes don't regress into blanket staleness.
+ */
+function isFileFresh(
+  rootPath: string,
+  ref: string,
+  filePath: string,
+  storedHash: string | null,
+): boolean {
+  if (!storedHash) return true;
+  const blob = getBlobBytes(rootPath, ref, filePath);
+  if (!blob) return false;
+  return contentHash(blob) === storedHash;
+}
+
+/**
  * Parse git diff to find changed symbols.
  * Single git diff call → parse hunks → batch SQL per file.
  */
-export function getChangedSymbols(
+export async function getChangedSymbols(
   store: Store,
   rootPath: string,
   opts: ChangedSymbolsOptions,
-): TraceMcpResult<ChangedSymbolsResult> {
+): Promise<TraceMcpResult<ChangedSymbolsResult>> {
   const until = opts.until ?? 'HEAD';
 
   // Reject hostile ref strings before they hit any subprocess. The previous
@@ -221,6 +269,7 @@ export function getChangedSymbols(
       changedFiles: 0,
       changedSymbols: [],
       summary: { added: 0, modified: 0, removed: 0, renamed: 0 },
+      staleFiles: [],
     });
   }
 
@@ -272,6 +321,7 @@ export function getChangedSymbols(
   // Map hunks to symbols — batch per file (no N+1)
   const changedSymbols: ChangedSymbolEntry[] = [];
   const seenSymbols = new Set<string>();
+  const staleFiles = new Set<string>();
 
   // Group hunks by file
   const hunksByFile = new Map<string, DiffHunk[]>();
@@ -281,10 +331,17 @@ export function getChangedSymbols(
     hunksByFile.set(hunk.file, arr);
   }
 
+  await initContentHasher();
+
   // Process each file — single SQL per file for symbols in range
   for (const [filePath, fileHunks] of hunksByFile) {
     const file = store.getFile(filePath);
     if (!file) continue;
+
+    if (!isFileFresh(rootPath, until, filePath, file.content_hash)) {
+      staleFiles.add(filePath);
+      continue;
+    }
 
     // Batch-fetch all symbols for this file
     const symbols = store.getSymbolsByFile(file.id);
@@ -321,6 +378,13 @@ export function getChangedSymbols(
     if (status === 'A' || status === 'D') {
       const file = store.getFile(filePath);
       if (!file) continue;
+      // Added files must match the blob at `until`; deleted files no longer
+      // exist there, so verify against the tree they were last seen in.
+      const ref = status === 'A' ? until : since;
+      if (!isFileFresh(rootPath, ref, filePath, file.content_hash)) {
+        staleFiles.add(filePath);
+        continue;
+      }
       const symbols = store.getSymbolsByFile(file.id);
       const changeKind = status === 'A' ? 'added' : 'removed';
       for (const sym of symbols) {
@@ -365,6 +429,7 @@ export function getChangedSymbols(
     changedFiles: fileStatuses.size,
     changedSymbols,
     summary,
+    staleFiles: [...staleFiles],
   });
 }
 
@@ -405,11 +470,11 @@ interface BranchComparisonResult extends ChangedSymbolsResult {
  * Compare two branches at the symbol level.
  * Resolves merge-base automatically, then delegates to getChangedSymbols.
  */
-export function compareBranches(
+export async function compareBranches(
   store: Store,
   rootPath: string,
   opts: BranchComparisonOptions,
-): TraceMcpResult<BranchComparisonResult> {
+): Promise<TraceMcpResult<BranchComparisonResult>> {
   const branch = opts.branch;
 
   const unsafe = findUnsafeRef({
@@ -466,7 +531,7 @@ export function compareBranches(
   }
 
   // Delegate to getChangedSymbols
-  const result = getChangedSymbols(store, rootPath, {
+  const result = await getChangedSymbols(store, rootPath, {
     since: mergeBase,
     until: branch,
     includeBlastRadius: opts.includeBlastRadius ?? true,
