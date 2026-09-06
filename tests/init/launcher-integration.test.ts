@@ -227,6 +227,38 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       );
     });
 
+    it('still starts the server when the state home is read-only', () => {
+      // A full disk or a root-owned ~/.trace makes every write in the shim
+      // fail: the log append, the rotation, the heal. None of them is the
+      // point of the run — losing all ~170 tools because the log could not be
+      // written would be. Verified on a real chmod 555 home, not asserted from
+      // reading the `|| true`s.
+      const { home, traceHome, node } = setupFakeHome();
+      const otherCli = plantNvmPackage(home);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+      fs.chmodSync(traceHome, 0o555);
+      try {
+        const { status, stdout, stderr } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${otherCli} serve`);
+        // Nothing may leak onto the client's stderr — a healthy server that
+        // looks broken in the client log is the TRA-797 failure mode.
+        expect(stderr).toBe('');
+        // A read-only *directory* still allows truncating a 0644 file already
+        // inside it, so the chmod above does not by itself catch a heal that
+        // dropped the tmp-then-rename and writes $CONFIG in place (review of
+        // #1021). Pin the config as untouched: on this run the heal cannot
+        // land, so the stale path it named must still be there.
+        expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).toContain(
+          path.join(home, 'gone', 'cli.js'),
+        );
+      } finally {
+        fs.chmodSync(traceHome, 0o755);
+      }
+    });
+
     it('does not persist env overrides into launcher.env', () => {
       const { home, traceHome, node, cli } = setupFakeHome();
       // No config at all — overrides carry the run.
