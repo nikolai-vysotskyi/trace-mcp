@@ -79,6 +79,11 @@ Rules for keeping it honest:
 | [Arnon-hs/open-source](https://github.com/Arnon-hs/open-source/blob/main/mcp/nikolai-vysotskyi-trace-mcp.md) | **Yes — never submitted** (89★) | A generated page of its own under `mcp/` **and** a second under `aiml/`: badges, a 67/100 score, our topic list, a practical-evaluation block, and an LLM-written summary in English, Russian and Chinese | Nothing to submit — and this is the row that changes how the auto-index channel should be valued, see the note below the table. It is **not** verbatim: the summary expands "MCP" to "Message Control Protocol" and the stars are 67 against a live 146 | 2026-09-06 |
 | [SAIRAMANALADI/vybe-intelligence-vault](https://github.com/SAIRAMANALADI/vybe-intelligence-vault) | **Yes — never submitted** (21★) | ~15 dated files under `daily-digests/*/trace-mcp.md`, each with YAML front matter: `quality_score: 9`, `rag_relevance: 10`, a tag list, and a `tech_stack` naming Graph Databases, NLP and **GPU Acceleration** — none of which we ship | Nothing to submit. Same generative shape as the row above | 2026-09-06 |
 | [patrickclery/awesomer](https://github.com/patrickclery/awesomer) (16★), [gabrielmoreira/awesome-ai-rabbit-holes](https://github.com/gabrielmoreira/awesome-ai-rabbit-holes) (5★) | **Yes — never submitted** | One line each, carried in from a list they aggregate | Nothing to submit; recorded so a later run does not open them as doors | 2026-09-06 |
+| [claudskills.com/skills/trace-mcp-pre-commit](https://claudskills.com/skills/trace-mcp-pre-commit) — mirrored at [aibot88/sec_skill_store](https://github.com/aibot88/sec_skill_store) | **Yes — third-party, we did not write it and did not submit it** | A Claude Code skill called `trace-mcp-pre-commit`: "Run trace-mcp security, quality-gate, and antipattern checks before committing or opening a PR." It walks an agent through `scan_security` → `taint_analysis` → `check_quality_gates({scope:"changed"})` → `detect_antipatterns` → `compare_branches` / `get_changed_symbols` / `predict_bugs` / `get_risk_hotspots`. **All seven tool names were checked against `src/tools/register/` and all seven are real** (`git.ts`, `quality.ts`, `advanced.ts`) — this is an accurate integration, not a hallucinated one | Live page verified 2026-09-06 (a fabricated slug on the same path returns 404, so the 200 is real). Nothing to submit and nothing to correct. **What it is worth is the shape:** it is the second third-party wrapper after `axisrow/trace-mcp-plugin`, and it wraps the half of our tool surface our own marketing never mentions — the quality/security tools, not the navigation ones. Somebody read the tool list and found a use we do not sell. Do not open an issue; the GitHub repo is a static mirror last pushed 2026-05-27 | 2026-09-06 |
+| [hotaru-ritsuki/ai-daily-briefings](https://github.com/hotaru-ritsuki/ai-daily-briefings) (2★) | **Yes — never submitted, and this is a reader, not an index** | A personal daily AI-engineering briefing. `briefings/2026-08-30.md` recommends us in the author's own words: "an MCP server for CC *and* Codex that claims 'one tool call replaces ~42 minutes of agent exploration' by giving the agent a code-trace instead of blind file reads. **Relevant for your Spring Boot/monorepo work**", and ranks us third in that day's list — "*Why:* cuts agent exploration time on large Java/TS codebases" | Nothing to submit; the value is the readout, below. Two stars, written for one person, and it is the closest thing to a user telling us in public what they think we are | 2026-09-06 |
+| [savanna0425/skillhot](https://github.com/savanna0425/skillhot) (37★) | **Yes — never submitted** | Chinese-language skill/repo directory. Carries our record in `public/data/details/nikolai__vysotskyi__trace__mcp.json`, plus `manifest.json` and `topics/claude-code-skill.json`, with `homepage` and the **current** description string — the measured 90.6% PR figure, not the retired one | Same scraper family as the `linny006` rows: verbatim copy of the GitHub description, so fixing the string fixes it. Useful as a control — it is the first auto-index observed carrying the corrected wording, which is evidence the 2026-09-05 fix propagates | 2026-09-06 |
+| [bormaxi8080/osint-timeline](https://github.com/bormaxi8080/osint-timeline) (151★) | **Yes — never submitted** | A dated newsletter roundup, `timelines/osintech-timeline_159_23.04.2026.md`: "**Trace MCP.** MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" | Nothing to submit. It is a **frozen dated issue** — the file is an archive entry, so unlike the scrapers it will never refresh. See the derivatives note below | 2026-09-06 |
+| [blackwell-systems/gcf](https://github.com/blackwell-systems/gcf) (46★) | **Yes — never submitted, and not a directory** | `outreach/tier1-discovery-2026-06-17.md`, a competitive-discovery sheet somebody else keeps: "\| 88 \| [nikolai-vysotskyi/trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) \| MCP exploration server \| TOON output format option \|" — a scored tier-1 row in someone else's outreach list | Nothing to submit; the point is what put us on it. Their column says **TOON output**, not code intelligence, not token savings. A feature we have never led with is what made us legible to an outside prospector's filter. Worth knowing before the next positioning pass — it is the only observed case of an outsider naming why they picked us | 2026-09-06 |
 
 ### The auto-index layer stopped copying us and started paraphrasing us (2026-09-06)
 
@@ -533,7 +538,9 @@ other rows get found. It has now produced a first: `mattbutlerengineering/ai-too
 the only third-party evaluation of trace-mcp anyone has written, was found this
 way (TRA-845) and not in any directory.
 
-Run it once per distribution run. Four queries, `gh search code`, dedupe by repo:
+Run it once per distribution run — `scripts/mention-sweep.sh`, which carries
+the four queries below and subtracts `ops/mentions-seen.txt` so it prints only
+repos nobody has read yet. `--record` appends the new ones to that list.
 
 ```
 gh search code 'trace-mcp'                  --limit 100 --json repository --jq '.[].repository.nameWithOwner' | sort | uniq -c | sort -rn
@@ -541,6 +548,15 @@ gh search code 'nikolai-vysotskyi/trace-mcp' --limit 100 ...
 gh search code 'trace-mcp.com'               --limit 100 ...
 gh search code '"npx -y trace-mcp"'          --limit 100 ...
 ```
+
+**The queries were never the expensive part; re-reading the same 20 repos was.**
+Two runs of this sweep returned the same collision set — `btraceio/btrace`,
+`oisee/odata_mcp`, `korwabs/playwright-trace-mcp` — and the second run had no
+way to know the first had already opened them. The seen list is what makes this
+a channel rather than a hunt: it turns "what does the sweep return" into "what
+does the sweep return **that is new**", which is a question with a short answer.
+A repo goes in that file only after someone opens its matched file; adding one
+unread silences it permanently.
 
 Two things about reading the output, both learned on the first run:
 
@@ -560,6 +576,66 @@ Two things about reading the output, both learned on the first run:
 had never heard of**, all three rows above, none submitted to, all three
 automatic. That matches what the arrivals reading already says — the mechanism
 that puts us on surfaces is being findable by a crawler, not filing forms.
+
+**Result of the second run (2026-09-06), the first with the seen list.** Twenty
+repos outside the list, eleven worth opening, **five genuine and four of them
+new rows above**. The ratio is the useful part: six of eleven were collisions,
+and two of those six were not even a collision on our name —
+`ZhuoZhuoCrayon/ai-workspace` matched a BlueKing observability filename
+`alarm-trace-mcp-new-tools`, and `MCPJam/inspector` matched a
+`trace-mcp-error-code` test id inside a component called `trace-timeline`. That
+is what the seen list is for: those two cost a read once, not once per run.
+
+**One near-miss worth recording as a method note.** The pass first classified
+`aibot88/sec_skill_store` as a hallucinated skill, on the reasoning that the
+seven tools it names — `scan_security`, `check_quality_gates`,
+`detect_antipatterns`, `compare_branches`, `predict_bugs`, `get_risk_hotspots`,
+`get_changed_symbols` — did not look like our tool surface. Every one of them is
+registered in `src/tools/register/`. **Check a claimed tool name against
+`src/tools/register/` before calling a third-party integration wrong**; our own
+surface is 178 tools and no one holds it in their head, including us. Calling a
+real integration fake is the more expensive error of the two, because it is the
+one that stops us reading what the integration reveals — here, that an outsider
+built on the quality and security tools we never advertise.
+
+**A sixth genuine hit, found by re-running the sweep after the seen list was
+filled — and it is the most useful thing in this pass.**
+`hotaru-ritsuki/ai-daily-briefings` (row above) is not an index; it is one
+engineer writing a daily briefing for themself. They covered us on 2026-08-30 as
+a recommendation. Four days later, on 2026-09-03, they wrote this about a
+competitor:
+
+> Code-intelligence MCP is shifting from blind reads to knowledge graphs.
+> `codebase-memory-mcp` (42k★) indexes a repo into a persistent graph … and
+> claims ~99% fewer tokens vs. letting the agent grep its way around — **the same
+> pitch as `trace-mcp` (covered) but graph-backed**, which fits my large Spring
+> Boot/TS monorepos.
+
+A reader who had read our page four days earlier concluded that the graph is
+what the *competitor* has and we do not. trace-mcp is a code graph. The
+differentiator they handed to a 42k-star competitor is our own architecture.
+This is not a misreading on their part: the description they quoted was the
+"~42 minutes of agent exploration" string, which describes a saving and names no
+mechanism, and "code-trace instead of blind file reads" is what they inferred
+from it. **The retired one-liner did not merely fail to sell the product — it
+sold the competitor's story.** Hand this to the positioning pass
+(`ops/positioning.md`) and to Competitor Intelligence; it is a single reader, so
+it is a signal and not a measurement, but it is a signal with a mechanism.
+
+**And the derivative count for the retired "~42 minutes" claim is now five, one
+of which can never refresh.** The 2026-09-06 note above found the string living
+on in generated summaries; this pass found it in two more places and one is a
+different shape. `bormaxi8080/osint-timeline` is a **dated newsletter archive**
+(`osintech-timeline_159_23.04.2026.md`) — nobody regenerates last April's issue,
+so that copy is permanent. `Jouryjc/blogs` carries a third pair of retired
+numbers in a Chinese trend report: "trace-mcp 称 40-50% token reduction、94-99%
+structured workflow reuse". `Nuel-code/Defi-discovery-` swept us into a keyword
+bot's run log with the same 42-minute string. Sharpening the earlier conclusion:
+a wrong one-liner does not merely outlive its retirement on regenerating
+indexes — some of its copies land in **archives, which never regenerate at all**.
+The cost of publishing an unmeasured number is therefore unbounded in time, not
+just long. That is the argument for the claims gate covering the repo
+description, and it is now the second finding to make it.
 
 ### And the finding that came out of it: the repo description was the last home of "~42 minutes"
 
@@ -584,10 +660,17 @@ this is the second time one of them drifted unnoticed. Whoever next touches the
 claims gate should decide whether it is worth a network read in CI; until then,
 re-read both in every distribution run.
 
-**Adoption number for anyone quoting it: 133★ on 2026-09-05** (the ledger's last
-figure was 102 on 2026-09-01). Both awesome-list star gates recorded above —
+**Adoption number for anyone quoting it: 151★ on 2026-09-06** (133 on
+2026-09-05, 102 on 2026-09-01). Both awesome-list star gates recorded above —
 `hesreallyhim` at 100 and `subinium` at 1,000 — should be re-read against this,
 not against 102.
+
+**Non-file surfaces, re-read 2026-09-06 as this section asks.** The repo
+`description` and the npm, `package.json` and `server.json` descriptions all
+carry the measured PR figure and agree with `docs/_data/counts.yml` (81
+languages, 87 frameworks). No drift this pass — the first clean read since the
+"~42 minutes" string was found here. The 20 repo topics were re-read too and
+make no claim, so nothing to guard there.
 
 ## Next door to try
 
