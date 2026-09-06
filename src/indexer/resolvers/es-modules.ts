@@ -90,7 +90,18 @@ function findTsconfig(startDir: string, stopDir: string): string | undefined {
 function buildResolver(projectRoot: string, rootPath: string): ResolverFactory {
   const options: NapiResolveOptions = {
     conditionNames: ['import', 'require', 'node', 'default'],
-    extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.vue', '.svelte'],
+    extensions: [
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '.mjs',
+      '.cjs',
+      '.json',
+      '.vue',
+      '.svelte',
+      '.astro',
+    ],
     mainFields: ['module', 'main'],
     extensionAlias: {
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
@@ -166,7 +177,18 @@ export class EsModuleResolver {
       // Bare minimum resolver
       this.rootResolver = new ResolverFactory({
         conditionNames: ['import', 'require', 'node', 'default'],
-        extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.vue', '.svelte'],
+        extensions: [
+          '.ts',
+          '.tsx',
+          '.js',
+          '.jsx',
+          '.mjs',
+          '.cjs',
+          '.json',
+          '.vue',
+          '.svelte',
+          '.astro',
+        ],
         mainFields: ['module', 'main'],
       });
     }

@@ -6,9 +6,18 @@
  * capability matrix used to derive its Imports column from "the plugin declares
  * import patterns" and so claimed 66 of 81 languages. Indexing a fixture where
  * every language performs one real cross-file import originally produced edges
- * for only four: php, python, typescript and vue. Go, Rust, C, C++, Java and
- * Ruby have since gained resolvers (in that order); C#, Kotlin, Swift, Elixir,
- * Lua, Astro and Svelte still extract an import that nothing consumes.
+ * for only four: php, python, typescript and vue. Go, Rust, C, C++, Java,
+ * Ruby, Astro and Svelte have since gained resolvers (in that order); C#,
+ * Kotlin, Swift, Elixir and Lua still extract an import that nothing
+ * consumes.
+ *
+ * Astro and Svelte needed no new resolver pass (TRA-451): both extract
+ * `imports` edges carrying plain filesystem-path specifiers — Astro's
+ * frontmatter/`<script>` blocks go through the same tree-sitter helper as
+ * TypeScript, Svelte's regex plugin already emits `from`/`module` specifiers
+ * — so joining `ESM_IMPORT_LANGUAGES` was sufficient. `.svelte` was already
+ * in the resolver's extension list (for `.ts` files importing a component);
+ * `.astro` was added alongside it.
  *
  * Adding a language here means adding or extending a resolver pass in
  * `src/indexer/pipeline.ts` — not editing a list.
@@ -26,6 +35,8 @@ export const ESM_IMPORT_LANGUAGES: ReadonlySet<string> = new Set([
   'tsx',
   'jsx',
   'vue',
+  'astro',
+  'svelte',
   'css',
   'scss',
   'sass',
