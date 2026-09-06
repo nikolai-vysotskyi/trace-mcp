@@ -62,3 +62,6 @@ wimpysworld/nix-config
 
 # Found on the 2026-09-06 re-run, row in ops/distribution.md:
 hotaru-ritsuki/ai-daily-briefings
+
+# Found on the 2026-09-06 distribution run, row in ops/distribution.md:
+agentskillexchange/skills

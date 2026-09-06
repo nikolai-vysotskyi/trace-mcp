@@ -17,6 +17,8 @@
   url: /vs/codebase-memory-mcp.html
 - title: vs codegraph
   url: /vs/codegraph.html
+- title: vs CodeGraphContext
+  url: /vs/codegraphcontext.html
 - title: vs Context Mode
   url: /vs/context-mode.html
 - title: vs code-review-graph

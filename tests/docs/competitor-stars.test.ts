@@ -65,6 +65,7 @@ describe('docs/_data/competitors.yml', () => {
       'vs/serena.md',
       'vs/codebase-memory-mcp.md',
       'vs/codegraph.md',
+      'vs/codegraphcontext.md',
       'vs/context-mode.md',
       'vs/code-review-graph.md',
       'vs/repomix-vs-codegraph.md',
