@@ -129,6 +129,7 @@ const BASE = 'http://127.0.0.1:3741';
 import { daemonFetch } from './daemon-fetch';
 import {
   addRecentProject,
+  disambiguateProjectLabels,
   getRecentProjects,
   removeRecentProject,
 } from './recent-projects.js';
@@ -178,6 +179,8 @@ function RecentProjects() {
     setRecent(getRecentProjects());
   };
 
+  const recentLabels = disambiguateProjectLabels(recent);
+
   return (
     <>
       {ctx && (
@@ -214,11 +217,25 @@ function RecentProjects() {
           </MenuItem>
         </Menu>
       )}
-      {recent.map((root) => (
+      {recent.map((root, i) => {
+        const label = recentLabels[i] ?? root;
+        const sep = label.lastIndexOf(' / ');
+        const name = sep === -1 ? label : label.slice(sep + 3);
+        const dir = sep === -1 ? null : label.slice(0, sep);
+        return (
         <SidebarRow
           key={root}
           icon="folder"
-          label={root.split(/[/\\]/).filter(Boolean).pop() ?? root}
+          label={
+            dir ? (
+              <span className="ws-sb-path">
+                <span className="name">{name}</span>
+                <span className="dir">{dir}</span>
+              </span>
+            ) : (
+              name
+            )
+          }
           title={root}
           onClick={() => openProject(root)}
           onContextMenu={(e) => {
@@ -246,7 +263,8 @@ function RecentProjects() {
             </span>
           }
         />
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -1174,10 +1192,12 @@ function AppTabView({
       icon: section.icon,
       run: () => selectSection(i + 1),
     }));
-    for (const projectRoot of getRecentProjects()) {
+    const recentRoots = getRecentProjects();
+    const recentLabels = disambiguateProjectLabels(recentRoots);
+    recentRoots.forEach((projectRoot, i) => {
       items.push({
         id: `project:${projectRoot}`,
-        label: projectRoot.split(/[/\\]/).filter(Boolean).pop() ?? projectRoot,
+        label: recentLabels[i] ?? projectRoot,
         detail: projectRoot,
         group: t('quickOpenGroupRecent'),
         icon: 'folder',
@@ -1186,7 +1206,7 @@ function AppTabView({
           window.electronAPI?.openProjectTab(projectRoot);
         },
       });
-    }
+    });
     for (const filePath of quickFiles) {
       const display = root && filePath.startsWith(root)
         ? filePath.slice(root.length).replace(/^[/\\]/, '')
