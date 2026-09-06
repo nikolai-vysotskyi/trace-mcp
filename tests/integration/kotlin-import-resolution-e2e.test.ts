@@ -67,6 +67,30 @@ object Ids {
     fun next(): Int = 0
 }
 `,
+  // Kotlin doesn't force package to mirror directory the way Java does: this
+  // file sits under `misleading/` but declares an unrelated package. A
+  // resolver keyed on directory suffix would wrongly link an importer of
+  // `com.example.app.misleading.Ghost` (the path-shaped guess) to this file.
+  [`${SRC}/misleading/Ghost.kt`]: `package org.unrelated
+
+class Ghost
+`,
+  [`${SRC}/GhostImporterWrongPath.kt`]: `package com.example.app
+
+import com.example.app.misleading.Ghost
+
+class GhostImporterWrongPath {
+    var g: Ghost? = null
+}
+`,
+  [`${SRC}/GhostImporterRightPath.kt`]: `package com.example.app
+
+import org.unrelated.Ghost
+
+class GhostImporterRightPath {
+    var g: Ghost? = null
+}
+`,
 };
 
 function importTargets(store: Store, sourcePath: string): Set<string> {
@@ -123,6 +147,18 @@ describe('Kotlin import resolution E2E', () => {
 
   it('resolves a nested-class import to its outer class file', () => {
     expect(importTargets(store, `${SRC}/Nested.kt`)).toEqual(new Set([`${SRC}/store/Repo.kt`]));
+  });
+
+  it('does not resolve a directory-shaped guess when the declared package disagrees', () => {
+    // Ghost.kt sits under `misleading/` but declares `package org.unrelated`.
+    // The directory-shaped specifier must NOT resolve to it.
+    expect(importTargets(store, `${SRC}/GhostImporterWrongPath.kt`).size).toBe(0);
+  });
+
+  it('resolves by declared package regardless of directory placement', () => {
+    expect(importTargets(store, `${SRC}/GhostImporterRightPath.kt`)).toEqual(
+      new Set([`${SRC}/misleading/Ghost.kt`]),
+    );
   });
 
   it('skips JDK/stdlib imports rather than inventing targets', () => {
