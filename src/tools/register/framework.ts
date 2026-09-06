@@ -265,7 +265,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'find_usages',
-    'Find all places that reference a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — semantic, not text matches. For raw text use search_text; for a bidirectional call graph use get_call_graph. By default, weakly-grounded `text_matched` edges into a target whose simple name collides with many other symbols are dropped (phantom god-node filter). Pass `include_ambiguous_text_matched: true` to keep them. Read-only. Returns JSON: { references: [{ file, line, kind, context }], total, ambiguous_filtered? }.',
+    'Find all references to a symbol or file (imports, calls, renders, dispatches). Use instead of Grep for symbol usages — semantic, not text matches. For raw text use search_text; for a bidirectional call graph use get_call_graph. Weakly-grounded `text_matched` edges into a name-colliding target are dropped by default (phantom god-node filter); `include_ambiguous_text_matched: true` keeps them. Read-only. Returns JSON: { references: [{ edge_type, resolution_tier, file, symbol }], total, truncated?, ambiguous_filtered? } — page caps at 50, `total` counts all.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find references for'),
       fqn: optionalNonEmptyString(512).describe('Fully qualified name to find references for'),
@@ -277,8 +277,15 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         .describe(
           'Keep text_matched edges whose target name collides with >=3 other symbols (default false — they produce phantom god-nodes).',
         ),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(1000)
+        .optional()
+        .describe('Max references returned (default 50).'),
     },
-    async ({ symbol_id, fqn, file_path, detail_level, include_ambiguous_text_matched }) => {
+    async ({ symbol_id, fqn, file_path, detail_level, include_ambiguous_text_matched, limit }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
@@ -288,6 +295,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         fqn,
         filePath: file_path,
         includeAmbiguousTextMatched: include_ambiguous_text_matched,
+        limit,
       });
       if (result.isErr()) {
         return {

@@ -49,12 +49,26 @@ const FRAME: Frame = JSON.parse(
 );
 const SEARCH_BASKET = FRAME.queries.map((q) => q.q);
 const OUTLINE_BASKET = FRAME.files.map((f) => f.path);
+/**
+ * TRA-1049: `find_usages` was priced from one hand-picked symbol
+ * (`estimateTokens`), and that one sample is what put it on the over-baseline
+ * list. Its cost is decided by how many incoming edges the target happens to
+ * have, which varies by two orders of magnitude across a repo — the same
+ * one-sample defect TRA-993 fixed for the three volume-heavy tools. It now
+ * runs over the frame's committed `identifier` stratum: real symbol names,
+ * picked positionally, resolved to a symbol_id by `search` at run time. No new
+ * selection rule and no new frame entry — the basket is the one already frozen
+ * and already re-checked by `tests/docs/response-token-frame.test.ts`.
+ */
+const USAGE_BASKET = FRAME.queries.filter((q) => q.stratum === 'identifier').map((q) => q.q);
 
 /** Tool + args, ordered by real call volume from `~/.trace/savings.json`. */
 const CALLS: Array<{
   tool: string;
   args: Record<string, unknown>;
   warmup?: boolean;
+  /** Warmup whose first `symbol_id` becomes `$USAGE_SYMBOL` for the next call. */
+  captureUsageSymbol?: boolean;
   /** Rows sharing a group collapse into one row holding their mean. */
   group?: string;
   /** The frame item this call priced — retained per item in the artifact. */
@@ -88,7 +102,20 @@ const CALLS: Array<{
     item: query,
   })),
   { tool: 'get_symbol', args: { symbol_id: '$SYMBOL' } },
-  { tool: 'find_usages', args: { symbol_id: '$SYMBOL' } },
+  ...USAGE_BASKET.flatMap((name) => [
+    {
+      tool: 'search',
+      args: { query: name, limit: 1 },
+      warmup: true,
+      captureUsageSymbol: true,
+    },
+    {
+      tool: 'find_usages',
+      args: { symbol_id: '$USAGE_SYMBOL' },
+      group: 'find_usages',
+      item: name,
+    },
+  ]),
   { tool: 'get_project_map', args: {} },
   { tool: 'get_index_health', args: {} },
   { tool: 'get_tests_for', args: { symbol_id: '$SYMBOL' } },
@@ -202,6 +229,10 @@ function run(): Promise<Array<Row & { group?: string }>> {
     let i = 0;
     let started = 0;
     let symbolId = '';
+    // Separate from `symbolId` on purpose: the usage basket re-captures on every
+    // item, and sharing one variable would silently re-target `get_tests_for`,
+    // `get_context_bundle` and `get_call_graph` further down the run.
+    let usageSymbolId = '';
     const next = (): void => {
       if (i >= CALLS.length) {
         clearTimeout(timer);
@@ -212,7 +243,11 @@ function run(): Promise<Array<Row & { group?: string }>> {
       started = Date.now();
       const c = CALLS[i];
       const args: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(c.args)) args[k] = v === '$SYMBOL' ? symbolId : v;
+      for (const [k, v] of Object.entries(c.args)) {
+        if (v === '$SYMBOL') args[k] = symbolId;
+        else if (v === '$USAGE_SYMBOL') args[k] = usageSymbolId;
+        else args[k] = v;
+      }
       send({
         jsonrpc: '2.0',
         id: 100 + i,
@@ -246,7 +281,12 @@ function run(): Promise<Array<Row & { group?: string }>> {
         if (typeof msg.id === 'number' && msg.id >= 100) {
           const text = msg.result?.content?.map((c) => c.text ?? '').join('') ?? '';
 
-          symbolId ||= /"symbol_id"\s*:\s*"([^"]+)"/.exec(text)?.[1] ?? '';
+          const seenSymbolId = /"symbol_id"\s*:\s*"([^"]+)"/.exec(text)?.[1] ?? '';
+          symbolId ||= seenSymbolId;
+          // Assigned unconditionally: a query the corpus cannot resolve must
+          // clear the id and fail the next call loudly, not silently re-price
+          // the previous basket item twice.
+          if (CALLS[i].captureUsageSymbol) usageSymbolId = seenSymbolId;
           if (msg.result?.isError) console.error(`  [${CALLS[i].tool}] ${text.slice(0, 300)}`);
           if (!CALLS[i].warmup)
             rows.push({
@@ -364,6 +404,7 @@ writeFileSync(
         source: 'benchmarks/response-tokens/frame.json',
         queries: SEARCH_BASKET,
         files: OUTLINE_BASKET,
+        usage_symbols: USAGE_BASKET,
       },
       rows,
       items,

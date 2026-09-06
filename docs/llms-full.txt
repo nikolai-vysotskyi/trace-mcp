@@ -410,7 +410,7 @@ which excludes the framework-specific rows.
 | `export_graph` | Export the dependency graph in formats external tools understand. | always |
 | `export_security_context` | Export security context for MCP server analysis. | always |
 | `extract_function` | Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). | always |
-| `find_usages` | Find all places that reference a symbol or file (imports, calls, renders, dispatches). | always |
+| `find_usages` | Find all references to a symbol or file (imports, calls, renders, dispatches). | always |
 | `generate_docs` | Generate project documentation from the code graph — architecture, API surface, data models, components, dependencies. | always |
 | `generate_insights_report` | Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-ti… | always |
 | `generate_sbom` | Generate a Software Bill of Materials (SBOM) from package manifests and lockfiles. | always |
@@ -6247,24 +6247,26 @@ quietly start booking savings again.
 
 ### What closing the tail did to the headline
 
-The two left-hand columns are frozen literals: they record what those runs
-measured, so a later re-measurement cannot rewrite them. Only the TRA-952 column
-is live.
+Every column but the last is a frozen literal: it records what that run
+measured, so a later re-measurement cannot rewrite it. Only the last column is
+live.
 
-| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) |
-|---|---|---|---|---|
-| coverage of recorded calls | 88.4% | 97.2% | 97.2% | **97.2%** |
-| net `reduction_pct` | 29.3% | 21.1% | 21.0% | **{{ site.data.response_tokens.reduction_pct }}%** |
-| credited | 35.2% | 32.6% | 31.5% | {{ site.data.response_tokens.credited_reduction_pct }}% |
-| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
-| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
+| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) | TRA-1049 (find_usages framed) |
+|---|---|---|---|---|---|
+| coverage of recorded calls | 88.4% | 97.2% | 97.2% | 97.2% | **97.2%** |
+| net `reduction_pct` | 29.3% | 21.1% | 21.0% | 67.4% | **{{ site.data.response_tokens.reduction_pct }}%** |
+| credited | 35.2% | 32.6% | 31.5% | 68.3% | {{ site.data.response_tokens.credited_reduction_pct }}% |
+| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | 65.8% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
+| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | 5 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
 
-**The last column is not an improvement on the one before it.** Nothing in the
-product changed between them that would move a headline 46 points. What changed
-is that `search_text`, `get_outline` and `search` — 76% of the weight — stopped
-being priced from one sample each and started being priced from a
+**The TRA-993 column is not an improvement on the one before it.** Nothing in
+the product changed between them that would move a headline 46 points. What
+changed is that `search_text`, `get_outline` and `search` — 76% of the weight —
+stopped being priced from one sample each and started being priced from a
 [registered sampling frame](./prereg-response-tokens.md#registered-sampling-frame-tra-993-registered-2026-09-06-before-the-run).
-Read across that row as four *frames*, not four builds.
+Read across that row as *frames*, not builds — with one exception: the TRA-1049
+column is the only step that moved because the product changed, and it is worth
+0.3 points.
 
 The tail was more expensive than the head, in both directions: it contained the
 worst per-call ratios in the product and the calls that should never have been
@@ -6399,6 +6401,76 @@ diff of whatever working tree it runs on, so the two runs asked it different
 questions and its row is not comparable between them at all. The other two track the corpus: the repo gained files and symbols between
 the two measurements. Same caveat as `get_outline` above, and the reason the
 per-tool ratios are the durable part of this page and the aggregate is not.
+
+## `find_usages` was on the over-baseline list because of one symbol (TRA-1049)
+
+TRA-1026 named `find_usages` "the only over-baseline tool with real call
+volume" — 440 calls, 1,122 tokens against a 1,000-token baseline, 1.12x — and
+pointed the next shaping pass at it. **That 1.12x was one call.** The harness
+priced `find_usages` by resolving a single symbol (`estimateTokens`) and
+measuring the answer, which is the same one-sample defect TRA-993 fixed for
+`search_text`, `get_outline` and `search`, left in place on the fourth tool
+because nobody had looked at it.
+
+`find_usages` is the tool in this product whose cost is least decided by the
+tool. It returns one row per incoming edge, so the target's in-degree *is* the
+response size, and in-degree spans two orders of magnitude inside one
+repository. Priced over the frame's committed `identifier` stratum — twelve
+real symbol names, picked positionally, no new selection rule — the twelve
+per-item costs in `docs/perf/response-tokens.json` run **265 to 21,671 tokens,
+an 82x spread**, and eleven of the twelve are under 600. The symbol the harness
+happened to pick sat near the top of that range.
+
+Two independent readings agree on where the middle is:
+
+| | median | p90 | max | n |
+|---|---|---|---|---|
+| harness basket, this repo | 337 | — | 21,671 | 12 |
+| recorded field calls, five months | 300 | 973 | 4,773 | 175 |
+
+The field row is every non-error `find_usages` call this machine has made since
+2026-04-05, from `~/.trace/analytics.db`, with recorded chars converted at the
+tool's own measured chars-to-token ratio. Reproduce it with
+`node scripts/field-response-distribution.mjs find_usages`. Against a
+1,000-token baseline the median real call reads **0.30x**. `find_usages` was
+never an over-baseline tool; it was a tool measured once, at its p90.
+
+**So the conclusion reverses, and the defect does not.** What the frame exposed
+is that `find_usages` had **no response ceiling of any kind** — not a `limit`,
+not a page size, only the compute guard's two-million-iteration ceiling, which
+is a wall-clock protection and not a token one. On this repo a call for `Error`
+returned 262 references and 21,671 tokens in one response. In a repository with
+a real god-node there is no number that answer stops at.
+
+Fixed the way TRA-952 fixed `get_dead_code`: a `limit`, defaulting to 50, with
+`total` and `resolution_tiers` still counting every reference and a `truncated`
+marker when the page is short of the answer. No field was dropped and the rest
+is one `limit` away. Fifty comes off the distribution above, not off taste — it
+is past the 97th percentile of recorded calls, four of the 175 are large enough
+to be clipped, and none by much.
+
+| | before | after |
+|---|---|---|
+| `Error` (262 references) | 21,671 | **4,032** |
+| basket mean, the published figure | 2,129 | **659** |
+| basket median | 337 | 337 |
+| ratio against the 1,000-token baseline | 2.13x | **0.66x** |
+
+The median does not move, which is the point: the change is invisible to every
+call the shape of real use produces, and cuts the worst one by 81%. On the
+weighted headline it is worth 0.3 points — 67.4% to
+{{ site.data.response_tokens.reduction_pct }}% — and it takes the over-baseline
+list from five tools to
+{{ site.data.response_tokens.tools_costing_more }}.
+
+One thing this does **not** fix: the published per-tool figure is the basket
+*mean*, and on a distribution this skewed a mean is a statement about the
+basket. 659 is the mean of eleven calls near 340 and one near 4,032. The mean is
+the right estimator for the weighted aggregate — it multiplies by a call count —
+but a reader wanting to know what a `find_usages` call costs should read the
+per-item rows in the artifact, or the field median above, and not this page's
+table cell. Every other multi-item tool on this page has the same property; this
+is the first one where the spread is large enough to say so out loud.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 

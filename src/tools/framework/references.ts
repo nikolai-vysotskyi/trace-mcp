@@ -11,6 +11,18 @@ import {
 } from '../shared/resolution.js';
 import { resolveSymbolInput } from '../shared/resolve.js';
 
+/**
+ * Page size for `find_usages`. Picked from the recorded distribution, not from
+ * taste: across 175 real calls over five months (`~/.trace/analytics.db`, one
+ * machine — `node scripts/field-response-distribution.mjs find_usages`) the
+ * median response is 300 o200k tokens and the 90th percentile is 973, which is
+ * roughly eight references. Fifty is above the 97th percentile: four of those
+ * 175 calls are large enough to be clipped, and none of them by much. It caps
+ * the tail — which had no ceiling at all, and reached 21,671 tokens on this
+ * repo's `Error` — without touching any call the shape of real use produces.
+ */
+const DEFAULT_LIMIT = 50;
+
 interface ReferenceItem {
   /** Edge type describing the relationship (e.g. 'imports', 'calls', 'renders_component') */
   edge_type: string;
@@ -48,6 +60,9 @@ interface FindReferencesResult {
   ambiguous_filtered?: { dropped: number; nameCollisions: number };
   /** Present only when a compute ceiling stopped the scan (TRA-841) */
   _budget_exceeded?: BudgetExceeded;
+  /** Set when `references` was capped at `limit`. `total` is still the full
+   * count, so nothing is hidden — the rest is one `limit` away (TRA-1049). */
+  truncated?: { returned: number; of: number };
 }
 
 /**
@@ -69,6 +84,7 @@ export function findReferences(
     filePath?: string;
     includeAmbiguousTextMatched?: boolean;
     ambiguityThreshold?: number;
+    limit?: number;
   },
   guard: BudgetGuard = forTool('find_usages'),
 ): TraceMcpResult<FindReferencesResult> {
@@ -237,11 +253,20 @@ export function findReferences(
   const tiers = emptyResolutionTiers();
   for (const r of kept) tiers[r.resolution_tier]++;
 
+  // TRA-1049: cap the page, not the answer. `find_usages` had no response
+  // ceiling at all: on this repo `Error` returns 262 references for 21,671
+  // tokens, and a god-node in a larger repo is unbounded from there. `total`
+  // and `resolution_tiers` still count every kept reference, so the shape of
+  // the full answer is visible from a capped page.
+  const limit = opts.limit ?? DEFAULT_LIMIT;
+  const page = kept.length > limit ? kept.slice(0, limit) : kept;
+
   const result: FindReferencesResult = {
     target: targetMeta,
-    references: kept,
+    references: page,
     total: kept.length,
     resolution_tiers: tiers,
+    ...(page.length < kept.length ? { truncated: { returned: page.length, of: kept.length } } : {}),
     ...guard.marker(),
   };
   if (chaExpansion && chaExpansion.length > 0) result.cha_expansion = chaExpansion;

@@ -241,4 +241,48 @@ describe('findReferences', () => {
       expect(v.ambiguous_filtered).toBeUndefined();
     });
   });
+  describe('response ceiling (TRA-1049)', () => {
+    function withCallers(n: number): void {
+      const target = addSymbol(store, { filePath: 'src/hot.ts', name: 'HotTarget', kind: 'class' });
+      for (let i = 0; i < n; i += 1) {
+        const caller = addSymbol(store, {
+          filePath: `src/c${i}.ts`,
+          name: `caller${i}`,
+          kind: 'function',
+        });
+        store.insertEdge(caller.nodeId, target.nodeId, 'calls');
+      }
+    }
+
+    it('caps the page at 50 by default while total still counts every reference', () => {
+      withCallers(120);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(50);
+      expect(v.total).toBe(120);
+      expect(v.truncated).toEqual({ returned: 50, of: 120 });
+      // The tier summary describes the whole answer, not the page.
+      expect(v.resolution_tiers.ast_resolved + v.resolution_tiers.ast_inferred).toBe(120);
+    });
+
+    it('leaves a short answer whole and unmarked', () => {
+      withCallers(3);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(3);
+      expect(v.truncated).toBeUndefined();
+    });
+
+    it('honours an explicit limit', () => {
+      withCallers(120);
+      const v = findReferences(store, {
+        symbolId: 'src/hot.ts::HotTarget#class',
+        limit: 200,
+      })._unsafeUnwrap();
+      expect(v.references).toHaveLength(120);
+      expect(v.truncated).toBeUndefined();
+    });
+  });
 });
