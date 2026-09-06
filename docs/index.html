@@ -410,6 +410,66 @@ updated: 2026-09-04
     .label-disabled { color: var(--text-disabled); }
     .label-success { color: var(--success); }
 
+    /* ── Two doors (IA) ── */
+    .doors { padding: 80px 0; }
+    .doors-lede {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin-bottom: 40px;
+    }
+    .doors-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    .door {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 32px;
+      border: 1px solid var(--border-visible);
+      background: var(--surface);
+      color: inherit;
+      transition: border-color 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .door:hover { border-color: var(--text-display); }
+    .door h2 {
+      font-family: var(--font-body);
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--text-display);
+      margin: 16px 0 14px;
+    }
+    .door p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      /* The two cards hold copy of different lengths; without this the second
+         card's link floats up and the pair reads as two unrelated blocks. */
+      margin: 0 0 24px;
+    }
+    .door p:last-of-type { margin-bottom: auto; }
+    .door-go {
+      display: inline-block;
+      margin-top: 24px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-display);
+      border-bottom: 1px solid var(--border-visible);
+      padding-bottom: 1px;
+    }
+    .door:hover .door-go { border-color: var(--text-display); }
+    @media (max-width: 800px) {
+      .doors { padding: 56px 0; }
+      .doors-grid { grid-template-columns: 1fr; gap: 16px; }
+      .door { padding: 24px; }
+    }
+
     /* ── Nav ── */
     nav {
       position: fixed; top: 0; left: 0; right: 0;
@@ -2289,6 +2349,35 @@ updated: 2026-09-04
            generated data files; `historical` in docs/_data/measurements.yml is
            what turns the older one into a dated result instead of a claim. -->
       <p class="metrics-strip-foot">Measured at trace-mcp {{ site.data.pr_context_bench.measured_build.version }} (<code>{{ site.data.pr_context_bench.measured_build.commit }}</code>) on {{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}{% if site.data.measurements.pr_context.historical %} &mdash; a result from that build, not a claim about the current one{% endif %}, and at {{ site.data.response_tokens.measured_build.version }} (<code>{{ site.data.response_tokens.measured_build.commit }}</code>) on {{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}{% if site.data.measurements.response_tokens.historical %} &mdash; also a result from that build, not a claim about the current one{% endif %}. What each one set out to measure, the bar it had to clear and the verdict against it: <a href="/perf/prereg-pr-context/">PR context preregistration</a>, <a href="/perf/prereg-response-tokens/">response cost preregistration</a> (that one publishes as a miss).</p>
+    </div>
+  </section>
+
+  <!-- ── TWO DOORS ──
+       The product ships through two doors, and the unit that decides a door is how a
+       thing is installed, not which mechanism it belongs to. Door 2 — what `trace init`
+       writes to the machine — had no name on any surface, so a reader who installed us
+       as "an MCP server" never learned that half of what they installed exists.
+       Two entries, not four feature cards: splitting per-mechanism re-creates the
+       "two products in one binary" reading this block exists to avoid.
+       It sits below the metrics strip, not above it, so the measured first screen
+       (DESIGN-WEB §8) is untouched. -->
+  <section class="doors" id="doors">
+    <div class="container">
+      <p class="doors-lede">One product, two doors. Which one a thing comes through is decided by how it is installed &mdash; not by what it does.</p>
+      <div class="doors-grid">
+        <a class="door" href="/tools-reference.html">
+          <span class="label">Door 01 / Tool surface</span>
+          <h2>What your agent can call</h2>
+          <p>The code graph, decision memory, the state tools and the startup audit. Installed by adding an MCP server; a preset decides how much of it your client sees.</p>
+          <span class="door-go">Tools reference &rarr;</span>
+        </a>
+        <a class="door" href="/what-trace-init-installs.html">
+          <span class="label">Door 02 / trace init</span>
+          <h2>What it installs on your machine</h2>
+          <p>Hooks your harness runs, a routing block in your instruction file, one MCP entry per detected client. None of it is reachable through <code>tools/list</code>.</p>
+          <span class="door-go">What trace init installs &rarr;</span>
+        </a>
+      </div>
     </div>
   </section>
 
