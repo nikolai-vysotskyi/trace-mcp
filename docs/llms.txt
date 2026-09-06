@@ -11,7 +11,7 @@ layout: null
 
 - [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources trace-mcp exposes, registered dynamically per detected framework.
 - [Tool index](https://trace-mcp.com/tools-index.html): Alphabetical index of every MCP tool with its one-line description, generated from the server's own registrations.
-- [How trace-mcp compares](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
+- [Serena, Repomix and 20+ code graph MCP servers compared](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
 - [trace-mcp vs Repomix](https://trace-mcp.com/vs/repomix.html): Head-to-head against Repomix — packing a repository into one prompt vs indexing it into a queryable graph, and when Repomix is the better pick.
 - [trace-mcp vs Serena](https://trace-mcp.com/vs/serena.html): Head-to-head against Serena — a live LSP proxy vs a precomputed framework-aware graph.
 - [trace-mcp vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html): Head-to-head against the closest peer — same knowledge-graph premise, opposite bets on language breadth vs framework depth.
