@@ -240,6 +240,52 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     expect(Object.keys(readProjects())).toEqual([registered, ...scratch.slice(1)]);
   });
 
+  it('never evicts a section a human has touched, however old it is', () => {
+    // TRA-706 review finding. `projects[...]` is a supported place to configure
+    // a project by hand — nothing requires `trace add` first — so "no registry
+    // entry claims it" does not mean "nobody needs it". Position in the file is
+    // a fine tiebreak among throwaway sections and a terrible reason to delete
+    // someone's settings, so the cap only reaches sections that still look
+    // exactly like what `setupProject` generated.
+    const { MAX_UNREGISTERED_SECTIONS } = configJsonc;
+    const tuned = path.join(tmpHome, 'aaa-hand-configured'); // written first = oldest
+    const commented = path.join(tmpHome, 'aab-hand-commented');
+    for (const root of [tuned, commented]) fs.mkdirSync(root, { recursive: true });
+
+    const generated: string[] = [];
+    for (let i = 0; i < MAX_UNREGISTERED_SECTIONS + 2; i++) {
+      const root = path.join(tmpHome, `scratch-${String(i).padStart(3, '0')}`);
+      fs.mkdirSync(root, { recursive: true });
+      generated.push(root);
+    }
+
+    fs.mkdirSync(path.dirname(GLOBAL_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(
+      GLOBAL_CONFIG_PATH,
+      `{
+  "projects": {
+    ${JSON.stringify(tuned)}: { "root": ".", "ai": { "enabled": true } },
+    ${JSON.stringify(commented)}: {
+      // indexing the fixtures on purpose
+      "root": ".",
+      "include": ["fixtures/**"]
+    },
+${generated.map((r) => `    ${JSON.stringify(r)}: { "root": ".", "include": ["src/**"] }`).join(',\n')}
+  }
+}
+`,
+    );
+
+    // Four candidates over the cap, but only the generated ones may go.
+    expect(configJsonc.pruneProjectConfigSections()).toEqual(generated.slice(0, 2));
+    const left = Object.keys(readProjects());
+    expect(left).toContain(tuned);
+    expect(left).toContain(commented);
+    expect(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')).toContain(
+      '// indexing the fixtures on purpose',
+    );
+  });
+
   it('leaves a config with no dead sections untouched', () => {
     const live = fs.mkdtempSync(path.join(tmpHome, 'live-'));
     writeConfig({ [live]: { root: '.' } });

@@ -6,7 +6,16 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
+import {
+  applyEdits,
+  findNodeAtLocation,
+  type Node,
+  type ModificationOptions,
+  modify,
+  parse,
+  parseTree,
+  visit,
+} from 'jsonc-parser';
 import {
   DEFAULT_CONFIG_JSONC,
   ensureGlobalDirs,
@@ -178,6 +187,52 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
  */
 export const MAX_UNREGISTERED_SECTIONS = 100;
 
+/** Exactly the keys `setupProject` writes into a generated section. */
+const GENERATED_SECTION_KEYS = new Set(['root', 'include', 'exclude']);
+
+/**
+ * True when a section carries no evidence of a human having touched it — the
+ * only sections the cap is allowed to evict (TRA-706).
+ *
+ * `projects[...]` is a supported place to configure a project by hand: nothing
+ * requires `trace add` first, so "no registry entry claims it" is not the same
+ * as "nobody needs it". Position in the file is a fine tiebreak among
+ * throwaway sections and a terrible reason to delete someone's settings. So
+ * the cap only reaches a section that still looks exactly like what
+ * `setupProject` generated: no key beyond {@link GENERATED_SECTION_KEYS}, and
+ * no comment inside its range.
+ *
+ * The comment test asks the parser rather than scanning the text: the first
+ * draft looked for `/*` in the section's source and read the `**\/` of a
+ * perfectly ordinary `"include": ["src/**"]` as a comment, which kept every
+ * section and made the cap inert. Both checks still fail *towards keeping* the
+ * section, which is the side to be wrong on.
+ */
+function isGeneratedSection(
+  node: Node | undefined,
+  commentRanges: Array<[number, number]>,
+  value: unknown,
+): boolean {
+  if (!isPlainObject(value)) return false;
+  for (const key of Object.keys(value)) {
+    if (!GENERATED_SECTION_KEYS.has(key)) return false;
+  }
+  if (!node) return true; // nothing to inspect — the key-set check already passed
+  const end = node.offset + node.length;
+  return !commentRanges.some(([start, stop]) => start >= node.offset && stop <= end);
+}
+
+/** Offsets of every comment in the file, collected in one pass. */
+function findCommentRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  visit(text, {
+    onComment: (offset, length) => {
+      ranges.push([offset, offset + length]);
+    },
+  });
+  return ranges;
+}
+
 /**
  * Drop dead per-project sections from `.config.json` (TRA-702).
  *
@@ -228,6 +283,10 @@ export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SE
       const projects = parsed?.projects;
       if (!projects || typeof projects !== 'object') return [];
 
+      // Parsed once for the whole file, not once per section.
+      const tree = parseTree(text);
+      const commentRanges = findCommentRanges(text);
+
       const registered = new Set(listProjects().map((p) => p.root));
       const removed: string[] = [];
       // Survivors of the two rules above, in file order. `modify` appends a new
@@ -241,7 +300,15 @@ export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SE
         const dead = !claimed && !fs.existsSync(root);
         const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
         if (dead || orphanWorkdir) removed.push(root);
-        else if (!claimed) keptUnregistered.push(root);
+        else if (
+          !claimed &&
+          isGeneratedSection(
+            tree ? findNodeAtLocation(tree, ['projects', root]) : undefined,
+            commentRanges,
+            projects[root],
+          )
+        )
+          keptUnregistered.push(root);
       }
 
       const overflow = keptUnregistered.length - maxUnregistered;

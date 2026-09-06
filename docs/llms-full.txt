@@ -1693,7 +1693,9 @@ server start. An hourly sweep bounds them:
 - a root that no longer exists (after a 7-day grace, so an unmounted drive keeps its
   registration) and one-shot agent-run workdirs are dropped;
 - at most **100 auto-registered projects** are kept, least recently indexed first;
-- at most **100 config sections that no registry entry claims** are kept, oldest first.
+- at most **100 config sections that no registry entry claims** are kept, oldest first —
+  and only sections that still look exactly as trace-mcp generated them. A section you
+  edited by hand (any extra key, or a comment inside it) is never evicted, however old.
 
 Projects you registered yourself with `trace add` or `trace init` are exempt from the
 caps and are only removed by `trace remove` / `trace-mcp doctor --fix`. Eviction only
