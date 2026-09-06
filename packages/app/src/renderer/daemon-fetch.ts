@@ -51,3 +51,27 @@ export function daemonFetch(
   // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
   return fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(timeoutMs) });
 }
+
+/**
+ * `daemonFetch` for a project-scoped read that may 503 while the daemon
+ * lazily reloads an idle-unloaded project (TRA-1052 — see cli.ts's
+ * `resolveProjectForRest`). Retries on 503, honouring `Retry-After`, so the
+ * caller's existing `loading` state carries the wait instead of it having to
+ * special-case "the project is still coming up" as a failure. Gives up after
+ * `maxWaitMs` and returns the last 503 as-is — the caller's normal
+ * `!res.ok` failure path takes it from there.
+ */
+export async function daemonFetchProject(
+  url: string,
+  init: RequestInit = {},
+  maxWaitMs = 30_000,
+): Promise<Response> {
+  const deadline = Date.now() + maxWaitMs;
+  for (;;) {
+    const res = await daemonFetch(url, init);
+    if (res.status !== 503) return res;
+    const retryAfterSec = Number(res.headers.get('Retry-After')) || 2;
+    if (Date.now() + retryAfterSec * 1000 > deadline) return res;
+    await new Promise((r) => setTimeout(r, retryAfterSec * 1000));
+  }
+}
