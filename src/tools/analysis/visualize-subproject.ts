@@ -10,6 +10,7 @@ import path from 'node:path';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
 import { writeTmpFileSync } from '../../utils/safe-fs.js';
+import { minMax } from '../../util/minmax.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -307,10 +308,10 @@ simulation.on('tick', () => {
     const el = d3.select(this);
     const xs = grp.nodes.map(n => n.x);
     const ys = grp.nodes.map(n => n.y);
-    const minX = Math.min(...xs) - PAD;
-    const minY = Math.min(...ys) - PAD - 16;
-    const maxX = Math.max(...xs) + PAD;
-    const maxY = Math.max(...ys) + PAD;
+    const minX = minMax(xs).min - PAD;
+    const minY = minMax(ys).min - PAD - 16;
+    const maxX = minMax(xs).max + PAD;
+    const maxY = minMax(ys).max + PAD;
     el.select('rect').attr('x', minX).attr('y', minY).attr('width', maxX - minX).attr('height', maxY - minY);
     el.select('text').attr('x', minX + 10).attr('y', minY + 14);
   });

@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
+import { minMax } from '../util/minmax.js';
 
 export const START_MARKER = '<!-- trace:start -->';
 export const LEGACY_START_MARKER = '<!-- trace-mcp:start -->';
@@ -159,7 +160,7 @@ function removeOrphanedEndMarkers(content: string): string {
       const startIdxes = [START_MARKER, LEGACY_START_MARKER]
         .map((m) => result.indexOf(m))
         .filter((idx) => idx !== -1);
-      const startIdx = startIdxes.length > 0 ? Math.min(...startIdxes) : -1;
+      const startIdx = startIdxes.length > 0 ? minMax(startIdxes).min : -1;
       const endIdx = result.indexOf(endMarker);
       if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
         result = result.slice(0, endIdx) + result.slice(endIdx + endMarker.length);

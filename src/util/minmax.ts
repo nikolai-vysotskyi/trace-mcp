@@ -9,10 +9,13 @@
  * one — the small index takes the on-the-fly fallback and never reaches the
  * ranking code.
  *
- * Any array whose length is bounded by the index rather than by a `limit` has
- * to be reduced, not spread.
+ * Any collection whose length is bounded by the index rather than by a `limit`
+ * has to be reduced, not spread. `search()` and `get_feature_context` spread
+ * `pagerankMap.values()` — one entry per graph node — which is why this takes
+ * an `Iterable` and not just an array: reducing the iterator directly avoids
+ * materialising a second 150k-element copy just to measure it.
  */
-export function minMax(values: readonly number[]): { min: number; max: number } {
+export function minMax(values: Iterable<number>): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (const v of values) {

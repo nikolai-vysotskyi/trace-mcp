@@ -1,128 +1,13 @@
 /**
  * Stress tests — verify the system handles large codebases without
  * exploding in memory or time. These use in-memory SQLite.
+ *
+ * The seeder lives in `large-index.ts`; `scale-rangeerror.test.ts` uses the
+ * same one at the size where V8's argument limit starts to bite.
  */
 import { describe, expect, it } from 'vitest';
 import { searchFts } from '../../src/db/fts.js';
-import { createTestStore } from '../test-utils.js';
-
-const KINDS = [
-  'class',
-  'function',
-  'method',
-  'interface',
-  'variable',
-  'type',
-  'constant',
-  'property',
-] as const;
-const PREFIXES = [
-  'User',
-  'Auth',
-  'Payment',
-  'Order',
-  'Product',
-  'Cart',
-  'Invoice',
-  'Config',
-  'Logger',
-  'Metric',
-];
-const LANGS = ['typescript', 'python', 'go', 'rust', 'java', 'csharp', 'ruby', 'kotlin'];
-
-function seedDatabase(
-  fileCount: number,
-  symbolsPerFile: number,
-  opts?: { workspaces?: string[]; crossWsEdges?: number },
-) {
-  const store = createTestStore();
-  const db = store.db;
-
-  const insertFile = db.prepare(
-    `INSERT INTO files (path, language, content_hash, byte_length, indexed_at, workspace)
-     VALUES (?, ?, ?, ?, datetime('now'), ?)`,
-  );
-  const insertSymbol = db.prepare(
-    `INSERT INTO symbols (file_id, symbol_id, name, kind, fqn, byte_start, byte_end, line_start, line_end, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  const insertNode = db.prepare(`INSERT OR IGNORE INTO nodes (node_type, ref_id) VALUES (?, ?)`);
-  const insertEdge = db.prepare(
-    `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, is_cross_ws)
-     VALUES (?, ?, ?, 1, ?)`,
-  );
-
-  const edgeType = db.prepare("SELECT id FROM edge_types WHERE name = 'imports'").get() as {
-    id: number;
-  };
-  const workspaces = opts?.workspaces ?? [null as any];
-  const fileIds: number[] = [];
-
-  db.transaction(() => {
-    for (let i = 0; i < fileCount; i++) {
-      const ws = workspaces[i % workspaces.length];
-      const lang = LANGS[i % LANGS.length]!;
-      const filePath = ws
-        ? `packages/${ws}/src/module${Math.floor(i / 10)}/file${i}.ts`
-        : `src/modules/module${Math.floor(i / 10)}/file${i}.ts`;
-
-      const result = insertFile.run(filePath, lang, `hash_${i}`, 500 + (i % 5000), ws ?? null);
-      const fileId = Number(result.lastInsertRowid);
-      insertNode.run('file', fileId);
-      fileIds.push(fileId);
-
-      for (let j = 0; j < symbolsPerFile; j++) {
-        const prefix = PREFIXES[j % PREFIXES.length]!;
-        const kind = KINDS[j % KINDS.length]!;
-        const name = `${prefix}${kind.charAt(0).toUpperCase() + kind.slice(1)}${i}_${j}`;
-        const symbolId = `${filePath}::${name}#${kind}`;
-        const fqn = ws
-          ? `${ws}.module${Math.floor(i / 10)}.${name}`
-          : `module${Math.floor(i / 10)}.${name}`;
-        const meta = j % 3 === 0 ? JSON.stringify({ exported: 1 }) : null;
-
-        const symResult = insertSymbol.run(
-          fileId,
-          symbolId,
-          name,
-          kind,
-          fqn,
-          j * 100,
-          (j + 1) * 100,
-          j * 5 + 1,
-          (j + 1) * 5,
-          meta,
-        );
-        insertNode.run('symbol', Number(symResult.lastInsertRowid));
-      }
-    }
-
-    // Add import edges between consecutive files
-    for (let i = 0; i < fileIds.length - 1; i++) {
-      const srcNode = store.getNodeId('file', fileIds[i]!);
-      const tgtNode = store.getNodeId('file', fileIds[i + 1]!);
-      if (srcNode && tgtNode) {
-        const isCrossWs =
-          workspaces.length > 1 && i % workspaces.length === workspaces.length - 1 ? 1 : 0;
-        insertEdge.run(srcNode, tgtNode, edgeType.id, isCrossWs);
-      }
-    }
-
-    // Additional cross-workspace edges
-    if (opts?.crossWsEdges) {
-      const step = Math.max(1, Math.floor(fileIds.length / opts.crossWsEdges));
-      for (let i = 0; i < opts.crossWsEdges && i * step + step < fileIds.length; i++) {
-        const srcNode = store.getNodeId('file', fileIds[i * step]!);
-        const tgtNode = store.getNodeId('file', fileIds[i * step + step]!);
-        if (srcNode && tgtNode) {
-          insertEdge.run(srcNode, tgtNode, edgeType.id, 1);
-        }
-      }
-    }
-  })();
-
-  return { db, store };
-}
+import { seedLargeIndex as seedDatabase } from './large-index.js';
 
 describe('Stress: 10K files', () => {
   it('seeds and queries 10,000 files with ~50K symbols', () => {

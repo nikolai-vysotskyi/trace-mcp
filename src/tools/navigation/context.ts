@@ -8,6 +8,7 @@ import { assembleContext, type ContextItem } from '../../scoring/assembly.js';
 import { computeRecency, getTypeBonus, hybridScore } from '../../scoring/hybrid.js';
 import { computePageRank } from '../../scoring/pagerank.js';
 import { readByteRange } from '../../utils/source-reader.js';
+import { minMax } from '../../util/minmax.js';
 
 interface FeatureContextResult {
   description: string;
@@ -205,11 +206,11 @@ export function getFeatureContext(
 
   // Build PageRank map
   const pagerankMap = computePageRank(store.db);
-  const maxPr = Math.max(...pagerankMap.values(), 0.001);
+  const maxPr = Math.max(minMax(pagerankMap.values()).max, 0.001);
 
   // Normalize FTS ranks
-  const minRank = Math.min(...ftsResults.map((r) => r.rank));
-  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
+  const minRank = minMax(ftsResults.map((r) => r.rank)).min;
+  const maxRank = minMax(ftsResults.map((r) => r.rank)).max;
   const rankSpread = maxRank - minRank || 1;
 
   const now = new Date();
