@@ -86,9 +86,18 @@ const THEMES = {
   },
 };
 
-const LOGO = fs
-  .readFileSync(path.join(REPO_ROOT, 'packages/app/build/icon-256.png'))
-  .toString('base64');
+// The banner used to set the wordmark in Space Grotesk beside the icon PNG,
+// which is a third rendering of the logo alongside the site's and the app's.
+// It now inlines the generated row lockup, so all three come from one place
+// and a geometry change lands everywhere at once (DESIGN-WEB §1b).
+const LOCKUP = fs.readFileSync(path.join(DOCS, 'images', 'logo', 'lockup-row-inherit.svg'), 'utf8');
+
+/** The lockup at a given height, coloured for the theme it is dropped into. */
+function lockup(t, height) {
+  return LOCKUP.replace('<svg ', `<svg class="lockup" style="height:${height}px;width:auto" `)
+    .replace(/currentColor/g, t.display)
+    .replace(/var\(--accent, #5B8CFF\)/g, t.accent);
+}
 
 const BANNER_W = 1200;
 // The phone cut. GitHub scales the banner to the README column (~390 CSS px on
@@ -131,9 +140,7 @@ function css(t) {
     }
     .top { display: flex; gap: 56px; align-items: flex-start; }
     .brandcol { flex: 1 1 auto; min-width: 0; }
-    .lockup { display: flex; align-items: center; gap: 16px; margin-bottom: 22px; }
-    .lockup img { width: 52px; height: 52px; display: block; }
-    .wordmark { font-size: 38px; font-weight: 500; letter-spacing: -0.03em; color: ${t.display}; }
+    .lockup { display: block; margin-bottom: 22px; }
     .tagline { font-size: 25px; line-height: 1.3; font-weight: 300; letter-spacing: -0.02em; color: ${t.primary}; max-width: 560px; }
     .tagline b { font-weight: 600; color: ${t.display}; }
 
@@ -165,9 +172,7 @@ function css(t) {
       padding: 32px 32px 28px; gap: 26px;
     }
     .banner.narrow .top { flex-direction: column; gap: 24px; }
-    .banner.narrow .lockup { gap: 14px; margin-bottom: 18px; }
-    .banner.narrow .lockup img { width: 46px; height: 46px; }
-    .banner.narrow .wordmark { font-size: 34px; }
+    .banner.narrow .lockup { margin-bottom: 18px; }
     .banner.narrow .tagline { font-size: 22px; max-width: none; }
     .banner.narrow .receipt { flex: 0 0 auto; width: 100%; padding: 20px 22px 16px; }
     .banner.narrow .foot { font-size: 11px; }
@@ -221,10 +226,7 @@ function bannerHtml(t, narrow = false) {
   return `<div class="banner${narrow ? ' narrow' : ''}" id="shot">
     <div class="top">
       <div class="brandcol">
-        <div class="lockup">
-          <img src="data:image/png;base64,${LOGO}" alt="" />
-          <span class="wordmark">trace-mcp</span>
-        </div>
+        ${lockup(t, narrow ? 46 : 54)}
         <div class="tagline">trace-mcp indexes what your agent keeps re-reading, and <b>serves the answer instead</b>.</div>
       </div>
       <div class="receipt">

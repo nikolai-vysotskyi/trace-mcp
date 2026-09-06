@@ -178,11 +178,17 @@ body::before {
   align-items: center;
   gap: 10px;
 }
-.nav-brand .bracket {
-  color: var(--text-disabled);
+/* The lockup replaces the bracketed wordmark (DESIGN-WEB §1b). Height, not
+   width: the SVG carries its own aspect ratio, and the mark inside is 885 of
+   the wordmark's 1000 units, so 26px here puts the word at roughly the 13px
+   the nav used to set it in. */
+.nav-lockup {
+  height: 26px;
+  width: auto;
+  display: block;
 }
-.nav-brand:hover .bracket {
-  color: var(--text-display);
+.nav-brand:hover .nav-lockup {
+  opacity: 0.85;
 }
 
 .container {
