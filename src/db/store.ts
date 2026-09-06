@@ -152,12 +152,12 @@ export class Store {
   }
 
   getSymbolsByFileIds(fileIds: number[]): SymbolRow[] {
-    if (fileIds.length === 0) return [];
-    const results: SymbolRow[] = [];
-    for (const fid of fileIds) {
-      results.push(...this.symbols.getSymbolsByFile(fid));
-    }
-    return results;
+    return this.symbols.getSymbolsByFileIds(fileIds);
+  }
+
+  /** (id, file_id) pairs for a set of files — see the repository method. */
+  getSymbolFileRefsByFileIds(fileIds: number[]): { id: number; file_id: number }[] {
+    return this.symbols.getSymbolFileRefsByFileIds(fileIds);
   }
 
   getSymbolBySymbolId(symbolId: string): SymbolRow | undefined {
