@@ -126,7 +126,7 @@ it('offers manual clients a real button that discloses the steps', async () => {
 it('states connection with a word, not only a colour', async () => {
   render(<Clients />);
   expect(await screen.findByText('Connected')).toBeTruthy();
-  expect(screen.getByText('Update available')).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Update' }).length).toBeGreaterThan(0);
 });
 
 /* `401b97c5 http` was the session row's primary label: a raw id where the name
@@ -215,19 +215,19 @@ it('says on the row when a write failed, and keeps the row actionable', async ()
 
 // ── TRA-614 ──────────────────────────────────────────────────────────────
 
-/* A legacy entry is not a broken one, and the row has to say which it is: the
-   badge names the state in a word, and the button names the verb that ends it.
-   Reusing "Update available" would have called a rename a drift. */
+/* A legacy entry is not a broken one, and the row has to say which it is. The
+   verb does that on its own — calling a rename an "Update" would have called it
+   a drift, and a badge beside the button would have said it twice (TRA-479). */
 it('flags a legacy entry as legacy, and offers Migrate rather than Update', async () => {
   api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_LEGACY });
   render(<Clients />);
 
-  const badges = await screen.findAllByText('Legacy');
-  expect(badges).toHaveLength(2);
-  expect(badges[0].className).toContain('t-blue');
+  const buttons = await screen.findAllByRole('button', { name: 'Migrate' });
+  expect(buttons).toHaveLength(2);
+  expect(buttons[0].getAttribute('title')).toBe('Registered as trace-mcp; init now writes trace');
   expect(screen.queryByText('Update available')).toBeNull();
+  expect(screen.queryByText('Legacy')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Update' })).toBeNull();
-  expect(screen.getAllByRole('button', { name: 'Migrate' })).toHaveLength(2);
 });
 
 /* Migrate is `clients update` — the entry gets rewritten under the new key.
@@ -292,4 +292,80 @@ it('states an unreachable daemon in the same words as every other surface', asyn
 
   expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
   expect(screen.queryByText('Daemon not reachable')).toBeNull();
+});
+
+// ── TRA-479 ──────────────────────────────────────────────────────────────
+
+/* "Windsurf · Connect" was the one row on this screen that said nothing: it
+   could not tell a client whose config sits right there, one click from
+   working, apart from one that is not on the machine at all — while every row
+   above it carried a path. The daemon knew the difference and did not report
+   it. */
+it('says whether an unconfigured client has a config file at all', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [
+      {
+        client: 'windsurf',
+        configPath: '/Users/x/.windsurf/mcp.json',
+        status: 'missing',
+        configExists: true,
+      },
+      {
+        client: 'continue',
+        configPath: '/Users/x/.continue/config.json',
+        status: 'missing',
+        configExists: false,
+      },
+    ],
+  });
+  render(<Clients />);
+
+  expect(await screen.findByText('~/.windsurf/mcp.json')).toBeTruthy();
+  expect(screen.getAllByText('No config file found')).toHaveLength(1);
+});
+
+/* A daemon older than the field reports neither fact, and inventing one is
+   worse than the bare row this replaces. */
+it('claims nothing about a config file when the daemon does not report one', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [{ client: 'windsurf', configPath: '/Users/x/.windsurf/mcp.json', status: 'missing' }],
+  });
+  render(<Clients />);
+
+  await screen.findAllByRole('button', { name: 'Connect' });
+  expect(screen.queryByText('No config file found')).toBeNull();
+  expect(screen.queryByText('~/.windsurf/mcp.json')).toBeNull();
+});
+
+/* Six rows saying "Update available" beside six buttons saying "Update", under
+   a header already counting them, is one condition said three ways (DESIGN.md
+   §5). The verb says it once. */
+it('does not repeat the row action back as a badge', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_DRIFTED });
+  render(<Clients />);
+
+  const buttons = await screen.findAllByRole('button', { name: 'Update' });
+  expect(buttons).toHaveLength(3);
+  expect(screen.queryByText('Update available')).toBeNull();
+  /* The reason the row drifted survives the badge, on the button itself. */
+  expect(buttons[0].getAttribute('title')).toBe('Drifted field: cwd');
+});
+
+/* Codex config is TOML: we detect the entry and cannot compare it. Rendering
+   that as the same green "Connected" as a config we verified claims a check we
+   never ran. */
+it('does not report presence-only detection as a verified connection', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [
+      { client: 'claude-code', configPath: '/Users/x/.claude.json', status: 'up_to_date' },
+      { client: 'codex', configPath: '/Users/x/.codex/config.toml', status: 'unknown' },
+    ],
+  });
+  render(<Clients />);
+
+  expect(await screen.findByText('Configured')).toBeTruthy();
+  expect(screen.getAllByText('Connected')).toHaveLength(1);
 });

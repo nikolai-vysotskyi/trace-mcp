@@ -799,6 +799,24 @@ dash while the tiles beside it keep their numbers. That is not the inconsistency
 paragraph above forbids — it is the one distinction on the strip that is real, and
 each tile follows from what it measures.
 
+**A row's action verb is its sentence; a badge beside it is the second copy.** The
+Clients list shipped six rows each carrying an `Update available` badge next to an
+`Update` button, under a header already counting them — one condition said three ways
+(TRA-479). Delete the badge, not the button: the verb names the state and the next step
+together, and the reason the row is in that state (which field drifted, which key it is
+registered under) moves onto the button's tooltip, where it is the only thing said twice
+that the reader could not already see. A badge earns its place only where there is no
+action to name the state — a read-only condition, or a state whose action lives elsewhere.
+
+**And the corollary, which is the same rule from the other end: a row with no caption is
+a row that has not said what it is.** `Windsurf · Connect` cannot distinguish a client
+whose config sits on disk one click from working from one that is not installed on this
+machine, and every row above it carried a path — so the bare row read as an omission, not
+as a state. Where the backend knows the difference, report it: a status enum that folds
+two facts the reader would act on differently is the defect, and the row is only where it
+becomes visible.
+
+
 ---
 
 ## 6. Layout skeleton

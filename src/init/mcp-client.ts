@@ -816,6 +816,15 @@ export interface McpClientStatus {
    * (`missing` / `unmanageable`) — where picking a level is a real choice.
    */
   level: EnforcementLevel | null;
+  /**
+   * Whether `configPath` exists on disk. `missing` covers two facts that look
+   * identical to a caller and are not the same thing: the client keeps a config
+   * here and simply has no trace-mcp entry in it (an opportunity — one click
+   * away), or there is no config at all, which usually means the client is not
+   * installed on this machine (noise). Reporting both as a bare "Connect" row
+   * is what TRA-479 found on the app's Clients screen.
+   */
+  configExists: boolean;
 }
 
 /**
@@ -918,7 +927,7 @@ function detectClientStatus(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
-): Omit<McpClientStatus, 'level'> {
+): Omit<McpClientStatus, 'level' | 'configExists'> {
   if (name === 'jetbrains-ai' || name === 'warp') {
     return { client: name, configPath: null, status: 'unmanageable' };
   }
@@ -1063,7 +1072,11 @@ export function getMcpClientStatuses(
     // Nothing on disk yet means the level is still an open choice, not a fact
     // to report — only a configured client has one.
     const configured = status.status !== 'missing' && status.status !== 'unmanageable';
-    return { ...status, level: configured ? detectEnforcementLevel(name) : null };
+    return {
+      ...status,
+      level: configured ? detectEnforcementLevel(name) : null,
+      configExists: status.configPath ? fs.existsSync(status.configPath) : false,
+    };
   });
 }
 
