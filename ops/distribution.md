@@ -71,6 +71,52 @@ Rules for keeping it honest:
 | [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
 | [linny006/mcp-servers-live](https://github.com/linny006/mcp-servers-live) + [its Pages site](https://linny006.github.io/mcp-servers-live/r/nikolai-vysotskyi/trace-mcp/) | **Yes — never submitted** | Auto-index of MCP servers refreshed every 15 minutes; we are #49 by stars with a per-repo page. Its whole body is our GitHub description, repeated 5× on that page | Nothing to submit. Links only `github.com`, never `trace-mcp.com`, so it adds nothing to the domain count below. Its value is that it demonstrates the description-propagation above | 2026-09-05 |
 | [linny006/trending-claude-skills](https://github.com/linny006/trending-claude-skills) | **Yes — never submitted** | Trending table, **rank 3**, 133★, same auto-copied description | Same scraper family as the row above; one operator, two indexes. Nothing to submit | 2026-09-05 |
+| [apiiskan/ai-agent-radar](https://github.com/apiiskan/ai-agent-radar/issues/16) | **Yes — never submitted** | A Chinese-language daily radar of AI-agent repos, published as GitHub issues. We are **#5 of the day** in the 2026-08-03 digest, score 45.69, one line of description plus the full topic list | Nothing to submit, and the scoring formula is the interesting part: it is readable in the entry itself — README present, licence, tests, an MCP entry point, days since last push, days since creation, and **topic matches**. That is the third auto-index in a row whose input is the repo topics row below, and the first one that prints its weights. Found by the issue-index sweep, not by a directory hunt | 2026-09-06 |
+| [GetBindu/awesome-claude-code-and-skills](https://github.com/GetBindu/awesome-claude-code-and-skills) | **Submitted, not merged** — [PR #195](https://github.com/GetBindu/awesome-claude-code-and-skills/pull/195), opened 2026-09-06 | One entry appended to `Productivity Tools → MCP Servers & Integrations`, the section `oraios/serena` opens (188★) | PR to `readme.md`; CONTRIBUTING is four points in the readme itself, no account, no scanner, no payment, and `Contents` is section-level so an entry never touches it. **This one passes the commit-log test the other two lists failed:** eight external PRs merged in August (`aragossa`, `therohitdas`, `aaronjmars`, `musoyangrigor`, `yotta-fish`), the last on 2026-08-31, by a maintainer who merges other people's entries rather than only adding his own. Queue is 38 open. Do not ping before 2026-09-20 | 2026-09-06 |
+| [Arnon-hs/open-source](https://github.com/Arnon-hs/open-source/blob/main/mcp/nikolai-vysotskyi-trace-mcp.md) | **Yes — never submitted** (89★) | A generated page of its own under `mcp/` **and** a second under `aiml/`: badges, a 67/100 score, our topic list, a practical-evaluation block, and an LLM-written summary in English, Russian and Chinese | Nothing to submit — and this is the row that changes how the auto-index channel should be valued, see the note below the table. It is **not** verbatim: the summary expands "MCP" to "Message Control Protocol" and the stars are 67 against a live 146 | 2026-09-06 |
+| [SAIRAMANALADI/vybe-intelligence-vault](https://github.com/SAIRAMANALADI/vybe-intelligence-vault) | **Yes — never submitted** (21★) | ~15 dated files under `daily-digests/*/trace-mcp.md`, each with YAML front matter: `quality_score: 9`, `rag_relevance: 10`, a tag list, and a `tech_stack` naming Graph Databases, NLP and **GPU Acceleration** — none of which we ship | Nothing to submit. Same generative shape as the row above | 2026-09-06 |
+| [patrickclery/awesomer](https://github.com/patrickclery/awesomer) (16★), [gabrielmoreira/awesome-ai-rabbit-holes](https://github.com/gabrielmoreira/awesome-ai-rabbit-holes) (5★) | **Yes — never submitted** | One line each, carried in from a list they aggregate | Nothing to submit; recorded so a later run does not open them as doors | 2026-09-06 |
+
+### The auto-index layer stopped copying us and started paraphrasing us (2026-09-06)
+
+The ledger's standing conclusion is that what puts trace-mcp on surfaces is
+being findable by a crawler, not filing forms. Seven of those crawlers are now
+recorded above. This run read what two of the newest ones actually say, and the
+conclusion needs a qualifier it did not have.
+
+`linny006`, `Chat2AnyLLM` and `trending-claude-skills` are **verbatim**: they
+repeat our GitHub description as a string, so fixing the string fixes them on
+their next pass. That is the mechanism the 2026-09-05 note above describes.
+
+`Arnon-hs/open-source` and `vybe-intelligence-vault` are **generative**, and
+they are the newer pair. They feed the repo to a model and publish its prose:
+
+- Arnon-hs writes summaries in English, Russian and Chinese, and its English
+  one expands MCP to "Message Control Protocol" — an invention, repeated in a
+  file that carries a 67/100 score badge and reads as an evaluation.
+- vybe publishes YAML front matter with `quality_score: 9`, `rag_relevance: 10`
+  and a `tech_stack` list containing Graph Databases, NLP and **GPU
+  Acceleration**. We ship none of the three.
+
+Two consequences, and neither is "go and correct them" — there is nobody to
+write to and no submission to make.
+
+1. **Retiring a bad claim does not retire its derivatives.** Arnon-hs's summary
+   is built on "One tool call replaces ~42 minutes of agent exploration", the
+   description retired on 2026-09-05. The string is gone from every surface we
+   own; the paragraph a model wrote from it is not, and it will not be until
+   that index regenerates the page — if it ever does. The cost of a wrong
+   one-liner is therefore longer-lived than the one-liner. That is an argument
+   for the claims gate covering the two non-file surfaces (repo description and
+   topics), which the 2026-09-05 note already flagged as guarded by nothing.
+2. **What we can steer is the input, not the output.** These indexes read the
+   repository — description, topics, README, `server.json`. Every one of those
+   is already a surface we own and already guarded except the two named above.
+   There is no lever here that is not a lever we already have; the finding is
+   that the lever's blast radius is bigger and slower than the table suggests.
+
+Do not open issues on any of these repos. A correction request to a generated
+catalogue with no contact path is an outgoing message with no reader.
 
 The repo's own `description` and `homepage` are part of that surface and were
 left alone — the description already leads with the clients and a concrete
@@ -697,6 +743,21 @@ already on. Two of them took a submission the same day (rows above). Use
 `gh api -X GET search/code -f q='"<owner>/<repo>" in:file filename:README.md'`;
 the search endpoint rate-limits hard, so seed one competitor per run, not five.
 
+**Third seed, and the first one that mostly failed: `Mibayy/token-savior`
+(2026-09-06).** 140 README hits, and roughly 100 of them are forks and near-forks
+of one project (`OmniRoute` and its spellings — `omniroute`, `OmniRouter`,
+`AIRoute`, `open-source-omniroute`), because that project's README happens to
+name token-savior in a tool table. Budget for this shape: a seed whose mentions
+are concentrated in one much-forked README returns that README's fork tree, not
+a population of lists. Sort the hits by repo and drop any cluster of
+same-named repos before reading anything. What survived the sort was three
+usable addresses out of 140 — one live door (`GetBindu`, row above) and two
+dead ones (parked below) — plus a short list of one- and two-star token-cost
+tools that are competitors, not doors: `chimera-defi/token-reduce-skill`,
+`alan-napieralski/claude-de-bloater`, `baddiecodes/token-slayer`,
+`Subrising/tokonomics`. Next seed should be one whose mentions are spread across
+many repos, not one that a popular README embeds.
+
 **Read the commit log before valuing the PR queue.** Both new lists accept PRs
 in writing; only one accepts them in practice. `ai-boost` has merged two
 external PRs ever while adding one entry a day by his own hand, so a PR there is
@@ -722,6 +783,18 @@ before any list submission, not after.
   `lean-ctx`). Same class as the pi-extensions harness in the section above —
   someone else's harness, pointed at our category. Worth more to Competitor
   Intelligence than to this file.
+- `RoggeOhta/awesome-codex-cli` (504★) — **dead, and the star count hides it.**
+  Last commit 2026-04-11, zero external PRs merged in the repo's history, and a
+  queue of recent `Add ...` PRs (five in the three days to 2026-09-05) that
+  nobody has looked at. Do not submit; re-check only if a commit appears.
+- `gudo7208/awesome-coding-agent-eval` (9★) — the best-fitting list by topic
+  found so far for the honest-measurement position (900+ resources on
+  benchmarks, scoring methods and evaluation pitfalls, agent-queryable), and
+  the commit log kills it: the maintainer's own 2026-07-28 commit is titled
+  "refresh corpus and **pause scheduled maintenance**", the two external PRs
+  it has ever received (May and June) are both still open and unanswered, and
+  nothing has been merged from outside. Worth re-reading in a quarter — the
+  category is right even though the repo is asleep.
 - `alexykn/pi-cbm`, `porameht/pi-codebase-memory-mcp`, `fxjs/cbm-tool` — third
   parties wrapping a competitor for a specific client, the same shape as
   `axisrow/trace-mcp-plugin` wrapping us. Not doors; evidence that the wrapper
