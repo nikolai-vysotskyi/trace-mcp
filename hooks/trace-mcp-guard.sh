@@ -706,6 +706,11 @@ fi
 # guarded tool calls and, once past the threshold, points the agent at
 # load_tools. Once per session, advisory only, never blocks.
 STATE_HINT_TURNS=${TRACE_MCP_STATE_HINT_TURNS:-30}
+# A non-numeric value here is not a bad hint, it is a dead guard: under
+# `set -u` bash reads the string inside (( )) as a variable name and aborts
+# the hook with no JSON on stdout, which fails open for every remaining
+# guarded call in the session. Fall back to the default instead.
+[[ "$STATE_HINT_TURNS" =~ ^-?[0-9]+$ ]] || STATE_HINT_TURNS=30
 STATE_HINT_FILE="$READS_DIR/.state-hint-emitted"
 STATE_SESSION_START="$READS_DIR/.session-start"
 STATE_TURN_COUNTER="$READS_DIR/.session-turn-count"

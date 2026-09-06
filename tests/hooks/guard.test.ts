@@ -1601,6 +1601,21 @@ describe.skipIf(process.platform === 'win32')('guard StateEngine hint (TRA-763)'
     }
   });
 
+  it('falls back to the default threshold when the knob is not a number', () => {
+    // Under `set -u` a non-numeric value inside (( )) aborts the hook with no
+    // JSON on stdout, which fails open for every remaining guarded call in the
+    // session — a typo in the knob must not disable the guard.
+    for (let i = 0; i < 3; i++) {
+      expect(call({ TRACE_MCP_STATE_HINT_TURNS: 'not-a-number' }).context).toBeUndefined();
+    }
+    // The default (30) is in force, so the guard is still routing: a
+    // navigational call is still denied.
+    const nav = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, projectDir, {
+      TRACE_MCP_STATE_HINT_TURNS: 'not-a-number',
+    });
+    expect(nav.allowed).toBe(false);
+  });
+
   it('is disabled by setting the threshold to zero', () => {
     for (let i = 0; i < 5; i++) {
       expect(call({ TRACE_MCP_STATE_HINT_TURNS: '0' }).context).toBeUndefined();

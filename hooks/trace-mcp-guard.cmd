@@ -391,6 +391,10 @@ REM crosses the threshold; silent otherwise. One shot per session.
 set "STATE_HINT_FIRED=0"
 set "STATE_TURNS=30"
 if defined TRACE_MCP_STATE_HINT_TURNS set "STATE_TURNS=%TRACE_MCP_STATE_HINT_TURNS%"
+REM Garbage in the knob falls back to the default, same as the POSIX guard -
+REM `set /a` would otherwise read it as 0 and silently disable the hint.
+echo !STATE_TURNS!| findstr /r "^-*[0-9][0-9]*$" >nul 2>&1
+if errorlevel 1 set "STATE_TURNS=30"
 set /a STATE_TURNS=STATE_TURNS+0 >nul 2>&1
 if !STATE_TURNS! LEQ 0 goto :eof
 if /i "%TRACE_MCP_PRESET%"=="state" goto :eof
