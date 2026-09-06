@@ -19,6 +19,7 @@ import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/ia
 import { resolveGoImportEdges as _resolveGoImports } from './edge-resolvers/go-imports.js';
 import { resolveJavaImportEdges as _resolveJavaImports } from './edge-resolvers/java-imports.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
+import { resolveKotlinImportEdges as _resolveKotlinImports } from './edge-resolvers/kotlin-imports.js';
 import { resolveMarkdownTagEdges as _resolveMarkdownTags } from './edge-resolvers/markdown-tags.js';
 import { resolveMarkdownWikilinkEdges as _resolveMarkdownLinks } from './edge-resolvers/markdown-wikilinks.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
@@ -150,6 +151,11 @@ export class EdgeResolver {
   /** Pass 2e4: Java import edges (package name → source directory). */
   resolveJavaImportEdges(scope?: ChangeScope): void {
     timed('java-imports', () => _resolveJavaImports(this.state, scope));
+  }
+
+  /** Pass 2e9: Kotlin import edges (package name → source directory). */
+  resolveKotlinImportEdges(scope?: ChangeScope): void {
+    timed('kotlin-imports', () => _resolveKotlinImports(this.state, scope));
   }
 
   /** Pass 2e5: Rust import edges (module path → module file). */
