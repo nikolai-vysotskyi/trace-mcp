@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import net from 'node:net';
 import {
   compareVersions,
@@ -504,5 +504,67 @@ describe('a live but unanswering daemon', () => {
     const result = await run(port, { healthTimeoutMs: 200 });
     expect(result.state.phase).toBe('failed');
     expect((result.state as { message: string }).message).toContain('nothing is listening');
+  });
+});
+
+/**
+ * TRA-982: every control-plane file this module writes lands in the state home
+ * or its `bin` directory, both of which the server sweeps for orphaned atomic
+ * -write tmps (SWEPT_STATE_DIRS in src/utils/atomic-write.ts). That sweeper
+ * matches `.tmp.<pid>.<12 hex>`; `writeIfChanged` emitted `.tmp.<pid>.<epoch
+ * ms>` — 13 decimal digits — so an app killed mid-install left a permanent
+ * file beside the shim that nothing collects.
+ *
+ * The regex is duplicated rather than imported: packages/app is its own package
+ * with its own test setup and does not import from the server's src.
+ */
+const ORPHAN_TMP_PATTERN = /^\.?.+\.tmp\.\d+\.[0-9a-f]{12}$/;
+
+describe.runIf(process.platform === 'darwin')('control-plane tmp files are sweepable', () => {
+  let home: string;
+  let resources: string;
+  let launchAgent: string;
+  const previousHome = process.env.TRACE_MCP_HOME;
+
+  beforeEach(() => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-install-tmp-'));
+    home = path.join(tmp, 'home');
+    resources = path.join(tmp, 'Resources');
+    launchAgent = path.join(tmp, 'com.trace-mcp.server.plist');
+    fs.mkdirSync(path.join(resources, 'server', 'dist'), { recursive: true });
+    fs.mkdirSync(path.join(resources, 'server', 'hooks'), { recursive: true });
+    fs.writeFileSync(path.join(resources, 'server', 'dist', 'cli.js'), '');
+    fs.writeFileSync(path.join(resources, 'server', 'hooks', 'trace-mcp-launcher.sh'), '#!/bin/bash\n');
+    process.env.TRACE_MCP_HOME = home;
+  });
+
+  afterEach(() => {
+    if (previousHome === undefined) delete process.env.TRACE_MCP_HOME;
+    else process.env.TRACE_MCP_HOME = previousHome;
+  });
+
+  it('names every tmp so the orphan sweeper collects it after a crash', async () => {
+    const tmpNames: string[] = [];
+    const realRename = fs.renameSync;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      tmpNames.push(path.basename(from as string));
+      return realRename(from as string, to as string);
+    });
+
+    await ensureDaemonInstalled({
+      appVersion: '3.7.0',
+      execPath: '/Applications/trace-mcp.app/Contents/MacOS/trace-mcp',
+      resourcesPath: resources,
+      launchAgentPath: launchAgent,
+      runLaunchctl: () => ({ ok: true, stderr: '' }),
+      probeHealth: async () => true,
+      log: () => {},
+    });
+    spy.mockRestore();
+
+    expect(tmpNames.length).toBeGreaterThan(0);
+    for (const name of tmpNames) {
+      expect(name).toMatch(ORPHAN_TMP_PATTERN);
+    }
   });
 });

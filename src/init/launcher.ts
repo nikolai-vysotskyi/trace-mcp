@@ -13,6 +13,7 @@
  * symlink to the above — see installLegacyBinCompat().
  */
 
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -290,7 +291,12 @@ export function legacyCompatCmdBody(currentLauncher: string): string {
  * old one and swap it in with a single rename.
  */
 function writeLegacyCompat(legacyPath: string, current: string): void {
-  const tmp = `${legacyPath}.tmp.${process.pid}`;
+  // `.tmp.<pid>.<12 hex>`: the shape sweepOrphanTmpFiles collects
+  // (src/utils/atomic-write.ts), and `bin` is one of the dirs it sweeps. A
+  // process killed between the symlink and the rename leaks this file, and
+  // without the hex suffix the pattern never matched it — so it sat next to the
+  // launcher forever (TRA-982).
+  const tmp = `${legacyPath}.tmp.${process.pid}.${randomBytes(6).toString('hex')}`;
   try {
     if (IS_WINDOWS) {
       fs.writeFileSync(tmp, legacyCompatCmdBody(current), { mode: 0o755 });
