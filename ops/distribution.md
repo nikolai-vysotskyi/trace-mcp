@@ -1082,3 +1082,78 @@ comment on these; they are somebody's private configuration ticket.
 in the first forty results, both single-author repos. It costs about ten
 minutes. It has not yet produced a surface with an audience, and it should not
 be sold as a distribution channel until it does.
+
+### Third pass of the trial-plan sweep: the method paid a debt back (2026-09-07)
+
+Same query as the two passes above, run for the week to 2026-09-07. Thirty-seven
+results, same shape: mostly agent-written roadmap digests, a readable minority.
+No new address worth a message this pass — but the previous pass's address
+answered, and what came back is the first thing this channel has produced that
+changed our own code.
+
+**`sosalejandro/atlas#105` replied, and handed a defect back.** They took both
+notes (the count-based acceptance criteria that could not see a tier change, and
+the silent no-op in SCIP ingest), filed provenance work as their #146 ahead of
+the sidecar, and rewrote the criteria. Then they returned one: two of their
+features had independently shipped the same bug — mapping a git diff onto symbols
+by joining line numbers at HEAD against spans recorded at the last scan, without
+checking the index was built at HEAD. Both reported a confident number about the
+wrong function.
+
+We have it. `getChangedSymbols` in `src/tools/quality/changed-symbols.ts` parses
+`git diff --unified=0 <since>..<until>`, takes the `+new` line numbers from the
+`@@` header, and overlaps them against `line_start`/`line_end` from
+`store.getSymbolsByFile()` — with no check in between. `store.getFile(path)`
+returns the row carrying `content_hash` and `mtime_ms` one line above the loop
+that ignores them. `compare_branches` is the same function with a merge-base
+resolver in front, and there it is wrong by construction rather than merely
+stale: it takes an arbitrary `branch` argument, so the diff can be
+`main..feature/x` while the stored spans came from whatever was checked out when
+the indexer last ran. The branch never has to have been checked out for the call
+to succeed. Tracked as TRA-1075. Reply:
+[#105 (comment)](https://github.com/sosalejandro/atlas/issues/105#issuecomment-5562492668).
+
+**What this settles about the method.** Two passes in, the honest summary above
+was that it had produced no surface with an audience and should not be sold as a
+channel. That still holds — atlas is a zero-star repo and sent us no users. What
+changed is the other column: a technical reply written to be useful rather than
+to pitch came back as a P0 defect in our own tree, found by someone reading our
+code because we had read theirs. That is not distribution and should never be
+counted as it. It is a reason to keep running the sweep that does not depend on
+distribution ever arriving.
+
+### A direct competitor with real reach and no catalog presence at all (2026-09-07)
+
+`ScriptedAlchemy/tracedecay` (71★, pushed hourly, MIT, Rust) surfaced in the
+sweep above and was not in this ledger or in `docs/comparisons.md`. It is the
+same product: "Semantic code intelligence for AI coding agents — fewer tokens,
+fewer tool calls, local by default", 70+ MCP tools, 50+ languages via tree-sitter,
+local libSQL, and a dashboard that reports savings and cost analytics. The author
+is Zack Jackson (Module Federation), so the reach is a person, not a star count.
+
+**The distribution reading, which is why it is in this file.** Running
+`tracedecay` through the code-search sweep returns exactly one third-party README
+in the entire index. They have done no catalog work whatsoever. Their bet is
+placed somewhere else entirely: native install paths for fifteen hosts
+(`tracedecay install --agent claude|codex|cursor|gemini|hermes|…`), a Codex
+plugin, and their own scoop bucket. So a well-connected author in our exact
+category looked at the same choice we face and skipped listings for host-native
+integration.
+
+That is a second, independent vote for the standing moratorium on new listings
+(roadmap point 3, `ops/arrivals.md`): the one competitor here with actual
+distribution reach is not using the channel we keep spending passes on. It is
+also the address list this ledger exists to produce — the fifteen hosts are the
+doors, and `natsukium/mcp-servers-nix` (TRA-1012) was the first of that kind we
+logged. Product profiling of tracedecay belongs to Competitor Intelligence, not
+here; the one thing worth flagging to them is that their scheduler tests name a
+behaviour we have just discovered we lack — `search_fails_fast_when_no_complete_generation_exists`
+and `semantic_mcp_abstention_uses_freshest_sealed_generation` are designed
+abstention on a stale index, which is TRA-1075 and TRA-852 solved as architecture.
+
+**Checked, silent, no action:** our five open catalog PRs — `eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384` —
+and `narumiruna/pi-extensions#1204`. No replies, nothing owed by us, no pings due.
+`hashgraph-online/awesome-ai-plugins#182` merged 2026-08-31 without the scanner
+action; the issue text describing it as open is stale.
