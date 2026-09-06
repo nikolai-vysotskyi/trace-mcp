@@ -42,6 +42,7 @@ import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { getAppDistRepo } from './app-dist-repo.mjs';
 import {
@@ -99,8 +100,22 @@ if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
  *   stdio session or Electron tray poll will ensureDaemon() back up.
  * Manually-spawned dev daemons (no pidfile, no launchd) are not touched —
  *   the developer will restart them as needed.
+ *
+ * Skipped entirely when this package was not installed into a `node_modules`
+ * tree — a source checkout (`pnpm install` in a clone, `npm link`) links its
+ * bin into the checkout's own `node_modules/.bin`, so there is no new binary
+ * for the launchd daemon to respawn with and the stop is pure downtime. Field
+ * measurement on the maintainer's machine: 118 of 155 daemon stops over 48h
+ * came from this hook, and 68 shutdowns landed within two minutes of the
+ * daemon's own start (TRA-1015).
  */
+function installedIntoNodeModules() {
+  const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  return path.basename(path.dirname(pkgDir)) === 'node_modules';
+}
+
 function stopRunningDaemon() {
+  if (!installedIntoNodeModules()) return;
   try {
     logDaemonStopAttribution(
       path.join(traceHomeDir(), 'daemon.log'),
