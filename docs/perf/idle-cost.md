@@ -65,3 +65,56 @@ The before/after gap is dominated by lock-queue wait, which is also why `reindex
 telemetry used to report elapsed times in the hours: `elapsedMs` summed the wait with the work.
 It is now the work alone, with the wait beside it as `queuedMs` (`daemon stats` renders it as
 `queued p95`).
+
+## The most expensive idle process is the one nobody owns
+
+Measured 2026-09-06 on the M5 Max. A `serve-http` daemon left over from an earlier benchmark run
+(port 37497, in another agent's workdir) was holding **517 MB and 97% of a core, with zero
+clients, 5h56m after its parent exited** — 356 minutes of CPU spent on nothing.
+
+`sample(1)` on it, and again on a fresh reproduction, showed the same loop and no SQLite at all:
+
+```
+uv__run_check
+  node::Environment::CheckImmediate
+    v8::internal::Isolate::ReportPendingMessages
+      node::errors::TriggerUncaughtException
+        v8::internal::Accessors::ErrorStackGetter
+          v8::internal::ErrorUtils::FormatStackTrace   <- and round again
+```
+
+The mechanism: when the parent that owned our stdout/stderr pipe exits without killing us, every
+write to those fds fails with `EPIPE` — emitted as an `error` event on the stream. Nothing listened
+for it, so it became an uncaught exception. The `uncaughtException` safety net in
+`src/server/process-safety-net.ts` exists to keep a long-lived server alive through stray errors,
+and it does that by *logging* — the logger's destination is `process.stderr`, the same dead pipe.
+That write fails again, re-enters the handler, formats a stack trace, logs, forever. The process
+never exits and never releases its port.
+
+An instrumented run of the reproduction settles where the error is raised: with an `error` listener
+attached to `process.stderr`, every failure arrives there and the `uncaughtException` handler never
+fires at all. That is what makes the fix narrow — see below.
+
+Reproduction, deterministic in about six seconds:
+
+```js
+const child = spawn('node', [CLI, 'serve-http', '-p', PORT], {
+  stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+});
+child.unref();
+setTimeout(() => { child.stdout.destroy(); child.stderr.destroy(); }, 6000);
+```
+
+| Orphaned `serve-http`, 17 s after the pipes close | Before | After |
+|---|---|---|
+| CPU | 88–106% | process has exited |
+| RSS | 853 MB | 0 |
+| Lifetime | unbounded | ends at the first `EPIPE` |
+
+The fix listens on `process.stdout` and `process.stderr` themselves and exits on a broken pipe
+there. The stream that raised the error is the proof of ownership, which matters: `EPIPE` and
+friends are generic codes that any socket can raise, and exiting on the code alone would take a
+healthy daemon down over an unrelated HTTP response. Any other write failure on those streams
+(`ENOSPC`, `EACCES`) is still swallowed — a logger must not stop the server, which is the call
+`attachFileLogging` already makes for its own stream. Both branches are guarded in
+`src/server/__tests__/process-safety-net.test.ts`.
