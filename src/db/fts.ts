@@ -22,11 +22,36 @@ export interface FtsFilters {
    * names. Default: false (no exclusion) — callers opt in explicitly.
    */
   excludeMarkdown?: boolean;
+  /**
+   * If true, exclude the synthetic `__module__` pseudo-symbols the language
+   * plugins emit so the call graph can attribute module-body call sites
+   * (`metadata.synthetic = true`). They carry no source an agent can read —
+   * their signature is `(module body) <path>`, which the `file` field already
+   * says — but their name embeds the file's basename at FTS weight 10, so they
+   * outrank real symbols on any filename-shaped query. Bypassed when the query
+   * itself names `__module__`. Default: false — callers opt in explicitly.
+   */
+  excludeModuleBodies?: boolean;
 }
 
 /** Kinds emitted by the markdown plugin. Kept in one place so the FTS-level
  *  default-exclusion guard stays in sync with the plugin. */
 export const MARKDOWN_SYMBOL_KINDS: ReadonlySet<string> = new Set(['heading', 'tag']);
+
+/**
+ * Synthetic module-body pseudo-symbols are named `__module__…` by every plugin
+ * that emits them. The SQL guard below covers the lexical path; the vector and
+ * fusion paths produce candidates that never touch this query, so they filter
+ * with this predicate after merging. One definition, so the two cannot drift.
+ */
+export function isModuleBodyName(name: string): boolean {
+  return name.startsWith('__module__');
+}
+
+/** True when the caller asked for module bodies by name, which bypasses the guard. */
+export function queryWantsModuleBodies(query: string): boolean {
+  return query.includes('__module__');
+}
 
 export function searchFts(
   db: Database.Database,
@@ -71,6 +96,12 @@ export function searchFts(
   ) {
     conditions.push(`s.kind NOT IN (${[...MARKDOWN_SYMBOL_KINDS].map(() => '?').join(',')})`);
     for (const k of MARKDOWN_SYMBOL_KINDS) params.push(k);
+  }
+
+  // Same shape as the markdown guard above: a default exclusion the caller can
+  // bypass by asking for the thing by name.
+  if (filters?.excludeModuleBodies && !queryWantsModuleBodies(query)) {
+    conditions.push("s.name NOT GLOB '__module__*'");
   }
 
   const needsFileJoin = filters?.language || filters?.filePattern;

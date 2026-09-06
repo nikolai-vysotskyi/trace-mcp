@@ -5,6 +5,8 @@
  * used to expose was retired in 2.0 once `search { retriever }` covered it
  * (TRA-240). Only the shared dispatch helper survives.
  */
+import { isModuleBodyName, queryWantsModuleBodies } from '../../db/fts.js';
+import type { SymbolRow } from '../../db/types.js';
 import type { ServerContext } from '../../server/types.js';
 import { createDefaultSearchModeRegistry } from '../../retrieval/modes/registry.js';
 import { runRetriever } from '../../retrieval/index.js';
@@ -55,7 +57,17 @@ export async function runNamedSearchMode(
     query,
     limit,
   } as unknown as Parameters<typeof runRetriever>[1])) as AnyResult[];
-  const normalized = items.map((it) => normalize(it, ctx));
+  // Third convergence point for the module-body guard (TRA-985 review): named
+  // retrievers early-return here without passing through `search()` or the
+  // fusion dispatcher, and the lexical one calls `searchFts` without the SQL
+  // filter while the semantic one reads the vector store directly. Filtering
+  // the normalized items covers every registered mode at once, including any
+  // added later.
+  const dropModuleBodies = !queryWantsModuleBodies(query);
+  const normalized = items
+    .map((it) => normalize(it, ctx))
+    // A row that would not resolve has no name to judge, so it is kept.
+    .filter((it) => !(dropModuleBodies && it.name !== null && isModuleBodyName(it.name)));
   return { ok: true, mode, items: normalized, total: normalized.length };
 }
 
@@ -65,7 +77,7 @@ export async function runNamedSearchMode(
  * self-contained regardless of which retriever produced it.
  */
 function normalize(item: AnyResult, ctx: ServerContext): NormalizedItem {
-  const row = ctx.store.getSymbolBySymbolId(item.id);
+  const row = resolveRow(item.id, ctx);
   const file = row ? findFilePath(ctx, row.file_id) : null;
   // Summary retriever already carries the summary; prefer it as a snippet.
   let snippet: string | undefined;
@@ -87,6 +99,18 @@ function normalize(item: AnyResult, ctx: ServerContext): NormalizedItem {
     score: item.score,
     snippet,
   };
+}
+
+/**
+ * Retrievers disagree about what `id` is: most carry the `symbol_id` string,
+ * the semantic one carries the numeric `symbols.id` from the vector store.
+ * Looking up only by string left those items as `{ name: null, file: null }`,
+ * which also made them invisible to the module-body guard above.
+ */
+function resolveRow(id: string, ctx: ServerContext): SymbolRow | undefined {
+  const bySymbolId = ctx.store.getSymbolBySymbolId(id);
+  if (bySymbolId) return bySymbolId;
+  return /^\d+$/.test(String(id)) ? ctx.store.getSymbolById(Number(id)) : undefined;
 }
 
 function findFilePath(ctx: ServerContext, fileId: number): string | null {

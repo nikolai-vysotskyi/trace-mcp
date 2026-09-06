@@ -295,7 +295,9 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
           summary: symbol.summary,
           file: file.path,
           line: symbol.line_start,
-          score,
+          // Three decimals is every digit a caller can act on; the raw double
+          // spends ~16 characters per item saying nothing more (TRA-985).
+          score: Math.round(score * 1000) / 1000,
         };
         // Surface decorators/annotations/attributes from metadata
         if (symbol.metadata) {

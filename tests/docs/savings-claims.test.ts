@@ -224,7 +224,15 @@ describe('aggregate savings claims (TRA-904)', () => {
           `by scripts/gen-response-tokens-data.ts into ${RESPONSE_DATA}; never type it in.`,
       ).toBe(true);
       const literal = new RegExp(`(?<![\\d.])${response.reduction_pct}\\s*%`);
-      const hit = typedIn(src).match(literal);
+      // Line-scoped and token-context-gated, like the sibling checks above: the
+      // aggregate can be a round two-digit percentage (22%), and CSS is full of
+      // those — `color-mix(in srgb, var(--accent-solid) 22%, transparent)` is
+      // not a savings claim. TRA-985.
+      const hit = typedIn(src)
+        .split('\n')
+        .filter((line) => TOKEN_CONTEXT.test(line))
+        .map((line) => line.match(literal))
+        .find(Boolean);
       expect(hit?.[0] ?? null, `${file} states the aggregate outside a Liquid tag`).toBe(null);
     }
   });

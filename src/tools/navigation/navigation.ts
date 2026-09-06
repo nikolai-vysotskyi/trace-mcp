@@ -5,7 +5,12 @@ import { safeGitEnv } from '../../utils/git-env.js';
 import { err, ok } from 'neverthrow';
 import type { EmbeddingService, RerankerService, VectorStore } from '../../ai/interfaces.js';
 import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
-import { type FtsFilters, searchFts } from '../../db/fts.js';
+import {
+  type FtsFilters,
+  isModuleBodyName,
+  queryWantsModuleBodies,
+  searchFts,
+} from '../../db/fts.js';
 import { fuzzySearch } from '../../db/fuzzy.js';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
@@ -415,6 +420,8 @@ export async function search(
       // Bypassed inside searchFts when the caller explicitly asked for a
       // markdown kind / language / file_pattern.
       excludeMarkdown: true,
+      // Synthetic module-body pseudo-symbols are not search answers (TRA-985).
+      excludeModuleBodies: true,
     };
     const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
     if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
@@ -457,9 +464,16 @@ export async function search(
   const heritageFilter = filters?.implements || filters?.extends;
   const decoratorFilter = filters?.decorator;
 
+  // The FTS path already dropped module bodies in SQL, but the hybrid path's
+  // vector channel produces candidates that never went through that query
+  // (TRA-985 review). Guard where every channel converges instead of once per
+  // channel, so a future retrieval mode cannot reopen the hole.
+  const dropModuleBodies = !queryWantsModuleBodies(query);
+
   for (const candidate of candidates) {
     const symbol = symbolByIdStr.get(candidate.symbolIdStr);
     if (!symbol) continue;
+    if (dropModuleBodies && isModuleBodyName(symbol.name)) continue;
 
     if ((heritageFilter || decoratorFilter) && symbol.metadata) {
       const meta =
@@ -569,6 +583,7 @@ async function runFusionSearch(
     // Same default-exclusion as the single-channel `search()` path — keeps
     // markdown headings/tags from polluting the lexical channel of fusion.
     excludeMarkdown: true,
+    excludeModuleBodies: true,
   };
 
   // ── Channel 1: Lexical (BM25) ──────────────────────────────
@@ -690,9 +705,13 @@ async function runFusionSearch(
   // Filter symbols and build candidate list
   const validCandidates: Array<{ id: string; symbol: SymbolRow; file: FileRow; nodeId?: number }> =
     [];
+  // Fusion merges a lexical channel (already filtered in SQL) with a similarity
+  // channel (not filtered at all) — same convergence guard as `search()`.
+  const dropModuleBodies = !queryWantsModuleBodies(query);
   for (const idStr of candidateIdStrs) {
     const symbol = symbolByIdStr.get(idStr);
     if (!symbol || !passesFilter(symbol)) continue;
+    if (dropModuleBodies && isModuleBodyName(symbol.name)) continue;
     const file = fileMap.get(symbol.file_id);
     if (!file) continue;
     validCandidates.push({ id: idStr, symbol, file, nodeId: nodeMap.get(symbol.id) });
