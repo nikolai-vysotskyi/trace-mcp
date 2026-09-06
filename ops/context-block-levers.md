@@ -242,6 +242,45 @@ The risk rule from TRA-759 applies to all of it and hardest to item 2: a tool
 absent from the start block is a tool the agent will not call. Every removal
 needs evidence of non-use over a named window, and `ToolSearch` must survive.
 
+## What a cache write actually costs us, and what does not (TRA-858, 2026-09-06)
+
+A cache read is ~12.5x cheaper than a cache write on Anthropic models, so
+"what invalidates the prefix" is a money question. It has a narrower answer
+than it looks.
+
+**Prompt caching matches a prefix.** A tool result is appended after
+everything already cached. Two identical calls that answer with different
+bytes become two separate messages; neither rewrites the other, and the
+prefix in front of both is untouched. So a wall-clock field inside a tool
+result — `generated_at`, `duration_ms`, a per-call id — costs **zero** extra
+cache writes. Same for `SessionJournal`'s dedup wrapper, which deliberately
+answers a repeat call with a stub or an appended `_duplicate_warning`: a
+straight token saving with no cache-side liability.
+
+TRA-858 was filed on the opposite claim ("a dynamic timestamp invalidates the
+cache key for all subsequent turns in the session"), sourced to a JetBrains
+A/B benchmark we have not located. The first pass at it deleted two tools'
+`generated_at` on that basis; the deletions were reverted and the ticket
+shipped as a determinism gate justified by replay diffability instead
+(`tests/tools/cache-determinism.test.ts`).
+
+**What can force a write** is content that sits *in* the prefix and gets
+re-sent changed:
+
+- the tool list, which `load_tools` mutates mid-session by design — the one
+  construction in trace-mcp that plausibly does this on purpose, and the one
+  worth measuring;
+- the MCP server `instructions` string;
+- the client's system prompt when it changes mid-session — which is what the
+  SDK's `systemPrompt.snapshot: true` exists to prevent (see §2).
+
+Not measured on the harness above: that needs a multi-turn run and `claude -p`
+gives one turn. Until someone builds it, this section is derived from the
+caching contract, not from our own numbers — by this file's own rules, treat
+it accordingly. What would settle it: a two-turn run where turn 2 differs only
+in an earlier tool result's bytes, comparing `cache_read_input_tokens` against
+a run where it does not.
+
 ## Open, not yet measured
 
 - SDK `skills: string[]` — expected to be most of the 11,822, unverified.
