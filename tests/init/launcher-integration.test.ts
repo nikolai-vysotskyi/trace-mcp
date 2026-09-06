@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import net from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -1396,4 +1397,132 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       });
     },
   );
+
+  // TRA-1050: the daemon-aware fast path (TRA-970) picks which script the
+  // client's whole session runs — proxy.js when a daemon is already up,
+  // cli.js otherwise — and shipped with no test at all. Every case below is
+  // "client asked for a server and got the wrong process", which the client
+  // reports, if at all, as a failed connection.
+  describe('daemon-aware proxy routing (TRA-970)', () => {
+    /** A real listener, so `/dev/tcp` in the shim sees what it sees in production. */
+    async function withListener<T>(fn: (port: number) => Promise<T> | T): Promise<T> {
+      const server = net.createServer();
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const port = (server.address() as net.AddressInfo).port;
+      try {
+        return await fn(port);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    }
+
+    /** A port nothing is listening on: bind one, read it, hand it back closed. */
+    async function deadPort(): Promise<number> {
+      return withListener((p) => p);
+    }
+
+    function plantProxy(cli: string): string {
+      const proxy = path.join(path.dirname(cli), 'proxy.js');
+      fs.writeFileSync(proxy, '// fake proxy\n');
+      return proxy;
+    }
+
+    it('execs proxy.js instead of cli.js when a daemon is listening', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      const proxy = plantProxy(cli);
+
+      const out = await withListener((port) =>
+        runLauncherAsync(
+          { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+          ['serve'],
+        ),
+      );
+
+      expect(out.status).toBe(0);
+      expect(out.stdout.trim()).toBe(`NODE_ARGS:${proxy} serve`);
+    });
+
+    it('passes --preset through to the proxy', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      const proxy = plantProxy(cli);
+
+      const out = await withListener((port) =>
+        runLauncherAsync(
+          { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+          ['serve', '--preset', 'core'],
+        ),
+      );
+
+      expect(out.status).toBe(0);
+      expect(out.stdout.trim()).toBe(`NODE_ARGS:${proxy} serve --preset core`);
+    });
+
+    it('keeps cli.js for anything Commander owns, daemon or not', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      plantProxy(cli);
+
+      // serve-http, doctor and unrecognised serve flags all have to reach the
+      // real CLI: the proxy only speaks plain stdio `serve`.
+      for (const args of [['serve-http'], ['doctor'], ['serve', '--http'], ['serve', '--preset']]) {
+        const out = await withListener((port) =>
+          runLauncherAsync(
+            { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+            args,
+          ),
+        );
+        expect(out.status).toBe(0);
+        expect(out.stdout.trim()).toBe(`NODE_ARGS:${cli} ${args.join(' ')}`);
+      }
+    });
+
+    it('stays on cli.js when no daemon is listening', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      plantProxy(cli);
+
+      const port = await deadPort();
+      const out = await runLauncherAsync(
+        { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+        ['serve'],
+      );
+
+      expect(out.status).toBe(0);
+      expect(out.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('stays on cli.js when the package ships no proxy.js', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      // No plantProxy: an older install, or the app bundle mid-update.
+
+      const out = await withListener((port) =>
+        runLauncherAsync(
+          { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+          ['serve'],
+        ),
+      );
+
+      expect(out.status).toBe(0);
+      expect(out.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('does not let a junk TRACE_MCP_DAEMON_PORT break the start', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      plantProxy(cli);
+
+      const out = await runLauncherAsync(
+        { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: 'not-a-port' },
+        ['serve'],
+      );
+
+      // The port check fails closed — cli.js, no shell error into the client.
+      expect(out.status).toBe(0);
+      expect(out.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+      expect(out.stderr).toBe('');
+    });
+  });
 });
