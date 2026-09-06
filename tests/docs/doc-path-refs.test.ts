@@ -45,8 +45,8 @@ const OUR_PREFIXES = [
  * those paths are real, just not here. Prefix-shaped rather than exact so a
  * further source read of the same peer needs no edit.
  *
- * ponytail: a prefix here also silences a path of ours if we ever create one
- * under the same name — grep this list when adding a top-level module.
+ * A prefix here would also silence a path of ours created under the same name,
+ * so the assertion below fails when one of these starts to exist here.
  */
 const FOREIGN_PREFIXES = [
   'src/budget.rs', // LeanKG
@@ -56,7 +56,7 @@ const FOREIGN_PREFIXES = [
   'src/solidlsp/', // Serena
   'src/roam/', // Roam-Code
   'src/core/', // Repomix
-  'src/cli/', // Repomix
+  'src/cli/cliTokenBudget.ts', // Repomix — exact file, `src/cli/` is ours
   'src/codegraphcontext/', // CodeGraphContext
   'src/executor.ts', // Context Mode
   'src/server.ts', // Context Mode
@@ -121,6 +121,13 @@ describe('backticked repository paths in the docs exist', () => {
   it('fails on a broken src/ reference, and only on that one', () => {
     const md = ['## Storage', '', '`src/db/store.ts` reads `src/db/gone.ts`.'].join('\n');
     expect(brokenPaths('docs/x.md', md)).toEqual(['docs/x.md:3 — `src/db/gone.ts` (in "Storage")']);
+  });
+
+  it.each(FOREIGN_PREFIXES)('foreign prefix does not shadow our own tree: %s', (prefix) => {
+    expect(
+      existsSync(join(REPO_ROOT, prefix)),
+      `${prefix} exists here now — narrow it to the exact foreign file`,
+    ).toBe(false);
   });
 
   // An exception that outlives its reason is how an allowlist stops being read.

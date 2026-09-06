@@ -14,8 +14,8 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { Store } from '../../db/store.js';
+import { validatePath } from '../../utils/security.js';
 
 export type RefKind = 'path' | 'symbol';
 
@@ -77,7 +77,9 @@ function isProse(token: string): boolean {
   );
 }
 
-const PATH_RE = /^[\w.@-]+(?:\/[\w.@-]+)+\/?$/;
+// `+` and `[]` are segment characters in Next/Nuxt/SvelteKit route trees
+// (`src/routes/[id]/page.tsx`, `+page.svelte`), all of which we index.
+const PATH_RE = /^[\w.@+[\]-]+(?:\/[\w.@+[\]-]+)+\/?$/;
 const CODE_FILE_RE =
   /\.(?:ts|tsx|js|jsx|mjs|cjs|json|jsonc|md|ya?ml|py|go|rs|java|rb|php|cs|kt|swift|sql|sh|toml)$/;
 const SYMBOL_RE = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
@@ -157,9 +159,8 @@ function resolveRef(store: Store, projectRoot: string, ref: DocRef): VerifiedRef
     if (store.getFile(ref.token)) return { ...ref, via: 'index' };
     // Directories and non-source files are never indexed but are still real
     // references — a doc pointing at `docs/` is not drift.
-    const root = resolve(projectRoot);
-    const abs = resolve(root, ref.token);
-    if (abs.startsWith(`${root}/`) && existsSync(abs)) return { ...ref, via: 'filesystem' };
+    const abs = validatePath(ref.token, projectRoot);
+    if (abs.isOk() && existsSync(abs.value)) return { ...ref, via: 'filesystem' };
     return null;
   }
   if (store.getSymbolByFqn(ref.token) || store.getSymbolBySymbolId(ref.token)) {
@@ -174,13 +175,10 @@ function resolveRef(store: Store, projectRoot: string, ref: DocRef): VerifiedRef
 export function verifyDocs(store: Store, options: VerifyDocsOptions): VerifyDocsResult {
   const { projectRoot, scope, compact = false } = options;
   const direction = options.direction ?? 'forward';
-  const root = resolve(projectRoot);
-  const docAbs = resolve(root, options.path);
   // The document path comes from a tool argument; keep it inside the project.
-  if (docAbs !== root && !docAbs.startsWith(`${root}/`)) {
-    throw new Error(`path escapes the project root: ${options.path}`);
-  }
-  const markdown = readFileSync(docAbs, 'utf-8');
+  const docAbs = validatePath(options.path, projectRoot);
+  if (docAbs.isErr()) throw new Error(`path escapes the project root: ${options.path}`);
+  const markdown = readFileSync(docAbs.value, 'utf-8');
   const result: VerifyDocsResult = { doc: options.path };
 
   if (direction === 'forward' || direction === 'both') {
