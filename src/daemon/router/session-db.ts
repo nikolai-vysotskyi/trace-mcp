@@ -68,11 +68,22 @@ function readOwnerPid(dbPath: string): number | null {
   }
 }
 
+/** Rows in `files`, or 0 when the table is missing/unreadable (fresh DB). */
+function countIndexedFiles(db: Database.Database): number {
+  try {
+    const row = db.prepare('SELECT COUNT(*) AS n FROM files').get() as { n?: number } | undefined;
+    return row?.n ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Seed a fresh session DB from the canonical project DB using SQLite's
  * online backup API (safe against a daemon writing concurrently). Returns
  * true when the session DB was seeded; false means "start from scratch"
- * (no shared DB yet, or the copy failed — any partial file is removed).
+ * (no shared DB yet, the shared DB holds no indexed files, or the copy failed —
+ * any partial file is removed).
  */
 export async function seedSessionDbFromShared(
   sharedDbPath: string,
@@ -82,6 +93,12 @@ export async function seedSessionDbFromShared(
   let src: Database.Database | null = null;
   try {
     src = new Database(sharedDbPath, { readonly: true, fileMustExist: true });
+    // An empty shared DB is not a snapshot worth having. Project registration
+    // creates the file before anything is indexed, so on a daemonless machine
+    // the first session would otherwise seed itself from zero files, latch
+    // read-only on the strength of "seeded", and serve an empty index forever —
+    // no indexAll, no watcher (TRA-931).
+    if (countIndexedFiles(src) === 0) return false;
     await src.backup(sessionDbPath);
     return true;
   } catch (err) {
@@ -112,7 +129,10 @@ export async function seedSessionDbFromShared(
  * read at all, fall back to an age check. Live sessions are never touched.
  * Best-effort: every failure skips the file rather than throwing.
  */
-export function sweepOrphanedSessionDbs(indexDir: string): { scanned: number; removed: number } {
+export function sweepOrphanedSessionDbs(indexDir: string): {
+  scanned: number;
+  removed: number;
+} {
   let scanned = 0;
   let removed = 0;
   let names: string[];
