@@ -17,6 +17,9 @@
  *   tsx scripts/bench-pr-context.ts --mine     # rebuild the pinned PR set via gh
  *   tsx scripts/bench-pr-context.ts            # run the benchmark
  *   tsx scripts/bench-pr-context.ts --limit 10 # smoke run on the first 10 PRs
+ *   tsx scripts/bench-pr-context.ts --dump-prompts <dir>
+ *                                              # also write each arm's assembled
+ *                                              # prompt, for bench-pr-quality.ts
  *
  * Inputs:  benchmarks/pr-context/dataset.json   — pinned repo + PR + base/head SHA
  * Outputs: benchmarks/pr-context/results.json   — per-PR rows + aggregates
@@ -109,6 +112,9 @@ interface PrResult {
   savings_pct: number;
   index_ms: number;
 }
+
+/** Set by --dump-prompts; where runOne writes each arm's assembled prompt. */
+let DUMP_DIR: string | undefined;
 
 const REVIEW_PREAMBLE = `You are reviewing a pull request. Identify correctness bugs,
 edge cases the change misses, and call sites the change breaks. Report findings
@@ -418,6 +424,20 @@ async function runOne(entry: PrEntry): Promise<PrResult | null> {
     const baseline = buildBaseline(dir, diff, files);
     const trace = buildTrace(store, dir, diff, symbolIds);
 
+    // TRA-568: the quality arm re-uses these exact texts, so it scores the same
+    // prompts this script counted tokens for rather than rebuilding them.
+    if (DUMP_DIR) {
+      const slug = `${entry.repo.replace('/', '__')}__${entry.number}`;
+      const d = path.join(DUMP_DIR, slug);
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, 'baseline.txt'), baseline.text);
+      fs.writeFileSync(path.join(d, 'trace.txt'), trace.text);
+      fs.writeFileSync(
+        path.join(d, 'meta.json'),
+        `${JSON.stringify({ repo: entry.repo, number: entry.number, url: entry.url, title: entry.title, diff }, null, 2)}\n`,
+      );
+    }
+
     /** null when there is nothing to score — never a vacuous 1.0. */
     const score = (spans: Spans, sites: SymbolSite[]): number | null => {
       if (sites.length === 0) return null;
@@ -625,6 +645,15 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   } else {
     const li = argv.indexOf('--limit');
     const limit = li >= 0 ? Number(argv[li + 1]) : undefined;
+    const di = argv.indexOf('--dump-prompts');
+    if (di >= 0) {
+      // `--dump-prompts --limit 10` must not create a directory called "--limit".
+      const next = argv[di + 1];
+      DUMP_DIR = path.resolve(
+        next && !next.startsWith('-') ? next : path.join(BENCH_DIR, 'prompts'),
+      );
+      fs.mkdirSync(DUMP_DIR, { recursive: true });
+    }
     await run(limit);
   }
 }

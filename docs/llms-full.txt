@@ -4024,6 +4024,13 @@ Assembling review context for a pull request with trace-mcp costs a median
 loading the diff plus every file it touches — while making *more* of the code
 the change can break visible, not less.
 
+It also produces a **worse review**. Sending both contexts to the same model on
+the same PRs, the trace-mcp arm understood the change
+{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
+often and asserted about twice as many problems that are not there — a
+preregistered bar this run [missed]({{ '/perf/prereg-pr-quality/' | relative_url }}).
+Both halves are below; neither number should be quoted without the other.
+
 | | naive file loading | trace-mcp |
 |---|---:|---:|
 | input tokens, median | {{ site.data.pr_context_bench.baseline_median_tokens }} | **{{ site.data.pr_context_bench.trace_median_tokens }}** |
@@ -4133,21 +4140,82 @@ Two further limits worth stating plainly:
   symbol's body is in the context; "located" means it is named with its file
   and line. It does not mean a model used it correctly.
 
-## What this does not measure
+## The thinner context also produces a worse review
 
-**Review quality is not measured here.** The metrics on this page are
-structural coverage of the code a reviewer needs, not an LLM's judgement about
-whether it found the bug. Measuring that requires running a model over both
-arms on all {{ site.data.pr_context_bench.pr_count }} PRs and scoring the
-findings, which is a separate, paid experiment.
+That question used to live in a "what this does not measure" section. It is
+measured now, and **the answer went against us**: on the same pull requests,
+the review written from trace-mcp's context understood the change
+{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
+often than the review written from the full files, and asserted roughly twice
+as many problems that are not there. The
+[preregistered bar]({{ '/perf/prereg-pr-quality/' | relative_url }}) — no more
+than a 10 point drop in comprehension and no more than +0.5 false positives per
+PR — was written before the calls were made, and this run **missed both**.
 
-So the honest reading of this page is narrow and it is deliberately narrow:
-**for the same review task on the same PRs, trace-mcp's context costs about a
-tenth of the tokens and puts strictly more of the affected call graph in front
-of the reviewer.** Whether that translates into catching more bugs is an open
-question, and this benchmark is the harness a future run would extend to answer
-it. For the levers that produce that difference — presets, compact schemas and
-the TOON encoding — see [cutting Claude Code token usage](reduce-claude-code-token-usage.md).
+The method: the same {{ site.data.pr_context_quality.pr_count }} pull requests
+and the same two assembled contexts — byte-for-byte the prompts counted above,
+dumped to disk by the token run — each sent to
+`{{ site.data.pr_context_quality.model }}` at identical settings, with the two
+resulting reviews handed to a judge together with the PR's own diff as ground
+truth, blind and in randomised order.
+
+| | naive file loading | trace-mcp |
+|---|---:|---:|
+| understood the change | {{ site.data.pr_context_quality.baseline_understood }} | {{ site.data.pr_context_quality.trace_understood }} |
+| false positives per PR | {{ site.data.pr_context_quality.baseline_false_positives }} | {{ site.data.pr_context_quality.trace_false_positives }} |
+| findings claimed per PR | {{ site.data.pr_context_quality.baseline_findings }} | {{ site.data.pr_context_quality.trace_findings }} |
+| review latency, median | {{ site.data.pr_context_quality.baseline_median_latency_s }} s | **{{ site.data.pr_context_quality.trace_median_latency_s }} s** |
+
+Per-PR agreement: both arms understood the change on
+{{ site.data.pr_context_quality.both_understood }} PRs, only the naive arm on
+{{ site.data.pr_context_quality.baseline_only }}, only trace-mcp on
+{{ site.data.pr_context_quality.trace_only }}, neither on
+{{ site.data.pr_context_quality.neither }}.
+
+Latency is the one column trace-mcp wins, which is what a tenth of the input
+buys. It does not pay for the other two.
+
+So the honest reading of this benchmark is now two sentences, not one:
+**trace-mcp's review context costs about a tenth of the tokens, and at the
+current 8,000-token bundle budget it costs review quality too.** Closing that
+gap — a larger or better-packed bundle, measured on this same harness — is the
+work this result creates, and until it lands the token saving should not be
+quoted on its own. Every review and every judgement is committed in
+[`benchmarks/pr-context/quality.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/benchmarks/pr-context/quality.json),
+so the scoring is auditable rather than asserted.
+
+```bash
+npx tsx scripts/bench-pr-context.ts --dump-prompts benchmarks/pr-context/prompts
+npx tsx scripts/bench-pr-quality.ts        # writes benchmarks/pr-context/quality.json
+```
+
+### What this still does not measure
+
+- **The ground truth is weak, and that flatters both arms.** These are merged
+  bug-fix PRs, so the defect is visible in the diff itself. "Understood the
+  change" is a comprehension question, not a bug-discovery one — a careful
+  reader can score it from the diff alone, which compresses the gap between the
+  arms. Separating them properly needs a harder corpus: pull requests followed
+  by a revert or an explicit regression fix, where a reviewer *should* have
+  caught something and did not. That is a different dataset and a different
+  run; this one keeps the pinned set so the quality rows sit on the same PRs as
+  the token rows.
+- **The judge is a model**, and `false_positives` in particular is a judgement
+  call rather than a fact. It is reported because a cheap context that produces
+  confident nonsense is not a win, and a number that can be audited beats an
+  assurance that it does not happen.
+- **Latency is model latency**, not end-to-end review time; it excludes the
+  index build (a median
+  {{ site.data.pr_context_bench.median_index_ms }} ms per PR, amortised) and
+  any harness overhead.
+- **Call-site coverage is still structural.** "Readable" means the symbol's
+  body is in the context. The quality arm now says something about whether a
+  model used that context well; it does not attribute that to any single row of
+  the coverage table.
+
+For the levers that produce the token difference — presets, compact schemas and
+the TOON encoding — see
+[cutting Claude Code token usage](reduce-claude-code-token-usage.md).
 
 ## See also
 

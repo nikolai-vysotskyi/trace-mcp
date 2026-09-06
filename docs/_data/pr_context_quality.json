@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-09-06T10:13:13.988Z",
+  "model": "claude-sonnet-4-5",
+  "judge_model": "claude-sonnet-4-5",
+  "transport": "claude CLI headless (-p), no tools, no MCP, no settings sources",
+  "pr_count": 60,
+  "failed_count": 0,
+  "baseline_understood": "65%",
+  "trace_understood": "50%",
+  "understood_drop_pp": "15",
+  "baseline_false_positives": "0.65",
+  "trace_false_positives": "1.20",
+  "baseline_findings": "3.5",
+  "trace_findings": "4.1",
+  "baseline_median_latency_s": "90.0",
+  "trace_median_latency_s": "74.5",
+  "baseline_median_output_tokens": 3968,
+  "trace_median_output_tokens": 3201,
+  "both_understood": 26,
+  "baseline_only": 13,
+  "trace_only": 4,
+  "neither": 17
+}
