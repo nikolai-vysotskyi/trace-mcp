@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "trace-mcp",
-  "version": "3.18.0",
+  "version": "3.19.0",
   "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 90.6% fewer input tokens to review a pull request",
   "author": {
     "name": "Nikolai Vysotskyi",
