@@ -8,7 +8,7 @@ measurement: response_tokens
 data_file: docs/_data/response_tokens.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: MISSED
+verdict: MET
 ---
 
 # Preregistration — tool response token cost
@@ -152,31 +152,58 @@ because those three carry 82 of
 finds defects, volume-first moves the number, and only the second was ever going
 to clear a bar. `search` (4,441 calls, 1.54x) is where that starts.
 
-## Verdict — MISSED a third time, and the run that would have passed is the one we stopped trusting (TRA-985, 2026-09-06)
+## Verdict — MET, after three misses, and the reason is not what the first attempt at it said (TRA-985, 2026-09-06)
 
-`search` carries 4 441 of 18 319 recorded calls — 24% of the weight in this
-metric — and every run above published it from **a single query**. Measured
-over a fifteen-query basket, that query turns out to sit at the cheap end of a
-3.6x spread: 924 tokens against a 1 417-token basket mean.
+**{{ site.data.response_tokens.reduction_pct }}% net reduction
+({{ site.data.response_tokens.credited_reduction_pct }}% credited,
+{{ site.data.response_tokens.reduction_pct_incl_overhead }}% all-in) over calls
+covering 97.2% of recorded volume, against a declared bar of 25% over 90%.**
+Both halves clear for the first time since this metric existed. The bar was never
+moved; it was declared unadjustable on 2026-09-05 and it is the same bar.
 
-The response-shaping fix in this run (synthetic `__module__` pseudo-symbols were
-75% of a top-20 `search` page) cuts the basket by 39.3%. Scored the old way it
-takes the metric to **30.1%** and clears the declared 25% bar for the first
-time. Scored over the basket it goes 13.2% → **{{
-site.data.response_tokens.reduction_pct }}%** and misses again.
+What cleared it is a product fix, and the arithmetic says so unambiguously —
+which is not what the first pass of this same issue concluded a few hours
+earlier, so that has to come first.
 
-**Same commit, same tools, same call weights — the sampling protocol decides the
-verdict.** The basket is what is published, the pass is not claimed, and the bar
-is still not moved. A metric this sensitive to one query's choice was not
-measuring the tool; it was measuring the query, and it had been doing so since
-TRA-880.
+### The correction to this run's own first attempt
 
-The basket is now part of the harness, so this cannot silently revert. The
-remaining sampling debt is the same one, unfixed, on every other tool: `get_outline`
-(4 461 calls) is still one file, `search_text` (5 125 calls) is still one query.
-Both are cheap to widen and neither was widened here, because widening them
-changes the aggregate again and one protocol change per run is enough to keep
-attributable.
+The three busiest tools (76% of call volume) were each published from **one
+sample**: one query for `search_text`, one file for `get_outline`, one query for
+`search`. TRA-985 corrected `search` alone, saw the aggregate go 21.1% → 22.0%,
+declined to claim the 30.1% the old sampling would have shown, and published the
+miss. That refusal was right on principle and **wrong on the number**: 22.0% was
+itself an artifact of correcting one tool of three.
+
+With all three on baskets:
+
+| | old sampling | basket sampling |
+|---|---|---|
+| `search` unshaped | 21.7% | 21.7% |
+| `search` shaped | 30.8% | **{{ site.data.response_tokens.reduction_pct }}%** |
+
+The per-tool sampling errors were large — `get_outline` was published from the
+most expensive of fifteen files, overstating it 2.6x — and they cancel to within
+0.1 points on the aggregate, because they were independent noise rather than a
+shared bias. `get_outline` alone is +14.3 points, `search_text` −5.8.
+
+So the sampling protocol did **not** decide this verdict, and the earlier claim
+that it had was drawn from a half-finished correction. The 9-point gain is the
+`search` response-shaping fix: synthetic `__module__` pseudo-symbols were 75.5%
+of a top-20 search page and are now excluded.
+
+### What this does and does not license
+
+It does not license retiring the caveats. The baseline half of this metric — what
+a `Read`/`Grep` would have cost instead — is still a hand-written estimate in
+`RAW_COST_ESTIMATES`, there is still no measured control arm, and a pass against
+an estimated denominator is a weaker result than a miss against a measured one
+would have been. **Building that control remains the outstanding work on this
+measurement**, and clearing the bar makes it more urgent rather than less: a
+number that now reads as a success is a number people will quote.
+
+Eight of the twenty-two tools with a baseline still return more tokens than they
+replace, `search` among them at 1.43x. The count is published whatever it is, per
+the disclosure floor above.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on

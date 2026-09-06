@@ -1,41 +1,19 @@
 {
-  "measured_at": "2026-09-06T04:14:42.255Z",
+  "measured_at": "2026-09-06T04:38:31.598Z",
   "measured_build": {
     "version": "3.19.0",
-    "commit": "dcbac22d"
+    "commit": "8ab72253"
   },
   "target": "self",
   "runs": 3,
   "rows": [
-    {
-      "tool": "search_text",
-      "ok": true,
-      "chars": 6418,
-      "est": 1846,
-      "real": 1722,
-      "ms": 79,
-      "runs": 3,
-      "real_min": 1722,
-      "real_max": 1722
-    },
-    {
-      "tool": "get_outline",
-      "ok": true,
-      "chars": 5749,
-      "est": 1653,
-      "real": 1427,
-      "ms": 2,
-      "runs": 3,
-      "real_min": 1427,
-      "real_max": 1427
-    },
     {
       "tool": "get_symbol",
       "ok": true,
       "chars": 1029,
       "est": 296,
       "real": 264,
-      "ms": 3,
+      "ms": 1,
       "runs": 3,
       "real_min": 264,
       "real_max": 264
@@ -46,7 +24,7 @@
       "chars": 4817,
       "est": 1385,
       "real": 1122,
-      "ms": 1,
+      "ms": 2,
       "runs": 3,
       "real_min": 1122,
       "real_max": 1122
@@ -54,35 +32,35 @@
     {
       "tool": "get_project_map",
       "ok": true,
-      "chars": 2100,
-      "est": 604,
-      "real": 568,
-      "ms": 5,
+      "chars": 2143,
+      "est": 617,
+      "real": 559,
+      "ms": 7,
       "runs": 3,
-      "real_min": 568,
-      "real_max": 568
+      "real_min": 559,
+      "real_max": 559
     },
     {
       "tool": "get_index_health",
       "ok": true,
       "chars": 1135,
       "est": 327,
-      "real": 337,
+      "real": 338,
       "ms": 2,
       "runs": 3,
-      "real_min": 336,
-      "real_max": 341
+      "real_min": 338,
+      "real_max": 338
     },
     {
       "tool": "get_tests_for",
       "ok": true,
-      "chars": 380,
-      "est": 110,
-      "real": 90,
+      "chars": 494,
+      "est": 143,
+      "real": 115,
       "ms": 2,
       "runs": 3,
-      "real_min": 90,
-      "real_max": 90
+      "real_min": 115,
+      "real_max": 115
     },
     {
       "tool": "get_context_bundle",
@@ -90,7 +68,7 @@
       "chars": 454,
       "est": 131,
       "real": 127,
-      "ms": 3,
+      "ms": 1,
       "runs": 3,
       "real_min": 127,
       "real_max": 127
@@ -98,24 +76,24 @@
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 18726,
-      "est": 5384,
-      "real": 5383,
-      "ms": 5,
+      "chars": 16062,
+      "est": 4618,
+      "real": 4592,
+      "ms": 4,
       "runs": 3,
-      "real_min": 5382,
-      "real_max": 5384
+      "real_min": 4592,
+      "real_max": 4593
     },
     {
       "tool": "get_call_graph",
       "ok": true,
-      "chars": 6639,
-      "est": 1909,
-      "real": 1633,
-      "ms": 2,
+      "chars": 3737,
+      "est": 1075,
+      "real": 904,
+      "ms": 3,
       "runs": 3,
-      "real_min": 1633,
-      "real_max": 1633
+      "real_min": 904,
+      "real_max": 904
     },
     {
       "tool": "get_complexity_report",
@@ -123,7 +101,7 @@
       "chars": 6864,
       "est": 1974,
       "real": 1820,
-      "ms": 3,
+      "ms": 4,
       "runs": 3,
       "real_min": 1820,
       "real_max": 1820
@@ -134,7 +112,7 @@
       "chars": 1189,
       "est": 342,
       "real": 345,
-      "ms": 132,
+      "ms": 81,
       "runs": 3,
       "real_min": 345,
       "real_max": 345
@@ -145,7 +123,7 @@
       "chars": 227,
       "est": 66,
       "real": 59,
-      "ms": 480,
+      "ms": 464,
       "runs": 3,
       "real_min": 59,
       "real_max": 59
@@ -153,13 +131,13 @@
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 26215,
-      "est": 7537,
-      "real": 7440,
-      "ms": 58,
+      "chars": 17867,
+      "est": 5137,
+      "real": 5155,
+      "ms": 60,
       "runs": 3,
-      "real_min": 7440,
-      "real_max": 7441
+      "real_min": 5155,
+      "real_max": 5155
     },
     {
       "tool": "get_env_vars",
@@ -175,24 +153,24 @@
     {
       "tool": "get_dead_code",
       "ok": true,
-      "chars": 11109,
-      "est": 3194,
-      "real": 2725,
-      "ms": 56,
+      "chars": 11136,
+      "est": 3202,
+      "real": 2729,
+      "ms": 57,
       "runs": 3,
-      "real_min": 2725,
-      "real_max": 2725
+      "real_min": 2729,
+      "real_max": 2729
     },
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 1972,
-      "est": 567,
-      "real": 507,
-      "ms": 47,
+      "chars": 2199,
+      "est": 633,
+      "real": 565,
+      "ms": 54,
       "runs": 3,
-      "real_min": 507,
-      "real_max": 507
+      "real_min": 565,
+      "real_max": 565
     },
     {
       "tool": "check_quality_gates",
@@ -200,7 +178,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 386,
+      "ms": 388,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -211,7 +189,7 @@
       "chars": 318,
       "est": 92,
       "real": 76,
-      "ms": 4,
+      "ms": 6,
       "runs": 3,
       "real_min": 76,
       "real_max": 76
@@ -233,7 +211,7 @@
       "chars": 4437,
       "est": 1276,
       "real": 1099,
-      "ms": 13,
+      "ms": 15,
       "runs": 3,
       "real_min": 1099,
       "real_max": 1099
@@ -244,7 +222,7 @@
       "chars": 120,
       "est": 35,
       "real": 38,
-      "ms": 557,
+      "ms": 568,
       "runs": 3,
       "real_min": 38,
       "real_max": 38
@@ -261,15 +239,37 @@
       "real_max": 1938
     },
     {
+      "tool": "search_text",
+      "ok": true,
+      "chars": 7253,
+      "est": 2086,
+      "real": 2054,
+      "ms": 9,
+      "runs": 3,
+      "real_min": 2054,
+      "real_max": 2054
+    },
+    {
+      "tool": "get_outline",
+      "ok": true,
+      "chars": 2264,
+      "est": 651,
+      "real": 558,
+      "ms": 2,
+      "runs": 3,
+      "real_min": 558,
+      "real_max": 558
+    },
+    {
       "tool": "search",
       "ok": true,
-      "chars": 3149,
-      "est": 906,
-      "real": 864,
-      "ms": 12,
+      "chars": 3135,
+      "est": 902,
+      "real": 860,
+      "ms": 11,
       "runs": 3,
-      "real_min": 864,
-      "real_max": 864
+      "real_min": 860,
+      "real_max": 860
     }
   ]
 }
