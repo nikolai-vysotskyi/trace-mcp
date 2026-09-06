@@ -6050,28 +6050,9 @@ what it stands in for.**
 
 | tool | calls (real) | raw baseline | measured response | measured/baseline |
 |---|---|---|---|---|
-| `search_text` | 5,125 | 3,000 | **1,722** | 0.57 |
-| `get_outline` | 4,461 | 1,200 | **1,427** | 1.19 |
-| `search` | 4,441 | 600 | **924** | 1.54 |
-| `get_symbol` | 2,687 | 800 | **294** | 0.37 |
-| `find_usages` | 440 | 1,000 | **975** | 0.97 |
-| `get_project_map` | 351 | 1,500 | **568** | 0.38 |
-| `get_index_health` | 211 | 500 | **297** | 0.59 |
-| `get_tests_for` | 96 | 800 | **90** | 0.11 |
-| `get_complexity_report` | 80 | 800 | **1,820** | 2.27 |
-| `get_feature_context` | 73 | 4,000 | **7,443** | 1.86 |
-| `get_env_vars` | 66 | 500 | **13** | 0.03 |
-| `get_dead_code` | 53 | 1,200 | **2,725** | 2.27 |
-| `get_context_bundle` | 39 | 6,000 | **127** | 0.02 |
-| `get_changed_symbols` | 38 | 500 | **1,224** | 2.45 |
-| `get_task_context` | 32 | 8,000 | **5,383** | 0.67 |
-| `check_quality_gates` | 24 | 500 | **121** | 0.24 |
-| `get_circular_imports` | 21 | 500 | **76** | 0.15 |
-| `check_duplication` | 19 | 500 | **272** | 0.54 |
-| `check_claudemd_drift` | 17 | 500 | **1,099** | 2.20 |
-| `scan_security` | 16 | 500 | **38** | 0.08 |
-| `list_projects` | 15 | 500 | **901** | 1.80 |
-| `get_call_graph` | 14 | 1,500 | **1,421** | 0.95 |
+{% for r in site.data.response_tokens.rows -%}
+| `{{ r.tool }}` | {{ r.calls }} | {{ r.baseline_per_call }} | **{{ r.measured_per_call }}** | {% if r.measured_over_baseline > 1 %}**{{ r.measured_over_baseline }}**{% else %}{{ r.measured_over_baseline }}{% endif %} |
+{% endfor %}
 
 Those {{ site.data.response_tokens.calls_weighted }} calls cost
 {{ site.data.response_tokens.measured_tokens }} measured tokens against a
@@ -6087,16 +6068,18 @@ section.
 
 Three things the table says:
 
-1. **0.15 is wrong on every tool that matters.** The four busiest (88% of all
-   calls) measure 0.37–1.54. The assumption is off by 2.5x on the best of them.
+1. **0.15 is wrong on every tool that matters.** The busiest four are 88% of all
+   calls, and not one of them lands near it. The assumption is off by several
+   multiples on every one.
 2. **{{ site.data.response_tokens.tools_costing_more }} of the
    {{ site.data.response_tokens.tools_with_baseline }} cost more than the
    baseline they replace** — and, before the counter was corrected, were still
    booking a positive number on every call. It was ten of twenty-two until
-   TRA-952 reshaped the three worst (below); the ones left are led by
-   `get_complexity_report` and `get_dead_code` at 2.27x. Each is a
-   response-shaping defect: a default `depth`/`limit` too generous for what the
-   caller asked.
+   TRA-952 reshaped the three worst (below). Each survivor is a response-shaping
+   defect: a default `depth`/`limit` too generous for what the caller asked. Read
+   the current list off the table rather than from here — which tools are on it
+   changes with every reshaping, and a name typed into prose is how this page
+   went stale once already (TRA-1020, below).
 3. **A few are far better than claimed** — `get_context_bundle` at 0.02 and
    `get_env_vars` at 0.03 were being under-credited by an order of magnitude.
 
@@ -6120,8 +6103,9 @@ still counted on the spend side, because the agent still paid for it:
 
 | tool | calls | baseline | measured response | tokens spent, credited zero |
 |---|---|---|---|---|
-| `register_edit` | 1,289 | — | **345** | 444,705 |
-| `reindex` | 184 | — | **59** | 10,856 |
+{% for r in site.data.response_tokens.overhead_rows -%}
+| `{{ r.tool }}` | {{ r.calls }} | — | **{{ r.measured_per_call }}** | {{ r.measured_tokens }} |
+{% endfor %}
 
 That is {{ site.data.response_tokens.overhead_calls }} calls and
 {{ site.data.response_tokens.overhead_tokens }} tokens of pure overhead — real
@@ -6268,11 +6252,13 @@ deeper dead-code page is still one `limit` away.
 
 **And it moved the headline by 0.1 points.** Those three tools are 82 of 18,319
 recorded calls. The weighted figure is decided by `search_text`, `get_outline`
-and `search`, which are 78% of call volume between them — `search` at 1.54x and
-`get_outline` at 1.19x are now the whole of the negative block that matters.
-Worst-ratio-first was the right order for finding defects and the wrong one for
-moving the number; the next response-shaping issue should be `search`, on
-volume.
+and `search`, which are 78% of call volume between them. Worst-ratio-first was
+the right order for finding defects and the wrong one for moving the number.
+
+The sentence that used to close this paragraph named `search` (1.54x) and
+`get_outline` (1.19x) as "the whole of the negative block that matters" and
+pointed the next issue at `search`. **Both figures were stale and both tools are
+under 1.00** — see TRA-1020 below.
 
 `get_dead_code` is left at 2.27x on purpose. Its baseline is 1,200 tokens —
 "what a `Read`/`Grep` would have cost instead" for a whole-repo dead-code sweep
@@ -6288,3 +6274,37 @@ diff of whatever working tree it runs on, so the two runs asked it different
 questions and its row is not comparable between them at all. The other two track the corpus: the repo gained files and symbols between
 the two measurements. Same caveat as `get_outline` above, and the reason the
 per-tool ratios are the durable part of this page and the aggregate is not.
+
+## The table on this page was hand-typed, and it had gone stale (TRA-1020)
+
+Everything on this page that reads `{{ site.data.response_tokens.* }}` is
+generated. The **per-tool table** was not: it was Markdown someone typed, and
+between TRA-952 and TRA-993 the measurements moved underneath it while the rows
+stayed put. The gap on the three tools that carry 76% of the weight, committed
+artifact against what the page was showing:
+
+| tool | page said | `docs/perf/response-tokens.json` said |
+|---|---|---|
+| `search_text` | 1,722 (0.57x) | 608 (0.20x) |
+| `get_outline` | 1,427 (1.19x) | 419 (0.35x) |
+| `search` | 924 (1.54x) | 421 (0.70x) |
+
+Re-measured independently on 3.20.0 (`bc67ad28`) before touching anything:
+`search_text` 608, `get_outline` 419, `search` 423. The artifact reproduces; the
+table did not.
+
+It is not only a wrong number. The page's own conclusion — "`search` at 1.54x
+and `get_outline` at 1.19x are now the whole of the negative block that
+matters", and the recommendation to shape `search` next — rested on rows that
+said those tools cost more than they replace when the committed measurement said
+they cost 0.70x and 0.35x. The aggregates beside the table were right the whole
+time, because they are generated: **{{ site.data.response_tokens.tools_costing_more }}
+of {{ site.data.response_tokens.tools_with_baseline }}** cost more than their
+baseline, not the eight the prose implied, and `search` is not among them.
+
+The table is now a Liquid loop over `site.data.response_tokens.rows`, so it
+cannot disagree with the artifact it summarises, and
+`tests/docs/response-tokens-table.test.ts` fails CI if a per-tool token count is
+typed back into the page. This is the same defect class as TRA-762 (README
+quoting synthetic benchmark numbers as measured) and TRA-880 (the counter
+publishing arithmetic as measurement), in the one place that documents both.
