@@ -8,7 +8,7 @@ measurement: response_tokens
 data_file: docs/_data/response_tokens.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: MET
+verdict: NOT-RUN
 ---
 
 # Preregistration — tool response token cost
@@ -152,58 +152,71 @@ because those three carry 82 of
 finds defects, volume-first moves the number, and only the second was ever going
 to clear a bar. `search` (4,441 calls, 1.54x) is where that starts.
 
-## Verdict — MET, after three misses, and the reason is not what the first attempt at it said (TRA-985, 2026-09-06)
+## The aggregate is suspended: three defensible frames, three answers, same build (TRA-985, 2026-09-06)
 
-**{{ site.data.response_tokens.reduction_pct }}% net reduction
-({{ site.data.response_tokens.credited_reduction_pct }}% credited,
-{{ site.data.response_tokens.reduction_pct_incl_overhead }}% all-in) over calls
-covering 97.2% of recorded volume, against a declared bar of 25% over 90%.**
-Both halves clear for the first time since this metric existed. The bar was never
-moved; it was declared unadjustable on 2026-09-05 and it is the same bar.
+**No verdict is claimed for this run, and the figures on this page are the
+TRA-952 ones, unchanged.** What follows is why they were not replaced.
 
-What cleared it is a product fix, and the arithmetic says so unambiguously —
-which is not what the first pass of this same issue concluded a few hours
-earlier, so that has to come first.
+`search_text`, `get_outline` and `search` are **76% of the weight** in this
+metric, and each of their published rows came from **one sample** — one query,
+one file, one query. That is not a defensible way to price a tool whose cost
+depends mostly on its input, so TRA-985 set out to replace each with a basket.
+Every basket that got built moved the aggregate somewhere else:
 
-### The correction to this run's own first attempt
+| frame for the three volume-heavy tools | aggregate, same build |
+|---|---|
+| one sample each (what this page publishes) | **21.0%** |
+| 15 filename-shaped words + stratified files | 30.7% |
+| shape-representative queries (25/75) | 56.0% |
 
-The three busiest tools (76% of call volume) were each published from **one
-sample**: one query for `search_text`, one file for `get_outline`, one query for
-`search`. TRA-985 corrected `search` alone, saw the aggregate go 21.1% → 22.0%,
-declined to claim the 30.1% the old sampling would have shown, and published the
-miss. That refusal was right on principle and **wrong on the number**: 22.0% was
-itself an artifact of correcting one tool of three.
+Same commit, same tools, same call weights, same tokenizer. The spread is the
+frame.
 
-With all three on baskets:
+### How each frame turned out to be wrong
 
-| | old sampling | basket sampling |
-|---|---|---|
-| `search` unshaped | 21.7% | 21.7% |
-| `search` shaped | 30.8% | **{{ site.data.response_tokens.reduction_pct }}%** |
+The first basket was fifteen single lowercase subsystem words. Code review
+caught what that is: **exactly the query shape where a `__module__:<filename>`
+pseudo-symbol wins the 10x FTS name weight** — the defect the same change fixed.
+The basket was enriched for its own treatment. Measured on it, the fix was worth
+−39.3%; measured on a basket of symbol names, which cannot be aimed at a
+file-named pseudo-symbol, the same fix was worth **−4.9%**.
 
-The per-tool sampling errors were large — `get_outline` was published from the
-most expensive of fifteen files, overstating it 2.6x — and they cancel to within
-0.1 points on the aggregate, because they were independent noise rather than a
-shared bias. `get_outline` alone is +14.3 points, `search_text` −5.8.
+Its stated provenance was also false. The harness claimed the terms were "the
+fifteen most common subsystem nouns in this repo's own directory names". Eleven
+of the fifteen are not directory names. Nobody checked the sentence before it was
+written, and a mechanical check found it in one command.
 
-So the sampling protocol did **not** decide this verdict, and the earlier claim
-that it had was drawn from a half-finished correction. The 9-point gain is the
-`search` response-shaping fix: synthetic `__module__` pseudo-symbols were 75.5%
-of a top-20 search page and are now excluded.
+The third frame was built from real data — 1,133 recorded `search` calls, 24.9%
+single lowercase words against 75.1% identifiers and phrases — and it moved the
+aggregate to 56%, because the same terms handed to `search_text` are rare strings
+that match almost nothing. Correcting one selection effect introduced another in
+the opposite direction.
 
-### What this does and does not license
+### Why there is no fourth attempt in this run
 
-It does not license retiring the caveats. The baseline half of this metric — what
-a `Read`/`Grep` would have cost instead — is still a hand-written estimate in
-`RAW_COST_ESTIMATES`, there is still no measured control arm, and a pass against
-an estimated denominator is a weaker result than a miss against a measured one
-would have been. **Building that control remains the outstanding work on this
-measurement**, and clearing the bar makes it more urgent rather than less: a
-number that now reads as a success is a number people will quote.
+`search` is the only one of the three with recorded arguments to build a frame
+from, and even those cannot be replayed: they are symbol names from private
+repositories, targeting codebases this bench does not index. For `search_text`
+and `get_outline` the store holds **zero** recorded queries, so any basket for
+them is somebody's intuition about usage, and this run demonstrated three times
+over what intuition is worth here.
 
-Eight of the twenty-two tools with a baseline still return more tokens than they
-replace, `search` among them at 1.43x. The count is published whatever it is, per
-the disclosure floor above.
+Picking the frame after seeing what each one does to the number is how a
+preregistration gets defeated from the inside. So:
+
+- The **retrieval fix ships** — synthetic module-body pseudo-symbols were 75% of
+  a top-20 page on filename-shaped queries and are excluded on every retrieval
+  path. That is a correctness result and it does not depend on any frame.
+- The **aggregate does not move**, and the figures above stay at TRA-952's until
+  a sampling frame is registered *before* the measurement that uses it.
+- The 21.0% on this page is now known to rest on one sample per volume-heavy
+  tool. It is not defended; it is left in place because replacing it with a
+  number chosen after the fact would be worse.
+
+**Outstanding work, in order:** register a sampling frame for the three
+volume-heavy tools, with its construction committed and its provenance checkable,
+and only then re-measure. That is now a harder blocker than the missing control
+arm, and it sits in front of it.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on

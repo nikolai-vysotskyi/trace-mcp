@@ -3,7 +3,7 @@ layout: default
 title: Tool response token cost
 permalink: /perf/response-tokens/
 description: What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the eight tools that cost more than the reads they replace.
-updated: 2026-09-06
+updated: 2026-09-05
 ---
 
 # Tool response token cost
@@ -16,7 +16,7 @@ updated: 2026-09-06
   "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/perf/response-tokens/",
   "datePublished": "2026-09-05",
-  "dateModified": "2026-09-06",
+  "dateModified": "2026-09-05",
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi"
@@ -24,15 +24,14 @@ updated: 2026-09-06
 }
 </script>
 
-Measured 2026-09-06 on darwin 25.5.0 / arm64, trace-mcp
+Measured 2026-09-05 on darwin 25.5.0 / arm64, trace-mcp
 {{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`) — the build stamp
 travels with the figure to every surface that quotes it, and the
 [preregistration](./prereg-response-tokens.md) states the bar and the verdict
-(this run is the first to publish as a **pass**, and the section below says exactly what cleared it). Against
+(this run publishes as a **miss**, on the reduction half of the bar). Against
 trace-mcp's own repo (2 159 files, 11 134 symbols) over a real stdio
-`tools/call` round-trip. TRA-880, extended to the tail by TRA-945, and to a query basket for
-`search` by TRA-985. Reproduce
+`tools/call` round-trip. TRA-880, extended to the tail by TRA-945. Reproduce
 with:
 
 ```
@@ -40,10 +39,7 @@ pnpm run build && npx tsx scripts/bench-response-tokens.ts [repoPath]
 ```
 
 Token column is the median of three runs, a real `o200k_base` count of the
-response text, not an estimate. The three volume-heavy tools — `search_text`,
-`get_outline`, `search`, 76% of all calls — are each the **mean over a
-fifteen-item basket**, median across runs, because one sample each was deciding
-three quarters of the aggregate. See below. Call volume is this machine's
+response text, not an estimate. Call volume is this machine's
 `~/.trace/savings.json` ({{ site.data.response_tokens.calls_store_total }} calls
 since the store was created) — real usage, one machine, never an average user.
 
@@ -71,28 +67,28 @@ what it stands in for.**
 
 | tool | calls (real) | raw baseline | measured response | measured/baseline |
 |---|---|---|---|---|
-| `search_text` | 5,125 | 3,000 | **2,054** | 0.68 |
-| `get_outline` | 4,461 | 1,200 | **558** | 0.47 |
-| `search` | 4,441 | 600 | **860** | 1.43 |
-| `get_symbol` | 2,687 | 800 | **264** | 0.33 |
-| `find_usages` | 440 | 1,000 | **1,122** | 1.12 |
-| `get_project_map` | 351 | 1,500 | **559** | 0.37 |
-| `get_index_health` | 211 | 500 | **338** | 0.68 |
-| `get_tests_for` | 96 | 800 | **115** | 0.14 |
+| `search_text` | 5,125 | 3,000 | **1,722** | 0.57 |
+| `get_outline` | 4,461 | 1,200 | **1,427** | 1.19 |
+| `search` | 4,441 | 600 | **924** | 1.54 |
+| `get_symbol` | 2,687 | 800 | **294** | 0.37 |
+| `find_usages` | 440 | 1,000 | **975** | 0.97 |
+| `get_project_map` | 351 | 1,500 | **568** | 0.38 |
+| `get_index_health` | 211 | 500 | **297** | 0.59 |
+| `get_tests_for` | 96 | 800 | **90** | 0.11 |
 | `get_complexity_report` | 80 | 800 | **1,820** | 2.27 |
-| `get_feature_context` | 73 | 4,000 | **5,155** | 1.29 |
+| `get_feature_context` | 73 | 4,000 | **7,443** | 1.86 |
 | `get_env_vars` | 66 | 500 | **13** | 0.03 |
-| `get_dead_code` | 53 | 1,200 | **2,729** | 2.27 |
+| `get_dead_code` | 53 | 1,200 | **2,725** | 2.27 |
 | `get_context_bundle` | 39 | 6,000 | **127** | 0.02 |
-| `get_changed_symbols` | 38 | 500 | **565** | 1.13 |
-| `get_task_context` | 32 | 8,000 | **4,592** | 0.57 |
+| `get_changed_symbols` | 38 | 500 | **1,224** | 2.45 |
+| `get_task_context` | 32 | 8,000 | **5,383** | 0.67 |
 | `check_quality_gates` | 24 | 500 | **121** | 0.24 |
 | `get_circular_imports` | 21 | 500 | **76** | 0.15 |
 | `check_duplication` | 19 | 500 | **272** | 0.54 |
 | `check_claudemd_drift` | 17 | 500 | **1,099** | 2.20 |
 | `scan_security` | 16 | 500 | **38** | 0.08 |
-| `list_projects` | 15 | 500 | **1,938** | 3.88 |
-| `get_call_graph` | 14 | 1,500 | **904** | 0.60 |
+| `list_projects` | 15 | 500 | **901** | 1.80 |
+| `get_call_graph` | 14 | 1,500 | **1,421** | 0.95 |
 
 Those {{ site.data.response_tokens.calls_weighted }} calls cost
 {{ site.data.response_tokens.measured_tokens }} measured tokens against a
@@ -109,16 +105,15 @@ section.
 Three things the table says:
 
 1. **0.15 is wrong on every tool that matters.** The four busiest (88% of all
-   calls) measure 0.33–1.43. The assumption is off by 2.2x on the best of them.
+   calls) measure 0.37–1.54. The assumption is off by 2.5x on the best of them.
 2. **{{ site.data.response_tokens.tools_costing_more }} of the
    {{ site.data.response_tokens.tools_with_baseline }} cost more than the
    baseline they replace** — and, before the counter was corrected, were still
-   booking a positive number on every call. The count has been eight, nine and
-   ten across three measurements of the same product; it moves when a tool is
-   shaped and when the corpus moves under it. The ones led by
-   `get_complexity_report` and `get_dead_code` at 2.27x are response-shaping
-   defects: a default `depth`/`limit` too generous for what the caller asked.
-   `list_projects` at 3.88x is not — see the note on it below.
+   booking a positive number on every call. It was ten of twenty-two until
+   TRA-952 reshaped the three worst (below); the ones left are led by
+   `get_complexity_report` and `get_dead_code` at 2.27x. Each is a
+   response-shaping defect: a default `depth`/`limit` too generous for what the
+   caller asked.
 3. **A few are far better than claimed** — `get_context_bundle` at 0.02 and
    `get_env_vars` at 0.03 were being under-credited by an order of magnitude.
 
@@ -164,24 +159,17 @@ The two left-hand columns are frozen literals: they record what those runs
 measured, so a later re-measurement cannot rewrite them. Only the TRA-952 column
 is live.
 
-| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-985 (baskets) |
-|---|---|---|---|---|
-| coverage of recorded calls | 88.4% | 97.2% | 97.2% | **97.2%** |
-| net `reduction_pct` | 29.3% | 21.1% | 21.0% | **{{ site.data.response_tokens.reduction_pct }}%** |
-| credited | 35.2% | 32.6% | 31.5% | {{ site.data.response_tokens.credited_reduction_pct }}% |
-| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
-| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
-| top-3 tools measured over | 1 sample each | 1 sample each | 1 sample each | **15 each** |
-| verdict against the declared bar | miss | miss | miss | **pass** |
+| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) |
+|---|---|---|---|
+| coverage of recorded calls | 88.4% | 97.2% | **97.2%** |
+| net `reduction_pct` | 29.3% | 21.1% | **{{ site.data.response_tokens.reduction_pct }}%** |
+| credited | 35.2% | 32.6% | {{ site.data.response_tokens.credited_reduction_pct }}% |
+| all-in, incl. no-baseline overhead | not computed | 19.5% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
+| tools costing more than their baseline | 4 of 12 | 10 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
 
 The tail was more expensive than the head, in both directions: it contained the
 worst per-call ratios in the product and the calls that should never have been
 scored. Fixing the coverage miss produced a reduction miss.
-
-The last column changed how the top three tools are sampled, which is the point
-of it. On the old sampling the same commit reads 30.8% — within 0.1 points,
-because the three sampling errors cancel. The columns are comparable on the
-aggregate and not on those three rows.
 
 ## The fix
 
@@ -234,6 +222,36 @@ TRA-880, on the same target file, because the change that added
 live repository, so its own commits move its numbers. That is a property of the
 corpus, not noise, and it is why the corpus size is stated at the top.
 
+## Two things TRA-985 found, one shipped and one suspended (2026-09-06)
+
+**Shipped: `search` was returning three quarters noise on filename-shaped
+queries.** The language plugins emit a synthetic `__module__` pseudo-symbol per
+file so the call graph can attribute module-body call sites
+(`metadata.synthetic = true`, signature `(module body) <path>`). Its name embeds
+the file's basename and FTS weights the name column 10x, so on any
+filename-shaped query these outrank every real symbol. Across fifteen such
+queries, **145 of 192 top-20 rows (75.5%) were pseudo-symbols**: `search`
+for `indexer` returned twenty of them and nothing else, `daemon` four of its top
+five. They are excluded now on every retrieval path — lexical, hybrid, fusion and
+pure-semantic — bypassed when the query names `__module__` itself.
+
+That is a retrieval-quality fix. `daemon` used to answer with four module bodies
+and one real constant; it answers with five real symbols now.
+
+**Suspended: what that is worth in tokens depends entirely on which queries you
+ask.** On the filename-shaped basket it reads −39.3%. On a basket of symbol
+names — which cannot be aimed at a pseudo-symbol named after a *file* — the same
+fix reads **−4.9%**. The aggregate on this page was not updated, because three
+defensible frames for the three volume-heavy tools (76% of the weight) produce
+21.0%, 30.7% and 56.0% on one build. The [preregistration](./prereg-response-tokens.md)
+records all three and why none of them was published; the numbers below are still
+TRA-952's.
+
+The honest summary of the sampling problem: `search_text`, `get_outline` and
+`search` are each priced from **one sample**, the store holds recorded arguments
+for only one of the three, and even those are not replayable here. Fixing that
+needs a frame registered before the measurement, not after.
+
 ## What shaping the three worst tools did (TRA-952)
 
 The first three tools on that follow-up list have been reshaped, and the table
@@ -255,7 +273,7 @@ and `search`, which are 78% of call volume between them — `search` at 1.54x an
 `get_outline` at 1.19x are now the whole of the negative block that matters.
 Worst-ratio-first was the right order for finding defects and the wrong one for
 moving the number; the next response-shaping issue should be `search`, on
-volume. **It was, and it is the section below.**
+volume.
 
 `get_dead_code` is left at 2.27x on purpose. Its baseline is 1,200 tokens —
 "what a `Read`/`Grep` would have cost instead" for a whole-repo dead-code sweep
@@ -263,103 +281,10 @@ over 3,412 exports, which is not a credible 1,200 tokens. Cutting the tool
 further would buy the ratio by answering less; the honest correction there is on
 the baseline half, which is still an estimate.
 
-## One sample per tool was deciding three quarters of the aggregate (TRA-985)
-
-The three busiest tools — `search_text` (5 125 calls), `get_outline` (4 461) and
-`search` (4 441) — are 76% of the weight in the table above, and until this run
-each of their published rows came from **one sample**: one query, one file, one
-query. All three were wrong, by different amounts and in different directions.
-
-| tool | published from | one sample | basket mean | spread across the basket |
-|---|---|---|---|---|
-| `get_outline` | `src/savings.ts` | 1,427 | **558** | 17x (84 – 1,427) |
-| `search_text` | `estimateTokens` | 1,722 | **2,054** | 1.7x (1,780 – 3,017) |
-| `search` | `savings` | 928 | **1,417** (unshaped) | 3.6x |
-
-`get_outline` was the worst: the file it was published from is the **most
-expensive of the fifteen**, so the row overstated the tool by 2.6x. `search_text`
-erred the other way.
-
-### What that did to the aggregate: nothing, and that is the finding
-
-| | old sampling | basket sampling |
-|---|---|---|
-| `search` unshaped | 21.7% | 21.7% |
-| `search` shaped | 30.8% | **{{ site.data.response_tokens.reduction_pct }}%** |
-
-**The per-tool sampling errors were large and the aggregate error was zero.**
-`get_outline` alone moves the headline +14.3 points, `search_text` −5.8, and
-`search`'s own basket the rest; corrected together they cancel to within 0.1
-points. The errors were independent, not a shared bias, which is what "noise"
-means — and it is why a tool-at-a-time correction cannot be read in between.
-
-That last part is a correction to what this page said a few hours earlier. The
-first TRA-985 run corrected `search` alone, watched the aggregate fall from 21.1%
-to 22.0%, and published that fall as the honest number while declining to claim
-the 30.1% the old protocol would have given. **Both of those figures were
-sampling artifacts of a half-finished correction.** With all three baskets in
-place the same code reads {{ site.data.response_tokens.reduction_pct }}%, and the
-9-point gain over the 21.7% baseline is the response-shaping fix — the whole of
-it. The refusal to claim the pass on partial evidence was right; the number
-published alongside it was not durable, and this is what replaced it.
-
-The baskets are in the harness (`SEARCH_BASKET`, `OUTLINE_BASKET` in
-`scripts/bench-response-tokens.ts`), fixed before measurement, so no future run
-picks them again. Grouped calls collapse to their **mean**, not their median,
-because the aggregate multiplies that number by a call count.
-
-## What shaping `search` did (TRA-985)
-
-Three quarters of a `search` page was not search results. The language plugins
-emit a synthetic `__module__` pseudo-symbol per file so the call graph has
-something to attribute module-body call sites to — `metadata.synthetic = true`,
-signature `(module body) <path>`. Its name embeds the file's basename, and FTS
-weights the name column 10x, so on any filename-shaped query these outrank every
-real symbol. Across the fifteen basket queries, **145 of 192 top-20 rows (75.5%)
-were these pseudo-symbols.** A search for `indexer` returned twenty of them and
-nothing else; a search for `daemon` returned five of the top five.
-
-They are excluded now — the same default-exclusion shape the markdown guard
-already used (`excludeModuleBodies` in `src/db/fts.ts`), bypassed when the query
-names `__module__` itself. Scores are also rounded to three decimals, which is
-every digit a caller can act on.
-
-| | before | after |
-|---|---|---|
-| basket total, 15 queries | 21,248 | **12,887** (−39.3%) |
-| `savings` (the old published query) | 928 | **363** (−60.7%) |
-| published row, basket mean | 1,417 | **860** |
-| ratio against its 600-token baseline | 2.36x | **1.43x** |
-
-It is a retrieval fix that happens to be a token fix. `daemon` used to answer
-with four module bodies and one real constant; it now answers with five real
-symbols. Two of the fifteen queries (`indexer`, `watcher`) had *only* module
-bodies in the top 20, so they now fall through to `search_mode:
-symbol_miss_text_fallback` — an honest "no symbol matches, here is where the
-word appears" in place of five rows that looked like hits and were not. One of
-those two, `watcher`, costs 207 tokens more than it did before. That is the
-whole regression.
-
-`search` still costs 1.43x the baseline it is credited against, so it is still
-in the losing column. Shaping alone will not get it under 1.00; its 600-token
-baseline is one of the estimates the last section is about.
-
-### One row moved a long way for a reason that is not the code
-
-`list_projects` reads 1 938 tokens here against 901 in TRA-952, on an unchanged
-tool. Its response scales with the number of projects registered on the machine
-running the bench, and this machine's registry grew between the two runs
-(TRA-706: 591 registered roots, 440 of them pointing at directories that no
-longer exist). A tool whose published cost tracks the operator's registry rather
-than its own code cannot be shaped to a stable ratio, and its 3.88x should be
-read as a property of the corpus, not a regression.
-
 ### Three rows moved for reasons that are not this change
 
-(Historical note, kept as written at TRA-952.) `get_changed_symbols`
-(521 → 1,224), `find_usages` (1,122 → 975) and `search_text` (1,659 → 1,722)
-were not touched. `search_text` has since moved to a basket mean and its row is
-no longer comparable with either figure here. `get_changed_symbols` reports the
+`get_changed_symbols` (521 → 1,224), `find_usages` (1,122 → 975) and
+`search_text` (1,659 → 1,722) were not touched. `get_changed_symbols` reports the
 diff of whatever working tree it runs on, so the two runs asked it different
 questions and its row is not comparable between them at all. The other two track the corpus: the repo gained files and symbols between
 the two measurements. Same caveat as `get_outline` above, and the reason the
