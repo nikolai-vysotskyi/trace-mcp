@@ -48,16 +48,17 @@ describe.each(VARIANTS)('lockup %s', (name) => {
 });
 
 describe('lockup geometry', () => {
-  it('places the row mark at one em with its centre 300 above the baseline', () => {
-    // The mark is exactly the em box: it shipped at 885 first and read light
-    // against the word, and one em is the same relation with one fewer
-    // arbitrary number — its bottom (-200) lands on the descender of `p` (-210).
+  it('places the row mark at 1220 with its centre 300 above the baseline', () => {
+    // The mark drives the lockup's own height, so at a fixed placement height a
+    // bigger mark grows the icon *and* shrinks the word — one knob, not two.
+    // 1220 with the placement raised ~7% is +16% icon and -16% word against the
+    // 885 this shipped with; the arithmetic is in DESIGN-WEB §1b.
     // The 300 is separate and settled: 232, the centre of the ink block, reads
-    // as hanging because the block is dragged down by that same descender while
-    // the eye reads the line off the x-height; 442 lifts the mark clear of it.
+    // as hanging because the block is dragged down by the descender of `p`
+    // while the eye reads the line off the x-height; 442 lifts the mark clear.
     const svg = read('row-dark');
     const scale = Number(svg.match(/scale\(([\d.]+)\)/)?.[1]);
-    expect(scale).toBeCloseTo(1000 / 1024, 5);
+    expect(scale).toBeCloseTo(1220 / 1024, 5);
     // Baseline sits at max(mark top above baseline, ink top) = 300 + 442.5.
     const translateY = Number(svg.match(/translate\(0 ([\d.-]+)\)/)?.[1]);
     expect(translateY).toBeCloseTo(0, 5);
