@@ -126,6 +126,12 @@ interface Row {
   real: number;
   ms: number;
   item?: string;
+  /**
+   * How many results the response reported, where it reports one. A frame item
+   * that matches nothing is cheap and useless at the same time — retained so a
+   * reader can tell a low per-item cost from a query the corpus does not answer.
+   */
+  hits?: number;
 }
 
 /**
@@ -252,6 +258,7 @@ function run(): Promise<Array<Row & { group?: string }>> {
               ms: Date.now() - started,
               group: CALLS[i].group,
               item: CALLS[i].item,
+              hits: Number(/"(?:total_matches|total)"\s*:\s*(\d+)/.exec(text)?.[1] ?? Number.NaN),
             });
           i += 1;
           next();
@@ -316,6 +323,7 @@ const items = [...itemSamples.entries()].map(([key, rs]) => {
     real_min: Math.min(...rs.map((r) => r.real)),
     real_max: Math.max(...rs.map((r) => r.real)),
     chars: median(rs.map((r) => r.chars)),
+    hits: Number.isNaN(rs[0].hits) ? undefined : median(rs.map((r) => r.hits ?? 0)),
   };
 });
 const rows = [...samples.entries()].map(([tool, rs]) => ({

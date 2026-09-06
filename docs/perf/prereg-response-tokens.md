@@ -289,6 +289,66 @@ mostly fails to match, so the aggregate is expected to land above the 30.7%
 frame and below the 56.0% one. If it lands outside that interval the prediction
 was wrong and this line stays on the page saying so.
 
+## Verdict — the prediction was wrong, and the pass is about the frame (TRA-993, 2026-09-06)
+
+**The prediction above is wrong and stays on the page.** It said the aggregate
+would land between 30.7% and 56.0%. Measured on the registered frame:
+**{{ site.data.response_tokens.reduction_pct }}% net reduction**
+({{ site.data.response_tokens.credited_reduction_pct }}% credited,
+{{ site.data.response_tokens.reduction_pct_incl_overhead }}% all-in) over
+{{ site.data.response_tokens.calls_weighted }} calls, 97.2% of recorded call
+volume, {{ site.data.response_tokens.tools_costing_more }} of
+{{ site.data.response_tokens.tools_with_baseline }} tools still costing more than
+their baseline. That is outside the interval, above it.
+
+Against the declared bar — net ≥ 25% over ≥ 90% of call volume — this is the
+first **PASS** this measurement has recorded.
+
+**It should not be read as the product getting better.** The build is one commit
+past TRA-952's, which published 21.0% on the same call weights and the same
+tokenizer. Nothing shipped in between that moves a headline 46 points. What
+moved is the frame: the three volume-heavy tools stopped being priced from one
+sample each. The four frames now on record for this metric price the same class
+of build at 21.0%, 30.7%, 56.0% and 67.4% — and the registered one is not
+"correct", it is *fixed in advance and checkable*, which is a different and
+smaller claim.
+
+So the useful result of this run is not the number. It is that **the number is
+frame-dominated**, and here is the mechanism, visible for the first time because
+per-item costs are now retained:
+
+- `search_text` costs **86 to 2 244 tokens** across the twenty frame queries —
+  a 26x spread around a 608-token mean. Any single sample from that population
+  was always going to be noise.
+- **Three of twenty `search_text` queries return zero matches** (`hits: 0` in
+  the artifact) and cost 86 tokens each. Six of twenty `search` queries find no
+  symbol. A corpus-derived frame naturally asks for rare things; real users ask
+  for things they expect to exist. This frame therefore prices misses, and a
+  miss is cheap — which pushes the aggregate up.
+- The opposite pull is there too: the two `word`-stratum queries (`advanced`,
+  `nestjs`) are the two most expensive items in both baskets, 2 128 and 2 244
+  tokens on `search_text`, an order of magnitude above the phrase stratum.
+
+Both effects were in the frame before it was run, both are stated in the strata
+rules, and neither was tuned after seeing the result. That is what the
+preregistration buys — not accuracy.
+
+**Known contamination, found during the run and not fixed here.** The bench
+indexes this repository, and this repository now contains the frame:
+`benchmarks/response-tokens/frame.json` and `docs/perf/response-tokens.json`
+both hold every query string as literal text, so a frame query can match the
+artifact that records it. `search { query: "extract subscript" }` returns
+`total: 0` symbols and falls back to text matches whose first two hits are those
+two files. The bias is **conservative for the headline** — it adds tokens to the
+measured side, which lowers the reduction — but it grows every time the artifact
+grows, and it needs excluding from the bench's corpus before the next run.
+
+**What this does not fix.** The control arm is still absent: `baseline_per_call`
+remains the hand-written `RAW_COST_ESTIMATES` table, not a measured `Read`/`Grep`
+alternative. A 67.4% against an estimated baseline is still an estimate on one
+side. With the frame now registered, that is again the outstanding work on this
+measurement, and it is the last structural one.
+
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on
 {{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.
