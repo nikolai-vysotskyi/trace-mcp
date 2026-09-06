@@ -7,7 +7,6 @@
 // server is wired (see src/server/transport-hardening.ts).
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
-import { startParentDeathWatch } from './server/parent-death-watch.js';
 import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
@@ -81,7 +80,14 @@ import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
 import { handleReindexFile } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
-import { StdioSession } from './daemon/router/session.js';
+import { runStdioSession, StdioSession } from './daemon/router/session.js';
+// Statically imported (unlike session.ts's own default dynamic import) so
+// `serve`'s SnapshotBackend fast path (TRA-948) resolves it near-instantly
+// from this already-loaded reference below, instead of paying a first-load
+// cost inside its <400ms budget — cli.js already carries this whole
+// dependency tree via its other commands, so there is nothing to save by
+// deferring it here the way the thin proxy entry does (TRA-970).
+import { SnapshotBackend } from './daemon/router/snapshot-backend.js';
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
 import {
@@ -90,7 +96,6 @@ import {
   DEFAULT_DAEMON_PORT,
   ensureGlobalDirs,
   GLOBAL_CONFIG_PATH,
-  getDbPath,
   INDEX_DIR,
   TOPOLOGY_DB_PATH,
 } from './global.js';
@@ -117,6 +122,7 @@ import {
   getProject,
   listProjects,
   pruneStaleProjects,
+  resolveDbPath,
   resolveRegisteredAncestor,
   sweepEphemeralDbs,
   updateLastIndexed,
@@ -149,17 +155,6 @@ import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
-
-/**
- * Resolve DB path for a project:
- * 1. Check registry for the project root
- * 2. Fall back to global path computed from project root
- */
-function resolveDbPath(projectRoot: string): string {
-  const entry = getProject(projectRoot);
-  if (entry) return entry.dbPath;
-  return getDbPath(projectRoot);
-}
 
 /**
  * Auto-discover subprojects: after indexing, detect services within the project
@@ -536,66 +531,19 @@ program
       drainTimeoutMs,
       autoSpawnDaemon,
       autoSpawnTimeoutMs,
-    });
-
-    let shuttingDown = false;
-    const shutdown = async (reason: string) => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      logger.info({ reason }, 'Shutting down trace-mcp server');
-      // #236 defect 2: orphaned sessions survived SIGTERM because graceful
-      // shutdown could hang (drain that never resolves, or the event loop
-      // starved by a synchronous indexing loop so this continuation never ran)
-      // — only SIGKILL worked. Arm a bounded hard-exit so a wedged session
-      // cannot outlive its shutdown signal. Unref'd, so it never keeps the
-      // process alive on its own.
-      // TRA-849: exit 0 — every reason that reaches here is a requested stop
-      // (signal, or the client closing stdin). Blowing the deadline means our
-      // cleanup ran long, not that the session crashed.
-      armBoundedExit(reason, {
-        exitCode: 0,
-        onTimeout: () => {
-          logger.warn({ reason }, 'Session shutdown exceeded its deadline — forcing exit');
-        },
-      });
-      try {
-        await session.shutdown(reason);
-      } catch (err) {
-        logger.warn({ err: String(err) }, 'Session shutdown errored');
-      }
-      process.exit(0);
-    };
-
-    process.on('SIGINT', () => {
-      void shutdown('SIGINT');
-    });
-    process.on('SIGTERM', () => {
-      void shutdown('SIGTERM');
-    });
-    // Orphan prevention: when the MCP client exits, stdin closes.
-    process.stdin.on('end', () => {
-      void shutdown('stdin-end');
-    });
-    process.stdin.on('close', () => {
-      void shutdown('stdin-close');
-    });
-    // #236 defect 1b: stdin close is the primary parent-death signal, but in
-    // the field ~20 orphans kept running with their stdin fd held open via an
-    // inherited pipe (ppid became 1, host long dead). Poll ppid as a cheap
-    // fallback so a reparented-to-init session shuts itself down.
-    startParentDeathWatch((reason) => {
-      logger.warn({ reason }, 'Detected orphaned session (parent died) — shutting down');
-      void shutdown(reason);
+      // See the import comment above: resolves instantly from the reference
+      // already loaded by this file, so the snapshot fast path (TRA-948)
+      // keeps its <400ms budget.
+      loadSnapshotBackend: () => Promise.resolve({ SnapshotBackend }),
     });
 
     logger.info(
       { projectRoot, indexRoot, idleTimeoutMs, daemonStabilityMs },
       'Starting trace-mcp stdio session...',
     );
-    await session.bootstrap();
-    // session.bootstrap() called stdio.start() which resolves when stdin closes.
-    // The process stays alive on the stdin event loop; shutdown handlers above
-    // take care of exit.
+    // Shared with the thin proxy entry (src/proxy-entry.ts, TRA-970) so both
+    // processes wire signals/shutdown and exit identically.
+    await runStdioSession(session);
   });
 
 program
@@ -1191,7 +1139,7 @@ program
         // container's mixed blob (#209). Falls back to the raw requested root
         // when nothing covers it — the initialize path below then auto-registers
         // it if it has root markers (reusing any existing getDbPath index).
-        const projectRoot = resolveDeepestKnownRoot(requestedRoot) ?? requestedRoot;
+        const projectRoot = (await resolveDeepestKnownRoot(requestedRoot)) ?? requestedRoot;
 
         try {
           // Route by session ID for existing sessions
@@ -1245,7 +1193,9 @@ program
               // watched projects on restart (#209). A registry project always
               // wins (full watched mode).
               const asSubproject =
-                !folderMissing && !getProject(projectRoot) && isKnownSubproject(projectRoot);
+                !folderMissing &&
+                !getProject(projectRoot) &&
+                (await isKnownSubproject(projectRoot));
               // A root present in the on-disk registry but absent from the
               // manager was idle-unloaded by the sweep
               // (project_idle_unload_minutes) — always eligible for lazy

@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.6
+# trace-mcp-launcher v0.6.7
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -598,6 +598,55 @@ heal_config() {
   return 0
 }
 
+# --- TRA-970: daemon-aware fast path ---
+#
+# When a trace-mcp daemon is already listening, exec the thin proxy bundle
+# (dist/proxy.js, sibling of cli.js) instead of cli.js itself: it skips
+# loading Commander, PluginRegistry, better-sqlite3 and tree-sitter into this
+# process entirely, rather than loading all of it and only then discovering a
+# daemon exists — cli.js pays that cost just by being started, no matter which
+# subcommand runs.
+#
+# `/dev/tcp` only proves *something* is listening on the port, not that it is
+# a healthy trace-mcp daemon — deliberately cheap and approximate. proxy.js's
+# own StdioSession makes the real call (a proper /health request) and
+# transparently falls back to local mode if this guessed wrong (see
+# src/proxy-entry.ts and src/daemon/router/session.ts). A false positive here
+# costs a little startup latency, never correctness; a false negative just
+# skips the optimization for this one run.
+daemon_port_open() {
+  local port="${TRACE_MCP_DAEMON_PORT:-3741}"
+  ( : <"/dev/tcp/127.0.0.1/$port" ) 2>/dev/null
+}
+
+# True when argv is a plain `serve` invocation this shim understands well
+# enough to route to the thin proxy: no args, `serve`, or `serve --preset X`.
+# Anything else (serve-http, doctor, add, unrecognised flags, ...) always
+# takes the full cli.js path — Commander stays the source of truth for
+# everything this heuristic does not explicitly recognise.
+is_plain_serve() {
+  case $# in
+    0) return 0 ;;
+    1) [ "$1" = "serve" ] ;;
+    3) [ "$1" = "serve" ] && [ "$2" = "--preset" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# Echoes the script to exec: the thin proxy sibling of $1 when it exists, this
+# is a plain `serve` invocation, and a daemon is reachable — $1 (cli.js)
+# otherwise. Never errors; worst case it just echoes $1 back.
+resolve_exec_target() {
+  local cli="$1" proxy
+  shift
+  proxy="$(dirname "$cli")/proxy.js"
+  if [ -f "$proxy" ] && is_plain_serve "$@" && daemon_port_open; then
+    echo "$proxy"
+  else
+    echo "$cli"
+  fi
+}
+
 # --- 3. Fast path: config is good → exec directly ---
 #
 # A config recorded before the version gate existed carries no verified major.
@@ -632,10 +681,11 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
 fi
 
 if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
-  log "exec(config) node=$NODE_PATH cli=$CLI_PATH argc=$#"
+  EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
+  log "exec(config) node=$NODE_PATH cli=$CLI_PATH target=$EXEC_TARGET argc=$#"
   PATH="$CLIENT_PATH"
   is_app_runtime "$NODE_PATH" && export ELECTRON_RUN_AS_NODE=1
-  exec "$NODE_PATH" "$CLI_PATH" "$@"
+  exec "$NODE_PATH" "$EXEC_TARGET" "$@"
 fi
 
 # --- 5. Resolve whatever the config could not ---
@@ -665,9 +715,10 @@ if [ "$HEALED" = 1 ] && [ "$USING_OVERRIDE" = 0 ]; then
   heal_config "$NODE_PATH" "$CLI_PATH" "$NODE_MAJOR"
 fi
 
-log "exec(probe) node=$NODE_PATH cli=$CLI_PATH argc=$#"
+EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
+log "exec(probe) node=$NODE_PATH cli=$CLI_PATH target=$EXEC_TARGET argc=$#"
 PATH="$CLIENT_PATH"
 # Set only for the app's own binary, never globally: the server spawns git and
 # LSP children, and an inherited ELECTRON_RUN_AS_NODE would follow them.
 is_app_runtime "$NODE_PATH" && export ELECTRON_RUN_AS_NODE=1
-exec "$NODE_PATH" "$CLI_PATH" "$@"
+exec "$NODE_PATH" "$EXEC_TARGET" "$@"

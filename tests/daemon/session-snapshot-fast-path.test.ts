@@ -42,6 +42,15 @@ vi.mock('../../src/daemon/router/local-backend.js', () => ({
 const { TraceMcpConfigSchema } = await import('../../src/config.js');
 const { initializeDatabase } = await import('../../src/db/schema.js');
 const { StdioSession } = await import('../../src/daemon/router/session.js');
+// Statically imported here for the same reason src/cli.ts imports it (TRA-970):
+// StdioSession's own default loader is a dynamic `import()`, a genuine
+// first-load the moment anything calls it — fine for the thin proxy entry,
+// which never does, but not for this test, which measures exactly the
+// <400ms budget that first load would blow. Importing it up front and
+// passing it back via `loadSnapshotBackend` mirrors what `trace-mcp serve`
+// actually does, and is what keeps this test measuring TRA-948's real
+// contract instead of an artifact of module loading order.
+const { SnapshotBackend } = await import('../../src/daemon/router/snapshot-backend.js');
 
 /** A socket that accepts and never replies — worst case for a /health probe. */
 async function startBlackHoleServer(): Promise<{ port: number; close: () => Promise<void> }> {
@@ -100,6 +109,7 @@ describe('StdioSession snapshot fast path (TRA-948)', () => {
       handshakeTimeoutMs: 0,
       stdin,
       stdout,
+      loadSnapshotBackend: () => Promise.resolve({ SnapshotBackend }),
     });
 
     const frames: Array<Record<string, unknown>> = [];
@@ -195,6 +205,7 @@ describe('StdioSession snapshot fast path (TRA-948)', () => {
       handshakeTimeoutMs: 0,
       stdin,
       stdout,
+      loadSnapshotBackend: () => Promise.resolve({ SnapshotBackend }),
     });
     await session.bootstrap();
     stdin.write(
