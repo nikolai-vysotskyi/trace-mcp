@@ -33,6 +33,46 @@ export function formatErr(e: unknown): { message: string; stack?: string } | { v
 }
 
 /**
+ * True when an error *raised by process.stdout or process.stderr* means that
+ * sink is gone for good: the pipe's reader has closed. Only ever consulted for
+ * errors emitted by those two streams, so the code alone is enough — the same
+ * code arriving from an HTTP response or any other socket never reaches here.
+ */
+export function isBrokenPipe(e: unknown): boolean {
+  const code = (e as NodeJS.ErrnoException | undefined)?.code;
+  return (
+    code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED' || code === 'ERR_STREAM_WRITE_AFTER_END'
+  );
+}
+
+/**
+ * Guard the two streams the logger writes to.
+ *
+ * When the parent that owned our stdout/stderr pipe exits without killing us,
+ * every write to it fails with EPIPE, emitted as an `error` event on the stream.
+ * With no listener that becomes an uncaught exception — and the safety net below
+ * answers an uncaught exception by *logging*, to the same dead pipe, which fails
+ * again, forever. A leaked `serve-http` was measured that way at 97% of a core
+ * and 517 MB with zero clients, 5h56m after its parent exited (TRA-921).
+ *
+ * Listening here is what makes the decision provable: the error is known to
+ * belong to stdout/stderr because the stream itself emitted it. A broken pipe
+ * means there is nowhere left to report to, so the process leaves. Any other
+ * write failure (ENOSPC, EACCES) is swallowed — a logger must not take the
+ * server down, which is the same call `attachFileLogging` makes for its own
+ * stream.
+ */
+function guardLogSinks(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      if (isBrokenPipe(err)) {
+        process.exit(0);
+      }
+    });
+  }
+}
+
+/**
  * Install `unhandledRejection` + `uncaughtException` handlers that log and keep
  * the process alive. Idempotent — safe to call from multiple entry points.
  *
@@ -55,6 +95,8 @@ export function installProcessSafetyNet(context: string): void {
       'Uncaught exception — server kept alive (safety net)',
     );
   });
+
+  guardLogSinks();
 }
 
 /** Test-only: reset the install guard so a fresh import can re-register. */
