@@ -160,6 +160,44 @@ a run on any new listing, read `ops/arrivals.md` in the private repo — the
 conclusion there has held across four independent 14-day windows and it should
 change how you value a submission.
 
+### The channel list was built from referrers, so a fast channel cannot get in (2026-09-06, TRA-1036)
+
+Every channel this ledger knows about got in by showing up as a GitHub
+*referrer* — Reddit, HN, Threads. GitHub's referrer series lags ~2 days and is
+aggregated, so a channel whose entire burst lands inside one day is invisible to
+that method by construction, not by absence. X was not in this file at all.
+
+On 2026-09-05 an unsolicited post by a 98k-follower account
+([DanKornas/2096032800793154007](https://x.com/DanKornas/status/2096032800793154007),
+5,003 views, bullets paraphrased from our README) produced 38 stars in a day
+against a one-star-a-day baseline, first star 24 minutes after the post. **What
+it converted to, and the only impression-to-install rate this project has ever
+measured, are in `ops/user-signal.md` in the private repo.** Read that number
+before proposing any new placement: it is the first bar a placement can be held
+to, and anything claimed above it owes an argument.
+
+Two things follow for this file:
+
+- **The `t.co` / `x.com` referrer read on 09-07 is a hypothesis test**, not a
+  routine reading. If they do not appear, the lag is worse than 2 days or the
+  aggregation swallowed them — either way the referrer method is weaker than
+  four "nothing arrived" windows made it look.
+- **Method for any future off-GitHub mention, three unauthenticated calls:**
+  `api.fxtwitter.com/<handle>/status/<id>` for the post's own reach, then the
+  stargazer timestamp series
+  (`gh api repos/:r/stargazers -H 'Accept: application/vnd.github.star+json'`),
+  then the `installs_28d.new` delta on `origin/adoption-data`. Together they
+  answer "did this produce users"; the referrer table answers only "did somebody
+  click through within the window".
+
+**Dead end, verified 2026-09-06 — replies to an X post are not readable from a
+run.** WebFetch on `x.com` returns HTTP 402; `publish.twitter.com/oembed`
+returns empty; the nitter mirrors `nitter.poast.org`, `nitter.privacydev.net`,
+`nitter.net` and `lightbrd.com` are all dead; `xcancel.com` was shut down by a
+cease-and-desist on 2026-08-24. `api.fxtwitter.com` gives the post's metrics
+without auth but not its replies. Do not spend another run on mirrors — this one
+needs an account (below).
+
 
 ### Does the listing actually link the site — external domains linking trace-mcp.com (TRA-792)
 
@@ -527,6 +565,10 @@ Not blockers to route around — genuinely outside what an agent may do alone:
   requires GitHub or Google OAuth login. Pasting the repo URL is the whole
   submission; whether their scanner picks up our root `plugin.json` / `mcp.json`
   is unverified until someone submits and reads back what it found.
+- **Reading the replies to an X post about us** — 15 replies under the
+  2026-09-05 post are the only live user reaction to trace-mcp that exists
+  anywhere, and X serves them only to a logged-in account (dead ends above).
+  Bundled into TRA-633 as one line rather than sent as its own ping.
 - **Anything paid** — see above.
 - Everything else here was self-serve: the mcpservers.org form takes a repo URL
   and an email, the Cline submission is a GitHub issue, and the registry publish
