@@ -29,6 +29,7 @@ import {
   type ExecFileException,
   type ExecFileOptions,
 } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
@@ -149,7 +150,11 @@ function writeIfChanged(filePath: string, content: string, mode: number): boolea
     /* missing or unreadable — write it */
   }
   ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
+  // `.tmp.<pid>.<12 hex>`, not an epoch: that is the shape the server's orphan
+  // sweeper matches, and it sweeps both the state home and its `bin` dir. An
+  // app killed between the write and the rename used to leak a file here that
+  // nothing would ever collect (TRA-982).
+  const tmp = `${filePath}.tmp.${process.pid}.${randomBytes(6).toString('hex')}`;
   fs.writeFileSync(tmp, content, { mode });
   fs.renameSync(tmp, filePath);
   if (!IS_WINDOWS) fs.chmodSync(filePath, mode);

@@ -11,6 +11,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLauncherPath, installLauncher, legacyCompatCmdBody } from '../../src/init/launcher.js';
 import { LAUNCHER_VERSION } from '../../src/init/types.js';
+import { sweepOrphanTmpFiles } from '../../src/utils/atomic-write.js';
 
 const STALE_SHIM = '#!/bin/bash\n# trace-mcp-launcher v0.3.0\nexit 127\n';
 
@@ -186,6 +187,55 @@ describe.skipIf(process.platform === 'win32')('legacy bin compat', () => {
       expect(fs.lstatSync(getLauncherPath()).isSymbolicLink()).toBe(false);
     } finally {
       delete process.env.TRACE_MCP_HOME;
+    }
+  });
+});
+
+/**
+ * TRA-982: `bin` is in SWEPT_STATE_DIRS (src/utils/atomic-write.ts) precisely so
+ * a write interrupted next to the shim gets collected. The sweeper matches
+ * `.tmp.<pid>.<12 hex>` — the trailing hex is what keeps it from eating a user
+ * file that merely has ".tmp." in its name — and this writer emitted
+ * `.tmp.<pid>` with no suffix at all, so a process killed between the symlink
+ * and the rename left a file in the launcher's own bin directory that nothing
+ * would ever collect.
+ */
+describe.skipIf(process.platform === 'win32')('legacy compat tmp is sweepable', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-legacy-tmp-'));
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+    delete process.env.TRACE_MCP_HOME;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('names its tmp so the orphan sweeper collects it after a crash', () => {
+    const legacyPath = path.join(home, '.trace-mcp', 'bin', 'trace-mcp');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    fs.writeFileSync(legacyPath, STALE_SHIM, { mode: 0o755 });
+
+    const tmpNames: string[] = [];
+    const realSymlink = fs.symlinkSync;
+    vi.spyOn(fs, 'symlinkSync').mockImplementation((target, p, type) => {
+      tmpNames.push(path.basename(p as string));
+      return realSymlink(target, p as string, type);
+    });
+
+    installLauncher({ force: true });
+
+    expect(tmpNames.length).toBeGreaterThan(0);
+    for (const name of tmpNames) {
+      // Must survive a full sweep pass, not just look right.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-sweep-'));
+      fs.writeFileSync(path.join(dir, name), '');
+      fs.utimesSync(path.join(dir, name), new Date(0), new Date(0));
+      expect(sweepOrphanTmpFiles(dir).map((f) => path.basename(f))).toEqual([name]);
+      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 });
