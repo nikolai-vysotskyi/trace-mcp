@@ -175,8 +175,11 @@ export const LOCKS_DIR = path.join(TRACE_MCP_HOME, 'locks');
  */
 export const STATUS_DIR = path.join(TRACE_MCP_HOME, 'status');
 
-/** Default port the daemon listens on. */
-export const DEFAULT_DAEMON_PORT = 3741;
+/** Default port the daemon listens on. Override with TRACE_MCP_DAEMON_PORT. */
+export const DEFAULT_DAEMON_PORT =
+  process.env.TRACE_MCP_DAEMON_PORT && !Number.isNaN(Number(process.env.TRACE_MCP_DAEMON_PORT))
+    ? Number(process.env.TRACE_MCP_DAEMON_PORT)
+    : 3741;
 
 /** Daemon log file path. */
 export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');

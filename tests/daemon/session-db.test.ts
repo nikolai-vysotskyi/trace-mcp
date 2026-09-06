@@ -46,6 +46,8 @@ describe('seedSessionDbFromShared', () => {
   it('copies the shared DB content into the session path', async () => {
     const shared = path.join(dir, 'project-abc.db');
     const db = new Database(shared);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    db.prepare(`INSERT INTO files (path) VALUES (?)`).run('src/index.ts');
     db.exec(`CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)`);
     db.prepare(`INSERT INTO t (v) VALUES (?)`).run('hello');
     db.close();
@@ -58,6 +60,20 @@ describe('seedSessionDbFromShared', () => {
     const row = out.prepare(`SELECT v FROM t`).get() as { v: string };
     out.close();
     expect(row.v).toBe('hello');
+  });
+
+  it('returns false when the shared DB exists but holds no indexed files', async () => {
+    // Project registration creates the shared DB before anything is indexed.
+    // Seeding from it used to succeed, which latched the session read-only:
+    // no indexAll, no watcher, an empty index served forever (TRA-931).
+    const shared = path.join(dir, 'project-empty.db');
+    const db = new Database(shared);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    db.close();
+
+    const session = path.join(dir, 'project-empty-session-00112233.db');
+    const seeded = await seedSessionDbFromShared(shared, session);
+    expect(seeded).toBe(false);
   });
 
   it('returns false when the shared DB does not exist', async () => {
@@ -136,6 +152,9 @@ describe('sweepOrphanedSessionDbs', () => {
   });
 
   it('returns zeros for a missing directory', () => {
-    expect(sweepOrphanedSessionDbs(path.join(dir, 'nope'))).toEqual({ scanned: 0, removed: 0 });
+    expect(sweepOrphanedSessionDbs(path.join(dir, 'nope'))).toEqual({
+      scanned: 0,
+      removed: 0,
+    });
   });
 });

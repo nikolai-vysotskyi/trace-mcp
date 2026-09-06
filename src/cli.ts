@@ -585,7 +585,7 @@ program
   .description(
     'Start MCP server (HTTP/SSE transport) — daemon mode, indexes all registered projects',
   )
-  .option('-p, --port <port>', 'Port to listen on', '3741')
+  .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_DAEMON_PORT))
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
   .option(
     '--allow-remote',
