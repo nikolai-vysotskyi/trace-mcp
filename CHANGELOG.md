@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 * **docs:** the mark and the wordmark as two generated lockups (TRA-780) ([#1029](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1029)) ([ec5e259](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ec5e259c9894e66c161f472b533dfda22677bef9))
 
 
+### Bug Fixes
+
+* **app:** give macOS back its dock margin, the icon shipped a fifth too big (TRA-780) ([#1032](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1032)) ([23d7144](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23d71442a2f408cd7b598103097c2bd5f0e20947))
+
+
 ### Documentation
 
 * **ops:** record the awesome-AI-driven-development submission and the trial-plan issue sweep ([#1030](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1030)) ([60f5e76](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60f5e76510c65fd51d6503fed7ff3cdb44c4ef3b))
