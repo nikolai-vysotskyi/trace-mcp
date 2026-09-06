@@ -349,3 +349,44 @@ narrowing it to the graph is the specific move this file exists to prevent.
   Cursor and Windsurf get a rules file, everything else gets tool descriptions.
   A category claim that only lands on one client is a narrower claim than it
   reads as. TRA-673 owns finding out.
+
+## Where the category term gets a page — decided (TRA-1024, 2026-09-06)
+
+The cluster above (`code graph mcp` / `codegraph mcp`) needed a landing target,
+and there were two candidates: repurpose `comparisons.html`, whose title already
+reads "Serena, Repomix & 20+ Code Graph MCP Servers Compared", or build a new
+page. **Decided: a new compact page, `/code-graph-mcp.html`.** Three reasons, in
+the order they settled it:
+
+1. **The SERP is made of product pages, not tables.** Live top-20, 2026-09-06:
+   `code-review-graph.com` at 6, `depgraph.ai` at 10, `codecontextgraph.com` at
+   16 — standalone product sites the size of ours. The one comparative result is
+   a third-party listicle at 12, which is a format we cannot occupy from our own
+   domain anyway. `comparisons.md` is 96 KB of source and does not rank for the
+   head term today after five months of trying.
+2. **Repurposing costs a position we already hold.** `comparisons.html` ranks
+   #1–2 on the comparative long tail (`serena mcp vs codegraph`, `codegraph vs
+   serena`, `repomix vs codegraph`). Retitling and compacting it toward "what is
+   a code graph MCP server" trades a page that wins for a page that might.
+3. **The intent does not match.** A reader typing the bare category term is
+   asking what the thing is and which one to install, not for a 20-product
+   matrix. The matrix is the second click, and the new page links to it.
+
+Constraint for whoever writes it: compact — product-shaped, one screen of what
+it is and what it costs, then out to `comparisons.html` for the deep table and
+to the `/vs/` pages for named peers. If it grows past a few hundred lines it has
+become `comparisons.html` again and the decision above is void.
+
+### Correction: `serena mcp` is not 2400/mo of addressable volume
+
+`serena mcp` (2400/mo) is the largest term in the category and we have
+`docs/vs/serena.md` pointed at it. The live top-20 contains **no comparison page
+and no "alternative" page**: the official repo and docs (3), MCP directories
+(6), install tutorials (6), Reddit, YouTube (2), one benchmark. The intent is
+"what is this / how do I install it", which a `trace-mcp vs Serena` page cannot
+serve by construction; what it can serve is `serena mcp alternative` — **10/mo**.
+`repomix` (1600/mo) fails the same check.
+
+This does not retire `vs/serena.md`: it earns the comparative long tail, where
+it ranks #1 (TRA-1022). It retires the *arithmetic* — 2400 and 1600 are not
+volume we can address with the pages we have, and no plan should count them.
