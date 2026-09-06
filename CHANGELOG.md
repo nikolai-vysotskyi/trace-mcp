@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.21.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.20.0...v3.21.0) (2026-09-06)
+
+
+### Features
+
+* **daemon:** thin proxy entrypoint cuts connected-session RSS ~175MB→~73MB (TRA-970) ([#1003](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1003)) ([b77a272](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b77a2722e646fbf3256614c9753b8219cdb56b8e))
+* **guard:** nudge long sessions into the StateEngine loop (TRA-763) ([#1010](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1010)) ([d0a6002](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0a6002acd52cea53d49b0fb11f87829b81a3965))
+* **tools:** verify an existing document against the index (TRA-1023) ([#1027](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1027)) ([7640318](https://github.com/nikolai-vysotskyi/trace-mcp/commit/76403187a33a7a43ab36bc6b4fe5b22e61dd77cd))
+
+
+### Bug Fixes
+
+* **launcher:** recover node and cli.js from the app bundle (TRA-996) ([#1011](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1011)) ([e51d4d9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e51d4d92687831c29e9aa2f695a1c89f2f3bcab9))
+* **postinstall:** stop the daemon only when a new binary was installed (TRA-1015) ([#1020](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1020)) ([7f53f32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f53f325e8c70d030199c632eca9109267eaf72f))
+
+
+### Documentation
+
+* code graph mcp cluster — landing-target decision, depgraph.ai facts, tracked query set ([#1026](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1026)) ([81650e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/81650e010e1272b0b468b1d14fe6351cad80346b))
+* **ops:** make the GitHub mention sweep a repeatable channel (TRA-998) ([#1012](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1012)) ([ff75c50](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ff75c50c8325968a6d1597ff4ddee87371555cd0))
+* **ops:** record the awesome-hermes-agent submission and the mcp-servers-nix door ([#1018](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1018)) ([3a61b8d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a61b8d533da16d1e88195f5e6f51ae41c3b735b))
+* **ops:** record what actually invalidates a prompt-cache prefix (TRA-858) ([#1016](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1016)) ([10ede73](https://github.com/nikolai-vysotskyi/trace-mcp/commit/10ede73ed313a954a0b8e1d9a3be38f0042a400e))
+* **ops:** resubmit sitemap to GSC, rule out /vs/ subdirectory (TRA-1022) ([#1024](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1024)) ([11f7684](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11f768496c04ddf4ac291b3088c8a6df10169dc8))
+* **perf:** generate the per-tool response-token table instead of typing it (TRA-1020) ([#1023](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1023)) ([bde54ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bde54ee6eb83e55cac5800f7f5ff9d5e24f0cb00))
+* **seo:** link `tools-reference.html` to MCP tracing, record the TRA-1025 re-derivation ([#1025](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1025)) ([3eaed43](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3eaed43355d656bca232aa2dc2040dacbea79229))
+
+
+### Tests
+
+* **bench:** measure PR-review quality, not just tokens (TRA-568) ([#1017](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1017)) ([bc67ad2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bc67ad2899f28db11b86f5b388c8d83b5e952dda))
+* **launcher:** a read-only state home must not cost the session (TRA-1016) ([#1021](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1021)) ([8c9d0ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8c9d0ee4db2b144039e17feb4f367c423b784d8d))
+* **launcher:** cover concurrent client starts on the probe+heal path (TRA-1029) ([#1031](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1031)) ([a920cba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a920cba0108e003df238b6cef79f0cdd8572ea40))
+* **tools:** gate read-only tool output determinism (TRA-858) ([#1015](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1015)) ([f3bee49](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f3bee49df0ff3194d6530aa1a8c7f5c8db0e2fd3))
+
+
+### CI/CD
+
+* cache pnpm activation via corepack instead of re-downloading per job ([#1014](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1014)) ([6aae6cb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6aae6cb38af88801c9780a1234510a64678a7ad5))
+
 ## [3.20.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.19.0...v3.20.0) (2026-09-06)
 
 
