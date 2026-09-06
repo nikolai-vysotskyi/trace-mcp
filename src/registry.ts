@@ -588,12 +588,34 @@ const EPHEMERAL_WORKDIR_PATTERN =
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
 
 /**
- * True when `root` is a one-shot agent-run checkout (see
- * {@link EPHEMERAL_WORKDIR_PATTERN}). Such roots are never persisted to
+ * The same runtime's other one-shot layout: a task given a scratch directory
+ * instead of a workspace checkout lands in `<tmp>/multica-task-<run-id>/...`.
+ * `EPHEMERAL_WORKDIR_PATTERN` above never matched those, so each was persisted
+ * like a real project — 17 of the 37 rows in the reported registry.json, all
+ * dead within the hour, each pinning a `.config.json` section for the full
+ * 7-day `sweepMissingRoots` grace (TRA-992).
+ *
+ * The container is matched, not the leaf: a run drops several roots under it
+ * (its own scratch dirs, benchmark fixtures) and none outlive the run. The
+ * numeric run id keeps this off a user directory that merely says
+ * "multica-task".
+ *
+ * Note for tests: such a runtime also exports TMPDIR as its own task
+ * directory, so `os.tmpdir()` itself can match this. A fixture that must stay
+ * persistent has to be built outside it — see `tmpRootOutsideTaskDir` in
+ * tests/test-utils.ts.
+ */
+const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
+
+/**
+ * True when `root` is a one-shot agent-run checkout, in either layout the
+ * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
+ * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
  * registry.json — see the `_ephemeralEntries` note above.
  */
 export function isEphemeralProjectRoot(root: string): boolean {
-  return EPHEMERAL_WORKDIR_PATTERN.test(path.resolve(root));
+  const abs = path.resolve(root);
+  return EPHEMERAL_WORKDIR_PATTERN.test(abs) || EPHEMERAL_TASK_DIR_PATTERN.test(abs);
 }
 
 export interface EphemeralProjectCandidate {
@@ -619,7 +641,7 @@ export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandida
   const now = Date.now();
   const out: EphemeralProjectCandidate[] = [];
   for (const entry of listProjects()) {
-    if (!EPHEMERAL_WORKDIR_PATTERN.test(entry.root)) continue;
+    if (!isEphemeralProjectRoot(entry.root)) continue;
     const addedMs = Date.parse(entry.addedAt);
     if (Number.isNaN(addedMs)) continue;
     const ageHours = (now - addedMs) / (60 * 60 * 1000);
