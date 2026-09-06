@@ -249,4 +249,64 @@ namespace Acme.App
       removeTmpDir(fixtureDir);
     }
   });
+
+  it('relinks to the new declaring file when a type moves, without reindexing the importer', async () => {
+    const fixtureDir = createTmpFixture(
+      {
+        'src/App.cs': `using static Acme.Store.Repo;
+
+namespace Acme.App
+{
+    public class Program
+    {
+        Repo repo;
+    }
+}
+`,
+        'src/One.cs': `namespace Acme.Store
+{
+    public class Repo {}
+}
+`,
+      },
+      'trace-mcp-csharp-move-',
+    );
+    try {
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerLanguagePlugin(new CSharpLanguagePlugin());
+      const pipeline = new IndexingPipeline(store, registry, makeConfig(fixtureDir), fixtureDir);
+      await pipeline.indexAll();
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/One.cs']));
+
+      // Move Repo out of One.cs and into a new Two.cs — App.cs, the
+      // importer, is untouched; both target files are reindexed together,
+      // as a file watcher would batch them.
+      const onePath = path.join(fixtureDir, 'src/One.cs');
+      const twoPath = path.join(fixtureDir, 'src/Two.cs');
+      fs.writeFileSync(
+        onePath,
+        `namespace Acme.Store
+{
+}
+`,
+      );
+      fs.writeFileSync(
+        twoPath,
+        `namespace Acme.Store
+{
+    public class Repo {}
+}
+`,
+      );
+      await pipeline.indexFiles([onePath, twoPath]);
+
+      // The stale edge into One.cs is gone, and the resolver relinked to
+      // Two.cs using the stale edge's own source + specifier — no reindex
+      // of App.cs was needed for this to converge.
+      expect(importTargets(store, 'src/App.cs')).toEqual(new Set(['src/Two.cs']));
+    } finally {
+      removeTmpDir(fixtureDir);
+    }
+  });
 });
