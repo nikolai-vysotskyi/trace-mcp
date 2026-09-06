@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.20.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.19.0...v3.20.0) (2026-09-06)
+
+
+### Features
+
+* **doctor:** validate the launcher path clients actually spawn ([#988](https://github.com/nikolai-vysotskyi/trace-mcp/issues/988)) ([6146312](https://github.com/nikolai-vysotskyi/trace-mcp/commit/614631242351761a60809bf4f4de8b2672759330))
+* **telemetry:** privacy page, first-run disclosure notice, config opt-out ([#992](https://github.com/nikolai-vysotskyi/trace-mcp/issues/992)) ([6a4b593](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6a4b593cb7c15eb94104dac77edaf895d7b6cf5a))
+
+
+### Bug Fixes
+
+* **app:** every Clients row names its own state (TRA-479) ([#1000](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1000)) ([e62dd88](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e62dd8826da1346452dbcce4c5965423cff69aed))
+* **config:** cap unregistered project sections in .config.json (TRA-706) ([#985](https://github.com/nikolai-vysotskyi/trace-mcp/issues/985)) ([c0ae24c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c0ae24cdee35aac0f92b6bb5bd7a9bc3f4cc06d9))
+* **indexer:** resolve Astro/Svelte imports, no new pass needed (TRA-451) ([#993](https://github.com/nikolai-vysotskyi/trace-mcp/issues/993)) ([034d3a9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/034d3a9835cbfac731b6f34ad183c2d623a46355))
+* **indexer:** scale ExtractPool to zero within 60s of daemon idle (TRA-971) ([#999](https://github.com/nikolai-vysotskyi/trace-mcp/issues/999)) ([993fa9b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/993fa9beebd83dc574cfafa8982c553a587c1b51))
+* **launcher:** name control-plane tmp files so the orphan sweeper collects them (TRA-982) ([#1004](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1004)) ([8adbee6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8adbee65719e9357c39305a3d99a483256e899a8))
+* **quality:** index the metadata-existence checks in antipatterns.ts (TRA-940) ([#959](https://github.com/nikolai-vysotskyi/trace-mcp/issues/959)) ([cfc7dca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cfc7dca6f86265d4caf021550fd4fe2775064367))
+* **registry:** classify &lt;tmp&gt;/multica-task-&lt;id&gt; checkouts as ephemeral (TRA-992) ([#1007](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1007)) ([68d0e0c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68d0e0c579d0226497fe0b37476e86a2e093eb26))
+* **search:** exclude synthetic module-body pseudo-symbols on every retrieval path (TRA-985) ([#1006](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1006)) ([e910bad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e910bad78dfc9266f5236fd04369aef87b51b14a))
+* **search:** reduce instead of spreading the FTS result set ([#957](https://github.com/nikolai-vysotskyi/trace-mcp/issues/957)) ([#976](https://github.com/nikolai-vysotskyi/trace-mcp/issues/976)) ([9318251](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9318251dc32f9a1a234a72a7c71df8872f22065c))
+* **seo:** let the sitemap generator advance lastmod as soon as git does ([#1009](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1009)) ([db9c36d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db9c36dc2b531120865d163fdc2c277e58c33ba1))
+* **server:** stop an orphaned server spinning forever on a dead log pipe (TRA-921) ([#986](https://github.com/nikolai-vysotskyi/trace-mcp/issues/986)) ([67affca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/67affcae52af02570e2a70fabf55c03c26ec7f24))
+* **test:** bump testTimeout in onnx.test.ts past cold-import contention (TRA-961) ([#995](https://github.com/nikolai-vysotskyi/trace-mcp/issues/995)) ([546f930](https://github.com/nikolai-vysotskyi/trace-mcp/commit/546f93060a9342ff1c7924af133ace6ab276ca94))
+
+
+### Performance
+
+* **bench:** add session-scaling benchmark harness and v3.18.0 baseline (TRA-931) ([#956](https://github.com/nikolai-vysotskyi/trace-mcp/issues/956)) ([529f714](https://github.com/nikolai-vysotskyi/trace-mcp/commit/529f7145634a8cc8e175402e2b3e6fcc4fdfe2cb))
+* **bench:** register a sampling frame before measuring response tokens (TRA-993) ([#1008](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1008)) ([af2f16d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af2f16dfa66ea0610d3464eeecd449f51c6d0d77))
+* **daemon:** serve first requests from the index snapshot before the daemon handshake (TRA-948) ([#1001](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1001)) ([ffc67d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ffc67d52f3354e1f0804949c75c614dc54722cf2))
+* **graph:** stop the per-file symbol N+1 in the daemon's graph build (TRA-651) ([#1002](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1002)) ([a83a0b5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a83a0b5dac9b264daefc847a4ecd7e33c8fcbff2))
+* **indexer:** measure indexing throughput by stage before optimizing (TRA-936) ([#968](https://github.com/nikolai-vysotskyi/trace-mcp/issues/968)) ([4f78203](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f7820380b9ce70ac9f3d138461cdf1e3524f983))
+
+
+### Documentation
+
+* **app:** make electron-cdp's header describe the flags it actually has ([#994](https://github.com/nikolai-vysotskyi/trace-mcp/issues/994)) ([384a171](https://github.com/nikolai-vysotskyi/trace-mcp/commit/384a171778aed875039a091860caff1a28d670d8))
+* lead with the claim, not the mechanism (TRA-918) ([#983](https://github.com/nikolai-vysotskyi/trace-mcp/issues/983)) ([a0ce61d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a0ce61dc3eff8b3f295fef730baaf487e3ab9a38))
+* **ops:** record the 2026-09-06 index reading — one /vs/ URL crossed (TRA-973) ([#989](https://github.com/nikolai-vysotskyi/trace-mcp/issues/989)) ([ca6d116](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca6d1160f9002d282354de388c7ce4e89e67c4e2))
+* **ops:** record the GetBindu submission and the generative auto-index finding (TRA-984) ([#1005](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1005)) ([9297924](https://github.com/nikolai-vysotskyi/trace-mcp/commit/92979247a23eccedb291b0a16beef63acd820b4e))
+* **registry:** drop the tool count from the server.json storefront (TRA-761) ([#987](https://github.com/nikolai-vysotskyi/trace-mcp/issues/987)) ([61b8b5b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61b8b5b5b8a523e3310b833c29d66993ce4e568e))
+* **seo:** retarget the comparisons hub at the Serena/Repomix query cluster ([#984](https://github.com/nikolai-vysotskyi/trace-mcp/issues/984)) ([960d6a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/960d6a2de1f0eedc5d66c0c31026eb73b052e2e8))
+* **seo:** route `mcp tracing` impressions to /telemetry.html (TRA-974) ([#990](https://github.com/nikolai-vysotskyi/trace-mcp/issues/990)) ([7d391a6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7d391a6c4274ac8f0be726669f6acb8f40bf92e5))
+* **site:** give door 2 a page — what `trace init` installs (TRA-919) ([#998](https://github.com/nikolai-vysotskyi/trace-mcp/issues/998)) ([fe47548](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fe475487c21857126e8e1b42497b611f564b7f97))
+
+
+### Tests
+
+* **logs:** pin the rotation ceiling on every log under ~/.trace (TRA-707) ([#996](https://github.com/nikolai-vysotskyi/trace-mcp/issues/996)) ([5167af3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5167af3ec824d48ae0545c4f5a2785d018a88439))
+* **scale:** run the real tools against a 150k-symbol index (TRA-977) ([#997](https://github.com/nikolai-vysotskyi/trace-mcp/issues/997)) ([27f35ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27f35efef2bfd8fdaa9e05d41f08630e815bb3a7))
+
 ## [3.19.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.18.0...v3.19.0) (2026-09-05)
 
 
