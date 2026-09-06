@@ -32,6 +32,15 @@ export const AUTO_REFRESH_INTERVAL_MS = 300_000; // 5 min — matches backend ca
 export const STATUS_TRANSITION_DEBOUNCE_MS = 1000;
 
 /**
+ * How often to re-ask while the daemon reports `computing`. The endpoint now
+ * answers instantly from a cache that a background pass fills (TRA-1053), so
+ * a first-ever launch gets file/symbol counts first and the analysed metrics
+ * a few seconds later — the five-minute fallback would leave that half-filled
+ * screen up for five minutes.
+ */
+export const COMPUTING_POLL_INTERVAL_MS = 3000;
+
+/**
  * How long a degraded reading has to hold before the banner appears. The event
  * feed drops and re-opens in well under a second while the daemon is loaded,
  * and a banner that blinks in and out of a screen reads as broken rather than
@@ -98,6 +107,12 @@ export interface UseWorkspaceProjectsResult {
   errorKind: MetricsErrorKind | null;
   /** One reading of how much the daemon is answering. */
   daemonState: DaemonState;
+  /**
+   * When the daemon last finished a metrics pass, epoch ms; 0 = never. The
+   * cache outlives a daemon restart, so the screen would otherwise be handed
+   * numbers of unknowable age (TRA-1072).
+   */
+  metricsComputedAt: number;
   connected: boolean;
   restarting: boolean;
   addProject(root: string): Promise<void>;
@@ -204,6 +219,10 @@ export function useDaemonProcessAlive(active: boolean): boolean | undefined {
 interface MetricsSetters {
   setMetrics: (m: ProjectHealthMetrics[]) => void;
   setErrorKind: (k: MetricsErrorKind | null) => void;
+  /** True while the daemon is still filling in the expensive metrics. */
+  setComputing?: (v: boolean) => void;
+  /** When the daemon last finished a metrics pass; 0 = never. */
+  setComputedAt?: (v: number) => void;
 }
 
 /** Classify a fetch rejection. A timeout means slow, not gone. */
@@ -231,9 +250,15 @@ export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean
       setters.setErrorKind('server');
       return false;
     }
-    const data = (await res.json()) as { projects: ProjectHealthMetrics[] };
+    const data = (await res.json()) as {
+      projects: ProjectHealthMetrics[];
+      computing?: boolean;
+      computedAt?: number;
+    };
     setters.setMetrics(data.projects ?? []);
     setters.setErrorKind(null);
+    setters.setComputing?.(data.computing === true);
+    setters.setComputedAt?.(typeof data.computedAt === 'number' ? data.computedAt : 0);
     return true;
   } catch (err) {
     setters.setErrorKind(classifyMetricsError(err));
@@ -252,6 +277,15 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<MetricsErrorKind | null>(null);
+  const [computing, setComputing] = useState(false);
+  /**
+   * Bumped after every metrics fetch. `computing` alone cannot re-arm the
+   * poll below: React bails out of a `setComputing(true)` while the state is
+   * already `true`, so the effect would fire exactly once and then leave the
+   * screen on counts-only until the five-minute fallback.
+   */
+  const [pollTick, setPollTick] = useState(0);
+  const [metricsComputedAt, setComputedAt] = useState(0);
 
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -268,8 +302,11 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
         saveMetricsSnapshot(m);
       },
       setErrorKind,
+      setComputing,
+      setComputedAt,
     });
     if (ok) setMetricsLoaded(true);
+    setPollTick((n) => n + 1);
   }, []);
 
   // Initial fetch + 5-min polling fallback.
@@ -286,6 +323,13 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
       if (debounceRef.current != null) clearTimeout(debounceRef.current);
     };
   }, [fetchMetrics, resetTimer]);
+
+  // Fast re-poll while the background metrics pass is still running.
+  useEffect(() => {
+    if (!computing) return;
+    const id = setTimeout(() => void fetchMetrics(), COMPUTING_POLL_INTERVAL_MS);
+    return () => clearTimeout(id);
+  }, [computing, pollTick, fetchMetrics]);
 
   // Reactive invalidation: when any daemon project completes a pipeline,
   // schedule a debounced metrics refetch.
@@ -379,6 +423,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     error,
     errorKind,
     daemonState,
+    metricsComputedAt,
     connected: daemon.connected,
     restarting: daemon.restarting,
     addProject: daemon.addProject,

@@ -32,6 +32,7 @@ export const workspace = {
   busyIndexingFresh_other:
     "Indexing {{indexing}} of {{total}} projects. The numbers arrive when it's done.",
   busyStale: 'The daemon is busy. These are the last indexed numbers.',
+  metricsAge: 'These numbers were computed {{age}}. Refreshing them now.',
   busyFresh: "The daemon is busy. The numbers arrive when it's done.",
   tryAgain: 'Try again',
   retrying: 'Retrying…',

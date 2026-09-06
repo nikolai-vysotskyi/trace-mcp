@@ -16,6 +16,7 @@ export const workspace = {
   busyIndexingFresh_other:
     '{{total}} 件中 {{indexing}} 件のプロジェクトをインデックス中です。完了すると数値が表示されます。',
   busyStale: 'デーモンが処理中です。表示中の数値は前回のものです。',
+  metricsAge: 'これらの数値は{{age}}に計算されました。現在更新中です。',
   busyFresh: 'デーモンが処理中です。完了すると数値が表示されます。',
   tryAgain: '再試行',
   retrying: '再試行中…',

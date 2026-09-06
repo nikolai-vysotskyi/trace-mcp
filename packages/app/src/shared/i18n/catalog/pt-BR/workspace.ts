@@ -24,6 +24,7 @@ export const workspace = {
   busyIndexingFresh_other:
     'Indexando {{indexing}} de {{total}} projetos. Os números chegam quando terminar.',
   busyStale: 'O daemon está ocupado. Estes são os últimos números indexados.',
+  metricsAge: 'Estes números foram calculados {{age}}. Atualizando agora.',
   busyFresh: 'O daemon está ocupado. Os números chegam quando terminar.',
   tryAgain: 'Tentar de novo',
   retrying: 'Tentando de novo…',
