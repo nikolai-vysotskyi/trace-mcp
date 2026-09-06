@@ -1,0 +1,46 @@
+{
+  "data": [
+    {
+      "file": "src/errors.ts",
+      "file_id": 469,
+      "score": 0.039312,
+      "in_degree": 194,
+      "out_degree": 1
+    },
+    {
+      "file": "src/plugin-api/types.ts",
+      "file_id": 866,
+      "score": 0.027509,
+      "in_degree": 307,
+      "out_degree": 1
+    },
+    {
+      "file": "src/db/store.ts",
+      "file_id": 466,
+      "score": 0.018857,
+      "in_degree": 397,
+      "out_degree": 9
+    },
+    {
+      "file": "src/logger.ts",
+      "file_id": 792,
+      "score": 0.012614,
+      "in_degree": 164,
+      "out_degree": 4
+    },
+    {
+      "file": "tests/test-utils.ts",
+      "file_id": 1816,
+      "score": 0.010038,
+      "in_degree": 324,
+      "out_degree": 5
+    },
+    {
+      "file": "src/db/types.ts",
+      "file_id": 467,
+      "score": 0.007374,
+      "in_degree": 47,
+      "out_degree": 0
+    }
+  ]
+}

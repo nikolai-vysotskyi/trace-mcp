@@ -73,7 +73,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Heuristic triage, not a validated risk metric — treat as "look here first" (calibration notes in _methodology). Requires git. For per-file bug-risk triage use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Supports `output_format: "toon"`.',
+    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Heuristic triage, not validated (calibration notes in _methodology). Requires git. For per-file bug-risk triage use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, max_cyclomatic, commits, assessment, confidence_level }], total }. Supports `output_format: "toon"`.',
     {
       since_days: z
         .number()

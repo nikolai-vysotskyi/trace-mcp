@@ -1,0 +1,23 @@
+{
+  "symbols": [
+    {
+      "id": 1898,
+      "name": "ProjectManager",
+      "fqn": null,
+      "kind": "class",
+      "file_path": "src/daemon/project-manager.ts",
+      "line_start": 163,
+      "line_end": 1300
+    },
+    {
+      "id": 6789,
+      "name": "SubprojectManager",
+      "fqn": null,
+      "kind": "class",
+      "file_path": "src/subproject/manager.ts",
+      "line_start": 192,
+      "line_end": 890
+    }
+  ],
+  "count": 2
+}
