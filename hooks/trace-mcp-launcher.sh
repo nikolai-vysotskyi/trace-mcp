@@ -286,7 +286,13 @@ node_from_pkg_roots() {
 app_bundle() {
   local line path=''
   [ -f "$APP_LOCATION_FILE" ] && [ -r "$APP_LOCATION_FILE" ] || return 1
-  while IFS= read -r line; do
+  # `|| [ -n "${line:-}" ]` — the same guard the config parser and pkg_roots
+  # use, for the same reason: `read` reports failure on a final line with no
+  # trailing newline, so a plain loop silently drops it. Today the writer emits
+  # `appPath` first and pretty-printed, so only a closing brace would be lost —
+  # but that is an accident of key order, not something this parser checks
+  # (review of #1011).
+  while IFS= read -r line || [ -n "${line:-}" ]; do
     case "$line" in
       *'"appPath"'*)
         path="${line#*\"appPath\"}"

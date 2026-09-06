@@ -1155,6 +1155,25 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
 
+  // Review of #1011: `read` reports failure on a final line with no trailing
+  // newline, so a plain `while read` loop drops it. The writer happens to emit
+  // `appPath` first today, which is key order, not a parser invariant — a
+  // minified or hand-edited file puts it on the only line there is.
+  it('reads an app-location file with no trailing newline', () => {
+    const { home, traceHome, node } = setupFakeHome();
+    const { app, cli } = plantAppBundle(home);
+    fs.writeFileSync(
+      path.join(traceHome, 'app-location.json'),
+      JSON.stringify({ appPath: app }), // one line, no newline at the end
+    );
+    writeConfig(traceHome, node, path.join(home, 'gone.app', 'cli.js'));
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+  });
+
   it('ignores an app-location file naming a bundle that is gone', () => {
     const { home, traceHome, node } = setupFakeHome();
     writeAppLocation(traceHome, path.join(home, 'never-installed.app'));
