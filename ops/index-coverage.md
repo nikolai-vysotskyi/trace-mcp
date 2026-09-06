@@ -275,3 +275,29 @@ Verify in GSC, not by inspection: impressions for `mcp tracing` should move off
 the homepage onto `/telemetry.html` and the average position should improve on
 13.7. Perceived-authority fixes take a recrawl; Request Indexing for
 `/telemetry.html` is queued with TRA-633's batch of Nikolai-clicks.
+
+## Reading 2026-09-06 (TRA-995): sitemap is the only discovery channel that has produced an index entry
+
+URL Inspection over all 28 sitemap URLs: 13 submitted-and-indexed, 10 unknown
+to Google, 5 discovered-but-not-indexed. The split is by page age with no
+exception — every indexed page was first committed 2026-07-02 or earlier, every
+unindexed one 2026-08-28 or later.
+
+The part worth keeping: **all 13 indexed pages report `sitemap.xml` as the
+referring source.** Not one was reached through an in-body internal link. The
+three pages Google *did* find by internal link (`/vs/repomix.html`,
+`/vs/codebase-memory-mcp.html` ← `configuration.html`; `/vs/codegraph.html` ←
+`development.html`) all sit in "Discovered — currently not indexed".
+
+Consequence for anyone touching docs: `<lastmod>` is the only re-crawl signal
+this domain has ever been shown to respond to. Until 2026-09-06 the generator's
+7-day drift tolerance stopped it advancing that date at all inside the window —
+14 of 28 pages were serving a date up to two days behind their own content and
+`pnpm docs:sitemap` was a no-op on them. Fixed by splitting the generator
+(always advances) from the CI guard (keeps merge-date slack, now 2 days);
+see the comments on `DRIFT_TOLERANCE_DAYS` in `scripts/gen-sitemap.mjs`.
+
+Do not re-derive "the `/vs/` format underperforms" from those pages' zero
+impressions — none of the six is in the index, so the number measures crawl
+coverage. `docs/comparisons.md` carried that inference until this reading
+corrected it.
