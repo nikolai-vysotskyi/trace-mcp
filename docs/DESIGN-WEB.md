@@ -877,8 +877,15 @@ one tested step wider than the failure. Inline behaviour is what you get above
 700px, not at it.
 
 **The first screen fits a 13" laptop, and that is a measurement.** Measured
-on the live page at 1440×900: the button top sits at 630px and the trust line
-at 841px, with the metrics strip below the fold. The rule is the button, not
+on the **live published page** at 1440×900 — `getBoundingClientRect().top`
+plus `scrollY`, document coordinates: the button top sits at 630px and the
+trust line at 841px, with the metrics strip below the fold.
+
+Take the figure on `trace-mcp.com`, not on a local preview, and say which you
+took. Without a Jekyll build there is no faithful local render of this page —
+a Liquid-lite substitution reads roughly 48px lower on every hero element than
+the live page does, so a preview number recorded here as the baseline is a
+regression the next run will chase and not find. The rule is the button, not
 the hero — a first screen whose button falls below 900px is a regression
 however good it looks at 1440×1080.
 
