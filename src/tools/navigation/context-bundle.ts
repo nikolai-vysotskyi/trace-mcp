@@ -7,7 +7,7 @@ import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import type { TraceMcpResult } from '../../errors.js';
-import type { ContextItem } from '../../scoring/assembly.js';
+import type { AssembledItem, ContextItem, DetailLevel } from '../../scoring/assembly.js';
 import {
   assembleStructuredContext,
   renderStructuredContext,
@@ -35,12 +35,18 @@ interface BundleSymbolItem {
   file: string;
   line: number | null;
   /**
-   * Are this symbol's bytes actually in `content`? False for the entries the
-   * budget (or the prose rule below) reduced to a signature. Listing a symbol
-   * and shipping its source are different claims — TRA-1090 cost us three days
-   * because a coverage metric could not tell them apart.
+   * Whether the assembled context actually carries this symbol's body
+   * ('full'), a signature-only fallback, or neither. TRA-1100: before this
+   * field existed, a consumer could only tell that a symbol was *listed*,
+   * not whether its body survived assembly — which is exactly how the
+   * TRA-1090 bare-`require` regression measured 100% "readable" on bundles
+   * that carried no source at all.
+   *
+   * Measured cost (o200k, code review 2026-09-07): +4 tokens per item for
+   * 'full', +5 for 'no_source' or 'signature_only' — negligible next to the
+   * body text this field describes.
    */
-  source_included: boolean;
+  detail: DetailLevel;
 }
 
 interface ContextBundleResult {
@@ -171,20 +177,34 @@ function containsAny(sym: SymbolRow, others: Array<{ sym: SymbolRow }>): boolean
  * what the caller asked for, but as a dependency or a caller it means "this
  * file mentions your symbol somewhere" — and inlining a whole test file to say
  * so cost more than the review's entire baseline (axios#11039). It stays listed.
+ *
+ * Spanning the file is not enough on its own: a one-function file's function
+ * spans it too, and its body is exactly what the caller wants. What marks a
+ * wrapper is that the indexer synthesised it to stand for the file — the three
+ * names below are what the language plugins emit for that (`__module__:x` in
+ * TS/JS, `x.<module>` in Python, `note:x` for a markdown document).
+ *
+ * ponytail: a name check, because neither kind nor nesting separates the two
+ * cases — Python indexes its module symbol as a `function`, and a test file
+ * whose bodies live inside `describe()` callbacks has no indexed children at
+ * all. Move to a flag on the row if a plugin ever stops using these names.
  */
-function isWholeFile(sym: SymbolRow, file: FileRow): boolean {
+const WRAPPER_NAME = /(^|[^A-Za-z])(__module__|<module>)|^note:/;
+
+function isWholeFileContainer(sym: SymbolRow, file: FileRow): boolean {
   if (sym.byte_start == null || sym.byte_end == null || file.byte_length == null) return false;
-  return sym.byte_start === 0 && sym.byte_end >= file.byte_length;
+  if (sym.byte_start !== 0 || sym.byte_end < file.byte_length) return false;
+  return WRAPPER_NAME.test(sym.fqn ?? sym.name);
 }
 
-function toBundleItem(sym: SymbolRow, file: FileRow, sourceIncluded: boolean): BundleSymbolItem {
+function toBundleItem(sym: SymbolRow, file: FileRow, detail: DetailLevel): BundleSymbolItem {
   return {
     symbol_id: sym.symbol_id,
     name: sym.name,
     kind: sym.kind,
     file: file.path,
     line: sym.line_start,
-    source_included: sourceIncluded,
+    detail,
   };
 }
 
@@ -333,13 +353,22 @@ export function getContextBundle(
   // Primary symbols get full source, unless an enclosing primary already
   // carries their bytes (TRA-1141) — then the container alone is emitted.
   const primaryContainer = primarySymbols.map((_, i) => containerIndexOf(primarySymbols, i));
-  const primaryItems: ContextItem[] = primarySymbols
-    .map((p, i) =>
-      primaryContainer[i] >= 0
-        ? null
-        : toContextItemCached(p.sym, p.file, fileCache, 1.0 - i * 0.01, false),
-    )
-    .filter((x): x is ContextItem => x !== null);
+  /** Outermost primary carrying entry `i`'s bytes — containers can nest. */
+  const outermostContainer = (i: number): number => {
+    let at = i;
+    for (let hops = 0; primaryContainer[at] >= 0 && hops <= primarySymbols.length; hops++) {
+      at = primaryContainer[at];
+    }
+    return at;
+  };
+  const buildPrimaryItems = (dropped: Set<number>): ContextItem[] =>
+    primarySymbols
+      .map((p, i) =>
+        dropped.has(i)
+          ? null
+          : toContextItemCached(p.sym, p.file, fileCache, 1.0 - i * 0.01, false),
+      )
+      .filter((x): x is ContextItem => x !== null);
   // Dependencies: top N get full source, rest get signature-only (lazy loading)
   // This avoids reading source for deps that will be truncated by the assembler anyway
   const MAX_FULL_SOURCE_DEPS = 10;
@@ -359,7 +388,7 @@ export function getContextBundle(
   ): boolean =>
     i >= MAX_FULL_SOURCE_DEPS ||
     e.file.language === 'markdown' ||
-    isWholeFile(e.sym, e.file) ||
+    isWholeFileContainer(e.sym, e.file) ||
     isContainedInAnother(emitted, unionOffset + i) ||
     containsAny(e.sym, primarySymbols);
   const depSignatureOnly = depSymbols.map((d, i) => signatureOnly(d, i, primarySymbols.length));
@@ -373,46 +402,75 @@ export function getContextBundle(
     toContextItemCached(c.sym, c.file, fileCache, 0.6 - i * 0.005, callerSignatureOnly[i]),
   );
 
-  const assembled = assembleStructuredContext({
-    primary: primaryItems,
+  let dropped = new Set(primarySymbols.map((_, i) => i).filter((i) => primaryContainer[i] >= 0));
+  let assembled = assembleStructuredContext({
+    primary: buildPrimaryItems(dropped),
     dependencies: depItems,
     callers: callerItems,
     typeContext: [],
     totalBudget: budget,
   });
 
-  // What `source_included` reports has to be what the assembler produced, not
-  // what this function asked it for: the budget independently downgrades an
-  // item to its signature or drops it. Reporting the request would be the same
-  // "listed, therefore readable" lie TRA-1090 found in changed_symbol_readable,
-  // one level deeper — caught in review of this change.
-  const delivered = new Set(
-    [...assembled.primary, ...assembled.dependencies, ...assembled.callers]
-      .filter((item) => item.detail === 'full')
-      .map((item) => item.id),
+  // Dropping a member in favour of its container is only free while the
+  // container's body actually survives assembly. When the budget reduces the
+  // container to a signature, the member is the one thing that could still have
+  // fitted — so it goes back in and the bundle is assembled once more. Without
+  // this, deduplication costs changed-symbol coverage on exactly the PRs where
+  // a small changed function lives in a file too large to ship whole.
+  const shipped = (items: AssembledItem[]): Set<string> =>
+    new Set(items.filter((item) => item.detail === 'full').map((item) => item.id));
+  const restored = [...dropped].filter(
+    (i) => !shipped(assembled.primary).has(primarySymbols[outermostContainer(i)].sym.symbol_id),
   );
-  // A primary dropped as contained ships its bytes inside the enclosing primary
-  // that replaced it — so it is delivered exactly when that container is.
-  const primaryDelivered = (i: number): boolean => {
-    // Containers nest, so walk up to the one actually emitted. `containerIndexOf`
-    // never returns a cycle (an entry is only contained in a strictly larger
-    // span, or in an earlier entry of the same span), but the hop count is
-    // bounded anyway.
-    let at = i;
-    for (let hops = 0; primaryContainer[at] >= 0 && hops <= primarySymbols.length; hops++) {
-      at = primaryContainer[at];
+  if (restored.length > 0) {
+    dropped = new Set([...dropped].filter((i) => !restored.includes(i)));
+    assembled = assembleStructuredContext({
+      primary: buildPrimaryItems(dropped),
+      dependencies: depItems,
+      callers: callerItems,
+      typeContext: [],
+      totalBudget: budget,
+    });
+  }
+
+  // Assembly can drop an item entirely under budget pressure (tryAssemble
+  // returns null when even signature_only doesn't fit). The returned groups
+  // must reflect exactly what assembly produced — a count-based slice of the
+  // pre-assembly list silently disagrees with `content` whenever a middle
+  // item is dropped while a later one survives.
+  const primaryById = new Map(primarySymbols.map((p) => [p.sym.symbol_id, p] as const));
+  const depById = new Map(depSymbols.map((d) => [d.sym.symbol_id, d] as const));
+  const callerById = new Map(callerSymbols.map((c) => [c.sym.symbol_id, c] as const));
+
+  const fromAssembled = (
+    items: AssembledItem[],
+    byId: Map<string, { sym: SymbolRow; file: FileRow }>,
+  ): BundleSymbolItem[] => {
+    const out: BundleSymbolItem[] = [];
+    for (const item of items) {
+      const entry = byId.get(item.id);
+      if (entry) out.push(toBundleItem(entry.sym, entry.file, item.detail));
     }
-    return delivered.has(primarySymbols[at].sym.symbol_id);
+    return out;
   };
 
+  // A primary dropped as contained (TRA-1141) is not in `assembled.primary` at
+  // all, but its bytes did ship — inside the container that replaced it. It is
+  // reported with that container's detail, so a consumer counting delivered
+  // bodies neither loses it nor over-claims it when the container was itself
+  // reduced to a signature. Containers nest, so walk up to the emitted one.
+  const primaryDetailById = new Map(assembled.primary.map((item) => [item.id, item.detail]));
+  const containedPrimaries: BundleSymbolItem[] = [];
+  primarySymbols.forEach((p, i) => {
+    if (!dropped.has(i)) return;
+    const detail = primaryDetailById.get(primarySymbols[outermostContainer(i)].sym.symbol_id);
+    if (detail) containedPrimaries.push(toBundleItem(p.sym, p.file, detail));
+  });
+
   const result: ContextBundleResult = {
-    primary: primarySymbols.map((p, i) => toBundleItem(p.sym, p.file, primaryDelivered(i))),
-    dependencies: depSymbols
-      .slice(0, assembled.dependencies.length)
-      .map((d) => toBundleItem(d.sym, d.file, delivered.has(d.sym.symbol_id))),
-    callers: callerSymbols
-      .slice(0, assembled.callers.length)
-      .map((c) => toBundleItem(c.sym, c.file, delivered.has(c.sym.symbol_id))),
+    primary: [...fromAssembled(assembled.primary, primaryById), ...containedPrimaries],
+    dependencies: fromAssembled(assembled.dependencies, depById),
+    callers: fromAssembled(assembled.callers, callerById),
     totalTokens: assembled.totalTokens,
     truncated: assembled.truncated,
   };

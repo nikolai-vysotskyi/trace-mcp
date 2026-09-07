@@ -65,3 +65,54 @@ hotaru-ritsuki/ai-daily-briefings
 
 # Found on the 2026-09-06 distribution run, row in ops/distribution.md:
 agentskillexchange/skills
+
+# --- First pass-2 (REST, competitor-paired) sweep, 2026-09-07 (TRA-1085) ---
+# Pass 2 returned 22 repos pass 1 had never returned. Only the six below were
+# actually read this run, so only they are recorded; the other 16 are still
+# unread and will come back on the next sweep. That is the file working as
+# intended — do not silence them here until somebody opens the matched file.
+#
+# Genuine users, rows in ops/distribution.md:
+drguptavivek/fundus_img_xtract   # handoff mandates trace-mcp before code exploration
+Egoka/FishtVue                   # CLAUDE.md carries a "Trace-mcp routing" section
+www-e/Omar                       # opencode.json runs `trace-mcp serve`, Windows
+
+# Genuine, a rival's competitive-landscape table, row in ops/distribution.md:
+jgravelle/jcodemunch-mcp         # docs/standard/NICHE.md lists us at "16 languages"
+
+# Genuine but nothing to do: a mirror of punkpeye/awesome-mcp-servers behind a
+# clauderules.net link wrapper, our line copied verbatim including the broken
+# leading `](https://glama.ai/...)` fragment that the upstream README has too.
+clauderules/turbo-claude
+
+# Collision: `openfilz-enterprise/docker/trace-mcp-native-hints.sh` is a GraalVM
+# tracing-agent script. Nothing to do with us.
+openfilz/openfilz-core
+
+# ── Swept 2026-09-07 (TRA-1116), the 18 the previous run left unread ──
+# Genuine, and the reason this sweep was worth running: three parties describe
+# us as an observability/tracing server. Rows in ops/distribution.md.
+Timothy191/Arch-Mk2                  # .vscode/README.md: "Standard tracing and debugger logging MCP server" — and installs us
+Timothy191/arch-systems-portal       # same paragraph, same author, second repo
+kansei-link/kansei-mcp-server        # registry classifier filed us under "DeFi & Web3"; the human fix says "AI observability/tracing"
+
+# Genuine catalogues and indexes that carry a stale copy of our own text:
+alpha-1-design/Nexus                 # mcp_catalog.json, "60 framework integrations … up to 99% token reduction"
+metinduraktr-44/claude-otonom-sistem # katalog/mcps/devtools/trace-mcp.json, same retired 99% line
+subev/awesome-stars                  # index of awesome-lists; description frozen at the "~42 minutes" era
+jskjw157/claude_extension            # aitmpl-index.json ships a trace-mcp.json template
+sudosubin/nix-skills                 # mirror of skillsdirectory.com's source list
+zhoux77899/claude-code-insights      # cached-repos.txt
+mediiiiium/mcp-jp                    # MCP trend tracker, records our 2026-04-03 first sighting
+
+# Genuine third-party writing about us, nothing to answer:
+Simplewyl2000/PaperDaily             # zh AI-scout daily 2026-06-20, accurate paragraph, quotes the retired "~42 min"
+pby2017/study-android                # ko posting log, differentiates us from Aider repo map / Sourcegraph / Qartez
+elpresidentepiff/velo-oracle-prime   # 2026-06-14 tech scout: evaluated the category, kept GitNexus, we are a one-line "similar idea"
+Kemalyavas/agent-skill-typosquat-bench # npm typosquat dataset, we are a "legit" row
+0motionguy/starscreener              # awesome-skills.json, records which lists carry us
+
+# Collisions on somebody else's "trace":
+atlaslattice/aluminum-os             # their own golden-trace-mcp
+dawsonblock/Stack0Bot                # vendored awesome-mcp-servers, matches korwabs/playwright-trace-mcp
+Josh-S-N2M/feature-pipeline          # doc id PIPELINE-TRACE-mcp-provisioning-postmortem

@@ -164,11 +164,20 @@ which silently returned "not a src layout" under ESM) and `install-app.ts`.
 
 The token benchmark reported changed-symbol readability of 100% in both arms —
 including on all 13 of these PRs, while the trace arm contained no code. The
-metric records a span whenever the bundle *lists* a symbol, never checking that
-the bundle carried its body. It was the one indicator that should have caught
-this and it was structurally incapable of it. Treat it as a pointer-coverage
-metric, which is what it is; the body assertion above is what "readable"
-was supposed to mean.
+metric recorded a span whenever the bundle *listed* a symbol, never checking
+that the bundle carried its body. It was the one indicator that should have
+caught this and it was structurally incapable of it.
+
+**Fixed, not renamed (TRA-1100).** `get_context_bundle` now reports a `detail`
+field (`'full' | 'no_source' | 'signature_only'`) per symbol — the same
+classification `assembleContext` already computed internally but never
+surfaced. `changed_symbol_readable` and `dependent_readable` in
+`scripts/bench-pr-context.ts` now count a span as readable only when
+`detail === 'full'`; `dependent_pointed` is unchanged, since "named with a
+location" was always the honest claim for that one. The same field backs a
+cheap CI gate (`tests/ci/context-bundle-body-coverage.test.ts`) that fails on
+partial body loss, not just total loss — see the [preregistration's release
+gate section]({{ '/perf/prereg-pr-quality/' | relative_url }}#release-gate-tra-1100).
 
 ---
 
@@ -198,11 +207,14 @@ SHAs, same corpus:
 
 | | before | after |
 |---|---:|---:|
-| median input tokens, trace arm | 3,951 | **3,214** |
-| median saving | 70.5% | **75.2%** |
-| PRs where the index did not pay off | 23 | **21** |
-| — of those, costing *more* than reading the files | 13 | 13 |
+| median input tokens, trace arm | 3,951 | **3,325** |
+| median saving | 70.5% | **72.8%** |
+| PRs costing *more* than reading the files | 13 | 13 |
 | worst single PR | −129.3% | **−62.4%** |
+
+The loss *count* moved as well, 23 → 56, for a reason that has nothing to do
+with this table: the metric behind it changed in the same run. The two sections
+below are that story.
 
 The 13 costliest PRs stay costlier, and that is structural rather than
 fixable: when the changed symbol *is* the module container, the bundle's
@@ -228,55 +240,57 @@ arm alone). The false-positive difference is two claims across 13 PRs — a
 number this sample cannot resolve, reported because it moved the wrong way,
 not because it means anything.
 
-## `dependent_readable` was the same lie as `changed_symbol_readable`
+## What the honest metric reads, now that it has been run
 
-The section above ends by noting that `changed_symbol_readable` scored a symbol
-as readable whenever the bundle *listed* it. `dependent_readable` had the
-identical defect, and it was still live: signature-only entries — everything
-past the budget's tenth full-source dependency — counted as readable.
-
-`get_context_bundle` now returns `source_included` per item, and the benchmark
-scores `readable` only from items whose bytes actually shipped. Measured on the
-same 60 PRs, holding everything else constant:
+TRA-1100 landed `detail` and pointed both readability columns at it, in
+parallel with this work and without re-running the benchmark — so the published
+artifact still carried the figures the old metric produced. This is that re-run.
+Holding everything else constant, `dependent_readable` in the trace arm:
 
 | trace arm, dependent_readable | value |
 |---|---:|
 | published, listing counted as readable | 58% |
-| same bundle, honest metric | 50% |
-| new bundle, honest metric | 38% |
+| same bundle, honest metric | 28% |
+| new bundle, honest metric | **22%** |
 
-Eight of those twenty points were the metric; twelve are real — bodies the new
+Thirty of those thirty-six points were the metric; six are real — bodies the new
 rules moved into the pointer list. `dependent_pointed` stays 100%: every
 dependent is still named with a location the agent can fetch. That trade is the
-change's actual cost, and it belongs next to the 75.2%, not underneath it.
+change's actual cost, and it belongs next to the 72.8%, not underneath it.
 
 ## And the finding that costs the most: half the changed bodies never shipped
 
-Review of that first fix found the field was still lying — `source_included`
-described what the bundle *asked* the assembler for, not what the assembler
-returned, and the assembler independently drops an item to its signature when
-its share of the token budget will not hold the body. Deriving the field from
-the assembled output instead moved the number that had read 100% since the
-benchmark was written:
+The same re-run moves the column that had read 100% since this benchmark was
+written. `changed_symbol_readable` counted a changed symbol as readable
+whenever the bundle listed it; scored against `detail === 'full'`, on the same
+60 pull requests:
 
-| 60 PRs, trace arm | before | after |
-|---|---:|---:|
-| changed_symbol_readable (median) | 100% | **50%** |
-| PRs delivering every changed symbol's body | — | **18 of 60** |
-| PRs delivering none of them | — | **11 of 60** |
-| PRs where the index did not pay off | 21 | **56** — 42 truncated, 13 costlier, 1 marginal |
+| 60 PRs, trace arm | published | old bundle, honest | new bundle, honest |
+|---|---:|---:|---:|
+| changed_symbol_readable (median) | 100% | 67% | **71%** |
+| PRs where the index did not pay off | 23 | 56 | **56** — 42 truncated, 13 costlier, 1 marginal |
 
-Nothing about what the product serves changed between those two columns. This
-is the same defect as the one at the top of this page, one level deeper: the
-budget was truncating changed-symbol bodies all along and the metric recorded
-a span whenever the bundle listed the symbol.
+Nothing about what the product serves changed between the first two columns.
+This is the same defect as the one at the top of this page, one level deeper:
+the budget was truncating changed-symbol bodies all along, and the metric
+recorded a span whenever the bundle listed the symbol. A third of the PRs never
+had the changed code in front of them.
+
+The third column is this change, and it is the reason the median saving reads
+72.8% rather than 75.2%. Deduplicating a member into its container is only free
+while the container's body survives assembly; when the budget reduces the
+container to a signature, the member was the one thing that could still have
+fitted. The bundle now notices that and re-assembles with those members
+restored — which costs 2.4 points of saving and buys back four points of
+changed-symbol coverage against the old bundle, on top of the eleven the
+deduplication had cost.
 
 The mechanism is visible in the extremes. `axios#11119` edits a line of
 `README.md`; the changed symbol is the whole 24,000-token document, it cannot
 fit the primary category's share of an 8,000-token budget, and what shipped was
 its first line. `psf/requests#7371` fixes a typo in a comment inside a 30,000-
 token test module; what shipped was `module tests/test_requests.py`. Both are
-counted in the 75.2% median saving, and in both the saving is partly the cost
+counted in the 72.8% median saving, and in both the saving is partly the cost
 of not sending the code — 349 tokens against 24,348, and 282 against 25,197.
 
 **This does not retract the token figure**, which counts what the arms actually

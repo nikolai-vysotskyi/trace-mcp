@@ -314,11 +314,15 @@ function buildTrace(
       for (const item of group ?? []) {
         const site = siteOf(store, item.symbol_id);
         if (!site) continue;
-        // TRA-1141: `readable` counts only symbols whose bytes are in the
-        // bundle. Signature-only entries are listed, not shown — scoring them
-        // as readable is the same class of lie TRA-1090 found in
-        // changed_symbol_readable.
-        if (item.source_included) addSpan(readable, site.file, site.line_start, site.line_end);
+        // TRA-1100: being listed in the bundle is not being readable — the
+        // TRA-1090 regression proved a symbol can appear here with no body at
+        // all. `detail === 'full'` is the only field that says the body
+        // actually made it into `content`; a signature-only or no-source item
+        // still counts as `pointed` (it was named with a location) but not
+        // `readable`.
+        if (item.detail === 'full') {
+          addSpan(readable, site.file, site.line_start, site.line_end);
+        }
         addSpan(pointed, site.file, site.line_start, site.line_end);
       }
     }

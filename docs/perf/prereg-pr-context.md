@@ -100,24 +100,24 @@ did not fire. Pull requests where the index did not pay off went from 5 to 23,
 [`docs/_data/pr_context_bench.json`](../_data/pr_context_bench.json) and on the
 [benchmark page]({{ '/pr-context-benchmark.html' | relative_url }}).
 
-**Re-measured 2026-09-07 (TRA-1141), at 75.2%.** The 70.5% run was correct
+**Re-measured 2026-09-07 (TRA-1141), at 72.8%.** The 70.5% run was correct
 about what the bundle contained; it was also paying for the same bytes twice,
 because a symbol and the container it lives inside were both emitted in full.
 With that duplication removed the same 60 pull requests, same pinned SHAs,
-measure **median 75.2%** (13,595 → 3,214 input tokens) and 21 non-paying PRs,
+measure **median 72.8%** (13,595 → 3,325 input tokens) and 21 non-paying PRs,
 still 13 of them costlier than reading the files. The bar was ≥50% and is met by
 a wider margin; the 70.5% figure is superseded by a re-measurement, not struck
 as wrong. The [loss-class page]({{ '/perf/pr-context-loss-classes/' |
 relative_url }}) carries the per-section diagnosis, the head-to-head quality
 check on the 13 PRs the change touched most (comprehension identical), and the
 cost: two coverage columns that were self-reported now measure delivery, and
-both fall — `dependent_readable` 58% → 38%, and `changed_symbol_readable`,
-which had read 100% since this benchmark was written, → 50%. Neither is a
-change in what the product serves; both are the metric no longer scoring a
-symbol as readable because the bundle listed it. The saving itself counts what
-the two arms actually sent and is unaffected. The shortfall it exposes — the
-bundle's budget falling back to a signature when the changed symbol is larger
-than its share — is TRA-1144.
+both fall — `dependent_readable` 58% → 22%, and `changed_symbol_readable`,
+which had read 100% since this benchmark was written, → 71%. Most of both drops
+is the metric, not the product: measured on the *previous* bundle those columns
+read 28% and 67%. The saving itself counts what the two arms actually sent and
+is unaffected by the metric. The shortfall the metric exposes — the bundle's
+budget falling back to a signature when the changed symbol is larger than its
+share, on a third of the corpus — is TRA-1144.
 
 Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
 (`{{ site.data.pr_context_bench.measured_build.commit }}`)** on

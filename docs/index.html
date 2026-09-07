@@ -176,7 +176,7 @@ updated: 2026-09-07
         "name": "What is the best MCP server for giving Claude Code codebase context?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs on your machine with no API keys and no account, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
         }
       },
       {
@@ -192,7 +192,7 @@ updated: 2026-09-07
         "name": "Do I need API keys or a cloud account?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI — but everything else runs without external services."
+          "text": "No. There is no account and no key to buy: your code and your index stay on the machine. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI — but everything else runs without external services."
         }
       },
       {
@@ -666,16 +666,26 @@ updated: 2026-09-07
     /* The payoff half of the subtitle separates on colour, not weight — a second
        weight here would spend a budget slot on what one shade already says. */
     .hero-desc .accent-text { color: var(--text-display); }
-    /* The boundary line reads as the quiet half of the same paragraph: same
-       measure, one step down in size and shade, so it is carried with the claim
-       without competing with it. */
-    .hero-boundary {
+    /* Two lines sit under the claim and they are not the same kind of sentence,
+       so they no longer share one class (TRA-1143). `.hero-evidence` is the other
+       half of the measurement — the quality result that says the cheap context was
+       worth having — and it carries the claim's own shade and the same
+       `.accent-text` treatment on its numbers, so the two read as one body of
+       evidence at two sizes. `.hero-boundary` is a scope note about what the
+       product does to your machine; that one is genuinely the quiet half and stays
+       a step down in shade. They were identical at 15px/--text-secondary, which
+       made the result that answers "is it worse?" look like the small print
+       underneath the number it qualifies. Size still separates evidence from
+       claim; shade now groups them. */
+    .hero-evidence, .hero-boundary {
       margin: 14px auto 0;
       max-width: 660px;
       font-size: 15px;
       line-height: 1.5;
-      color: var(--text-secondary);
     }
+    .hero-evidence { color: var(--text-primary); }
+    .hero-evidence .accent-text { color: var(--text-display); }
+    .hero-boundary { color: var(--text-secondary); }
     /* The three mono caps rows of the hero — eyebrow above the headline, the
        alternative platforms under the button, the trust line at the fold — are one
        treatment at three opacities, not three components. Only the distance from the
@@ -751,7 +761,7 @@ updated: 2026-09-07
       .hero { padding: 64px 0 40px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
-      .hero-boundary { margin-top: 12px; font-size: 14px; }
+      .hero-evidence, .hero-boundary { margin-top: 12px; font-size: 14px; }
       /* Full width, one button: on a phone the download is a target, not a pill
          floating in the middle of a 390px row. */
       .hero-cta { margin-top: 28px; }
@@ -2314,6 +2324,27 @@ updated: 2026-09-07
         median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own.
       </p>
 
+      <!-- TRA-1122: the saving never travels alone. The same PRs were reviewed twice
+           and scored blind, and that half is what says the cheap context was worth
+           having — a page that publishes only the saving asks the reader to take the
+           rest on trust. Reuses .hero-boundary rather than adding a class: same
+           treatment, same measure, one less thing in the hero to keep in step.
+           Gated by tests/docs/readme-claims.test.ts.
+
+           TRA-1143: `.hero-evidence`, not `.hero-boundary`. Both classes rendered
+           identically, so the half that answers "is the thinner context worse?" was
+           set in the same grey as the scope note below it and read as small print
+           under the saving. Its four numbers take the claim's own `.accent-text`
+           treatment for the same reason. -->
+      <p class="hero-evidence">
+        Cheaper is not better, so the same PRs were reviewed twice and scored blind:
+        <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
+        <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
+        <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
+        <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
+        <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
+      </p>
+
       <!-- The honesty boundary travels with the claim, not as a footnote further down
            the page (ops/positioning.md &sect; The boundary, carried with the claim). -->
       <p class="hero-boundary">
@@ -2354,7 +2385,10 @@ updated: 2026-09-07
       <p class="hero-trust">
         <span>Open source</span>
         <span class="dot"></span>
-        <span>100% local</span>
+        <!-- No absolute about locality (TRA-1013): src/telemetry/usage-ping.ts POSTs
+             one anonymous daily ping unless it is switched off, so `grep
+             google-analytics` over our own repo disproves it. Say the true thing. -->
+        <span>Code stays local</span>
         <span class="dot"></span>
         <span>Claude Code</span>
         <span class="dot"></span>
@@ -2888,7 +2922,7 @@ updated: 2026-09-07
         <div class="section-meta-tag"><span class="label">010 / Security</span></div>
         <div>
           <h2 class="section-title">Built for <span class="em">real-world environments.</span></h2>
-          <p class="section-lede">Runs fully local. No code leaves your machine. Refactors are reversible. Destructive operations require explicit confirmation.</p>
+          <p class="section-lede">Runs on your machine. No code leaves it. Refactors are reversible. Destructive operations require explicit confirmation.</p>
         </div>
       </div>
 
@@ -3095,7 +3129,7 @@ updated: 2026-09-07
             <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs on your machine with no API keys and no account, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
         </details>
         <details class="faq">
           <summary>
@@ -3109,7 +3143,7 @@ updated: 2026-09-07
             <h3>Do I need API keys or a cloud account?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
+          <div class="answer">No. There is no account and no key to buy: your code and your index stay on the machine. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
         </details>
         <details class="faq">
           <summary>
