@@ -61,7 +61,11 @@ async function startSplitHealthServer(
             JSON.stringify({
               jsonrpc: '2.0',
               id: 1,
-              result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'd' } },
+              result: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                serverInfo: { name: 'd' },
+              },
             }),
           );
         }, 2_000),
@@ -108,50 +112,52 @@ describe('StdioSession local fallback failure (TRA-1148)', () => {
   it.each(['fail', 'slow'] as const)(
     'answers initialize exactly once when the local backend cannot be built (%s daemon)',
     async (mode) => {
-    const daemon = await startSplitHealthServer(mode);
-    const stdin = new PassThrough();
-    const stdout = new PassThrough();
-    const session = new StdioSession({
-      projectRoot: process.cwd(),
-      indexRoot: process.cwd(),
-      config: TraceMcpConfigSchema.parse({}),
-      sharedDbPath: '/nonexistent/shared.db',
-      daemonPort: daemon.port,
-      idleTimeoutMs: 0,
-      daemonStabilityMs: 60_000,
-      autoSpawnDaemon: false,
-      autoSpawnTimeoutMs: 20_000,
-      handshakeTimeoutMs: 0,
-      stdin,
-      stdout,
-    });
-    cleanup = async () => {
-      await session.shutdown('test');
-      await daemon.close();
-    };
+      const daemon = await startSplitHealthServer(mode);
+      const stdin = new PassThrough();
+      const stdout = new PassThrough();
+      const session = new StdioSession({
+        projectRoot: process.cwd(),
+        indexRoot: process.cwd(),
+        config: TraceMcpConfigSchema.parse({}),
+        sharedDbPath: '/nonexistent/shared.db',
+        daemonPort: daemon.port,
+        idleTimeoutMs: 0,
+        daemonStabilityMs: 60_000,
+        autoSpawnDaemon: false,
+        autoSpawnTimeoutMs: 20_000,
+        handshakeTimeoutMs: 0,
+        stdin,
+        stdout,
+      });
+      cleanup = async () => {
+        await session.shutdown('test');
+        await daemon.close();
+      };
 
-    const frames: unknown[] = [];
-    stdout.on('data', (chunk: Buffer) => {
-      for (const line of chunk.toString('utf8').split('\n')) {
-        if (line.trim()) frames.push(JSON.parse(line));
-      }
-    });
+      const frames: unknown[] = [];
+      stdout.on('data', (chunk: Buffer) => {
+        for (const line of chunk.toString('utf8').split('\n')) {
+          if (line.trim()) frames.push(JSON.parse(line));
+        }
+      });
 
-    await session.bootstrap();
-    stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })}\n`);
+      await session.bootstrap();
+      stdin.write(
+        `${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })}\n`,
+      );
 
-    // Settle past the slow daemon's 2 s reply, so a late second frame lands
-    // inside the window rather than after the assertion.
-    await new Promise<void>((resolve) => {
-      const t = setTimeout(resolve, mode === 'slow' ? 3_000 : 1_500);
-      t.unref?.();
-    });
+      // Settle past the slow daemon's 2 s reply, so a late second frame lands
+      // inside the window rather than after the assertion.
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, mode === 'slow' ? 3_000 : 1_500);
+        t.unref?.();
+      });
 
-    // Exactly one: a failed fallback may neither silently eat the handshake
-    // (0 — the hang this PR fixes) nor answer it twice (2 — the late frame a
-    // still-wired proxy backend forwards). An error the client can surface
-    // beats a connection that never resolves.
-    expect(responsesFor(frames, 1)).toHaveLength(1);
+      // Exactly one: a failed fallback may neither silently eat the handshake
+      // (0 — the hang this PR fixes) nor answer it twice (2 — the late frame a
+      // still-wired proxy backend forwards). An error the client can surface
+      // beats a connection that never resolves.
+      expect(responsesFor(frames, 1)).toHaveLength(1);
     },
   );
 });
