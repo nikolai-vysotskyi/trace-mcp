@@ -166,8 +166,9 @@ export class ProjectManager {
    *  worker thread count regardless of project count. Lazy-init on the first
    *  addProject() so we can read the project's config for sizing. */
   private sharedPool: ExtractPool | null = null;
-  /** Configurable cap on concurrent initial indexAll() calls. Watcher-driven
-   *  indexFiles() is NOT gated. Lazy-init alongside sharedPool. */
+  /** Configurable cap on concurrent full indexAll() calls — initial indexing
+   *  and watcher rescans alike. Watcher-driven indexFiles() is NOT gated
+   *  (small batches). Lazy-init alongside sharedPool. */
   private indexAllLimit: ReturnType<typeof pLimit> | null = null;
   /** Optional shared TopologyStore/DecisionStore pool. When provided,
    *  stopProject() force-disposes the project's pool entry so the SQLite
@@ -747,8 +748,18 @@ export class ProjectManager {
           // Dropped fs events (bulk checkout, install, wake from sleep) leave
           // the index silently stale. indexAll() re-walks the root and is
           // hash-gated, so unchanged files cost a stat+hash, not a reparse.
+          // Gated by the same limiter as initial indexing: wake-from-sleep
+          // drops events in EVERY registered project at once, and N full
+          // re-walks is exactly the load `parallel_initial_index` bounds.
+          // The null branch is belt-and-braces, not a live race: shutdown()
+          // clears the limiter only after watcher.stop() has drained the
+          // in-flight rescan (TRA-834), and stop() unsubscribes before
+          // draining, so this read cannot observe null today. It stays so a
+          // regression in that ordering degrades to an ungated re-walk
+          // instead of a TypeError inside a watcher callback.
           onRescan: async () => {
-            await pipeline.indexAll();
+            const limit = this.indexAllLimit;
+            await (limit ? limit(() => pipeline.indexAll()) : pipeline.indexAll());
           },
         },
       );
