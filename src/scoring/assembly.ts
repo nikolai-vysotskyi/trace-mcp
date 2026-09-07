@@ -73,7 +73,14 @@ function tryAssemble(item: ContextItem, remainingTokens: number): AssembledItem 
 
   // Try no_source (signature + metadata)
   if (item.signature) {
-    const content = `${item.metadata}\n${item.signature}`;
+    // TRA-1144: when a body existed and the budget refused it, say so. A bare
+    // signature reads like the whole answer — `module tests/test_requests.py`
+    // was the entire context served for a 30,000-token file — and nothing in
+    // the payload distinguished that from a symbol which genuinely has no body.
+    const omitted = item.source
+      ? `\n[body omitted — ${estimateTokens(item.source)} tokens, over this section's budget]`
+      : '';
+    const content = `${item.metadata}\n${item.signature}${omitted}`;
     const tokens = estimateTokens(content);
     if (tokens <= remainingTokens) {
       return { id: item.id, score: item.score, detail: 'no_source', content, tokens };

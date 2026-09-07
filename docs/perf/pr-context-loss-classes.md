@@ -189,7 +189,7 @@ which now publishes as MISSED.
 
 The cause is not what this page first guessed. **93 of the 98 are the bundle
 budget truncating** — raising it to 64,000 brings all but five bodies through,
-at 8,000: 240 bodies and 72.8% saved; 16,000: 263 at 32.3%; 32,000: 299 at
+at 8,000: 240 bodies and 72.7% saved; 16,000: 263 at 32.3%; 32,000: 299 at
 −0.1%; 64,000: 333 at −0.3%. The saving crosses zero while 39 bodies are still
 missing, so there is no budget on this corpus that buys full coverage *and* a
 token win. The missed floor is therefore a packing problem — which symbols get
@@ -234,8 +234,8 @@ SHAs, same corpus:
 
 | | before | after |
 |---|---:|---:|
-| median input tokens, trace arm | 3,951 | **3,286** |
-| median saving | 70.5% | **72.8%** |
+| median input tokens, trace arm | 3,951 | **3,291** |
+| median saving | 70.5% | **72.7%** |
 | PRs costing *more* than reading the files | 13 | 13 |
 | worst single PR | −129.3% | **−62.4%** |
 
@@ -283,7 +283,7 @@ Holding everything else constant, `dependent_readable` in the trace arm:
 Thirty of those thirty-six points were the metric; six are real — bodies the new
 rules moved into the pointer list. `dependent_pointed` stays 100%: every
 dependent is still named with a location the agent can fetch. That trade is the
-change's actual cost, and it belongs next to the 72.8%, not underneath it.
+change's actual cost, and it belongs next to the 72.7%, not underneath it.
 
 ## And the finding that costs the most: half the changed bodies never shipped
 
@@ -304,7 +304,7 @@ recorded a span whenever the bundle listed the symbol. A third of the PRs never
 had the changed code in front of them.
 
 The third column is this change, and it is the reason the median saving reads
-72.8% rather than 75.2%. Deduplicating a member into its container is only free
+72.7% rather than 75.2%. Deduplicating a member into its container is only free
 while the container's body survives assembly; when the budget reduces the
 container to a signature, the member was the one thing that could still have
 fitted. The bundle now notices that and re-assembles with those members
@@ -317,7 +317,7 @@ The mechanism is visible in the extremes. `axios#11119` edits a line of
 fit the primary category's share of an 8,000-token budget, and what shipped was
 its first line. `psf/requests#7371` fixes a typo in a comment inside a 30,000-
 token test module; what shipped was `module tests/test_requests.py`. Both are
-counted in the 72.8% median saving, and in both the saving is partly the cost
+counted in the 72.7% median saving, and in both the saving is partly the cost
 of not sending the code — 349 tokens against 24,348, and 282 against 25,197.
 
 **This does not retract the token figure**, which counts what the arms actually
@@ -328,3 +328,69 @@ when the changed symbol is larger than its budget: the sub-symbols the diff
 actually touched, or the hunks' surroundings, rather than the container's first
 line. That is TRA-1144, filed from this run, and it is now measurable because
 the metric finally moves when it happens.
+
+## Saying so when the budget refuses a body (TRA-1144, 2026-09-07)
+
+Re-assembling with the restored members answers the case where there *is*
+something smaller to send. Some changed symbols have nothing smaller.
+`axios#11119`'s is a whole 24,000-token `README.md`; `psf/requests#7371`'s is a
+30,000-token test module. No share of an 8,000-token budget delivers either, and
+sending them whole would buy the coverage column at a price that defeats the
+tool — so that ceiling stands.
+
+What does not have to stand is how it was reported. The degraded entry shipped
+as `(module body) tests/test_requests.py`: one line, reading like the whole
+answer, indistinguishable from a symbol that genuinely has no body. It now
+carries the fact:
+
+```
+[namespace] __module__:test_requests — tests/test_requests.py
+(module body) tests/test_requests.py
+[body omitted — 29,847 tokens, over this section's budget]
+```
+
+Cost, same 60 PRs, same pinned SHAs, measured against `master` at the merge of
+the change above: median saving **72.8% → 72.7%**, median trace tokens
+3,286 → 3,291, +1,445 across the set — about 23 tokens on each of the 46 PRs
+that omit anything, nothing on the other 14. Changed-symbol coverage is
+unchanged at 71%, by design: **the marker declares the loss, it does not repair
+it.** The declaration sits inside the token accounting, so a longer degraded
+entry can consume budget a shorter one would not have; that is a property of the
+greedy assembler, not a defect, and it is what the +1,445 is.
+
+The marker stays silent for the entries the bundle caps *before* the assembler
+runs — dependencies past `MAX_FULL_SOURCE_DEPS`, markdown files, whole-file
+containers. Those reach the same `no_source` tier with their source never read,
+so there is no omitted body to report, and a behavioural test pins the two
+routes apart.
+
+This closes the third of the three answers TRA-1144 asked for. The first — send
+the sub-symbols the diff touched rather than their container — is the
+re-assembly rule above. The second, a line window around each hunk, was not
+built: `get_context_bundle` never sees the diff, and the sub-symbols the caller
+already asked for are the same information arriving through a channel that
+exists.
+
+### The comprehension result, which did not go the expected way
+
+An implementation of the first answer, built in parallel with the one that
+shipped and discarded in its favour, was run head-to-head against the pre-fix
+bundle on the 13 PRs it moved most — the TRA-568 judge protocol, blind and
+order-randomised:
+
+| 13 PRs | before restoring members | after |
+|---|---:|---:|
+| understood the change | 46.2% | **46.2%** |
+| false positives per PR | 0.92 | 1.00 |
+| findings per PR | 2.92 | 3.00 |
+
+Not equal only on aggregate — identical **row by row**: all 13 landed on the
+same verdict in both arms (6 understood by both, 7 by neither, 0 by either
+alone). The check on the implementation that did ship reported 69.2% in both
+arms on its own 13 PRs. Different samples, same shape of answer: no movement.
+
+So the coverage column's climb from 50% to 71% has no comprehension result
+behind it yet. Both samples are underpowered and both were chosen for being
+hard, which does not settle whether the effect is absent or merely unmeasurable
+here — but until something does, the recovered bodies are worth reporting as
+delivery, not as quality.

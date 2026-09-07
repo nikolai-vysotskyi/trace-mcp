@@ -580,3 +580,140 @@ describe('getContextBundle() — restoring a dropped member does not re-duplicat
     expect(inner?.detail).toBe('full');
   });
 });
+
+/**
+ * TRA-1144: some containers cannot be delivered at any budget — `axios#11119`'s
+ * changed symbol is a whole 24,000-token README, and the PR-context benchmark
+ * has 42 of 60 PRs where at least one changed body does not fit. What the
+ * payload said about that was a signature line, which reads like the whole
+ * answer. It now says the body was dropped, and by how much.
+ */
+describe('getContextBundle() — a body the budget refused is declared, not silently a signature', () => {
+  const BIG_SRC = `export function big() {\n${'  // padding padding padding padding padding\n'.repeat(300)}}\n`;
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    rootPath = createTmpFixture({ 'src/one.ts': BIG_SRC });
+    store = createTestStore();
+    const fileId = store.insertFile('src/one.ts', 'typescript', 'h-one', BIG_SRC.length);
+    store.insertSymbol(fileId, {
+      symbolId: 'src/one.ts::big#function',
+      name: 'big',
+      kind: 'function',
+      fqn: 'big',
+      byteStart: 0,
+      byteEnd: BIG_SRC.length,
+      lineStart: 1,
+      lineEnd: BIG_SRC.split('\n').length,
+      signature: 'function big()',
+    });
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('names the omitted body and its size next to the signature', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/one.ts::big#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 500,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    const content = bundle.content ?? '';
+
+    expect(content).toContain('function big()');
+    expect(content).toMatch(/\[body omitted — \d+ tokens, over this section's budget\]/);
+    // The declaration is a fact about this response, so it has to agree with
+    // what the response actually reports about the symbol.
+    expect(bundle.primary[0].detail).not.toBe('full');
+    expect(bundle.totalTokens).toBeLessThanOrEqual(500);
+  });
+
+  it('says nothing when the body fits and ships whole', () => {
+    const fits = getContextBundle(store, rootPath, {
+      symbolIds: ['src/one.ts::big#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 100_000,
+    });
+    expect(fits._unsafeUnwrap().content ?? '').not.toContain('body omitted');
+  });
+});
+
+/**
+ * The marker must not fire for the entries the bundle caps *before* the
+ * assembler runs — dependencies past `MAX_FULL_SOURCE_DEPS`, markdown, whole-file
+ * containers. Those reach `no_source` too, and they have no omitted body to
+ * report because their source was never read. Raised in review of TRA-1144: the
+ * two routes land on the same tier and nothing pinned them apart.
+ */
+describe('getContextBundle() — no marker for an entry whose source was never read', () => {
+  const DEP_SRC = 'export function depN() { return 1; }\n';
+  const MAIN_SRC = 'export function main() { return 0; }\n';
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    const files: Record<string, string> = { 'src/main.ts': MAIN_SRC };
+    for (let i = 0; i < 12; i++) files[`src/dep${i}.ts`] = DEP_SRC;
+    rootPath = createTmpFixture(files);
+    store = createTestStore();
+
+    const mainFile = store.insertFile('src/main.ts', 'typescript', 'h-main', MAIN_SRC.length);
+    const mainSym = store.insertSymbol(mainFile, {
+      symbolId: 'src/main.ts::main#function',
+      name: 'main',
+      kind: 'function',
+      fqn: 'main',
+      byteStart: 0,
+      byteEnd: MAIN_SRC.length,
+      lineStart: 1,
+      lineEnd: 1,
+      signature: 'function main()',
+    });
+    const mainNid = store.getNodeId('symbol', mainSym)!;
+
+    for (let i = 0; i < 12; i++) {
+      const f = store.insertFile(`src/dep${i}.ts`, 'typescript', `h-dep${i}`, DEP_SRC.length);
+      const s = store.insertSymbol(f, {
+        symbolId: `src/dep${i}.ts::dep${i}#function`,
+        name: `dep${i}`,
+        kind: 'function',
+        fqn: `dep${i}`,
+        byteStart: 0,
+        byteEnd: DEP_SRC.length,
+        lineStart: 1,
+        lineEnd: 1,
+        signature: `function dep${i}()`,
+      });
+      store.insertEdge(
+        mainNid,
+        store.getNodeId('symbol', s)!,
+        'esm_imports',
+        true,
+        undefined,
+        false,
+        'ast_resolved',
+      );
+    }
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('lists the capped dependencies without claiming a body was omitted', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/main.ts::main#function'],
+      tokenBudget: 100_000,
+      outputFormat: 'markdown',
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    // Past the tenth, dependencies are listed without their source being read.
+    expect(bundle.dependencies.some((d) => d.detail === 'no_source')).toBe(true);
+    expect(bundle.content ?? '').not.toContain('body omitted');
+  });
+});

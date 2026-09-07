@@ -78,7 +78,7 @@ result would be a result about trace-mcp, not about a guessed baseline. It is
 also the reason this figure, and not the aggregate in
 [prereg-response-tokens](./prereg-response-tokens.md), leads the storefront.
 
-## Verdict — MISSED: primary bar met at 72.8%, quality floor failed at 71%
+## Verdict — MISSED: primary bar met at 72.7%, quality floor failed at 71%
 
 A run that misses any registered bar publishes as MISSED, so that is the verdict
 even though the headline saving cleared its bar comfortably. Which bar failed,
@@ -135,7 +135,7 @@ diagnostic and writes no artifacts):
 | body present | 240 | 263 | 299 | 333 |
 | bodyless — whole-file node | 65 | 48 | 21 | 3 |
 | bodyless — ordinary symbol | 33 | 27 | 18 | 2 |
-| **median token saving** | **72.8%** | **32.3%** | **−0.1%** | **−0.3%** |
+| **median token saving** | **72.7%** | **32.3%** | **−0.1%** | **−0.3%** |
 
 A *whole-file node* is one whose body is the entire file — a `__module__` /
 `<module>` node, or a document node on a non-code file — so the bundle declining
@@ -145,7 +145,7 @@ truncation**: raise the budget far enough and all but five bodies arrive.
 The curve is monotone in both columns, and that is the finding: every body
 recovered costs saving, and **the saving crosses zero between 16,000 and 32,000
 — while 39 bodies are still missing.** There is no budget at which this corpus
-gets full changed-symbol coverage *and* a token win. The 72.8% is not a saving
+gets full changed-symbol coverage *and* a token win. The 72.7% is not a saving
 that happens to come with a coverage gap; the coverage gap is what pays for it.
 
 That reframes what the missed floor asks for. It cannot be met by turning the
@@ -178,7 +178,7 @@ correct about what the bundle contained; it was also paying for the same bytes
 twice, because a symbol and the container it lives inside were both emitted in
 full. With that duplication removed, and with a member restored whenever the
 container that replaced it turns out not to fit the budget, the same 60 pull
-requests measure **median 72.8%** (13,595 → 3,286 input tokens) and
+requests measure **median 72.7%** (13,595 → 3,291 input tokens) and
 **71%** changed-symbol readability against the 67% above.
 
 The floor is still missed — 71% against the baseline's 100% — and the verdict
