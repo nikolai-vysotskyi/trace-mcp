@@ -80,7 +80,7 @@ Rules for keeping it honest:
 | [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Do not ping. Re-read 2026-10-05 | 2026-09-05 |
 | [yzfly/awesome-context-engineering](https://github.com/yzfly/awesome-context-engineering) | **Submitted, not merged** — [PR #44](https://github.com/yzfly/awesome-context-engineering/pull/44), opened 2026-09-05 | One line each in `README.md` and `README_CN.md`, section `Memory & Compression` / `记忆与压缩`, next to `lean-ctx`, `headroom` and `skillreaper` (140★) | PR to both READMEs — `CONTRIBUTING.md` requires the English and Chinese versions to stay in sync, so an entry that touches one file only is incomplete. **This is the door with a real merge rate in this class:** five external PRs merged in the two weeks to 2026-08-30, three of them in one batch, authors unaffiliated with the maintainer. Re-check 2026-09-19 | 2026-09-05 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
-| GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 70.5% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own. 81 languages, 87 frameworks, 100% local." | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/` | 2026-09-05 |
+| GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05, then carried "100% local" until 2026-09-07. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 70.5% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own, comprehension at parity. 81 languages, 87 frameworks. Your code and index never leave the machine; an anonymous usage ping is on by default and opt-out." (327 of the 350 characters GitHub allows) | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/`. **No longer on trust: `scripts/check-remote-claims.mjs` fetches this string nightly and compares it to `docs/_data/`** (TRA-1120) | 2026-09-07 |
 | [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
 | [linny006/mcp-servers-live](https://github.com/linny006/mcp-servers-live) + [its Pages site](https://linny006.github.io/mcp-servers-live/r/nikolai-vysotskyi/trace-mcp/) | **Yes — never submitted** | Auto-index of MCP servers refreshed every 15 minutes; we are #49 by stars with a per-repo page. Its whole body is our GitHub description, repeated 5× on that page | Nothing to submit. Links only `github.com`, never `trace-mcp.com`, so it adds nothing to the domain count below. Its value is that it demonstrates the description-propagation above | 2026-09-05 |
 | [linny006/trending-claude-skills](https://github.com/linny006/trending-claude-skills) | **Yes — never submitted** | Trending table, **rank 3**, 133★, same auto-copied description | Same scraper family as the row above; one operator, two indexes. Nothing to submit | 2026-09-05 |
@@ -129,6 +129,10 @@ write to and no submission to make.
    one-liner is therefore longer-lived than the one-liner. That is an argument
    for the claims gate covering the two non-file surfaces (repo description and
    topics), which the 2026-09-05 note already flagged as guarded by nothing.
+   **The description half was built on 2026-09-07** —
+   `scripts/check-remote-claims.mjs`, TRA-1120, see the findings section.
+   Topics carry no number and no claim, so they are still ungated and that is
+   deliberate; revisit only if a topic ever states a figure.
 2. **What we can steer is the input, not the output.** These indexes read the
    repository — description, topics, README, `server.json`. Every one of those
    is already a surface we own and already guarded except the two named above.
@@ -510,6 +514,31 @@ do not hand-type the number into a submission form. It is generated into
 `docs/_data/pr_context_bench.json` by `scripts/bench-pr-context.ts` and guarded
 by `tests/docs/readme-claims.test.ts` — same discipline as
 `docs/_data/counts.yml`.
+
+**The two claim surfaces that are not files are now gated too** (TRA-1120,
+2026-09-07). The GitHub repo description and the npm registry `description` are
+the widest surfaces we own and neither is in the repository, so every docs gate
+was blind to both. Measured that day: GitHub said 70.5% and npm said 90.6% —
+same claim, same benchmark family, same day, CI green — and the GitHub string
+still carried "100% local" while the usage ping is on by default (TRA-1013,
+which is scoped to the README and would never have reached it).
+`scripts/check-remote-claims.mjs` now fetches both and compares them to
+`docs/_data/` on the counts.yml anchor rule: every count must equal
+`counts.yml`, every percentage must be a generated figure, no retired number
+(90.6%, "up to 99%", "~42 minutes", "40–50%", "53 frameworks / 68 languages"),
+and no unqualified locality absolute. It runs nightly in `ci.yml`, never on a
+PR — npm serves the latest *published* version, so its description lags master
+until the release that carries it and a PR author could not fix that.
+`tests/docs/remote-claims.test.ts` is the offline half and does run on every PR.
+Two consequences worth knowing before reading a red run:
+
+- **The npm row is expected red until the next release.** `package.json` has
+  said 70.5% since TRA-1090; a published description cannot be edited in place.
+  The gate says so in the failure text. Do not "fix" it by touching npm.
+- **The locality rule bans the absolute, not the claim.** "Your code and index
+  never leave the machine; an anonymous usage ping is on by default and opt-out"
+  passes and is the wording now live on GitHub. A gate that failed it would have
+  pushed the copy back to saying nothing at all.
 
 **The one-liner every directory renders is the widest surface we have, and it
 was the last to get the corrected number** (TRA-883 / TRA-904, 2026-09-05).
