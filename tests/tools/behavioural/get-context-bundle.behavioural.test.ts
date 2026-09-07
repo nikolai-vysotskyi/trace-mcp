@@ -574,5 +574,9 @@ describe('getContextBundle() — restoring a dropped member does not re-duplicat
     // but only one copy of the innermost body may appear.
     expect(content).toContain('INNER_MARKER');
     expect(content.split('INNER_MARKER').length - 1).toBe(1);
+    // And the innermost symbol reports the detail of whichever ancestor ended up
+    // carrying it, not of the outermost one that was reduced to a signature.
+    const inner = bundle.primary.find((x) => x.symbol_id === 'src/nested.ts::inner#function');
+    expect(inner?.detail).toBe('full');
   });
 });

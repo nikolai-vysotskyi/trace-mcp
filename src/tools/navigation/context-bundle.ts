@@ -367,14 +367,6 @@ export function getContextBundle(
   // Primary symbols get full source, unless an enclosing primary already
   // carries their bytes (TRA-1141) — then the container alone is emitted.
   const primaryContainer = primarySymbols.map((_, i) => containerIndexOf(primarySymbols, i));
-  /** Outermost primary carrying entry `i`'s bytes — containers can nest. */
-  const outermostContainer = (i: number): number => {
-    let at = i;
-    for (let hops = 0; primaryContainer[at] >= 0 && hops <= primarySymbols.length; hops++) {
-      at = primaryContainer[at];
-    }
-    return at;
-  };
   const buildPrimaryItems = (dropped: Set<number>): ContextItem[] =>
     primarySymbols
       .map((p, i) =>
@@ -490,15 +482,20 @@ export function getContextBundle(
   };
 
   // A primary dropped as contained (TRA-1141) is not in `assembled.primary` at
-  // all, but its bytes did ship — inside the container that replaced it. It is
-  // reported with that container's detail, so a consumer counting delivered
-  // bodies neither loses it nor over-claims it when the container was itself
-  // reduced to a signature. Containers nest, so walk up to the emitted one.
+  // all, but its bytes did ship — inside the ancestor that replaced it, whose
+  // `detail` is therefore its own. That is the *nearest emitted* ancestor, not
+  // the topmost one: after the restore loop above converges, an inner symbol
+  // can be covered by a middle ancestor while the outermost was reduced to a
+  // signature, and reporting the outermost's detail would under-claim a body
+  // that is in `content`. `ancestorsOf` is ordered nearest-first. Found in
+  // review, in the opposite direction to the first delivery-honesty bug.
   const primaryDetailById = new Map(assembled.primary.map((item) => [item.id, item.detail]));
   const containedPrimaries: BundleSymbolItem[] = [];
   primarySymbols.forEach((p, i) => {
     if (!dropped.has(i)) return;
-    const detail = primaryDetailById.get(primarySymbols[outermostContainer(i)].sym.symbol_id);
+    const carrier = ancestorsOf(i).find((a) => !dropped.has(a));
+    if (carrier === undefined) return;
+    const detail = primaryDetailById.get(primarySymbols[carrier].sym.symbol_id);
     if (detail) containedPrimaries.push(toBundleItem(p.sym, p.file, detail));
   });
 
