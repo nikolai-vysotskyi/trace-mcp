@@ -65,3 +65,26 @@ hotaru-ritsuki/ai-daily-briefings
 
 # Found on the 2026-09-06 distribution run, row in ops/distribution.md:
 agentskillexchange/skills
+
+# --- First pass-2 (REST, competitor-paired) sweep, 2026-09-07 (TRA-1085) ---
+# Pass 2 returned 22 repos pass 1 had never returned. Only the six below were
+# actually read this run, so only they are recorded; the other 16 are still
+# unread and will come back on the next sweep. That is the file working as
+# intended — do not silence them here until somebody opens the matched file.
+#
+# Genuine users, rows in ops/distribution.md:
+drguptavivek/fundus_img_xtract   # handoff mandates trace-mcp before code exploration
+Egoka/FishtVue                   # CLAUDE.md carries a "Trace-mcp routing" section
+www-e/Omar                       # opencode.json runs `trace-mcp serve`, Windows
+
+# Genuine, a rival's competitive-landscape table, row in ops/distribution.md:
+jgravelle/jcodemunch-mcp         # docs/standard/NICHE.md lists us at "16 languages"
+
+# Genuine but nothing to do: a mirror of punkpeye/awesome-mcp-servers behind a
+# clauderules.net link wrapper, our line copied verbatim including the broken
+# leading `](https://glama.ai/...)` fragment that the upstream README has too.
+clauderules/turbo-claude
+
+# Collision: `openfilz-enterprise/docker/trace-mcp-native-hints.sh` is a GraalVM
+# tracing-agent script. Nothing to do with us.
+openfilz/openfilz-core
