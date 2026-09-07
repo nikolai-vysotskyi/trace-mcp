@@ -137,6 +137,10 @@ one is the one to plan a budget against.
 describes itself as mutating is left out of the set, so the next one cannot
 quietly start booking savings again.
 
+**TRA-1098 then shaped the larger of the two, and the harness could not see
+it.** That result is written up in full below, because the number came back
+against the change and the reason is more useful than the change was.
+
 ### What closing the tail did to the headline
 
 Every column but the last is a frozen literal: it records what that run
@@ -363,6 +367,104 @@ but a reader wanting to know what a `find_usages` call costs should read the
 per-item rows in the artifact, or the field median above, and not this page's
 table cell. Every other multi-item tool on this page has the same property; this
 is the first one where the spread is large enough to say so out loud.
+
+## `register_edit` repeated itself, and the harness prices the one call that does not (TRA-1098)
+
+Since TRA-945 `register_edit` is credited zero and counted as pure overhead, so
+every token it returns is spend. This page priced that at 345 tokens over 1 289
+calls — 444 705 tokens, the largest single block of response spend in the
+product. Making it visible did not make it cheaper, so TRA-1098 went looking at
+what was in it.
+
+**The composition, five files of this repo:**
+
+| file | total | `_duplication_warnings` | share |
+|---|---:|---:|---:|
+| `src/global.ts` | 380 | 330 | 87% |
+| `src/savings.ts` | 351 | 294 | 84% |
+| `src/indexer/pipeline.ts` | 312 | 253 | 81% |
+| `src/progress.ts` | 290 | 239 | 82% |
+| `src/tools/register/core.ts` | 47 | 0 | — |
+
+The bookkeeping half — `status`, `file`, `totalFiles`, `indexed`, `skipped`,
+`errors`, `durationMs` — is 21-47 tokens. Everything else was duplication
+warnings, and the check recomputed them over the whole file on every edit, so
+editing one file forty times reported the same similarities forty times.
+
+**The obvious fix is wrong, and the reason is worth keeping.** Snapshot the
+file's symbols before reindexing, report only what is new. Review caught the
+race: a single edit fires three independent reindex paths — parcel-watcher
+inside the daemon, the PostToolUse HTTP hook, and the agent's own
+`register_edit` call — and `recent-reindex-cache.ts` documents skew between
+them regularly exceeding 500 ms, which is why its dedup TTL is 2 000 ms. If
+another path indexes first and the agent's call arrives later than that, the
+"pre-edit" snapshot is read from a store that already reflects the edit, and the
+genuinely new symbol is filtered out as pre-existing. That is a silent false
+negative in the one case the warning exists for, and it is worse than the noise
+it replaces. `tests/tools/register-edit-duplication-memo.test.ts` fails on
+exactly that scenario.
+
+What shipped instead does not read the store: each warning is reported once per
+file per process. A warning the agent has not been shown is new *to the agent*
+whoever indexed the file, which is the only sense in which "new" was ever
+actionable.
+
+### The result went the other way
+
+Re-running `scripts/bench-response-tokens.ts` after the change measures
+`register_edit` at **345 tokens — unchanged**. The harness calls each tool once
+against a fresh server, so it prices the first call on a file, which is the one
+call that still legitimately pays for the warning. Nothing here moves the
+headline, and the columns above are unchanged on purpose.
+
+The effect is real, and it is smaller than the composition table suggests.
+Replayed against every `register_edit` call recorded in `~/.trace/analytics.db`
+— 740 calls, 369 distinct files, mean 470 chars — with the memo applied in call
+order:
+
+| grouping | suppressed | response tokens | per call |
+|---|---:|---:|---:|
+| per session + file (memo lives one session) | 169 of 740, 22.8% | 101 003 → 83 236, **−17.6%** | 136 → 112 |
+| per file (memo lives the daemon's life) | 364 of 740, 49.2% | 101 003 → 70 423, **−30.3%** | 136 → 95 |
+
+Reality is between the two rows: the memo is process-local, and a daemon
+outlives a session while a stdio server does not.
+
+**And the field distribution says this page has been over-pricing the tool.**
+The harness's single sample is `src/savings.ts`, which fires four warnings at
+351 tokens. Across 740 recorded calls the mean is **136 tokens**, 2.5x lower —
+`register_edit`'s cost is decided by how many similarities its file happens to
+carry, which is the same argument-driven spread that put `find_usages` on the
+over-baseline list from one sample (TRA-1049). At 136 tokens the recorded
+overhead block is nearer 101 000 tokens than 445 000.
+
+That is a frame question, not a product one, and this page's rule is that
+editing the frame is a visible act in its own commit. It is filed separately;
+nothing on this page has been repriced here.
+
+## The four tools still over baseline, and why none of them is next (TRA-1098)
+
+With `find_usages` reversed and `register_edit` shaped, the over-baseline list
+is down to four tools carrying **165 recorded calls between them** — against
+1 289 for `register_edit` alone. Each has a recorded decision now, so the next
+run does not re-derive them:
+
+| tool | calls | ratio | decision |
+|---|---:|---:|---|
+| `list_projects` | 15 | 4.03x | **Not portable.** TRA-1026 established the figure moves with how many projects the measuring machine has registered (901 tokens on one, 2 017 here). It prices this laptop, not the tool. |
+| `get_complexity_report` | 80 | 2.27x | **Baseline, not response.** 30 rows of `{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }` is the question the caller asked. 800 tokens is not what deriving those metrics from `Read`/`Grep` would cost, and the tabular redundancy already has an answer in `output_format: "toon"`. |
+| `get_dead_code` | 53 | 2.27x | **Decided in TRA-1026:** a 1 200-token baseline for a whole-repo sweep is not credible, so cutting the tool would buy the ratio by answering less. |
+| `check_claudemd_drift` | 17 | 2.20x | Volume too low to price; same baseline objection. |
+
+Three of the four are baseline problems, and the baseline half is the estimate
+this whole page says is still an estimate. **None of the four is in `minimal`,
+the shipped default surface** — they live in `standard`, `review`, `perf` and
+`architecture`, where a caller has explicitly asked for that analysis. Shaping
+them further would be optimising a number nobody's default session pays.
+
+The honest next move on this metric is not another shaping pass; it is
+measuring the baseline half. Until then, a ratio near 2x on a low-volume
+analysis tool is a statement about `RAW_COST_ESTIMATES`, not about the tool.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 
