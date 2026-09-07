@@ -264,7 +264,7 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 170 MCP tool implementations
+├── tools/                  # {{ site.data.counts.tools }} MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
