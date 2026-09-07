@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
+import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { TWEAKCC_VERSION } from '../../src/init/tweakcc.js';
 
@@ -28,13 +29,27 @@ function collectUses(dir: string): { file: string; ref: string }[] {
       continue;
     }
     if (!/\.ya?ml$/.test(entry.name)) continue;
-    for (const line of readFileSync(full, 'utf8').split('\n')) {
-      const m = line.match(/^\s*(?:-\s*)?uses:\s*['"]?([^'"\s#]+)/);
-      if (!m) continue;
+    // Parsed, not line-matched: a review showed `steps: [{ uses: x@main }]`
+    // slipping past a `^\s*uses:` regex, and a folded scalar would do the same.
+    // The parser sees the same `uses` GitHub does, whatever the YAML style.
+    const doc = YAML.parse(readFileSync(full, 'utf8'));
+    for (const ref of collectUsesValues(doc)) {
       // `./path` local refs are our own code, versioned by the same commit.
-      if (m[1].startsWith('./')) continue;
-      out.push({ file: full.slice(ROOT.length + 1), ref: m[1] });
+      if (ref.startsWith('./')) continue;
+      out.push({ file: full.slice(ROOT.length + 1), ref });
     }
+  }
+  return out;
+}
+
+/** Every `uses:` value anywhere in a parsed workflow/action document. */
+function collectUsesValues(node: unknown): string[] {
+  if (Array.isArray(node)) return node.flatMap(collectUsesValues);
+  if (node === null || typeof node !== 'object') return [];
+  const out: string[] = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'uses' && typeof value === 'string') out.push(value.trim());
+    else out.push(...collectUsesValues(value));
   }
   return out;
 }
@@ -47,6 +62,11 @@ describe('third-party GitHub Actions are pinned to a commit SHA', () => {
     ...collectUses(join(ROOT, '.github/workflows')),
     ...collectUses(join(ROOT, '.github/actions')),
   ];
+
+  it('reads uses: out of flow-style YAML, not just line starts', () => {
+    const doc = YAML.parse('runs: { using: composite, steps: [{ uses: actions/checkout@main }] }');
+    expect(collectUsesValues(doc)).toEqual(['actions/checkout@main']);
+  });
 
   it('finds `uses:` entries in both .github/workflows and .github/actions', () => {
     expect(uses.length).toBeGreaterThan(0);
@@ -91,6 +111,14 @@ const PINNED_INTERPOLATIONS = new Set(['TWEAKCC_SPEC']);
  */
 const SPEC_SHAPE = /^(\$\{\w+\}|@?[\w.-]+(\/[\w.-]+)?(@[^\s]+)?)$/;
 
+/**
+ * A spec assembled at run time is never a pin, wherever the hole sits —
+ * `${pkg}`, `${cfg.package}`, `${name}@1.0.0`, `'npx ' + pkg`. Reaching
+ * `isPinned` matters: `SPEC_SHAPE` used to reject these as prose *before* the
+ * policy could reject them as unpinned, which is a pass, not a rejection.
+ */
+const DYNAMIC = /\$\{/;
+
 /** Our own CLI, appearing in help text — not third-party code. */
 const OWN_PACKAGES = new Set(['trace', 'trace-mcp']);
 
@@ -104,29 +132,45 @@ export function findUnpinnedNpx(source: string, fileName = 'probe.ts'): string[]
       const spec = extractSpec(m[1]);
       // Not spec-shaped: prose that merely contains the word npx, e.g.
       // "auto-installs tweakcc via npx (recommended)".
-      if (spec === null || !SPEC_SHAPE.test(spec)) continue;
+      if (spec === null) continue;
+      if (!DYNAMIC.test(spec) && !SPEC_SHAPE.test(spec)) continue;
       if (!isPinned(spec)) offenders.push(`npx ${spec}`);
     }
   };
 
   const visit = (node: ts.Node): void => {
-    if (ts.isStringLiteralLike(node)) check(node.text);
-    else if (ts.isTemplateExpression(node)) check(templateText(node));
+    if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node) || isConcat(node)) {
+      check(flattenText(node));
+    }
     ts.forEachChild(node, visit);
   };
   visit(sf);
   return offenders;
 }
 
-/** Render a template literal with each hole as `${identifierOrExpr}`. */
-function templateText(node: ts.TemplateExpression): string {
-  let out = node.head.text;
-  for (const span of node.templateSpans) {
-    const expr = span.expression;
-    out += `\${${ts.isIdentifier(expr) ? expr.text : '?'}}`;
-    out += span.literal.text;
+function isConcat(node: ts.Node): node is ts.BinaryExpression {
+  return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken;
+}
+
+/**
+ * Render a literal, a template, or a `+` concatenation as one string, with each
+ * run-time hole spelled `${name}` — `${dynamic}` when the expression is not a
+ * plain identifier. Concatenation matters because `'npx ' + pkg` visits only the
+ * literal `'npx '`, which carries no spec and used to pass.
+ */
+function flattenText(node: ts.Node): string {
+  if (ts.isStringLiteralLike(node)) return node.text;
+  if (ts.isTemplateExpression(node)) {
+    let out = node.head.text;
+    for (const span of node.templateSpans) {
+      out += `\${${ts.isIdentifier(span.expression) ? span.expression.text : 'dynamic'}}`;
+      out += span.literal.text;
+    }
+    return out;
   }
-  return out;
+  if (isConcat(node)) return flattenText(node.left) + flattenText(node.right);
+  if (ts.isIdentifier(node)) return `\${${node.text}}`;
+  return '${dynamic}';
 }
 
 /**
@@ -149,17 +193,24 @@ function extractSpec(rest: string): string | null {
   return null;
 }
 
+/**
+ * An exact release, and nothing else. `@latest`, `@next`, `@^4`, `@*` all leave
+ * the registry deciding what runs, which is the whole finding — "has an `@`"
+ * was the first cut and it accepted every one of them.
+ */
+const EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
+
 function isPinned(spec: string): boolean {
   const interpolated = spec.match(/^\$\{(.+)\}$/);
   if (interpolated) return PINNED_INTERPOLATIONS.has(interpolated[1]);
-  // Any hole in the middle of a spec (`tweakcc@${v}`, `${name}@1.0.0`) leaves
-  // part of what executes decided elsewhere — not a pin as far as this gate is
-  // concerned. Whitelist it above if a case ever justifies it.
-  if (spec.includes('${')) return false;
+  // A hole anywhere else in the spec (`tweakcc@${v}`, `${name}@1.0.0`) leaves
+  // part of what executes decided elsewhere.
+  if (DYNAMIC.test(spec)) return false;
 
   const bare = spec.replace(/^@[^/]+\//, ''); // drop a leading npm scope
-  if (OWN_PACKAGES.has(bare.split('@')[0])) return true;
-  return bare.includes('@');
+  const at = bare.indexOf('@');
+  if (OWN_PACKAGES.has(at === -1 ? bare : bare.slice(0, at))) return true;
+  return at > 0 && EXACT_VERSION.test(bare.slice(at + 1));
 }
 
 describe('findUnpinnedNpx', () => {
@@ -201,6 +252,20 @@ describe('findUnpinnedNpx', () => {
   it('ignores prose that merely contains the word npx', () => {
     expect(flags(`const hint = 'auto-installs tweakcc via npx (recommended)';`)).toEqual([]);
     expect(flags(`const s = 'launched via npx/uvx by the client';`)).toEqual([]);
+  });
+
+  it('rejects mutable tags and ranges, not just a missing @', () => {
+    expect(flags(`execSync('npx tweakcc@latest --version')`)).toEqual(['npx tweakcc@latest']);
+    expect(flags(`execSync('npx tweakcc@next')`)).toEqual(['npx tweakcc@next']);
+    expect(flags(`execSync('npx tweakcc@^4')`)).toEqual(['npx tweakcc@^4']);
+    expect(flags(`execSync('npx tweakcc@*')`)).toEqual(['npx tweakcc@*']);
+    expect(flags(`execSync('npx tweakcc@4.3.3-rc.1')`)).toEqual([]);
+  });
+
+  it('flags a dynamic spec however it is assembled', () => {
+    expect(flags('execSync(`npx -y ${config.package} --version`)')).toEqual(['npx ${dynamic}']);
+    expect(flags(`execSync('npx ' + packageFromConfig)`)).toEqual(['npx \${packageFromConfig}']);
+    expect(flags('execSync(`npx ${name}@1.0.0`)')).toEqual(['npx ${name}@1.0.0']);
   });
 
   it('sees through the markdown quoting of a user-facing message', () => {
