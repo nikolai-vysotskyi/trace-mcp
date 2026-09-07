@@ -109,11 +109,21 @@ Per PR, on the 13:
 | [sindresorhus/got#2454](https://github.com/sindresorhus/got/pull/2454) | 55,721 | 2,502 | 6,075 | 96% → 89% |
 | [sindresorhus/got#2471](https://github.com/sindresorhus/got/pull/2471) | 31,642 | 2,222 | 5,446 | 93% → 83% |
 
-**The quality number was too bad**, by an unknown amount until the re-run. The
-−15 pp comprehension gap was measured against a context that was never the
-product's context. Whatever the re-run reports is the first honest reading of
-that question; the preregistered bars (≤10 pp, ≤+0.5 false positives per PR) do
-not move.
+**The quality number was too bad.** The re-run, same 60 PRs, same
+preregistered bars, same judge protocol:
+
+| 60 PRs | naive | trace-mcp, struck run | trace-mcp, re-run |
+|---|---:|---:|---:|
+| understood the change | 65.0% | 50.0% | **66.7%** |
+| false positives per PR | 0.58 | 1.20 | **0.80** |
+| PRs only the naive arm understood | — | 13 | **3** |
+| review latency, median | 93.0 s | 74.5 s | 92.9 s |
+
+Both bars are met (≤10 pp comprehension loss, ≤+0.5 false positives): the trace
+arm lands 1.7 points *above* the naive one, which the bar never asked for and
+which 60 pull requests cannot make significant — parity is the honest reading.
+The naive arm scored 65.0% in both runs, untouched, which is the control. The
+latency advantage was the speed of a context with the code removed and is gone.
 
 ## Why no test caught it, and what does now
 
