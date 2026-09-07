@@ -9,8 +9,8 @@ import {
   ensureGlobalDirs,
   EPHEMERAL_INDEX_DIR,
   getDbPath,
-  getEphemeralDbPath,
   getProjectRemoteIdentity,
+  isEphemeralProjectRoot,
   projectName,
   REGISTRY_PATH,
 } from './global.js';
@@ -296,12 +296,10 @@ export function registerProject(
   // path (TRA-396 item 2): `listProjects()` no longer returns other ephemeral
   // checkouts, so the only match a workdir can find is the canonical project,
   // and twenty checkouts of one repo resolve to one index instead of twenty.
+  // TRA-1136: `getDbPath` routes an ephemeral root to EPHEMERAL_INDEX_DIR on
+  // its own, so this no longer needs a separate branch for it.
   const shareWithSibling = sibling ? claimSharedDb(sibling.dbPath, absRoot) : false;
-  const dbPath = shareWithSibling
-    ? sibling!.dbPath
-    : ephemeral
-      ? getEphemeralDbPath(absRoot)
-      : getDbPath(absRoot);
+  const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot);
   try {
     if (!shareWithSibling) announceDbHolder(dbPath, absRoot);
   } catch {
@@ -622,52 +620,11 @@ export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRep
   return results;
 }
 
-/**
- * Path shape Multica's `repo checkout` uses for one-shot agent-run workdirs:
- * `.../multica_workspaces_<host>/<workspace-id>/<run-id>/workdir`. Each task
- * run gets a brand-new directory, so a project matching this shape is queried
- * exactly once, for the lifetime of that single run, and never touched again.
- *
- * TRA-527: the run directory is the container, not the project root — `repo
- * checkout` clones into `workdir/<repo>`, and a monorepo package sits deeper
- * still. Anchoring on `workdir$` therefore missed every root an agent actually
- * opens, and those leaked back into registry.json (three on the reported
- * machine within hours of TRA-396 shipping). Nothing below a run's workdir
- * outlives the run, so match the whole subtree.
- */
-const EPHEMERAL_WORKDIR_PATTERN =
-  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
-
-/**
- * The same runtime's other one-shot layout: a task given a scratch directory
- * instead of a workspace checkout lands in `<tmp>/multica-task-<run-id>/...`.
- * `EPHEMERAL_WORKDIR_PATTERN` above never matched those, so each was persisted
- * like a real project — 17 of the 37 rows in the reported registry.json, all
- * dead within the hour, each pinning a `.config.json` section for the full
- * 7-day `sweepMissingRoots` grace (TRA-992).
- *
- * The container is matched, not the leaf: a run drops several roots under it
- * (its own scratch dirs, benchmark fixtures) and none outlive the run. The
- * numeric run id keeps this off a user directory that merely says
- * "multica-task".
- *
- * Note for tests: such a runtime also exports TMPDIR as its own task
- * directory, so `os.tmpdir()` itself can match this. A fixture that must stay
- * persistent has to be built outside it — see `tmpRootOutsideTaskDir` in
- * tests/test-utils.ts.
- */
-const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
-
-/**
- * True when `root` is a one-shot agent-run checkout, in either layout the
- * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
- * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
- * registry.json — see the `_ephemeralEntries` note above.
- */
-export function isEphemeralProjectRoot(root: string): boolean {
-  const abs = path.resolve(root);
-  return EPHEMERAL_WORKDIR_PATTERN.test(abs) || EPHEMERAL_TASK_DIR_PATTERN.test(abs);
-}
+// TRA-1136: the two path patterns and `isEphemeralProjectRoot` live in
+// global.ts, next to `getDbPath`, which needs them to route an unregistered
+// one-shot root at its DB in the ephemeral index dir. Re-exported here because
+// this is where every caller has always imported them from.
+export { isEphemeralProjectRoot } from './global.js';
 
 export interface EphemeralProjectCandidate {
   name: string;
