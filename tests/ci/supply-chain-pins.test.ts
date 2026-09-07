@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import ts from 'typescript';
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +11,14 @@ import { TWEAKCC_VERSION } from '../../src/init/tweakcc.js';
 // undetected until TRA-1133. This is that pass, run by CI instead.
 
 const ROOT = join(import.meta.dirname, '../..');
+
+/** Repo-relative, forward-slashed — the assertions below compare path prefixes,
+ * and on Windows `join` hands back backslashes. */
+const rel = (full: string) =>
+  full
+    .slice(ROOT.length + 1)
+    .split(sep)
+    .join('/');
 
 /** `owner/repo/path@ref` — a pin is a full 40-char commit SHA, never a tag. */
 const SHA_PIN = /^[0-9a-f]{40}$/;
@@ -36,7 +44,7 @@ function collectUses(dir: string): { file: string; ref: string }[] {
     for (const ref of collectUsesValues(doc)) {
       // `./path` local refs are our own code, versioned by the same commit.
       if (ref.startsWith('./')) continue;
-      out.push({ file: full.slice(ROOT.length + 1), ref });
+      out.push({ file: rel(full), ref });
     }
   }
   return out;
@@ -357,9 +365,7 @@ describe('npx invocations in src/ name an exact version', () => {
 
   const files = collectTsSources(join(ROOT, 'src'));
   const offenders = files.flatMap((file) =>
-    findUnpinnedNpx(readFileSync(file, 'utf8'), file).map(
-      (o) => `${file.slice(ROOT.length + 1)}: ${o}`,
-    ),
+    findUnpinnedNpx(readFileSync(file, 'utf8'), file).map((o) => `${rel(file)}: ${o}`),
   );
 
   it('finds sources to scan', () => {
