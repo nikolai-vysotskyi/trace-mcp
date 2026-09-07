@@ -68,6 +68,7 @@ export const activity = {
   errorSampleHideShort: 'Ocultar ejemplo',
   errorGroupFilter: 'Mostrar solo los errores de {{tool}}',
   noErrorsInWindow: 'Sin errores en esta ventana.',
+  noLatencyInWindow: 'Sin datos de latencia en esta ventana.',
   clearTimeRange: 'Quitar el filtro de intervalo',
   clear: 'Limpiar',
   sparklineTitle: '{{time}}: {{calls}} llamadas',

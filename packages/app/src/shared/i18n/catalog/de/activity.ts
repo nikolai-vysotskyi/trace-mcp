@@ -70,6 +70,7 @@ export const activity = {
   errorSampleHideShort: 'Beispiel ausblenden',
   errorGroupFilter: 'Nur Fehler von {{tool}} anzeigen',
   noErrorsInWindow: 'Keine Fehler in diesem Zeitraum.',
+  noLatencyInWindow: 'Keine Latenzdaten in diesem Zeitraum.',
   clearTimeRange: 'Zeitraumfilter zurücksetzen',
   clear: 'Zurücksetzen',
   sparklineTitle: '{{time}}: {{calls}} Aufrufe',
