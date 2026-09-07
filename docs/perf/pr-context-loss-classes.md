@@ -64,8 +64,11 @@ It worked in the two places we look:
   the working path.
 
 It failed in exactly one place: a consumer that imports `src/` as real ESM.
-That is what `scripts/bench-pr-context.ts` does under `tsx` — which means the
-benchmark, and only the benchmark, measured a context with the source removed.
+The published package ships `dist` only (`bin` → `dist/cli.js`), so no install
+path reaches that code; the two consumers that do are
+`scripts/bench-pr-context.ts` under `tsx` — which is how the benchmark measured
+a context with the source removed — and `pnpm serve`, the contributor's
+run-from-source path.
 
 This is the second instance of the class; TRA-542 was the same bare `require`
 in `dropDecisionRows`, also behind a non-fatal catch, also reporting success.
