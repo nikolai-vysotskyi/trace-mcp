@@ -2,6 +2,7 @@
  * get_context_bundle — symbol source + import dependencies + optional callers,
  * packed within a token budget. Deduplicates shared imports for batch queries.
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
@@ -54,8 +55,11 @@ class FileReadCache {
     let buf = this.cache.get(file.id);
     if (buf === undefined) {
       try {
+        // TRA-1090: this was a bare `require('node:fs')`. The shipped build has
+        // a createRequire banner so it worked there, but every ESM-source
+        // consumer (tests, benchmarks) threw ReferenceError into the catch
+        // below and got a bundle with no source at all — silently.
         const absPath = path.resolve(this.rootPath, file.path);
-        const fs = require('node:fs') as typeof import('node:fs');
         buf = fs.readFileSync(absPath);
       } catch {
         buf = null;
