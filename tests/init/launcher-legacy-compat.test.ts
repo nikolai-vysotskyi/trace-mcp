@@ -227,14 +227,23 @@ describe.skipIf(process.platform === 'win32')('legacy compat tmp is sweepable', 
     });
 
     installLauncher({ force: true });
+    // Stop recording before the assertions below create symlinks of their own —
+    // the spy appends to `tmpNames`, and a loop over an array the loop body
+    // keeps growing never ends.
+    vi.restoreAllMocks();
 
     expect(tmpNames.length).toBeGreaterThan(0);
     for (const name of tmpNames) {
-      // Must survive a full sweep pass, not just look right.
+      // Must survive a full sweep pass, not just look right — and as the shape
+      // this writer actually leaks. Planting a regular file here passed while
+      // the sweeper still gated on `isFile()`, so the one shape a crash between
+      // symlinkSync and renameSync can leave was never covered (TRA-1156).
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-sweep-'));
-      fs.writeFileSync(path.join(dir, name), '');
-      fs.utimesSync(path.join(dir, name), new Date(0), new Date(0));
+      const leaked = path.join(dir, name);
+      fs.symlinkSync(path.join(dir, 'target-that-never-arrived'), leaked);
+      fs.lutimesSync(leaked, new Date(0), new Date(0));
       expect(sweepOrphanTmpFiles(dir).map((f) => path.basename(f))).toEqual([name]);
+      expect(fs.existsSync(leaked)).toBe(false);
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
