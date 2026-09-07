@@ -15,6 +15,7 @@ export const activity = {
   window1h: '1 Std.',
   window6h: '6 Std.',
   window24h: '24 Std.',
+  recordingStarted: 'Aufzeichnung begann {{when}}',
 
   // ── Feed state ──
   feedLive: 'Live',

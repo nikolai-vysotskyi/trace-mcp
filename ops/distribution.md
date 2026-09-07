@@ -1443,3 +1443,86 @@ decompilation, which is not our domain.
 PR #1066 — it was measured on a context that contained no source code, and the
 corrected run is 67% against 65% at the same 70.5% median token saving. Anything
 outgoing that still carries −15 п.п. is quoting a bug, not a result.
+
+### Fifth pass, 2026-09-07: the first maintainer reply of the week, and two doors inside one 27k★ tracker
+
+**`Ivy-Apps/deslop#173` answered within 27 minutes.** `ILIYANGERMANOV` replied to this
+morning's `export … from` note: the fix is his current task and Deslop users should
+expect a release with it this week. That is the second live human reply this
+category has produced for us (after `sosalejandro/atlas`), and both came from the
+same move — reading their code first and sending the traps we already paid for,
+with no ask attached. Nothing is owed there now; a thank-you reply would only cost
+them a notification.
+
+**Method note, because the search that worked twice has started failing.** GitHub
+issue search on engineering phrases (`"symbol index" stale`, `"codebase index"`,
+`"code graph" MCP`) now returns mostly machine-generated repositories: agent
+planning tickets, daily-digest repos, benchmark-report bots. Of 75 distinct repos
+across five queries, 19 had ≥100 stars and 12 were worth opening. **Filter the
+result set by stargazers before reading any body** — it costs one `gh api repos/…`
+per repo and removes about three quarters of the noise.
+
+**Both of today's second-pass doors are in `Kilo-Org/kilocode` (27,210★), which
+ships codebase indexing of its own, so the disclosure line does real work.**
+
+- [`#13843`](https://github.com/Kilo-Org/kilocode/issues/13843) (opened today):
+  their indexing manager fails on git worktrees with CJK paths on Windows — a
+  `git rev-parse --path-format=absolute …` command line arrives at
+  `fs.realpathSync` as a single string, with the backslash before `目录A` eaten.
+  The reporter had already disassembled their minified CLI to find it. What we
+  added is the two ways we avoid the class: `execFileSync` with an argv array
+  never builds a command string, and `resolveGitMetadataDir` in `src/global.ts`
+  answers `--git-common-dir` from disk alone (`.git` file → `gitdir:` → the admin
+  dir's `commondir`, falling back to `<admin>/../..`), so no locale or argv is
+  involved. Plus the shape half of their own footnote: in a linked worktree `.git`
+  is a *file*, so an `isDirectory()` test reports "not a git repo" on every
+  platform. And the design half: their
+  `Waiting for the primary worktree index to become available` is a state we chose
+  not to have, because a linked worktree shares the main repo's index
+  (`src/registry-worktree.ts`).
+  [Comment](https://github.com/Kilo-Org/kilocode/issues/13843#issuecomment-5571830423).
+- [`#12707`](https://github.com/Kilo-Org/kilocode/issues/12707) (open and
+  unanswered since 2026-07-30): codebase search ran 41 minutes with no deadline
+  when VS Code was opened at a broad root. They ask for exactly the two behaviours
+  we shipped, so the comment is what each cost: the broad-root rule is a literal
+  deny-list rather than a size heuristic (a big monorepo is indistinguishable from
+  `/` until it has been walked), with the three traps inside ours — `/private/tmp`
+  arriving pre-resolved, Windows dirs matched below the drive letter, and the
+  `/\\+$/` trim that CodeQL flags as polynomial ReDoS on a client-supplied path.
+  And the part that surprises: fixing root resolution moves the hang to "index not
+  built yet", so the answer is answering instead of blocking — 503 with
+  `Retry-After: 3` on routes needing a complete index, with registered-but-unloaded
+  and folder-missing as distinct answers.
+  [Comment](https://github.com/Kilo-Org/kilocode/issues/12707#issuecomment-5571830697).
+
+**Competitor intel: three new entrants, all found through catalog submission
+queues rather than through their own repos.** `pmgarg/cgraphy` (0★, PyPI, official
+MCP registry), `UnboundCompute/lachesis` (3★, compiler-precise code property graph,
+AGPL-3.0, ghcr image), `myelixlabs/synapse-mcp` (1★, "60% token savings", 14 tools).
+Two facts follow. First, every one of them leads with a token-savings number and
+none publishes anything about answer quality, which is the gap TRA-1140 named and
+the reason our corrected 67% vs 65% at 70.5% is worth publishing rather than
+sitting in a PR. Second, `chatmcp/mcpso` (2,715★) and `cline/mcp-marketplace`
+(785★) accept submissions from 0-star projects by issue — cheap to enter and
+therefore weak as a signal, which is an argument for keeping the catalog
+moratorium rather than against it. Both queues stay recorded here as addresses for
+the day `acquisition` starts reading.
+
+**Checked and skipped, with reasons, so the next pass does not re-derive them:**
+`Sharper-Flow/lgrep#12` (3★, last push 2026-08-07), `ending0421/Ward#6` (0★),
+`mupozg823/codelens-mcp-plugin#396` (3★, 49 open issues, stale) — all three are
+genuinely in our defect class (stale index answering `ok:true` with an empty
+result set) and all three are too small and too quiet to be worth a touch;
+`zilliztech/claude-context#419/#420` (12,496★) — real defects in a direct
+competitor's tracker, which is not a place we comment;
+`warpdotdev/warp#12569` (multi-GB indexing memory spikes) — closed-source product,
+our daemon memory work says nothing they can act on;
+`anthropics/claude-code#75993` and `continuedev/continue#12853` — audience, not
+usefulness, the same call the fourth pass made.
+
+**Threads re-checked 2026-09-07 evening, silent, nothing owed:**
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`,
+`tolkonepiu/best-of-mcp-servers#384`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`,
+`Nano-Collective/nanocoder#1197`. No pings due before 2026-09-19.
