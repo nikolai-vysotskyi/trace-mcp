@@ -58,6 +58,8 @@ const FOREIGN_PREFIXES = [
   'src/core/', // Repomix
   'src/cli/cliTokenBudget.ts', // Repomix — exact file, `src/cli/` is ours
   'src/codegraphcontext/', // CodeGraphContext
+  'src/constants.ts', // SocratiCode
+  'src/services/', // SocratiCode
   'src/executor.ts', // Context Mode
   'src/server.ts', // Context Mode
   'src/http/client.ts', // hypothetical file in the reader's own repo
