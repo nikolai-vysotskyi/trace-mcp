@@ -144,7 +144,7 @@ interface SymbolDetailRow {
   kind: string;
   /** 'full' | 'no_source' | 'signature_only', or 'dropped' when assembly kept nothing. */
   detail: string;
-  /** A `__module__` / `<module>` node: its "body" is the whole file. */
+  /** A node whose "body" is the whole file — module node or document node. */
   module_level: boolean;
 }
 
@@ -321,8 +321,31 @@ function siteOf(store: Store, symbolId: string): SymbolSite | undefined {
 }
 
 /** trace-mcp: the diff plus changed-symbol bodies, their imports, and dependents. */
-function isModuleLevel(symbolId: string, kind: string): boolean {
-  return symbolId.includes('__module__') || symbolId.endsWith('<module>') || kind === 'namespace';
+/** Files whose only node is the document itself — no code symbols to pick from. */
+const DOCUMENT_EXTENSIONS = ['.md', '.mdx', '.rst', '.txt', '.toml', '.yaml', '.yml', '.json'];
+
+/**
+ * A whole-file node: one whose "body" is the entire file, so the bundle
+ * declining to carry it is the index working as intended rather than a symbol
+ * being lost. Three forms occur in this corpus:
+ *
+ * - `foo.ts::__module__#namespace` — the TS/JS module node.
+ * - `foo.py::<module>#function` — the Python one. Note the tail is `#function`,
+ *   not `<module>`: an `endsWith('<module>')` test misses every Python module
+ *   node, which is how the first version of this undercounted them (found in
+ *   review of PR #1117).
+ * - `README.md::README#namespace` — a document node on a non-code file.
+ *
+ * Deliberately *not* `kind === 'namespace'` on its own: at least fifteen
+ * language plugins use that label for real, bounded constructs — Rust `mod`,
+ * Erlang `-module()`, Perl `package`, Tcl namespaces — none of which have a
+ * whole-file body, so a bare kind check would over-match on any corpus wider
+ * than this one.
+ */
+function isWholeFileNode(symbolId: string, kind: string): boolean {
+  if (symbolId.includes('::__module__#') || symbolId.includes('::<module>#')) return true;
+  const filePath = symbolId.split('::')[0] ?? '';
+  return kind === 'namespace' && DOCUMENT_EXTENSIONS.some((e) => filePath.endsWith(e));
 }
 
 function buildTrace(
@@ -377,7 +400,7 @@ function buildTrace(
           // Absent from the assembled primary group means assembly kept nothing
           // for it at all — a different failure from keeping a bodyless stub.
           detail: item ? (item.detail ?? 'unknown') : 'dropped',
-          module_level: isModuleLevel(id, kind),
+          module_level: isWholeFileNode(id, kind),
         });
       }
     }

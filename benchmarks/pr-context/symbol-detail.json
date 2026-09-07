@@ -1,18 +1,20 @@
 {
-  "generated_at": "2026-09-07T14:25:49.906Z",
+  "generated_at": "2026-09-07T15:06:36.055Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "47755aeb"
+    "commit": "77a954e5",
+    "dirty": true
   },
   "total": 338,
   "counts": {
-    "module:no_source": 51,
-    "symbol:full": 180,
-    "module:full": 41,
-    "symbol:no_source": 50,
+    "module:no_source": 67,
+    "symbol:full": 176,
+    "module:full": 45,
+    "symbol:no_source": 34,
     "symbol:dropped": 11,
-    "symbol:signature_only": 3,
-    "module:dropped": 2
+    "symbol:signature_only": 2,
+    "module:dropped": 2,
+    "module:signature_only": 1
   },
   "rows": [
     {
@@ -1349,7 +1351,7 @@
       "symbol_id": "src/requests/adapters.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1373,7 +1375,7 @@
       "symbol_id": "docs/conf.py::<module>#function",
       "kind": "function",
       "detail": "full",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1397,7 +1399,7 @@
       "symbol_id": "src/requests/_types.py::<module>#function",
       "kind": "function",
       "detail": "full",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1453,7 +1455,7 @@
       "symbol_id": "src/requests/utils.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1469,7 +1471,7 @@
       "symbol_id": "tests/test_utils.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1541,7 +1543,7 @@
       "symbol_id": "tests/test_requests.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1589,7 +1591,7 @@
       "symbol_id": "src/requests/_types.py::<module>#function",
       "kind": "function",
       "detail": "full",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1629,7 +1631,7 @@
       "symbol_id": "tests/test_requests.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1661,7 +1663,7 @@
       "symbol_id": "tests/test_requests.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1709,7 +1711,7 @@
       "symbol_id": "tests/test_requests.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "psf/requests",
@@ -1773,7 +1775,7 @@
       "symbol_id": "src/flask/app.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -1813,7 +1815,7 @@
       "symbol_id": "tests/test_basic.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -1853,7 +1855,7 @@
       "symbol_id": "src/flask/sansio/app.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -1877,7 +1879,7 @@
       "symbol_id": "tests/test_basic.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -1957,7 +1959,7 @@
       "symbol_id": "tests/test_cli.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2061,7 +2063,7 @@
       "symbol_id": "src/flask/sansio/app.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2117,7 +2119,7 @@
       "symbol_id": "src/flask/app.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2165,7 +2167,7 @@
       "symbol_id": "src/flask/cli.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2229,7 +2231,7 @@
       "symbol_id": "src/flask/sansio/app.py::<module>#function",
       "kind": "function",
       "detail": "no_source",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2269,7 +2271,7 @@
       "symbol_id": "src/flask/views.py::<module>#function",
       "kind": "function",
       "detail": "signature_only",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",
@@ -2325,7 +2327,7 @@
       "symbol_id": "examples/tutorial/flaskr/db.py::<module>#function",
       "kind": "function",
       "detail": "full",
-      "module_level": false
+      "module_level": true
     },
     {
       "repo": "pallets/flask",

@@ -131,12 +131,16 @@ diagnostic and writes no artifacts):
 | of 338 changed symbols | 8,000 (shipped) | 16,000 | 32,000 | 64,000 |
 |---|---:|---:|---:|---:|
 | body present | 221 | 245 | 281 | 309 |
-| bodyless — module-level node | 53 | 38 | 15 | 2 |
-| bodyless — ordinary symbol | 64 | 55 | 42 | 27 |
+| bodyless — whole-file node | 70 | 52 | 23 | 7 |
+| bodyless — ordinary symbol | 47 | 41 | 34 | 22 |
 | **median token saving** | **70.5%** | **29.7%** | **−0.4%** | **−5.8%** |
 
-**88 of the 117 are budget truncation**, not the module-level pseudo-symbols the
-earlier note guessed at — those are 53, and 51 of them are also just budget.
+A *whole-file node* is one whose body is the entire file — a `__module__` /
+`<module>` node, or a document node on a non-code file — so the bundle declining
+to carry it is the index working as intended. **88 of the 117 are budget
+truncation**: 70 of the bodyless are whole-file nodes and 63 of those come back
+once the budget is raised, which makes them a budget effect too, not a
+structural one.
 
 The curve is monotone in both columns, and that is the finding: every body
 recovered costs saving, and **the saving crosses zero between 16,000 and 32,000
@@ -148,9 +152,10 @@ That reframes what the missed floor asks for. It cannot be met by turning the
 budget up. It is a packing question — which symbols get the budget — not a size
 question.
 
-**29 bodies never arrive at any budget** (27 ordinary symbols, 2 module-level;
-11 of them dropped from the bundle entirely rather than kept as a stub). Those
-are the ones a budget cannot explain, and they are the next thing to look at.
+**29 bodies never arrive at any budget** (22 ordinary symbols, 7 whole-file
+nodes; 11 of them dropped from the bundle entirely rather than kept as a stub).
+Those are the ones a budget cannot explain, and they are the next thing to look
+at.
 
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a
