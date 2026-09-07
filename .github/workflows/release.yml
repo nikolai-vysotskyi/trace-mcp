@@ -269,6 +269,11 @@ jobs:
           '
       # Same exclusions as ci.yml :: test step (hang in toon-drift etc).
       - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+      # TRA-1112: same second step as ci.yml :: test — the two excludes above
+      # that are not covered by that note (`tests/integration/**`,
+      # `tests/daemon/**`) hold the daemon/proxy connection suite, and this is
+      # the last gate before the artifact ships.
+      - run: pnpm exec vitest run tests/integration tests/daemon --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
       # pnpm 10's `--provenance` flow signs the sigstore attestation
       # successfully but the subsequent `PUT /trace-mcp` to the npm
       # registry returns 404 — the OIDC-token-to-npm-scoped-token swap

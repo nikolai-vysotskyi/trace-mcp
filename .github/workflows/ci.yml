@@ -449,6 +449,22 @@ jobs:
         # Exclude both for the 1.38 release — re-include after root-cause fix.
         run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --reporter=verbose --reporter=./tests/file-start-reporter.ts --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
+      # TRA-1112: `tests/integration/**` and `tests/daemon/**` sit in the exclude
+      # list above without appearing in the reasons documented beside it — they
+      # are not the fixture dirs, the perf benchmarks or the two files the 1.38
+      # hang bisection named. What that quietly bought is the whole daemon /
+      # proxy connection suite, mid-session daemon-death guards included,
+      # running in no required gate at all: `cross-platform-test` is the only
+      # job that loads them and it is deliberately not a required check. A
+      # regression that costs an agent all its tools would have merged green.
+      #
+      # Run them as their own step rather than deleting the two excludes: the
+      # invocation above is load-order-sensitive (see the bisection note) and
+      # this keeps a hang here attributable to these files instead of
+      # reopening that hunt. 86 files / ~30 s, against a 12-minute budget.
+      - name: Test (integration + daemon)
+        run: pnpm exec vitest run tests/integration tests/daemon --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+
       - name: Job summary
         if: always()
         run: |
