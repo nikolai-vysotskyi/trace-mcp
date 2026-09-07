@@ -278,6 +278,7 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 | Site IA | Two second-level entries, one per door; door 2 has no page today | The real gap; see Doors |
 | `comparisons.md` | Compares graph-to-graph today. The `/vs/` claim changes shape | Coordinate with SEO — TRA-876 just landed benchmark copy on three `/vs/` pages |
 | `server.json` `description` | **Tools only** — do not carry the category sentence | Deliberate; see Doors |
+| `serverInfo` at `initialize` (`src/server/server.ts`, `SERVER_IDENTITY`) | **Done (TRA-1119).** `title` names the category, `description` is tools-only phrasing plus an explicit denial of the wrong one | The client's server list — the first and often only description a user reads. Three parties filed us as a tracing/observability server from the bare name; evidence in `ops/distribution.md`. No counts here |
 | Directory listings (`ops/distribution.md`) | Only where copy is ours to edit, and **only together with the rename** | See Sequencing |
 | `docs/ROADMAP.md` item 8 | Superseded by this file | Roadmap autopilot's next revision |
 
