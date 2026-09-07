@@ -16,6 +16,7 @@ import type {
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
+import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
@@ -784,7 +785,7 @@ export class IndexingPipeline {
       // #237: yield before the (synchronous, potentially multi-second) graph
       // snapshot capture so /health can be serviced between edge resolution and
       // snapshotting on a full reindex.
-      await new Promise<void>((r) => setImmediate(r));
+      await yieldToEventLoopFair();
       try {
         // P02 Task DAG: graph-snapshots is scheduled via this._dag. The Task
         // wrapper is a pure adapter — it calls `captureGraphSnapshots(store,
@@ -922,14 +923,17 @@ export class IndexingPipeline {
    */
   private async runEdgeResolvers(scope: ChangeScope | undefined): Promise<void> {
     if (scope === undefined) this._lastFullResolveMs = Date.now();
-    const yieldLoop = () => new Promise<void>((r) => setImmediate(r));
     const edgeResolver = new EdgeResolver(this.getPipelineState());
     // #237: the postprocess (edge-resolution) phase runs right after extraction
     // hits 100%, and in the field SIGTERMs delivered during this window were
     // only processed once it finished — i.e. this phase starves the event loop
     // and /health. Yield before the first (heaviest, cross-file) resolver pass
     // so the loop can service a health check between extraction and resolution.
-    await yieldLoop();
+    // Not wrapped in runInOwnTurn: resolveEdges is async, so only its first
+    // synchronous span is covered by the yield. That is enough while every
+    // FrameworkPlugin.resolveEdges is synchronous (plugin-api/types.ts); a
+    // plugin that genuinely awaits I/O would need its own boundary.
+    await yieldToEventLoopFair();
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
       this.buildResolveContext(scope),
@@ -971,8 +975,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolveFileProjectionEdges(scope),
     ];
     for (const stage of stages) {
-      await yieldLoop();
-      stage();
+      await runInOwnTurn(stage);
     }
   }
 
