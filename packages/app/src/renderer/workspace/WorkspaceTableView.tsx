@@ -357,6 +357,7 @@ function Row({
       <td className="px-3" style={stickyCell('right', 0, bg)}>
         <ProjectRowActions
           project={project}
+          label={label}
           canMutate={canMutate}
           confirming={confirming}
           onRequestRemove={onRequestRemove}
@@ -587,6 +588,7 @@ export function WorkspaceTableView({
       {menu && (
         <ProjectContextMenu
           project={menu.project}
+          label={labelByRoot.get(menu.project.root) ?? menu.project.name}
           canMutate={canMutate}
           x={menu.x}
           y={menu.y}
