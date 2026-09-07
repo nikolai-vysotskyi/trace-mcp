@@ -68,6 +68,10 @@ const FOREIGN_PREFIXES = [
   'docs/tool-output-contract.md', // SDL-MCP
   'benchmarks/cross-repo-l1/', // Roam-Code
   'src/jcodemunch_mcp/', // jCodeMunch
+  'src/tokensave/', // TokenSave
+  'src/accounting/', // TokenSave
+  'src/extraction_worker.rs', // TokenSave
+  'src/extraction/', // TokenSave
 ];
 
 /**
