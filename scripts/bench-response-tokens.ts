@@ -128,7 +128,20 @@ const CALLS: Array<{
   { tool: 'get_complexity_report', args: {} },
   // TRA-945: the tail. The twelve above are 88% of recorded calls; these are the
   // next thirteen by volume, taking coverage to 97%.
-  { tool: 'register_edit', args: { file_path: 'src/savings.ts' } },
+  // TRA-1107: `register_edit` was priced from one hand-picked file
+  // (`src/savings.ts`, which fires four duplication warnings at 351 tokens).
+  // Its response is bookkeeping plus one `_duplication_warnings` entry per
+  // similarity the file happens to carry, so the cost is decided by the
+  // argument — the same one-sample defect TRA-993 fixed for the three
+  // volume-heavy tools and TRA-1049 for `find_usages`. It runs over the frame's
+  // committed `file` stratum, the same basket `get_outline` uses. No new
+  // selection rule and no new frame entry.
+  ...OUTLINE_BASKET.map((path) => ({
+    tool: 'register_edit',
+    args: { file_path: path },
+    group: 'register_edit',
+    item: path,
+  })),
   { tool: 'reindex', args: {} },
   {
     tool: 'get_feature_context',
