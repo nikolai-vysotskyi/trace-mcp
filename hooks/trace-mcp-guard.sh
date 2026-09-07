@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.17
+# trace-mcp-guard v0.18
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.18 changes (TRA-1088 — find the sentinel from a subdirectory):
+#   - Resolves the project root by walking up from the cwd to the nearest
+#     ancestor a server has claimed, instead of demanding that the cwd itself
+#     be the root the MCP client launched with. Working one directory down —
+#     a checked-out repo, a monorepo package — made the guard report a live
+#     session as dead and wave every Read/Grep through.
+#   - `/` is never accepted as that ancestor: a registry row for `/` is a known
+#     pathology (TRA-37) and sits on the walk of every path.
 #
 # v0.17 changes (TRA-763 — StateEngine discovery hint):
 #   - Counts guarded tool calls per session and, on the 30th (default,
@@ -384,14 +393,6 @@ backoff_hit() {
 
 # ─── Project + session paths ───────────────────────────────────────
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "default"')
-PROJECT_ROOT="$(pwd)"
-if command -v sha256sum >/dev/null 2>&1; then
-  PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | sha256sum | cut -c1-12)
-elif command -v shasum >/dev/null 2>&1; then
-  PROJECT_HASH=$(echo -n "$PROJECT_ROOT" | shasum -a 256 | cut -c1-12)
-else
-  PROJECT_HASH=""
-fi
 
 # The server↔hook sentinels live under the state home, NOT $TMPDIR (TRA-869).
 # $TMPDIR is per-process: the server is spawned by the MCP client, this hook by
@@ -408,6 +409,61 @@ case "$TRACE_STATE_HOME" in
 esac
 STATUS_HOME="$TRACE_STATE_HOME/status"
 TMP_HOME="${TMPDIR:-/tmp}"
+
+project_hash_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | cut -c1-12
+  elif command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | cut -c1-12
+  fi
+}
+
+# The server hashes the root the MCP CLIENT launched it with; this hook runs in
+# whatever directory the agent is standing in. The moment the agent works in a
+# subdirectory of the session root — a checked-out repo, a monorepo package, a
+# `cd` into src/ — the two hashes stop matching, no sentinel is found, and the
+# guard reports a live server as dead: strict routing switches off and every
+# Read/Grep is waved through, which is the fallback trace-mcp exists to replace.
+# Reproduced on the maintainer's machine against a server `claude mcp list`
+# called connected the same instant (TRA-1088).
+#
+# So walk up to the nearest ancestor a server has claimed. The exact cwd is
+# tried first, which is both the common case and today's whole cost — only a
+# miss (i.e. the broken case, which currently does no useful work at all) pays
+# for the walk, one hash per level.
+#
+# First sentinel wins rather than the freshest: staleness is the next section's
+# job, and it reports a stale ancestor far more usefully than the "not running"
+# this whole block exists to stop being wrong about.
+#
+# `/` is never accepted as a root, however fresh its sentinel. A registry row
+# for `/` is a known pathology, not a project (TRA-37), and it sits on the walk
+# of EVERY path — so honouring it would make the guard claim a live server for
+# every directory on the machine, turning this fix into a permanent false
+# positive that denies Read/Grep with nothing behind it. One such sentinel was
+# live on the maintainer's machine while this was written, and the test suite
+# caught it there.
+# ponytail: bounded at 40 levels; deepen only if a real tree ever nests further.
+PROJECT_ROOT="$(pwd)"
+PROJECT_HASH=$(project_hash_of "$PROJECT_ROOT")
+if [[ -n "$PROJECT_HASH" ]]; then
+  probe_dir="$PROJECT_ROOT"
+  probe_hash="$PROJECT_HASH"
+  probe_depth=0
+  while (( probe_depth < 40 )); do
+    if [[ "$probe_dir" != "/" ]] &&
+       [[ -e "$STATUS_HOME/trace-mcp-alive-${probe_hash}" || -e "$TMP_HOME/trace-mcp-alive-${probe_hash}" ]]; then
+      PROJECT_ROOT="$probe_dir"
+      PROJECT_HASH="$probe_hash"
+      break
+    fi
+    [[ "$probe_dir" == "/" ]] && break
+    probe_dir=$(dirname "$probe_dir")
+    probe_hash=$(project_hash_of "$probe_dir")
+    [[ -n "$probe_hash" ]] || break
+    probe_depth=$((probe_depth + 1))
+  done
+fi
 
 # Whichever of the two was touched most recently, so a sentinel left behind by a
 # crashed new server cannot mask a live old one still refreshing the $TMPDIR
