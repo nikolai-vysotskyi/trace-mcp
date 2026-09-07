@@ -366,6 +366,9 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     async (root: string) => {
       try {
         await daemon.addProject(root);
+        // Clear a banner left by an earlier rejected add — otherwise it
+        // outlives the failure it described and reads as still-broken.
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
         throw err;

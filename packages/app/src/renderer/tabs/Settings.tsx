@@ -1193,7 +1193,11 @@ function ProjectsScreen({
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState(false);
-  const paths = Object.keys(projects);
+  // `null` marks a key queued for removal but not yet saved — the server's
+  // JSONC merge (applySettingsDiff) only deletes a key on an explicit `null`;
+  // a key merely absent from the PUT payload is left untouched on disk, so a
+  // plain `delete` here would silently fail to remove it once Save runs.
+  const paths = Object.keys(projects).filter((p) => projects[p] !== null);
   const staleSet = new Set(staleProjectPaths);
   const stalePaths = paths.filter((p) => staleSet.has(p));
 
@@ -1208,7 +1212,7 @@ function ProjectsScreen({
 
   const removeStale = () => {
     const u = { ...projects };
-    for (const p of stalePaths) delete u[p];
+    for (const p of stalePaths) u[p] = null;
     onUpdate({ ...config, projects: u });
     if (editKey && stalePaths.includes(editKey)) setEditKey(null);
   };
@@ -1274,7 +1278,7 @@ function ProjectsScreen({
                   variant="plain"
                   onClick={() => {
                     const u = { ...projects };
-                    delete u[p];
+                    u[p] = null;
                     onUpdate({ ...config, projects: u });
                     if (editKey === p) setEditKey(null);
                   }}
