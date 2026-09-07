@@ -156,7 +156,16 @@ export function AppMenu({
   const runAction = (action: GlobalAction): (() => void) => {
     if (action.url) {
       const url = action.url;
-      return run(() => void window.electronAPI?.openExternal?.(url));
+      /* "Get help" opens the issue FORM with this copy's version, platform and
+         update channel already in the body (TRA-1155). Only the main process
+         knows those, so ask it; the static URL in the action list is the
+         fallback for a `vite dev` browser, where there is no main process. */
+      const open = async () => {
+        const target =
+          action.id === 'get-help' ? ((await window.electronAPI?.helpUrl?.()) ?? url) : url;
+        await window.electronAPI?.openExternal?.(target);
+      };
+      return run(() => void open());
     }
     if (action.id === 'settings') return run(onSettings);
     return run(onCheckForUpdate);

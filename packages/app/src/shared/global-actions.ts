@@ -40,6 +40,40 @@ export interface GlobalAction {
   icon: string;
 }
 
+const ISSUES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/issues';
+
+/** The environment facts every app bug report so far has needed. Filled in by
+    whichever process knows them: the main process reads them off `app` and
+    `process`, the renderer asks the main process for the finished URL. */
+export interface HelpEnv {
+  version: string;
+  platform: string;
+  arch: string;
+  /** Packaged builds update themselves through electron-updater; a dev run
+      does not, and that difference has explained bug reports before. */
+  autoUpdate: boolean;
+}
+
+/** "Get help" as a pre-filled new issue (TRA-1155). Windows installs are the
+    only deliberate acquisition this project has and the app has never received
+    a single report — sending someone to a list of closed issues with no form
+    and no hint of what we need is most of the reason. */
+export function helpUrl(env: HelpEnv): string {
+  const body = [
+    'What happened:',
+    '',
+    'What you expected:',
+    '',
+    'Steps to reproduce:',
+    '',
+    '---',
+    `App version: ${env.version}`,
+    `Platform: ${env.platform} ${env.arch}`,
+    `Updates: ${env.autoUpdate ? 'electron-updater' : 'none'}`,
+  ].join('\n');
+  return `${ISSUES_URL}/new?title=${encodeURIComponent('[app] ')}&body=${encodeURIComponent(body)}`;
+}
+
 /** Order here is the order the in-app menu renders them in. */
 export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
   {
@@ -60,11 +94,16 @@ export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
     icon: 'scroll',
   },
   /* A question mark, not a speech bubble: this opens GitHub issues, and a
-     speech bubble would promise a person on the other end. */
+     speech bubble would promise a person on the other end.
+
+     The issue FORM, not the issue list: the list is where every issue is
+     closed and nothing tells a reporter what we would need to know (TRA-1155).
+     This URL is the fallback — both surfaces replace it with `helpUrl()`,
+     which prefills the environment. */
   {
     id: 'get-help',
     labelKey: 'menu:getHelp',
-    url: 'https://github.com/nikolai-vysotskyi/trace-mcp/issues',
+    url: `${ISSUES_URL}/new`,
     icon: 'help',
   },
   {
