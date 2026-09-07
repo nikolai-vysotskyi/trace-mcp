@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.8 (Windows)
+# trace-mcp-launcher v0.6.9 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -160,10 +160,20 @@ function Test-RuntimeShim {
     return (Test-Path -LiteralPath $target -PathType Leaf)
 }
 
+# `Length -gt 0`, not merely "the file is there" (TRA-1132). Test-NodeBinary
+# above closed "exists but does not run" for node; this is the same class on
+# the other half of the pair. A zero-byte dist/cli.js - what a disk-full write,
+# an unclean shutdown or a half-restored backup leaves behind - is a valid
+# empty program to node: exit 0, no output, no stderr. The client sees a server
+# that starts, says nothing and leaves; the shim logs no ERROR because its own
+# launch worked; and the pair is already in launcher.env, so every later start
+# repeats it.
 function Test-CliFile {
     param([string]$Path)
     if (-not $Path) { return $false }
-    return (Test-Path -LiteralPath $Path -PathType Leaf)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    return ($null -ne $item -and $item.Length -gt 0)
 }
 
 # Persist a probed (or freshly verified) pair so the next start takes the fast path.
@@ -404,7 +414,7 @@ function Find-Cli {
     $roots = @(Get-PkgRoots $NodeExe)
     foreach ($r in $roots) {
         $c = Join-Path $r 'trace-mcp\dist\cli.js'
-        if (Test-Path -LiteralPath $c -PathType Leaf) {
+        if (Test-CliFile $c) {
             return (Resolve-Path -LiteralPath $c).Path
         }
     }
@@ -422,7 +432,7 @@ function Find-Cli {
                Sort-Object @{ Expression = { if ($_.Name -like 'trace-mcp.tmcp-bak-*') { 0 } else { 1 } } },
                            @{ Expression = 'LastWriteTime'; Descending = $true } |
                ForEach-Object { Join-Path $_.FullName 'dist\cli.js' } |
-               Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+               Where-Object { Test-CliFile $_ } |
                Select-Object -First 1
         if ($bak) { return (Resolve-Path -LiteralPath $bak).Path }
     }
