@@ -1181,16 +1181,25 @@ function PickerScreen({ picker, onBack }: { picker: PickerInfo; onBack: () => vo
 function ProjectsScreen({
   config,
   onUpdate,
+  staleProjectPaths,
 }: {
   config: Record<string, unknown>;
   onUpdate: (c: Record<string, unknown>) => void;
+  /** Override paths whose folder no longer exists on disk (TRA-1054). */
+  staleProjectPaths: string[];
 }) {
   const projects = (config.projects ?? {}) as Record<string, unknown>;
   const [newPath, setNewPath] = useState('');
   const [editKey, setEditKey] = useState<string | null>(null);
   const [editJson, setEditJson] = useState('');
   const [editError, setEditError] = useState(false);
-  const paths = Object.keys(projects);
+  // `null` marks a key queued for removal but not yet saved — the server's
+  // JSONC merge (applySettingsDiff) only deletes a key on an explicit `null`;
+  // a key merely absent from the PUT payload is left untouched on disk, so a
+  // plain `delete` here would silently fail to remove it once Save runs.
+  const paths = Object.keys(projects).filter((p) => projects[p] !== null);
+  const staleSet = new Set(staleProjectPaths);
+  const stalePaths = paths.filter((p) => staleSet.has(p));
 
   const add = () => {
     const p = newPath.trim();
@@ -1199,6 +1208,13 @@ function ProjectsScreen({
     setEditKey(p);
     setEditJson('{}');
     setNewPath('');
+  };
+
+  const removeStale = () => {
+    const u = { ...projects };
+    for (const p of stalePaths) u[p] = null;
+    onUpdate({ ...config, projects: u });
+    if (editKey && stalePaths.includes(editKey)) setEditKey(null);
   };
 
   return (
@@ -1210,6 +1226,17 @@ function ProjectsScreen({
         {t('settings:projects.intro')}
       </p>
 
+      {stalePaths.length > 0 && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="text-[11px]" style={{ color: 'var(--status-red)' }}>
+            {t('settings:projects.staleCount', { count: stalePaths.length, n: stalePaths.length })}
+          </span>
+          <Button size="small" variant="plain" onClick={removeStale}>
+            {t('settings:projects.removeStale', { count: stalePaths.length, n: stalePaths.length })}
+          </Button>
+        </div>
+      )}
+
       {paths.length > 0 && (
         <Card>
           {paths.map((p, i) => (
@@ -1217,11 +1244,19 @@ function ProjectsScreen({
               <div className="flex items-center gap-2">
                 <span
                   className="flex-1 min-w-0 truncate text-[13px] leading-4"
-                  style={{ fontFamily: 'var(--font-mono)', color: 'var(--label)' }}
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    color: staleSet.has(p) ? 'var(--label-secondary)' : 'var(--label)',
+                  }}
                   title={p}
                 >
                   {p}
                 </span>
+                {staleSet.has(p) && (
+                  <span className="text-[11px] whitespace-nowrap" style={{ color: 'var(--status-red)' }}>
+                    {t('settings:projects.folderNotFound')}
+                  </span>
+                )}
                 <Button
                   size="small"
                   active={editKey === p}
@@ -1243,7 +1278,7 @@ function ProjectsScreen({
                   variant="plain"
                   onClick={() => {
                     const u = { ...projects };
-                    delete u[p];
+                    u[p] = null;
                     onUpdate({ ...config, projects: u });
                     if (editKey === p) setEditKey(null);
                   }}
@@ -2050,7 +2085,13 @@ export function Settings({
             />
           )}
 
-          {screen.type === 'projects' && <ProjectsScreen config={config} onUpdate={updateFull} />}
+          {screen.type === 'projects' && (
+            <ProjectsScreen
+              config={config}
+              onUpdate={updateFull}
+              staleProjectPaths={settings?.staleProjectPaths ?? []}
+            />
+          )}
 
           {showDiff && <DiffPanel entries={diffs} onClose={() => setShowDiff(false)} />}
         </div>

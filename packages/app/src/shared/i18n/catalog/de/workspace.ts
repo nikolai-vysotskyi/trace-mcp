@@ -48,6 +48,7 @@ export const workspace = {
   filterStatusOkTitle: 'Projekte, die fehlerfrei indexiert wurden',
   filterStatusIndexingTitle: 'Projekte, die gerade indexiert werden',
   filterStatusErrorTitle: 'Projekte, deren letzte Indexierung fehlschlug',
+  filterStatusMissingTitle: 'Projekte, deren Ordner nicht mehr existiert',
 
   // ── Status words ────────────────────────────────────────────────────────
   statusOk: 'OK',
@@ -55,6 +56,7 @@ export const workspace = {
   statusComputing: 'Wird berechnet',
   statusError: 'Fehler',
   statusNotLoaded: 'Nicht geladen',
+  statusMissing: 'Ordner fehlt',
 
   // ── KPI strip ───────────────────────────────────────────────────────────
   kpiProjects: 'Projekte',
@@ -124,6 +126,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} ausgewählt',
   bulkRemove: 'Entfernen',
   bulkReindexFailed: 'Die Neuindexierung ist bei mindestens einem Projekt fehlgeschlagen',
+  bulkReindexDisabledMissing: 'Neuindexierung nicht möglich – der Ordner existiert nicht mehr',
   bulkRemoveFailed: 'Das Entfernen ist bei mindestens einem Projekt fehlgeschlagen',
   bulkExportJson: 'JSON exportieren',
   bulkExportCsv: 'CSV exportieren',

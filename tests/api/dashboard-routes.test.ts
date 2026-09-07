@@ -44,19 +44,54 @@ beforeAll(() => {
   for (let i = 0; i < PROJECT_COUNT; i++) {
     const root = path.join(tmpHome, `proj${i}`);
     const dbPath = path.join(tmpHome, `proj${i}.db`);
+    // Every root exists on disk — this fixture is about the DB half of
+    // "not yet indexed", not the "the folder itself is gone" case (that one
+    // gets its own registry entry below, TRA-1054).
+    fs.mkdirSync(root, { recursive: true });
     // Half the registry points at databases that do not exist — the shape a
-    // real registry drifts into (TRA-1054). Those rows must stay cheap too.
+    // real registry drifts into. Those rows must stay cheap too.
     if (i % 2 === 0) makeDb(dbPath);
     projects[root] = { name: `proj${i}`, root, dbPath, lastIndexed: null, addedAt: '' };
   }
+  // A registry row whose root directory has been deleted — the ghost entry
+  // TRA-1054 is about. Must classify as `missing`, not `not_loaded`.
+  const goneRoot = path.join(tmpHome, 'gone-project');
+  projects[goneRoot] = {
+    name: 'gone-project',
+    root: goneRoot,
+    dbPath: path.join(tmpHome, 'gone-project.db'),
+    lastIndexed: null,
+    addedAt: '',
+  };
   fs.writeFileSync(path.join(tmpHome, 'registry.json'), JSON.stringify({ version: 1, projects }));
   // No timeout override on purpose: the seed is ~10ms now, so the default hook
   // ceiling is the regression guard. If this hook ever needs a bigger number
   // again, the seed got expensive — fix the seed, not the ceiling (TRA-790).
 });
 
-afterAll(() => {
-  fs.rmSync(tmpHome, { recursive: true, force: true });
+afterAll(async () => {
+  // The background refreshAll() this suite triggers is fire-and-forget
+  // (`void refreshAll()` in dashboard-routes.ts) and opens each project's DB
+  // again for the expensive pass — nothing in this file awaits it, so a
+  // handle can still be open on `projN.db` the instant the last test
+  // resolves. `waitForIdleForTests()` resolves once that pass has actually
+  // finished, which clears the ordinary case.
+  //
+  // What's left is a Windows-only residue this repo has hit before for a
+  // different file (TRA-1104): the OS can keep a just-closed file briefly
+  // busy after a legitimate close() — outside the process's control and not
+  // bounded by anything this suite does. POSIX tolerates unlinking an open
+  // file regardless; Windows doesn't (EBUSY). The temp directory lives under
+  // `os.tmpdir()` on a CI runner that is destroyed after the job — failing
+  // to delete a few KB of leftover fixture there is not a real problem, so
+  // cleanup best-effort and never fails the suite over it.
+  const { waitForIdleForTests } = await import('../../src/api/dashboard-routes.js');
+  await waitForIdleForTests();
+  try {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  } catch {
+    /* best-effort — see above */
+  }
   delete process.env.TRACE_MCP_DATA_DIR;
 });
 
@@ -93,7 +128,7 @@ describe('GET /api/dashboard/projects', () => {
       computing: boolean;
       computedAt: number;
     };
-    expect(parsed.projects).toHaveLength(PROJECT_COUNT);
+    expect(parsed.projects).toHaveLength(PROJECT_COUNT + 1); // +1 for the deleted-root fixture below
     // The cache outlives a daemon restart, so the age of the numbers has to
     // travel with them — a snapshot that cannot date itself is TRA-1072.
     expect(typeof parsed.computedAt).toBe('number');
@@ -110,6 +145,24 @@ describe('GET /api/dashboard/projects', () => {
     const res = await get('/api/dashboard/projects');
     expect(performance.now() - t0).toBeLessThan(200);
     expect(res.status).toBe(200);
+  });
+
+  // TRA-1054: a registry row whose `root` no longer exists on disk is a dead
+  // row, not "not yet indexed" — the two must not collapse to the same
+  // status, because the UI decides Open/Re-index and the KPI denominator off
+  // it (types.ts deriveKpis / statusLabel). The route never computes inline
+  // (TRA-1053), so a brand-new row reads `computing` until the background
+  // pass reaches it — poll rather than asserting on the very first response.
+  it('classifies a deleted-root registry entry as `missing`, not `not_loaded`', async () => {
+    let status: string | undefined;
+    for (let i = 0; i < 50; i++) {
+      const res = await get('/api/dashboard/projects');
+      const parsed = JSON.parse(res.body) as { projects: Array<{ root: string; status: string }> };
+      status = parsed.projects.find((p) => p.root.endsWith('gone-project'))?.status;
+      if (status && status !== 'computing') break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(status).toBe('missing');
   });
 });
 

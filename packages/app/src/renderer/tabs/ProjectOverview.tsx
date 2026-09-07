@@ -591,7 +591,7 @@ export function ProjectOverview({
             </Button>
           )
         ) : (
-          <Button variant="prominent" icon="add" onClick={() => addProject(root)}>
+          <Button variant="prominent" icon="add" onClick={() => void addProject(root).catch(() => {})}>
             {untracked ? t('actionReAdd') : t('actionIndex')}
           </Button>
         )}
@@ -770,7 +770,7 @@ export function ProjectOverview({
                   title={t('emptyIndexTitle')}
                   subtitle={t('emptyIndexBody')}
                   action={
-                    <Button variant="prominent" icon="add" onClick={() => addProject(root)}>
+                    <Button variant="prominent" icon="add" onClick={() => void addProject(root).catch(() => {})}>
                       {t('actionIndex')}
                     </Button>
                   }

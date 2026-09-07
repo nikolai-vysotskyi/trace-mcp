@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, within } from '@testing-library/react';
+import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ROW_H,
@@ -165,6 +165,34 @@ describe('WorkspaceTableView row content', () => {
     expect(box.tagName).toBe('INPUT');
     expect(box.type).toBe('checkbox');
     expect(box.style.width).toBe('');
+  });
+
+  // TRA-1054: the Open icon button is disabled for a deleted root, but the
+  // row itself used to stay clickable as a bypass — clicking anywhere in the
+  // row, not just the disabled button, called onOpen on a directory that no
+  // longer exists.
+  it('does not open a `missing` project on row click', () => {
+    let opened: string | null = null;
+    const { container } = render(
+      <WorkspaceTableView
+        projects={[{ ...PROJECT, displayStatus: 'missing' }]}
+        labelByRoot={new Map([[PROJECT.root, PROJECT.name]])}
+        sortKey="name"
+        sortDir="asc"
+        onSort={() => {}}
+        selected={new Set()}
+        onSelectChange={() => {}}
+        onSelectAll={() => {}}
+        onOpen={(root) => {
+          opened = root;
+        }}
+        onReindex={() => {}}
+        onRemove={() => {}}
+        canMutate
+      />,
+    );
+    fireEvent.click(container.querySelector('tbody tr')!);
+    expect(opened).toBeNull();
   });
 });
 

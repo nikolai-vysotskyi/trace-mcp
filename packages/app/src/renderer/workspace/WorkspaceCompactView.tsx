@@ -78,7 +78,9 @@ function CompactRow({
   return (
     <div
       role="listitem"
-      className="flex items-center gap-2 px-3 cursor-pointer transition-colors"
+      className={`flex items-center gap-2 px-3 transition-colors ${
+        project.displayStatus === 'missing' ? 'cursor-default' : 'cursor-pointer'
+      }`}
       style={{
         minHeight: COMPACT_ROW_H,
         borderBottom: '0.5px solid var(--separator)',
@@ -86,7 +88,9 @@ function CompactRow({
         outline: cursored ? '2px solid var(--accent)' : undefined,
         outlineOffset: -2,
       }}
-      onClick={() => onOpen(project.root)}
+      // Nothing to open for a deleted root (TRA-1054) — the row-level click
+      // is a fallback for the disabled Open button, not a way around it.
+      onClick={() => project.displayStatus !== 'missing' && onOpen(project.root)}
       onContextMenu={(e) => onContextMenu(e, project)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -195,7 +199,7 @@ export function WorkspaceCompactView({
           moveCursor(-1);
         } else if (e.key === 'Enter' && cursor >= 0 && cursor < projects.length) {
           e.preventDefault();
-          onOpen(projects[cursor].root);
+          if (projects[cursor].displayStatus !== 'missing') onOpen(projects[cursor].root);
         } else if (e.key === 'Escape') {
           setCursor(-1);
           setConfirmRoot(null);

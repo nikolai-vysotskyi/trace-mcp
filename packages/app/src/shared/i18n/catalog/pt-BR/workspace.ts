@@ -50,12 +50,14 @@ export const workspace = {
   filterStatusOkTitle: 'Projetos indexados sem erros',
   filterStatusIndexingTitle: 'Projetos sendo indexados agora',
   filterStatusErrorTitle: 'Projetos cuja última indexação falhou',
+  filterStatusMissingTitle: 'Projetos cuja pasta não existe mais',
 
   statusOk: 'OK',
   statusIndexing: 'Indexando',
   statusComputing: 'Calculando',
   statusError: 'Erro',
   statusNotLoaded: 'Não carregado',
+  statusMissing: 'Pasta ausente',
 
   kpiProjects: 'Projetos',
   kpiFiles: 'Arquivos',
@@ -126,6 +128,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} selecionados',
   bulkRemove: 'Remover',
   bulkReindexFailed: 'A reindexação falhou em pelo menos um projeto',
+  bulkReindexDisabledMissing: 'Não é possível reindexar — a pasta não existe mais',
   bulkRemoveFailed: 'A remoção falhou em pelo menos um projeto',
   bulkExportJson: 'Exportar JSON',
   bulkExportCsv: 'Exportar CSV',

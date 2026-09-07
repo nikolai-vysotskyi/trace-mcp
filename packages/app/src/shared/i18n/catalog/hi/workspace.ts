@@ -46,12 +46,14 @@ export const workspace = {
   filterStatusOkTitle: 'जो प्रोजेक्ट बिना दिक्कत इंडेक्स हुए',
   filterStatusIndexingTitle: 'जो प्रोजेक्ट अभी इंडेक्स हो रहे हैं',
   filterStatusErrorTitle: 'जिन प्रोजेक्ट का पिछला इंडेक्स विफल रहा',
+  filterStatusMissingTitle: 'जिन प्रोजेक्ट का फ़ोल्डर अब मौजूद नहीं है',
 
   statusOk: 'ठीक',
   statusIndexing: 'इंडेक्स हो रहा है',
   statusComputing: 'गणना हो रही है',
   statusError: 'एरर',
   statusNotLoaded: 'लोड नहीं हुआ',
+  statusMissing: 'फ़ोल्डर गायब',
 
   kpiProjects: 'प्रोजेक्ट',
   kpiFiles: 'फ़ाइलें',
@@ -116,6 +118,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} चुने गए',
   bulkRemove: 'हटाएँ',
   bulkReindexFailed: 'कम से कम एक प्रोजेक्ट का reindex विफल रहा',
+  bulkReindexDisabledMissing: 'रीइंडेक्स संभव नहीं — फ़ोल्डर अब मौजूद नहीं है',
   bulkRemoveFailed: 'कम से कम एक प्रोजेक्ट हटाया नहीं जा सका',
   bulkExportJson: 'JSON एक्सपोर्ट',
   bulkExportCsv: 'CSV एक्सपोर्ट',

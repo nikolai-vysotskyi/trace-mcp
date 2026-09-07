@@ -59,6 +59,7 @@ export const workspace = {
   filterStatusOkTitle: 'Projects that indexed cleanly',
   filterStatusIndexingTitle: 'Projects currently being indexed',
   filterStatusErrorTitle: 'Projects whose last index failed',
+  filterStatusMissingTitle: 'Projects whose folder no longer exists',
 
   // ── Status words (statusLabel in types.ts, and the filter menu) ──────────
   statusOk: 'OK',
@@ -66,6 +67,7 @@ export const workspace = {
   statusComputing: 'Computing',
   statusError: 'Error',
   statusNotLoaded: 'Not loaded',
+  statusMissing: 'Missing folder',
 
   // ── KPI strip ───────────────────────────────────────────────────────────
   kpiProjects: 'Projects',
@@ -141,6 +143,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} selected',
   bulkRemove: 'Remove',
   bulkReindexFailed: 'Reindex failed for at least one project',
+  bulkReindexDisabledMissing: 'Cannot re-index — the folder no longer exists',
   bulkRemoveFailed: 'Remove failed for at least one project',
   bulkExportJson: 'Export JSON',
   bulkExportCsv: 'Export CSV',
