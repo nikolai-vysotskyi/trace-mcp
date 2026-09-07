@@ -59,7 +59,30 @@ Two results matter more than the headline:
 
 `src/eval/state-benchmark.ts` remains a closed-form model whose output is a
 restatement of its constants; the replay harness is the number to quote. Neither
-measures task success — we have no Pass@1 evidence, only prompt cost.
+measures task success.
+
+### What task success costs (2026-09-07)
+
+`pnpm bench:state-recall` is the first SKILL.state measurement with an arm that
+can come out wrong: twelve twenty-turn tasks with planted facts, exact-match
+grading, thresholds pinned before the first call
+(`benchmarks/state-recall/preregistration.md`).
+
+| Arm | Recall | Pass@1 |
+|---|---:|---:|
+| Whole transcript | 100.0% | 100% |
+| Transcript truncated to 4 500 tokens | 43.1% | 0% |
+| Rewritten state block + last 2 turns | **76.4%** | **67%** |
+
+The state block beats a truncating context by 33 points and **loses 23.6 points
+to a transcript that fits** — wider than the 15-point gap TRA-568 found on
+context packing. Every one of the 17 lost facts was written into state and then
+erased by a later rewrite; none was missed at capture.
+
+Read the caveat with the number: that arm rewrites its whole block each turn,
+where the shipped `trace_state_patch` applies an RFC 7396 merge patch that
+cannot touch a key it does not name. The measured loop is not yet the shipped
+loop. `benchmarks/state-recall/README.md` has the full reading.
 
 ---
 

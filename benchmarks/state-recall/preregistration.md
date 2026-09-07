@@ -1,6 +1,8 @@
 # State-recall A/B — preregistration
 
-**verdict: PENDING**
+**verdict: H1 PASS · H2 PASS · H3 FAIL · H4 PASS** — run of 2026-09-07, 12/12
+tasks, `results.json`. Thresholds below are as committed; nothing in this file
+was edited after the run except this line. The reading is in `README.md`.
 
 Committed before the first model call, per TRA-920. Thresholds below are not to
 be moved after results land; if a threshold turns out to be the wrong question,

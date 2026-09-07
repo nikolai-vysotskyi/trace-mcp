@@ -67,7 +67,7 @@ interface Answer {
   output_tokens: number;
 }
 
-async function askModel(system: string, prompt: string): Promise<Answer> {
+function spawnCli(system: string, prompt: string): Promise<string> {
   const args = [
     '-p',
     '--model',
@@ -86,7 +86,7 @@ async function askModel(system: string, prompt: string): Promise<Answer> {
     '',
     '--no-session-persistence',
   ];
-  const stdout = await new Promise<string>((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const child = spawn('claude', args, {
       cwd: SANDBOX,
       env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
@@ -107,18 +107,40 @@ async function askModel(system: string, prompt: string): Promise<Answer> {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(out);
-      else reject(new Error(`claude exited ${code}: ${err.slice(-400)}`));
+      else reject(new Error(`claude exited ${code}: ${err.slice(-400) || '(no stderr)'}`));
     });
     child.stdin.end(prompt);
   });
-  const d = JSON.parse(stdout) as {
-    is_error?: boolean;
-    result: string;
-    duration_api_ms: number;
-    usage?: { output_tokens?: number };
-  };
-  if (d.is_error) throw new Error(`model error: ${String(d.result).slice(0, 300)}`);
-  return { text: d.result, api_ms: d.duration_api_ms, output_tokens: d.usage?.output_tokens ?? 0 };
+}
+
+/**
+ * One pinned model call. Under concurrency the CLI intermittently exits 1 with
+ * an empty stderr — a transient refusal, not a bad prompt. Retried rather than
+ * dropped: dropping tasks would quietly reshape the corpus the preregistration
+ * pinned, and the survivors would be the easy ones.
+ */
+async function askModel(system: string, prompt: string): Promise<Answer> {
+  let last: Error | undefined;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const d = JSON.parse(await spawnCli(system, prompt)) as {
+        is_error?: boolean;
+        result: string;
+        duration_api_ms: number;
+        usage?: { output_tokens?: number };
+      };
+      if (d.is_error) throw new Error(`model error: ${String(d.result).slice(0, 300)}`);
+      return {
+        text: d.result,
+        api_ms: d.duration_api_ms,
+        output_tokens: d.usage?.output_tokens ?? 0,
+      };
+    } catch (e) {
+      last = e as Error;
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 5_000 * attempt));
+    }
+  }
+  throw last;
 }
 
 function transcriptPrompt(task: RecallTask, turns: RecallTask['turns'], dropped: number): string {
@@ -136,6 +158,10 @@ interface ArmRun {
   prompt_tokens: number;
   api_ms: number;
   calls: number;
+  /** State arm only. The diagnostic that separates "never written down" from
+   * "written down, then dropped by a later rewrite". */
+  state_final?: string;
+  state_fact_life?: { id: string; literal: string; written_at: number | null; survived: boolean }[];
 }
 
 async function runFull(task: RecallTask): Promise<ArmRun> {
@@ -166,6 +192,7 @@ async function runState(task: RecallTask): Promise<ArmRun> {
   let promptTokens = 0;
   let apiMs = 0;
   let calls = 0;
+  const trace: string[] = [];
 
   for (const turn of task.turns) {
     const window = task.turns.slice(Math.max(0, turn.n - 1 - WINDOW), turn.n - 1);
@@ -174,6 +201,7 @@ async function runState(task: RecallTask): Promise<ArmRun> {
     }\n\n## New tool result\n${renderTurn(turn)}\n\nRewrite the state block so it carries everything this task will still need at the end.`;
     const a = await askModel(STATE_SYSTEM, prompt);
     state = a.text.trim();
+    trace.push(state);
     promptTokens += estimateTokens(prompt);
     apiMs += a.api_ms;
     calls++;
@@ -189,6 +217,16 @@ async function runState(task: RecallTask): Promise<ArmRun> {
     prompt_tokens: promptTokens + estimateTokens(finalPrompt),
     api_ms: apiMs + a.api_ms,
     calls: calls + 1,
+    state_final: state,
+    state_fact_life: task.facts.map((f) => {
+      const at = trace.findIndex((block) => block.toUpperCase().includes(f.literal));
+      return {
+        id: f.id,
+        literal: f.literal,
+        written_at: at === -1 ? null : at + 1,
+        survived: state.toUpperCase().includes(f.literal),
+      };
+    }),
   };
 }
 

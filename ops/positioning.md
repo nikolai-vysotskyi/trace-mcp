@@ -346,6 +346,21 @@ narrowing it to the graph is the specific move this file exists to prevent.
   disproved about our own counter. **No part of that number goes on a public
   surface until one arm can fail** (roadmap item 8). This pass answers where
   state belongs, not what may be claimed for it.
+
+  **2026-09-07, TRA-1115: an arm can now fail, and it failed.**
+  `pnpm bench:state-recall` grades long-horizon fact retention against a planted
+  ground truth. Three arms: the whole transcript recalls 100%, a transcript
+  truncated to 4 500 tokens recalls 43.1%, and a rewritten state block recalls
+  **76.4%** at Pass@1 67%. So the state block buys 33 points over a truncating
+  context and **gives up 23.6 points against a transcript that fits** — wider
+  than TRA-568's 15-point gap on context packing. All 17 lost facts were written
+  into state and then erased by a later rewrite; none was missed at capture.
+  The embargo therefore stays: the honest sentence today is "cheaper than
+  truncation, not free against a full transcript." One caveat travels with it —
+  the measured arm rewrites its block each turn, while the shipped
+  `trace_state_patch` is an RFC 7396 merge patch that cannot touch keys it does
+  not name, so the shipped loop has not been measured yet. Reading:
+  `benchmarks/state-recall/README.md`.
 - **Nothing here is measured on a client other than Claude Code.** Door 2 is
   mostly Claude-Code-shaped: the guard hook and the `tweakcc` pairing (third
   party, see the boundary above) are Claude Code only,
