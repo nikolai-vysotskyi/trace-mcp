@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { announceDbHolder } from '../src/db-holders.js';
-import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
+import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, getDbPath, REGISTRY_PATH } from '../src/global.js';
 import {
   findEphemeralProjects,
   findOverlapForNewRoot,
@@ -349,6 +349,32 @@ describe('ephemeral workdirs are never persisted', () => {
     expect(resolveRegisteredAncestor(path.join(workdir, 'packages', 'app'))?.root).toBe(workdir);
     // Its DB lives in the ephemeral index dir so it stays collectable by age.
     expect(entry.dbPath.startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(true);
+  });
+
+  // TRA-1136: the ephemeral registry entry is process-local, so every *other*
+  // process — and `ProjectManager.addProject({ persist: false })`, which never
+  // registers at all — resolved these roots through a bare `getDbPath()` and
+  // created a DB straight in INDEX_DIR. Nothing sweeps that: `sweepEphemeralDbs`
+  // only walks EPHEMERAL_INDEX_DIR and `prune` can only call it
+  // `orphan_unregistered`. 250 such files / 818 MB on the reported machine, still
+  // growing daily. Routing on the path shape is what makes the two agree.
+  it('routes an unregistered one-shot workdir at the ephemeral index dir', () => {
+    const workdir = makeEphemeralWorkdir();
+
+    expect(getProject(workdir)).toBeNull();
+    expect(getDbPath(workdir).startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(true);
+  });
+
+  it('routes an unregistered one-shot task scratch dir the same way', () => {
+    const dir = makeEphemeralTaskDir();
+
+    expect(getDbPath(dir).startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(true);
+  });
+
+  it('leaves an ordinary project fixture in the main index dir', () => {
+    const repo = makeTmpRepo();
+
+    expect(getDbPath(repo).startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(false);
   });
 
   it('leaves the registry empty after a saturating burst of agent runs', () => {
