@@ -712,6 +712,87 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         );
         expect(fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8')).toContain('ERROR');
       });
+
+      // TRA-1132: the same class as the two cases above, on the other half of
+      // the pair. `[ -f ]` proves the recorded cli.js exists, never that it
+      // holds a program — and a zero-byte dist/cli.js is what a disk-full
+      // write, an unclean shutdown or a botched restore leaves behind.
+      //
+      // Worse than the node case, because node runs an empty file happily:
+      // exit 0, no output, no stderr. The MCP client sees a server that
+      // starts, says nothing and leaves, so it reports "failed to connect"
+      // with nothing to go on; the shim logs no ERROR (its own exec worked),
+      // so the launcher.log error count reads clean while every session dies;
+      // and the config still pins the dead path, so every later start repeats
+      // it. Reproduced with a complete copy of the package sitting unused in
+      // the same prefix.
+      it('reprobes when the configured cli.js exists but is empty', () => {
+        const { home, traceHome, node } = setupFakeHome();
+        const empty = path.join(home, 'empty-cli.js');
+        fs.writeFileSync(empty, '');
+        writeConfig(traceHome, node, empty);
+        const good = plantNvmPackage(home);
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        // Only the cli is replaced — the configured node still runs.
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${good} serve`);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).toContain(`TRACE_MCP_CLI="${good}"`);
+        expect(cfg).not.toContain(empty);
+      });
+
+      // The probe has to apply the same rule, or the gate above just moves the
+      // failure one step later: an update that truncated dist/cli.js in the
+      // live package directory would be picked straight back up, and the
+      // complete copy the updater renamed aside would go unused.
+      it('probe skips an empty package cli.js and falls back to the swap-window backup', () => {
+        const { home, traceHome, node } = setupFakeHome();
+        const root = path.join(home, 'prefix', 'lib', 'node_modules');
+        fs.mkdirSync(path.join(root, 'trace-mcp', 'dist'), { recursive: true });
+        fs.writeFileSync(path.join(root, 'trace-mcp', 'dist', 'cli.js'), '');
+        fs.mkdirSync(path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist'), { recursive: true });
+        fs.writeFileSync(
+          path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist', 'cli.js'),
+          '// complete previous build\n',
+        );
+        const backup = fs.realpathSync(
+          path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist', 'cli.js'),
+        );
+        fs.writeFileSync(path.join(traceHome, 'pkg-roots'), `${root}\n`);
+        writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${backup} serve`);
+      });
+
+      // Review of #1097: the first cut of this gate used `[ -s ]` alone, which
+      // means "exists and size > 0" — and a directory satisfies that (verified:
+      // an empty dir reports size 64 on APFS). So a stray `cli.js` directory,
+      // the same half-restored-backup class the gate exists for in another
+      // shape, would have been accepted and exec'd instead of falling through
+      // to the backup. `is_usable_script` needs both halves.
+      it('reprobes when the configured cli.js is a directory', () => {
+        const { home, traceHome, node } = setupFakeHome();
+        const asDir = path.join(home, 'cli.js');
+        fs.mkdirSync(asDir);
+        writeConfig(traceHome, node, asDir);
+        const good = plantNvmPackage(home);
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${good} serve`);
+      });
     });
 
     it('finds the package in a bundled runtime prefix recorded by a past install', () => {
