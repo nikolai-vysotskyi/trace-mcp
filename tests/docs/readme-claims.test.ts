@@ -21,9 +21,13 @@ import {
  * pointer at the exact line in README to fix (or at the source of truth
  * to update).
  *
- * Tolerance: ±2 on framework / language / tool counts so a single in-flight
- * plugin add doesn't block unrelated CI runs. Outside the tolerance the test
- * fails — that's the signal to update README.
+ * TRA-1086: every guarded surface is compared to `docs/_data/counts.yml`
+ * EXACTLY, and `counts.yml` alone is compared to the live registry. The old
+ * shape gave each surface its own ±tolerance against the registry and never
+ * compared two surfaces to each other, so README could sit at 178 while
+ * counts.yml said 181 and the whole suite stayed green — two surfaces could
+ * legally differ by up to 7. One comparison against the registry instead of
+ * eighteen, and the file's "single source of truth" header is now true.
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
@@ -61,14 +65,23 @@ function readReadme(): string {
   return readFileSync(README_PATH, 'utf-8');
 }
 
+/**
+ * The numbers every guarded surface must state. `counts.yml` is the anchor;
+ * the single registry comparison below keeps the anchor itself honest.
+ */
+const CLAIMED = {
+  tools: lookupCount('tools') as number,
+  languages: lookupCount('languages') as number,
+  frameworks: lookupCount('frameworks') as number,
+  resources: lookupCount('resources') as number,
+};
+
+const FIX = 'docs/_data/counts.yml is the source of truth — copy the number from there';
+
 interface Claim {
   count: number;
   rawLine: string;
   description: string;
-}
-
-function within(actual: number, claim: number, tolerance: number): boolean {
-  return Math.abs(actual - claim) <= tolerance;
 }
 
 // TRA-268: both counts used to come from a non-recursive `grep .../register/*.ts`,
@@ -103,65 +116,63 @@ function findAllClaims(unit: RegExp, text: string): Claim[] {
 
 describe('README numeric claims', () => {
   const readme = readReadme();
-  const registry = PluginRegistry.createWithDefaults();
-  const langPlugins = registry.getLanguagePlugins().length;
-  const fwPlugins = registry.getAllFrameworkPlugins().length;
-  const toolCount = countServerToolCalls();
 
-  it('every frameworks count in README is within tolerance of registered framework plugins', () => {
+  it('every frameworks count in README matches docs/_data/counts.yml', () => {
     // TRA-272: same first-match-only gap as the languages check below — README
     // states this number twice and only the first one was ever verified.
     const claims = findAllClaims(/framework integrations?/, readme);
     expect(claims.length, 'no "X framework integrations" claim found in README').toBeGreaterThan(0);
     for (const claim of claims) {
-      if (!within(fwPlugins, claim.count, 5)) {
+      if (claim.count !== CLAIMED.frameworks) {
         throw new Error(
-          `README claims ${claim.count} framework integrations; registry has ${fwPlugins}. ` +
-            `Update README.md line: "${claim.rawLine}"`,
+          `README claims ${claim.count} framework integrations; counts.yml says ${CLAIMED.frameworks}. ` +
+            `${FIX}. README.md line: "${claim.rawLine}"`,
         );
       }
     }
   });
 
-  it('every languages count in README matches registered language plugins (±2)', () => {
+  it('every languages count in README matches docs/_data/counts.yml', () => {
     // TRA-272: first-match-only let README say "80 languages" on line 36 and
     // "language coverage (81)" further down for months. Scan every occurrence,
     // the way the docs-site block already does.
     const claims = findAllClaims(/languages?/, readme);
     expect(claims.length, 'no "X languages" claim found in README').toBeGreaterThan(0);
     for (const claim of claims) {
-      if (!within(langPlugins, claim.count, 2)) {
+      if (claim.count !== CLAIMED.languages) {
         throw new Error(
-          `README claims ${claim.count} languages; registry has ${langPlugins}. ` +
-            `Update README.md line: "${claim.rawLine}"`,
+          `README claims ${claim.count} languages; counts.yml says ${CLAIMED.languages}. ` +
+            `${FIX}. README.md line: "${claim.rawLine}"`,
         );
       }
     }
   });
 
-  it('every MCP tool count in README matches the source of truth (±5)', () => {
+  it('every MCP tool count in README matches docs/_data/counts.yml', () => {
     // TRA-608: first-match-only left "169 tools · 9 resources" in the
     // architecture diagram for months while the intro above it said 177 —
     // the same gap TRA-272 already closed for languages and frameworks.
-    const claims = findAllClaims(/tools?/, readme);
+    // TRA-1086: the unit is `(?:MCP )?tools?`, the same one the docs-site block
+    // uses. Plain /tools?/ never matched "All 169 MCP tools" in the docs table,
+    // so that line sat 12 below the real count with nothing to catch it.
+    const claims = findAllClaims(/(?:MCP )?tools?/, readme);
     expect(claims.length, 'no "X tools" claim found in README').toBeGreaterThan(0);
     for (const claim of claims) {
-      if (!within(toolCount, claim.count, 5)) {
+      if (claim.count !== CLAIMED.tools) {
         throw new Error(
-          `README claims ${claim.count} tools; src/tools/register/ registers ${toolCount} ` +
-            `framework-agnostic tools. Update README.md line: "${claim.rawLine}"`,
+          `README claims ${claim.count} tools; counts.yml says ${CLAIMED.tools}. ` +
+            `${FIX}. README.md line: "${claim.rawLine}"`,
         );
       }
     }
   });
 
-  it('every resource count in README matches the source of truth (±2)', () => {
+  it('every resource count in README matches docs/_data/counts.yml', () => {
     for (const claim of findAllClaims(/resources?/, readme)) {
-      if (!within(countServerResourceCalls(), claim.count, 2)) {
+      if (claim.count !== CLAIMED.resources) {
         throw new Error(
-          `README claims ${claim.count} resources; src/tools/register/ contains ` +
-            `${countServerResourceCalls()} server.resource(...) registrations. ` +
-            `Update README.md line: "${claim.rawLine}"`,
+          `README claims ${claim.count} resources; counts.yml says ${CLAIMED.resources}. ` +
+            `${FIX}. README.md line: "${claim.rawLine}"`,
         );
       }
     }
@@ -232,36 +243,39 @@ describe('docs site numeric claims (TRA-174)', () => {
   // "48+ frameworks across 68 languages"; the skills claimed "120+ tools").
   // `skipLine` exempts lines that legitimately state a *subset* count
   // (preset sizes, the TOON allowlist) rather than the total.
-  const docs: Array<{ path: string; tolerance: number; skipLine?: RegExp }> = [
-    { path: 'docs/index.html', tolerance: 2 },
-    { path: 'docs/llms.txt', tolerance: 2 },
+  const docs: Array<{ path: string; skipLine?: RegExp }> = [
+    { path: 'docs/index.html' },
+    { path: 'docs/llms.txt' },
     // `N → M tools` is a record of a past measurement ("TRA-239: 171 → 172
     // tools"), not a claim about the surface today — it must not drift with
     // the count, and it goes stale by definition as tools are added.
-    { path: 'docs/tools-reference.md', tolerance: 5, skipLine: /\d+ → \d+ tools/ },
-    { path: 'docs/quality-gates.md', tolerance: 5 },
-    { path: 'CLAUDE.md', tolerance: 5, skipLine: /output_format|preset/ },
-    { path: 'AGENTS.md', tolerance: 5, skipLine: /output_format|preset/ },
-    { path: 'skills/README.md', tolerance: 5 },
-    { path: 'skills/trace-mcp/SKILL.md', tolerance: 5, skipLine: /output_format|preset/ },
+    { path: 'docs/tools-reference.md', skipLine: /\d+ → \d+ tools/ },
+    { path: 'docs/quality-gates.md' },
+    // TRA-1086: architecture.md was unguarded and its project tree said
+    // "170 MCP tool implementations" while counts.yml said 181.
+    { path: 'docs/architecture.md' },
+    { path: 'CLAUDE.md', skipLine: /output_format|preset/ },
+    { path: 'AGENTS.md', skipLine: /output_format|preset/ },
+    { path: 'skills/README.md' },
+    { path: 'skills/trace-mcp/SKILL.md', skipLine: /output_format|preset/ },
     // TRA-259: server.json is the manifest published to the MCP registry and was
     // never guarded — it still advertised "81 languages, 58 framework
     // integrations, 138 tools". docs/configuration.md was unguarded too.
-    { path: 'server.json', tolerance: 5 },
-    { path: 'docs/configuration.md', tolerance: 5, skipLine: /output_format|preset/ },
+    { path: 'server.json' },
+    { path: 'docs/configuration.md', skipLine: /output_format|preset/ },
     // TRA-361: the install surfaces — the npm page and the Claude Code / Codex
     // plugin marketplaces — were the last unguarded copies, and every one of
     // them still advertised "60(+) framework integrations, 81 languages" while
     // server.json next to them said 87 / 80. Their `version` fields were
     // guarded (tests/plugin/manifest-sync.test.ts), their prose was not.
-    { path: 'package.json', tolerance: 5 },
-    { path: '.claude-plugin/plugin.json', tolerance: 5 },
-    { path: '.claude-plugin/marketplace.json', tolerance: 5 },
-    { path: '.codex-plugin/plugin.json', tolerance: 5 },
-    { path: '.codex-plugin/marketplace.json', tolerance: 5 },
+    { path: 'package.json' },
+    { path: '.claude-plugin/plugin.json' },
+    { path: '.claude-plugin/marketplace.json' },
+    { path: '.codex-plugin/plugin.json' },
+    { path: '.codex-plugin/marketplace.json' },
     // TRA-634: the Agent Plugins root manifest is a scanner-facing surface with
     // the same prose counts, so it drifts the same way the others did.
-    { path: 'plugin.json', tolerance: 5 },
+    { path: 'plugin.json' },
     // TRA-722 guarded ops/launch-hn.md and ops/launch-reddit.md here, because
     // the drafts are the copy that goes out under the project's name and had
     // sat at 169 tools for four days while counts.yml moved to 177. Both moved
@@ -271,39 +285,39 @@ describe('docs site numeric claims (TRA-174)', () => {
     // carries the rule as prose instead.
   ];
 
-  for (const { path, tolerance, skipLine } of docs) {
-    it(`${path}: every "languages" claim matches the registry (±${tolerance})`, () => {
+  for (const { path, skipLine } of docs) {
+    it(`${path}: every "languages" claim matches docs/_data/counts.yml`, () => {
       const text = readDoc(path);
       for (const claim of findAllClaims(/languages?/, text)) {
-        if (!within(langPlugins, claim.count, tolerance)) {
+        if (claim.count !== CLAIMED.languages) {
           throw new Error(
-            `${path} claims ${claim.count} languages; registry has ${langPlugins}. Line: "${claim.rawLine}"`,
+            `${path} claims ${claim.count} languages; counts.yml says ${CLAIMED.languages}. ${FIX}. Line: "${claim.rawLine}"`,
           );
         }
       }
     });
 
-    it(`${path}: every "frameworks/integrations" claim matches the registry (±${tolerance})`, () => {
+    it(`${path}: every "frameworks/integrations" claim matches docs/_data/counts.yml`, () => {
       const text = readDoc(path);
       for (const claim of findAllClaims(
         /(?:frameworks?|integrations?|framework integrations?)/,
         text,
       )) {
-        if (!within(fwPlugins, claim.count, tolerance)) {
+        if (claim.count !== CLAIMED.frameworks) {
           throw new Error(
-            `${path} claims ${claim.count} frameworks/integrations; registry has ${fwPlugins}. Line: "${claim.rawLine}"`,
+            `${path} claims ${claim.count} frameworks/integrations; counts.yml says ${CLAIMED.frameworks}. ${FIX}. Line: "${claim.rawLine}"`,
           );
         }
       }
     });
 
-    it(`${path}: every "MCP tools" claim matches the source of truth (±${tolerance})`, () => {
+    it(`${path}: every "MCP tools" claim matches docs/_data/counts.yml`, () => {
       const text = readDoc(path);
       for (const claim of findAllClaims(/(?:MCP )?tools?/, text)) {
         if (skipLine?.test(claim.rawLine)) continue;
-        if (!within(toolCount, claim.count, tolerance)) {
+        if (claim.count !== CLAIMED.tools) {
           throw new Error(
-            `${path} claims ${claim.count} tools; src/tools/register/ registers ${toolCount} framework-agnostic tools. Line: "${claim.rawLine}"`,
+            `${path} claims ${claim.count} tools; counts.yml says ${CLAIMED.tools}. ${FIX}. Line: "${claim.rawLine}"`,
           );
         }
       }
@@ -311,14 +325,14 @@ describe('docs site numeric claims (TRA-174)', () => {
   }
 
   it("comparisons.md: trace-mcp's own column (first data cell per row) matches the registry", () => {
-    // Row label -> which metric its trace-mcp cell should match, and tolerance.
-    const rowChecks: Array<{ labelPrefix: string; expected: number; tolerance: number }> = [
-      { labelPrefix: 'Tree-sitter AST parsing', expected: langPlugins, tolerance: 2 },
-      { labelPrefix: 'Languages', expected: langPlugins, tolerance: 2 },
-      { labelPrefix: 'Framework-aware edges', expected: fwPlugins, tolerance: 5 },
-      { labelPrefix: 'Framework integrations', expected: fwPlugins, tolerance: 5 },
-      { labelPrefix: 'Code intelligence included', expected: toolCount, tolerance: 5 },
-      { labelPrefix: 'MCP tools', expected: toolCount, tolerance: 5 },
+    // Row label -> which counts.yml number its trace-mcp cell should state.
+    const rowChecks: Array<{ labelPrefix: string; expected: number }> = [
+      { labelPrefix: 'Tree-sitter AST parsing', expected: CLAIMED.languages },
+      { labelPrefix: 'Languages', expected: CLAIMED.languages },
+      { labelPrefix: 'Framework-aware edges', expected: CLAIMED.frameworks },
+      { labelPrefix: 'Framework integrations', expected: CLAIMED.frameworks },
+      { labelPrefix: 'Code intelligence included', expected: CLAIMED.tools },
+      { labelPrefix: 'MCP tools', expected: CLAIMED.tools },
     ];
     const text = readDoc('docs/comparisons.md');
     for (const line of text.split('\n')) {
@@ -330,19 +344,19 @@ describe('docs site numeric claims (TRA-174)', () => {
       const m = cells[2].match(/(\d+)/);
       if (!m) continue;
       const claimCount = Number.parseInt(m[1], 10);
-      if (!within(check.expected, claimCount, check.tolerance)) {
+      if (claimCount !== check.expected) {
         throw new Error(
           `docs/comparisons.md row "${check.labelPrefix}": trace-mcp cell claims ${claimCount}, ` +
-            `registry has ${check.expected}. Line: "${line.trim()}"`,
+            `counts.yml says ${check.expected}. ${FIX}. Line: "${line.trim()}"`,
         );
       }
     }
   });
 
   it('no docs page hardcodes its own tool count any more (TRA-263)', () => {
-    // The per-page scans above only enforce a ±tolerance against the registry,
-    // which is what let 138 / 164 / 165 / ~170 coexist. Reading all of them from
-    // one data file is the part that actually keeps the pages equal.
+    // The per-page scans above catch a stale number once it is typed; reading
+    // it from one data file is what stops it being typed at all. 138 / 164 /
+    // 165 / ~170 coexisted because every page carried its own copy.
     for (const path of ['docs/index.html', 'docs/llms.txt', 'docs/tools-reference.md']) {
       COUNT_TAG.lastIndex = 0;
       expect(
@@ -352,9 +366,16 @@ describe('docs site numeric claims (TRA-174)', () => {
     }
   });
 
-  it('docs/_data/counts.yml language and framework counts match the registry exactly (TRA-275)', () => {
-    // Exact, not ±tolerance: unlike the tool count these are derived, so the
-    // registry is an exact receipt (same reasoning as preset-claims.test.ts).
+  it('docs/_data/counts.yml matches the registry exactly (TRA-275, TRA-1086)', () => {
+    // This is now the ONLY place a doc number is compared to the code. Every
+    // surface above is compared to counts.yml instead, so adding a tool fails
+    // here alone and the fix is one line in one file — the ±tolerance that used
+    // to absorb an in-flight tool was also absorbing README-vs-counts.yml drift
+    // of up to 7 (TRA-1086).
+    expect(
+      lookupCount('tools'),
+      'update `tools:` in docs/_data/counts.yml — a tool was registered or removed',
+    ).toBe(toolCount);
     expect(
       lookupCount('languages'),
       'update `languages:` in docs/_data/counts.yml — a language plugin was added or removed',
@@ -607,9 +628,9 @@ describe('docs site numeric claims (TRA-174)', () => {
     const toolsRef = readDoc('docs/tools-reference.md');
     for (const text of [llms, toolsRef]) {
       for (const claim of findAllClaims(/resources?/, text)) {
-        if (!within(resourceCount, claim.count, 2)) {
+        if (claim.count !== CLAIMED.resources) {
           throw new Error(
-            `claims ${claim.count} resources; src/tools/register/ contains ${resourceCount} server.resource(...) registrations. Line: "${claim.rawLine}"`,
+            `claims ${claim.count} resources; counts.yml says ${CLAIMED.resources}. ${FIX}. Line: "${claim.rawLine}"`,
           );
         }
       }

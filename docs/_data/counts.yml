@@ -8,6 +8,12 @@
 # tests/docs/tool-surface.ts computes it, tests/docs/readme-claims.test.ts
 # enforces it, and the failure message prints the number to write here.
 #
+# TRA-1086: this file is the ANCHOR, not one surface among many. Every guarded
+# doc/prose surface is compared to the value here EXACTLY; only this file is
+# compared to the live registry. Before that, each surface had its own ±2/±5
+# tolerance against the registry and none were compared to each other, so
+# README could say 178 while this file said 181 with CI green throughout.
+#
 # TRA-268: this is deliberately NOT a live `tools/list` count. That varies with
 # the repo's detected frameworks and the user's own config — measured 150 / 165
 # / 172 across three environments — so it cannot be a number in a doc.
@@ -25,7 +31,8 @@ tools: 181
 # surfaces get. A plugin add fails CI here with the number to write.
 #
 # README.md / CLAUDE.md / AGENTS.md / skills/ are not Jekyll-rendered, so they
-# keep prose numbers and stay on the ±tolerance guard.
+# keep prose numbers — and since TRA-1086 those numbers must equal the value
+# here exactly, like every other guarded surface. There is no ±tolerance left.
 languages: 81
 frameworks: 87
 
