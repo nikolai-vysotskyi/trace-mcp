@@ -281,6 +281,35 @@ jobs:
             echo "::error::AI provenance marks in the files above - remove them"; exit 1
           fi
 
+  # The two claim surfaces that are not files (TRA-1120): the GitHub repo
+  # description and the npm registry description. The docs gates compare every
+  # in-repo surface to `docs/_data/` and can see neither of these, which is how
+  # 70.5% and 90.6% were live on the same day with CI green.
+  #
+  # Nightly and dispatch only, never on a PR. npm serves the latest PUBLISHED
+  # version, so its description legitimately lags master from the merge until
+  # the release that carries it — as a required PR check this would be red for
+  # days at a time for a reason no PR author can fix. The offline half of the
+  # gate (`tests/docs/remote-claims.test.ts`) does run on every PR.
+  remote-claims:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - uses: ./.github/actions/setup-pnpm
+      # `yaml` only; the full install is a build away and this reads two files.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Remote claim surfaces agree with docs/_data/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-remote-claims.mjs
+
   # ───────────────────────────────────────────────────────────────────────────
   # Build once on ubuntu, upload dist/ + node_modules/ as an artifact.
   # Downstream jobs (test shards, impact-report) skip install AND build.
