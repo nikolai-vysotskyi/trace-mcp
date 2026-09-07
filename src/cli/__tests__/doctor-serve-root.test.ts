@@ -50,13 +50,20 @@ describe('diagnoseServeRoot (TRA-1087)', () => {
     expect(r.detail).toContain('proj2');
   });
 
-  it('honours TRACE_MCP_REPO_ROOT', async () => {
+  // The override used to reach only serve's auto-register check, so serve kept
+  // indexing the cwd while doctor reported the override. Both now go through
+  // resolveServeRoots, so this pins the two together.
+  it('reports the same root serve resolves when TRACE_MCP_REPO_ROOT is set', async () => {
     const proj = path.join(tmpHome, 'proj3');
-    fs.mkdirSync(proj);
+    fs.mkdirSync(path.join(proj, 'sub'), { recursive: true });
     fs.writeFileSync(path.join(proj, 'package.json'), '{}');
     vi.stubEnv('TRACE_MCP_REPO_ROOT', proj);
-    const r = doctor.diagnoseServeRoot(tmpHome);
+    const { resolveServeRoots } = await import('../../project-root.js');
+
+    const r = doctor.diagnoseServeRoot(path.join(proj, 'sub'));
     expect(r.indexRoot).toBe(proj);
     expect(r.envOverride).toBe(proj);
+    expect(r.status).toBe('will-register');
+    expect(r.indexRoot).toBe(resolveServeRoots(path.join(proj, 'sub')).indexRoot);
   });
 });

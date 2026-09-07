@@ -22,9 +22,8 @@ import {
 } from '../init/launcher.js';
 import { checkRegisteredLaunchers, type RegisteredLauncherCheck } from '../init/launcher-health.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
-import path from 'node:path';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
-import { detectGitWorktree, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { findProjectRoot, hasRootMarkers, resolveServeRoots } from '../project-root.js';
 import { getProject } from '../registry.js';
 import {
   type EphemeralProjectCandidate,
@@ -71,14 +70,8 @@ export interface ServeRootReport {
 }
 
 export function diagnoseServeRoot(from?: string): ServeRootReport {
-  const cwd = path.resolve(from ?? process.cwd());
-  const envOverride = process.env.TRACE_MCP_REPO_ROOT || null;
-  const worktree = detectGitWorktree(cwd);
-  const worktreeMainRoot = worktree?.mainRoot ?? null;
-  // Same precedence serve uses: env override wins, then worktree main repo, then cwd.
-  let indexRoot = worktreeMainRoot ?? cwd;
-  // findProjectRoot short-circuits on the override and returns it verbatim.
-  if (envOverride) indexRoot = findProjectRoot(cwd);
+  // Exactly what serve resolves — same function, no second copy of the rule.
+  const { cwd, envOverride, worktreeMainRoot, indexRoot } = resolveServeRoots(from);
 
   const dangerReason = isDangerousProjectRoot(indexRoot);
   const registered = !!getProject(indexRoot);

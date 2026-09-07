@@ -115,7 +115,12 @@ import { TRACE_MCP_HOME } from './global.js';
 import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
 import { checkBindHost, isLoopbackHost } from './daemon/bind-host.js';
 import { PluginRegistry } from './plugin-api/registry.js';
-import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
+import {
+  detectGitWorktree,
+  findProjectRoot,
+  hasRootMarkers,
+  resolveServeRoots,
+} from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { sweepEphemeralTopology } from './daemon/project-artifacts.js';
 import {
@@ -437,7 +442,9 @@ program
     // the whole MCP session — log it and stay alive instead (see #202-adjacent
     // "disconnects/crashes" reports).
     installProcessSafetyNet('serve');
-    const projectRoot = process.cwd();
+    // cwd, or TRACE_MCP_REPO_ROOT when a client spawned us somewhere the user
+    // never chose. `doctor` reports these same roots (TRA-1087).
+    const { projectRoot, indexRoot, worktreeMainRoot, envOverride } = resolveServeRoots();
 
     // Auto-update + post-update migrations. TRA-703: both run in the background,
     // never on the path to the `initialize` response — awaiting them here made
@@ -452,17 +459,17 @@ program
       install: globalRaw.auto_update !== false,
     });
 
-    // Detect git linked worktrees so we share the main repo's index instead
-    // of building a redundant copy.  projectRoot stays as the worktree path
-    // (file watcher, path validation), but the DB comes from the main repo.
-    const worktreeInfo = detectGitWorktree(projectRoot);
-    const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
-
-    if (worktreeInfo) {
+    // Linked git worktrees share the main repo's index instead of building a
+    // redundant copy: projectRoot stays the worktree path (file watcher, path
+    // validation), the DB comes from the main repo.
+    if (worktreeMainRoot) {
       logger.info(
-        { worktreeRoot: projectRoot, mainRoot: worktreeInfo.mainRoot },
+        { worktreeRoot: projectRoot, mainRoot: worktreeMainRoot },
         'Git worktree detected — sharing main repo index',
       );
+    }
+    if (envOverride) {
+      logger.info({ envOverride }, 'Serving TRACE_MCP_REPO_ROOT instead of cwd');
     }
 
     // Auto-register the index root (main repo if worktree, otherwise current project).
