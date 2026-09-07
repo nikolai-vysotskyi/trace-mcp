@@ -632,18 +632,21 @@ describe('docs site numeric claims (TRA-174)', () => {
    * and then shipped ourselves. So: a surface that quotes the saving quotes the
    * quality result too, and both come from the generated data.
    *
-   * README.md and docs/comparisons.md (TRA-1123) are the surfaces this gates
-   * today. A Jekyll page reads the figures through Liquid rather than typing
-   * them, so a `site.data.pr_context_quality.<key>` reference counts as
+   * QUOTES_THE_SAVING below is the list; a surface joins it in the change that
+   * makes it carry the quality half (docs/comparisons.md TRA-1123, the homepage
+   * hero TRA-1122). A Jekyll page reads the figures through Liquid rather than
+   * typing them, so a `site.data.pr_context_quality.<key>` reference counts as
    * carrying the number — the literal one never appears in its source.
-   * docs/index.html (the hero) still quotes the saving without the quality
-   * half; it belongs to the site mandate and is filed as TRA-1122 — add its
-   * path here once it carries it.
    */
   const QUALITY = JSON.parse(
     readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_quality.json'), 'utf-8'),
   ) as Record<string, unknown>;
-  const QUOTES_THE_SAVING = ['README.md', 'docs/comparisons.md', 'docs/code-graph-mcp.md'];
+  const QUOTES_THE_SAVING = [
+    'README.md',
+    'docs/comparisons.md',
+    'docs/code-graph-mcp.md',
+    'docs/index.html',
+  ];
 
   /** One-line surfaces cannot carry four numbers, so they carry the verdict
    *  instead — the same phrase the live GitHub repo description already runs.
@@ -700,6 +703,8 @@ describe('docs site numeric claims (TRA-174)', () => {
       'package.json',
       'server.json',
       'scripts/gen-readme-banner.mjs',
+      // TRA-1122: the homepage trust line ran the same absolute as the banner chip.
+      'docs/index.html',
     ]) {
       const hit = readFileSync(join(REPO_ROOT, path), 'utf-8').match(absolute);
       expect(

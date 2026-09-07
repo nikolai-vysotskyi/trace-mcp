@@ -27,13 +27,14 @@ Rules for keeping it honest, same three as the sibling ledgers:
   the quality result from `docs/_data/pr_context_quality.json` in the same
   breath. Cheaper is not better, and one number stating a claim it does not
   support is the defect we documented in a competitor before we shipped it
-  ourselves. Gated by `tests/docs/readme-claims.test.ts` (TRA-1013):
-  `README.md` and `docs/comparisons.md` carry the four numbers; `package.json`,
-  `plugin.json` and `server.json` are one-liners with no room for a table, so
-  they carry the verdict instead — **comprehension at parity**. That phrase is
-  silent on false positives (0.58 → 0.80, inside the preregistered bound but not
-  nothing), so it belongs on a line that has no room for the pair and nowhere
-  else.
+  ourselves. Gated by `tests/docs/readme-claims.test.ts` (TRA-1013, TRA-1122):
+  `README.md`, `docs/index.html` and `docs/comparisons.md` carry the four
+  numbers — on a Jekyll surface as `{{ site.data.pr_context_quality.* }}` tags,
+  never typed; `package.json`, `plugin.json` and `server.json` are one-liners
+  with no room for a table, so they carry the verdict instead — **comprehension
+  at parity**. That phrase is silent on false positives (0.58 → 0.80, inside the
+  preregistered bound but not nothing), so it belongs on a line that has no room
+  for the pair and nowhere else.
 
 ## The question this answers
 
@@ -171,7 +172,14 @@ anonymous daily ping unless the user sets `TRACE_MCP_TELEMETRY=off` or
 absolute. The banner chip and its `alt` text said it until 2026-09-07 (TRA-1013),
 on the surface auto-indexes copy verbatim. Gated by
 `tests/docs/readme-claims.test.ts` for `README.md`, `package.json`,
-`server.json` and `scripts/gen-readme-banner.mjs`.
+`server.json`, `scripts/gen-readme-banner.mjs` and `docs/index.html`.
+
+The homepage joined that list on 2026-09-07 (TRA-1122) and said it in three
+places, not one: the trust line at the fold ("100% local"), the security lede
+("Runs fully local"), and the "Do I need API keys or a cloud account?" answer
+("trace-mcp is fully local") — the last one duplicated into the FAQ JSON-LD, so
+it was also the answer we handed Google. One phrase per surface is the wrong
+mental model when the page is long: grep the claim, not the file.
 
 And say the reachable share out loud, because "manages your context budget"
 implies a whole we do not have. The measured decomposition of one real start
