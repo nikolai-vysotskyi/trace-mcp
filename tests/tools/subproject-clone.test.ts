@@ -100,12 +100,15 @@ describe('cloneRemoteRepo ref validation', () => {
   });
 
   it('does not invoke ref validation when ref is undefined', async () => {
-    // No ref means cloneRemoteRepo proceeds past the validator into the SSRF
-    // check and (possibly) DNS / git. We expect either Ok (when destination
-    // already exists from a prior run) or Err with a non-ref reason.
-    const r = await cloneRemoteRepo('/tmp/p', safeUrl, {});
+    // Use a URL the SSRF guard blocks on a literal address (no DNS, no git):
+    // the call still gets past the ref validator, which is all this asserts.
+    // Pointing at a real host here would run an actual `git clone` and made
+    // this test flake out on CI (TRA-1118).
+    const r = await cloneRemoteRepo('/tmp/p', 'https://0.0.0.0/owner/repo.git', {});
+    expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.message).not.toContain('unsafe git ref');
+      expect(r.error.message).toContain('SSRF');
     }
   });
 });
