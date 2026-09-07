@@ -818,6 +818,20 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
     delete reg.projects[root];
     removed.push(root);
     changed = true;
+
+    // TRA-1105: `dbPath` is not private to this row. `registerProject` points a
+    // checkout at a sibling's DB when both resolve to the same git remote, and
+    // persists that choice — so a legacy ephemeral row can name the index of a
+    // live, canonical project. Deregistering the row is always right;
+    // unlinking the file is only right if nobody else is on it. Same two
+    // guards `removeProjectArtifacts` uses, for the same reason: a live holder
+    // marker (or an unreadable holder dir) means some process has this DB open
+    // right now, and guessing wrong here deletes someone else's index.
+    const sharedWithSibling = Object.values(reg.projects).some(
+      (other) => other.dbPath === entry.dbPath,
+    );
+    if (sharedWithSibling || hasLiveHolderOrUnknown(entry.dbPath, root)) continue;
+
     for (const suffix of MISSING_ROOT_SIDECARS) {
       try {
         fs.unlinkSync(entry.dbPath + suffix);
