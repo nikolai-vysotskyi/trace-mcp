@@ -175,6 +175,28 @@ describe('SavingsTracker.flush is a repeatable delta', () => {
     expect(second?.sessions).toBe(1); // one session, three flushes
   });
 
+  /* The early-return guard used to test only calls and saved tokens. For a
+     NO_BASELINE tool both are zero by construction, so a correction arriving
+     in a later flush window than its recordCall was dropped and never reached
+     disk — under-reporting exactly the measured count the report gates on. */
+  it('writes a correction whose only effect is on the measured block', async () => {
+    const mod = await import('../../src/savings.js');
+    const tracker = new mod.SavingsTracker('/test/project');
+
+    tracker.recordCall('register_edit'); // NO_BASELINE: rawCost 0, saved 0
+    tracker.flush();
+    expect(mod.loadPersistentSavings()?.measured?.calls).toBe(0);
+
+    tracker.recordActualTokens('register_edit', 120);
+    tracker.flush();
+
+    const after = mod.loadPersistentSavings();
+    expect(after?.measured?.calls).toBe(1);
+    expect(after?.measured?.actual_tokens).toBe(120);
+    expect(after?.measured?.tokens_saved).toBe(0); // no baseline to save against
+    expect(after?.total_calls).toBe(1); // and the call is still counted once
+  });
+
   it('counts only calls whose response was actually measured', async () => {
     const mod = await import('../../src/savings.js');
     const tracker = new mod.SavingsTracker('/test/project');

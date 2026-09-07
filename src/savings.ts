@@ -405,7 +405,19 @@ export class SavingsTracker {
   flush(): void {
     const f = this.flushed;
     const deltaCalls = this.session.total_calls - f.calls;
-    if (deltaCalls === 0 && this.session.total_tokens_saved === f.tokens_saved) return;
+    // The measured block has to be part of this test, not just calls and saved
+    // tokens: for a NO_BASELINE tool `correctCall` moves neither of those (both
+    // sides of `deltaSaved` are zero when rawCost is), so a correction landing
+    // in a later window than its `recordCall` would be dropped by an early
+    // return and never reach disk.
+    if (
+      deltaCalls === 0 &&
+      this.session.total_tokens_saved === f.tokens_saved &&
+      this.session.measured.calls === f.measured.calls &&
+      this.session.measured.actual_tokens === f.measured.actual_tokens
+    ) {
+      return;
+    }
 
     try {
       ensureGlobalDirs();
@@ -452,6 +464,11 @@ export class SavingsTracker {
         this.flushedPerTool[tool] = { calls: rec.calls, tokens_saved: rec.tokens_saved };
       }
 
+      // Read-merge-write against a file other trace-mcp processes also write.
+      // Flushing every 60s instead of once at shutdown widens the window in
+      // which two stdio servers can lose each other's update. Left as is: the
+      // cost of a lost window is a slightly low figure on a screen, and the
+      // alternative is a lock file on the hot path of every session.
       savePersistentSavings(merged);
       this.flushed = {
         calls: this.session.total_calls,
