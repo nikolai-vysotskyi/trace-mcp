@@ -30,7 +30,9 @@ const ALLOWED: Record<string, string> = {
 
 describe('no bare require() in src/', () => {
   it('every require is either an ESM import or an allowlisted runtime load', () => {
+    // readdirSync returns backslashes on Windows; ALLOWED is keyed on posix paths.
     const files = (readdirSync('src', { recursive: true }) as string[])
+      .map((f) => f.replace(/\\/g, '/'))
       .filter((f) => f.endsWith('.ts') && !f.includes('__tests__'))
       .map((f) => `src/${f}`);
     expect(files.length).toBeGreaterThan(100); // the glob itself must not silently match nothing
