@@ -1,0 +1,104 @@
+{
+  "measuredAt": "2026-09-07",
+  "languages": [
+    {
+      "language": "go",
+      "repo": "spf13/cobra",
+      "commit": "adbc8813901b",
+      "created": 159,
+      "external": 178,
+      "ambiguous": 0,
+      "resolvedShare": "47.2%"
+    },
+    {
+      "language": "csharp",
+      "repo": "JamesNK/Newtonsoft.Json",
+      "commit": "09bb545d7296",
+      "created": 12,
+      "external": 4979,
+      "ambiguous": 0,
+      "resolvedShare": "0.2%"
+    },
+    {
+      "language": "python",
+      "repo": "pallets/flask",
+      "commit": "d318b6834711",
+      "created": 96,
+      "external": 333,
+      "ambiguous": 0,
+      "resolvedShare": "22.4%"
+    },
+    {
+      "language": "ruby",
+      "repo": "sinatra/sinatra",
+      "commit": "cb22afd7902b",
+      "created": 131,
+      "external": 88,
+      "ambiguous": 0,
+      "resolvedShare": "59.8%"
+    },
+    {
+      "language": "rust",
+      "repo": "BurntSushi/ripgrep",
+      "commit": "3fce3b5bb023",
+      "created": 453,
+      "external": 447,
+      "ambiguous": 0,
+      "resolvedShare": "50.3%"
+    },
+    {
+      "language": "java",
+      "repo": "google/gson",
+      "commit": "b3f4ca20087f",
+      "created": 1085,
+      "external": 1586,
+      "ambiguous": 0,
+      "resolvedShare": "40.6%"
+    },
+    {
+      "language": "kotlin",
+      "repo": "square/okhttp",
+      "commit": "dfcfab38248e",
+      "created": 2621,
+      "external": 4330,
+      "ambiguous": 0,
+      "resolvedShare": "37.7%"
+    },
+    {
+      "language": "c",
+      "repo": "curl/curl",
+      "commit": "8f6046485e15",
+      "created": 3138,
+      "external": 990,
+      "ambiguous": 0,
+      "resolvedShare": "76.0%"
+    },
+    {
+      "language": "cpp",
+      "repo": "fmtlib/fmt",
+      "commit": "2d4d8a13c2b4",
+      "created": 155,
+      "external": 411,
+      "ambiguous": 0,
+      "resolvedShare": "27.4%"
+    },
+    {
+      "language": "php",
+      "repo": "guzzle/guzzle",
+      "commit": "93939470950a",
+      "created": 374,
+      "external": 247,
+      "ambiguous": 0,
+      "resolvedShare": "60.2%"
+    },
+    {
+      "language": "typescript",
+      "repo": "colinhacks/zod",
+      "commit": "7a00236683c7",
+      "created": 660,
+      "external": 660,
+      "ambiguous": 0,
+      "resolvedShare": "50.0%"
+    }
+  ]
+}

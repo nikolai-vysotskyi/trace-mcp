@@ -13,18 +13,29 @@
  * resolver already logs (src/indexer/edge-resolvers/*-imports.ts) — this
  * reuses that existing instrumentation rather than adding new counters.
  *
- * `external` is not a failure: a resolver that recognizes a specifier names
- * an npm/PyPI/crate/gem package correctly leaves it unresolved (that target
- * is not in this repo). `ambiguous` (ruby, c/cpp) is a specifier matching
- * more than one candidate file, left unresolved on purpose. Only `created`
- * lands as a graph edge.
+ * `external` is not, by itself, a failure — most of the time it means the
+ * resolver saw a specifier and correctly decided it does not name a file in
+ * this repo (an npm/PyPI/crate/gem package, or the standard library). But its
+ * exact meaning is resolver-specific and not always "third-party": csharp's
+ * `external` bucket also holds plain `using Namespace;` directives, which are
+ * deliberately left unresolved by design (see csharp-imports.ts) even when
+ * the namespace is internal to the repo — read the per-language resolver
+ * before treating a whole `external` count as "correctly out of scope".
+ * `ambiguous` (ruby, c/cpp) is a specifier matching more than one candidate
+ * file, left unresolved on purpose. Only `created` lands as a graph edge.
  *
- * Usage: npx tsx scripts/measure-import-resolution.ts [--json out.json]
+ * Writes docs/_data/import-resolution.json — scripts/language-matrix.ts reads
+ * it at doc-render time (same pattern as docs/_data/counts.yml and
+ * docs/_data/pr_context_bench.json), so re-running this script is the only
+ * step needed to refresh the published table.
+ *
+ * Usage: npx tsx scripts/measure-import-resolution.ts
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { TraceMcpConfigSchema } from '../src/config.js';
 import { initializeDatabase } from '../src/db/schema.js';
@@ -32,12 +43,23 @@ import { Store } from '../src/db/store.js';
 import { IndexingPipeline } from '../src/indexer/pipeline.js';
 import { PluginRegistry } from '../src/plugin-api/registry.js';
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const OUT = path.join(ROOT, 'docs/_data/import-resolution.json');
 const CACHE_ROOT = path.join(os.homedir(), '.trace', 'import-resolution-bench');
 
 interface RepoSpec {
   language: string;
   repo: string; // owner/name
-  note?: string;
+  /**
+   * The exact `msg` a resolver logs (src/indexer/edge-resolvers/*.ts,
+   * `grep -n "import edges resolved" src/indexer/edge-resolvers/*.ts`).
+   * Filtering on this exact string, not a loose "contains 'import'" match, is
+   * required — a multi-language repo runs every resolver in the same pass, so
+   * a substring match attributes another language's counts to this one (e.g.
+   * `pallets/flask`'s stray asset file triggers "ES module import edges
+   * resolved" too, which a loose filter folds into the Python row).
+   */
+  logMessage: string;
 }
 
 // One well-known real repo per language with an import-edge resolver
@@ -45,15 +67,25 @@ interface RepoSpec {
 // repeat measurements already quoted in docs (TRA-451, the language-matrix
 // C# callout) as a consistency check; the rest are new.
 const REPOS: RepoSpec[] = [
-  { language: 'go', repo: 'spf13/cobra' },
-  { language: 'csharp', repo: 'JamesNK/Newtonsoft.Json' },
-  { language: 'python', repo: 'pallets/flask' },
-  { language: 'ruby', repo: 'sinatra/sinatra' },
-  { language: 'rust', repo: 'BurntSushi/ripgrep' },
-  { language: 'java', repo: 'google/gson' },
-  { language: 'kotlin', repo: 'square/okhttp' },
-  { language: 'c', repo: 'curl/curl' },
-  { language: 'cpp', repo: 'fmtlib/fmt' },
+  { language: 'go', repo: 'spf13/cobra', logMessage: 'Go import edges resolved' },
+  {
+    language: 'csharp',
+    repo: 'JamesNK/Newtonsoft.Json',
+    logMessage: 'C# import edges resolved',
+  },
+  { language: 'python', repo: 'pallets/flask', logMessage: 'Python import edges resolved' },
+  { language: 'ruby', repo: 'sinatra/sinatra', logMessage: 'Ruby import edges resolved' },
+  { language: 'rust', repo: 'BurntSushi/ripgrep', logMessage: 'Rust import edges resolved' },
+  { language: 'java', repo: 'google/gson', logMessage: 'Java import edges resolved' },
+  { language: 'kotlin', repo: 'square/okhttp', logMessage: 'Kotlin import edges resolved' },
+  { language: 'c', repo: 'curl/curl', logMessage: 'C/C++ import edges resolved' },
+  { language: 'cpp', repo: 'fmtlib/fmt', logMessage: 'C/C++ import edges resolved' },
+  { language: 'php', repo: 'guzzle/guzzle', logMessage: 'PHP import edges resolved' },
+  {
+    language: 'typescript',
+    repo: 'colinhacks/zod',
+    logMessage: 'ES module import edges resolved',
+  },
 ];
 
 function sh(cmd: string[], cwd?: string): void {
@@ -91,12 +123,13 @@ async function indexAndCapture(spec: RepoSpec, root: string): Promise<ResolverLi
   process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
     const text = typeof chunk === 'string' ? chunk : String(chunk);
     for (const line of text.split('\n')) {
-      if (!line.includes('import edges resolved') && !line.includes('import edges')) continue;
+      if (!line.includes(spec.logMessage)) continue;
       try {
         const parsed = JSON.parse(line);
-        if (typeof parsed.msg === 'string' && parsed.msg.toLowerCase().includes('import')) {
-          lines.push(parsed);
-        }
+        // Exact match, not substring — a multi-language repo runs every
+        // resolver in the same pass, and another language's identically
+        // shaped log line must not be attributed to this one.
+        if (parsed.msg === spec.logMessage) lines.push(parsed);
       } catch {
         // not JSON — ignore
       }
@@ -154,10 +187,11 @@ async function main(): Promise<void> {
     );
   }
 
-  const jsonFlag = process.argv.indexOf('--json');
-  if (jsonFlag !== -1) {
-    fs.writeFileSync(process.argv[jsonFlag + 1], JSON.stringify(results, null, 2));
-  }
+  fs.writeFileSync(
+    OUT,
+    `${JSON.stringify({ measuredAt: new Date().toISOString().slice(0, 10), languages: results }, null, 2)}\n`,
+  );
+  process.stdout.write(`\nWrote ${path.relative(ROOT, OUT)}\n`);
 
   process.stdout.write('\n| Language | Repo | Commit | Created | External | Ambiguous |\n');
   process.stdout.write('| --- | --- | --- | ---: | ---: | ---: |\n');

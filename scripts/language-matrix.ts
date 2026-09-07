@@ -156,6 +156,42 @@ function currentUpdatedDate(): string {
   return fs.readFileSync(OUT, 'utf8').match(/^updated:[ \t]*(\S+)/m)?.[1] ?? today;
 }
 
+interface ImportResolutionRow {
+  language: string;
+  repo: string;
+  commit: string;
+  created: number;
+  external: number;
+  ambiguous: number;
+  resolvedShare: string;
+}
+
+/**
+ * Renders the "Import resolution depth on real repos" table from
+ * docs/_data/import-resolution.json (written by
+ * scripts/measure-import-resolution.ts) — refreshing that table means
+ * re-running the measurement script, not hand-editing markdown. Sorted by
+ * resolved share, highest first, so the spread reads as a spread.
+ */
+function importResolutionTable(): string {
+  const dataPath = path.join(ROOT, 'docs/_data/import-resolution.json');
+  const { languages } = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as {
+    languages: ImportResolutionRow[];
+  };
+  const sorted = [...languages].sort(
+    (a, b) => Number.parseFloat(b.resolvedShare) - Number.parseFloat(a.resolvedShare),
+  );
+  const rows = sorted
+    .map(
+      (r) =>
+        `| ${r.language} | ${r.repo} | ${r.commit} | ${r.created} | ${r.external} | ${r.ambiguous} | ${r.resolvedShare} |`,
+    )
+    .join('\n');
+  return `| Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+${rows}`;
+}
+
 export function renderMatrix(): string {
   const { rows, counts } = buildMatrix();
   const yes = (v: boolean) => (v ? 'yes' : '—');
@@ -279,31 +315,27 @@ only means a pipeline pass exists; it says nothing about how much of a real
 codebase that pass actually connects. Measured on one well-known public repo
 per language — clone it, run the real indexing pipeline, read the
 \`{ created, external, ambiguous }\` counts each resolver already logs
-(\`src/indexer/edge-resolvers/*-imports.ts\`) — the reusable, reproducible
-measurement is \`scripts/measure-import-resolution.ts\`:
+(\`src/indexer/edge-resolvers/*-imports.ts\`), filtered by that resolver's exact
+log message so a multi-language repo can't attribute one language's counts to
+another — the reusable, reproducible measurement is
+\`scripts/measure-import-resolution.ts\`, and its output is
+\`docs/_data/import-resolution.json\`:
 
-| Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| python | pallets/flask | d318b6834711 | 96 | 1 | 0 | 99.0% |
-| c | curl/curl | 8f6046485e15 | 3178 | 990 | 0 | 76.2% |
-| ruby | sinatra/sinatra | cb22afd7902b | 131 | 88 | 0 | 59.8% |
-| rust | BurntSushi/ripgrep | 3fce3b5bb023 | 453 | 447 | 0 | 50.3% |
-| go | spf13/cobra | adbc8813901b | 159 | 178 | 0 | 47.2% |
-| java | google/gson | b3f4ca20087f | 1085 | 1586 | 0 | 40.6% |
-| kotlin | square/okhttp | dfcfab38248e | 2622 | 4788 | 0 | 35.4% |
-| cpp | fmtlib/fmt | 2d4d8a13c2b4 | 155 | 411 | 0 | 27.4% |
-| csharp | JamesNK/Newtonsoft.Json | 09bb545d7296 | 12 | 4979 | 0 | 0.2% |
+${importResolutionTable()}
 
-**Read "left external" as "correctly left external," not "missed."** A
-resolver seeing \`import "github.com/spf13/pflag"\` or \`import os\` and leaving
-it unresolved has done its job — that target is a third-party package or the
-standard library, not a file in this repo, and a file-level edge to it would
-be noise. This table is not a defect list; it is what "the resolver exists"
-costs out to on one real codebase per language. Two things it does surface as
-real gaps: **kotlin and cpp sit closer to csharp than to python** on a single
-sample, and every row is n=1 — one repo's import style, not a distribution.
-Re-run the script against a second repo per language before treating any row
-as a trend rather than a data point.
+**"Left external" does not mean "missed," but it does not always mean
+"correctly out of scope" either — read the resolver.** Most of the time a
+specifier a resolver leaves external is genuinely a third-party or standard
+library import (\`import "github.com/spf13/pflag"\`, \`import os\`), and
+resolving it to a file in this repo would be wrong. But the bucket's exact
+meaning is resolver-specific: csharp's \`external\` count also holds plain
+\`using Namespace;\` directives that are **internal to the repo** — left
+unresolved by design because a namespace can span most of a codebase (see the
+C# paragraph above), not because the target lives outside it. Treat this table
+as what "the resolver exists" costs out to on one real codebase per language,
+not as a defect list. Every row is n=1 — one repo's import style, not a
+distribution; re-run the script against a second repo per language before
+treating any row as a trend rather than a data point.
 
 ## Matrix
 
