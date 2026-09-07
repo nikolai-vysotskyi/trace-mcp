@@ -772,6 +772,27 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         expect(status).toBe(0);
         expect(stdout.trim()).toBe(`NODE_ARGS:${backup} serve`);
       });
+
+      // Review of #1097: the first cut of this gate used `[ -s ]` alone, which
+      // means "exists and size > 0" — and a directory satisfies that (verified:
+      // an empty dir reports size 64 on APFS). So a stray `cli.js` directory,
+      // the same half-restored-backup class the gate exists for in another
+      // shape, would have been accepted and exec'd instead of falling through
+      // to the backup. `is_usable_script` needs both halves.
+      it('reprobes when the configured cli.js is a directory', () => {
+        const { home, traceHome, node } = setupFakeHome();
+        const asDir = path.join(home, 'cli.js');
+        fs.mkdirSync(asDir);
+        writeConfig(traceHome, node, asDir);
+        const good = plantNvmPackage(home);
+
+        const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, [
+          'serve',
+        ]);
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${good} serve`);
+      });
     });
 
     it('finds the package in a bundled runtime prefix recorded by a past install', () => {

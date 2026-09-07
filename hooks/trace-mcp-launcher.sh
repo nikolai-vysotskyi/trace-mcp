@@ -140,6 +140,30 @@ if [ -n "${TRACE_MCP_CLI_OVERRIDE:-}"  ]; then CLI_PATH="$TRACE_MCP_CLI_OVERRIDE
 
 # --- 4. Probe fallback (stable sources only, no version globs) ---
 
+# True for a script this shim can actually hand to node: a regular file with
+# something in it.
+#
+# Both halves are load-bearing. `-f` alone was the TRA-1132 bug: it accepts a
+# zero-byte dist/cli.js, which node runs as a valid empty program — exit 0, no
+# output, no stderr — so the client sees a server that starts, says nothing and
+# leaves, the shim logs no ERROR because its own exec worked, and the pair is
+# already healed into launcher.env so every later start repeats it.
+#
+# `-s` alone reintroduces a different hole: it means "exists and size > 0",
+# which a DIRECTORY satisfies (review of #1097). A stray `dist/cli.js`
+# directory — the same half-restored-backup class this gate exists for, just
+# in another shape — would then be accepted and exec'd instead of falling
+# through to probe_cli, the swap-window backup and the app bundle, which is
+# the fallback chain this whole path exists to keep reliable.
+#
+# ponytail: this catches truncation to zero, the shape an interrupted write
+# actually leaves. A non-empty but incomplete bundle still gets exec'd —
+# detecting that needs a parse, i.e. a fork on every client start, and there
+# the exec itself is the cheaper detector.
+is_usable_script() {
+  [ -f "$1" ] && [ -s "$1" ]
+}
+
 # True for a value `[ -lt ]` can safely compare. Digits alone are not enough:
 # a long-but-numeric string makes bash arithmetic abort with "integer
 # expression expected", the test fails, and the gate would fail OPEN. Three
@@ -335,7 +359,7 @@ cli_from_app_bundle() {
   local app cli
   app=$(app_bundle) || return 1
   cli="$app/Contents/Resources/server/dist/cli.js"
-  [ -s "$cli" ] && normalise_path "$cli"
+  is_usable_script "$cli" && normalise_path "$cli"
 }
 
 # True when $1 is the app's own binary, which only runs as Node with this set.
@@ -490,7 +514,7 @@ probe_cli() {
   while IFS= read -r root; do
     [ -n "$root" ] || continue
     cli="$root/trace-mcp/dist/cli.js"
-    if [ -s "$cli" ]; then
+    if is_usable_script "$cli"; then
       normalise_path "$cli"
       return 0
     fi
@@ -519,7 +543,7 @@ probe_cli() {
       [ -n "$group" ] || continue
       while IFS= read -r bak; do
         [ -n "$bak" ] || continue
-        if [ -s "$bak/dist/cli.js" ]; then
+        if is_usable_script "$bak/dist/cli.js"; then
           normalise_path "$bak/dist/cli.js"
           return 0
         fi
@@ -631,7 +655,7 @@ resolve_exec_target() {
   local cli="$1" proxy
   shift
   proxy="$(dirname "$cli")/proxy.js"
-  if [ -s "$proxy" ] && is_plain_serve "$@" && daemon_port_open; then
+  if is_usable_script "$proxy" && is_plain_serve "$@" && daemon_port_open; then
     echo "$proxy"
   else
     echo "$cli"
@@ -683,26 +707,7 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
   fi
 fi
 
-# `-s`, not `-f`, on every cli.js gate in this shim (TRA-1132).
-#
-# The gate above closed "exists but does not run" for node. This is the same
-# class on the other half of the pair: `-f` proves the recorded dist/cli.js is
-# there, never that it holds a program, and a zero-byte one is what a disk-full
-# write, an unclean shutdown or a half-restored backup leaves behind.
-#
-# It fails worse than the node case, because node runs an empty file happily —
-# exit 0, no output, no stderr. The client sees a server that starts, says
-# nothing and leaves, and reports "failed to connect" with nothing to go on;
-# the shim logs no ERROR, because its own exec worked, so the launcher.log
-# error count reads clean while every session dies; and the pair was already
-# healed into the config, so every later start repeats it. Reproduced with a
-# complete copy of the package sitting unused in the same npm prefix.
-#
-# ponytail: `-s` catches truncation to zero, which is the shape an interrupted
-# write actually leaves. A non-empty but incomplete bundle still gets exec'd —
-# detecting that needs a parse, i.e. a fork on every start, and there the exec
-# itself is the cheaper detector.
-if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -s "$CLI_PATH" ]; then
+if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && is_usable_script "$CLI_PATH"; then
   EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
   log "exec(config) node=$NODE_PATH cli=$CLI_PATH target=$EXEC_TARGET argc=$#"
   PATH="$CLIENT_PATH"
@@ -724,7 +729,7 @@ if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ]; then
   HEALED=1
 fi
 
-if [ -z "$CLI_PATH" ] || [ ! -s "$CLI_PATH" ]; then
+if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
   ROOTS=$(pkg_roots "$NODE_PATH")
   CLI_PATH=$(probe_cli "$ROOTS") || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
   log "probe: cli=$CLI_PATH"
