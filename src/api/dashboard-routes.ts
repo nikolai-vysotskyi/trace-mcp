@@ -260,6 +260,15 @@ async function enrich(entry: RegistryEntry, basics: ProjectHealth): Promise<Proj
  */
 const DASHBOARD_CACHE_PATH = path.join(TRACE_MCP_HOME, 'dashboard-cache.json');
 const CACHE_TTL_MS = 300_000; // 5 minutes
+/**
+ * Bump whenever the grading logic changes in a way that makes an
+ * already-cached `techDebtGrade` wrong. A dbPath fingerprint only detects
+ * changes to the *project's* index, not to trace-mcp's own scoring code — so
+ * without this, a stale-but-still-fingerprint-matching grade computed by a
+ * pre-fix build (e.g. "A" for an empty or 1-symbol project, TRA-1057) would
+ * survive an upgrade forever, since nothing ever marks it stale.
+ */
+const DASHBOARD_CACHE_VERSION = 2;
 
 const cache = new Map<string, ProjectHealth>();
 /** dbPath fingerprint at the time each project's expensive pass last ran. */
@@ -273,10 +282,15 @@ function loadCacheFromDisk(): void {
   loadedFromDisk = true;
   try {
     const raw = JSON.parse(fs.readFileSync(DASHBOARD_CACHE_PATH, 'utf-8')) as {
+      version?: number;
       computedAt?: number;
       projects?: ProjectHealth[];
       enrichedAt?: Array<[string, number]>;
     };
+    // Missing/older version → a pre-fix build wrote this file. Discard it
+    // rather than trust grades it computed; refreshAll() recomputes from
+    // scratch on the next tick.
+    if (raw.version !== DASHBOARD_CACHE_VERSION) return;
     for (const p of raw.projects ?? []) if (p?.root) cache.set(p.root, p);
     for (const [root, at] of raw.enrichedAt ?? []) enrichedAt.set(root, at);
     if (typeof raw.computedAt === 'number') computedAt = raw.computedAt;
@@ -291,6 +305,7 @@ function saveCacheToDisk(): void {
     fs.writeFileSync(
       tmp,
       JSON.stringify({
+        version: DASHBOARD_CACHE_VERSION,
         computedAt,
         projects: [...cache.values()],
         enrichedAt: [...enrichedAt],

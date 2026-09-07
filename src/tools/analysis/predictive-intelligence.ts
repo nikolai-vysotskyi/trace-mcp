@@ -130,8 +130,9 @@ interface TechDebtModule {
 export interface TechDebtResult {
   modules: TechDebtModule[];
   project_score: number;
-  /** `null` when there are no modules to score — an empty index has nothing
-   *  to grade, which is not the same claim as "grade A" (TRA-1057). */
+  /** `null` when there are no modules to score, or too few indexed symbols
+   *  for the score to mean anything — neither case is the same claim as
+   *  "grade A" (TRA-1057). */
   project_grade: 'A' | 'B' | 'C' | 'D' | 'F' | null;
 }
 
@@ -374,6 +375,9 @@ function riskLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
   if (score < 0.75) return 'high';
   return 'critical';
 }
+
+/** Minimum indexed symbols before a project-level tech-debt grade is meaningful (TRA-1057). */
+const MIN_SYMBOLS_FOR_GRADE = 20;
 
 function debtGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
   if (score < 0.2) return 'A';
@@ -743,6 +747,13 @@ export function getTechDebt(
     if (row.tested_path) testedFiles.add(row.tested_path);
   }
 
+  // Below this many indexed symbols, per-file averages, coupling instability,
+  // and churn percentiles are dominated by 1-2 data points — not a signal
+  // worth grading (TRA-1057: a 1-symbol project scored grade B).
+  const totalSymbolCount =
+    (store.db.prepare('SELECT COUNT(*) AS c FROM symbols').get() as { c: number } | undefined)?.c ??
+    0;
+
   // Group files by module
   const allFiles = store.getAllFiles();
   const moduleFiles = new Map<string, string[]>();
@@ -848,13 +859,16 @@ export function getTechDebt(
   const totalScore =
     modules.length > 0 ? modules.reduce((s, m) => s + m.score, 0) / modules.length : 0;
 
+  // Zero modules means zero files — nothing was scored, so there is nothing
+  // to grade. debtGrade(0) reads as "A", the best possible score, which is
+  // exactly backwards for an empty project. Same reasoning below
+  // MIN_SYMBOLS_FOR_GRADE: too little data to mean anything (TRA-1057).
+  const hasEnoughDataToGrade = modules.length > 0 && totalSymbolCount >= MIN_SYMBOLS_FOR_GRADE;
+
   return ok({
     modules: modules.slice(0, 50),
     project_score: round(totalScore),
-    // Zero modules means zero files — nothing was scored, so there is
-    // nothing to grade. debtGrade(0) reads as "A", the best possible score,
-    // which is exactly backwards for an empty project (TRA-1057).
-    project_grade: modules.length > 0 ? debtGrade(totalScore) : null,
+    project_grade: hasEnoughDataToGrade ? debtGrade(totalScore) : null,
   });
 }
 
