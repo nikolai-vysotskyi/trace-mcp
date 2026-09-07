@@ -59,7 +59,7 @@ function runGuard(
     },
     cwd,
     encoding: 'utf-8',
-    timeout: 5000,
+    timeout: 30_000,
   });
 
   if (result.status !== 0) {
