@@ -30,7 +30,7 @@ declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 import { installCursorRules, installWindsurfRules } from '../init/ide-rules.js';
-import { installTweakccPrompts, detectTweakccPrompts } from '../init/tweakcc.js';
+import { installTweakccPrompts, detectTweakccPrompts, TWEAKCC_SPEC } from '../init/tweakcc.js';
 import { formatReport } from '../init/reporter.js';
 import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
 import {
@@ -226,7 +226,7 @@ export const initCommand = new Command('init')
                 label: 'Max — CLAUDE.md + hooks + tweakcc',
                 hint: tweakccState.installed
                   ? "patches Claude's system prompts (recommended)"
-                  : 'auto-installs tweakcc via npx (recommended)',
+                  : `downloads and runs ${TWEAKCC_SPEC} via npx (recommended)`,
               },
             ],
             initialValue: 'max' as const,
