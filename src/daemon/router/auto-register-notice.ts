@@ -8,24 +8,24 @@
  * nothing on screen saying so and no hint that there is anything to clean up.
  *
  * So say it once, in the one place the user is actually looking — the
- * `initialize` instructions of the session that caused it. "Once" needs no
- * persisted flag: the root is absent from registry.json before the
- * auto-registration and present after, so the session that saw it absent at
- * start and present-but-not-`explicit` at handshake is by construction the
- * first one. Later sessions see it already registered and stay quiet.
+ * `initialize` instructions of the session that caused it. A session is a
+ * candidate when it saw the root absent from registry.json at construction and
+ * present-but-not-`explicit` at handshake; the notice itself is then claimed
+ * from the registry entry, so concurrent first sessions against the same brand
+ * new root produce one notice between them rather than one each.
  *
  * Roots that never reach registry.json — ephemeral agent-run workdirs
  * (TRA-396) and read-mostly subprojects — have no entry at handshake either,
  * and get no notice: nothing persistent was added, so there is nothing to
  * remove.
  */
-import { getProject, type RegistryEntry } from '../../registry.js';
+import { claimAutoRegisterNotice, getProject } from '../../registry.js';
 
-function lookup(root: string): RegistryEntry | null {
+function isRegistered(root: string): boolean {
   try {
-    return getProject(root);
+    return getProject(root) !== null;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -34,15 +34,17 @@ export class AutoRegisterNotice {
   private spent = false;
 
   constructor(private readonly projectRoot: string) {
-    this.wasRegistered = lookup(projectRoot) !== null;
+    this.wasRegistered = isRegistered(projectRoot);
   }
 
   /** The notice this session owes, or `''`. Answers non-empty at most once. */
   take(): string {
+    // `wasRegistered` is the cheap pre-filter that keeps the overwhelmingly
+    // common case — a session on an already-known project — off the registry's
+    // write path entirely. The claim below is what decides.
     if (this.spent || this.wasRegistered) return '';
     this.spent = true;
-    const entry = lookup(this.projectRoot);
-    if (!entry || entry.explicit) return '';
+    if (!claimAutoRegisterNotice(this.projectRoot)) return '';
     return (
       `Notice: trace-mcp registered and indexed ${this.projectRoot} automatically, because an ` +
       'MCP client connected from it — no one ran `trace-mcp add` or `trace-mcp init` here. It ' +

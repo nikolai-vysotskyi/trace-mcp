@@ -89,6 +89,34 @@ describe('AutoRegisterNotice (#936)', () => {
     expect(instructionsOf(notice.applyTo(initializeResult()))).toContain('trace-mcp remove');
   });
 
+  it('gives two sessions racing the same brand-new root one notice between them', () => {
+    // Both instances are constructed before the daemon's addProject() lands,
+    // so both see the root as unregistered — the claim on the registry entry
+    // is the only thing that separates them.
+    const first = new mod.AutoRegisterNotice(projectDir);
+    const second = new mod.AutoRegisterNotice(projectDir);
+    registry.registerProject(projectDir);
+
+    const outs = [first, second].map((n) => instructionsOf(n.applyTo(initializeResult('base'))));
+    expect(outs.filter((o) => o?.includes('trace-mcp remove'))).toHaveLength(1);
+  });
+
+  it('stamps the entry so a later daemon run stays quiet too', () => {
+    const notice = new mod.AutoRegisterNotice(projectDir);
+    registry.registerProject(projectDir);
+    notice.applyTo(initializeResult('base'));
+
+    expect(registry.getProject(projectDir)?.autoRegisterNoticedAt).toBeTruthy();
+    expect(registry.claimAutoRegisterNotice(projectDir)).toBe(false);
+  });
+
+  it('claims nothing for a deliberate registration or an unregistered root', () => {
+    expect(registry.claimAutoRegisterNotice(projectDir)).toBe(false);
+    registry.registerProject(projectDir, { explicit: true });
+    expect(registry.claimAutoRegisterNotice(projectDir)).toBe(false);
+    expect(registry.getProject(projectDir)?.autoRegisterNoticedAt).toBeUndefined();
+  });
+
   it('leaves non-initialize frames untouched', () => {
     const notice = new mod.AutoRegisterNotice(projectDir);
     registry.registerProject(projectDir);

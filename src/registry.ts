@@ -81,6 +81,18 @@ export interface RegistryEntry {
    * regardless of when it was registered.
    */
   explicit?: boolean;
+  /**
+   * ISO timestamp of the moment the "this root was registered for you, here is
+   * how to undo it" notice was handed to a client (#936). Set by
+   * {@link claimAutoRegisterNotice}, which is what makes the notice fire once
+   * per entry rather than once per session — two MCP clients connecting to the
+   * same brand-new root at the same instant would otherwise both believe they
+   * were the first.
+   *
+   * Absent on every row written before TRA-1101, and on every deliberate
+   * registration — neither is owed a notice.
+   */
+  autoRegisterNoticedAt?: string;
 }
 
 interface Registry {
@@ -186,6 +198,34 @@ function claimSharedDb(siblingDbPath: string, absRoot: string): boolean {
   }
   releaseDbHolder(siblingDbPath, absRoot);
   return false;
+}
+
+/**
+ * Claim the one-time auto-registration notice for `root` (#936).
+ *
+ * True exactly once per registry entry: the first caller stamps
+ * {@link RegistryEntry.autoRegisterNoticedAt} and every later one — in this
+ * process or another — reads it back and gets false. A root the user
+ * registered deliberately, and one that never reached registry.json at all
+ * (ephemeral workdirs, read-mostly subprojects), are owed nothing and answer
+ * false too.
+ *
+ * The read-modify-write is not locked, which leaves the same microsecond-wide
+ * window every other registry mutation has. That is the point: it replaces a
+ * window as wide as a session's lifetime with the one the file's own
+ * consistency story already accepts.
+ */
+export function claimAutoRegisterNotice(root: string): boolean {
+  const absRoot = path.resolve(root);
+  const reg = loadRegistry();
+  const entry = reg.projects[absRoot];
+  if (!entry || entry.explicit || entry.autoRegisterNoticedAt) return false;
+  // Mutated in place — `entry` is the object `reg.projects` holds, and
+  // assigning to a path-derived computed property is what
+  // `js/remote-property-injection` flags (see registerProject).
+  entry.autoRegisterNoticedAt = new Date().toISOString();
+  saveRegistry(reg);
+  return true;
 }
 
 export function registerProject(
