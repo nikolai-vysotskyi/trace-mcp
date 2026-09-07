@@ -23,6 +23,12 @@ Rules for keeping it honest, same three as the sibling ledgers:
   with no reason written down gets re-adopted next quarter.
 - Numbers going outside come from `docs/_data/counts.yml` and
   `docs/_data/pr_context_bench.json`. Never hand-typed.
+- **The saving never travels alone.** A surface quoting the token figure quotes
+  the quality result from `docs/_data/pr_context_quality.json` in the same
+  breath. Cheaper is not better, and one number stating a claim it does not
+  support is the defect we documented in a competitor before we shipped it
+  ourselves. Gated for `README.md` by `tests/docs/readme-claims.test.ts`
+  (TRA-1013).
 
 ## The question this answers
 
@@ -149,6 +155,18 @@ too. If the distinction ever stops being drawn, the honest move is to drop the
 pairing from the public surfaces, not to soften the boundary: the boundary is
 load-bearing for the whole claim and `tweakcc` is an optional amplifier on one
 client.
+
+**The second boundary: no absolute about locality.** Say what is true — your
+code and your index stay on the machine, there is no account and no server of
+ours in the path — and stop there. "100% local" is false the moment you `grep
+google-analytics` over our own repo: `src/telemetry/usage-ping.ts` POSTs one
+anonymous daily ping unless the user sets `TRACE_MCP_TELEMETRY=off` or
+`telemetry.usage_ping: false`. The ping carries no code, no paths and no IP, and
+`docs/privacy.md` lists every field it does carry — none of which rescues an
+absolute. The banner chip and its `alt` text said it until 2026-09-07 (TRA-1013),
+on the surface auto-indexes copy verbatim. Gated by
+`tests/docs/readme-claims.test.ts` for `README.md`, `package.json`,
+`server.json` and `scripts/gen-readme-banner.mjs`.
 
 And say the reachable share out loud, because "manages your context budget"
 implies a whole we do not have. The measured decomposition of one real start

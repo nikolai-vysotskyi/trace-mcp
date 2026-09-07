@@ -623,6 +623,87 @@ describe('docs site numeric claims (TRA-174)', () => {
     expect([...new Set(broken)], 'no matching key in docs/_data/pr_context_bench.json').toEqual([]);
   });
 
+  /**
+   * TRA-1013 / roadmap 2026-09-07: the token saving may not be published alone.
+   * The same 60 PRs were also reviewed by a model and scored blind, and the
+   * quality half is the half that decides whether the cheap context was worth
+   * having. When only the saving travelled, one number was doing the work of a
+   * claim it does not support — the exact defect we documented in a competitor
+   * and then shipped ourselves. So: a surface that quotes the saving quotes the
+   * quality result too, and both come from the generated data.
+   *
+   * README.md is the surface this gates today. docs/index.html (the hero) and
+   * docs/comparisons.md quote the saving without the quality half as well, but
+   * they belong to the site and competitor mandates — filed separately; add
+   * their paths to QUOTES_THE_SAVING once they carry it.
+   */
+  const QUALITY = JSON.parse(
+    readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_quality.json'), 'utf-8'),
+  ) as Record<string, unknown>;
+  const QUOTES_THE_SAVING = ['README.md'];
+
+  /** One-line surfaces cannot carry four numbers, so they carry the verdict
+   *  instead — the same phrase the live GitHub repo description already runs. */
+  const ONE_LINERS_QUOTING_THE_SAVING = ['package.json'];
+
+  it('no surface publishes the token saving without the quality result (TRA-1013)', () => {
+    for (const path of QUOTES_THE_SAVING) {
+      const src = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      for (const [label, needle] of [
+        ['trace understood rate', QUALITY.trace_understood],
+        ['baseline understood rate', QUALITY.baseline_understood],
+        ['trace false positives', QUALITY.trace_false_positives],
+        ['baseline false positives', QUALITY.baseline_false_positives],
+      ] as const) {
+        expect(
+          src.includes(String(needle)),
+          `${path} states the ${BENCH.median_savings_pct}% token saving but not the ${label} ` +
+            `("${needle}") from docs/_data/pr_context_quality.json. Cheaper is not better: the ` +
+            'quality half travels with the saving. Re-run `npx tsx scripts/bench-pr-quality.ts` ' +
+            'and update the block under the benchmark headline.',
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('a one-line surface quoting the saving states the quality verdict (TRA-1013)', () => {
+    for (const path of ONE_LINERS_QUOTING_THE_SAVING) {
+      const src = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      expect(
+        /comprehension at parity/.test(src),
+        `${path} quotes the ${BENCH.median_savings_pct}% saving in a description too short for ` +
+          'the quality table, so it owes the reader the verdict: "comprehension at parity" ' +
+          '(docs/perf/prereg-pr-quality.md, verdict MET). Keep it in step with the GitHub repo ' +
+          'description in ops/distribution.md.',
+      ).toBe(true);
+    }
+  });
+
+  /**
+   * TRA-1013: the banner chip read "100% local" while src/telemetry/usage-ping.ts
+   * POSTs to google-analytics.com by default. The ping carries no code and both
+   * opt-outs are documented — what was false was the absolute. `grep
+   * google-analytics` over our own repo disproved it in one command, on the
+   * surface that is copied verbatim into every auto-indexed listing.
+   */
+  it('no surface we own claims absolute locality while the usage ping ships on (TRA-1013)', () => {
+    const absolute = /(100\s*%[\s-]*local|fully local|entirely local|never leaves your machine)/i;
+    for (const path of [
+      'README.md',
+      'package.json',
+      'server.json',
+      'scripts/gen-readme-banner.mjs',
+    ]) {
+      const hit = readFileSync(join(REPO_ROOT, path), 'utf-8').match(absolute);
+      expect(
+        hit?.[0] ?? null,
+        `${path} claims "${hit?.[0]}". trace-mcp sends one anonymous usage ping by default ` +
+          '(src/telemetry/usage-ping.ts), so an absolute is false. Say what is true instead — ' +
+          'your code and index stay on the machine — and link https://trace-mcp.com/privacy.html.',
+      ).toBe(null);
+    }
+  });
+
   it('llms.txt and tools-reference.md agree on the resource count', () => {
     const llms = readDoc('docs/llms.txt');
     const toolsRef = readDoc('docs/tools-reference.md');
