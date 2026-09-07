@@ -72,22 +72,25 @@ beforeAll(() => {
 afterAll(async () => {
   // The background refreshAll() this suite triggers is fire-and-forget
   // (`void refreshAll()` in dashboard-routes.ts) and opens each project's DB
-  // again for the expensive pass — nothing in this file awaits it, so it can
-  // still hold a handle open on `projN.db` the instant the last test
-  // resolves. POSIX tolerates unlinking an open file; Windows does not
-  // (EBUSY), so retry with backoff instead of asserting the handle is
+  // again for the expensive pass — nothing in this file awaits it, so a
+  // handle can still be open on `projN.db` the instant the last test
+  // resolves, and closing it waits on that pass reaching its next
+  // `await tick()`. POSIX tolerates unlinking an open file; Windows does
+  // not (EBUSY). Same class of Windows-only timing gap `makeDb` above
+  // already documents for antivirus-scanned file creation (TRA-1104) —
+  // retry with backoff for up to ~20s instead of asserting the handle is
   // already gone.
   for (let attempt = 0; ; attempt++) {
     try {
       fs.rmSync(tmpHome, { recursive: true, force: true });
       break;
     } catch (err) {
-      if (attempt >= 10) throw err;
-      await new Promise((r) => setTimeout(r, 50));
+      if (attempt >= 80) throw err;
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
   delete process.env.TRACE_MCP_DATA_DIR;
-});
+}, 30_000);
 
 /** Drive the handler without a socket: collect what it writes. */
 async function get(url: string): Promise<{ status: number; body: string }> {
