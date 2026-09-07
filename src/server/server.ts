@@ -4,6 +4,27 @@ declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
+/**
+ * What this server calls itself at `initialize` (TRA-1119).
+ *
+ * `name` is the protocol id and stays `trace` — renaming it breaks every
+ * existing client config. `title`/`description` exist because the bare name
+ * reads as a distributed-tracing or debug-logging server to anyone who meets it
+ * in a client's server list before reading any documentation: TRA-1119
+ * collected three independent parties who filed us under tracing/observability,
+ * one of them copying it out of his own working install. This is the one string
+ * every user sees, so it has to say what the server is in its first four words.
+ *
+ * No counts here — those live in `docs/_data/counts.yml` and go stale silently.
+ */
+export const SERVER_IDENTITY = {
+  name: 'trace',
+  title: 'Trace — Code Intelligence',
+  description:
+    'Precomputed code graph for AI agents: symbol search, file outlines, call graphs, and change-impact analysis, served instead of raw file reads. Not a distributed-tracing or logging server.',
+  websiteUrl: 'https://trace-mcp.com',
+} as const;
+
 import {
   type AIProvider,
   BlobVectorStore,
@@ -339,7 +360,12 @@ export function createServer(
   const agentBehavior = config.tools?.agent_behavior ?? 'off';
   const onSurface = createToolFilter(config, sessionSurface);
   const server = new McpServer(
-    { name: 'trace', version: PKG_VERSION },
+    // `name` is the protocol id and stays `trace`. The rest exists because the
+    // bare name reads as a distributed-tracing/debug-logger server to anyone who
+    // meets it in a client's server list before any documentation — TRA-1119
+    // collected three independent parties who filed us that way, one of them
+    // from his own installed config. This is the only line every user sees.
+    { ...SERVER_IDENTITY, version: PKG_VERSION },
     {
       instructions: buildInstructions(
         detectedFrameworks,

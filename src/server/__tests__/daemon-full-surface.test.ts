@@ -154,3 +154,20 @@ describe('serveFullSurface (TRA-951)', () => {
     expect(handle.toolHandlers.has(OUTSIDE_MINIMAL)).toBe(false);
   });
 });
+
+// TRA-1119: `serverInfo` is what a client renders in its server list, before
+// any documentation. It travels the same construction path as the preset above,
+// so it is guarded here rather than in a second server-building fixture.
+describe('serverInfo reaches the handshake (TRA-1119)', () => {
+  it('advertises the title and description, not just the bare name', async () => {
+    const { SERVER_IDENTITY } = await import('../server.js');
+    const handle = await build({});
+    const info = (handle.server as unknown as { server: { _serverInfo: Record<string, unknown> } })
+      .server._serverInfo;
+
+    expect(info.name).toBe('trace');
+    expect(info.title).toBe(SERVER_IDENTITY.title);
+    expect(info.description).toBe(SERVER_IDENTITY.description);
+    expect(info.version).toBeTypeOf('string');
+  });
+});
