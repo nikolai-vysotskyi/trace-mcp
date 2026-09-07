@@ -19,13 +19,21 @@ process.env.TRACE_MCP_DATA_DIR = tmpHome;
 /** Minimal schema — enough for the three COUNT(*) queries the cheap pass runs. */
 function makeDb(dbPath: string): void {
   const db = new Database(dbPath);
+  // One transaction, no rollback journal. The seed used to run its 100 inserts
+  // in autocommit: 20 databases x 100 commits = 2000 journal files created,
+  // fsynced and deleted. That is ~1s on macOS and minutes on a Windows runner
+  // whose antivirus scans every one of those creations (TRA-1104) — which is
+  // why raising the hook ceiling from 15s to 60s only moved the boundary.
+  db.pragma('journal_mode = MEMORY');
   db.exec(`
     CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT, status TEXT);
     CREATE TABLE symbols (id INTEGER PRIMARY KEY, name TEXT);
     CREATE TABLE edges (id INTEGER PRIMARY KEY, src TEXT, dst TEXT);
   `);
   const f = db.prepare("INSERT INTO files (path, status) VALUES (?, 'ok')");
-  for (let i = 0; i < 100; i++) f.run(`src/f${i}.ts`);
+  db.transaction(() => {
+    for (let i = 0; i < 100; i++) f.run(`src/f${i}.ts`);
+  })();
   db.close();
 }
 
@@ -42,14 +50,14 @@ beforeAll(() => {
     projects[root] = { name: `proj${i}`, root, dbPath, lastIndexed: null, addedAt: '' };
   }
   fs.writeFileSync(path.join(tmpHome, 'registry.json'), JSON.stringify({ version: 1, projects }));
-  // Windows CI's filesystem/SQLite baseline is slow enough that 20 synchronous
-  // better-sqlite3 file creations can clear the default 15s hook timeout, even
-  // though the same seed is well under 1s on macOS/Ubuntu.
-}, 60_000);
+  // No timeout override on purpose: the seed is ~10ms now, so the default hook
+  // ceiling is the regression guard. If this hook ever needs a bigger number
+  // again, the seed got expensive — fix the seed, not the ceiling (TRA-790).
+});
 
 afterAll(() => {
   fs.rmSync(tmpHome, { recursive: true, force: true });
-  process.env.TRACE_MCP_DATA_DIR = undefined;
+  delete process.env.TRACE_MCP_DATA_DIR;
 });
 
 /** Drive the handler without a socket: collect what it writes. */
