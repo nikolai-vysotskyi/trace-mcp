@@ -113,19 +113,21 @@ definition:
 | affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | {{ site.data.pr_context_bench.trace_dependent_pointed }} |
 
 A third of the changed symbols arrive without their bodies (113 of 338 across
-the corpus), and the previously-published 58% call-site readability was the same
-pointer count — it is 28% when bodies are required. **The bar was registered as
-unadjustable and it is not being adjusted: this publishes as MISSED.** The
-token saving is unaffected — 70.5% is the same number under either definition,
-because tokens were always counted on the assembled text.
+the corpus) — though how much of that is module-level pseudo-symbols, whose
+"body" is an entire file and is exactly what this index exists not to ship,
+versus symbols the 8,000-token budget drops, is **not yet measured**. The
+previously-published 58% call-site readability was the same pointer count; it is
+28% when bodies are required. **The bar was registered as unadjustable and it is
+not being adjusted: this publishes as MISSED.** The token saving is unaffected —
+70.5% is the same number under either definition, because tokens were always
+counted on the assembled text.
 
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a
 model rather than a metric, came back at parity on the same corpus. Both are
 true, and the gap between them — a third of changed symbols missing without a
-measurable comprehension cost — is the open question, not a resolved one. The
-decomposition (module-level pseudo-symbols, whose "body" is a whole file, versus
-symbols the 8,000-token budget drops) is not yet measured.
+measurable comprehension cost — is the open question, not a resolved one, and
+measuring the decomposition named above is the way into it.
 
 Pull requests where the index did not pay off went from 5 to 56 under the
 corrected metric — 43 of them classified `truncated`, which is that same
