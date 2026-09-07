@@ -773,6 +773,97 @@ The cost of publishing an unmeasured number is therefore unbounded in time, not
 just long. That is the argument for the claims gate covering the repo
 description, and it is now the second finding to make it.
 
+### The sweep had been half-blind since it was written (2026-09-07, TRA-1085)
+
+`scripts/mention-sweep.sh` ran four `gh search code` queries and, on 2026-09-07,
+reported "No repos outside the seen list. Nothing to read." The same minute,
+`gh api search/code` with the same term returned repos the sweep had never
+printed once. Two separate limits, both in `gh search code`:
+
+- **It answers a multi-term query with an empty array.** `gh search code
+  'trace-mcp serena'` returns `[]`; `gh api -X GET search/code -f
+  q='trace-mcp serena'` returns `total_count: 96`. Verified against a known
+  positive: repo-scoped, `gh search code 'serena trace-mcp
+  repo:mattbutlerengineering/ai-tooling'` does return `CATALOG.md`, so the
+  syntax is fine and the global multi-term path is what fails. **Every
+  competitor-paired query anyone has run through this script has silently
+  returned nothing.**
+- **Its single-term recall is far short of the REST index.** 27 unique repos
+  for `trace-mcp` against a REST index that answers in the thousands of files.
+
+The legacy REST indexer has the opposite flaw: it splits on the hyphen, so
+`dynatrace-mcp` and `dynatrace-mcp-server` match `trace-mcp` and cost about half
+the raw results. That is cheap to fix and now fixed in the script — pass 2 asks
+for `Accept: application/vnd.github.text-match+json` and keeps a repo only when
+a returned fragment holds the literal token with a non-word character in front
+of it.
+
+**Do not read a clean pass-1 run as "no new mentions" for anything before
+2026-09-07.** With pass 2 added, the first run printed **22 repos** the old
+script had never returned. Six were read and classified this run; the rest stay
+unread in the queue rather than being silenced in `ops/mentions-seen.txt`.
+
+What the six were, and it is the argument for the whole channel — **three of the
+first four genuine hits are live users, and none of them ever filed an issue or
+clicked through a directory:**
+
+| Repo | What the matched file is | Why it matters |
+|---|---|---|
+| `drguptavivek/fundus_img_xtract` | `handoff/01_GUARDRAILS.md` and `handoff/05_START_PROMPT.md`: "Use trace-mcp before code exploration, as required by `AGENTS.md`" | A **retained** user. Same account filed #381/#382 (plugin support: `click`, `marshmallow`) in August; a month later trace-mcp is a standing instruction in their agent handoff, not a trial. Django/Python medical-imaging repo. They keep `.serena/` in the same tree — we are used *beside* Serena, not instead of it |
+| `Egoka/FishtVue` | `CLAUDE.md`, a "Trace-mcp routing" section naming `get_outline`, `get_symbol`, `find_usages`, `get_feature_context`, `get_change_impact` | Vue component library. The section is a paraphrase of our own routing table, in Russian, pointing at a global `~/.claude/CLAUDE.md` for the full table — so the routing guidance travels, and it travels re-written |
+| `www-e/Omar` | `opencode.json`, `"trace-mcp": {"command": ["trace-mcp", "serve"], "timeout": 60000}` | **opencode**, on Windows, with `trace-mcp serve` and no project root — the exact shape TRA-893 is about. They gave us a 60 s timeout, the longest in the file bar one, which reads as somebody who hit a startup timeout and raised it. Same file also runs `context-mode`, `codedev-mcp` and `engram`: this user stacks the category rather than choosing inside it |
+| `jgravelle/jcodemunch-mcp` | `docs/standard/NICHE.md`, a 14-row competitive-landscape table | A rival's own positioning doc, and **it lists trace-mcp at "16 languages, incremental indexing"**. `counts.yml` says 81. In a table where breadth is an explicit axis (CodeGraph 158 grammars, Axon 43, SigMap 34, vexp 34) the stale figure makes us the narrowest tool on the board. **No surface of ours has ever said 16** — `git log -S"16 languages" --all` returns nothing before this commit — so it is their error, not our stale copy, and there is nothing to correct at the source. **No outreach:** this is a rival's internal positioning doc, not a public directory; writing to ask them to raise our number in their own competitive analysis is a message no maintainer is glad to get. Recorded, not answered. The check did turn up a real drift on our side and it is filed as TRA-1086 |
+| `clauderules/turbo-claude` | `README.md` | A link-wrapped mirror of `punkpeye/awesome-mcp-servers`. Our line is copied verbatim, including the broken leading `](https://glama.ai/…)` fragment the upstream README also carries. Nothing to do here; the fix is upstream if it is anywhere |
+| `openfilz/openfilz-core` | `docker/trace-mcp-native-hints.sh` | Collision. A GraalVM tracing-agent script |
+
+**The method, for the next run.** Pass 2's paired terms are in the script. Add a
+row to them when `docs/_data/competitors.yml` grows a name. The paired form is
+what makes it a *user-signal* channel rather than a listings channel: a file
+that names us next to a rival is, almost always, somebody deciding — an
+evaluation, a catalogue, or an agent config with both servers wired in.
+
+### Somebody else posted us to Hacker News, and it is not the signal it looks like (2026-09-07, TRA-1085)
+
+Found in `xkef/swe-digest`, a repo that snapshots the HN front page daily and
+which pass 2 surfaced. HN item **49581857**, "Trace MCP", pointing at the
+GitHub repo, submitted **2026-09-05 23:38 UTC** by `handfuloflight`. Two points,
+zero comments, zero descendants. Not us, and not organic either: Algolia shows
+the same account filed **15 submissions in the four days 09-03…09-06**, every
+one of them an AI or agent tool, every one landing at 1–5 points with no
+comments. It is a firehose, not a reader.
+
+Three things follow.
+
+- **`ops/launch-hn.md` is not spent.** A 2-point submission with no comment
+  attracted no attention to reuse and no discussion to contradict; HN routinely
+  re-runs stories that got no traction. But the draft should be checked against
+  the fact that a bare-title, bare-URL post already exists.
+- The date is the same day as the `DanKornas` X post (5,003 views, 38 stars).
+  Scout accounts on two platforms picked us up within hours of each other, which
+  says the pickup was driven by something upstream of either.
+- **A future run will re-find this item and can easily misread it as interest.**
+  It is not. Points and comments, not presence, are the reading.
+
+### npm downloads: the version histogram is the proof, and it is better than the release-day one (2026-09-07, TRA-1085)
+
+TRA-413 already retired npm downloads as an adoption metric off the daily
+series — ~40/day through the summer, then 1,300–2,000/day on 27–30 August,
+the four days we published 31 releases. The per-version endpoint settles it
+without needing the release calendar at all:
+
+`api.npmjs.org/versions/trace-mcp/last-week` — **all 86 published versions have
+downloads, median 9, and the top of the list is 3.10.0 (275), 3.8.0 (263),
+3.11.0 (256), 3.5.0 (251), 3.5.2 (238)**. Retired versions from four months ago
+outrank everything recent, and `latest` does not appear at all. No population of
+users produces that shape; a crawler walking the version list does, and it is
+running continuously rather than only on release days.
+
+**Keep the retirement, and quote this histogram rather than the daily spike when
+somebody asks why.** It is one unauthenticated call, needs no correlation with
+our own release history, and it answers the obvious objection ("your spike was
+just a popular week") that the daily series cannot.
+
+
 ### And the finding that came out of it: the repo description was the last home of "~42 minutes"
 
 The scrapers do not paraphrase. `linny006.github.io` repeats our GitHub
