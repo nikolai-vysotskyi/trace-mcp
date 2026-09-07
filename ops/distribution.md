@@ -440,6 +440,42 @@ The measured case for the whole rename was **0.74–1.23%** of the advertised
 tool surface (TRA-613, #720). Anything that would cost this table a listing is
 not worth that, and this row exists so the next run does not re-derive it.
 
+### The name reads as "distributed tracing" to anyone who never read a description (2026-09-07, TRA-1119)
+
+Field evidence, not a hypothesis. Three independent parties filed us as an
+observability/tracing server:
+
+- `Timothy191/Arch-Mk2` and `Timothy191/arch-systems-portal` — same author, two
+  repos, `.vscode/README.md` (2026-07-07, 2026-07-22): *"`trace-mcp` (Tracing
+  Utility) — Standard tracing and debugger logging MCP server."* The setup block
+  right below it runs `claude mcp add trace-mcp npx -y trace-mcp@latest`. He had
+  us installed and working, and wrote down the wrong category.
+- `kansei-link/kansei-mcp-server`, an MCP registry: its classifier filed us
+  under "DeFi & Web3"; the human remediation pass
+  (`scripts/audit-remediation-20260424.mjs`, 2026-04-24) corrected it to
+  "AI observability/tracing" — still wrong, from the same file.
+
+The mechanism is visible in the same sweep and it is the useful part: **wherever
+an aggregator copied our README or Glama text the category is right**
+(`clauderules/turbo-claude`, `metinduraktr-44/claude-otonom-sistem`,
+`alpha-1-design/Nexus` all carry "Framework-aware code intelligence…").
+Wherever someone worked from the package name alone, it lands next to
+`dynatrace-mcp`. Prose we wrote travels correctly; the name alone does not.
+
+What we did about it, so it is not re-derived: **not a rename** (the section
+above stands). The fix is that the server now says what it is in the one string
+every user meets before any documentation — `serverInfo` at `initialize`, which
+a client renders in its server list:
+
+- `name` stays `trace` (protocol id, in everyone's config).
+- `title`: "Trace — Code Intelligence".
+- `description`: names the category and explicitly denies the wrong one
+  ("Not a distributed-tracing or logging server").
+
+Checked at the same time and found already correct — no change needed:
+`server.json`, `plugin.json`, both `.claude-plugin`/`.codex-plugin` manifests,
+and all four `skills/*/SKILL.md` descriptions. The gap was only the handshake.
+
 ## Findings that should not be re-derived
 
 **The official registry was the root cause of everything else** (TRA-352,
