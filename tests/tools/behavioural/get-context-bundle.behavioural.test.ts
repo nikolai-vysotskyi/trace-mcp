@@ -580,3 +580,64 @@ describe('getContextBundle() — restoring a dropped member does not re-duplicat
     expect(inner?.detail).toBe('full');
   });
 });
+
+/**
+ * TRA-1144: some containers cannot be delivered at any budget — `axios#11119`'s
+ * changed symbol is a whole 24,000-token README, and the PR-context benchmark
+ * has 42 of 60 PRs where at least one changed body does not fit. What the
+ * payload said about that was a signature line, which reads like the whole
+ * answer. It now says the body was dropped, and by how much.
+ */
+describe('getContextBundle() — a body the budget refused is declared, not silently a signature', () => {
+  const BIG_SRC = `export function big() {\n${'  // padding padding padding padding padding\n'.repeat(300)}}\n`;
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    rootPath = createTmpFixture({ 'src/one.ts': BIG_SRC });
+    store = createTestStore();
+    const fileId = store.insertFile('src/one.ts', 'typescript', 'h-one', BIG_SRC.length);
+    store.insertSymbol(fileId, {
+      symbolId: 'src/one.ts::big#function',
+      name: 'big',
+      kind: 'function',
+      fqn: 'big',
+      byteStart: 0,
+      byteEnd: BIG_SRC.length,
+      lineStart: 1,
+      lineEnd: BIG_SRC.split('\n').length,
+      signature: 'function big()',
+    });
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('names the omitted body and its size next to the signature', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/one.ts::big#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 500,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    const content = bundle.content ?? '';
+
+    expect(content).toContain('function big()');
+    expect(content).toMatch(/\[body omitted — \d+ tokens, over this section's budget\]/);
+    // The declaration is a fact about this response, so it has to agree with
+    // what the response actually reports about the symbol.
+    expect(bundle.primary[0].detail).not.toBe('full');
+    expect(bundle.totalTokens).toBeLessThanOrEqual(500);
+  });
+
+  it('says nothing when the symbol has no body to omit', () => {
+    const noBody = getContextBundle(store, rootPath, {
+      symbolIds: ['src/one.ts::big#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 100_000,
+    });
+    expect(noBody._unsafeUnwrap().content ?? '').not.toContain('body omitted');
+  });
+});
