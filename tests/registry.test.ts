@@ -363,6 +363,9 @@ describe('ephemeral workdirs are never persisted', () => {
 
     expect(getProject(workdir)).toBeNull();
     expect(getDbPath(workdir).startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(true);
+    // The invariant the leak broke: the registering process and every other
+    // one must name the same file for the same root.
+    expect(registerProject(workdir).dbPath).toBe(getDbPath(workdir));
   });
 
   it('routes an unregistered one-shot task scratch dir the same way', () => {
