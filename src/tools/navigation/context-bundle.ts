@@ -7,7 +7,7 @@ import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import type { TraceMcpResult } from '../../errors.js';
-import type { ContextItem } from '../../scoring/assembly.js';
+import type { ContextItem, DetailLevel } from '../../scoring/assembly.js';
 import {
   assembleStructuredContext,
   renderStructuredContext,
@@ -34,6 +34,15 @@ interface BundleSymbolItem {
   kind: string;
   file: string;
   line: number | null;
+  /**
+   * Whether the assembled context actually carries this symbol's body
+   * ('full'), a signature-only fallback, or neither. TRA-1100: before this
+   * field existed, a consumer could only tell that a symbol was *listed*,
+   * not whether its body survived assembly — which is exactly how the
+   * TRA-1090 bare-`require` regression measured 100% "readable" on bundles
+   * that carried no source at all.
+   */
+  detail: DetailLevel;
 }
 
 interface ContextBundleResult {
@@ -113,13 +122,14 @@ function toContextItemCached(
   };
 }
 
-function toBundleItem(sym: SymbolRow, file: FileRow): BundleSymbolItem {
+function toBundleItem(sym: SymbolRow, file: FileRow, detail: DetailLevel): BundleSymbolItem {
   return {
     symbol_id: sym.symbol_id,
     name: sym.name,
     kind: sym.kind,
     file: file.path,
     line: sym.line_start,
+    detail,
   };
 }
 
@@ -287,14 +297,22 @@ export function getContextBundle(
     totalBudget: budget,
   });
 
+  // Assembly drops or degrades items under budget pressure; look up each
+  // symbol's actual outcome by id rather than assuming array order survived.
+  const detailBySymbolId = new Map<string, DetailLevel>();
+  for (const item of [...assembled.primary, ...assembled.dependencies, ...assembled.callers]) {
+    detailBySymbolId.set(item.id, item.detail);
+  }
+  const detailOf = (symbolId: string): DetailLevel => detailBySymbolId.get(symbolId) ?? 'no_source';
+
   const result: ContextBundleResult = {
-    primary: primarySymbols.map((p) => toBundleItem(p.sym, p.file)),
+    primary: primarySymbols.map((p) => toBundleItem(p.sym, p.file, detailOf(p.sym.symbol_id))),
     dependencies: depSymbols
       .slice(0, assembled.dependencies.length)
-      .map((d) => toBundleItem(d.sym, d.file)),
+      .map((d) => toBundleItem(d.sym, d.file, detailOf(d.sym.symbol_id))),
     callers: callerSymbols
       .slice(0, assembled.callers.length)
-      .map((c) => toBundleItem(c.sym, c.file)),
+      .map((c) => toBundleItem(c.sym, c.file, detailOf(c.sym.symbol_id))),
     totalTokens: assembled.totalTokens,
     truncated: assembled.truncated,
   };

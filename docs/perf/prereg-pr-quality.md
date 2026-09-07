@@ -150,6 +150,39 @@ The baseline arm is a real control: same PRs, same model, same settings, same
 judge, context assembled by loading the diff plus every file it touches. A miss
 is therefore a result about trace-mcp's context, not about a guessed baseline.
 
+## Release gate (TRA-1100)
+
+The 180 model calls behind this measurement go through the `claude` CLI on a
+subscription, not an API key (see *Limits*), take roughly 90 minutes on 8
+parallel workers, and need a checkout with an index built — none of which fits
+a GitHub Actions job on every PR. The bar above is still meant to be enforced,
+just not there: run it by hand, or from the Releaser autopilot, before cutting
+a release that touched retrieval, ranking, or context assembly (`src/scoring/`,
+`src/tools/navigation/context-bundle.ts`, `src/tools/analysis/impact.ts`):
+
+```bash
+tsx scripts/bench-pr-context.ts --dump-prompts benchmarks/pr-context/prompts
+tsx scripts/bench-pr-quality.ts
+node scripts/check-pr-quality-thresholds.mjs
+```
+
+The third command reads the `docs/_data/pr_context_quality.json` the second
+one just wrote and exits non-zero if either bar above is missed — the same
+comparison this page states in prose, kept in one place
+(`scripts/check-pr-quality-thresholds.mjs`) so a release call does not depend
+on someone re-reading percentages correctly. A MISSED run blocks the release;
+it does not get a threshold adjustment to pass (see *Pass bar*, "unadjustable
+after seeing data").
+
+What runs on every PR instead, cheaply, is the structural half of this gate:
+`tests/ci/context-bundle-body-coverage.test.ts` asserts that a
+generously-budgeted `get_context_bundle` result actually carries a body for
+every symbol it lists, using the same `detail` field this fix added to the
+tool's JSON output. It cannot tell you the reviewer understood the change —
+only the full harness above can — but it catches the exact defect that made
+this preregistration fail once already (TRA-1090: a bundle that lists symbols
+without their bodies) on every commit, in milliseconds, without a model call.
+
 ## Limits
 
 Stated in advance so they are not read as excuses afterwards:
