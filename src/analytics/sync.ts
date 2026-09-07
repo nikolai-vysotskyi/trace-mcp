@@ -47,7 +47,11 @@ export interface SyncResult {
   tool_calls_stored: number;
   errors: number;
   duration_ms: number;
-  /** mtime (epoch ms) of the newest session log seen on disk, null when none. */
+  /**
+   * mtime (epoch ms) of the newest session log seen on disk, null when none.
+   * Always the machine-wide newest, even for a project-scoped sync — see
+   * `buildIngestionStatus`'s doc comment for why.
+   */
   newest_log_mtime: number | null;
 }
 
@@ -65,7 +69,16 @@ export interface IngestionStatus {
   newest_session_log_at: string | null;
   /** True when a session log on disk is newer than the ingestion watermark. */
   stale: boolean;
-  /** How far the watermark trails the newest log, in hours (null when fresh). */
+  /**
+   * Tri-state freshness read. 'unknown' means we could not find a log to
+   * compare the watermark against (no session logs anywhere on disk) — this
+   * is NOT the same claim as 'fresh' and must not be reported as `stale:
+   * false` without distinction. See TRA-1072.
+   */
+  freshness: 'fresh' | 'stale' | 'unknown';
+  /** When this status was computed, ISO-8601 — lets a caller show the age of the read. */
+  computed_at: string;
+  /** How far the watermark trails the newest log, in hours (null when fresh/unknown). */
   behind_hours: number | null;
 }
 
@@ -73,19 +86,32 @@ export interface IngestionStatus {
  * Derive ingestion freshness from a just-completed sync plus the store's
  * watermark. Takes the sync result rather than re-listing the filesystem so
  * this costs nothing beyond one SELECT.
+ *
+ * `newestLogMtime` MUST be the newest session log mtime across the whole
+ * machine, not scoped to one project — a project with no logs of its own
+ * has nothing to say about whether the DB is stale, so scoping this input
+ * silently collapsed "couldn't check" into "fresh" (TRA-1072).
  */
 export function buildIngestionStatus(
   watermark: { parsed_at: string | null; files_tracked: number },
   newestLogMtime: number | null,
+  now: number = Date.now(),
 ): IngestionStatus {
   const parsedAtMs = watermark.parsed_at ? Date.parse(watermark.parsed_at) : NaN;
-  const stale =
-    newestLogMtime !== null && (Number.isNaN(parsedAtMs) || newestLogMtime > parsedAtMs);
+  const freshness: IngestionStatus['freshness'] =
+    newestLogMtime === null
+      ? 'unknown'
+      : Number.isNaN(parsedAtMs) || newestLogMtime > parsedAtMs
+        ? 'stale'
+        : 'fresh';
+  const stale = freshness === 'stale';
   return {
     ingested_through: watermark.parsed_at,
     files_tracked: watermark.files_tracked,
     newest_session_log_at: newestLogMtime === null ? null : new Date(newestLogMtime).toISOString(),
     stale,
+    freshness,
+    computed_at: new Date(now).toISOString(),
     behind_hours:
       stale && !Number.isNaN(parsedAtMs)
         ? Math.round((((newestLogMtime as number) - parsedAtMs) / 3_600_000) * 10) / 10
@@ -213,6 +239,9 @@ export function syncProjectAnalytics(
     tool_calls_stored: toolCallsCount,
     errors,
     duration_ms: Date.now() - start,
-    newest_log_mtime: newestMtime(sessions),
+    // Freshness must be judged against every log on disk, not just this
+    // project's — `allSessions` is already in hand from the listAllSessions()
+    // call above, so this is free. See TRA-1072.
+    newest_log_mtime: newestMtime(allSessions),
   };
 }
