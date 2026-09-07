@@ -30,6 +30,11 @@ export interface RemoveConfirmState {
 
 export interface ProjectRowActionsProps extends ProjectActionHandlers, RemoveConfirmState {
   project: ProjectViewModel;
+  /** Disambiguated display name — see Workspace.tsx (TRA-1058). Required, not
+      defaulted to `project.name`: a missing prop should fail to compile, not
+      silently reintroduce the ambiguity (this is the third time a consumer of
+      `project.name` was found still unpatched after the first fix). */
+  label: string;
   /** false = daemon disconnected; Re-index/Remove are disabled. */
   canMutate: boolean;
 }
@@ -46,6 +51,7 @@ function canOpen(project: ProjectViewModel): boolean {
 
 export function ProjectRowActions({
   project,
+  label,
   canMutate,
   confirming,
   onRequestRemove,
@@ -90,24 +96,24 @@ export function ProjectRowActions({
         disabled={!canOpen(project)}
         onClick={() => onOpen(project.root)}
         style={{ color: 'var(--accent)' }}
-        aria-label={t('openProject', { name: project.name })}
-        title={t('openProject', { name: project.name })}
+        aria-label={t('openProject', { name: label })}
+        title={t('openProject', { name: label })}
       />
       <Button
         variant="icon"
         icon="refresh"
         disabled={!canReindex(project, canMutate)}
         onClick={() => onReindex(project.root)}
-        aria-label={t('reindexProject', { name: project.name })}
-        title={t('reindexProject', { name: project.name })}
+        aria-label={t('reindexProject', { name: label })}
+        title={t('reindexProject', { name: label })}
       />
       <Button
         variant="icon"
         icon="close"
         disabled={!mutationAllowed}
         onClick={() => onRequestRemove(project.root)}
-        aria-label={t('removeProjectFrom', { name: project.name })}
-        title={t('removeProjectFrom', { name: project.name })}
+        aria-label={t('removeProjectFrom', { name: label })}
+        title={t('removeProjectFrom', { name: label })}
       />
     </div>
   );
@@ -115,6 +121,9 @@ export function ProjectRowActions({
 
 export interface ProjectContextMenuProps {
   project: ProjectViewModel;
+  /** Disambiguated display name — see Workspace.tsx (TRA-1058). Required, same
+      reasoning as {@link ProjectRowActionsProps.label}. */
+  label: string;
   canMutate: boolean;
   x: number;
   y: number;
@@ -126,6 +135,7 @@ export interface ProjectContextMenuProps {
 
 export function ProjectContextMenu({
   project,
+  label,
   canMutate,
   x,
   y,
@@ -146,7 +156,7 @@ export function ProjectContextMenu({
         disabled={!canOpen(project)}
         onClick={run(() => onOpen(project.root))}
       >
-        {t('openProject', { name: project.name })}
+        {t('openProject', { name: label })}
       </MenuItem>
       <MenuItem
         icon="refresh"
