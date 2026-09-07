@@ -1087,6 +1087,76 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       fs.chmodSync(traceHome, 0o700);
     }
   });
+
+  // TRA-1163. HOME is not guaranteed: a systemd unit with `User=` but no
+  // `Environment=HOME`, a container ENTRYPOINT, a bare launchd job and `env -i`
+  // wrappers all spawn the MCP client without it. Under `set -u` every bare
+  // `$HOME` in the shim is then a hard abort — exit 1, a raw bash error into
+  // the client's stderr, no recovery message, no log line, and (critically) no
+  // probe: `node_candidates` expands its whole `for` list before the first
+  // iteration, so a perfectly good /opt/homebrew/bin/node listed BEFORE the
+  // `$HOME` entry never gets emitted either. Both reproduced.
+  describe('client spawned without HOME (TRA-1163)', () => {
+    // HOME="" is the other real spawn shape: a launcher that exports every
+    // variable it knows of, set or not. `-n` catches it, but `~` does NOT —
+    // tilde consults passwd only when HOME is *unset*, so a plain
+    // `[ -n "$HOME" ] || HOME=~` leaves it empty and every path below roots at
+    // `/`. That is why the guard unsets first.
+    it('does not root its paths at / when HOME is set but empty', () => {
+      const { traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      // Report HOME rather than argv — the empty value is what has to be gone.
+      fs.writeFileSync(
+        node,
+        `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo v22.22.2; exit 0; fi\necho "HOME_SEEN:\${HOME:-EMPTY}"\n`,
+        { mode: 0o755 },
+      );
+
+      const { status, stdout, stderr } = runLauncher({ HOME: '', TRACE_MCP_HOME: traceHome }, [
+        'serve',
+      ]);
+
+      expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
+      expect(status).toBe(0);
+      expect(stdout.trim()).not.toBe('HOME_SEEN:EMPTY');
+      expect(stdout.trim()).toMatch(/^HOME_SEEN:\/./);
+    });
+
+    // The probe half. Which node it lands on is not assertable here — the
+    // passwd fallback is the machine's REAL home, so the runner's own nvm /
+    // Homebrew install outranks anything the fixture can plant. Assert the
+    // property that is the bug instead: the shim reaches an exec at all.
+    // Before the fix `node_candidates` aborted while expanding its `for` list
+    // and this exited 127 with "node binary not found".
+    it('still probes — an unbound HOME must not empty the candidate list', () => {
+      const { traceHome } = setupHealingHome();
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stderr } = runLauncher({ TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
+      expect(stderr).not.toContain('node binary not found');
+      expect(status).toBe(0);
+      expect(fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8')).toContain('exec(');
+    });
+
+    it('hands node an absolute HOME, so the server can find its state directory', () => {
+      const { traceHome, node, cli } = setupFakeHome();
+      // Report HOME rather than argv: cli.js resolves ~/.trace from it, and an
+      // unset HOME there is a second outage hiding behind the first.
+      fs.writeFileSync(
+        node,
+        `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo v22.22.2; exit 0; fi\necho "HOME_SEEN:\${HOME:-UNSET}"\n`,
+        { mode: 0o755 },
+      );
+      writeConfig(traceHome, node, cli);
+
+      const { status, stdout } = runLauncher({ TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toMatch(/^HOME_SEEN:\/./);
+    });
+  });
 });
 
 // TRA-965. The desktop app records `~/.trace/bin/node-runtime` as
