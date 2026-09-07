@@ -90,6 +90,14 @@
     "access": "public",
     "provenance": true
   },
+  "peerDependencies": {
+    "tweakcc": "4.3.3"
+  },
+  "peerDependenciesMeta": {
+    "tweakcc": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@ast-grep/napi": "^0.45.0",
     "@clack/prompts": "^1.2.0",

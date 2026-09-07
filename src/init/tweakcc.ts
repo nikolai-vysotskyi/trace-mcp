@@ -20,6 +20,20 @@ import type { InitStepResult } from './types.js';
 
 const DEFAULT_TWEAKCC_DIR = path.join(os.homedir(), '.tweakcc');
 
+/**
+ * The exact tweakcc version `init` is allowed to fetch and execute.
+ *
+ * tweakcc is the only third-party npm package we run on a user's machine, and
+ * it patches the installed Claude Code bundle. Unpinned, `latest` would resolve
+ * at run time on the user's machine — i.e. what executes would be decided after
+ * our release rather than by it. Mirrored in `package.json` under
+ * `peerDependencies` (optional) so the dependency graph, the release SBOM and
+ * dependabot can all see it; `tests/ci/supply-chain-pins.test.ts` keeps the two
+ * in sync and fails on any unpinned `npx` in `src/`.
+ */
+export const TWEAKCC_VERSION = '4.3.3';
+export const TWEAKCC_SPEC = `tweakcc@${TWEAKCC_VERSION}`;
+
 function getTweakccConfigDir(): string | null {
   const envDir = process.env.TWEAKCC_CONFIG_DIR?.trim();
   if (envDir) return envDir;
@@ -63,7 +77,11 @@ function resolveOrBootstrapPromptsDir(): string | null {
 
 export function isTweakccInstalled(): boolean {
   try {
-    execSync('npx tweakcc --version', { stdio: 'pipe', timeout: 10_000 });
+    // `--no-install` is load-bearing: plain `npx tweakcc` installs the package
+    // when it is missing, and `stdio: 'pipe'` means npm sees no TTY, skips its
+    // confirmation prompt, and swallows the warning. A *detection* call must
+    // not be the thing that installs what it claims to detect (TRA-1133).
+    execSync('npx --no-install tweakcc --version', { stdio: 'pipe', timeout: 10_000 });
     return true;
   } catch {
     return getTweakccConfigDir() !== null;
@@ -236,7 +254,7 @@ export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResul
     results.push({
       target: '~/.tweakcc/system-prompts/',
       action: 'skipped',
-      detail: 'tweakcc package not available — run `npx tweakcc` manually, then re-run init',
+      detail: `tweakcc package not available — run \`npx -y ${TWEAKCC_SPEC}\` manually, then re-run init`,
     });
     return results;
   }
@@ -252,7 +270,7 @@ export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResul
     results.push({
       target: 'tweakcc --apply',
       action: 'skipped',
-      detail: 'Would run `npx tweakcc --apply` to patch Claude Code',
+      detail: `Would run \`npx -y ${TWEAKCC_SPEC} --apply\` to patch Claude Code`,
     });
     return results;
   }
@@ -277,7 +295,7 @@ export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResul
   // Try to apply via tweakcc
   if (written > 0) {
     try {
-      execSync('npx tweakcc --apply', { stdio: 'pipe', timeout: 60_000 });
+      execSync(`npx -y ${TWEAKCC_SPEC} --apply`, { stdio: 'pipe', timeout: 60_000 });
       results.push({
         target: 'tweakcc --apply',
         action: 'updated',
@@ -287,8 +305,7 @@ export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResul
       results.push({
         target: 'tweakcc --apply',
         action: 'skipped',
-        detail:
-          'Prompt files written but `npx tweakcc --apply` failed — run it manually (may need Claude Code not running)',
+        detail: `Prompt files written but \`npx -y ${TWEAKCC_SPEC} --apply\` failed — run it manually (may need Claude Code not running)`,
       });
     }
   }

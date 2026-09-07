@@ -170,9 +170,19 @@ removed.
 **`tweakcc` is a third-party tool, and the Max tier runs it for you.** It is not
 ours: it is [`tweakcc`](https://github.com/Piebald-AI/tweakcc), and what it does
 is patch Claude Code's system prompts. What trace-mcp does is write prompt files
-into `~/.tweakcc/system-prompts/` and then shell out to `npx tweakcc --apply`.
-The patching is tweakcc's; the decision to invoke it, at the Max tier, is ours,
-and saying anything softer than that would be untrue of the code.
+into `~/.tweakcc/system-prompts/` and then shell out to
+`npx -y tweakcc@4.3.3 --apply`. The patching is tweakcc's; the decision to
+invoke it, at the Max tier, is ours, and saying anything softer than that would
+be untrue of the code.
+
+The version is **pinned**, not `latest`: the exact spec lives in
+`src/init/tweakcc.ts` (`TWEAKCC_VERSION`), is mirrored into `package.json` as an
+optional peer dependency so it appears in the dependency graph, the release SBOM
+and dependabot, and `tests/ci/supply-chain-pins.test.ts` fails the build if the
+two drift apart or if any `npx` in `src/` loses its version. A bump is therefore
+a reviewable PR, not something the registry can decide on your machine after our
+release. Detection is a `--no-install` probe, so nothing is fetched before you
+answer the tier question.
 
 **Max is the default when `init` runs non-interactively** against Claude Code,
 Claw Code or Claude Desktop. Interactively it is the preselected option and the
