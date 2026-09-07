@@ -2728,11 +2728,17 @@ program
       // REST API: read global settings
       if (req.method === 'GET' && url.pathname === '/api/settings') {
         const raw = loadGlobalConfigRaw();
+        // TRA-1054: same "folder gone → dead row" rule as the project
+        // registry, applied to per-project config overrides — a second store
+        // that drifts the same way and has no cleanup path of its own.
+        const overrideProjects = (raw as { projects?: Record<string, unknown> }).projects ?? {};
+        const staleProjectPaths = Object.keys(overrideProjects).filter((p) => !fs.existsSync(p));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             settings: raw,
             path: GLOBAL_CONFIG_PATH,
+            staleProjectPaths,
             daemon: {
               port,
               host,

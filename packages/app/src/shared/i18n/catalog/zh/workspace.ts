@@ -41,12 +41,14 @@ export const workspace = {
   filterStatusOkTitle: '索引顺利完成的项目',
   filterStatusIndexingTitle: '正在索引的项目',
   filterStatusErrorTitle: '上次索引失败的项目',
+  filterStatusMissingTitle: '文件夹已不存在的项目',
 
   statusOk: '正常',
   statusIndexing: '索引中',
   statusComputing: '计算中',
   statusError: '错误',
   statusNotLoaded: '未加载',
+  statusMissing: '文件夹缺失',
 
   kpiProjects: '项目',
   kpiFiles: '文件',
@@ -105,6 +107,7 @@ export const workspace = {
   bulkSelected_other: '已选 {{n}} 个',
   bulkRemove: '移除',
   bulkReindexFailed: '至少有一个项目重新索引失败',
+  bulkReindexDisabledMissing: '无法重新索引 — 文件夹已不存在',
   bulkRemoveFailed: '至少有一个项目移除失败',
   bulkExportJson: '导出 JSON',
   bulkExportCsv: '导出 CSV',

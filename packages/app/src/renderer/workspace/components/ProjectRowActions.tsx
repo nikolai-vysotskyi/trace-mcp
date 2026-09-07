@@ -36,7 +36,12 @@ export interface ProjectRowActionsProps extends ProjectActionHandlers, RemoveCon
 
 export function canReindex(project: ProjectViewModel, canMutate: boolean): boolean {
   const indexing = project.displayStatus === 'indexing' || project.displayStatus === 'computing';
-  return canMutate && project.inDaemon && !indexing;
+  return canMutate && project.inDaemon && !indexing && project.displayStatus !== 'missing';
+}
+
+/** No directory, nothing to open (TRA-1054). Only Remove makes sense. */
+function canOpen(project: ProjectViewModel): boolean {
+  return project.displayStatus !== 'missing';
 }
 
 export function ProjectRowActions({
@@ -82,6 +87,7 @@ export function ProjectRowActions({
       <Button
         variant="icon"
         icon="arrow_right_alt"
+        disabled={!canOpen(project)}
         onClick={() => onOpen(project.root)}
         style={{ color: 'var(--accent)' }}
         aria-label={t('openProject', { name: project.name })}
@@ -135,7 +141,11 @@ export function ProjectContextMenu({
   };
   return (
     <Menu x={x} y={y} onClose={onClose}>
-      <MenuItem icon="arrow_right_alt" onClick={run(() => onOpen(project.root))}>
+      <MenuItem
+        icon="arrow_right_alt"
+        disabled={!canOpen(project)}
+        onClick={run(() => onOpen(project.root))}
+      >
         {t('openProject', { name: project.name })}
       </MenuItem>
       <MenuItem

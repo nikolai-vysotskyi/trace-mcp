@@ -42,12 +42,14 @@ export const workspace = {
   filterStatusOkTitle: '問題なくインデックスされたプロジェクト',
   filterStatusIndexingTitle: '現在インデックス中のプロジェクト',
   filterStatusErrorTitle: '前回のインデックスが失敗したプロジェクト',
+  filterStatusMissingTitle: 'フォルダが存在しなくなったプロジェクト',
 
   statusOk: 'OK',
   statusIndexing: 'インデックス中',
   statusComputing: '計算中',
   statusError: 'エラー',
   statusNotLoaded: '未読み込み',
+  statusMissing: 'フォルダなし',
 
   kpiProjects: 'プロジェクト',
   kpiFiles: 'ファイル',
@@ -106,6 +108,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} 件を選択中',
   bulkRemove: '削除',
   bulkReindexFailed: '少なくとも1件のプロジェクトで再インデックスに失敗しました',
+  bulkReindexDisabledMissing: '再インデックス不可 — フォルダが存在しません',
   bulkRemoveFailed: '少なくとも1件のプロジェクトで削除に失敗しました',
   bulkExportJson: 'JSON で書き出す',
   bulkExportCsv: 'CSV で書き出す',

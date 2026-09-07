@@ -42,12 +42,14 @@ export const workspace = {
   filterStatusOkTitle: '문제 없이 인덱싱된 프로젝트',
   filterStatusIndexingTitle: '현재 인덱싱 중인 프로젝트',
   filterStatusErrorTitle: '마지막 인덱싱이 실패한 프로젝트',
+  filterStatusMissingTitle: '폴더가 더 이상 존재하지 않는 프로젝트',
 
   statusOk: 'OK',
   statusIndexing: '인덱싱 중',
   statusComputing: '계산 중',
   statusError: '오류',
   statusNotLoaded: '불러오지 않음',
+  statusMissing: '폴더 없음',
 
   kpiProjects: '프로젝트',
   kpiFiles: '파일',
@@ -106,6 +108,7 @@ export const workspace = {
   bulkSelected_other: '{{n}}개 선택됨',
   bulkRemove: '제거',
   bulkReindexFailed: '하나 이상의 프로젝트에서 다시 인덱싱이 실패했습니다',
+  bulkReindexDisabledMissing: '다시 인덱싱할 수 없음 — 폴더가 더 이상 존재하지 않음',
   bulkRemoveFailed: '하나 이상의 프로젝트에서 제거가 실패했습니다',
   bulkExportJson: 'JSON 내보내기',
   bulkExportCsv: 'CSV 내보내기',

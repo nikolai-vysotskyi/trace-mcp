@@ -358,6 +358,25 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     setRefreshing(false);
   }, [fetchMetrics, resetTimer]);
 
+  // TRA-1077: surface a rejected add the same way reindexMany/removeMany
+  // surface a rejected bulk mutation — through the banner `error` below —
+  // and rethrow so the caller (AddProjectControl) knows not to treat this as
+  // success (clear the input, close the popover).
+  const addProject = useCallback(
+    async (root: string) => {
+      try {
+        await daemon.addProject(root);
+        // Clear a banner left by an earlier rejected add — otherwise it
+        // outlives the failure it described and reads as still-broken.
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    },
+    [daemon.addProject],
+  );
+
   // Bulk mutations — Promise.allSettled, surface first failure.
   const reindexMany = useCallback(
     async (roots: string[]) => {
@@ -426,7 +445,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     metricsComputedAt,
     connected: daemon.connected,
     restarting: daemon.restarting,
-    addProject: daemon.addProject,
+    addProject,
     removeProject: daemon.removeProject,
     reindexProject: daemon.reindexProject,
     reindexMany,

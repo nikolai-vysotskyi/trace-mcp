@@ -50,12 +50,14 @@ export const workspace = {
   filterStatusOkTitle: 'Projets indexés sans erreur',
   filterStatusIndexingTitle: 'Projets en cours d’indexation',
   filterStatusErrorTitle: 'Projets dont la dernière indexation a échoué',
+  filterStatusMissingTitle: 'Projets dont le dossier n’existe plus',
 
   statusOk: 'OK',
   statusIndexing: 'Indexation',
   statusComputing: 'Calcul',
   statusError: 'Erreur',
   statusNotLoaded: 'Non chargé',
+  statusMissing: 'Dossier manquant',
 
   kpiProjects: 'Projets',
   kpiFiles: 'Fichiers',
@@ -127,6 +129,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} sélectionnés',
   bulkRemove: 'Retirer',
   bulkReindexFailed: 'La réindexation a échoué pour au moins un projet',
+  bulkReindexDisabledMissing: 'Ré‑indexation impossible — le dossier n’existe plus',
   bulkRemoveFailed: 'Le retrait a échoué pour au moins un projet',
   bulkExportJson: 'Exporter en JSON',
   bulkExportCsv: 'Exporter en CSV',

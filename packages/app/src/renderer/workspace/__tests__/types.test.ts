@@ -159,6 +159,17 @@ describe('mergeIntoViewModel', () => {
     expect(out[0].displayStatus).toBe('ok');
   });
 
+  it('missing dashboard status is never overridden by a live daemon status (TRA-1054)', () => {
+    // The daemon still reports the project as 'ready' from before its root
+    // directory was deleted — it does not re-stat a loaded project's root.
+    // `missing` must win regardless: it is a fact about the filesystem.
+    const out = mergeIntoViewModel(
+      [daemonProject({ status: 'ready' })],
+      [metric({ status: 'missing' })],
+    );
+    expect(out[0].displayStatus).toBe('missing');
+  });
+
   it('basename fallback strips trailing slashes', () => {
     const out = mergeIntoViewModel(
       [daemonProject({ root: '/Users/me/projects/widget///' })],
@@ -209,6 +220,25 @@ describe('deriveKpis', () => {
       vm({ root: '/c', displayStatus: 'ok' }),
     ]);
     expect(k.indexing).toBe(2);
+  });
+
+  it('excludes `missing` (deleted root) rows from totalProjects and every other tile (TRA-1054)', () => {
+    const k = deriveKpis([
+      vm({ root: '/a', displayStatus: 'ok', hasMetrics: true, techDebtGrade: 'A', securityFindings: 0 }),
+      vm({
+        root: '/gone',
+        displayStatus: 'missing',
+        hasMetrics: true,
+        // Even if metrics were still attached (stale cache), a missing row
+        // must not count anywhere.
+        techDebtGrade: 'A',
+        securityFindings: 0,
+        totalFiles: 999,
+      }),
+    ]);
+    expect(k.totalProjects).toBe(1);
+    expect(k.totalFiles).toBe(0);
+    expect(k.healthy).toBe(1);
   });
 });
 
@@ -335,6 +365,7 @@ describe('statusToDot', () => {
     expect(statusToDot('computing')).toBe('orange');
     expect(statusToDot('error')).toBe('red');
     expect(statusToDot('not_loaded')).toBe('neutral');
+    expect(statusToDot('missing')).toBe('neutral');
   });
 });
 
@@ -345,5 +376,6 @@ describe('statusLabel', () => {
     expect(statusLabel('computing')).toBe('Computing');
     expect(statusLabel('error')).toBe('Error');
     expect(statusLabel('not_loaded')).toBe('Not loaded');
+    expect(statusLabel('missing')).toBe('Missing folder');
   });
 });

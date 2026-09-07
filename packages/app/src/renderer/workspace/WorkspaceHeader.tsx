@@ -102,6 +102,11 @@ const statusChips = (): Array<{ key: ProjectHealthStatus; label: string; title: 
     title: t('workspace:filterStatusIndexingTitle'),
   },
   { key: 'error', label: t('workspace:statusError'), title: t('workspace:filterStatusErrorTitle') },
+  {
+    key: 'missing',
+    label: t('workspace:statusMissing'),
+    title: t('workspace:filterStatusMissingTitle'),
+  },
 ];
 const GRADE_CHIPS: TechDebtGrade[] = ['A', 'B', 'C', 'D', 'F'];
 const viewOptions = (): Array<{ value: ViewMode; label: string }> => [

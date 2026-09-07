@@ -130,7 +130,9 @@ interface TechDebtModule {
 export interface TechDebtResult {
   modules: TechDebtModule[];
   project_score: number;
-  project_grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  /** `null` when there are no modules to score — an empty index has nothing
+   *  to grade, which is not the same claim as "grade A" (TRA-1057). */
+  project_grade: 'A' | 'B' | 'C' | 'D' | 'F' | null;
 }
 
 interface ChangeRiskResult {
@@ -849,7 +851,10 @@ export function getTechDebt(
   return ok({
     modules: modules.slice(0, 50),
     project_score: round(totalScore),
-    project_grade: debtGrade(totalScore),
+    // Zero modules means zero files — nothing was scored, so there is
+    // nothing to grade. debtGrade(0) reads as "A", the best possible score,
+    // which is exactly backwards for an empty project (TRA-1057).
+    project_grade: modules.length > 0 ? debtGrade(totalScore) : null,
   });
 }
 

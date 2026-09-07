@@ -48,12 +48,14 @@ export const workspace = {
   filterStatusOkTitle: 'Proyectos que se indexaron sin problemas',
   filterStatusIndexingTitle: 'Proyectos que se están indexando ahora',
   filterStatusErrorTitle: 'Proyectos cuya última indexación falló',
+  filterStatusMissingTitle: 'Proyectos cuya carpeta ya no existe',
 
   statusOk: 'OK',
   statusIndexing: 'Indexando',
   statusComputing: 'Calculando',
   statusError: 'Error',
   statusNotLoaded: 'Sin cargar',
+  statusMissing: 'Carpeta faltante',
 
   kpiProjects: 'Proyectos',
   kpiFiles: 'Archivos',
@@ -124,6 +126,7 @@ export const workspace = {
   bulkSelected_other: '{{n}} seleccionados',
   bulkRemove: 'Quitar',
   bulkReindexFailed: 'La reindexación falló en al menos un proyecto',
+  bulkReindexDisabledMissing: 'No se puede reindexar: la carpeta ya no existe',
   bulkRemoveFailed: 'La eliminación falló en al menos un proyecto',
   bulkExportJson: 'Exportar JSON',
   bulkExportCsv: 'Exportar CSV',

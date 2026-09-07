@@ -54,6 +54,11 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
         await onAdd(trimmed);
         setPath('');
         setShowPathInput(false);
+      } catch {
+        // TRA-1077: a rejected add (e.g. the path doesn't exist) is already
+        // surfaced through the workspace error banner (useWorkspaceProjects).
+        // Leave the popover open with what the user typed so they can fix it,
+        // instead of closing it as if the add had gone through.
       } finally {
         setAdding(false);
       }
