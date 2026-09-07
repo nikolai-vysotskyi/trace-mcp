@@ -213,11 +213,17 @@ async function enrich(entry: RegistryEntry, basics: ProjectHealth): Promise<Proj
 
     try {
       const debtResult = getTechDebt(store, entry.root, {});
-      if (debtResult.isOk() && debtResult.value.project_grade) {
-        out.techDebtGrade = debtResult.value.project_grade;
-      }
+      // Explicit undefined on the "nothing to grade" branch, not a skipped
+      // assignment — `out` was seeded from `basics`, which can carry a stale
+      // grade forward from before a project shrank below the "enough data"
+      // floor (TRA-1057 review: a skipped assignment here left a project
+      // that dropped to 1 symbol permanently reading its old grade B).
+      out.techDebtGrade =
+        debtResult.isOk() && debtResult.value.project_grade
+          ? debtResult.value.project_grade
+          : undefined;
     } catch {
-      /* leave undefined */
+      out.techDebtGrade = undefined;
     }
     await tick();
 
