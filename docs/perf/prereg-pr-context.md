@@ -94,8 +94,9 @@ the product does not serve. The [diagnosis]({{ '/perf/pr-context-loss-classes/'
 | relative_url }}) has the full account.
 
 The same 60 pull requests, same pinned SHAs, re-run with bodies restored:
-**median 70.5%** (13,595 → 3,951 input tokens), against the 90.6% first
-published. The primary bar was ≥50% and is still met; the previous figure is
+**median {{ site.data.pr_context_bench.median_savings_pct }}%**
+(13,595 → {{ site.data.pr_context_bench.trace_median_tokens }} input tokens),
+against the 90.6% first published. The primary bar was ≥50% and is still met; the previous figure is
 struck, not defended.
 
 **The quality floor is a different story, and it now fails.** It reads
@@ -112,16 +113,17 @@ definition:
 | affected call sites readable | {{ site.data.pr_context_bench.baseline_dependent_readable }} | {{ site.data.pr_context_bench.trace_dependent_readable }} |
 | affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | {{ site.data.pr_context_bench.trace_dependent_pointed }} |
 
-A third of the changed symbols arrive without their bodies — **117 of 338**
+Some of the changed symbols arrive without their bodies — **98 of 338**
 across the corpus, counted per symbol in
 [`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json).
 The previously-published 58% call-site readability was the same pointer count;
-it is 28% when bodies are required. **The bar was registered as unadjustable and
+it is {{ site.data.pr_context_bench.trace_dependent_readable }} when bodies are
+required. **The bar was registered as unadjustable and
 it is not being adjusted: this publishes as MISSED.** The token saving is
-unaffected — 70.5% is the same number under either definition, because tokens
-were always counted on the assembled text.
+unaffected by the metric's definition — whatever it reads, it was counted on the
+assembled text, not on what the metric called readable.
 
-### What the 117 are, and what they cost to recover
+### What the 98 are, and what they cost to recover
 
 This was published as unmeasured on 2026-09-07 and is measured now, because the
 guess in that sentence turned out to be wrong. Re-running the identical corpus
@@ -130,32 +132,32 @@ diagnostic and writes no artifacts):
 
 | of 338 changed symbols | 8,000 (shipped) | 16,000 | 32,000 | 64,000 |
 |---|---:|---:|---:|---:|
-| body present | 221 | 245 | 281 | 309 |
-| bodyless — whole-file node | 70 | 52 | 23 | 7 |
-| bodyless — ordinary symbol | 47 | 41 | 34 | 22 |
-| **median token saving** | **70.5%** | **29.7%** | **−0.4%** | **−5.8%** |
+| body present | 240 | 263 | 299 | 333 |
+| bodyless — whole-file node | 65 | 48 | 21 | 3 |
+| bodyless — ordinary symbol | 33 | 27 | 18 | 2 |
+| **median token saving** | **72.8%** | **32.3%** | **−0.1%** | **−0.3%** |
 
 A *whole-file node* is one whose body is the entire file — a `__module__` /
 `<module>` node, or a document node on a non-code file — so the bundle declining
-to carry it is the index working as intended. **88 of the 117 are budget
-truncation**: 70 of the bodyless are whole-file nodes and 63 of those come back
-once the budget is raised, which makes them a budget effect too, not a
-structural one.
+to carry it is the index working as intended. **93 of the 98 are budget
+truncation**: raise the budget far enough and all but five bodies arrive.
 
 The curve is monotone in both columns, and that is the finding: every body
 recovered costs saving, and **the saving crosses zero between 16,000 and 32,000
-— while 57 bodies are still missing.** There is no budget at which this corpus
-gets full changed-symbol coverage *and* a token win. The 70.5% is not a saving
+— while 39 bodies are still missing.** There is no budget at which this corpus
+gets full changed-symbol coverage *and* a token win. The 72.8% is not a saving
 that happens to come with a coverage gap; the coverage gap is what pays for it.
 
 That reframes what the missed floor asks for. It cannot be met by turning the
 budget up. It is a packing question — which symbols get the budget — not a size
 question.
 
-**29 bodies never arrive at any budget** (22 ordinary symbols, 7 whole-file
-nodes; 11 of them dropped from the bundle entirely rather than kept as a stub).
-Those are the ones a budget cannot explain, and they are the next thing to look
-at.
+**5 bodies never arrive at any budget** (2 ordinary symbols, 3 whole-file
+nodes). That residual was 29 before [TRA-1141]({{ '/perf/pr-context-loss-classes/' | relative_url }})
+stopped the bundle shipping a container and its members as separate copies of
+the same bytes: the budget those duplicates were consuming is most of what the
+higher budgets above were buying back. Five is small enough to inspect one by
+one, which is the next thing to do rather than a class to reason about.
 
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a

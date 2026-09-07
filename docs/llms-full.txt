@@ -4607,24 +4607,22 @@ Two further limits worth stating plainly:
   readability is {{ site.data.pr_context_bench.trace_changed_symbol_readable }}
   against the naive arm's
   {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} — a third of
-  changed symbols arrive without their bodies, 117 of 338 across the corpus.
+  changed symbols arrive without their bodies, 98 of 338 across the corpus.
   This page said the opposite until 2026-09-07, because the metric counted
   whether the bundle *listed* a symbol rather than whether it carried the body;
   it now scores `detail === 'full'`. That miss is registered against the
   [preregistered quality floor]({{ '/perf/prereg-pr-context/' | relative_url }}),
   which the bar does not move for. The token figure is unaffected — it was
   always counted on the assembled text.
-- **The coverage gap is what buys the saving.** Of those 117, **88 are budget
-  truncation**. Re-running the same corpus at larger bundle budgets trades one
-  for the other, monotonically: 8,000 → 221 of 338 bodies at
-  {{ site.data.pr_context_bench.median_savings_pct }}% saved; 16,000 → 245 at
-  29.7%; 32,000 → 281 at **−0.4%**; 64,000 → 309 at **−5.8%**. The saving
-  crosses zero while 57 bodies are still missing, so on this dataset there is no
-  budget that buys full changed-symbol coverage *and* a token win — the honest
-  way to read the headline is "a third of the changed bodies is the price of the
-  {{ site.data.pr_context_bench.median_savings_pct }}%". 29 bodies never arrive
-  at any budget; those are a defect, not a tradeoff, and are open. Per-symbol
-  counts:
+- **The coverage gap is what buys the saving.** Of the 98 changed symbols that
+  arrive bodyless, **93 are budget truncation**. Re-running the same corpus at
+  larger bundle budgets trades one for the other, monotonically: 8,000 → 240 of
+  338 bodies at {{ site.data.pr_context_bench.median_savings_pct }}% saved;
+  16,000 → 263 at 32.3%; 32,000 → 299 at **−0.1%**; 64,000 → 333 at **−0.3%**.
+  The saving crosses zero while 39 bodies are still missing, so on this dataset
+  there is no budget that buys full changed-symbol coverage *and* a token win.
+  Five bodies never arrive at any budget; those are a defect, not a tradeoff,
+  and are open. Per-symbol counts:
   [`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json).
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file

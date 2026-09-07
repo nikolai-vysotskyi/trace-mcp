@@ -180,25 +180,30 @@ partial body loss, not just total loss — see the [preregistration's release
 gate section]({{ '/perf/prereg-pr-quality/' | relative_url }}#release-gate-tra-1100).
 
 **And once it measured something, it failed.** Under the corrected definition
-the trace arm reads 67% against the naive arm's 100%: 117 of 338 changed
-symbols across the corpus arrive without their bodies. That misses a
+the trace arm reads {{ site.data.pr_context_bench.trace_changed_symbol_readable }}
+against the naive arm's
+{{ site.data.pr_context_bench.baseline_changed_symbol_readable }}: 98 of 338
+changed symbols across the corpus arrive without their bodies. That misses a
 [preregistered quality floor]({{ '/perf/prereg-pr-context/' | relative_url }}),
 which now publishes as MISSED.
 
-The cause is not what this page first guessed. 88 of the 117 are the
-8,000-token bundle budget truncating. Whole-file nodes — the suspect named here
-on 2026-09-07, meaning a `__module__` / `<module>` node or a document node whose
-body is the file itself — are 70 of the bodyless, and 63 of those come back when
-the budget is raised, so they are a budget effect too. Re-running the identical corpus at larger budgets trades bodies for saving
-monotonically — 16,000: 245 bodies at 29.7%; 32,000: 281 at −0.4%; 64,000: 309
-at −5.8% — so the saving crosses zero while 57 bodies are still missing. There
-is no budget on this corpus that buys full coverage *and* a token win. The
-missed floor is therefore a packing problem — which symbols get the budget —
-not a budget-size problem.
+The cause is not what this page first guessed. **93 of the 98 are the bundle
+budget truncating** — raising it to 64,000 brings all but five bodies through,
+at 8,000: 240 bodies and 72.8% saved; 16,000: 263 at 32.3%; 32,000: 299 at
+−0.1%; 64,000: 333 at −0.3%. The saving crosses zero while 39 bodies are still
+missing, so there is no budget on this corpus that buys full coverage *and* a
+token win. The missed floor is therefore a packing problem — which symbols get
+the budget — not a budget-size problem.
 
-29 bodies arrive missing at *any* budget — 22 ordinary symbols and 7 whole-file
-nodes, 11 of them dropped from the bundle outright rather than kept as a stub. That residual is the part a tradeoff does not
-explain, and it is open. Per-symbol counts:
+Whole-file nodes — the suspect named here on 2026-09-07, meaning a `__module__`
+/ `<module>` node or a document node whose body is the file itself — are 65 of
+the bodyless, and they thin out with budget like everything else, so they were
+never a separate structural cause.
+
+**5 bodies arrive missing at any budget**, down from 29 measured before the
+containment fix below: most of what the higher budgets were buying back was
+budget the bundle had been spending on duplicate bytes. Five is small enough to
+read one by one. Per-symbol counts:
 [`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json);
 reproduce with `--symbol-detail` and `--bundle-budget`.
 ---

@@ -1,19 +1,17 @@
 {
-  "generated_at": "2026-09-07T15:15:30.709Z",
+  "generated_at": "2026-09-07T15:29:29.627Z",
   "measured_build": {
-    "version": "3.22.0",
-    "commit": "63dbd414"
+    "version": "3.23.0",
+    "commit": "f48502d8"
   },
   "total": 338,
   "counts": {
-    "module:no_source": 67,
-    "symbol:full": 176,
-    "module:full": 45,
-    "symbol:no_source": 34,
-    "symbol:dropped": 11,
-    "symbol:signature_only": 2,
-    "module:dropped": 2,
-    "module:signature_only": 1
+    "module:no_source": 65,
+    "symbol:full": 190,
+    "module:full": 50,
+    "symbol:no_source": 28,
+    "symbol:signature_only": 1,
+    "symbol:dropped": 4
   },
   "rows": [
     {
@@ -213,7 +211,7 @@
       "number": 5236,
       "symbol_id": "src/router/trie-router/node.ts::Node::search#method",
       "kind": "method",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -589,7 +587,7 @@
       "number": 11096,
       "symbol_id": "lib/core/Axios.js::__module__#namespace",
       "kind": "namespace",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": true
     },
     {
@@ -597,7 +595,7 @@
       "number": 11096,
       "symbol_id": "lib/core/Axios.js::Axios#class",
       "kind": "class",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -765,7 +763,7 @@
       "number": 11087,
       "symbol_id": "tests/unit/core/InterceptorManager.test.js::__module__#namespace",
       "kind": "namespace",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": true
     },
     {
@@ -869,7 +867,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::ProgressEventTarget::addEventListener#method",
       "kind": "method",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -877,7 +875,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest#class",
       "kind": "class",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -885,7 +883,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::constructor#method",
       "kind": "method",
-      "detail": "signature_only",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -893,7 +891,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::abort#method",
       "kind": "method",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -901,7 +899,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::getListenerCount#method",
       "kind": "method",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -909,7 +907,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::emit#method",
       "kind": "method",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -917,7 +915,7 @@
       "number": 11121,
       "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::respondWith#method",
       "kind": "method",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -925,7 +923,7 @@
       "number": 11121,
       "symbol_id": "tests/unit/helpers/progressEventReducer.test.js::__module__#namespace",
       "kind": "namespace",
-      "detail": "dropped",
+      "detail": "no_source",
       "module_level": true
     },
     {
@@ -933,7 +931,7 @@
       "number": 11121,
       "symbol_id": "tests/unit/helpers/throttle.test.js::__module__#namespace",
       "kind": "namespace",
-      "detail": "dropped",
+      "detail": "full",
       "module_level": true
     },
     {
@@ -1045,7 +1043,7 @@
       "number": 11094,
       "symbol_id": "tests/unit/adapters/xhr.test.js::importAxiosForPage#function",
       "kind": "function",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -1085,7 +1083,7 @@
       "number": 11109,
       "symbol_id": "lib/core/Axios.js::Axios::request#method",
       "kind": "method",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -1093,7 +1091,7 @@
       "number": 11109,
       "symbol_id": "tests/unit/core/Axios.test.js::__module__#namespace",
       "kind": "namespace",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": true
     },
     {
@@ -1741,7 +1739,7 @@
       "number": 7433,
       "symbol_id": "tests/test_requests.py::TestRequests::_patch_adapter_gzipped_redirect#method",
       "kind": "method",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -2197,7 +2195,7 @@
       "number": 5620,
       "symbol_id": "src/flask/cli.py::FlaskGroup::__init__#method",
       "kind": "method",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -2253,7 +2251,7 @@
       "number": 5620,
       "symbol_id": "src/flask/testing.py::EnvironBuilder#class",
       "kind": "class",
-      "detail": "dropped",
+      "detail": "no_source",
       "module_level": false
     },
     {
@@ -2261,7 +2259,7 @@
       "number": 5620,
       "symbol_id": "src/flask/testing.py::EnvironBuilder::__init__#method",
       "kind": "method",
-      "detail": "signature_only",
+      "detail": "full",
       "module_level": false
     },
     {
@@ -2269,7 +2267,7 @@
       "number": 5620,
       "symbol_id": "src/flask/views.py::<module>#function",
       "kind": "function",
-      "detail": "signature_only",
+      "detail": "no_source",
       "module_level": true
     },
     {
@@ -2277,7 +2275,7 @@
       "number": 5620,
       "symbol_id": "src/flask/views.py::View#class",
       "kind": "class",
-      "detail": "dropped",
+      "detail": "signature_only",
       "module_level": false
     },
     {
@@ -2469,7 +2467,7 @@
       "number": 2458,
       "symbol_id": "documentation/quick-start.md::quick-start#namespace",
       "kind": "namespace",
-      "detail": "no_source",
+      "detail": "full",
       "module_level": true
     },
     {
