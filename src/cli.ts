@@ -1353,7 +1353,8 @@ program
                     { projectRoot, readMostly: asSubproject },
                     asSubproject
                       ? 'Auto-served registered subproject read-mostly on first MCP connect'
-                      : 'Auto-registered project on first MCP connect',
+                      : 'Auto-registered project on first MCP connect — nobody ran `add`/`init` ' +
+                          `here; undo with \`trace-mcp remove ${projectRoot}\` (#936)`,
                   );
                   transport =
                     (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ??
@@ -3700,11 +3701,17 @@ program
     } else {
       console.log('Registered projects:\n');
       let staleCount = 0;
+      let autoCount = 0;
       for (const p of projects) {
         const lastIdx = p.lastIndexed ? new Date(p.lastIndexed).toLocaleString() : 'never';
         const rootExists = fs.existsSync(p.root);
         const dbExists = fs.existsSync(p.dbPath) ? 'ok' : 'missing';
-        console.log(`  ${p.name}${rootExists ? '' : '  [STALE — folder deleted]'}`);
+        // `explicit` is set by `add`/`init`; its absence means the daemon
+        // registered this root by itself when a client connected from it
+        // (#936). Say so, so the list answers "why is this here?".
+        const auto = p.explicit ? '' : '  [auto-added on MCP connect]';
+        if (!p.explicit) autoCount++;
+        console.log(`  ${p.name}${rootExists ? '' : '  [STALE — folder deleted]'}${auto}`);
         console.log(`    Root: ${p.root}`);
         console.log(`    DB: ${dbExists}`);
         console.log(`    Last indexed: ${lastIdx}`);
@@ -3715,6 +3722,12 @@ program
         console.log(
           `${staleCount} stale entr${staleCount === 1 ? 'y' : 'ies'} (folder deleted). ` +
             'Clean up with `trace-mcp doctor --fix` or `trace-mcp prune --apply`.',
+        );
+      }
+      if (autoCount > 0) {
+        console.log(
+          `${autoCount} entr${autoCount === 1 ? 'y was' : 'ies were'} added automatically when an ` +
+            'MCP client connected from that directory. Drop one with `trace-mcp remove <path>`.',
         );
       }
     }

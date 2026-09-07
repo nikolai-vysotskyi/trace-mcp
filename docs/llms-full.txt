@@ -2192,7 +2192,10 @@ All trace state lives in `~/.trace/` (with automatic backwards compatibility and
 
 Starting the server in a directory auto-registers it, so both `registry.json` and the
 `projects[...]` map in `.config.json` grow on their own — and both are read on every
-server start. An hourly sweep bounds them:
+server start. The first session that causes a registration says so: the `initialize`
+instructions carry a one-off notice naming the directory and `trace-mcp remove <path>`,
+and `trace-mcp list` marks such entries `[auto-added on MCP connect]`. An hourly sweep
+bounds them:
 
 - a root that no longer exists (after a 7-day grace, so an unmounted drive keeps its
   registration) and one-shot agent-run workdirs are dropped;

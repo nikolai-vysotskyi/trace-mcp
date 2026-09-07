@@ -13,6 +13,7 @@ import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { armBoundedExit } from '../../server/bounded-shutdown.js';
 import { startParentDeathWatch } from '../../server/parent-death-watch.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
+import { AutoRegisterNotice } from './auto-register-notice.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
 import {
   createHandshakeWatchdog,
@@ -179,6 +180,12 @@ export class StdioSession {
    * sees the handshake and every frame going back to the client.
    */
   private readonly clientProfile: ClientProfileGate;
+  /**
+   * Tells the client, once, when this session's root was registered and
+   * indexed by the daemon rather than by the user (#936). Constructed before
+   * the handshake so it can see the registry as it was on arrival.
+   */
+  private readonly autoRegisterNotice: AutoRegisterNotice;
   /** One `tools/list_changed` per profile reinstatement, never two (TRA-796). */
   private readonly listChanged = new ListChangedDebt();
   /** Id of the in-flight `initialize` request the watchdog below is timing. */
@@ -195,6 +202,7 @@ export class StdioSession {
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
     this.clientProfile = new ClientProfileGate(opts.config);
+    this.autoRegisterNotice = new AutoRegisterNotice(opts.projectRoot);
     this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport(opts.stdin, opts.stdout));
     this.router = new MessageRouter({
       sendToClient: (msg) => {
@@ -485,7 +493,8 @@ export class StdioSession {
   /** Send one frame, then any `tools/list_changed` it left owed (TRA-796). */
   private async sendAndSettleListChanged(msg: unknown): Promise<void> {
     const owed = this.listChanged.settle(msg as { id?: string | number; method?: string });
-    await this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
+    const shaped = this.autoRegisterNotice.applyTo(this.clientProfile.applyToClient(msg));
+    await this.stdio.send(shaped as JSONRPCMessage);
     if (owed) await this.stdio.send({ jsonrpc: '2.0', method: LIST_CHANGED } as JSONRPCMessage);
   }
 
