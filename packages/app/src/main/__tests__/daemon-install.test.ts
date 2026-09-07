@@ -287,9 +287,44 @@ describe('ensureDaemonInstalled', () => {
         cli: path.join(resources, 'server', 'dist', 'cli.js'),
         version: '3.7.0',
       });
-      expect(fs.existsSync(path.join(home, 'bin', 'trace-mcp'))).toBe(true);
+      // The current name, the same one npm writes — so both installers feed one
+      // shim file instead of two that drift apart (TRA-1156).
+      expect(fs.existsSync(path.join(home, 'bin', 'trace'))).toBe(true);
+      // Nothing was registered at the legacy path, so none is invented.
+      expect(fs.existsSync(path.join(home, 'bin', 'trace-mcp'))).toBe(false);
       expect(fs.readFileSync(launchAgent, 'utf-8')).toContain(PLIST_MARKER);
       expect(calls.some((c) => c[0] === 'bootstrap')).toBe(true);
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')(
+    'repoints a legacy shim an MCP client is still registered at (TRA-1156)',
+    async () => {
+      // A pre-TRA-611 copy at the path the client spawns, frozen several
+      // launcher versions back.
+      const legacy = path.join(home, 'bin', 'trace-mcp');
+      fs.mkdirSync(path.dirname(legacy), { recursive: true });
+      fs.writeFileSync(legacy, '#!/bin/bash\n# trace-mcp-launcher v0.1.0\nexit 0\n', { mode: 0o755 });
+
+      await run('3.7.0');
+
+      expect(fs.lstatSync(legacy).isSymbolicLink()).toBe(true);
+      expect(fs.realpathSync(legacy)).toBe(fs.realpathSync(path.join(home, 'bin', 'trace')));
+    },
+  );
+
+  it.runIf(process.platform === 'darwin')(
+    'leaves a wrapper at the legacy path that is not ours alone',
+    async () => {
+      const legacy = path.join(home, 'bin', 'trace-mcp');
+      const wrapper = '#!/bin/sh\nexec my-own-thing "$@"\n';
+      fs.mkdirSync(path.dirname(legacy), { recursive: true });
+      fs.writeFileSync(legacy, wrapper, { mode: 0o755 });
+
+      await run('3.7.0');
+
+      expect(fs.lstatSync(legacy).isSymbolicLink()).toBe(false);
+      expect(fs.readFileSync(legacy, 'utf-8')).toBe(wrapper);
     },
   );
 

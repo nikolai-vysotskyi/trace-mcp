@@ -161,6 +161,56 @@ function writeIfChanged(filePath: string, content: string, mode: number): boolea
   return true;
 }
 
+/**
+ * Point an already-registered legacy shim path at the current one, so it tracks
+ * every later upgrade instead of freezing at whatever copy is on disk (TRA-1156,
+ * same reasoning as src/init/launcher.ts::installLegacyBinCompat).
+ *
+ * Only ever *repairs* — never creates. A machine with no `bin/trace-mcp` has no
+ * client registered there, and inventing one would just be litter. Windows gets
+ * no symlink (it needs a privileged mode this app does not ask for); the CLI's
+ * `trace init` writes a delegating `.cmd` there instead.
+ */
+function delegateLegacyShim(binDir: string): boolean {
+  if (IS_WINDOWS) return false;
+  const [current, legacy] = SHIM_NAMES;
+  const legacyPath = path.join(binDir, legacy);
+  let st: fs.Stats;
+  try {
+    st = fs.lstatSync(legacyPath);
+  } catch {
+    return false; // nothing registered there
+  }
+  // A symlink that still resolves is already delegating. A dangling one is the
+  // single state that spawns nothing at all, so it is repaired.
+  if (st.isSymbolicLink() && fs.existsSync(legacyPath)) return false;
+  if (!st.isSymbolicLink() && !isOwnedShim(legacyPath)) return false; // user's own wrapper
+  const tmp = `${legacyPath}.tmp.${process.pid}.${randomBytes(6).toString('hex')}`;
+  try {
+    fs.symlinkSync(current, tmp);
+    fs.renameSync(tmp, legacyPath);
+    return true;
+  } catch {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* nothing to clean up */
+    }
+    return false;
+  }
+}
+
+/** Header line every shim we ship carries. Mirrors src/init/launcher.ts. */
+const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
+
+function isOwnedShim(file: string): boolean {
+  try {
+    return LAUNCHER_HEADER_RE.test(fs.readFileSync(file, 'utf-8').slice(0, 256));
+  } catch {
+    return false;
+  }
+}
+
 function isExecutable(p: string | undefined): boolean {
   if (!p) return false;
   try {
@@ -561,17 +611,23 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
       changed = writeIfChanged(runtimeShim, runtimeShimContent(execPath), 0o755) || changed;
 
       // The launcher shim itself ships in the payload's hooks/, so a DMG-only
-      // machine gets the same shim an npm install would have written.
+      // machine gets the same shim an npm install would have written — under
+      // the same name, SHIM_NAMES[0]. Writing the pre-TRA-611 name here instead
+      // gave the machine two real shim files fed by two installers: npm wrote
+      // `trace`, the app wrote `trace-mcp`, and the path MCP clients spawn
+      // advanced only when the app did. A launcher fix shipped through npm
+      // never reached it (TRA-1156).
       const shimSources = IS_WINDOWS
         ? [
-            ['trace-mcp-launcher.cmd', 'trace-mcp.cmd'],
+            ['trace-mcp-launcher.cmd', SHIM_NAMES[0]],
             ['trace-mcp-launcher.ps1', 'trace-mcp-launcher.ps1'],
           ]
-        : [['trace-mcp-launcher.sh', 'trace-mcp']];
+        : [['trace-mcp-launcher.sh', SHIM_NAMES[0]]];
       for (const [src, dest] of shimSources) {
         const from = path.join(serverDir, 'hooks', src);
         changed = writeIfChanged(path.join(binDir, dest), fs.readFileSync(from, 'utf-8'), 0o755) || changed;
       }
+      changed = delegateLegacyShim(binDir) || changed;
 
       changed =
         writeIfChanged(
