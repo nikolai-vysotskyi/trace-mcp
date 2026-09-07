@@ -979,7 +979,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 
 | Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.repomix.stars }} | {{ site.data.competitors.context_mode.stars }} | {{ site.data.competitors.code_review_graph.stars }} | 2.6K | {{ site.data.competitors.codebase_memory_mcp.stars }} | 165 |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.repomix.stars }} | {{ site.data.competitors.context_mode.stars }} | {{ site.data.competitors.code_review_graph.stars }} | {{ site.data.competitors.jcodemunch.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} | 165 |
 | Tree-sitter AST parsing | ✓ {{ site.data.counts.languages }} languages | ✓ compress only (~20) | ✗ no code parsing | ✓ 23 langs + Jupyter | ✓ 70+ languages | ✓ 162 languages | ✓ 22 languages |
 | Token-efficient symbol lookup | ✓ outlines, symbols, bundles | ✗ packs entire files | ✗ no symbol index — compresses tool *output* instead | ✓ | ✓ core focus (~95% reduction) | ✓ | ✓ outline/show/context |
 | Cross-file dependency graph | ✓ directed edge graph | ✗ | ✗ | ✓ incremental knowledge graph | ✓ import graph | ✓ knowledge graph | ✓ refs/importers |
@@ -1003,7 +1003,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 
 | Capability | trace-mcp | Kage | MemPalace | claude-mem | mem0 / OpenMemory | engram | ConPort |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | new (2026) | ~56.7K | 91.8K | ~64.3K | 2.7K | 765 |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | new (2026) | ~56.7K | 91.8K | ~64.3K | ~6.4K | 765 |
 | Cross-session context carryover | ✓ `get_wake_up { scope: "resume" }` + decisions | ✓ git-committed packets | ✓ wings/rooms | ✓ core focus | ✓ multi-level (User/Session/Agent) | ✓ branch-scoped handoffs | ✓ |
 | Cross-session content search | ✓ `search_sessions` FTS5 | partial (JSON packets) | ✓ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✓ SQLite + Chroma hybrid | ✓ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✓ local ONNX embeddings | ✓ vector semantic |
 | Decision knowledge graph | ✓ temporal, code-linked | ✓ temporal, code-linked | ✓ temporal + "Closets" storage | ✗ | ✓ temporal + state-key supersession | ✗ | ✓ project-level |
@@ -1194,9 +1194,9 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode, jCodeMunch.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Narsil-MCP, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Narsil-MCP, tokensave, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -1272,7 +1272,15 @@ Three mechanisms were read at source and each got a decision:
 - **Docker-managed vector database container: passing, we already do better.** Requiring Docker with open network ports (`16333`, `11435`) adds heavy operational dependencies, fails in restricted containerized environments, and consumes substantial idle memory. trace-mcp's embedded SQLite+FTS5 plus bundled ONNX embeddings provide zero-dependency local search with single-file portability and zero network attack surface.
 - **Cross-process locking for multi-agent concurrency: passing, already handled.** SocratiCode uses `proper-lockfile` to prevent duplicate index builds when multiple agent processes access the same directory. trace-mcp's background daemon architecture natively serializes index mutations through SQLite WAL mode and a centralized worker pool. Nothing to take.
 
-Priority for next deep-dive: **jCodeMunch** (2.6K stars, Python — AST chunking, 21 frameworks route/middleware, blast radius), the highest-star direct code-graph peer remaining unprofiled at source.
+**jCodeMunch profiled this pass** (September 7, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `pyproject.toml`, `LICENSE`, `src/jcodemunch_mcp/server.py`, `src/jcodemunch_mcp/counter.py`, `src/jcodemunch_mcp/tier_switch_cost.py`, `src/jcodemunch_mcp/storage/sqlite_store.py`, `src/jcodemunch_mcp/tools/_call_graph.py`, `src/jcodemunch_mcp/tools/plan_refactoring.py`, `src/jcodemunch_mcp/parser/context/framework_profiles.py`). 2,668 stars (GitHub API, this pass), Dual-Use License v1.1 (free for non-commercial use only; commercial use prohibited without license), Python, v1.108.317 (released September 2026). It defines ~90 MCP tools and fronts them on first-ever installs through "The Counter" (a 3-tool meta-dispatch surface: `order`, `menu`, `route`). Storage is SQLite WAL with tables for symbols, files, and runtime tracking (`runtime_calls`, `runtime_edges`). Route detection across ~13 frameworks uses regexes in context providers rather than true semantic graph edges. See the full head-to-head: [trace-mcp vs jCodeMunch](/vs/jcodemunch.html).
+
+Three mechanisms were read at source and each got a decision:
+
+- **The Counter meta-dispatch front door (`order`, `menu`, `route`): passing on meta-dispatch, validating the prompt budget lesson.** Fronting 90 tools with a single `order(action, args)` dispatch verb drastically cuts top-level schema tokens, but forces an extra indirection turn and bypasses client schema validation, increasing parameter hallucination risk. trace-mcp instead uses task-tailored presets (`minimal` default with 28 tools, `review`, `architecture`, `dev`) and dynamic runtime escalation via `load_tools`, preserving type-safe client schemas without meta-tool indirection. Nothing to take.
+- **Agent configuration hygiene auditing (`audit_agent_config`): taking the idea for doc and config linting.** `audit_agent_config` cross-references `CLAUDE.md`, `.cursorrules`, and `copilot-instructions.md` against the symbol index to find dead symbol names, broken paths, and token waste. We already check doc-to-code path integrity (`verify_docs`, `tests/docs/doc-path-refs.test.ts`), and extending this to user-facing agent instruction files is a high-value developer workflow.
+- **Text-based refactoring plan generation (`plan_refactoring`): passing, we already do better.** `plan_refactoring` generates text find-and-replace candidate blocks `{old_text, new_text}` using regexes on imports. trace-mcp provides native AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) that execute atomic, syntax-verified transformations directly in the AST. Nothing to take.
+
+Priority for next deep-dive: **tokensave** (620 stars, Rust/Python — 40+ tools, 30+ languages, pre-indexed semantic knowledge graph), the highest-star direct code-graph peer remaining unprofiled at source.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
@@ -1752,6 +1760,141 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
 - See how trace-mcp stacks up against other alternatives in the [comparisons hub](/comparisons.html).
+- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+
+---
+
+# jCodeMunch alternative: trace-mcp vs jCodeMunch
+
+Source: https://trace-mcp.com/vs/jcodemunch.html
+
+
+
+**TL;DR.** jCodeMunch is an AST code exploration MCP server written in Python that focuses on reducing AI token consumption during repository navigation. It features structural symbol extraction across 70+ languages, an adaptive 3-tool "Counter" front door (`order`, `menu`, `route`) to mitigate prompt schema bloat, agent config auditing (`audit_agent_config`), and git commit archaeology (`get_symbol_provenance`).
+
+The critical differences lie in licensing, semantic depth, and refactoring safety. jCodeMunch is released under a restrictive Dual-Use License that explicitly prohibits commercial use without a paid license and bars redistribution to public package registries. Its framework route detection relies on text regex patterns rather than compiler-grade graph edges, and its refactoring tool generates text replacement suggestions rather than performing AST-verified code modifications. trace-mcp is 100% open-source under the permissive MIT License, requires zero infrastructure (`npx -y trace-mcp`), connects {{ site.data.counts.frameworks }} frameworks with deep architectural edges, provides atomic AST refactoring write tools, and includes OWASP Top-10 taint analysis.
+
+Pick jCodeMunch if you are an individual working on personal non-commercial projects who wants a 3-tool meta-dispatch surface and git provenance narratives. Pick trace-mcp if you need enterprise-safe commercial licensing, true framework-aware call graphs, AST-verified refactoring, and zero-setup distribution via npm.
+
+## Head-to-head
+
+| Capability | trace-mcp | jCodeMunch |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.jcodemunch.stars }} |
+| License | **MIT** (permissive open-source) | Dual-Use v1.1 (**Non-commercial only**; commercial prohibited) |
+| Written in | TypeScript (Node.js) | Python (>=3.10, uv) |
+| Installation / Distribution | `npx -y trace-mcp@latest` (npm registry) | `uv tool install` / git clone (public registry distribution barred) |
+| Underlying storage | Embedded SQLite + FTS5 + local ONNX | SQLite WAL (`symbols`, `files`, `runtime_*`) |
+| Languages (AST parsing) | **{{ site.data.counts.languages }}** (tree-sitter WASM) | 70+ (`tree-sitter-language-pack` <1.0.0) |
+| Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ~13 context profiles (regex route matching) |
+| Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ (text regex matches, no graph edges) |
+| MCP tools defined | {{ site.data.counts.tools }} | ~90 tools |
+| Default advertised tools | 28 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
+| Tool dispatch model | Direct MCP tool invocation with presets | Meta-dispatch verb (`order(action, args)`) |
+| Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
+| Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
+| Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | Anti-pattern presets (`search_ast`) + secret redaction |
+| Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` (CLAUDE.md / .cursorrules token audit) |
+| Git archaeology | Commit diff history + change tracking | ✓ `get_symbol_provenance` + `get_delivery_metrics` |
+| Session memory | ✓ code-linked decision graph with staleness checks | SQLite index persistence |
+
+Verified on September 7, 2026 against jCodeMunch's repository at `main` (v1.108.317, commit `cf4e96a`, {{ site.data.competitors.jcodemunch.stars }} stars). Tool definitions from `src/jcodemunch_mcp/tools/`, storage architecture from `src/jcodemunch_mcp/storage/sqlite_store.py`, licensing from `LICENSE`.
+
+## Key architectural differences
+
+### 1. Permissive MIT vs. Non-Commercial Dual-Use License
+
+The most consequential difference between the two tools is legal and operational.
+
+jCodeMunch is distributed under a bespoke **Dual-Use License (Version 1.1)**. Clause 3 of the license explicitly states:
+> *"The software may not be used, directly or indirectly, in any product, service, or workflow that generates revenue, is offered commercially, or is used within a for-profit organization to support revenue-generating activities."*
+
+Furthermore, the license explicitly forbids publishing or uploading modified or unmodified versions to public package registries like npm, PyPI, or crates.io. For engineering teams, startups, or enterprise companies building commercial software, adopting jCodeMunch requires negotiating commercial licensing terms with the author.
+
+trace-mcp is 100% open-source under the **permissive MIT License**. It can be deployed across commercial codebases, internal enterprise tooling, proprietary products, and CI/CD pipelines with zero restrictions, zero legal ambiguity, and zero commercial fees. It is distributed through npm (`npx -y trace-mcp`) and requires no compilation from source or custom toolchains.
+
+### 2. True Framework Semantics vs. Text Regex Heuristics
+
+Both tools index code syntax using tree-sitter grammars. However, how each tool interprets modern web frameworks differs fundamentally.
+
+jCodeMunch implements framework awareness through context provider modules (`decorator_routes.py`, `express.py`, `django.py`) that rely heavily on regular expressions. For instance, route detection in Flask and FastAPI uses `re.compile` to scan for `@app.route(...)` and `@router.get(...)` strings in source files. While this captures simple, statically declared endpoints, it breaks down when routes are constructed dynamically, mounted through modular sub-routers, wrapped in authentication middleware factories, or linked across architectural boundaries.
+
+trace-mcp builds a true semantic code graph across {{ site.data.counts.frameworks }} frameworks:
+- **HTTP Routes & Handlers**: Direct directed edges from route definitions to handler functions, parameter schemas, and middleware chains (Express, Fastify, NestJS, Next.js, Django, Flask, FastAPI, Rails, Spring Boot, Gin, Actix, Axum).
+- **UI Components & Templates**: Relationships connecting backend view controllers to React/Vue/Svelte components, Blade templates, and Jinja layouts.
+- **ORM & Data Layer**: Database models connected to table definitions, migration files, and query callsites.
+
+When an AI agent asks "what endpoints are impacted if I change this authentication signature?", trace-mcp traverses typed graph edges. jCodeMunch must rely on text word matches and reverse import traversals.
+
+### 3. Tool Surface Management: The Counter vs. Adaptive Task Presets
+
+As MCP servers grow in capability, advertising dozens of tools overwhelms the model's system prompt context and degrades tool selection accuracy (dispatch dilution). Both projects acknowledge this challenge but solve it differently.
+
+jCodeMunch introduces **"The Counter"** (`counter.py`): on new installations, the server advertises only 3 meta-tools:
+- `order(action, args)`: Executes any underlying tool action by name.
+- `menu(query, tier)`: Searches and browses available tools in the catalog.
+- `route(task, execute)`: Matches natural language intent to tool actions.
+
+While The Counter reduces resident schema tokens, it introduces significant friction into the agent loop. Running an action through `order` requires an extra turn of indirection and passes parameters inside generic unstructured objects, bypassing the client's native tool schema validation and increasing argument hallucination rates.
+
+trace-mcp addresses context cost through **Adaptive Task Presets**:
+- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (41 tools), or `dev` (42 tools).
+- Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
+
+### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
+
+Understanding who calls a function is essential for safe code edits, and both tools implement multi-tier resolution ladders rather than single-strategy lookups.
+
+jCodeMunch (`_call_graph.py`) resolves callers and callees through a tiered dispatch pipeline:
+1. `_dispatch_callers`: Interface-to-implementation resolution (`lsp_dispatch`).
+2. `_lsp_callers`: Live LSP-resolved caller locations (`lsp_resolved`).
+3. `_callers_from_references`: AST-derived call sites stored in the symbol index (`call_references`, v8+ schema), tagged `ast_resolved` or `ast_inferred`.
+4. Text heuristic fallback: If call-site data is missing or indexing is partial, it falls back to word-token regex matching (`_word_match` scanning imported file bodies for `\b<name>\b`).
+
+The key architectural differences lie in persistence and confidence contracts:
+- **Index-resident vs. query-time traversal**: trace-mcp precomputes and indexes explicit directed graph edges directly in SQLite during the indexing pass. Relationships (including cross-file framework edges) are materialized before the agent queries them, rather than reconstructed at query time across import tables.
+- **5-tier resolution with calibrated confidence**: trace-mcp tags every edge with an explicit confidence level and resolution tier:
+  - `compiler_verified`: Direct compiler/SCIP evidence.
+  - `scope_resolved`: Lexical AST scope resolution.
+  - `import_bound`: Explicit module import binding.
+  - `type_inferred`: Type-inferred call targets.
+  - `fuzzy_matched`: Fallback heuristic match with explicit confidence flags.
+- **Transparent edge contracts**: When an AI agent queries trace-mcp for call hierarchy or change impact, the client receives calibrated confidence scores per edge, distinguishing exact compiler-grade links from heuristic inferences. In jCodeMunch, callers must inspect the resolution tier to verify whether an edge came from AST call sites or from the text-regex fallback (`_word_match`).
+
+### 5. Code Modification: AST-Native Transforms vs. Text Replacement Blocks
+
+jCodeMunch includes `plan_refactoring`, which produces text-based find-and-replace candidate blocks `{old_text, new_text}` using regular expressions across import lines. The tool suggests replacements for renames, moves, and extractions, but leaves execution and syntax validation entirely to the caller.
+
+trace-mcp provides a complete suite of **AST-native refactoring write tools**:
+- `refactor_rename`: Performs scope-aware symbol renames across files, updating import declarations and call sites while preserving syntax validity.
+- `refactor_extract`: Extracts code blocks into new functions with inferred parameters and return types.
+- `refactor_move`: Moves functions and classes across module boundaries with automatic import resolution.
+- `refactor_codemod`: Applies structural AST transformation patterns safely.
+
+## When to choose jCodeMunch
+
+- **Non-commercial personal projects**: You are an individual open-source enthusiast or student working solely on hobby projects where commercial license restrictions do not apply.
+- **You prefer a minimal 3-tool dispatch entry point**: You want to experiment with `order`/`menu`/`route` meta-tools to keep top-level schema definitions under 3 tools.
+- **Agent config file auditing**: You want `audit_agent_config` to inspect your `CLAUDE.md`, `.cursorrules`, or `copilot-instructions.md` for dead symbol references and token bloat.
+- **Git archaeology insights**: You want `get_symbol_provenance` to generate commit narratives explaining how a specific function evolved over time.
+
+## When to choose trace-mcp
+
+- **Commercial and enterprise development**: You require permissive MIT licensing with no restrictions on revenue generation, enterprise distribution, or cloud deployment.
+- **Modern framework architectures**: You work with React, Vue, Next.js, Django, FastAPI, Laravel, Spring Boot, or Rails, and need true semantic edges between routes, middleware, models, and UI templates.
+- **High-confidence impact analysis**: You need a 5-tier call graph with calibrated confidence distinguishing compiler-verified relationships from heuristic fallbacks.
+- **Safe, automated refactoring**: You want your AI agent to execute atomic renames, extractions, and file moves with syntax validation.
+- **Integrated security auditing**: You want OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting built directly into your MCP workflow.
+- **Zero infrastructure setup**: You want immediate execution via `npx -y trace-mcp` with no Python virtual environment, uv, or local compilation required.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
+- Explore all MCP tools in the [tools reference](/tools-reference.html).
+- Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- See how trace-mcp compares to other servers in the [comparisons hub](/comparisons.html).
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---

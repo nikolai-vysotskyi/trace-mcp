@@ -70,6 +70,7 @@ describe('docs/_data/competitors.yml', () => {
       'vs/context-mode.md',
       'vs/code-review-graph.md',
       'vs/repomix-vs-codegraph.md',
+      'vs/jcodemunch.md',
     ];
     // Only the shortened "NN.NK" strings: a three-digit count matches too much
     // unrelated prose to search for literally.
