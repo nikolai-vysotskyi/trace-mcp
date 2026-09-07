@@ -41,6 +41,31 @@ describe('remote claim surfaces (TRA-1120)', () => {
     expect(problems).toHaveLength(1);
   });
 
+  // Both found by review of the first cut of this gate, both confirmed by
+  // running the regexes: the adverb and the spelled-out unit each slipped a
+  // retired claim past every check with zero problems reported.
+  it('catches the adverb too — "100% locally" is the same claim as "100% local"', () => {
+    for (const phrasing of ['100% locally', 'completely locally', 'fully local']) {
+      expect(
+        checkRemoteClaims([{ name: 'gh', text: `${CLEAN}. Runs ${phrasing}.` }], anchor).join('\n'),
+        phrasing,
+      ).toContain('usage ping is on by default');
+    }
+  });
+
+  it('catches a retired figure spelled out instead of glyphed', () => {
+    // `%` is what every pattern here hunts for, and a description pasted out of
+    // prose need not carry one.
+    for (const spelling of ['90.6 percent', '90.6 per cent']) {
+      expect(
+        checkRemoteClaims([{ name: 'npm', text: CLEAN.replace('70.5%', spelling) }], anchor).join(
+          '\n',
+        ),
+        spelling,
+      ).toContain('retired');
+    }
+  });
+
   it('catches a percentage that is simply not in docs/_data/', () => {
     expect(
       checkRemoteClaims([{ name: 'gh', text: CLEAN.replace('70.5%', '75%') }], anchor).join('\n'),

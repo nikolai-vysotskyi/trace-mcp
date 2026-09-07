@@ -56,6 +56,16 @@ const RETIRED =
   /\b90\.6\s*%|up to 99\s*%|~?\s*42 minutes|\b40\s*[–—-]\s*50\s*%|\b53 framework|\b68 languages/i;
 
 /**
+ * Every pattern here hunts for a `%` glyph, so a one-liner that spells the
+ * number out — "90.6 percent fewer input tokens" — would otherwise clear both
+ * the retired-figure check and the anchor sweep at once. That is not a
+ * contrived string: these descriptions are hand-edited through
+ * `gh api -X PATCH`, so the text often arrives pasted out of prose. Matching
+ * runs on the normalised copy; the failure message still prints the live one.
+ */
+const normalise = (text) => text.replace(/\s*per\s?cent(?:age)?\b/gi, '%');
+
+/**
  * `100% local` is false while the usage ping POSTs to GA by default
  * (`src/telemetry/usage-ping.ts`, off via `TRACE_MCP_TELEMETRY=off` or
  * `telemetry.usage_ping: false`). TRA-1013 owns the wording fix for the README;
@@ -68,7 +78,13 @@ const RETIRED =
  * towards the vaguer wording.
  */
 const ABSOLUTE_LOCALITY =
-  /\b(100\s*%|fully|entirely|completely)\s+local\b|\b(nothing|no data|never)\s+leaves\b/i;
+  /\b(100\s*%|fully|entirely|completely)\s+local(?:ly)?\b|\b(nothing|no data|never)\s+leaves\b/i;
+/**
+ * Presence, not proximity: any mention of the ping anywhere in the string
+ * exempts all of it. Sound for two one-line descriptions and not for a page —
+ * "100% local. We never sell your telemetry." would clear this. Tighten it to
+ * the sentence if this gate ever grows a surface longer than a sentence or two.
+ */
 const DISCLOSES_PING = /ping|telemetry|analytics/i;
 
 const TOKEN_CONTEXT = /token|saving|saved|reduction|fewer|less/i;
@@ -82,13 +98,16 @@ export function checkRemoteClaims(surfaces, anchor) {
   const problems = [];
   for (const { name, text, mirrors } of surfaces) {
     const fail = (msg) => problems.push(`${name}: ${msg}\n    live: ${text}`);
+    // Everything below matches on this; only the drift check compares the raw
+    // string, because that one is a literal equality against package.json.
+    const claim = normalise(text);
 
     if (!text) {
       fail('has no description at all — the auto-indexes have nothing to copy but the repo name');
       continue;
     }
 
-    const retired = text.match(RETIRED);
+    const retired = claim.match(RETIRED);
     if (retired) {
       fail(
         `quotes the retired "${retired[0]}". Retiring a claim does not retire the copies of it; ` +
@@ -96,7 +115,7 @@ export function checkRemoteClaims(surfaces, anchor) {
       );
     }
 
-    const absolute = DISCLOSES_PING.test(text) ? null : text.match(ABSOLUTE_LOCALITY);
+    const absolute = DISCLOSES_PING.test(claim) ? null : claim.match(ABSOLUTE_LOCALITY);
     if (absolute) {
       fail(
         `claims "${absolute[0]}" while the usage ping is on by default (TRA-1013). Say what is ` +
@@ -106,7 +125,7 @@ export function checkRemoteClaims(surfaces, anchor) {
 
     // Every count the surface states has to be the count docs/_data/counts.yml
     // states — exactly, the way every guarded in-repo surface is since TRA-1086.
-    for (const [, n, noun] of text.matchAll(
+    for (const [, n, noun] of claim.matchAll(
       /(\d+)\+?\s+(languages?|frameworks?|tools?|resources?)/gi,
     )) {
       const key = `${noun.toLowerCase().replace(/s?$/, '')}s`;
@@ -117,8 +136,8 @@ export function checkRemoteClaims(surfaces, anchor) {
     }
 
     // And every percentage it quotes at a stranger has to be a generated one.
-    for (const [, pct] of text.matchAll(/(\d{1,3}(?:\.\d)?)\s*%/g)) {
-      if (!TOKEN_CONTEXT.test(text)) continue;
+    for (const [, pct] of claim.matchAll(/(\d{1,3}(?:\.\d)?)\s*%/g)) {
+      if (!TOKEN_CONTEXT.test(claim)) continue;
       if (anchor.savings.includes(pct)) continue;
       // One number, one line. The two checks above already name the figure when
       // it is a retired one or the locality absolute; repeating it here would
