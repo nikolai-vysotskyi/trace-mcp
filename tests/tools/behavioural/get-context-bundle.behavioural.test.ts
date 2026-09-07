@@ -632,12 +632,88 @@ describe('getContextBundle() — a body the budget refused is declared, not sile
     expect(bundle.totalTokens).toBeLessThanOrEqual(500);
   });
 
-  it('says nothing when the symbol has no body to omit', () => {
-    const noBody = getContextBundle(store, rootPath, {
+  it('says nothing when the body fits and ships whole', () => {
+    const fits = getContextBundle(store, rootPath, {
       symbolIds: ['src/one.ts::big#function'],
       outputFormat: 'markdown',
       tokenBudget: 100_000,
     });
-    expect(noBody._unsafeUnwrap().content ?? '').not.toContain('body omitted');
+    expect(fits._unsafeUnwrap().content ?? '').not.toContain('body omitted');
+  });
+});
+
+/**
+ * The marker must not fire for the entries the bundle caps *before* the
+ * assembler runs — dependencies past `MAX_FULL_SOURCE_DEPS`, markdown, whole-file
+ * containers. Those reach `no_source` too, and they have no omitted body to
+ * report because their source was never read. Raised in review of TRA-1144: the
+ * two routes land on the same tier and nothing pinned them apart.
+ */
+describe('getContextBundle() — no marker for an entry whose source was never read', () => {
+  const DEP_SRC = 'export function depN() { return 1; }\n';
+  const MAIN_SRC = 'export function main() { return 0; }\n';
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    const files: Record<string, string> = { 'src/main.ts': MAIN_SRC };
+    for (let i = 0; i < 12; i++) files[`src/dep${i}.ts`] = DEP_SRC;
+    rootPath = createTmpFixture(files);
+    store = createTestStore();
+
+    const mainFile = store.insertFile('src/main.ts', 'typescript', 'h-main', MAIN_SRC.length);
+    const mainSym = store.insertSymbol(mainFile, {
+      symbolId: 'src/main.ts::main#function',
+      name: 'main',
+      kind: 'function',
+      fqn: 'main',
+      byteStart: 0,
+      byteEnd: MAIN_SRC.length,
+      lineStart: 1,
+      lineEnd: 1,
+      signature: 'function main()',
+    });
+    const mainNid = store.getNodeId('symbol', mainSym)!;
+
+    for (let i = 0; i < 12; i++) {
+      const f = store.insertFile(`src/dep${i}.ts`, 'typescript', `h-dep${i}`, DEP_SRC.length);
+      const s = store.insertSymbol(f, {
+        symbolId: `src/dep${i}.ts::dep${i}#function`,
+        name: `dep${i}`,
+        kind: 'function',
+        fqn: `dep${i}`,
+        byteStart: 0,
+        byteEnd: DEP_SRC.length,
+        lineStart: 1,
+        lineEnd: 1,
+        signature: `function dep${i}()`,
+      });
+      store.insertEdge(
+        mainNid,
+        store.getNodeId('symbol', s)!,
+        'esm_imports',
+        true,
+        undefined,
+        false,
+        'ast_resolved',
+      );
+    }
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('lists the capped dependencies without claiming a body was omitted', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/main.ts::main#function'],
+      tokenBudget: 100_000,
+      outputFormat: 'markdown',
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    // Past the tenth, dependencies are listed without their source being read.
+    expect(bundle.dependencies.some((d) => d.detail === 'no_source')).toBe(true);
+    expect(bundle.content ?? '').not.toContain('body omitted');
   });
 });
