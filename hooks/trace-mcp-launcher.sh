@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.8
+# trace-mcp-launcher v0.6.9
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -335,7 +335,7 @@ cli_from_app_bundle() {
   local app cli
   app=$(app_bundle) || return 1
   cli="$app/Contents/Resources/server/dist/cli.js"
-  [ -f "$cli" ] && normalise_path "$cli"
+  [ -s "$cli" ] && normalise_path "$cli"
 }
 
 # True when $1 is the app's own binary, which only runs as Node with this set.
@@ -490,7 +490,7 @@ probe_cli() {
   while IFS= read -r root; do
     [ -n "$root" ] || continue
     cli="$root/trace-mcp/dist/cli.js"
-    if [ -f "$cli" ]; then
+    if [ -s "$cli" ]; then
       normalise_path "$cli"
       return 0
     fi
@@ -519,7 +519,7 @@ probe_cli() {
       [ -n "$group" ] || continue
       while IFS= read -r bak; do
         [ -n "$bak" ] || continue
-        if [ -f "$bak/dist/cli.js" ]; then
+        if [ -s "$bak/dist/cli.js" ]; then
           normalise_path "$bak/dist/cli.js"
           return 0
         fi
@@ -631,7 +631,7 @@ resolve_exec_target() {
   local cli="$1" proxy
   shift
   proxy="$(dirname "$cli")/proxy.js"
-  if [ -f "$proxy" ] && is_plain_serve "$@" && daemon_port_open; then
+  if [ -s "$proxy" ] && is_plain_serve "$@" && daemon_port_open; then
     echo "$proxy"
   else
     echo "$cli"
@@ -683,7 +683,26 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
   fi
 fi
 
-if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
+# `-s`, not `-f`, on every cli.js gate in this shim (TRA-1132).
+#
+# The gate above closed "exists but does not run" for node. This is the same
+# class on the other half of the pair: `-f` proves the recorded dist/cli.js is
+# there, never that it holds a program, and a zero-byte one is what a disk-full
+# write, an unclean shutdown or a half-restored backup leaves behind.
+#
+# It fails worse than the node case, because node runs an empty file happily —
+# exit 0, no output, no stderr. The client sees a server that starts, says
+# nothing and leaves, and reports "failed to connect" with nothing to go on;
+# the shim logs no ERROR, because its own exec worked, so the launcher.log
+# error count reads clean while every session dies; and the pair was already
+# healed into the config, so every later start repeats it. Reproduced with a
+# complete copy of the package sitting unused in the same npm prefix.
+#
+# ponytail: `-s` catches truncation to zero, which is the shape an interrupted
+# write actually leaves. A non-empty but incomplete bundle still gets exec'd —
+# detecting that needs a parse, i.e. a fork on every start, and there the exec
+# itself is the cheaper detector.
+if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -s "$CLI_PATH" ]; then
   EXEC_TARGET=$(resolve_exec_target "$CLI_PATH" "$@")
   log "exec(config) node=$NODE_PATH cli=$CLI_PATH target=$EXEC_TARGET argc=$#"
   PATH="$CLIENT_PATH"
@@ -705,7 +724,7 @@ if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ]; then
   HEALED=1
 fi
 
-if [ -z "$CLI_PATH" ] || [ ! -f "$CLI_PATH" ]; then
+if [ -z "$CLI_PATH" ] || [ ! -s "$CLI_PATH" ]; then
   ROOTS=$(pkg_roots "$NODE_PATH")
   CLI_PATH=$(probe_cli "$ROOTS") || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
   log "probe: cli=$CLI_PATH"
