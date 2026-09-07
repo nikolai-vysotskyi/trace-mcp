@@ -1622,3 +1622,123 @@ describe.skipIf(process.platform === 'win32')('guard StateEngine hint (TRA-763)'
     }
   });
 });
+
+// The server hashes the root the MCP CLIENT launched it with; this hook hashed
+// its own cwd. Any `cd` into a subdirectory — a checked-out repo, a monorepo
+// package — made the two disagree, so the guard called a live session dead and
+// waved Read/Grep through: the exact fallback trace-mcp exists to replace.
+// Reproduced on the maintainer's machine, mid-session, against a server the
+// same instant `claude mcp list` reported as connected (TRA-1088).
+describe.skipIf(process.platform === 'win32')('guard: sentinel lookup from a subdirectory', () => {
+  const projectDir = path.join(
+    TMP_BASE,
+    `trace-mcp-guard-subdir-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const nested = path.join(projectDir, 'packages', 'app');
+  let sessionId: string;
+  let heartbeatFile: string;
+
+  beforeEach(() => {
+    fs.mkdirSync(nested, { recursive: true });
+    sessionId = `vitest-sub-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    // Live server, rooted at the session root the client launched — nothing
+    // ever writes a sentinel for the nested directory.
+    heartbeatFile = setHeartbeatAlive(projectDir);
+  });
+
+  afterEach(() => {
+    if (stateStatusDir && fs.existsSync(stateStatusDir)) {
+      fs.rmSync(stateStatusDir, { recursive: true, force: true });
+    }
+    const readsDir = path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
+    if (fs.existsSync(readsDir)) fs.rmSync(readsDir, { recursive: true, force: true });
+    if (fs.existsSync(heartbeatFile)) fs.rmSync(heartbeatFile, { force: true });
+    if (fs.existsSync(projectDir)) fs.rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('keeps routing from a nested dir served by the session root', () => {
+    const decision = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, nested, {
+      TRACE_MCP_GUARD_NAV_MIN: '1',
+    });
+    expect(decision.context ?? '').not.toContain('no heartbeat sentinel');
+    expect(decision.allowed).toBe(false);
+  });
+
+  // Found in review of #1062. `startHeartbeat` writes a sentinel for whatever
+  // cwd it was handed, with no isDangerousProjectRoot gate, so a server started
+  // from $HOME or / leaves a live one there. Those sit on the walk of every
+  // path below them, so honouring one would force-deny Read/Grep across the
+  // whole machine with nothing behind it — worse than the bug being fixed.
+  it('ignores a sentinel on a shared ancestor like $HOME or /', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    const shared = [os.homedir(), '/', '/tmp', TMP_BASE];
+    const planted = shared.map((dir) => {
+      const f = path.join(TMP_BASE, `trace-mcp-alive-${projectHash(dir)}`);
+      fs.writeFileSync(f, String(Date.now()));
+      return f;
+    });
+    try {
+      const decision = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, nested, {
+        TRACE_MCP_GUARD_NAV_MIN: '1',
+      });
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').toContain('no heartbeat sentinel');
+    } finally {
+      for (const f of planted) fs.rmSync(f, { force: true });
+    }
+  });
+
+  // Also found in review of #1062. Stopping on the first match regardless of
+  // freshness re-admits the bug: a package once opened as its own project keeps
+  // a sentinel, and once it goes stale it would mask the live monorepo root one
+  // level up.
+  it('walks past a stale sentinel to a live one further up', () => {
+    const staleFile = path.join(
+      TMP_BASE,
+      `trace-mcp-alive-${projectHash(fs.realpathSync(nested))}`,
+    );
+    fs.writeFileSync(staleFile, String(Date.now()));
+    const past = new Date(Date.now() - 120_000);
+    fs.utimesSync(staleFile, past, past);
+    try {
+      const decision = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, nested, {
+        TRACE_MCP_GUARD_NAV_MIN: '1',
+      });
+      expect(decision.context ?? '').not.toContain('stale');
+      expect(decision.allowed).toBe(false);
+    } finally {
+      fs.rmSync(staleFile, { force: true });
+    }
+  });
+
+  // The nearest stale match is still used when nothing fresher exists, so the
+  // staleness diagnostic stays reachable instead of collapsing to "not running".
+  it('falls back to the nearest stale sentinel when nothing is live', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    const staleFile = path.join(
+      TMP_BASE,
+      `trace-mcp-alive-${projectHash(fs.realpathSync(nested))}`,
+    );
+    fs.writeFileSync(staleFile, String(Date.now()));
+    const past = new Date(Date.now() - 120_000);
+    fs.utimesSync(staleFile, past, past);
+    try {
+      const decision = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, nested, {
+        TRACE_MCP_GUARD_NAV_MIN: '1',
+      });
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').toContain('stale');
+    } finally {
+      fs.rmSync(staleFile, { force: true });
+    }
+  });
+
+  it('still reports a dead server when no ancestor has a sentinel', () => {
+    fs.rmSync(heartbeatFile, { force: true });
+    const decision = runGuard('Grep', { pattern: 'foo', glob: '*.ts' }, sessionId, nested, {
+      TRACE_MCP_GUARD_NAV_MIN: '1',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('no heartbeat sentinel');
+  });
+});
