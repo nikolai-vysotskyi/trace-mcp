@@ -44,8 +44,17 @@ repo so the run reproduces.
 
 Assembling review context for a pull request with trace-mcp costs a median
 **{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens** than
-loading the diff plus every file it touches — while making *more* of the code
-the change can break visible, not less.
+loading the diff plus every file it touches. It makes *more* of the code the
+change can break visible — {{ site.data.pr_context_bench.trace_dependent_readable }}
+of affected call sites readable against
+{{ site.data.pr_context_bench.baseline_dependent_readable }}, and
+{{ site.data.pr_context_bench.trace_dependent_pointed }} at least located — and
+*less* of the changed code itself:
+{{ site.data.pr_context_bench.trace_changed_symbol_readable }} of changed symbols
+arrive with their bodies, against
+{{ site.data.pr_context_bench.baseline_changed_symbol_readable }} for whole
+files. That second number misses a
+[preregistered bar]({{ '/perf/prereg-pr-context/' | relative_url }}).
 
 The review written from it holds up. Sending both contexts to the same model on
 the same PRs, the trace-mcp arm understood the change as often as the naive one
@@ -160,21 +169,31 @@ a reviewer does not need.
 
 Two further limits worth stating plainly:
 
-- **The truncation failure mode did not fire here.** The trace-mcp arm is
-  capped at an 8,000-token context bundle; on this dataset no PR was large
-  enough for that cap to drop a changed symbol, so changed-symbol readability
-  is {{ site.data.pr_context_bench.trace_changed_symbol_readable }} in both
-  arms. On a substantially larger PR it would bite, and the benchmark reports
-  it as a `truncated` loss when it does. We have not measured that regime.
+- **The truncation failure mode fires on most of this dataset.** The trace-mcp
+  arm is capped at an 8,000-token context bundle, and changed-symbol
+  readability is {{ site.data.pr_context_bench.trace_changed_symbol_readable }}
+  against the naive arm's
+  {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} — a third of
+  changed symbols arrive without their bodies, 113 of 338 across the corpus.
+  This page said the opposite until 2026-09-07, because the metric counted
+  whether the bundle *listed* a symbol rather than whether it carried the body;
+  it now scores `detail === 'full'`. That miss is registered against the
+  [preregistered quality floor]({{ '/perf/prereg-pr-context/' | relative_url }}),
+  which the bar does not move for. The token figure is unaffected — it was
+  always counted on the assembled text. Whether the missing bodies are
+  module-level pseudo-symbols (whose body is a whole file, which is what this
+  index exists not to ship) or symbols the budget drops is not yet measured.
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file
   and line. It does not mean a model used it correctly.
-- **"Readable" counts pointers, not bodies.** The metric records a span
-  whenever the bundle lists a symbol; it never checks that the body arrived.
-  That is how it read 100% through a three-month stretch in which the
-  benchmark's trace arm carried no source code at all — see the
-  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) of that
-  defect and the correction it forced on the figures above.
+- **"Readable" counted pointers, not bodies — until 2026-09-07.** The metric
+  recorded a span whenever the bundle listed a symbol and never checked that the
+  body arrived, which is how it read 100% through a three-month stretch in which
+  the benchmark's trace arm carried no source code at all. It now scores the
+  bundle's own `detail` field, and every coverage figure on this page is the
+  first measured under that definition. The
+  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) has the
+  account of the original defect.
 
 ## Does the thinner context produce a worse review?
 
