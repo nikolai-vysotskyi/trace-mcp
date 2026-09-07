@@ -10,7 +10,7 @@
  * - Source root detection via pyproject.toml or src/ layout heuristic
  * - Package vs module distinction (__init__.py)
  */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 export class PyModuleResolver {
@@ -220,7 +220,6 @@ export class PyModuleResolver {
   private looksLikeSrcLayout(dir: string): boolean {
     const abs = join(this.projectRoot, dir);
     try {
-      const { readdirSync } = require('node:fs');
       const entries = readdirSync(abs, { withFileTypes: true }) as Array<{
         name: string;
         isDirectory(): boolean;

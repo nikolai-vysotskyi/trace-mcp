@@ -118,7 +118,10 @@ spec table or a product page where it is still checkable.
    should not try (see Doors). Our own surfaces should stop leading with the
    transport.
 
-**Not falling out:** the 90.6% PR-review number
+**Not falling out:** the PR-review number — **70.5%** since 2026-09-07, not the
+90.6% first published (TRA-1090: the benchmark's trace arm carried no source
+code; `docs/perf/pr-context-loss-classes.md` has the account). The correction
+does not change what the number is for
 (`docs/_data/pr_context_bench.json`, 60 merged PRs across 6 repos that are not
 ours). It is the only measurement we have on other people's code, it is a
 measurement of the graph, and it stays the headline evidence under the new
@@ -234,7 +237,7 @@ phrase on a door-1 channel, the same carve-out this section already makes.
 Languages and frameworks stay: they measure coverage a registry reader is
 actually shopping for, not surface they will pay for. The description reads:
 
-> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 90.6% fewer PR-review tokens
+> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 70.5% fewer PR-review tokens
 
 The registry caps `description` at 100 characters (`manifest-sync.test.ts`), so
 anything added here costs something already in the line.
@@ -269,7 +272,7 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 
 | Surface | Change | Note |
 |---|---|---|
-| `docs/index.html` hero | **Done (TRA-918).** Headline → the sentence. Boundary line under it. 90.6% moved to the subhead as evidence | Eyebrow kept — it was right all along. Category term stays on the `<title>` and the Product View heading, not the hero |
+| `docs/index.html` hero | **Done (TRA-918).** Headline → the sentence. Boundary line under it. The PR figure moved to the subhead as evidence | Eyebrow kept — it was right all along. Category term stays on the `<title>` and the Product View heading, not the hero |
 | `README.md` first screen + banner PNGs | **Done (TRA-918).** Same sentence, verbatim, plus the boundary line | Banner regenerated from `scripts/gen-readme-banner.mjs` — the tagline lives in that script, not in the PNG |
 | `docs/_config.yml` `description` | **Done (TRA-918).** Sentence first, then the category term; no hand-typed number | Feeds meta description on every page, so it is cut to 155 characters |
 | Site IA | Two second-level entries, one per door; door 2 has no page today | The real gap; see Doors |

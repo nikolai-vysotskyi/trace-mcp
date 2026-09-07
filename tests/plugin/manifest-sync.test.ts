@@ -174,6 +174,17 @@ describe('install-surface token claims stay honest', () => {
   // anchor. "Contains 90.6%" is weaker still — a nested second copy satisfies it.
   // Anything that qualifies a region rather than a match has this bug.
   const measuredPct = String(PR_BENCH.median_savings_pct).replace('.', String.raw`\.`);
+  /** The measured median as prose. The fixtures below build on it so a
+   *  re-measurement cannot leave this suite testing a retired number. */
+  const MEASURED = String(PR_BENCH.median_savings_pct);
+  /**
+   * The exemption only has anything to exempt while the measured median is
+   * itself inside the 9x% band this rule polices. TRA-1090 moved it to 70.5%,
+   * which the claim pattern does not match at all — so the cases below are
+   * inapplicable, not passing. They return automatically if a re-measurement
+   * ever puts the median back above 90%.
+   */
+  const exemptionApplies = /^9\d(?:\.\d+)?$/.test(MEASURED);
   const approvedPhrasings = [
     // package.json / plugin.json: the npm page has room for the whole sentence.
     new RegExp(`${measuredPct}%\\s*(?:fewer|less)\\s*input tokens[^.]{0,60}?pull request`, 'gi'),
@@ -215,54 +226,57 @@ describe('install-surface token claims stay honest', () => {
   }
 
   // The exemption's own regression tests: every bypass found in review on PR #914.
-  it.each([
-    ['bare claim', '{"description":"90.6% fewer tokens"}'],
+  it.skipIf(!exemptionApplies).each([
+    ['bare claim', `{"description":"${MEASURED}% fewer tokens"}`],
     [
       'qualifier in a neighbouring JSON field',
-      '{"description":"90.6% fewer tokens","unrelated":"Pull request support is configured elsewhere"}',
+      `{"description":"${MEASURED}% fewer tokens","unrelated":"Pull request support is configured elsewhere"}`,
     ],
     [
       'qualifier in the next sentence',
-      '90.6% fewer tokens. Separately, this plugin can summarize a pull request.',
+      `${MEASURED}% fewer tokens. Separately, this plugin can summarize a pull request.`,
     ],
-    ['peak claim beside a qualified one', 'Up to 99% fewer tokens. 90.6% fewer PR-review tokens.'],
+    [
+      'peak claim beside a qualified one',
+      `Up to 99% fewer tokens. ${MEASURED}% fewer PR-review tokens.`,
+    ],
     [
       'two claims across a semicolon',
-      'Up to 99% fewer tokens; separately, 90.6% fewer PR-review tokens.',
+      `Up to 99% fewer tokens; separately, ${MEASURED}% fewer PR-review tokens.`,
     ],
     [
       'two claims across a conjunction',
-      'Up to 99% fewer tokens, while the benchmark reports 90.6% fewer PR-review tokens.',
+      `Up to 99% fewer tokens, while the benchmark reports ${MEASURED}% fewer PR-review tokens.`,
     ],
     [
       'peak claim after the qualified one',
-      '90.6% fewer PR-review tokens, but up to 99% fewer tokens everywhere else.',
+      `${MEASURED}% fewer PR-review tokens, but up to 99% fewer tokens everywhere else.`,
     ],
     [
       'peak claim swallowed by the approved span, semicolon',
-      '90.6% fewer input tokens; up to 99% fewer tokens per pull request',
+      `${MEASURED}% fewer input tokens; up to 99% fewer tokens per pull request`,
     ],
     [
       'peak claim swallowed by the approved span, dashes',
-      '90.6% fewer input tokens — 99% fewer tokens — to review a pull request',
+      `${MEASURED}% fewer input tokens — 99% fewer tokens — to review a pull request`,
     ],
     [
       'peak claim swallowed by the approved span, apposition',
-      '90.6% fewer input tokens, including 99% savings, to review a pull request',
+      `${MEASURED}% fewer input tokens, including 99% savings, to review a pull request`,
     ],
     [
       'nested second copy of the measured number',
-      '90.6% fewer input tokens, 90.6% savings elsewhere, to review a pull request',
+      `${MEASURED}% fewer input tokens, ${MEASURED}% savings elsewhere, to review a pull request`,
     ],
   ])('rejects a 9x%% claim that is not itself the measured wording (%s)', (_name, text) => {
     expect(unqualifiedClaims(text).length).toBeGreaterThan(0);
   });
 
-  it.each([
-    ['server.json', 'Code intelligence for agents: 177 tools, 90.6% fewer PR-review tokens'],
+  it.skipIf(!exemptionApplies).each([
+    ['server.json', `Code intelligence for agents: 177 tools, ${MEASURED}% fewer PR-review tokens`],
     [
       'package.json',
-      'Framework-aware code intelligence MCP server — 90.6% fewer input tokens to review a pull request',
+      `Framework-aware code intelligence MCP server — ${MEASURED}% fewer input tokens to review a pull request`,
     ],
   ])('admits the measured median where the claim itself names the task (%s)', (_name, text) => {
     expect(unqualifiedClaims(text)).toEqual([]);

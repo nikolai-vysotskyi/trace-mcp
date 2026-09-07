@@ -18,6 +18,7 @@
  *   tsx scripts/bench-pr-context.ts            # run the benchmark
  *   tsx scripts/bench-pr-context.ts --limit 10 # smoke run on the first 10 PRs
  *   tsx scripts/bench-pr-context.ts --dump-prompts <dir>
+ *   tsx scripts/bench-pr-context.ts --only axios/axios#11073,psf/requests#6806
  *                                              # also write each arm's assembled
  *                                              # prompt, for bench-pr-quality.ts
  *
@@ -478,9 +479,13 @@ async function runOne(entry: PrEntry): Promise<PrResult | null> {
   }
 }
 
-async function run(limit?: number): Promise<void> {
+async function run(limit?: number, only?: Set<string>): Promise<void> {
   const dataset = JSON.parse(fs.readFileSync(DATASET_PATH, 'utf-8')) as PrEntry[];
-  const entries = limit ? dataset.slice(0, limit) : dataset;
+  // `--only` runs a named subset (TRA-1090 dumps prompts for the 13 PRs the
+  // trace arm lost). A subset must never overwrite the artifacts, so the two
+  // writes below are skipped when it is set.
+  const selected = only ? dataset.filter((e) => only.has(`${e.repo}#${e.number}`)) : dataset;
+  const entries = limit ? selected.slice(0, limit) : selected;
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 
   const rows: PrResult[] = [];
@@ -584,6 +589,13 @@ async function run(limit?: number): Promise<void> {
     rows,
   };
 
+  if (only) {
+    console.log(
+      `\n${rows.length} of ${only.size} selected PRs run; artifacts not written (--only)`,
+    );
+    return;
+  }
+
   fs.writeFileSync(RESULTS_PATH, `${JSON.stringify(results, null, 2)}\n`);
 
   // Same discipline as docs/_data/counts.yml: the docs page renders these and
@@ -643,6 +655,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes('--mine')) {
     mine();
   } else {
+    const oi = argv.indexOf('--only');
+    const only =
+      oi >= 0 && argv[oi + 1] && !argv[oi + 1].startsWith('-')
+        ? new Set(
+            argv[oi + 1]
+              .split(',')
+              .map((x) => x.trim())
+              .filter(Boolean),
+          )
+        : undefined;
     const li = argv.indexOf('--limit');
     const limit = li >= 0 ? Number(argv[li + 1]) : undefined;
     const di = argv.indexOf('--dump-prompts');
@@ -654,6 +676,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       );
       fs.mkdirSync(DUMP_DIR, { recursive: true });
     }
-    await run(limit);
+    await run(limit, only);
   }
 }

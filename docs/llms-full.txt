@@ -4261,12 +4261,17 @@ Assembling review context for a pull request with trace-mcp costs a median
 loading the diff plus every file it touches — while making *more* of the code
 the change can break visible, not less.
 
-It also produces a **worse review**. Sending both contexts to the same model on
-the same PRs, the trace-mcp arm understood the change
-{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
-often and asserted about twice as many problems that are not there — a
-preregistered bar this run [missed]({{ '/perf/prereg-pr-quality/' | relative_url }}).
-Both halves are below; neither number should be quoted without the other.
+The review written from it holds up. Sending both contexts to the same model on
+the same PRs, the trace-mcp arm understood the change as often as the naive one
+and asserted {{ site.data.pr_context_quality.trace_false_positives }} problems
+that are not there per PR against
+{{ site.data.pr_context_quality.baseline_false_positives }} — both inside a
+[preregistered bar]({{ '/perf/prereg-pr-quality/' | relative_url }}) written
+before the calls were made. An earlier run of that same arm published a 15 point
+comprehension loss; it was measured on a context that
+[contained no source code]({{ '/perf/pr-context-loss-classes/' | relative_url }})
+and is struck. Both halves are below; neither number should be quoted without
+the other.
 
 | | naive file loading | trace-mcp |
 |---|---:|---:|
@@ -4359,8 +4364,10 @@ were cases where the index barely earned its keep:
 
 They share a shape: a small change to one or two small files. When the whole
 file is 200 lines, loading it outright is already cheap, and the symbol bodies
-plus the impact list come to nearly the same size. `got#2379` is the extreme —
-{{ site.data.pr_context_bench.losses[0].savings_pct }}% saved, which is noise.
+plus the callers and the impact list come to more than the files themselves —
+which is why 13 of these rows are negative, not merely small. `got#2379` is the
+extreme at {{ site.data.pr_context_bench.losses[0].savings_pct }}%: the assembled
+context costs more than twice what reading both files would.
 **If your repository is small, or your PRs touch only small files, this index
 does not solve a problem you have.** The saving scales with how much of a file
 a reviewer does not need.
@@ -4376,18 +4383,35 @@ Two further limits worth stating plainly:
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file
   and line. It does not mean a model used it correctly.
+- **"Readable" counts pointers, not bodies.** The metric records a span
+  whenever the bundle lists a symbol; it never checks that the body arrived.
+  That is how it read 100% through a three-month stretch in which the
+  benchmark's trace arm carried no source code at all — see the
+  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) of that
+  defect and the correction it forced on the figures above.
 
-## The thinner context also produces a worse review
+## Does the thinner context produce a worse review?
 
 That question used to live in a "what this does not measure" section. It is
-measured now, and **the answer went against us**: on the same pull requests,
-the review written from trace-mcp's context understood the change
-{{ site.data.pr_context_quality.understood_drop_pp }} percentage points less
-often than the review written from the full files, and asserted roughly twice
-as many problems that are not there. The
+measured now, and the answer is **no, within the bar that was set for it**: on
+the same pull requests, the review written from trace-mcp's context understood
+the change as often as the review written from the full files
+({{ site.data.pr_context_quality.trace_understood }} against
+{{ site.data.pr_context_quality.baseline_understood }} — the sign is in our
+favour, which {{ site.data.pr_context_bench.pr_count }} pull requests cannot
+make significant, so read it as parity),
+and asserted +0.22 more false positives per PR. The
 [preregistered bar]({{ '/perf/prereg-pr-quality/' | relative_url }}) — no more
 than a 10 point drop in comprehension and no more than +0.5 false positives per
-PR — was written before the calls were made, and this run **missed both**.
+PR — was written before the calls were made, and this run **meets both**.
+
+**This is the second run under that preregistration.** The first published a 15
+point loss and is struck: its trace arm carried no source code, because
+`get_context_bundle` read symbol bodies through a bare `require('node:fs')` that
+throws under ESM into a silent catch. The bars did not move, the corpus did not
+move, and the [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }})
+is published alongside. The naive arm scored the same 65% in both runs, which is
+the control the correction rests on.
 
 The method: the same {{ site.data.pr_context_quality.pr_count }} pull requests
 and the same two assembled contexts — byte-for-byte the prompts counted above,
@@ -4409,15 +4433,17 @@ Per-PR agreement: both arms understood the change on
 {{ site.data.pr_context_quality.trace_only }}, neither on
 {{ site.data.pr_context_quality.neither }}.
 
-Latency is the one column trace-mcp wins, which is what a tenth of the input
-buys. It does not pay for the other two.
+Latency is level: {{ site.data.pr_context_quality.trace_median_latency_s }} s
+against {{ site.data.pr_context_quality.baseline_median_latency_s }} s. The
+saving is in input tokens, not in wall clock — the struck run's 17% latency win
+was the speed of a context with the code taken out of it.
 
-So the honest reading of this benchmark is now two sentences, not one:
-**trace-mcp's review context costs about a tenth of the tokens, and at the
-current 8,000-token bundle budget it costs review quality too.** Closing that
-gap — a larger or better-packed bundle, measured on this same harness — is the
-work this result creates, and until it lands the token saving should not be
-quoted on its own. Every review and every judgement is committed in
+So the honest reading is: **trace-mcp's review context costs about 30% of the
+tokens and the review written from it is not measurably worse on this corpus.**
+What that does *not* say is that it is better, or that it holds on harder pull
+requests — the corpus is merged bug-fix PRs where the defect is visible in the
+diff, which flatters both arms (see below). Every review and every judgement is
+committed in
 [`benchmarks/pr-context/quality.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/benchmarks/pr-context/quality.json),
 so the scoring is auditable rather than asserted.
 

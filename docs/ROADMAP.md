@@ -34,11 +34,25 @@ byte-identical prompts dumped from the token run:
 | error density | 18.6% | **29.3%** | |
 | review latency, median | 90.0 s | 74.5 s | −17% |
 
-Per PR: both arms understood 26, naive-only 13, trace-mcp-only 4, neither 17.
-`docs/perf/prereg-pr-quality.md` was committed with `verdict: PENDING` before
-the calls were made; the bar did not move afterwards. So the 90.6% input-token
-saving is real *and* the context that produces it drops something the agent
-needed in 13 of 60 cases.
+**Struck on 2026-09-07 by TRA-1090 — this run measured a defect, not the
+product.** The 13 pull requests behind that gap had exactly one thing in
+common: the trace arm's context contained no source code at all.
+`get_context_bundle` read symbol bodies through a bare `require('node:fs')`,
+which throws under ESM and was swallowed by a catch, so the harness — which
+imports `src/` as real ESM — assembled signatures only. The shipped build was
+never affected. Re-run on the same 60 PRs against the same unmoved bars:
+comprehension **65.0% naive vs 66.7% trace** (parity; the sign is in our favour
+and 60 PRs cannot make that significant), false positives **0.58 vs 0.80**
+(+0.22 against the struck run's +0.55), naive-only losses **13 → 3**, latency
+level at ~93 s both ways against the struck run's 17% gap. Each run carries its
+own naive column — the struck row above is only comparable to the naive numbers
+measured in the same pass. Both bars met.
+The token figure moved the other way in the same correction: **90.6% → 70.5%**,
+median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
+
+Everything below that was written from the struck numbers — item 1 in
+particular — needs re-deciding on the corrected ones at the next revision of
+this file.
 
 Read it precisely, because both over-readings are wrong. It is one task
 (reviewing a merged bug-fix PR, where the defect is inside the diff), one
@@ -580,9 +594,10 @@ is still no demand-side reason to unpark it.
   everything a search engine or a human types stays `trace-mcp`.
 - **Chasing competitor feature/tool-count parity.** Count was never the metric
   in either direction.
-- **Quoting the 90.6% token saving without the quality result beside it.**
-  `docs/pr-context-benchmark.md` now carries both; any surface that carries one
-  carries the other, until item 1 moves the second number.
+- **Quoting the token saving without the quality result beside it.**
+  `docs/pr-context-benchmark.md` now carries both, at their corrected values
+  (70.5% and parity on comprehension); any surface that carries one carries the
+  other.
 - **Publishing the State Engine A/B as a value claim** before an arm exists
   where the baseline can fail (item 7).
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
