@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.9
+# trace-mcp-launcher v0.6.10
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -8,6 +8,41 @@
 # Managed by trace-mcp — do not edit by hand. Re-run `trace-mcp init` to refresh.
 
 set -u
+
+# HOME is not guaranteed. A systemd unit with `User=` but no `Environment=HOME`,
+# a container ENTRYPOINT, a bare launchd job, an `env -i` wrapper — all of them
+# spawn the MCP client without it, and every bare `$HOME` below is then a hard
+# abort under `set -u`: exit 1, a raw bash error into the client's stderr, no
+# recovery message, no log line, no probe. The probe loss is the worse half:
+# `node_candidates` expands its whole `for` list before the first iteration, so
+# `/opt/homebrew/bin/node` — listed *before* the `$HOME` entry — is never even
+# emitted, and a machine with a perfectly good node reports "node binary not
+# found" (TRA-1163, reproduced both ways).
+#
+# One guard here rather than `${HOME:-}` at ~15 call sites: the failure is the
+# class, not any one path. Bash expands `~` from the passwd database when HOME
+# is unset, which is exactly the value the missing variable should have had.
+#
+# The `unset` is load-bearing, not tidiness. HOME set to the EMPTY STRING is a
+# real spawn shape (a launcher that exports every variable it knows, known or
+# not), and `~` consults the passwd database ONLY when HOME is unset — with
+# HOME="" it expands to the current value, i.e. stays empty, and every path
+# below resolves against `/`: `$HOME/.trace` becomes `/.trace`, which is
+# unwritable for a normal user and, in a container running as root, is
+# silently CREATED at the filesystem root.
+#
+# If passwd has no home either, refuse to root paths at `/` — a nonexistent
+# directory makes the probe fall through to its npm-prefix sources and, at
+# worst, die with the recovery message, which is the honest outcome.
+#
+# Exported, because cli.js resolves its own state directory from it and an
+# unset HOME there is a second outage hiding behind this one.
+if [ -z "${HOME:-}" ]; then
+  unset HOME
+  HOME=~
+  [ -n "$HOME" ] || HOME=/nonexistent
+fi
+export HOME
 
 # The shim inherits the MCP client's PATH, and a client started in a project
 # directory routinely carries that repository's `node_modules/.bin` on it. Every
