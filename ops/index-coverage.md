@@ -449,3 +449,38 @@ Following the sitemap resubmission on 2026-09-06 (TRA-1022) and the GitHub READM
 2. **Two `/vs/` spokes are now indexed.** `/vs/codegraph.html` and `/vs/context-mode.html` crossed into the index. The cluster is no longer locked out.
 3. **Dedicated category landing page `/code-graph-mcp.html` launched.** Following TRA-1024, `docs/code-graph-mcp.md` was created to target `code graph mcp` / `codegraph mcp`. Cites the 90.6% PR benchmark, models framework semantics across 87 frameworks, and links outward to `comparisons.html` and all `/vs/` spokes. Sitemaps updated to 31 URLs and resubmitted to GSC.
 
+## Reading 2026-09-07 16:00 UTC (TRA-1139): 3rd /vs/ page indexed, 5 pages in Discovered, sitemap resubmitted to 32 URLs
+
+Full Search Console API pass (URL Inspection, Search Analytics 28d, Sitemaps API) and PageSpeed Insights mobile CWV audit on 2026-09-07 16:00 UTC.
+
+**Key indexation breakthroughs (CONFIRMED):**
+
+1. **Third `/vs/` comparison page officially indexed:**
+   `/vs/codebase-memory-mcp.html` transitioned from `URL is unknown to Google` to **Submitted and indexed** (last crawl: `2026-09-07T00:45:55Z`, referring URLs credited by Googlebot: `/privacy.html`, `/configuration.html`).
+   Current status across the 9 comparison pages:
+   - `/vs/codegraph.html` — **Submitted and indexed** (crawled 09-06T16:25Z)
+   - `/vs/context-mode.html` — **Submitted and indexed** (crawled 09-06T08:58Z)
+   - `/vs/codebase-memory-mcp.html` — **Submitted and indexed** (crawled 09-07T00:45:55Z)
+   - `/vs/serena.html` — **Discovered - currently not indexed** (ref: `/configuration.html`)
+   - `/vs/repomix.html` — **Discovered - currently not indexed** (ref: `/configuration.html`)
+   - `/vs/code-review-graph.html` — **Discovered - currently not indexed** (ref: `/analytics.html`)
+   - `/vs/repomix-vs-codegraph.html` — **Discovered - currently not indexed** (ref: GitHub README)
+   - `/vs/codegraphcontext.html` — URL is unknown to Google (merged ~8h ago, pending crawl of 32-URL sitemap)
+   - `/vs/socraticode.html` — URL is unknown to Google (merged ~4h ago, pending crawl of 32-URL sitemap)
+
+2. **Five deep documentation pages advanced to "Discovered - currently not indexed":**
+   - `/daemon-memory.html` (ref: `/pr-context-benchmark.html`) — moved off `unknown`
+   - `/vs/serena.html` (ref: `/configuration.html`) — moved off `unknown`
+   - `/vs/repomix.html` (ref: `/configuration.html`) — moved off `unknown`
+   - `/vs/code-review-graph.html` (ref: `/analytics.html`) — moved off `unknown`
+   - Total indexed pages across domain: **21 URLs** (up from 20 this morning, and 13 on Sept 4).
+
+3. **Sitemap updated and resubmitted via API:**
+   Google's cached sitemap download had 30 submitted URLs from 00:14 UTC. With the merges of `/vs/codegraphcontext.html` (TRA-1034) and `/vs/socraticode.html` (TRA-1114), `docs/sitemap.xml` expanded to 32 URLs. Resubmitted via Search Console API `sitemaps().submit()` at `2026-09-07T12:06:33Z` (`isPending: true`).
+
+4. **Category landing page `/code-graph-mcp.html` integrated & audited:**
+   - Included into the ecosystem matrix with SocratiCode (3.3K★).
+   - Augmented with blind-scored PR review quality metrics (TRA-1013 / `ops/positioning.md`).
+   - Mobile PageSpeed Insights score: **Performance 99, SEO 100, Accessibility 100, Best Practices 100, FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms**.
+
+

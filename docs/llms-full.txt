@@ -34,7 +34,7 @@ Every turn in an agentic coding session pays for the entire preceding conversati
 A persistent code graph replaces file scans with graph queries:
 
 1. **Cost scales with the answer, not the repository.** Reading files scales with the size of the repository. Graph queries (`find_symbol`, `find_usages`, `get_change_impact`) scale with the size of the returned subgraph.
-2. **Measured context reduction.** In real benchmarks, graph-assembled context reduces input token usage by a median **{{ site.data.pr_context_bench.median_savings_pct }}%** to assemble pull-request review context across {{ site.data.pr_context_bench.pr_count }} open-source pull requests in {{ site.data.pr_context_bench.repo_count }} repositories ([read the PR context benchmark](/pr-context-benchmark.html)).
+2. **Measured context reduction.** In real benchmarks, graph-assembled context reduces input token usage by a median **{{ site.data.pr_context_bench.median_savings_pct }}%** to assemble pull-request review context across {{ site.data.pr_context_bench.pr_count }} open-source pull requests in {{ site.data.pr_context_bench.repo_count }} repositories ([read the PR context benchmark](/pr-context-benchmark.html)). Blind evaluation confirms comprehension at parity: {{ site.data.pr_context_quality.trace_understood }} understood rate against naive file loading's {{ site.data.pr_context_quality.baseline_understood }} (at {{ site.data.pr_context_quality.trace_false_positives }} vs {{ site.data.pr_context_quality.baseline_false_positives }} false positives per PR; see [quality preregistration](/perf/prereg-pr-quality/)).
 3. **Freshness without rebuilds.** File watchers detect edits with a 300 ms debounce, re-parsing only changed files and updating edge tables in an embedded SQLite database.
 
 ## How trace-mcp implements the code graph
@@ -58,6 +58,7 @@ Different tools approach codebase context from distinct angles:
 | **Broad grammar graph** | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) | Compiles 162 vendored grammars into an incremental graph. | Broad syntax support, but no framework routing or refactoring operations. [trace-mcp vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) |
 | **SCIP-driven graph** | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) | Orchestrates eleven external Sourcegraph SCIP indexers into graph snapshots. | External indexer pipelines, but requires external binaries and complex backend choices. [trace-mcp vs CodeGraphContext](/vs/codegraphcontext.html) |
 | **Review graph** | [code-review-graph](https://github.com/code-review-graph/code-review-graph) | Tracks incremental changes with empty-result uncertainty explanations. | Specialised for review navigation, but advertises 29 tools without preset filtering. [trace-mcp vs code-review-graph](/vs/code-review-graph.html) |
+| **Hybrid vector-AST graph** | [SocratiCode](https://github.com/giancarloerra/SocratiCode) | Combines Qdrant vector embeddings with ast-grep in Docker. | Semantic vector search, but requires Docker runtime and lacks framework routing. [trace-mcp vs SocratiCode](/vs/socraticode.html) |
 
 For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code graph comparisons hub](/comparisons.html).
 
@@ -900,7 +901,7 @@ Pick CodeGraphContext when compiler-grade references on a mainstream language ju
 
 [SocratiCode](https://github.com/giancarloerra/SocratiCode) (giancarloerra/SocratiCode, {{ site.data.competitors.socraticode.stars }} stars, TypeScript, AGPL-3.0-only / commercial dual license, v1.13.0) pairs Qdrant vector search with ast-grep AST syntax parsing across 19 languages. It delivers hybrid dense-vector plus keyword search via Reciprocal Rank Fusion (RRF), manages cross-agent concurrency locks for multi-agent workflows, and generates an interactive in-browser HTML graph visualization with Vis.js (`codebase_graph_visualize`).
 
-Where it differs is infrastructure and semantics. SocratiCode requires Docker running local Qdrant and Ollama containers (or external API keys), advertises all 25 tools unconditionally without preset filtering, parses syntax without resolving framework connections, and ships under copyleft AGPL-3.0. trace-mcp runs 100% locally with zero external infrastructure—single `npx trace-mcp` with embedded SQLite+FTS5 and local ONNX embeddings—under permissive MIT, with {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, and active refactoring tools. Full head-to-head: [trace-mcp vs SocratiCode](/vs/socraticode.html).
+Where it differs is infrastructure and semantics. SocratiCode requires Docker running local Qdrant and Ollama containers (or external API keys), advertises all 25 tools unconditionally without preset filtering, parses syntax without resolving framework connections, and ships under copyleft AGPL-3.0. trace-mcp runs locally with zero external infrastructure (your code and index stay on your machine — see [privacy](/privacy.html))—single `npx trace-mcp` with embedded SQLite+FTS5 and local ONNX embeddings—under permissive MIT, with {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, and active refactoring tools. Full head-to-head: [trace-mcp vs SocratiCode](/vs/socraticode.html).
 
 ### If you are comparing two of the alternatives to each other
 
@@ -1667,7 +1668,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ |
 | Session memory | ✓ code-linked decision graph with staleness checks | partial (context artifacts in Qdrant, not code-linked) |
 | Multi-agent concurrency | Daemon process pool | Cross-process lockfile (`proper-lockfile`) |
-| Cloud / Team edition | 100% local, self-hosted | SocratiCode Cloud (private beta) |
+| Cloud / Team edition | Local-first, self-hosted ([privacy](/privacy.html)) | SocratiCode Cloud (private beta) |
 
 Verified on September 7, 2026 against SocratiCode's repository at `main` (v1.13.0, commit `88a8ff5`, {{ site.data.competitors.socraticode.stars }} stars). Tool definitions from `src/index.ts` and `src/tools/`, storage architecture from `src/constants.ts` and `src/config.ts`, language mappings from `src/constants.ts`.
 
@@ -1732,6 +1733,8 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
 - See how trace-mcp stacks up against other alternatives in the [comparisons hub](/comparisons.html).
