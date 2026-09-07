@@ -65,6 +65,12 @@ export function resolvePythonImportEdges(state: PipelineState, _scope?: ChangeSc
   }
 
   let created = 0;
+  // Counts a `from` specifier that does not map to any file in this repo — the
+  // expected outcome for stdlib (`os`, `sys`) and third-party (PyPI) imports,
+  // not a resolver defect. Mirrors the external/created split every other
+  // *-imports.ts resolver already logs (go, rust, java, kotlin, ruby, c/cpp,
+  // csharp), which scripts/measure-import-resolution.ts (TRA-1145) depends on.
+  let external = 0;
 
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
@@ -84,7 +90,10 @@ export function resolvePythonImportEdges(state: PipelineState, _scope?: ChangeSc
 
       for (const [fromPath, specifiers] of consolidated) {
         const resolved = resolvePythonModule(fromPath, file.path, moduleToFile);
-        if (!resolved) continue;
+        if (!resolved) {
+          external++;
+          continue;
+        }
 
         const targetNodeId = fileNodeMap.get(resolved.id);
         if (targetNodeId == null) continue;
@@ -101,8 +110,8 @@ export function resolvePythonImportEdges(state: PipelineState, _scope?: ChangeSc
     }
   })();
 
-  if (created > 0) {
-    logger.info({ edges: created }, 'Python import edges resolved');
+  if (created > 0 || external > 0) {
+    logger.info({ edges: created, external }, 'Python import edges resolved');
   }
 }
 
