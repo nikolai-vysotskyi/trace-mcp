@@ -22,7 +22,10 @@ import {
 } from '../init/launcher.js';
 import { checkRegisteredLaunchers, type RegisteredLauncherCheck } from '../init/launcher-health.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
-import { findProjectRoot } from '../project-root.js';
+import path from 'node:path';
+import { isDangerousProjectRoot } from '../dangerous-root.js';
+import { detectGitWorktree, findProjectRoot, hasRootMarkers } from '../project-root.js';
+import { getProject } from '../registry.js';
 import {
   type EphemeralProjectCandidate,
   findEphemeralProjects,
@@ -47,6 +50,87 @@ const SEVERITY_LABEL: Record<ConflictSeverity, string> = {
   info: 'INFO',
 };
 
+/**
+ * What `trace-mcp serve` would index if it were launched from this directory.
+ *
+ * Field evidence (TRA-1087): a real opencode config runs `["trace-mcp","serve"]`
+ * with no project root at all — the client picks the cwd and the user never
+ * sees which directory that was. This is the first thing doctor answers.
+ */
+export interface ServeRootReport {
+  cwd: string;
+  /** Directory serve would index: TRACE_MCP_REPO_ROOT, worktree main root, or cwd. */
+  indexRoot: string;
+  envOverride: string | null;
+  worktreeMainRoot: string | null;
+  registered: boolean;
+  /** Non-null reason when the root is one serve refuses to register. */
+  dangerReason: string | null;
+  status: 'ok' | 'will-register' | 'not-a-project' | 'root-above-cwd' | 'dangerous';
+  detail: string;
+}
+
+export function diagnoseServeRoot(from?: string): ServeRootReport {
+  const cwd = path.resolve(from ?? process.cwd());
+  const envOverride = process.env.TRACE_MCP_REPO_ROOT || null;
+  const worktree = detectGitWorktree(cwd);
+  const worktreeMainRoot = worktree?.mainRoot ?? null;
+  // Same precedence serve uses: env override wins, then worktree main repo, then cwd.
+  let indexRoot = worktreeMainRoot ?? cwd;
+  // findProjectRoot short-circuits on the override and returns it verbatim.
+  if (envOverride) indexRoot = findProjectRoot(cwd);
+
+  const dangerReason = isDangerousProjectRoot(indexRoot);
+  const registered = !!getProject(indexRoot);
+
+  let status: ServeRootReport['status'];
+  let detail: string;
+  if (dangerReason) {
+    status = 'dangerous';
+    detail = `${shortPath(indexRoot)} is a ${dangerReason} — serve refuses to index it. Launch trace-mcp with the project as cwd, or set TRACE_MCP_REPO_ROOT.`;
+  } else if (registered) {
+    status = 'ok';
+    detail = `${shortPath(indexRoot)} is registered and would be served.`;
+  } else if (hasRootMarkers(indexRoot)) {
+    status = 'will-register';
+    detail = `${shortPath(indexRoot)} is not registered yet — serve would auto-register and index it.`;
+  } else {
+    let above: string | null = null;
+    try {
+      above = findProjectRoot(indexRoot);
+    } catch {
+      above = null;
+    }
+    if (above && above !== indexRoot) {
+      status = 'root-above-cwd';
+      detail = `${shortPath(indexRoot)} has no project markers; the nearest project root is ${shortPath(above)}, above it. Serve will NOT auto-register — it indexes nothing until you launch it from the project or set TRACE_MCP_REPO_ROOT.`;
+    } else {
+      status = 'not-a-project';
+      detail = `${shortPath(indexRoot)} has no project markers — serve would index nothing. Launch trace-mcp with the project as cwd, or set TRACE_MCP_REPO_ROOT.`;
+    }
+  }
+
+  return {
+    cwd,
+    indexRoot,
+    envOverride,
+    worktreeMainRoot,
+    registered,
+    dangerReason,
+    status,
+    detail,
+  };
+}
+
+function printServeRootReport(r: ServeRootReport): void {
+  const label = r.status === 'ok' || r.status === 'will-register' ? 'Serve root' : 'SERVE ROOT';
+  console.log(`${label}: would index ${shortPath(r.indexRoot)} (cwd ${shortPath(r.cwd)})`);
+  if (r.envOverride) console.log(`  TRACE_MCP_REPO_ROOT=${r.envOverride}`);
+  if (r.worktreeMainRoot)
+    console.log(`  git worktree — main repo ${shortPath(r.worktreeMainRoot)}`);
+  if (r.status !== 'ok') console.log(`  ${r.detail}`);
+}
+
 export const doctorCommand = new Command('doctor')
   .description('Check trace-mcp health: registry/DB integrity and competing tools')
   .option('--fix', 'Automatically fix all fixable conflicts')
@@ -66,6 +150,10 @@ export const doctorCommand = new Command('doctor')
         const code = diagnoseLauncher({ json: opts.json });
         process.exit(code);
       }
+
+      // What `serve` would index from here — the first question a user
+      // launching us through an MCP client with no cwd needs answered.
+      const serveRoot = diagnoseServeRoot();
 
       // Registry/DB integrity (#168) — independent of project conflicts. Surfaces
       // stale registrations (deleted folders, missing/corrupt DBs) that would
@@ -120,6 +208,7 @@ export const doctorCommand = new Command('doctor')
           console.log(
             JSON.stringify(
               {
+                serveRoot,
                 registry,
                 registryFix,
                 topology,
@@ -134,11 +223,14 @@ export const doctorCommand = new Command('doctor')
             ),
           );
         } else {
-          console.log(JSON.stringify({ registry, topology, decisions, ...report }, null, 2));
+          console.log(
+            JSON.stringify({ serveRoot, registry, topology, decisions, ...report }, null, 2),
+          );
         }
         return;
       }
 
+      printServeRootReport(serveRoot);
       printRegistryReport(registry);
       printTopologyReport(topology);
       printDecisionsReport(decisions);
