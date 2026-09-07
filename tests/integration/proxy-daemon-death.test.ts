@@ -21,6 +21,7 @@
 
 import { type ChildProcess, spawn } from 'node:child_process';
 import http from 'node:http';
+import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -152,7 +153,19 @@ describeIfBuilt('built proxy.js survives the daemon dying mid-session (TRA-1112)
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     cleanup = async () => {
+      // Wait for the child to actually be gone before removing the sandbox.
+      // `kill()` only posts the request — the process is still alive when it
+      // returns — and this child's cwd IS `sandbox/proj`, which Windows locks
+      // for as long as it lives. So teardown raced the exit and threw
+      // `EBUSY: rmdir`, failing a test whose assertions had already passed.
+      //
+      // Retrying the rmSync does not fix it: the lock is held by a process,
+      // not by a lingering handle, so the retries just burn their budget while
+      // it is still running. Waiting is both the correct fix and the cheaper
+      // one — on a healthy run the exit has usually already happened.
+      const exited = once(child, 'exit');
       child.kill('SIGKILL');
+      await exited;
       await daemon.kill().catch(() => {});
       rmSync(sandbox, { recursive: true, force: true });
     };
