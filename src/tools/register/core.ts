@@ -19,6 +19,7 @@ import { LockError, withLock } from '../../utils/pid-lock.js';
 import { verifyDecision } from '../../memory/decision-verification.js';
 import { relativizeUnderRoot } from '../../utils/path-relativize.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
+import { takeUnreportedDuplicates } from '../analysis/duplication-memo.js';
 import { getMinimalContext } from '../project/minimal-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 
@@ -427,7 +428,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'register_edit',
-    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh — much lighter than full reindex. Also checks symbols this edit introduced — if `_duplication_warnings` appears, you may be recreating existing logic; review them. Pre-existing symbols are not re-reported; `check_duplication` does that. Mutates the index; idempotent. Returns JSON: { status, file, totalFiles, indexed, _duplication_warnings? }.',
+    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh — much lighter than full reindex. Also flags duplicate symbols — if `_duplication_warnings` appears, you may be recreating existing logic; review them. Each one is reported once per file, not on every edit; `check_duplication` re-asks. Mutates the index; idempotent. Returns JSON: { status, file, totalFiles, indexed, _duplication_warnings? }.',
     {
       file_path: z.string().min(1).max(512).describe('Relative path to the edited file'),
     },
@@ -487,24 +488,6 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // `get_index_health` reports. Without it, `progress.indexing` kept
       // showing whatever the last watcher batch did — "completed 276/276"
       // right after a 2069-file forced reindex (TRA-231).
-      //
-      // TRA-1098: snapshot the symbol ids the file already had *before* this
-      // edit is indexed. The duplication warning further down only means
-      // something for a symbol the edit just introduced — "you may be
-      // recreating existing logic" is not a statement about a function that
-      // has been sitting in the file untouched for months. Without it the same
-      // warnings were re-emitted on every edit to the file, and they were
-      // 84-87% of the whole response (measured 239-330 of 290-380 tokens).
-      const preEditSymbolIds = new Set<string>();
-      try {
-        const preFile = store.getFile(filePath);
-        if (preFile) {
-          for (const s of store.getSymbolsByFile(preFile.id)) preEditSymbolIds.add(s.symbol_id);
-        }
-      } catch {
-        /* non-fatal — an empty set just reports every warning, as before */
-      }
-
       const pipeline = new IndexingPipeline(
         store,
         registry,
@@ -612,16 +595,19 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         duplicate_file: string;
       }[] = [];
       try {
-        // maxResults caps the list *before* the pre-existing symbols are
-        // filtered out, so it has to be raised — otherwise five stale warnings
-        // crowd out the one new symbol worth reporting. Cut back to 5 after
-        // the filter, which is the number that reaches the caller.
+        // TRA-1098: the same similarities were re-reported on every edit to
+        // the file — 84-87% of this response, on the fourth busiest tool in
+        // the product. Report each one once per file per process; the memo
+        // explains why this is not done by diffing the store.
+        //
+        // `maxResults` caps the list before the memo sees it, so it is raised
+        // and cut back to 5 after — otherwise warnings the agent has already
+        // read would crowd out one it has not.
         const dup = checkFileForDuplicates(store, store.db, filePath, {
           threshold: 0.7,
           maxResults: 25,
         });
-        dupWarnings = dup.warnings
-          .filter((w) => !preEditSymbolIds.has(w.source_symbol_id))
+        dupWarnings = takeUnreportedDuplicates(projectRoot, filePath, dup.warnings)
           .slice(0, 5)
           .map((w) => ({
             message: `"${w.source_name}" is similar to "${w.duplicate_name}" in ${w.duplicate_file}:${w.duplicate_line ?? '?'}`,

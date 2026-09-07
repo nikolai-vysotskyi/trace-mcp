@@ -6394,22 +6394,9 @@ one is the one to plan a budget against.
 describes itself as mutating is left out of the set, so the next one cannot
 quietly start booking savings again.
 
-**TRA-1098 then shaped the larger of the two.** Crediting `register_edit` zero
-made it visible; it did not make it cheaper, and at 345 tokens over 1 289 calls
-it was 445 561 tokens — the single largest block of response spend in the
-product, larger than the excess of all four remaining over-baseline tools
-combined. Measured composition over five files of this repo: 239-330 of the
-290-380 tokens, **84-87%, were `_duplication_warnings`** — and every one of them
-described a symbol that predated the edit. The check ran over every symbol in
-the reindexed file, so editing the same file forty times reported the same five
-pre-existing similarities forty times. "You may be recreating existing logic" is
-only a statement about a symbol the edit just introduced, so that is now the
-only kind reported; `check_duplication` still answers the standing question.
-**345 → 46 tokens per call, −87%**, guarded by
-`tests/tools/register-edit-new-symbols-only.test.ts`, which asserts both halves:
-silence on a pre-existing similarity, and a warning when the edit does introduce
-a duplicate. This is a deletion, not a cap — no argument, no truncation, and the
-warning that mattered is the one that survived.
+**TRA-1098 then shaped the larger of the two, and the harness could not see
+it.** That result is written up in full below, because the number came back
+against the change and the reason is more useful than the change was.
 
 ### What closing the tail did to the headline
 
@@ -6417,23 +6404,22 @@ Every column but the last is a frozen literal: it records what that run
 measured, so a later re-measurement cannot rewrite it. Only the last column is
 live.
 
-| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) | TRA-1049 (find_usages framed) | TRA-1098 (register_edit shaped) |
-|---|---|---|---|---|---|---|
-| coverage of recorded calls | 88.4% | 97.2% | 97.2% | 97.2% | 97.2% | **97.2%** |
-| net `reduction_pct` | 29.3% | 21.1% | 21.0% | 67.4% | 67.7% | **{{ site.data.response_tokens.reduction_pct }}%** |
-| credited | 35.2% | 32.6% | 31.5% | 68.3% | 68.4% | {{ site.data.response_tokens.credited_reduction_pct }}% |
-| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | 65.8% | 66.1% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
-| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | 5 of 22 | 4 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
+| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) | TRA-1049 (find_usages framed) |
+|---|---|---|---|---|---|
+| coverage of recorded calls | 88.4% | 97.2% | 97.2% | 97.2% | **97.2%** |
+| net `reduction_pct` | 29.3% | 21.1% | 21.0% | 67.4% | **{{ site.data.response_tokens.reduction_pct }}%** |
+| credited | 35.2% | 32.6% | 31.5% | 68.3% | {{ site.data.response_tokens.credited_reduction_pct }}% |
+| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | 65.8% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
+| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | 5 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
 
 **The TRA-993 column is not an improvement on the one before it.** Nothing in
 the product changed between them that would move a headline 46 points. What
 changed is that `search_text`, `get_outline` and `search` — 76% of the weight —
 stopped being priced from one sample each and started being priced from a
 [registered sampling frame](./prereg-response-tokens.md#registered-sampling-frame-tra-993-registered-2026-09-06-before-the-run).
-Read across that row as *frames*, not builds — with two exceptions: TRA-1049 and
-TRA-1098 are the only steps that moved because the product changed, worth 0.3 and
-0.5 points respectively. The all-in figure, which is the one to budget against,
-moved 1.8 points on TRA-1098 alone — see below.
+Read across that row as *frames*, not builds — with one exception: the TRA-1049
+column is the only step that moved because the product changed, and it is worth
+0.3 points.
 
 The tail was more expensive than the head, in both directions: it contained the
 worst per-call ratios in the product and the calls that should never have been
@@ -6638,6 +6624,80 @@ but a reader wanting to know what a `find_usages` call costs should read the
 per-item rows in the artifact, or the field median above, and not this page's
 table cell. Every other multi-item tool on this page has the same property; this
 is the first one where the spread is large enough to say so out loud.
+
+## `register_edit` repeated itself, and the harness prices the one call that does not (TRA-1098)
+
+Since TRA-945 `register_edit` is credited zero and counted as pure overhead, so
+every token it returns is spend. This page priced that at 345 tokens over 1 289
+calls — 444 705 tokens, the largest single block of response spend in the
+product. Making it visible did not make it cheaper, so TRA-1098 went looking at
+what was in it.
+
+**The composition, five files of this repo:**
+
+| file | total | `_duplication_warnings` | share |
+|---|---:|---:|---:|
+| `src/global.ts` | 380 | 330 | 87% |
+| `src/savings.ts` | 351 | 294 | 84% |
+| `src/indexer/pipeline.ts` | 312 | 253 | 81% |
+| `src/progress.ts` | 290 | 239 | 82% |
+| `src/tools/register/core.ts` | 47 | 0 | — |
+
+The bookkeeping half — `status`, `file`, `totalFiles`, `indexed`, `skipped`,
+`errors`, `durationMs` — is 21-47 tokens. Everything else was duplication
+warnings, and the check recomputed them over the whole file on every edit, so
+editing one file forty times reported the same similarities forty times.
+
+**The obvious fix is wrong, and the reason is worth keeping.** Snapshot the
+file's symbols before reindexing, report only what is new. Review caught the
+race: a single edit fires three independent reindex paths — parcel-watcher
+inside the daemon, the PostToolUse HTTP hook, and the agent's own
+`register_edit` call — and `recent-reindex-cache.ts` documents skew between
+them regularly exceeding 500 ms, which is why its dedup TTL is 2 000 ms. If
+another path indexes first and the agent's call arrives later than that, the
+"pre-edit" snapshot is read from a store that already reflects the edit, and the
+genuinely new symbol is filtered out as pre-existing. That is a silent false
+negative in the one case the warning exists for, and it is worse than the noise
+it replaces. `tests/tools/register-edit-duplication-memo.test.ts` fails on
+exactly that scenario.
+
+What shipped instead does not read the store: each warning is reported once per
+file per process. A warning the agent has not been shown is new *to the agent*
+whoever indexed the file, which is the only sense in which "new" was ever
+actionable.
+
+### The result went the other way
+
+Re-running `scripts/bench-response-tokens.ts` after the change measures
+`register_edit` at **345 tokens — unchanged**. The harness calls each tool once
+against a fresh server, so it prices the first call on a file, which is the one
+call that still legitimately pays for the warning. Nothing here moves the
+headline, and the columns above are unchanged on purpose.
+
+The effect is real, and it is smaller than the composition table suggests.
+Replayed against every `register_edit` call recorded in `~/.trace/analytics.db`
+— 740 calls, 369 distinct files, mean 470 chars — with the memo applied in call
+order:
+
+| grouping | suppressed | response tokens | per call |
+|---|---:|---:|---:|
+| per session + file (memo lives one session) | 169 of 740, 22.8% | 101 003 → 83 236, **−17.6%** | 136 → 112 |
+| per file (memo lives the daemon's life) | 364 of 740, 49.2% | 101 003 → 70 423, **−30.3%** | 136 → 95 |
+
+Reality is between the two rows: the memo is process-local, and a daemon
+outlives a session while a stdio server does not.
+
+**And the field distribution says this page has been over-pricing the tool.**
+The harness's single sample is `src/savings.ts`, which fires four warnings at
+351 tokens. Across 740 recorded calls the mean is **136 tokens**, 2.5x lower —
+`register_edit`'s cost is decided by how many similarities its file happens to
+carry, which is the same argument-driven spread that put `find_usages` on the
+over-baseline list from one sample (TRA-1049). At 136 tokens the recorded
+overhead block is nearer 101 000 tokens than 445 000.
+
+That is a frame question, not a product one, and this page's rule is that
+editing the frame is a visible act in its own commit. It is filed separately;
+nothing on this page has been repriced here.
 
 ## The four tools still over baseline, and why none of them is next (TRA-1098)
 
