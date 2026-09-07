@@ -27,8 +27,13 @@ Rules for keeping it honest, same three as the sibling ledgers:
   the quality result from `docs/_data/pr_context_quality.json` in the same
   breath. Cheaper is not better, and one number stating a claim it does not
   support is the defect we documented in a competitor before we shipped it
-  ourselves. Gated for `README.md` by `tests/docs/readme-claims.test.ts`
-  (TRA-1013).
+  ourselves. Gated by `tests/docs/readme-claims.test.ts` (TRA-1013):
+  `README.md` and `docs/comparisons.md` carry the four numbers; `package.json`,
+  `plugin.json` and `server.json` are one-liners with no room for a table, so
+  they carry the verdict instead — **comprehension at parity**. That phrase is
+  silent on false positives (0.58 → 0.80, inside the preregistered bound but not
+  nothing), so it belongs on a line that has no room for the pair and nowhere
+  else.
 
 ## The question this answers
 

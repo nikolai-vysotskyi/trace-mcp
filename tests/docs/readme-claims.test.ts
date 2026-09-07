@@ -646,8 +646,10 @@ describe('docs site numeric claims (TRA-174)', () => {
   const QUOTES_THE_SAVING = ['README.md', 'docs/comparisons.md'];
 
   /** One-line surfaces cannot carry four numbers, so they carry the verdict
-   *  instead — the same phrase the live GitHub repo description already runs. */
-  const ONE_LINERS_QUOTING_THE_SAVING = ['package.json'];
+   *  instead — the same phrase the live GitHub repo description already runs.
+   *  `server.json` is trimmed to fit the registry's 100-char limit and still
+   *  says it in full; anything that no longer fits drops a keyword, not this. */
+  const ONE_LINERS_QUOTING_THE_SAVING = ['package.json', 'plugin.json', 'server.json'];
 
   it('no surface publishes the token saving without the quality result (TRA-1013)', () => {
     for (const path of QUOTES_THE_SAVING) {
