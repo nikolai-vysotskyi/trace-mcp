@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.23.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.23.1...v3.23.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* **workspace:** dead registry rows aren't projects (TRA-1054/1057/1077) ([1749b7a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1749b7a9626bc3114d913e04f7fe42895fc8ed35))
+
+
+### Documentation
+
+* **perf:** measure what the missing changed-symbol bodies are, and what recovering them costs ([#1117](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1117)) ([50d6845](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50d684562a4f5a5d662c864e364706b3b14ab184))
+
 ## [3.23.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.23.0...v3.23.1) (2026-09-07)
 
 
