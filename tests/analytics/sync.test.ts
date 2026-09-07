@@ -72,18 +72,30 @@ describe('buildIngestionStatus()', () => {
       parsedAtMs + 7 * 24 * HOUR,
     );
     expect(status.stale).toBe(true);
+    expect(status.freshness).toBe('stale');
     expect(status.behind_hours).toBe(168);
   });
 
   it('is stale when nothing was ever ingested but logs exist', () => {
     const status = buildIngestionStatus({ parsed_at: null, files_tracked: 0 }, parsedAtMs);
     expect(status.stale).toBe(true);
+    expect(status.freshness).toBe('stale');
     expect(status.behind_hours).toBeNull();
   });
 
-  it('is not stale when there are no logs on disk at all', () => {
+  // TRA-1072: newestLogMtime === null must not be reported as "checked,
+  // fresh" — that's indistinguishable from a genuine fresh reading and was
+  // exactly the trap that let a 3-day-stale DB claim `stale: false`.
+  it('is "unknown", not "fresh", when there are no logs on disk at all — and stale stays false', () => {
     const status = buildIngestionStatus({ parsed_at: null, files_tracked: 0 }, null);
     expect(status.stale).toBe(false);
+    expect(status.freshness).toBe('unknown');
+  });
+
+  it('stamps computed_at with the supplied clock', () => {
+    const now = parsedAtMs + HOUR;
+    const status = buildIngestionStatus({ parsed_at: parsedAt, files_tracked: 10 }, null, now);
+    expect(status.computed_at).toBe(new Date(now).toISOString());
   });
 });
 
