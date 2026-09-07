@@ -203,9 +203,21 @@ function delegateLegacyShim(binDir: string): boolean {
 /** Header line every shim we ship carries. Mirrors src/init/launcher.ts. */
 const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
 
+/**
+ * Bounded read, like the original in src/init/launcher.ts. `ensureDaemonInstalled`
+ * runs on every app launch, so whatever a user has parked at this path must not
+ * be loaded whole to answer a question about its first line.
+ */
 function isOwnedShim(file: string): boolean {
   try {
-    return LAUNCHER_HEADER_RE.test(fs.readFileSync(file, 'utf-8').slice(0, 256));
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      fs.readSync(fd, buf, 0, 256, 0);
+      return LAUNCHER_HEADER_RE.test(buf.toString('utf-8'));
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return false;
   }
