@@ -279,3 +279,40 @@ export function findProjectRoot(from?: string): string {
     dir = parent;
   }
 }
+
+export interface ServeRoots {
+  /** Directory the process was launched from. */
+  cwd: string;
+  /** Resolved TRACE_MCP_REPO_ROOT, or null when unset. */
+  envOverride: string | null;
+  /** Main repo root when `projectRoot` is a linked git worktree. */
+  worktreeMainRoot: string | null;
+  /** Session root: config, file watcher, path validation. */
+  projectRoot: string;
+  /** Root whose index/DB is used — the main repo when in a worktree. */
+  indexRoot: string;
+}
+
+/**
+ * The roots `trace-mcp serve` runs on. Shared with `doctor` so its
+ * "here is what serve would index" report cannot drift from what serve does
+ * (TRA-1087: doctor and serve disagreed on TRACE_MCP_REPO_ROOT).
+ *
+ * The override names the repo outright — for Docker/CI, and for MCP clients
+ * that spawn us with a cwd the user never chose — so it replaces cwd for the
+ * whole session, not just the auto-register check.
+ */
+export function resolveServeRoots(from?: string): ServeRoots {
+  const cwd = path.resolve(from ?? process.cwd());
+  const raw = process.env.TRACE_MCP_REPO_ROOT;
+  const envOverride = raw && raw.length > 0 ? findProjectRoot(cwd) : null;
+  const projectRoot = envOverride ?? cwd;
+  const worktreeMainRoot = detectGitWorktree(projectRoot)?.mainRoot ?? null;
+  return {
+    cwd,
+    envOverride,
+    worktreeMainRoot,
+    projectRoot,
+    indexRoot: worktreeMainRoot ?? projectRoot,
+  };
+}
