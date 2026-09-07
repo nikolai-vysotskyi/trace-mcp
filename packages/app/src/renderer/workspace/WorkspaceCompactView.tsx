@@ -78,7 +78,6 @@ function CompactRow({
   return (
     <div
       role="listitem"
-      aria-selected={selected}
       className="flex items-center gap-2 px-3 cursor-pointer transition-colors"
       style={{
         minHeight: COMPACT_ROW_H,

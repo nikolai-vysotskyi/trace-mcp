@@ -476,7 +476,7 @@ export function WorkspaceTableView({
           box-shadow on cells in the collapsed model, which is why the pinned
           seams below have declared a hairline since TRA-265 and never drawn
           one. The row hairline lives on the cells there. */}
-      <table className="ws-table w-full text-[13px]">
+      <table className="ws-table w-full text-[13px]" aria-label={t('projectsGrid')}>
         {/* STICKY_HEADER_BG, not a bare --fill-quaternary: that token is
             translucent, so rows scrolling under a sticky header showed
             straight through the column labels. Same reason the pinned cells
