@@ -105,12 +105,18 @@ async function refreshAndSettle(): Promise<{ techDebtGrade?: string; status: str
 
 describe('dashboard drops a stale grade when a project shrinks (TRA-1057)', () => {
   it('never carries a prior real grade forward once the project is too small to grade', async () => {
-    // Pass 1 must actually reach `ok`/graded before we shrink anything.
+    // The first GET's snapshot() fires refreshAll() as a side effect but does
+    // not await it (TRA-1053: the route never computes inline) — so drive it
+    // to completion with waitForIdleForTests() rather than polling the
+    // per-project status. That polling loop raced refreshAll(true) below on a
+    // loaded CI runner: if the POST landed in the gap between this pass
+    // reaching `status: 'ok'` and its `computing` flag actually flipping back
+    // to false, `refreshAll`'s `if (computing) return;` guard silently
+    // dropped the forced recompute, so the shrink was never picked up.
+    const { waitForIdleForTests } = await import('../../src/api/dashboard-routes.js');
+    await get();
+    await waitForIdleForTests();
     let project = await get();
-    for (let i = 0; i < 50 && project?.status === 'computing'; i++) {
-      await new Promise((r) => setTimeout(r, 20));
-      project = await get();
-    }
     expect(project?.status).toBe('ok');
     expect(['A', 'B', 'C', 'D', 'F']).toContain(project?.techDebtGrade);
 
