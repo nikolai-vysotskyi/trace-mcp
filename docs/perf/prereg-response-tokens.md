@@ -402,3 +402,98 @@ guessed on the other.
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on
 {{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.
+
+## `register_edit` is the fifth one-sample tool, and this time it is registered (TRA-1107, registered 2026-09-07, before the run)
+
+**Registered before the run, unlike TRA-1049.** Nothing below was written after
+seeing a frame number. The field figures quoted as the cross-check were already
+published in TRA-1098 and in TRA-1107's own text; the frame basket has not been
+run at the time of writing.
+
+### The defect
+
+`register_edit` is priced at **345 tokens** from one harness call,
+`register_edit { file_path: 'src/savings.ts' }`. Its response is bookkeeping
+(21-47 tokens) plus one `_duplication_warnings` entry per similarity the file
+happens to carry, and `src/savings.ts` carries four. `src/tools/register/core.ts`
+carries none and answers in 47. The spread is a property of the file passed in,
+not of the tool — the same argument-driven, one-sample defect TRA-993 fixed for
+`search_text` / `get_outline` / `search` and TRA-1049 fixed for `find_usages`.
+
+It matters more here than on those four. `register_edit` is credited zero and
+counted as pure overhead (TRA-945), so every token it returns is spend, and its
+1 289 recorded calls make it the largest single block of response spend in the
+product. That figure feeds `reduction_pct_incl_overhead` — the all-in number
+this page tells a reader to budget against.
+
+### Decision: frame, not field
+
+Priced from the **committed frame**, cross-checked against the field
+distribution. That is TRA-1049's arrangement and it applies unchanged.
+
+TRA-1107 raised the objection that there is no stratum for "a file with a
+representative number of near-duplicate symbols", so a frame entry would have to
+be built and frozen first. **That objection is wrong, and dropping it is the
+point of this entry.** `benchmarks/response-tokens/frame.json` has carried a
+`file` stratum since TRA-993 — fifteen indexed non-test `.ts` files under `src/`,
+path-sorted, every Nth, generated on 2026-09-06 and re-checked against the
+repository by `tests/docs/response-token-frame.test.ts`. `get_outline` already
+prices against it. `register_edit`'s argument is a file path. The stratum is the
+right shape and it is already frozen.
+
+Building a duplication-stratified frame entry instead would mean inventing a
+selection rule for "representative number of similarities" — a judgement call
+made after seeing which files are expensive, which is the exact move TRA-985
+showed decides the headline. **The only choice available in this run is which
+committed stratum**, and there is only one whose items are file paths.
+
+The field distribution is the independent check, not the price: it is one
+machine, it carries no build stamp, and it is weighted by which files this
+maintainer happens to edit. It cannot be the published figure for the same
+reason `list_projects`' 4.03x cannot — it prices the laptop.
+
+### Metric
+
+`register_edit` run once per frame `file` item, fifteen calls, collapsed to the
+group mean by the harness's existing `collapseGroups` — mean, because the
+aggregate multiplies it by a call count. Per-item costs retained in
+`docs/perf/response-tokens.json` under `items`, as for every other grouped tool.
+
+### Prediction
+
+Registered before running:
+
+1. The frame mean lands **below 345** — the harness sample sits high by
+   construction and every reading available says so.
+2. The frame mean lands **between 80 and 250** tokens. Most files carry no
+   similarity at all; a minority carry several.
+3. The frame **median** lands **above the field median of 67** and below the
+   frame mean. The frame is uniform over source files; the field is weighted by
+   how often each file is edited, and repeat edits within a session are
+   suppressed by TRA-1098's memo, so the field is pulled toward the bookkeeping
+   floor in a way a one-call-per-file basket is not.
+4. `reduction_pct_incl_overhead` **rises**, because `register_edit` is the
+   largest overhead block and it is being repriced downward.
+
+Prediction 4 is why this is a separate commit from anything that benefits from
+it: the change moves the published all-in figure **in our favour**, which is
+exactly when a frame edit needs to have been registered first.
+
+### Pass bar
+
+There is none, and that is deliberate. This is a re-framing, not a product
+change — nothing ships in it that could make the product faster or cheaper. The
+run passes if the frame basket is the committed one, the per-item spread is
+published rather than summarised to a mean, and the direction of the headline
+move is reported before the number.
+
+### Field cross-check, fixed in advance
+
+`node scripts/field-response-distribution.mjs register_edit`, read before the
+frame run, 710 non-error calls between 2026-04-06 and 2026-09-06:
+
+| min | p25 | median | p75 | p90 | max | mean | n |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 38 | 57 | **67** | 112 | 408 | 712 | 141 | 710 |
+
+Registered at trace-mcp `ea994220`, 7 September 2026.
