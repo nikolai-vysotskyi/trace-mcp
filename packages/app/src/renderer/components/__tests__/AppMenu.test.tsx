@@ -18,6 +18,7 @@ import type { DaemonUpdateState, UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
 
 const openExternal = vi.fn();
+const helpUrl = vi.fn(async () => 'https://github.com/x/y/issues/new?body=prefilled');
 
 function renderMenu(props: Partial<AppMenuProps> = {}) {
   const onAppearanceChange = vi.fn();
@@ -53,7 +54,7 @@ function openMenu(trigger: HTMLElement): HTMLElement {
 
 beforeEach(() => {
   openExternal.mockReset();
-  (window as unknown as { electronAPI: unknown }).electronAPI = { openExternal };
+  (window as unknown as { electronAPI: unknown }).electronAPI = { openExternal, helpUrl };
 });
 
 /* The Language row switches for real — there is no store to fake, which is the
@@ -267,18 +268,41 @@ describe('sidebar app menu', () => {
     expect(document.activeElement?.textContent).toContain('View changelog');
   });
 
-  it('runs the commands and opens the links', () => {
+  it('runs the commands and opens the links', async () => {
     const { trigger, onSettings, onCheckForUpdate } = renderMenu();
     fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /Settings/ }));
     expect(onSettings).toHaveBeenCalled();
 
+    fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /View changelog/ }));
+    await vi.waitFor(() =>
+      expect(openExternal).toHaveBeenCalledWith(
+        'https://github.com/nikolai-vysotskyi/trace-mcp/releases',
+      ),
+    );
+
+    /* TRA-1155: "Get help" is the one link whose destination the main process
+       builds — the issue form, prefilled with this copy's version, platform and
+       update channel. The static URL in the shared list is only the fallback. */
     fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /Get help/ }));
-    expect(openExternal).toHaveBeenCalledWith(
-      'https://github.com/nikolai-vysotskyi/trace-mcp/issues',
+    await vi.waitFor(() =>
+      expect(openExternal).toHaveBeenCalledWith('https://github.com/x/y/issues/new?body=prefilled'),
     );
 
     fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /Check for updates/ }));
     expect(onCheckForUpdate).toHaveBeenCalled();
+  });
+
+  /* In a `vite dev` browser there is no main process to ask, so the link must
+     still go somewhere useful rather than nowhere. */
+  it('falls back to the shared list’s URL when no main process answers', async () => {
+    (window as unknown as { electronAPI: unknown }).electronAPI = { openExternal };
+    const { trigger } = renderMenu();
+    fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /Get help/ }));
+    await vi.waitFor(() =>
+      expect(openExternal).toHaveBeenCalledWith(
+        'https://github.com/nikolai-vysotskyi/trace-mcp/issues/new',
+      ),
+    );
   });
 
   /* TRA-376. "Check for updates…" acts on the app; the two above it leave for

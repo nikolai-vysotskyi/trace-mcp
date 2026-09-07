@@ -31,7 +31,7 @@ const focusedWindow = {
 };
 
 vi.mock('electron', () => ({
-  app: { name: 'trace-mcp', on: vi.fn() },
+  app: { name: 'trace-mcp', on: vi.fn(), getVersion: () => '3.21.0', isPackaged: true },
   BrowserWindow: {
     getFocusedWindow: () => (focusedId === null ? null : focusedWindow),
     getAllWindows: () => [],
@@ -49,6 +49,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../tray', () => ({ showMenuWindow: vi.fn(), refreshTrayMenu: vi.fn() }));
 
+import { shell } from 'electron';
 import { GLOBAL_ACTIONS } from '../../shared/global-actions.js';
 import { startI18n, t } from '../i18n';
 import { buildAppMenu, forgetWindowSections, setWindowSections } from '../menu';
@@ -139,6 +140,19 @@ describe('application menu', () => {
     click(menu('Help'), 'Get help');
     click(menu('Help'), 'View changelog');
     expect(sent).toEqual([]); // neither is an app-command
+  });
+
+  /* TRA-1155: the app has never received a bug report, and "Get help" landing
+     on a list of closed issues is most of the reason. It opens the form, and
+     the form arrives carrying the three facts every app bug has needed. */
+  it('opens "Get help" on a new issue prefilled with this copy’s environment', () => {
+    click(menu('Help'), 'Get help');
+    const [url] = vi.mocked(shell.openExternal).mock.calls.at(-1) as [string];
+    expect(url.startsWith('https://github.com/nikolai-vysotskyi/trace-mcp/issues/new?')).toBe(true);
+    const body = new URL(url).searchParams.get('body') ?? '';
+    expect(body).toContain('App version: 3.21.0');
+    expect(body).toContain(`Platform: ${process.platform} ${process.arch}`);
+    expect(body).toContain('Updates: electron-updater');
   });
 
   it('keeps Edit on plain roles so text fields keep working', () => {
