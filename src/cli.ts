@@ -79,7 +79,7 @@ import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
-import { handleReindexFile } from './daemon/reindex-file-handler.js';
+import { countReindexingProjects, handleReindexFile } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
 // Statically imported (unlike session.ts's own default dynamic import) so
@@ -3222,7 +3222,12 @@ program
         const loaded = projectManager.listProjects();
         return {
           loaded: loaded.length,
-          indexing: loaded.filter((p) => p.status === 'indexing' || p.status === 'starting').length,
+          // TRA-1125: initial-load status alone under-reports. Incremental
+          // reindex runs with the project still marked `ready`, so a busy
+          // daemon logged itself idle — see countReindexingProjects().
+          indexing:
+            loaded.filter((p) => p.status === 'indexing' || p.status === 'starting').length +
+            countReindexingProjects(),
         };
       },
     });

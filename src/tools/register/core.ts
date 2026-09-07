@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { redactEnvFile } from '../../utils/env-parser.js';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
+import { beginReindex } from '../../daemon/reindex-file-handler.js';
 import { getReindexStats } from '../../daemon/reindex-stats.js';
 import { repairIndex, type RepairMode } from '../../db/repair.js';
 import { verifyIndex } from '../../db/verify.js';
@@ -496,6 +497,10 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         progress ?? undefined,
       );
       let result: Awaited<ReturnType<typeof pipeline.indexFiles>>;
+      // TRA-1125: this path reindexes in-process on the daemon's own MCP
+      // server, so it has to show up in `projects_indexing` too — otherwise
+      // the vitals line still calls a busy daemon idle.
+      const endReindex = beginReindex(projectRoot);
       try {
         // Share the reindex lock so a single-file edit cannot race with a
         // running full-project reindex. The two paths mutate the same SQLite
@@ -548,6 +553,8 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           };
         }
         throw e;
+      } finally {
+        endReindex();
       }
 
       // Record in journal so session knows this file was edited
