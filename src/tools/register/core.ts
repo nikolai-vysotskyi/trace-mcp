@@ -427,7 +427,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'register_edit',
-    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh — much lighter than full reindex. Also checks for duplicate symbols — if `_duplication_warnings` appears in the response, you may be recreating existing logic; review the referenced symbols before continuing. Mutates the index; idempotent. Returns JSON: { status, file, totalFiles, indexed, _duplication_warnings? }.',
+    'Notify trace-mcp that a file was edited. Reindexes the single file and invalidates search caches. Call after Edit/Write to keep index fresh — much lighter than full reindex. Also checks symbols this edit introduced — if `_duplication_warnings` appears, you may be recreating existing logic; review them. Pre-existing symbols are not re-reported; `check_duplication` does that. Mutates the index; idempotent. Returns JSON: { status, file, totalFiles, indexed, _duplication_warnings? }.',
     {
       file_path: z.string().min(1).max(512).describe('Relative path to the edited file'),
     },
@@ -487,6 +487,24 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // `get_index_health` reports. Without it, `progress.indexing` kept
       // showing whatever the last watcher batch did — "completed 276/276"
       // right after a 2069-file forced reindex (TRA-231).
+      //
+      // TRA-1098: snapshot the symbol ids the file already had *before* this
+      // edit is indexed. The duplication warning further down only means
+      // something for a symbol the edit just introduced — "you may be
+      // recreating existing logic" is not a statement about a function that
+      // has been sitting in the file untouched for months. Without it the same
+      // warnings were re-emitted on every edit to the file, and they were
+      // 84-87% of the whole response (measured 239-330 of 290-380 tokens).
+      const preEditSymbolIds = new Set<string>();
+      try {
+        const preFile = store.getFile(filePath);
+        if (preFile) {
+          for (const s of store.getSymbolsByFile(preFile.id)) preEditSymbolIds.add(s.symbol_id);
+        }
+      } catch {
+        /* non-fatal — an empty set just reports every warning, as before */
+      }
+
       const pipeline = new IndexingPipeline(
         store,
         registry,
@@ -594,16 +612,23 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         duplicate_file: string;
       }[] = [];
       try {
+        // maxResults caps the list *before* the pre-existing symbols are
+        // filtered out, so it has to be raised — otherwise five stale warnings
+        // crowd out the one new symbol worth reporting. Cut back to 5 after
+        // the filter, which is the number that reaches the caller.
         const dup = checkFileForDuplicates(store, store.db, filePath, {
           threshold: 0.7,
-          maxResults: 5,
+          maxResults: 25,
         });
-        dupWarnings = dup.warnings.map((w) => ({
-          message: `"${w.source_name}" is similar to "${w.duplicate_name}" in ${w.duplicate_file}:${w.duplicate_line ?? '?'}`,
-          score: w.score,
-          duplicate_symbol_id: w.duplicate_symbol_id,
-          duplicate_file: w.duplicate_file,
-        }));
+        dupWarnings = dup.warnings
+          .filter((w) => !preEditSymbolIds.has(w.source_symbol_id))
+          .slice(0, 5)
+          .map((w) => ({
+            message: `"${w.source_name}" is similar to "${w.duplicate_name}" in ${w.duplicate_file}:${w.duplicate_line ?? '?'}`,
+            score: w.score,
+            duplicate_symbol_id: w.duplicate_symbol_id,
+            duplicate_file: w.duplicate_file,
+          }));
       } catch {
         /* non-fatal */
       }

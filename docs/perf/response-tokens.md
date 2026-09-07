@@ -137,28 +137,46 @@ one is the one to plan a budget against.
 describes itself as mutating is left out of the set, so the next one cannot
 quietly start booking savings again.
 
+**TRA-1098 then shaped the larger of the two.** Crediting `register_edit` zero
+made it visible; it did not make it cheaper, and at 345 tokens over 1 289 calls
+it was 445 561 tokens — the single largest block of response spend in the
+product, larger than the excess of all four remaining over-baseline tools
+combined. Measured composition over five files of this repo: 239-330 of the
+290-380 tokens, **84-87%, were `_duplication_warnings`** — and every one of them
+described a symbol that predated the edit. The check ran over every symbol in
+the reindexed file, so editing the same file forty times reported the same five
+pre-existing similarities forty times. "You may be recreating existing logic" is
+only a statement about a symbol the edit just introduced, so that is now the
+only kind reported; `check_duplication` still answers the standing question.
+**345 → 46 tokens per call, −87%**, guarded by
+`tests/tools/register-edit-new-symbols-only.test.ts`, which asserts both halves:
+silence on a pre-existing similarity, and a warning when the edit does introduce
+a duplicate. This is a deletion, not a cap — no argument, no truncation, and the
+warning that mattered is the one that survived.
+
 ### What closing the tail did to the headline
 
 Every column but the last is a frozen literal: it records what that run
 measured, so a later re-measurement cannot rewrite it. Only the last column is
 live.
 
-| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) | TRA-1049 (find_usages framed) |
-|---|---|---|---|---|---|
-| coverage of recorded calls | 88.4% | 97.2% | 97.2% | 97.2% | **97.2%** |
-| net `reduction_pct` | 29.3% | 21.1% | 21.0% | 67.4% | **{{ site.data.response_tokens.reduction_pct }}%** |
-| credited | 35.2% | 32.6% | 31.5% | 68.3% | {{ site.data.response_tokens.credited_reduction_pct }}% |
-| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | 65.8% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
-| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | 5 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
+| | TRA-880 (12 tools) | TRA-945 (24 tools) | TRA-952 (shaped) | TRA-993 (registered frame) | TRA-1049 (find_usages framed) | TRA-1098 (register_edit shaped) |
+|---|---|---|---|---|---|---|
+| coverage of recorded calls | 88.4% | 97.2% | 97.2% | 97.2% | 97.2% | **97.2%** |
+| net `reduction_pct` | 29.3% | 21.1% | 21.0% | 67.4% | 67.7% | **{{ site.data.response_tokens.reduction_pct }}%** |
+| credited | 35.2% | 32.6% | 31.5% | 68.3% | 68.4% | {{ site.data.response_tokens.credited_reduction_pct }}% |
+| all-in, incl. no-baseline overhead | not computed | 19.5% | 19.4% | 65.8% | 66.1% | {{ site.data.response_tokens.reduction_pct_incl_overhead }}% |
+| tools costing more than their baseline | 4 of 12 | 10 of 22 | 8 of 22 | 5 of 22 | 4 of 22 | **{{ site.data.response_tokens.tools_costing_more }} of {{ site.data.response_tokens.tools_with_baseline }}** |
 
 **The TRA-993 column is not an improvement on the one before it.** Nothing in
 the product changed between them that would move a headline 46 points. What
 changed is that `search_text`, `get_outline` and `search` — 76% of the weight —
 stopped being priced from one sample each and started being priced from a
 [registered sampling frame](./prereg-response-tokens.md#registered-sampling-frame-tra-993-registered-2026-09-06-before-the-run).
-Read across that row as *frames*, not builds — with one exception: the TRA-1049
-column is the only step that moved because the product changed, and it is worth
-0.3 points.
+Read across that row as *frames*, not builds — with two exceptions: TRA-1049 and
+TRA-1098 are the only steps that moved because the product changed, worth 0.3 and
+0.5 points respectively. The all-in figure, which is the one to budget against,
+moved 1.8 points on TRA-1098 alone — see below.
 
 The tail was more expensive than the head, in both directions: it contained the
 worst per-call ratios in the product and the calls that should never have been
@@ -363,6 +381,30 @@ but a reader wanting to know what a `find_usages` call costs should read the
 per-item rows in the artifact, or the field median above, and not this page's
 table cell. Every other multi-item tool on this page has the same property; this
 is the first one where the spread is large enough to say so out loud.
+
+## The four tools still over baseline, and why none of them is next (TRA-1098)
+
+With `find_usages` reversed and `register_edit` shaped, the over-baseline list
+is down to four tools carrying **165 recorded calls between them** — against
+1 289 for `register_edit` alone. Each has a recorded decision now, so the next
+run does not re-derive them:
+
+| tool | calls | ratio | decision |
+|---|---:|---:|---|
+| `list_projects` | 15 | 4.03x | **Not portable.** TRA-1026 established the figure moves with how many projects the measuring machine has registered (901 tokens on one, 2 017 here). It prices this laptop, not the tool. |
+| `get_complexity_report` | 80 | 2.27x | **Baseline, not response.** 30 rows of `{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }` is the question the caller asked. 800 tokens is not what deriving those metrics from `Read`/`Grep` would cost, and the tabular redundancy already has an answer in `output_format: "toon"`. |
+| `get_dead_code` | 53 | 2.27x | **Decided in TRA-1026:** a 1 200-token baseline for a whole-repo sweep is not credible, so cutting the tool would buy the ratio by answering less. |
+| `check_claudemd_drift` | 17 | 2.20x | Volume too low to price; same baseline objection. |
+
+Three of the four are baseline problems, and the baseline half is the estimate
+this whole page says is still an estimate. **None of the four is in `minimal`,
+the shipped default surface** — they live in `standard`, `review`, `perf` and
+`architecture`, where a caller has explicitly asked for that analysis. Shaping
+them further would be optimising a number nobody's default session pays.
+
+The honest next move on this metric is not another shaping pass; it is
+measuring the baseline half. Until then, a ratio near 2x on a low-volume
+analysis tool is a statement about `RAW_COST_ESTIMATES`, not about the tool.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 
