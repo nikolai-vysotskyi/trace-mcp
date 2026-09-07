@@ -9,6 +9,7 @@ layout: null
 
 ## Docs
 
+- [Code graph MCP server](https://trace-mcp.com/code-graph-mcp.html): What a code graph MCP server is, how persistent symbol, call and framework relationships reduce agent prompt bloat, and how trace-mcp compares to alternatives.
 - [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources trace-mcp exposes, registered dynamically per detected framework.
 - [Tool index](https://trace-mcp.com/tools-index.html): Alphabetical index of every MCP tool with its one-line description, generated from the server's own registrations.
 - [What `trace init` installs](https://trace-mcp.com/what-trace-init-installs.html): What `trace init` writes to your machine — the guard hook, the opt-in Read/Bash mirrors, the routing block, client config, and the tweakcc tiers — plus how to audit your own startup block.

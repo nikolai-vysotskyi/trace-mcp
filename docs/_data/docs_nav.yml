@@ -1,6 +1,8 @@
 # Footer "See also" nav, rendered by _layouts/default.html.
 # Keep in sync with docs/sitemap.xml — tests/docs/internal-links.test.ts fails
 # if a sitemap page is missing here.
+- title: Code graph MCP
+  url: /code-graph-mcp.html
 - title: Tools reference
   url: /tools-reference.html
 - title: Tool index
