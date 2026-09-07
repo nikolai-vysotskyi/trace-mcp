@@ -31,7 +31,8 @@ tools: 181
 # surfaces get. A plugin add fails CI here with the number to write.
 #
 # README.md / CLAUDE.md / AGENTS.md / skills/ are not Jekyll-rendered, so they
-# keep prose numbers and stay on the ±tolerance guard.
+# keep prose numbers — and since TRA-1086 those numbers must equal the value
+# here exactly, like every other guarded surface. There is no ±tolerance left.
 languages: 81
 frameworks: 87
 
