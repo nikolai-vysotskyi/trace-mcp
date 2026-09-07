@@ -4606,8 +4606,8 @@ Two further limits worth stating plainly:
   arm is capped at an 8,000-token context bundle, and changed-symbol
   readability is {{ site.data.pr_context_bench.trace_changed_symbol_readable }}
   against the naive arm's
-  {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} — a third of
-  changed symbols arrive without their bodies, 98 of 338 across the corpus.
+  {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} — 98 of 338
+  changed symbols across the corpus arrive without their bodies.
   This page said the opposite until 2026-09-07, because the metric counted
   whether the bundle *listed* a symbol rather than whether it carried the body;
   it now scores `detail === 'full'`. That miss is registered against the

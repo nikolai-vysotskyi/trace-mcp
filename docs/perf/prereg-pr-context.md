@@ -162,8 +162,8 @@ one, which is the next thing to do rather than a class to reason about.
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a
 model rather than a metric, came back at parity on the same corpus. Both are
-true, and the gap between them — a third of changed symbols missing without a
-measurable comprehension cost — is the open question, not a resolved one, and
+true, and the gap between them — 98 of 338 changed-symbol bodies missing without
+a measurable comprehension cost — is the open question, not a resolved one, and
 measuring the decomposition named above is the way into it.
 
 Pull requests where the index did not pay off went from 5 to 56 under the
