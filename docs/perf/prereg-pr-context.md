@@ -78,7 +78,7 @@ result would be a result about trace-mcp, not about a guessed baseline. It is
 also the reason this figure, and not the aggregate in
 [prereg-response-tokens](./prereg-response-tokens.md), leads the storefront.
 
-## Verdict — MISSED: primary bar met at 70.5%, quality floor failed at 67%
+## Verdict — MISSED: primary bar met at 72.8%, quality floor failed at 71%
 
 A run that misses any registered bar publishes as MISSED, so that is the verdict
 even though the headline saving cleared its bar comfortably. Which bar failed,
@@ -112,15 +112,14 @@ definition:
 | affected call sites readable | {{ site.data.pr_context_bench.baseline_dependent_readable }} | {{ site.data.pr_context_bench.trace_dependent_readable }} |
 | affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | {{ site.data.pr_context_bench.trace_dependent_pointed }} |
 
-A third of the changed symbols arrive without their bodies (113 of 338 across
-the corpus) — though how much of that is module-level pseudo-symbols, whose
-"body" is an entire file and is exactly what this index exists not to ship,
-versus symbols the 8,000-token budget drops, is **not yet measured**. The
-previously-published 58% call-site readability was the same pointer count; it is
-28% when bodies are required. **The bar was registered as unadjustable and it is
-not being adjusted: this publishes as MISSED.** The token saving is unaffected —
-70.5% is the same number under either definition, because tokens were always
-counted on the assembled text.
+Getting on for a third of the changed symbols arrive without their bodies —
+though how much of that is module-level pseudo-symbols, whose "body" is an
+entire file and is exactly what this index exists not to ship, versus symbols
+the 8,000-token budget drops, is **not yet measured**. The previously-published
+58% call-site readability was the same pointer count. **The bar was registered
+as unadjustable and it is not being adjusted: this publishes as MISSED.** The
+token saving is unaffected by the definition, because tokens were always counted
+on the assembled text.
 
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a
@@ -130,14 +129,34 @@ measurable comprehension cost — is the open question, not a resolved one, and
 measuring the decomposition named above is the way into it.
 
 Pull requests where the index did not pay off went from 5 to 56 under the
-corrected metric — 43 of them classified `truncated`, which is that same
-finding counted per PR rather than per symbol, and 12 costing more than reading
+corrected metric — 42 of them classified `truncated`, which is that same
+finding counted per PR rather than per symbol, and 13 costing more than reading
 the files outright; they are published in
 [`docs/_data/pr_context_bench.json`](../_data/pr_context_bench.json) and on the
 [benchmark page]({{ '/pr-context-benchmark.html' | relative_url }}).
 
+**Re-measured 2026-09-07 (TRA-1141), and both bars moved.** The 70.5% run was
+correct about what the bundle contained; it was also paying for the same bytes
+twice, because a symbol and the container it lives inside were both emitted in
+full. With that duplication removed, and with a member restored whenever the
+container that replaced it turns out not to fit the budget, the same 60 pull
+requests measure **median 72.8%** (13,595 → 3,286 input tokens) and
+**71%** changed-symbol readability against the 67% above.
+
+The floor is still missed — 71% against the baseline's 100% — and the verdict
+above stands. What moved is the direction: the same change that raised the
+saving raised the readability it is measured against, which is the only way this
+bar is worth clearing. Its cost is on the other coverage column: call-site
+readability goes 28% → 22%, because markdown documents, file-level wrappers and
+symbols already inside something else are now listed rather than inlined.
+`dependent_pointed` stays 100%, so every one of them is still named with a
+location. Raising the floor the rest of the way is TRA-1144's job. The
+[loss-class page]({{ '/perf/pr-context-loss-classes/' | relative_url }}) has the
+per-section diagnosis and the head-to-head comprehension check on the 13 pull
+requests the change touched most.
+
 Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
 (`{{ site.data.pr_context_bench.measured_build.commit }}`)** on
-{{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}. That build was
-reconstructed from the run's timestamp — the run did not record it, which is the
+{{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}. The 2026-08-30
+build was reconstructed from the run's timestamp — the run did not record it, which is the
 second thing TRA-920 fixed. Every run from now on stamps its own build.
