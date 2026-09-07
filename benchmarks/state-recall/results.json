@@ -86,16 +86,8 @@
           "prompt_tokens": 4428,
           "api_ms": 9299,
           "calls": 1,
-          "retained": [
-            "recall-01-f5",
-            "recall-01-f6"
-          ],
-          "missed": [
-            "recall-01-f1",
-            "recall-01-f2",
-            "recall-01-f3",
-            "recall-01-f4"
-          ],
+          "retained": ["recall-01-f5", "recall-01-f6"],
+          "missed": ["recall-01-f1", "recall-01-f2", "recall-01-f3", "recall-01-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -202,16 +194,8 @@
           "prompt_tokens": 4461,
           "api_ms": 8425,
           "calls": 1,
-          "retained": [
-            "recall-02-f5",
-            "recall-02-f6"
-          ],
-          "missed": [
-            "recall-02-f1",
-            "recall-02-f2",
-            "recall-02-f3",
-            "recall-02-f4"
-          ],
+          "retained": ["recall-02-f5", "recall-02-f6"],
+          "missed": ["recall-02-f1", "recall-02-f2", "recall-02-f3", "recall-02-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -318,16 +302,8 @@
           "prompt_tokens": 4584,
           "api_ms": 9116,
           "calls": 1,
-          "retained": [
-            "recall-03-f5",
-            "recall-03-f6"
-          ],
-          "missed": [
-            "recall-03-f1",
-            "recall-03-f2",
-            "recall-03-f3",
-            "recall-03-f4"
-          ],
+          "retained": ["recall-03-f5", "recall-03-f6"],
+          "missed": ["recall-03-f1", "recall-03-f2", "recall-03-f3", "recall-03-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -381,9 +357,7 @@
               "survived": false
             }
           ],
-          "retained": [
-            "recall-03-f1"
-          ],
+          "retained": ["recall-03-f1"],
           "missed": [
             "recall-03-f2",
             "recall-03-f3",
@@ -435,16 +409,8 @@
           "prompt_tokens": 4586,
           "api_ms": 7532,
           "calls": 1,
-          "retained": [
-            "recall-04-f5",
-            "recall-04-f6"
-          ],
-          "missed": [
-            "recall-04-f1",
-            "recall-04-f2",
-            "recall-04-f3",
-            "recall-04-f4"
-          ],
+          "retained": ["recall-04-f5", "recall-04-f6"],
+          "missed": ["recall-04-f1", "recall-04-f2", "recall-04-f3", "recall-04-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -551,16 +517,8 @@
           "prompt_tokens": 4662,
           "api_ms": 8353,
           "calls": 1,
-          "retained": [
-            "recall-05-f4",
-            "recall-05-f5",
-            "recall-05-f6"
-          ],
-          "missed": [
-            "recall-05-f1",
-            "recall-05-f2",
-            "recall-05-f3"
-          ],
+          "retained": ["recall-05-f4", "recall-05-f5", "recall-05-f6"],
+          "missed": ["recall-05-f1", "recall-05-f2", "recall-05-f3"],
           "recall": 0.5,
           "passed": false,
           "fabricated": 0,
@@ -667,16 +625,8 @@
           "prompt_tokens": 4688,
           "api_ms": 7391,
           "calls": 1,
-          "retained": [
-            "recall-06-f5",
-            "recall-06-f6"
-          ],
-          "missed": [
-            "recall-06-f1",
-            "recall-06-f2",
-            "recall-06-f3",
-            "recall-06-f4"
-          ],
+          "retained": ["recall-06-f5", "recall-06-f6"],
+          "missed": ["recall-06-f1", "recall-06-f2", "recall-06-f3", "recall-06-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -783,9 +733,7 @@
           "prompt_tokens": 4490,
           "api_ms": 10862,
           "calls": 1,
-          "retained": [
-            "recall-07-f6"
-          ],
+          "retained": ["recall-07-f6"],
           "missed": [
             "recall-07-f1",
             "recall-07-f2",
@@ -899,16 +847,8 @@
           "prompt_tokens": 4691,
           "api_ms": 9118,
           "calls": 1,
-          "retained": [
-            "recall-08-f5",
-            "recall-08-f6"
-          ],
-          "missed": [
-            "recall-08-f1",
-            "recall-08-f2",
-            "recall-08-f3",
-            "recall-08-f4"
-          ],
+          "retained": ["recall-08-f5", "recall-08-f6"],
+          "missed": ["recall-08-f1", "recall-08-f2", "recall-08-f3", "recall-08-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
@@ -1015,16 +955,8 @@
           "prompt_tokens": 4599,
           "api_ms": 10242,
           "calls": 1,
-          "retained": [
-            "recall-09-f4",
-            "recall-09-f5",
-            "recall-09-f6"
-          ],
-          "missed": [
-            "recall-09-f1",
-            "recall-09-f2",
-            "recall-09-f3"
-          ],
+          "retained": ["recall-09-f4", "recall-09-f5", "recall-09-f6"],
+          "missed": ["recall-09-f1", "recall-09-f2", "recall-09-f3"],
           "recall": 0.5,
           "passed": false,
           "fabricated": 0,
@@ -1138,9 +1070,7 @@
             "recall-10-f5",
             "recall-10-f6"
           ],
-          "missed": [
-            "recall-10-f1"
-          ],
+          "missed": ["recall-10-f1"],
           "recall": 0.8333333333333334,
           "passed": false,
           "fabricated": 0,
@@ -1194,16 +1124,8 @@
               "survived": false
             }
           ],
-          "retained": [
-            "recall-10-f2",
-            "recall-10-f3",
-            "recall-10-f4",
-            "recall-10-f5"
-          ],
-          "missed": [
-            "recall-10-f1",
-            "recall-10-f6"
-          ],
+          "retained": ["recall-10-f2", "recall-10-f3", "recall-10-f4", "recall-10-f5"],
+          "missed": ["recall-10-f1", "recall-10-f6"],
           "recall": 0.6666666666666666,
           "passed": false,
           "fabricated": 2,
@@ -1248,16 +1170,8 @@
           "prompt_tokens": 4615,
           "api_ms": 9673,
           "calls": 1,
-          "retained": [
-            "recall-11-f4",
-            "recall-11-f5",
-            "recall-11-f6"
-          ],
-          "missed": [
-            "recall-11-f1",
-            "recall-11-f2",
-            "recall-11-f3"
-          ],
+          "retained": ["recall-11-f4", "recall-11-f5", "recall-11-f6"],
+          "missed": ["recall-11-f1", "recall-11-f2", "recall-11-f3"],
           "recall": 0.5,
           "passed": false,
           "fabricated": 0,
@@ -1364,16 +1278,8 @@
           "prompt_tokens": 4572,
           "api_ms": 12312,
           "calls": 1,
-          "retained": [
-            "recall-12-f3",
-            "recall-12-f4",
-            "recall-12-f5",
-            "recall-12-f6"
-          ],
-          "missed": [
-            "recall-12-f1",
-            "recall-12-f2"
-          ],
+          "retained": ["recall-12-f3", "recall-12-f4", "recall-12-f5", "recall-12-f6"],
+          "missed": ["recall-12-f1", "recall-12-f2"],
           "recall": 0.6666666666666666,
           "passed": false,
           "fabricated": 0,
@@ -1427,16 +1333,8 @@
               "survived": true
             }
           ],
-          "retained": [
-            "recall-12-f5",
-            "recall-12-f6"
-          ],
-          "missed": [
-            "recall-12-f1",
-            "recall-12-f2",
-            "recall-12-f3",
-            "recall-12-f4"
-          ],
+          "retained": ["recall-12-f5", "recall-12-f6"],
+          "missed": ["recall-12-f1", "recall-12-f2", "recall-12-f3", "recall-12-f4"],
           "recall": 0.3333333333333333,
           "passed": false,
           "fabricated": 0,
