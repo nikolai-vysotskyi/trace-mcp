@@ -640,7 +640,7 @@ jobs:
 
       - name: Upload quality gates SARIF
         if: hashFiles('quality-gates.sarif') != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: quality-gates.sarif
           category: trace-mcp-quality-gates
@@ -689,7 +689,7 @@ jobs:
 
       - name: Upload security scan SARIF
         if: hashFiles('security-scan.sarif') != ''
-        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: security-scan.sarif
           category: trace-mcp-security-scan
