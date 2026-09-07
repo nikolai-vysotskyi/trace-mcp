@@ -265,3 +265,125 @@ describe('getContextBundle() — a container and its member ship one copy', () =
     expect(bundle.primary.every((p) => p.source_included)).toBe(true);
   });
 });
+
+/**
+ * Both cases below came out of review of the TRA-1141 change and are the two
+ * ways it was still wrong: `source_included` described what the bundle asked
+ * the assembler for rather than what came back, and containment was only ever
+ * checked in one direction.
+ */
+describe('getContextBundle() — delivery is reported, not requested', () => {
+  const BIG = (marker: string) =>
+    `export function ${marker}() {\n${`  // ${marker} filler line\n`.repeat(60)}  return '${marker}';\n}\n`;
+  const A_SRC = BIG('bigA');
+  const B_SRC = BIG('bigB');
+  const CONTAINER_SRC = [
+    'export class Container {',
+    '  method() {',
+    "    return 'METHOD_BODY_MARKER';",
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    rootPath = createTmpFixture({
+      'src/a.ts': A_SRC,
+      'src/b.ts': B_SRC,
+      'src/container.ts': CONTAINER_SRC,
+    });
+    store = createTestStore();
+    for (const [rel, src, name] of [
+      ['src/a.ts', A_SRC, 'bigA'],
+      ['src/b.ts', B_SRC, 'bigB'],
+    ] as const) {
+      const fileId = store.insertFile(rel, 'typescript', `h-${name}`, src.length);
+      store.insertSymbol(fileId, {
+        symbolId: `${rel}::${name}#function`,
+        name,
+        kind: 'function',
+        fqn: name,
+        byteStart: 0,
+        byteEnd: src.length,
+        lineStart: 1,
+        lineEnd: src.split('\n').length,
+        signature: `function ${name}()`,
+      });
+    }
+    const containerFile = store.insertFile(
+      'src/container.ts',
+      'typescript',
+      'h-container',
+      CONTAINER_SRC.length,
+    );
+    const containerSym = store.insertSymbol(containerFile, {
+      symbolId: 'src/container.ts::Container#class',
+      name: 'Container',
+      kind: 'class',
+      fqn: 'Container',
+      byteStart: 0,
+      byteEnd: CONTAINER_SRC.indexOf('}\n', CONTAINER_SRC.indexOf('  }')) + 1,
+      lineStart: 1,
+      lineEnd: 5,
+      signature: 'class Container',
+    });
+    const methodSym = store.insertSymbol(containerFile, {
+      symbolId: 'src/container.ts::Container.method#method',
+      name: 'method',
+      kind: 'method',
+      fqn: 'Container.method',
+      byteStart: CONTAINER_SRC.indexOf('  method()'),
+      byteEnd: CONTAINER_SRC.indexOf('  }') + 3,
+      lineStart: 2,
+      lineEnd: 4,
+      signature: 'method()',
+    });
+    // The class surfaces as an import dependency of its own method — the shape
+    // that shipped the method's body twice.
+    store.insertEdge(
+      store.getNodeId('symbol', methodSym)!,
+      store.getNodeId('symbol', containerSym)!,
+      'esm_imports',
+      true,
+      undefined,
+      false,
+      'ast_resolved',
+    );
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('reports source_included=false when the budget left room for signatures only', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/a.ts::bigA#function', 'src/b.ts::bigB#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 60,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    expect(bundle.content ?? '').not.toContain('filler line');
+    expect(bundle.primary.some((p) => p.source_included)).toBe(false);
+  });
+
+  it('does not ship a primary twice inside a dependency that contains it', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/container.ts::Container.method#method'],
+      outputFormat: 'markdown',
+      tokenBudget: 8000,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    // The containing class is present as a dependency — the guard is that its
+    // body is not, because it would repeat the primary.
+    expect(bundle.dependencies.map((d) => d.symbol_id)).toContain(
+      'src/container.ts::Container#class',
+    );
+    const content = bundle.content ?? '';
+    expect(content).toContain('METHOD_BODY_MARKER');
+    expect(content.split('METHOD_BODY_MARKER').length - 1).toBe(1);
+  });
+});

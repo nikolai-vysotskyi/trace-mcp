@@ -110,8 +110,14 @@ a wider margin; the 70.5% figure is superseded by a re-measurement, not struck
 as wrong. The [loss-class page]({{ '/perf/pr-context-loss-classes/' |
 relative_url }}) carries the per-section diagnosis, the head-to-head quality
 check on the 13 PRs the change touched most (comprehension identical), and the
-cost: `dependent_readable` falls from a self-reported 58% to a measured 38%,
-eight points of which were the metric counting listed symbols as readable.
+cost: two coverage columns that were self-reported now measure delivery, and
+both fall — `dependent_readable` 58% → 38%, and `changed_symbol_readable`,
+which had read 100% since this benchmark was written, → 50%. Neither is a
+change in what the product serves; both are the metric no longer scoring a
+symbol as readable because the bundle listed it. The saving itself counts what
+the two arms actually sent and is unaffected. The shortfall it exposes — the
+bundle's budget falling back to a signature when the changed symbol is larger
+than its share — is TRA-1144.
 
 Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
 (`{{ site.data.pr_context_bench.measured_build.commit }}`)** on

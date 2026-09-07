@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-07T12:31:22.360Z",
+  "generated_at": "2026-09-07T13:27:55.939Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "696f2434",
+    "commit": "1d1097b9",
     "dirty": true
   },
   "model_for_pricing": "claude-sonnet-4-5",
@@ -96,12 +96,12 @@
     "baseline_overflow_rate": 0,
     "trace_overflow_rate": 0,
     "baseline_changed_symbol_readable": 1,
-    "trace_changed_symbol_readable": 1,
+    "trace_changed_symbol_readable": 0.5,
     "baseline_dependent_readable": 0.2,
-    "trace_dependent_readable": 0.375,
+    "trace_dependent_readable": 0.2,
     "baseline_dependent_pointed": 0.2,
     "trace_dependent_pointed": 1,
-    "median_index_ms": 249
+    "median_index_ms": 301.5
   },
   "losses": [
     {
@@ -259,7 +259,7 @@
       "trace_changed_symbol_readable": 1
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/axios/axios/pull/11094",
       "changed_files": 6,
       "changed_symbols": 14,
@@ -267,10 +267,10 @@
       "trace_tokens": 6757,
       "savings_pct": 38.348540145985396,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.9285714285714286
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/axios/axios/pull/11087",
       "changed_files": 5,
       "changed_symbols": 15,
@@ -278,10 +278,10 @@
       "trace_tokens": 6087,
       "savings_pct": 43.366207666542614,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.9333333333333333
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/axios/axios/pull/11121",
       "changed_files": 8,
       "changed_symbols": 21,
@@ -289,10 +289,10 @@
       "trace_tokens": 10108,
       "savings_pct": 43.73504035624826,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.23809523809523808
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/sindresorhus/got/pull/2380",
       "changed_files": 2,
       "changed_symbols": 4,
@@ -300,10 +300,10 @@
       "trace_tokens": 7612,
       "savings_pct": 45.48839873961615,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.25
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/sindresorhus/got/pull/2458",
       "changed_files": 4,
       "changed_symbols": 8,
@@ -311,10 +311,10 @@
       "trace_tokens": 7150,
       "savings_pct": 45.9398155148949,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.75
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/honojs/hono/pull/5268",
       "changed_files": 2,
       "changed_symbols": 4,
@@ -322,10 +322,10 @@
       "trace_tokens": 5147,
       "savings_pct": 46.228583368157125,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.75
     },
     {
-      "reason": "marginal",
+      "reason": "truncated",
       "url": "https://github.com/axios/axios/pull/11172",
       "changed_files": 8,
       "changed_symbols": 20,
@@ -333,7 +333,392 @@
       "trace_tokens": 15741,
       "savings_pct": 49.78627025647569,
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 1
+      "trace_changed_symbol_readable": 0.25
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2388",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "baseline_tokens": 12598,
+      "trace_tokens": 6145,
+      "savings_pct": 51.22241625654866,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.25
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/6806",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "baseline_tokens": 6017,
+      "trace_tokens": 2402,
+      "savings_pct": 60.07977397374107,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2391",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "baseline_tokens": 9670,
+      "trace_tokens": 3213,
+      "savings_pct": 66.77352637021716,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2367",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 6604,
+      "trace_tokens": 1969,
+      "savings_pct": 70.1847365233192,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7425",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "baseline_tokens": 9160,
+      "trace_tokens": 2663,
+      "savings_pct": 70.92794759825327,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.3333333333333333
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2399",
+      "changed_files": 3,
+      "changed_symbols": 5,
+      "baseline_tokens": 11384,
+      "trace_tokens": 3186,
+      "savings_pct": 72.01335207308503,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.4
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7431",
+      "changed_files": 3,
+      "changed_symbols": 7,
+      "baseline_tokens": 18827,
+      "trace_tokens": 4489,
+      "savings_pct": 76.15658362989323,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.7142857142857143
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/pallets/flask/pull/5620",
+      "changed_files": 10,
+      "changed_symbols": 27,
+      "baseline_tokens": 44519,
+      "trace_tokens": 10600,
+      "savings_pct": 76.18994137334622,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.4074074074074074
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/pallets/flask/pull/5808",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "baseline_tokens": 8617,
+      "trace_tokens": 1871,
+      "savings_pct": 78.28710688174539,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5283",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "baseline_tokens": 19517,
+      "trace_tokens": 3215,
+      "savings_pct": 83.52718143157247,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.75
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7433",
+      "changed_files": 2,
+      "changed_symbols": 7,
+      "baseline_tokens": 34845,
+      "trace_tokens": 5602,
+      "savings_pct": 83.92308796097001,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.2857142857142857
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5244",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 18133,
+      "trace_tokens": 2793,
+      "savings_pct": 84.59714332984062,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5282",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 9829,
+      "trace_tokens": 1488,
+      "savings_pct": 84.86112524163191,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/expressjs/express/pull/4893",
+      "changed_files": 3,
+      "changed_symbols": 6,
+      "baseline_tokens": 51767,
+      "trace_tokens": 7464,
+      "savings_pct": 85.58154809048236,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.16666666666666666
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5288",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 9886,
+      "trace_tokens": 1422,
+      "savings_pct": 85.61602265830467,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5236",
+      "changed_files": 4,
+      "changed_symbols": 9,
+      "baseline_tokens": 44246,
+      "trace_tokens": 6234,
+      "savings_pct": 85.91059078786782,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.7777777777777778
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2470",
+      "changed_files": 2,
+      "changed_symbols": 6,
+      "baseline_tokens": 32118,
+      "trace_tokens": 4508,
+      "savings_pct": 85.9642568030388,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5291",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 19866,
+      "trace_tokens": 2677,
+      "savings_pct": 86.52471559448304,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5202",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 17078,
+      "trace_tokens": 2272,
+      "savings_pct": 86.69633446539407,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5280",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 18190,
+      "trace_tokens": 2374,
+      "savings_pct": 86.94887300714679,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/honojs/hono/pull/5215",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 17101,
+      "trace_tokens": 2169,
+      "savings_pct": 87.31653119700601,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/pallets/flask/pull/6096",
+      "changed_files": 4,
+      "changed_symbols": 10,
+      "baseline_tokens": 32753,
+      "trace_tokens": 4148,
+      "savings_pct": 87.33551125087779,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2471",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "baseline_tokens": 31642,
+      "trace_tokens": 3761,
+      "savings_pct": 88.11389924783516,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/axios/axios/pull/11096",
+      "changed_files": 8,
+      "changed_symbols": 13,
+      "baseline_tokens": 70417,
+      "trace_tokens": 8048,
+      "savings_pct": 88.57094167601574,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.46153846153846156
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2454",
+      "changed_files": 3,
+      "changed_symbols": 5,
+      "baseline_tokens": 55721,
+      "trace_tokens": 5678,
+      "savings_pct": 89.80994598086897,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.2
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/pallets/flask/pull/5917",
+      "changed_files": 7,
+      "changed_symbols": 26,
+      "baseline_tokens": 64258,
+      "trace_tokens": 6451,
+      "savings_pct": 89.96078309315571,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.34615384615384615
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/6963",
+      "changed_files": 2,
+      "changed_symbols": 9,
+      "baseline_tokens": 16057,
+      "trace_tokens": 1416,
+      "savings_pct": 91.1814162047705,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7502",
+      "changed_files": 2,
+      "changed_symbols": 8,
+      "baseline_tokens": 34807,
+      "trace_tokens": 2859,
+      "savings_pct": 91.78613497285029,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.25
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7395",
+      "changed_files": 2,
+      "changed_symbols": 6,
+      "baseline_tokens": 30835,
+      "trace_tokens": 1665,
+      "savings_pct": 94.60029187611481,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2362",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "baseline_tokens": 18777,
+      "trace_tokens": 776,
+      "savings_pct": 95.86728444373436,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.3333333333333333
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/sindresorhus/got/pull/2266",
+      "changed_files": 1,
+      "changed_symbols": 1,
+      "baseline_tokens": 9655,
+      "trace_tokens": 329,
+      "savings_pct": 96.59243915069912,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/expressjs/express/pull/5555",
+      "changed_files": 3,
+      "changed_symbols": 3,
+      "baseline_tokens": 46454,
+      "trace_tokens": 1550,
+      "savings_pct": 96.66336591036294,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.3333333333333333
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/axios/axios/pull/11119",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "baseline_tokens": 24348,
+      "trace_tokens": 349,
+      "savings_pct": 98.56661738130443,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/expressjs/express/pull/7390",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "baseline_tokens": 43097,
+      "trace_tokens": 547,
+      "savings_pct": 98.73077012321043,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7371",
+      "changed_files": 1,
+      "changed_symbols": 4,
+      "baseline_tokens": 25197,
+      "trace_tokens": 282,
+      "savings_pct": 98.88081914513633,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0
     }
   ],
   "rows": [
@@ -352,12 +737,12 @@
       },
       "trace": {
         "tokens": 2677,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.25,
+        "changed_symbol_readable": 0.5,
+        "dependent_readable": 0.125,
         "dependent_pointed": 1
       },
       "savings_pct": 86.52471559448304,
-      "index_ms": 372
+      "index_ms": 375
     },
     {
       "repo": "honojs/hono",
@@ -374,12 +759,12 @@
       },
       "trace": {
         "tokens": 3215,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.3333333333333333,
+        "changed_symbol_readable": 0.75,
+        "dependent_readable": 0.2222222222222222,
         "dependent_pointed": 1
       },
       "savings_pct": 83.52718143157247,
-      "index_ms": 249
+      "index_ms": 244
     },
     {
       "repo": "honojs/hono",
@@ -401,7 +786,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -5.830246416492189,
-      "index_ms": 522
+      "index_ms": 544
     },
     {
       "repo": "honojs/hono",
@@ -418,12 +803,12 @@
       },
       "trace": {
         "tokens": 1422,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.25,
         "dependent_pointed": 1
       },
       "savings_pct": 85.61602265830467,
-      "index_ms": 518
+      "index_ms": 514
     },
     {
       "repo": "honojs/hono",
@@ -440,12 +825,12 @@
       },
       "trace": {
         "tokens": 5147,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.2894736842105263,
+        "changed_symbol_readable": 0.75,
+        "dependent_readable": 0.18421052631578946,
         "dependent_pointed": 1
       },
       "savings_pct": 46.228583368157125,
-      "index_ms": 349
+      "index_ms": 348
     },
     {
       "repo": "honojs/hono",
@@ -462,12 +847,12 @@
       },
       "trace": {
         "tokens": 2169,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 87.31653119700601,
-      "index_ms": 383
+      "index_ms": 399
     },
     {
       "repo": "honojs/hono",
@@ -484,12 +869,12 @@
       },
       "trace": {
         "tokens": 6234,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.7777777777777778,
         "dependent_readable": 0.5,
         "dependent_pointed": 1
       },
       "savings_pct": 85.91059078786782,
-      "index_ms": 289
+      "index_ms": 315
     },
     {
       "repo": "honojs/hono",
@@ -506,12 +891,12 @@
       },
       "trace": {
         "tokens": 1488,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.25,
         "dependent_pointed": 1
       },
       "savings_pct": 84.86112524163191,
-      "index_ms": 402
+      "index_ms": 441
     },
     {
       "repo": "honojs/hono",
@@ -528,12 +913,12 @@
       },
       "trace": {
         "tokens": 2793,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 84.59714332984062,
-      "index_ms": 498
+      "index_ms": 529
     },
     {
       "repo": "honojs/hono",
@@ -550,12 +935,12 @@
       },
       "trace": {
         "tokens": 2272,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 86.69633446539407,
-      "index_ms": 249
+      "index_ms": 260
     },
     {
       "repo": "honojs/hono",
@@ -577,7 +962,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 23.947998631542937,
-      "index_ms": 280
+      "index_ms": 284
     },
     {
       "repo": "honojs/hono",
@@ -594,12 +979,12 @@
       },
       "trace": {
         "tokens": 2374,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 86.94887300714679,
-      "index_ms": 481
+      "index_ms": 479
     },
     {
       "repo": "axios/axios",
@@ -616,12 +1001,12 @@
       },
       "trace": {
         "tokens": 15741,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.5,
+        "changed_symbol_readable": 0.25,
+        "dependent_readable": 0.25,
         "dependent_pointed": 1
       },
       "savings_pct": 49.78627025647569,
-      "index_ms": 413
+      "index_ms": 446
     },
     {
       "repo": "axios/axios",
@@ -643,7 +1028,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -7.096592509152351,
-      "index_ms": 652
+      "index_ms": 790
     },
     {
       "repo": "axios/axios",
@@ -660,12 +1045,12 @@
       },
       "trace": {
         "tokens": 349,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 1,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": 98.56661738130443,
-      "index_ms": 265
+      "index_ms": 320
     },
     {
       "repo": "axios/axios",
@@ -682,12 +1067,12 @@
       },
       "trace": {
         "tokens": 8048,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.5263157894736842,
+        "changed_symbol_readable": 0.46153846153846156,
+        "dependent_readable": 0.42105263157894735,
         "dependent_pointed": 1
       },
       "savings_pct": 88.57094167601574,
-      "index_ms": 276
+      "index_ms": 318
     },
     {
       "repo": "axios/axios",
@@ -704,12 +1089,12 @@
       },
       "trace": {
         "tokens": 6087,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.9333333333333333,
         "dependent_readable": 1,
         "dependent_pointed": 1
       },
       "savings_pct": 43.366207666542614,
-      "index_ms": 274
+      "index_ms": 309
     },
     {
       "repo": "axios/axios",
@@ -726,12 +1111,12 @@
       },
       "trace": {
         "tokens": 10108,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.8,
+        "changed_symbol_readable": 0.23809523809523808,
+        "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 43.73504035624826,
-      "index_ms": 306
+      "index_ms": 312
     },
     {
       "repo": "axios/axios",
@@ -748,12 +1133,12 @@
       },
       "trace": {
         "tokens": 6757,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.9285714285714286,
         "dependent_readable": 0.375,
         "dependent_pointed": 1
       },
       "savings_pct": 38.348540145985396,
-      "index_ms": 268
+      "index_ms": 298
     },
     {
       "repo": "axios/axios",
@@ -775,7 +1160,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -11.152416356877323,
-      "index_ms": 119
+      "index_ms": 136
     },
     {
       "repo": "axios/axios",
@@ -797,7 +1182,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -19.302615193026153,
-      "index_ms": 312
+      "index_ms": 338
     },
     {
       "repo": "axios/axios",
@@ -815,11 +1200,11 @@
       "trace": {
         "tokens": 1832,
         "changed_symbol_readable": 1,
-        "dependent_readable": 0.3333333333333333,
+        "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": -7.259953161592506,
-      "index_ms": 238
+      "index_ms": 250
     },
     {
       "repo": "axios/axios",
@@ -837,11 +1222,11 @@
       "trace": {
         "tokens": 3002,
         "changed_symbol_readable": 1,
-        "dependent_readable": 0.5,
+        "dependent_readable": 0.375,
         "dependent_pointed": 1
       },
       "savings_pct": -8.610709117221418,
-      "index_ms": 121
+      "index_ms": 142
     },
     {
       "repo": "axios/axios",
@@ -863,7 +1248,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -1.4583333333333333,
-      "index_ms": 277
+      "index_ms": 293
     },
     {
       "repo": "expressjs/express",
@@ -880,12 +1265,12 @@
       },
       "trace": {
         "tokens": 547,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 1,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": 98.73077012321043,
-      "index_ms": 112
+      "index_ms": 199
     },
     {
       "repo": "expressjs/express",
@@ -907,7 +1292,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -0.36994877632327827,
-      "index_ms": 56
+      "index_ms": 82
     },
     {
       "repo": "expressjs/express",
@@ -924,12 +1309,12 @@
       },
       "trace": {
         "tokens": 1550,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.3333333333333333,
         "dependent_readable": null,
         "dependent_pointed": null
       },
       "savings_pct": 96.66336591036294,
-      "index_ms": 204
+      "index_ms": 673
     },
     {
       "repo": "expressjs/express",
@@ -946,12 +1331,12 @@
       },
       "trace": {
         "tokens": 7464,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.16666666666666666,
         "dependent_readable": null,
         "dependent_pointed": null
       },
       "savings_pct": 85.58154809048236,
-      "index_ms": 182
+      "index_ms": 359
     },
     {
       "repo": "expressjs/express",
@@ -973,7 +1358,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -2.2663769015833592,
-      "index_ms": 81
+      "index_ms": 198
     },
     {
       "repo": "expressjs/express",
@@ -995,7 +1380,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -2.278401997503121,
-      "index_ms": 61
+      "index_ms": 115
     },
     {
       "repo": "expressjs/express",
@@ -1017,7 +1402,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -0.4242965609647164,
-      "index_ms": 55
+      "index_ms": 125
     },
     {
       "repo": "expressjs/express",
@@ -1039,7 +1424,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -2.987861811391223,
-      "index_ms": 75
+      "index_ms": 184
     },
     {
       "repo": "psf/requests",
@@ -1056,12 +1441,12 @@
       },
       "trace": {
         "tokens": 2402,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.7333333333333333,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.3333333333333333,
         "dependent_pointed": 1
       },
       "savings_pct": 60.07977397374107,
-      "index_ms": 210
+      "index_ms": 497
     },
     {
       "repo": "psf/requests",
@@ -1083,7 +1468,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 74.23511531090993,
-      "index_ms": 157
+      "index_ms": 284
     },
     {
       "repo": "psf/requests",
@@ -1100,12 +1485,12 @@
       },
       "trace": {
         "tokens": 4489,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.48484848484848486,
+        "changed_symbol_readable": 0.7142857142857143,
+        "dependent_readable": 0.24242424242424243,
         "dependent_pointed": 1
       },
       "savings_pct": 76.15658362989323,
-      "index_ms": 222
+      "index_ms": 464
     },
     {
       "repo": "psf/requests",
@@ -1122,12 +1507,12 @@
       },
       "trace": {
         "tokens": 1416,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.4,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.2,
         "dependent_pointed": 1
       },
       "savings_pct": 91.1814162047705,
-      "index_ms": 222
+      "index_ms": 532
     },
     {
       "repo": "psf/requests",
@@ -1144,12 +1529,12 @@
       },
       "trace": {
         "tokens": 2859,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.3157894736842105,
+        "changed_symbol_readable": 0.25,
+        "dependent_readable": 0.13157894736842105,
         "dependent_pointed": 1
       },
       "savings_pct": 91.78613497285029,
-      "index_ms": 275
+      "index_ms": 487
     },
     {
       "repo": "psf/requests",
@@ -1166,12 +1551,12 @@
       },
       "trace": {
         "tokens": 2663,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.625,
+        "changed_symbol_readable": 0.3333333333333333,
+        "dependent_readable": 0.125,
         "dependent_pointed": 1
       },
       "savings_pct": 70.92794759825327,
-      "index_ms": 746
+      "index_ms": 349
     },
     {
       "repo": "psf/requests",
@@ -1188,12 +1573,12 @@
       },
       "trace": {
         "tokens": 1665,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.7894736842105263,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.05263157894736842,
         "dependent_pointed": 1
       },
       "savings_pct": 94.60029187611481,
-      "index_ms": 275
+      "index_ms": 199
     },
     {
       "repo": "psf/requests",
@@ -1210,12 +1595,12 @@
       },
       "trace": {
         "tokens": 282,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 1,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": 98.88081914513633,
-      "index_ms": 188
+      "index_ms": 179
     },
     {
       "repo": "psf/requests",
@@ -1232,12 +1617,12 @@
       },
       "trace": {
         "tokens": 5602,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.55,
+        "changed_symbol_readable": 0.2857142857142857,
+        "dependent_readable": 0.35,
         "dependent_pointed": 1
       },
       "savings_pct": 83.92308796097001,
-      "index_ms": 243
+      "index_ms": 283
     },
     {
       "repo": "psf/requests",
@@ -1259,7 +1644,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 57.01519213583557,
-      "index_ms": 225
+      "index_ms": 319
     },
     {
       "repo": "pallets/flask",
@@ -1276,12 +1661,12 @@
       },
       "trace": {
         "tokens": 4148,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.2127659574468085,
+        "changed_symbol_readable": 0.5,
+        "dependent_readable": 0.10638297872340426,
         "dependent_pointed": 1
       },
       "savings_pct": 87.33551125087779,
-      "index_ms": 453
+      "index_ms": 1570
     },
     {
       "repo": "pallets/flask",
@@ -1298,12 +1683,12 @@
       },
       "trace": {
         "tokens": 6451,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.33962264150943394,
+        "changed_symbol_readable": 0.34615384615384615,
+        "dependent_readable": 0.11320754716981132,
         "dependent_pointed": 1
       },
       "savings_pct": 89.96078309315571,
-      "index_ms": 305
+      "index_ms": 442
     },
     {
       "repo": "pallets/flask",
@@ -1320,12 +1705,12 @@
       },
       "trace": {
         "tokens": 1871,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.1276595744680851,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.0425531914893617,
         "dependent_pointed": 1
       },
       "savings_pct": 78.28710688174539,
-      "index_ms": 339
+      "index_ms": 522
     },
     {
       "repo": "pallets/flask",
@@ -1343,11 +1728,11 @@
       "trace": {
         "tokens": 1613,
         "changed_symbol_readable": 1,
-        "dependent_readable": 0.14285714285714285,
+        "dependent_readable": 0.047619047619047616,
         "dependent_pointed": 1
       },
       "savings_pct": 92.07020303819871,
-      "index_ms": 114
+      "index_ms": 167
     },
     {
       "repo": "pallets/flask",
@@ -1364,12 +1749,12 @@
       },
       "trace": {
         "tokens": 10600,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.3391304347826087,
+        "changed_symbol_readable": 0.4074074074074074,
+        "dependent_readable": 0.12173913043478261,
         "dependent_pointed": 1
       },
       "savings_pct": 76.18994137334622,
-      "index_ms": 255
+      "index_ms": 442
     },
     {
       "repo": "pallets/flask",
@@ -1391,7 +1776,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 62.13356843729336,
-      "index_ms": 90
+      "index_ms": 137
     },
     {
       "repo": "sindresorhus/got",
@@ -1408,12 +1793,12 @@
       },
       "trace": {
         "tokens": 4508,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.2631578947368421,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.13157894736842105,
         "dependent_pointed": 1
       },
       "savings_pct": 85.9642568030388,
-      "index_ms": 554
+      "index_ms": 909
     },
     {
       "repo": "sindresorhus/got",
@@ -1430,12 +1815,12 @@
       },
       "trace": {
         "tokens": 3761,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.3170731707317073,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.12195121951219512,
         "dependent_pointed": 1
       },
       "savings_pct": 88.11389924783516,
-      "index_ms": 244
+      "index_ms": 243
     },
     {
       "repo": "sindresorhus/got",
@@ -1452,12 +1837,12 @@
       },
       "trace": {
         "tokens": 7150,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.19736842105263158,
+        "changed_symbol_readable": 0.75,
+        "dependent_readable": 0.14473684210526316,
         "dependent_pointed": 1
       },
       "savings_pct": 45.9398155148949,
-      "index_ms": 335
+      "index_ms": 275
     },
     {
       "repo": "sindresorhus/got",
@@ -1474,12 +1859,12 @@
       },
       "trace": {
         "tokens": 5678,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.2972972972972973,
+        "changed_symbol_readable": 0.2,
+        "dependent_readable": 0.10810810810810811,
         "dependent_pointed": 1
       },
       "savings_pct": 89.80994598086897,
-      "index_ms": 72
+      "index_ms": 55
     },
     {
       "repo": "sindresorhus/got",
@@ -1496,12 +1881,12 @@
       },
       "trace": {
         "tokens": 3186,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.4,
         "dependent_readable": 0.25,
         "dependent_pointed": 1
       },
       "savings_pct": 72.01335207308503,
-      "index_ms": 288
+      "index_ms": 238
     },
     {
       "repo": "sindresorhus/got",
@@ -1518,12 +1903,12 @@
       },
       "trace": {
         "tokens": 6145,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.35294117647058826,
+        "changed_symbol_readable": 0.25,
+        "dependent_readable": 0.23529411764705882,
         "dependent_pointed": 1
       },
       "savings_pct": 51.22241625654866,
-      "index_ms": 95
+      "index_ms": 141
     },
     {
       "repo": "sindresorhus/got",
@@ -1540,12 +1925,12 @@
       },
       "trace": {
         "tokens": 3213,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.37142857142857144,
+        "changed_symbol_readable": 0,
+        "dependent_readable": 0.22857142857142856,
         "dependent_pointed": 1
       },
       "savings_pct": 66.77352637021716,
-      "index_ms": 77
+      "index_ms": 101
     },
     {
       "repo": "sindresorhus/got",
@@ -1562,12 +1947,12 @@
       },
       "trace": {
         "tokens": 7612,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 0.40540540540540543,
+        "changed_symbol_readable": 0.25,
+        "dependent_readable": 0.21621621621621623,
         "dependent_pointed": 1
       },
       "savings_pct": 45.48839873961615,
-      "index_ms": 88
+      "index_ms": 117
     },
     {
       "repo": "sindresorhus/got",
@@ -1585,11 +1970,11 @@
       "trace": {
         "tokens": 4559,
         "changed_symbol_readable": 1,
-        "dependent_readable": 0.10638297872340426,
+        "dependent_readable": 0.0425531914893617,
         "dependent_pointed": 1
       },
       "savings_pct": -62.357549857549856,
-      "index_ms": 92
+      "index_ms": 105
     },
     {
       "repo": "sindresorhus/got",
@@ -1606,12 +1991,12 @@
       },
       "trace": {
         "tokens": 776,
-        "changed_symbol_readable": 1,
-        "dependent_readable": 1,
+        "changed_symbol_readable": 0.3333333333333333,
+        "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": 95.86728444373436,
-      "index_ms": 138
+      "index_ms": 305
     },
     {
       "repo": "sindresorhus/got",
@@ -1628,12 +2013,12 @@
       },
       "trace": {
         "tokens": 1969,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0.5,
         "dependent_readable": 0,
         "dependent_pointed": 1
       },
       "savings_pct": 70.1847365233192,
-      "index_ms": 120
+      "index_ms": 169
     },
     {
       "repo": "sindresorhus/got",
@@ -1650,12 +2035,12 @@
       },
       "trace": {
         "tokens": 329,
-        "changed_symbol_readable": 1,
+        "changed_symbol_readable": 0,
         "dependent_readable": null,
         "dependent_pointed": null
       },
       "savings_pct": 96.59243915069912,
-      "index_ms": 232
+      "index_ms": 285
     }
   ]
 }

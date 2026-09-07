@@ -131,15 +131,38 @@ function toContextItemCached(
  * entry stays in the reported symbol list, just without a second copy of the
  * source. Equal spans keep the earlier entry.
  */
-function isContainedInAnother(entries: Array<{ sym: SymbolRow }>, i: number): boolean {
+function containerIndexOf(entries: Array<{ sym: SymbolRow }>, i: number): number {
   const e = entries[i].sym;
-  if (e.byte_start == null || e.byte_end == null) return false;
-  return entries.some(({ sym: o }, j) => {
+  if (e.byte_start == null || e.byte_end == null) return -1;
+  return entries.findIndex(({ sym: o }, j) => {
     if (j === i || o.file_id !== e.file_id) return false;
     if (o.byte_start == null || o.byte_end == null) return false;
     if (o.byte_start > e.byte_start || o.byte_end < e.byte_end) return false;
     const sameSpan = o.byte_start === e.byte_start && o.byte_end === e.byte_end;
     return sameSpan ? j < i : true;
+  });
+}
+
+function isContainedInAnother(entries: Array<{ sym: SymbolRow }>, i: number): boolean {
+  return containerIndexOf(entries, i) >= 0;
+}
+
+/**
+ * The mirror of the rule above, for the direction it does not cover: a class
+ * that surfaces as a *dependency* of its own method, while that method is the
+ * primary, contains the primary rather than being contained by it — so nothing
+ * above catches it and both bodies ship. Found in review of this change.
+ *
+ * The primary wins, always: it is what the caller asked for and it is assembled
+ * at the highest priority, so downgrading it on the strength of a lower-priority
+ * entry that the budget may yet truncate would risk losing it outright.
+ */
+function containsAny(sym: SymbolRow, others: Array<{ sym: SymbolRow }>): boolean {
+  if (sym.byte_start == null || sym.byte_end == null) return false;
+  return others.some(({ sym: o }) => {
+    if (o.file_id !== sym.file_id || o.symbol_id === sym.symbol_id) return false;
+    if (o.byte_start == null || o.byte_end == null) return false;
+    return sym.byte_start <= o.byte_start && sym.byte_end >= o.byte_end;
   });
 }
 
@@ -309,9 +332,10 @@ export function getContextBundle(
 
   // Primary symbols get full source, unless an enclosing primary already
   // carries their bytes (TRA-1141) — then the container alone is emitted.
+  const primaryContainer = primarySymbols.map((_, i) => containerIndexOf(primarySymbols, i));
   const primaryItems: ContextItem[] = primarySymbols
     .map((p, i) =>
-      isContainedInAnother(primarySymbols, i)
+      primaryContainer[i] >= 0
         ? null
         : toContextItemCached(p.sym, p.file, fileCache, 1.0 - i * 0.01, false),
     )
@@ -336,7 +360,8 @@ export function getContextBundle(
     i >= MAX_FULL_SOURCE_DEPS ||
     e.file.language === 'markdown' ||
     isWholeFile(e.sym, e.file) ||
-    isContainedInAnother(emitted, unionOffset + i);
+    isContainedInAnother(emitted, unionOffset + i) ||
+    containsAny(e.sym, primarySymbols);
   const depSignatureOnly = depSymbols.map((d, i) => signatureOnly(d, i, primarySymbols.length));
   const callerSignatureOnly = callerSymbols.map((c, i) =>
     signatureOnly(c, i, primarySymbols.length + depSymbols.length),
@@ -356,16 +381,38 @@ export function getContextBundle(
     totalBudget: budget,
   });
 
+  // What `source_included` reports has to be what the assembler produced, not
+  // what this function asked it for: the budget independently downgrades an
+  // item to its signature or drops it. Reporting the request would be the same
+  // "listed, therefore readable" lie TRA-1090 found in changed_symbol_readable,
+  // one level deeper — caught in review of this change.
+  const delivered = new Set(
+    [...assembled.primary, ...assembled.dependencies, ...assembled.callers]
+      .filter((item) => item.detail === 'full')
+      .map((item) => item.id),
+  );
+  // A primary dropped as contained ships its bytes inside the enclosing primary
+  // that replaced it — so it is delivered exactly when that container is.
+  const primaryDelivered = (i: number): boolean => {
+    // Containers nest, so walk up to the one actually emitted. `containerIndexOf`
+    // never returns a cycle (an entry is only contained in a strictly larger
+    // span, or in an earlier entry of the same span), but the hop count is
+    // bounded anyway.
+    let at = i;
+    for (let hops = 0; primaryContainer[at] >= 0 && hops <= primarySymbols.length; hops++) {
+      at = primaryContainer[at];
+    }
+    return delivered.has(primarySymbols[at].sym.symbol_id);
+  };
+
   const result: ContextBundleResult = {
-    // A primary dropped as contained still ships its bytes — inside the
-    // enclosing primary that replaced it — so it reports source_included.
-    primary: primarySymbols.map((p) => toBundleItem(p.sym, p.file, true)),
+    primary: primarySymbols.map((p, i) => toBundleItem(p.sym, p.file, primaryDelivered(i))),
     dependencies: depSymbols
       .slice(0, assembled.dependencies.length)
-      .map((d, i) => toBundleItem(d.sym, d.file, !depSignatureOnly[i])),
+      .map((d) => toBundleItem(d.sym, d.file, delivered.has(d.sym.symbol_id))),
     callers: callerSymbols
       .slice(0, assembled.callers.length)
-      .map((c, i) => toBundleItem(c.sym, c.file, !callerSignatureOnly[i])),
+      .map((c) => toBundleItem(c.sym, c.file, delivered.has(c.sym.symbol_id))),
     totalTokens: assembled.totalTokens,
     truncated: assembled.truncated,
   };

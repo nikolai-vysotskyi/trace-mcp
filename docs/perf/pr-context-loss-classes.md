@@ -249,3 +249,41 @@ Eight of those twenty points were the metric; twelve are real — bodies the new
 rules moved into the pointer list. `dependent_pointed` stays 100%: every
 dependent is still named with a location the agent can fetch. That trade is the
 change's actual cost, and it belongs next to the 75.2%, not underneath it.
+
+## And the finding that costs the most: half the changed bodies never shipped
+
+Review of that first fix found the field was still lying — `source_included`
+described what the bundle *asked* the assembler for, not what the assembler
+returned, and the assembler independently drops an item to its signature when
+its share of the token budget will not hold the body. Deriving the field from
+the assembled output instead moved the number that had read 100% since the
+benchmark was written:
+
+| 60 PRs, trace arm | before | after |
+|---|---:|---:|
+| changed_symbol_readable (median) | 100% | **50%** |
+| PRs delivering every changed symbol's body | — | **18 of 60** |
+| PRs delivering none of them | — | **11 of 60** |
+| PRs where the index did not pay off | 21 | **56** — 42 truncated, 13 costlier, 1 marginal |
+
+Nothing about what the product serves changed between those two columns. This
+is the same defect as the one at the top of this page, one level deeper: the
+budget was truncating changed-symbol bodies all along and the metric recorded
+a span whenever the bundle listed the symbol.
+
+The mechanism is visible in the extremes. `axios#11119` edits a line of
+`README.md`; the changed symbol is the whole 24,000-token document, it cannot
+fit the primary category's share of an 8,000-token budget, and what shipped was
+its first line. `psf/requests#7371` fixes a typo in a comment inside a 30,000-
+token test module; what shipped was `module tests/test_requests.py`. Both are
+counted in the 75.2% median saving, and in both the saving is partly the cost
+of not sending the code — 349 tokens against 24,348, and 282 against 25,197.
+
+**This does not retract the token figure**, which counts what the arms actually
+sent and is unchanged by the metric fix, and it does not contradict the
+comprehension parity measured in TRA-568 — that judgement was made on these
+same prompts. It does say the bundle needs a better answer than a signature
+when the changed symbol is larger than its budget: the sub-symbols the diff
+actually touched, or the hunks' surroundings, rather than the container's first
+line. That is TRA-1144, filed from this run, and it is now measurable because
+the metric finally moves when it happens.
