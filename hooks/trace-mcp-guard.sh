@@ -432,30 +432,70 @@ project_hash_of() {
 # miss (i.e. the broken case, which currently does no useful work at all) pays
 # for the walk, one hash per level.
 #
-# First sentinel wins rather than the freshest: staleness is the next section's
-# job, and it reports a stale ancestor far more usefully than the "not running"
-# this whole block exists to stop being wrong about.
+# A shared ancestor is never accepted as a root, however fresh its sentinel.
+# `startHeartbeat` (src/server/server.ts) writes one for whatever cwd it was
+# handed, with no `isDangerousProjectRoot` gate — that check only guards daemon
+# project registration — so a server started from `/` or from `$HOME` leaves a
+# live sentinel there. Such a directory sits on the walk of EVERY path below it,
+# so honouring it would make the guard claim a live server for the whole machine
+# and force-deny Read/Grep with nothing behind it: worse than the bug this block
+# fixes, because it takes the agent's fallback away too. A live `/` sentinel was
+# on the maintainer's machine while this was written (TRA-37) and the test suite
+# caught it immediately; `$HOME` was found in review and reproduces the same way.
 #
-# `/` is never accepted as a root, however fresh its sentinel. A registry row
-# for `/` is a known pathology, not a project (TRA-37), and it sits on the walk
-# of EVERY path — so honouring it would make the guard claim a live server for
-# every directory on the machine, turning this fix into a permanent false
-# positive that denies Read/Grep with nothing behind it. One such sentinel was
-# live on the maintainer's machine while this was written, and the test suite
-# caught it there.
+# Mirrors the POSIX half of isDangerousProjectRoot (src/dangerous-root.ts). The
+# Windows half is deliberately absent: this is the POSIX guard, and Windows
+# agents run trace-mcp-guard.cmd, which has no sentinel logic at all.
+# ponytail: two copies of one policy, so they can drift — a bash hook cannot
+# import the TS module; unify only if a third reader ever appears.
+is_shared_ancestor() {
+  [[ "$1" == "/" || "$1" == "$HOME" || "$1" == "${TMP_HOME%/}" ]] && return 0
+  case "$1" in
+    /Users|/home|/root|/System|/Library|/private|/tmp|/private/tmp|/var|/etc) return 0 ;;
+    /bin|/sbin|/usr|/opt|/dev|/Volumes|/Applications|/Network|/cores|/proc|/sys) return 0 ;;
+  esac
+  return 1
+}
+
+# A FRESH sentinel stops the walk; a stale one is only remembered and stepped
+# past. Stopping on the first match either way re-admits the very bug this block
+# fixes: a package once opened as its own project keeps a sentinel, and once
+# that goes stale it would mask the live one at the monorepo root a level up —
+# reported as "heartbeat stale", never as the working session it is. The nearest
+# stale match is still used when nothing fresher exists, so the staleness reason
+# below stays reachable and keeps its diagnostic value.
 # ponytail: bounded at 40 levels; deepen only if a real tree ever nests further.
+STALE_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALE_SEC:-30}
+sentinel_for() {
+  if [[ -e "$STATUS_HOME/trace-mcp-alive-$1" ]]; then
+    echo "$STATUS_HOME/trace-mcp-alive-$1"
+  elif [[ -e "$TMP_HOME/trace-mcp-alive-$1" ]]; then
+    echo "$TMP_HOME/trace-mcp-alive-$1"
+  fi
+}
+
 PROJECT_ROOT="$(pwd)"
 PROJECT_HASH=$(project_hash_of "$PROJECT_ROOT")
 if [[ -n "$PROJECT_HASH" ]]; then
   probe_dir="$PROJECT_ROOT"
   probe_hash="$PROJECT_HASH"
   probe_depth=0
+  stale_dir=""
+  stale_hash=""
+  now_epoch=$(date +%s)
   while (( probe_depth < 40 )); do
-    if [[ "$probe_dir" != "/" ]] &&
-       [[ -e "$STATUS_HOME/trace-mcp-alive-${probe_hash}" || -e "$TMP_HOME/trace-mcp-alive-${probe_hash}" ]]; then
-      PROJECT_ROOT="$probe_dir"
-      PROJECT_HASH="$probe_hash"
-      break
+    if ! is_shared_ancestor "$probe_dir"; then
+      probe_sentinel=$(sentinel_for "$probe_hash")
+      if [[ -n "$probe_sentinel" ]]; then
+        if (( now_epoch - $(file_mtime "$probe_sentinel") <= STALE_THRESHOLD_SEC )); then
+          PROJECT_ROOT="$probe_dir"
+          PROJECT_HASH="$probe_hash"
+          stale_dir=""
+          break
+        fi
+        # Nearest stale match only — an older one further up is no better.
+        [[ -n "$stale_dir" ]] || { stale_dir="$probe_dir"; stale_hash="$probe_hash"; }
+      fi
     fi
     [[ "$probe_dir" == "/" ]] && break
     probe_dir=$(dirname "$probe_dir")
@@ -463,6 +503,10 @@ if [[ -n "$PROJECT_HASH" ]]; then
     [[ -n "$probe_hash" ]] || break
     probe_depth=$((probe_depth + 1))
   done
+  if [[ -n "$stale_dir" ]]; then
+    PROJECT_ROOT="$stale_dir"
+    PROJECT_HASH="$stale_hash"
+  fi
 fi
 
 # Whichever of the two was touched most recently, so a sentinel left behind by a
@@ -516,7 +560,8 @@ mkdir -p "$READS_DIR" 2>/dev/null || true
 
 # Tunables
 REPEAT_READ_LIMIT=${TRACE_MCP_GUARD_REPEAT_LIMIT:-3}
-STALE_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALE_SEC:-30}
+# STALE_THRESHOLD_SEC is set with the project-root walk above, which needs it to
+# tell a live ancestor from a leftover one.
 # Stall detection: if status JSON shows last_successful_tool_call_at is older
 # than this AND tool_calls_total > 0, MCP channel is considered stalled.
 STALL_THRESHOLD_SEC=${TRACE_MCP_GUARD_STALL_SEC:-300}
