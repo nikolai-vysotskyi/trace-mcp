@@ -2616,7 +2616,7 @@ updated: 2026-09-06
       <div class="definition reveal">
         <div class="def-text">
           <h3>What the agent queries <span class="em">instead of your files.</span></h3>
-          <p><strong>Computed once</strong> &mdash; every symbol, every edge, across {{ site.data.counts.languages }} languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
+          <p><strong>Computed once</strong> &mdash; every symbol, every edge, across {{ site.data.counts.languages }} languages in one directed graph. The agent queries it instead of rediscovering it each turn. See <a href="/code-graph-mcp.html">how a code graph MCP server works</a>.</p>
           <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. {{ site.data.counts.frameworks }} integrations capture edges the agent would otherwise reconstruct from raw files.</p>
           <p><strong>Compiler-grade where it matters</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for call resolution that survives across calls.</p>
           <p><strong>Reused, not rebuilt</strong> &mdash; 300ms file-watcher debounce and content-hashed incremental reindex keep the graph fresh without redoing finished work.</p>
