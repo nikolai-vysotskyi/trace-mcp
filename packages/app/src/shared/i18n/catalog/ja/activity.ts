@@ -13,6 +13,7 @@ export const activity = {
   window1h: '1時間',
   window6h: '6時間',
   window24h: '24時間',
+  recordingStarted: '記録開始: {{when}}',
 
   feedLive: 'ライブ',
   feedIdle: '待機中',
