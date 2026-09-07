@@ -69,6 +69,7 @@ Rules for keeping it honest:
 | [wong2/awesome-mcp-servers](https://github.com/wong2/awesome-mcp-servers) | **No** | — | **Not a separate door.** Its README refuses PRs outright and redirects to `mcpservers.org/submit` — the same form as the mcpservers.org row above. Treat the two as one channel | 2026-08-29 |
 | [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | **No** — checked their live catalog API (`api.cline.bot/v1/mcp/marketplace`, 199 entries), not a web search | — | Closest thing to an open door left. Open an issue on `cline/mcp-marketplace` with their `mcp-server-submission` template: repo URL, a **400×400 PNG** logo, reason for addition. `llms-install.md` is optional — their FAQ says a well-written README is usually enough (there is no crawler; Cline itself reads the README at install time). Their step 3 also asks the submitter to confirm they have watched Cline set the server up from the README alone. The logo is now in-repo at `docs/icon-400x400.png`. No account or payment — but that step-3 checkbox is **required**, so this is not an agent-alone submission; see "Next door to try" | 2026-08-29 |
 | [Docker MCP Catalog](https://github.com/docker/mcp-registry) | **No** — listed all 328 entries of `servers/` via the GitHub contents API | — | **Blocked on an artifact we don't have.** Both paths need something trace-mcp isn't: "Local" wants a Dockerfile in our repo, "Remote" wants a reachable streamable-http/SSE endpoint. A plain npm/stdio package qualifies for neither. Adding a Dockerfile is a product decision, not a listings one — don't smuggle it in as distribution work | 2026-08-29 |
+| [Homebrew `homebrew-core`](https://github.com/Homebrew/homebrew-core) | **No — closed to a self-submission on two counts, both measured 2026-09-07** | — | An install path, not a listing, so the arrivals objection does not apply — but it is shut. (1) **Notability**: `docs/Package-Acceptance-Policy.md` asks 75★ / 30 forks / 30 watchers from a third-party submitter and **225★ / 90 forks / 90 watchers when the repository owner submits it himself**. We are at 161★ / 19 forks / 4 watchers, so we clear the third-party bar today and are 64 stars short of our own. (2) **Native dependencies, and this one does not expire with stars**: `homebrew/core` requires build-from-source or platform-independent output, and `std_npm_args` builds native addons from source. `better-sqlite3` (node-gyp) and `@parcel/watcher` (`install: build-from-source.js`) can do that; `@ast-grep/napi` and `oxc-resolver` cannot — both are napi-rs crates whose npm tarball carries no Rust source at all, only `optionalDependencies` on per-platform packages containing a prebuilt `.node`. Same four native deps are the one real cost named in the `mcp-servers-nix` row, so this is one product constraint closing two OS package managers, not two listing problems. Also worth knowing before anyone tries: `std_npm_args` runs npm with scripts ignored, so all three of our `postinstall` steps — including `postinstall-control-plane.mjs`, which writes `~/.trace/launcher.env`, the `trace` shim and the launchd plist — would not run, and a brew install would produce a CLI without the control plane. Re-check only if the napi deps gain a source build; stars alone do not open it | 2026-09-07 |
 | Continue.dev Hub | — | — | **Dead product, not a gap.** Continue was acquired by Cursor (June 2026), the final release shipped 2026-06-19, cloud data was deleted after 2026-07-15, `hub.continue.dev` no longer resolves. The GitHub repo is **not** archived and is still public — do not describe it as read-only — but it has shipped nothing since (last commit 2026-07-21). Re-check only if Cursor stands a successor up | 2026-08-29 |
 | [LobeHub](https://lobehub.com/mcp) | **No** — the `trace-mcp` listing there is `Mnehmos/trace-mcp`, an unrelated project with the same name | — | Publishing is `npx @lobehub/market-cli`, and it requires `lhm login` (browser OIDC) plus `lhm github connect` (browser ownership check). There is no token-only path: verified in `@lobehub/market-cli@0.0.41` itself, because their docs pages under `lobehub.com/docs/market/*` are content-free stubs. `plugin publish` and `plugin claim` both go through `createUserSDK()`, which aborts with "Not logged in. Run `lhm login` first" unless a user OAuth token is on disk; the `MARKET_CLIENT_ID`/`MARKET_CLIENT_SECRET` env pair is never used for publishing. Human-only, like Smithery | 2026-08-29 |
 | [skillsllm.com](https://skillsllm.com/skill/trace-mcp) | **Yes** — found while checking it as a "roundup" (see below); it is a directory, and we were already in it | Accurate and live: 177 tools / 81 languages / 102 stars, matching `docs/_data/counts.yml` on the day it was read. Passed their Semgrep + dependency scan | Nothing to submit. Their `/about` says a scraper "searches GitHub daily for repositories containing SKILL.md files or tagged with relevant topics like `claude-code`, `ai-agent`, `mcp-server`" — we carry all three, so the topics row below is what put us here and what keeps the numbers current. A `/submit` form and a paid "Featured Listing" also exist; neither is needed | 2026-09-02 |
@@ -1175,3 +1176,47 @@ abstention on a stale index, which is TRA-1075 and TRA-852 solved as architectur
 and `narumiruna/pi-extensions#1204`. No replies, nothing owed by us, no pings due.
 `hashgraph-online/awesome-ai-plugins#182` merged 2026-08-31 without the scanner
 action; the issue text describing it as open is stale.
+
+### The "fifteen hosts are the doors" reading was wrong, and what is left when it goes (2026-09-07, second pass)
+
+The section above ended by calling `tracedecay`'s fifteen `install --agent` targets
+"the address list this ledger exists to produce". Read at source, they are not
+addresses. `tracedecay install --agent claude|codex|cursor|gemini|hermes|…`
+writes the host's own config, plugin or rules file on the user's machine; the
+other two install routes in that README are `curl … install.sh` from their own
+releases and **their own** scoop bucket (`ScriptedAlchemy/scoop-bucket`). Every
+one of those surfaces belongs to them or to the user. Nobody merged anything,
+and there is nothing for us to submit.
+
+So the correct reading of that competitor is stronger, not weaker: an author with
+real reach in our exact category spends his distribution effort on **surfaces he
+controls**, and the third-party channel count is zero — not "fifteen doors we
+haven't knocked on". Ours is the mirror image: `trace init` already writes host
+configs, and the one genuinely third-party install channel we have asked for is
+`mcp-servers-nix` (TRA-1012). That row and this one are the whole class.
+
+**The class was worth checking properly, so Homebrew got a real pass** (row in
+the table above). Result: closed, on two independent counts, and the second one
+is the interesting one. Notability is a matter of time — 161★ against the 225★
+that Homebrew asks when the repository owner submits his own package, versus the
+75★ it asks from anyone else. The blocker that does not expire is that
+`@ast-grep/napi` and `oxc-resolver` publish no Rust source to npm, only prebuilt
+per-platform `.node` files, and `homebrew/core` wants build-from-source or
+platform-independent output. The same four native dependencies are what made the
+Nix package an ask rather than a PR. One product constraint, two package
+managers, and it will be three the next time this class comes up — which is the
+kind of thing worth knowing before a run spends itself writing a formula that
+CI would reject.
+
+**Threads, all checked 2026-09-07, all silent, nothing owed by us:**
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`,
+`tolkonepiu/best-of-mcp-servers#384`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`. No pings are due on any
+of them before 2026-09-19 at the earliest. `sosalejandro/atlas#105` had our reply
+of 2026-09-06 and no answer since; nothing is owed there either — the exchange
+already paid (TRA-1075). The HOL ownership-claim reminder on
+`awesome-ai-plugins#182` stands unanswered by decision, not by oversight: it is a
+sign-in-and-authorize flow on a third-party site in exchange for a badge, which is
+the same trade we refused on their scanner action. If a second reminder arrives,
+the answer is still nothing.
