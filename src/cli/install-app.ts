@@ -122,7 +122,7 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<str
         reject(new Error('Too many redirects'));
         return;
       }
-      const mod = targetUrl.startsWith('https') ? https : (http as unknown as typeof https);
+      const mod = targetUrl.startsWith('https') ? https : http;
       mod
         .get(targetUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
           if ((res.statusCode === 302 || res.statusCode === 301) && res.headers.location) {

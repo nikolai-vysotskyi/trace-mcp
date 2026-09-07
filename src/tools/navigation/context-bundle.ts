@@ -55,10 +55,11 @@ class FileReadCache {
     let buf = this.cache.get(file.id);
     if (buf === undefined) {
       try {
-        // TRA-1090: this was a bare `require('node:fs')`. The shipped build has
-        // a createRequire banner so it worked there, but every ESM-source
-        // consumer (tests, benchmarks) threw ReferenceError into the catch
-        // below and got a bundle with no source at all — silently.
+        // TRA-1090: this was a bare `require('node:fs')`. It worked in the
+        // shipped build (createRequire banner) and under vitest (which defines
+        // `require` in every module it transforms), but any real-ESM consumer —
+        // the benchmarks under tsx, `pnpm serve` — threw ReferenceError into
+        // the catch below and got a bundle with no source at all, silently.
         const absPath = path.resolve(this.rootPath, file.path);
         buf = fs.readFileSync(absPath);
       } catch {
