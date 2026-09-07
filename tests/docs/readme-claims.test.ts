@@ -643,7 +643,7 @@ describe('docs site numeric claims (TRA-174)', () => {
   const QUALITY = JSON.parse(
     readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_quality.json'), 'utf-8'),
   ) as Record<string, unknown>;
-  const QUOTES_THE_SAVING = ['README.md', 'docs/comparisons.md'];
+  const QUOTES_THE_SAVING = ['README.md', 'docs/comparisons.md', 'docs/code-graph-mcp.md'];
 
   /** One-line surfaces cannot carry four numbers, so they carry the verdict
    *  instead — the same phrase the live GitHub repo description already runs.
