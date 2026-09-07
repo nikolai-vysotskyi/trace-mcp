@@ -3097,6 +3097,11 @@ trace setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on c
   --global                 # Install globally
   --uninstall              # Remove hook
 
+# What trace-mcp gave back (local, measured — see docs/perf/response-tokens.md)
+trace savings              # Input tokens this install got back, and what that is worth
+  --json                   # Output as JSON
+                           # Also printed by `trace doctor`.
+
 # Analytics (see docs/analytics.md)
 trace analytics sync       # Parse session logs into analytics DB
   --full                   # Force full rescan
@@ -6623,3 +6628,32 @@ cannot disagree with the artifact it summarises, and
 typed back into the page. This is the same defect class as TRA-762 (README
 quoting synthetic benchmark numbers as measured) and TRA-880 (the counter
 publishing arithmetic as measurement), in the one place that documents both.
+
+## Your own install: `trace savings` (TRA-1091)
+
+This page is one benchmark run on one repository. The same corrected counter
+also keeps a per-install tally, and `trace savings` (also printed by
+`trace doctor`, served at `GET /api/savings`, and shown on the desktop app's
+Savings screen) is where you read it. Everything those surfaces print comes from
+`src/savings-report.ts` — one implementation, so no surface can drift back into
+the arithmetic TRA-880 disproved.
+
+Three properties it carries, and why:
+
+- **Measured calls only.** `savings.json` gained a `measured` block that is
+  incremented only when a response was actually counted. The old
+  `total_tokens_saved` — which on any store written before this includes the
+  `calls x constant` guess — is never read. An install upgrading from an older
+  build therefore starts from "not enough data", not from an inflated total.
+- **A floor.** Dollars are priced at the cheapest current Claude input rate, so
+  the figure understates for everyone on a larger model. The baseline half is
+  still `RAW_COST_ESTIMATES`, i.e. an estimate, which is why the wording is
+  "at least" and why this page is linked from every surface that prints it.
+- **It says "not enough data" rather than showing a zero.** Below 25 measured
+  calls there is no figure at all.
+
+**It is not expressed as a share of a weekly limit**, which is the obvious thing
+to want. Anthropic does not publish the Claude Code weekly limit in tokens, so
+any percentage would need a denominator we invented — the exact move that
+produced the number TRA-880 had to retract. Tokens and a floor price are what we
+can source.

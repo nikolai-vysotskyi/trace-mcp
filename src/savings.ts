@@ -164,12 +164,36 @@ export interface ToolLatencyState {
   totalErrors: number;
 }
 
+/**
+ * The subset of activity scored against a real response-token count.
+ *
+ * {@link SavingsTracker.recordCall} has to run before the tool does, so it books
+ * `rawCost x COMPRESSION_RATIO` — the `calls x constant` arithmetic TRA-880
+ * disproved. Only {@link SavingsTracker.recordActualTokens} /
+ * {@link SavingsTracker.recordFailedCall} replace that guess with a measurement.
+ * This block counts only what went through them, so a number shown to a user
+ * can be sourced to measurement and never to the guess or to any total carried
+ * over from a store written before the correction landed.
+ */
+export interface MeasuredSavings {
+  calls: number;
+  tokens_saved: number;
+  raw_tokens: number;
+  actual_tokens: number;
+}
+
+export function emptyMeasured(): MeasuredSavings {
+  return { calls: 0, tokens_saved: 0, raw_tokens: 0, actual_tokens: 0 };
+}
+
 export interface SessionStats {
   started_at: string;
   total_calls: number;
   total_tokens_saved: number;
   total_raw_tokens: number;
   total_actual_tokens: number;
+  /** Measured-only slice of the above — the only half fit to show a user. */
+  measured: MeasuredSavings;
   per_tool: Record<string, ToolCallRecord>;
 }
 
@@ -181,6 +205,12 @@ export interface PersistentSavings {
   sessions: number;
   first_session: string;
   last_session: string;
+  /**
+   * Absent in stores written before TRA-1091. Absent means "none of these
+   * totals were measured", not zero savings — user-facing surfaces say so
+   * rather than printing a 0.
+   */
+  measured?: MeasuredSavings;
   per_project: Record<
     string,
     {
@@ -207,12 +237,27 @@ export interface LatencySink {
 export class SavingsTracker {
   private session: SessionStats;
   private projectRoot: string;
-  private flushed = false;
+  /**
+   * What {@link flush} has already written. Flushing is a delta, not a
+   * one-shot: a daemon session can run for days, and a savings figure that
+   * only reaches disk at shutdown is a figure `trace savings` and the desktop
+   * app read stale (TRA-1091). Repeated flushes are safe and idempotent when
+   * nothing changed.
+   */
+  private flushed = {
+    calls: 0,
+    tokens_saved: 0,
+    raw_tokens: 0,
+    measured: emptyMeasured(),
+    sessionCounted: false,
+  };
   /** Per-tool latency state. Kept separate from per_tool savings so tokens-related logic
    *  doesn't have to deal with timing concerns. */
   private latency: Record<string, ToolLatencyState> = {};
   /** Optional persistent sink for cross-session analysis. Only attached when telemetry is on. */
   private sink: LatencySink | null = null;
+  /** Per-tool counterpart of {@link flushed}. */
+  private flushedPerTool: Record<string, { calls: number; tokens_saved: number }> = {};
 
   constructor(projectRoot: string, sink: LatencySink | null = null) {
     this.projectRoot = projectRoot;
@@ -223,6 +268,7 @@ export class SavingsTracker {
       total_tokens_saved: 0,
       total_raw_tokens: 0,
       total_actual_tokens: 0,
+      measured: emptyMeasured(),
       per_tool: {},
     };
   }
@@ -263,6 +309,12 @@ export class SavingsTracker {
     this.session.total_actual_tokens += actualTokens - assumed;
     this.session.total_tokens_saved += deltaSaved;
     rec.tokens_saved += deltaSaved;
+
+    const m = this.session.measured;
+    m.calls += 1;
+    m.raw_tokens += rawCost;
+    m.tokens_saved += saved;
+    m.actual_tokens += actualTokens;
   }
 
   /** Record a tool call with an optional actual response token count */
@@ -345,10 +397,15 @@ export class SavingsTracker {
     };
   }
 
-  /** Flush session stats to persistent file. Call on shutdown. Idempotent. */
+  /**
+   * Write everything recorded since the last flush to the persistent file.
+   * Safe to call repeatedly (periodically and again on shutdown) — each call
+   * writes only the delta, and the session counter increments once.
+   */
   flush(): void {
-    if (this.flushed || this.session.total_calls === 0) return;
-    this.flushed = true;
+    const f = this.flushed;
+    const deltaCalls = this.session.total_calls - f.calls;
+    if (deltaCalls === 0 && this.session.total_tokens_saved === f.tokens_saved) return;
 
     try {
       ensureGlobalDirs();
@@ -367,27 +424,42 @@ export class SavingsTracker {
         per_tool: {},
       };
 
-      merged.total_tokens_saved += this.session.total_tokens_saved;
-      merged.total_raw_tokens += this.session.total_raw_tokens;
-      merged.total_calls += this.session.total_calls;
-      merged.sessions++;
+      merged.total_tokens_saved += this.session.total_tokens_saved - f.tokens_saved;
+      merged.total_raw_tokens += this.session.total_raw_tokens - f.raw_tokens;
+      merged.total_calls += deltaCalls;
+      if (!f.sessionCounted) merged.sessions++;
       merged.last_session = now;
+
+      const mm = (merged.measured ??= emptyMeasured());
+      mm.calls += this.session.measured.calls - f.measured.calls;
+      mm.raw_tokens += this.session.measured.raw_tokens - f.measured.raw_tokens;
+      mm.tokens_saved += this.session.measured.tokens_saved - f.measured.tokens_saved;
+      mm.actual_tokens += this.session.measured.actual_tokens - f.measured.actual_tokens;
 
       // Per-project
       const projKey = this.projectRoot;
       const proj = (merged.per_project[projKey] ??= { tokens_saved: 0, calls: 0, last_used: now });
-      proj.tokens_saved += this.session.total_tokens_saved;
-      proj.calls += this.session.total_calls;
+      proj.tokens_saved += this.session.total_tokens_saved - f.tokens_saved;
+      proj.calls += deltaCalls;
       proj.last_used = now;
 
-      // Per-tool
+      // Per-tool: same delta discipline, tracked in `flushedPerTool`.
       for (const [tool, rec] of Object.entries(this.session.per_tool)) {
+        const prev = this.flushedPerTool[tool] ?? { calls: 0, tokens_saved: 0 };
         const t = (merged.per_tool[tool] ??= { calls: 0, tokens_saved: 0 });
-        t.calls += rec.calls;
-        t.tokens_saved += rec.tokens_saved;
+        t.calls += rec.calls - prev.calls;
+        t.tokens_saved += rec.tokens_saved - prev.tokens_saved;
+        this.flushedPerTool[tool] = { calls: rec.calls, tokens_saved: rec.tokens_saved };
       }
 
       savePersistentSavings(merged);
+      this.flushed = {
+        calls: this.session.total_calls,
+        tokens_saved: this.session.total_tokens_saved,
+        raw_tokens: this.session.total_raw_tokens,
+        measured: { ...this.session.measured },
+        sessionCounted: true,
+      };
       logger.debug(
         { calls: this.session.total_calls, saved: this.session.total_tokens_saved },
         'Session savings flushed',
