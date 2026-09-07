@@ -67,6 +67,13 @@ export function _resetYieldCountForTests(): void {
  * the wait a pending health check sees is bounded by the largest single unit
  * rather than by their sum. Total throughput is unchanged — they were sharing
  * one thread either way — only the interleaving is.
+ *
+ * The chain is one unscoped process-wide queue, which is what makes it work:
+ * scoping it per project would restore the stacking it exists to prevent. The
+ * cost is shared fate — a new caller from an unrelated subsystem (MCP request
+ * handlers, LSP enrichment, the subproject scanner) queues behind indexing and
+ * indexing queues behind it. Only adopt it for work that is already CPU-bound
+ * on the main thread, and never for anything that awaits I/O inside its unit.
  */
 let fairChain: Promise<void> = Promise.resolve();
 

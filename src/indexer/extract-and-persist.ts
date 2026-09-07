@@ -243,6 +243,10 @@ export async function extractAndPersist(
         // own bounds that window at negligible cost.
         await runInOwnTurn(() => persister.persistBatch(extractions));
         result.indexed += extractions.length;
+      } else {
+        // Nothing to persist, but the batch still did work — keep the
+        // once-per-batch boundary the old unconditional yield gave.
+        await yieldToEventLoopFair();
       }
 
       // Bound in-process content residency to one batch: Pass 2

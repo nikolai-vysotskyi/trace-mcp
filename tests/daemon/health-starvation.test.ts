@@ -19,6 +19,12 @@
  * These two tests guard the two halves of that: the primitive
  * (`runInOwnTurn`) under synthetic load, and real indexing of several projects
  * at once.
+ *
+ * The primitive test is the sharp one — it fails on any regression in the
+ * fairness chain itself. The real-load test is coarser by construction: the
+ * pipeline yields at several points, so breaking one of them can be masked by
+ * the others on a small corpus. It is here to catch the wiring coming undone
+ * wholesale, not to localise which yield was lost.
  */
 import fs from 'node:fs';
 import os from 'node:os';

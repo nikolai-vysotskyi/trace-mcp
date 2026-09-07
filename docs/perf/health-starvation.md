@@ -1,3 +1,11 @@
+---
+layout: default
+title: /health starvation during indexing
+permalink: /perf/health-starvation/
+description: Internal working document. Why the trace-mcp daemon stopped answering /health while indexing, and what bounds it now.
+noindex: true
+---
+
 # /health starvation during indexing (TRA-1127)
 
 Measured 2026-09-07 on an M-series MacBook Pro, Node 22, `trace-mcp` at

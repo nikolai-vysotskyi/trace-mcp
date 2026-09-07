@@ -929,6 +929,10 @@ export class IndexingPipeline {
     // only processed once it finished — i.e. this phase starves the event loop
     // and /health. Yield before the first (heaviest, cross-file) resolver pass
     // so the loop can service a health check between extraction and resolution.
+    // Not wrapped in runInOwnTurn: resolveEdges is async, so only its first
+    // synchronous span is covered by the yield. That is enough while every
+    // FrameworkPlugin.resolveEdges is synchronous (plugin-api/types.ts); a
+    // plugin that genuinely awaits I/O would need its own boundary.
     await yieldToEventLoopFair();
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
