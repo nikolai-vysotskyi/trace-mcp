@@ -23,6 +23,8 @@
   url: /vs/codegraphcontext.html
 - title: vs SocratiCode
   url: /vs/socraticode.html
+- title: vs jCodeMunch
+  url: /vs/jcodemunch.html
 - title: vs Context Mode
   url: /vs/context-mode.html
 - title: vs code-review-graph

@@ -67,6 +67,7 @@ const FOREIGN_PREFIXES = [
   'docs/tool-enforcement.md', // SDL-MCP
   'docs/tool-output-contract.md', // SDL-MCP
   'benchmarks/cross-repo-l1/', // Roam-Code
+  'src/jcodemunch_mcp/', // jCodeMunch
 ];
 
 /**
