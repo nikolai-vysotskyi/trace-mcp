@@ -115,34 +115,47 @@ describe('real indexing load: many projects at once', () => {
   });
 
   afterAll(() => {
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   });
 
-  function makePipeline(root: string, dbName: string): IndexingPipeline {
+  /** The DB handle comes back with the pipeline because `dispose()` does not
+   *  close it — in the daemon that is the caller's job, and a test that skips
+   *  it leaves ten open SQLite files per arm. POSIX unlinks them anyway;
+   *  Windows fails the whole suite with `EBUSY ... unlink conc.db`. */
+  function makePipeline(
+    root: string,
+    dbName: string,
+  ): { pipeline: IndexingPipeline; close: () => void } {
     const db = initializeDatabase(path.join(root, dbName));
-    return new IndexingPipeline(
-      new Store(db),
-      PluginRegistry.createWithDefaults(),
-      TraceMcpConfigSchema.parse({ root }),
-      root,
-    );
+    return {
+      pipeline: new IndexingPipeline(
+        new Store(db),
+        PluginRegistry.createWithDefaults(),
+        TraceMcpConfigSchema.parse({ root }),
+        root,
+      ),
+      close: () => db.close(),
+    };
   }
 
   async function delayIndexing(
     dbName: string,
     mode: 'concurrent' | 'sequential',
   ): Promise<{ max: number; p99: number }> {
-    const pipelines = roots.map((r) => makePipeline(r, dbName));
+    const made = roots.map((r) => makePipeline(r, dbName));
     try {
       return await loopDelayDuring(async () => {
         if (mode === 'concurrent') {
-          await Promise.all(pipelines.map((p) => p.indexAll(false)));
+          await Promise.all(made.map((m) => m.pipeline.indexAll(false)));
         } else {
-          for (const p of pipelines) await p.indexAll(false);
+          for (const m of made) await m.pipeline.indexAll(false);
         }
       });
     } finally {
-      for (const p of pipelines) await p.dispose();
+      for (const m of made) {
+        await m.pipeline.dispose();
+        m.close();
+      }
     }
   }
 
