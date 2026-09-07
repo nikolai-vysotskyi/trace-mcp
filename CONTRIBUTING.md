@@ -48,6 +48,32 @@ against a moving base is what `test` and `build` are for — they run on every P
 `master` after merge. Don't switch strict mode back on to fix a bad merge; set up GitHub's
 merge queue instead, which handles the same problem without the busy-wait.
 
+## Fixing a user-visible defect
+
+Most operations here exist twice: once as an MCP tool for agents, once behind
+an HTTP route for the desktop app's UI. They often converge on shared logic,
+but nothing enforces that — two independently-written implementations of "label
+this community" or "disambiguate this project name" can each look correct
+while producing different results, and the one you didn't touch is the one the
+screen actually calls. A unit test staying green while the screen still shows
+the bug is not evidence the fix worked — it's evidence the test exercises the
+sibling, not the path.
+
+Before fixing a defect reported from the app:
+
+1. **Name the path, one line, in the PR description**: which UI element sent
+   which request, which route/handler served it, which function computed the
+   value — e.g. `GET /api/projects/graph → buildGraphData() → labelCommunities()`.
+2. **Test through that same path.** Call the function the screen calls, not a
+   sibling with a similar name or purpose.
+3. **If a second, independently-computed implementation of the same value
+   exists** (e.g. one used only by an MCP tool), collapse them onto one
+   function instead of patching both — delete the other, don't mirror the fix
+   into it.
+
+Reviewing a UI-facing fix: ask the author to show that the screen calls the
+function the diff touches, before looking at the diff itself.
+
 ## How to Contribute
 
 1. Fork the repository
