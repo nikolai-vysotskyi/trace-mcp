@@ -1605,3 +1605,84 @@ thank-you would only cost them a notification.
 `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`,
 `iansmith/slopstop#633`, `Ivy-Apps/deslop#173`, `Kilo-Org/kilocode#13843`,
 `Kilo-Org/kilocode#12707`.
+
+### Seventh pass, 2026-09-08: the catalog PR the mandate calls open merged a week ago, and two doors in the freshness class
+
+**`hashgraph-online/awesome-ai-plugins#182` merged on 2026-08-31, in the form we
+submitted it.** The autopilot brief that opens every run still describes it as
+open and unmerged with a maintainer asking for their `ai-plugin-scanner-action`;
+that sentence is stale and this line is the correction. We declined the fourth
+third-party workflow, accepted the advisory scan failure, and the listing landed
+anyway. Nothing further is owed there and the thread does not need re-checking.
+
+**Two touches, both written after reading the other repo's code.**
+
+- [`abhigyanpatwari/GitNexus#3127`](https://github.com/abhigyanpatwari/GitNexus/issues/3127#issuecomment-5576596012)
+  (47,120★, same category as us — client-side code knowledge graph with an MCP
+  server). Someone proposes a `--stale-policy warn|ignore|error` flag. The flag
+  would consume `checkStaleness` in `gitnexus/src/core/git-staleness.ts`, and
+  that function ends in `catch { return { isStale: false, commitsBehind: 0 } }`,
+  so every git failure reports fresh and `--stale-policy error` exits 0 exactly
+  when the check broke. Their own `commitsAheadOfIndexed` in the same file
+  already returns `undefined` for "drift unknown" with a doc comment telling
+  callers not to read it as "no drift", so the missing fourth outcome is
+  argued from their code, not ours. Two more from ours: `rev-list --count
+  lastCommit..HEAD` returns 0 when HEAD is *behind* the indexed commit (branch
+  switch backwards), which is why `computeRepoFreshness` compares SHAs for
+  equality; and commit distance cannot see uncommitted edits, which is the
+  common case when an agent is driving, which is why `computeFileFreshness`
+  compares floored mtimes and yields `fresh | edited_uncommitted | stale_index`
+  per file.
+- [`watt-mind/factory#1078`](https://github.com/watt-mind/factory/issues/1078#issuecomment-5576622023)
+  (14★, but the acceptance criteria are the reason). A human-filed spike that
+  plans to bake off graphify, codegraph, code-graph-mcp and codebase-memory-mcp
+  on two of their own repos, grading correctness against a hand-written answer
+  key and rejecting any tool whose per-worktree rebuild costs more than it
+  saves. **This is the first third party we have found that plans to grade
+  answer quality rather than count tokens** — the gap TRA-1140 named. We sent
+  the three things our own version of that measurement cost: the struck 50%
+  vs 65% run and how the naive arm's unchanged 65% is what made the correction
+  provable; the cheap assertion that catches it (assert the packed context
+  contains a body from the answer key before the model sees it); and that five
+  questions resolve to 20 points each, with our own 60-item agreement table
+  (36 both, 3 naive only, 4 ours only, **17 neither**) as the argument that the
+  question set decides more than the tool does. Their per-worktree criterion got
+  the `resolveWorktreeAware` answer: a linked worktree resolving back to the
+  main worktree's index is a design choice, testable in five minutes per
+  candidate. We named ourselves as a possible fifth arm and attached no ask.
+
+**Silent and nothing owed, re-checked 2026-09-08:** `Nano-Collective/nanocoder#1197`
+(addyCooks replied 09-07 adopting all three points and is folding them into the
+spec — a thank-you would only cost a notification), `Ivy-Apps/deslop#173`
+(maintainer shipping the fix), `sosalejandro/atlas#105` (the 09-07 comment is his
+own Tier-2 close-out: `github/stack-graphs` archived 2025-09-09, the tier would
+add zero languages over SCIP, so he withdraws it — nothing directed at us),
+`Kilo-Org/kilocode#13843` and `#12707`, `facebook/pyrefly#4583`,
+`eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+`natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`,
+`iansmith/slopstop#633`. No pings due before 2026-09-19.
+
+**Checked and skipped, with reasons.** `Graphify-Labs/graphify` (**115,687★**,
+the largest peer in the category, two live tree-sitter extraction bugs today) —
+a direct competitor's tracker, the same call the fifth pass made on
+`zilliztech/claude-context`; it is already profiled deep in `docs/comparisons.md`,
+so nothing is missing but the star count, which moved 112.4k → 115.7k in six days.
+`anthropics/buffa#423` (879★, `DescriptorPool` resolves type names across the
+whole set and ignores each file's import graph — genuinely our defect class, and
+already carrying a complete protoc-verified repro) — audience rather than
+usefulness. `burin-labs/harn#8082`, `HeddleCo/heddle#987`, `vksvicky/RepoLens#34`,
+`jlaustill/c-next#1509` — all 0–20★ and in the agent-written planning-ticket class.
+
+**Two method notes for the next pass.** First, `gh search issues` ANDs every
+term: `token budget context agent codebase` and `monorepo indexing slow agent`
+both returned zero results while `"import graph"` and `"stale index"` returned
+full pages. Use one or two quoted phrases, then filter by stargazers, rather
+than a descriptive sentence. Second, **GitNexus is a repeatable address, not a
+one-off**: 339 open issues in exactly our domain, several of them our own defect
+classes verbatim — `#3198` (`POST /api/analyze` ignores `branch`, returns 202 and
+reports `complete` while indexing the default branch — the same "no-op that looks
+like success" invariant as TRA-1161), `#3068` (portable index export for
+exact-commit builds), `#3014` (read path never loads VECTOR). One door per pass,
+not a sweep.
