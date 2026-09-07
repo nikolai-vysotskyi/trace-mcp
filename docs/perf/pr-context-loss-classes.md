@@ -164,8 +164,17 @@ which silently returned "not a src layout" under ESM) and `install-app.ts`.
 
 The token benchmark reported changed-symbol readability of 100% in both arms —
 including on all 13 of these PRs, while the trace arm contained no code. The
-metric records a span whenever the bundle *lists* a symbol, never checking that
-the bundle carried its body. It was the one indicator that should have caught
-this and it was structurally incapable of it. Treat it as a pointer-coverage
-metric, which is what it is; the body assertion above is what "readable"
-was supposed to mean.
+metric recorded a span whenever the bundle *listed* a symbol, never checking
+that the bundle carried its body. It was the one indicator that should have
+caught this and it was structurally incapable of it.
+
+**Fixed, not renamed (TRA-1100).** `get_context_bundle` now reports a `detail`
+field (`'full' | 'no_source' | 'signature_only'`) per symbol — the same
+classification `assembleContext` already computed internally but never
+surfaced. `changed_symbol_readable` and `dependent_readable` in
+`scripts/bench-pr-context.ts` now count a span as readable only when
+`detail === 'full'`; `dependent_pointed` is unchanged, since "named with a
+location" was always the honest claim for that one. The same field backs a
+cheap CI gate (`tests/ci/context-bundle-body-coverage.test.ts`) that fails on
+partial body loss, not just total loss — see the [preregistration's release
+gate section]({{ '/perf/prereg-pr-quality/' | relative_url }}#release-gate-tra-1100).

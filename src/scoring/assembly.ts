@@ -11,7 +11,7 @@ export interface ContextItem {
   metadata: string;
 }
 
-type DetailLevel = 'full' | 'no_source' | 'signature_only';
+export type DetailLevel = 'full' | 'no_source' | 'signature_only';
 
 export interface AssembledItem {
   id: string;
