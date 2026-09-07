@@ -61,8 +61,49 @@ function runScript(env: Record<string, string | undefined>): {
   }
 }
 
+/** Minimal installed-package layout with no .git, so the script doesn't skip. */
+function stageFakePkg(fakePkg: string): void {
+  fs.mkdirSync(path.join(fakePkg, 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
+  fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
+  fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+  fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
+  for (const name of [
+    'trace-mcp-launcher.sh',
+    'trace-mcp-launcher.cmd',
+    'trace-mcp-launcher.ps1',
+  ]) {
+    const src = path.join(REPO_ROOT, 'hooks', name);
+    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(fakePkg, 'hooks', name));
+  }
+  fs.writeFileSync(path.join(fakePkg, 'dist', 'cli.js'), '// fake\n');
+  fs.writeFileSync(
+    path.join(fakePkg, 'package.json'),
+    JSON.stringify({ name: 'trace-mcp', version: '9.9.9-test' }),
+  );
+}
+
 describe('postinstall-control-plane', () => {
   let home: string;
+
+  /** Run the staged script against the fake home, with the real default paths. */
+  function runFakePkg(fakePkg: string): void {
+    execFileSync(
+      process.execPath,
+      [path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs')],
+      {
+        env: buildEnv({
+          HOME: home,
+          USERPROFILE: home,
+          CI: 'true',
+          TRACE_MCP_DATA_DIR: undefined,
+          TRACE_MCP_HOME: undefined,
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      },
+    );
+  }
 
   beforeEach(() => {
     home = mkTmp('trace-mcp-postinstall-');
@@ -248,6 +289,68 @@ describe('postinstall-control-plane', () => {
       fs.rmSync(fakePkg, { recursive: true, force: true });
     }
   });
+
+  // `npm i -g trace-mcp` runs this script and never reaches `trace init`, so
+  // this is the only installer an upgrade has. It used to return early whenever
+  // the legacy path existed in any shape, which left an MCP client registered
+  // there spawning a frozen copy no launcher fix could reach (TRA-1156).
+  it.skipIf(process.platform === 'win32')(
+    'repoints a stale legacy shim copy at the current one instead of leaving it frozen',
+    () => {
+      const fakePkg = mkTmp('trace-mcp-fakepkg-');
+      try {
+        stageFakePkg(fakePkg);
+
+        // A pre-rename install: a real shim file at the legacy absolute path,
+        // several launcher versions behind, plus the migration marker a past
+        // run left behind.
+        const legacyBin = path.join(home, '.trace-mcp', 'bin');
+        fs.mkdirSync(legacyBin, { recursive: true });
+        const legacyShim = path.join(legacyBin, 'trace-mcp');
+        fs.writeFileSync(legacyShim, '#!/bin/bash\n# trace-mcp-launcher v0.1.0\nexit 0\n', {
+          mode: 0o755,
+        });
+        const newHome = path.join(home, '.trace');
+        fs.mkdirSync(newHome, { recursive: true });
+        fs.writeFileSync(path.join(newHome, '.migrated-from-trace-mcp'), '');
+
+        runFakePkg(fakePkg);
+
+        const currentShim = path.join(newHome, 'bin', 'trace');
+        expect(fs.lstatSync(legacyShim).isSymbolicLink()).toBe(true);
+        expect(fs.realpathSync(legacyShim)).toBe(fs.realpathSync(currentShim));
+        // No orphaned tmp left beside it.
+        expect(fs.readdirSync(legacyBin).filter((n) => n.includes('.tmp.'))).toEqual([]);
+      } finally {
+        fs.rmSync(fakePkg, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    "leaves a wrapper at the legacy path that isn't ours alone",
+    () => {
+      const fakePkg = mkTmp('trace-mcp-fakepkg-');
+      try {
+        stageFakePkg(fakePkg);
+
+        const legacyBin = path.join(home, '.trace-mcp', 'bin');
+        fs.mkdirSync(legacyBin, { recursive: true });
+        const legacyShim = path.join(legacyBin, 'trace-mcp');
+        const userWrapper = '#!/bin/sh\nexec my-own-thing "$@"\n';
+        fs.writeFileSync(legacyShim, userWrapper, { mode: 0o755 });
+        fs.mkdirSync(path.join(home, '.trace'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.trace', '.migrated-from-trace-mcp'), '');
+
+        runFakePkg(fakePkg);
+
+        expect(fs.lstatSync(legacyShim).isSymbolicLink()).toBe(false);
+        expect(fs.readFileSync(legacyShim, 'utf-8')).toBe(userWrapper);
+      } finally {
+        fs.rmSync(fakePkg, { recursive: true, force: true });
+      }
+    },
+  );
 
   it('PLIST_VERSION constant matches src/daemon/lifecycle.ts', () => {
     const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');
