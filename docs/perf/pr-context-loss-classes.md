@@ -169,3 +169,83 @@ the bundle carried its body. It was the one indicator that should have caught
 this and it was structurally incapable of it. Treat it as a pointer-coverage
 metric, which is what it is; the body assertion above is what "readable"
 was supposed to mean.
+
+---
+
+## Second pass, same 13 PRs: the context was paying for the same bytes twice
+
+*Added 2026-09-07 (TRA-1141), after the correction above.*
+
+With bodies restored, 13 of the 60 PRs cost **more** than reading the files
+outright. Breaking those 13 prompts down by section — token counts per section
+of the dumped prompts, `gpt-tokenizer`, same pinned SHAs — puts the excess in
+one place. In 10 of 13 the "Primary Symbol" section alone was larger than the
+naive arm's entire file dump.
+
+The reason is containment. `__module__:foo` spans its whole file and
+`note:Readme` spans its whole document, and a changed-symbol review bundle asks
+for both the container and the functions or headings inside it — so the members'
+bytes shipped twice. `axios#11118` sent `InterceptorManager.js` as a module
+body and then again as three functions, a class and two methods. Two related
+cases cost as much: an entire markdown document inlined because a wikilink
+mentions the symbol (32% of `got#2379`'s prompt), and an entire test file
+inlined as a "caller" (94% of `axios#11039`'s excess).
+
+`get_context_bundle` now emits a contained symbol once, inside the container
+that already carries it, and keeps whole-file and prose symbols in the
+dependency and caller lists as pointers rather than bodies. Same 60 PRs, same
+SHAs, same corpus:
+
+| | before | after |
+|---|---:|---:|
+| median input tokens, trace arm | 3,951 | **3,214** |
+| median saving | 70.5% | **75.2%** |
+| PRs where the index did not pay off | 23 | **21** |
+| — of those, costing *more* than reading the files | 13 | 13 |
+| worst single PR | −129.3% | **−62.4%** |
+
+The 13 costliest PRs stay costlier, and that is structural rather than
+fixable: when the changed symbol *is* the module container, the bundle's
+primary section is the file, so it can approach the cost of reading the file
+but never beat it, and the diff, callers and impact list sit on top. What
+changed is the size of the overrun — across those 13 prompts, 49,770 → 40,991
+tokens.
+
+**What it cost on the quality side.** Shaping a response without checking
+comprehension is the failure this whole page exists to prevent, so the two
+bundle versions were run head-to-head on the 13 PRs the change touched most:
+same judge protocol, same model, blind and order-randomised, arm A the old
+bundle and arm B the new one.
+
+| 13 PRs | old bundle | new bundle |
+|---|---:|---:|
+| understood the change | 69.2% | **69.2%** |
+| false positives per PR | 0.23 | **0.38** |
+| findings per PR | 2.85 | 2.31 |
+
+Comprehension is identical (9 of 13 each; 8 understood by both, one by each
+arm alone). The false-positive difference is two claims across 13 PRs — a
+number this sample cannot resolve, reported because it moved the wrong way,
+not because it means anything.
+
+## `dependent_readable` was the same lie as `changed_symbol_readable`
+
+The section above ends by noting that `changed_symbol_readable` scored a symbol
+as readable whenever the bundle *listed* it. `dependent_readable` had the
+identical defect, and it was still live: signature-only entries — everything
+past the budget's tenth full-source dependency — counted as readable.
+
+`get_context_bundle` now returns `source_included` per item, and the benchmark
+scores `readable` only from items whose bytes actually shipped. Measured on the
+same 60 PRs, holding everything else constant:
+
+| trace arm, dependent_readable | value |
+|---|---:|
+| published, listing counted as readable | 58% |
+| same bundle, honest metric | 50% |
+| new bundle, honest metric | 38% |
+
+Eight of those twenty points were the metric; twelve are real — bodies the new
+rules moved into the pointer list. `dependent_pointed` stays 100%: every
+dependent is still named with a location the agent can fetch. That trade is the
+change's actual cost, and it belongs next to the 75.2%, not underneath it.

@@ -100,8 +100,21 @@ did not fire. Pull requests where the index did not pay off went from 5 to 23,
 [`docs/_data/pr_context_bench.json`](../_data/pr_context_bench.json) and on the
 [benchmark page]({{ '/pr-context-benchmark.html' | relative_url }}).
 
+**Re-measured 2026-09-07 (TRA-1141), at 75.2%.** The 70.5% run was correct
+about what the bundle contained; it was also paying for the same bytes twice,
+because a symbol and the container it lives inside were both emitted in full.
+With that duplication removed the same 60 pull requests, same pinned SHAs,
+measure **median 75.2%** (13,595 → 3,214 input tokens) and 21 non-paying PRs,
+still 13 of them costlier than reading the files. The bar was ≥50% and is met by
+a wider margin; the 70.5% figure is superseded by a re-measurement, not struck
+as wrong. The [loss-class page]({{ '/perf/pr-context-loss-classes/' |
+relative_url }}) carries the per-section diagnosis, the head-to-head quality
+check on the 13 PRs the change touched most (comprehension identical), and the
+cost: `dependent_readable` falls from a self-reported 58% to a measured 38%,
+eight points of which were the metric counting listed symbols as readable.
+
 Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
 (`{{ site.data.pr_context_bench.measured_build.commit }}`)** on
-{{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}. That build was
-reconstructed from the run's timestamp — the run did not record it, which is the
+{{ site.data.pr_context_bench.generated_at | date: "%-d %B %Y" }}. The 2026-08-30
+build was reconstructed from the run's timestamp — the run did not record it, which is the
 second thing TRA-920 fixed. Every run from now on stamps its own build.

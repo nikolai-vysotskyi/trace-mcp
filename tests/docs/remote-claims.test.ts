@@ -14,9 +14,15 @@ import { anchors, checkRemoteClaims } from '../../scripts/check-remote-claims.mj
  */
 describe('remote claim surfaces (TRA-1120)', () => {
   const anchor = anchors();
+  /**
+   * The shipped description, with its measured figure read out of the anchor
+   * rather than typed — TRA-1141 re-measured the median and this fixture was
+   * the one place still asserting the previous one.
+   */
+  const MEASURED = `${anchor.savings[0]}%`;
   const CLEAN =
     'Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, ' +
-    '70.5% fewer input tokens to review a pull request';
+    `${MEASURED} fewer input tokens to review a pull request`;
 
   it('reads its anchors out of docs/_data/, not out of prose', () => {
     expect(anchor.counts.languages).toBeGreaterThan(0);
@@ -33,7 +39,7 @@ describe('remote claim surfaces (TRA-1120)', () => {
 
   it('catches the retired figure npm was serving', () => {
     const problems = checkRemoteClaims(
-      [{ name: 'npm', text: CLEAN.replace('70.5%', '90.6%') }],
+      [{ name: 'npm', text: CLEAN.replace(MEASURED, '90.6%') }],
       anchor,
     );
     expect(problems.join('\n')).toContain('retired');
@@ -58,7 +64,7 @@ describe('remote claim surfaces (TRA-1120)', () => {
     // prose need not carry one.
     for (const spelling of ['90.6 percent', '90.6 per cent']) {
       expect(
-        checkRemoteClaims([{ name: 'npm', text: CLEAN.replace('70.5%', spelling) }], anchor).join(
+        checkRemoteClaims([{ name: 'npm', text: CLEAN.replace(MEASURED, spelling) }], anchor).join(
           '\n',
         ),
         spelling,
@@ -68,7 +74,7 @@ describe('remote claim surfaces (TRA-1120)', () => {
 
   it('catches a percentage that is simply not in docs/_data/', () => {
     expect(
-      checkRemoteClaims([{ name: 'gh', text: CLEAN.replace('70.5%', '75%') }], anchor).join('\n'),
+      checkRemoteClaims([{ name: 'gh', text: CLEAN.replace(MEASURED, '75%') }], anchor).join('\n'),
     ).toContain('not in docs/_data/');
   });
 

@@ -314,7 +314,11 @@ function buildTrace(
       for (const item of group ?? []) {
         const site = siteOf(store, item.symbol_id);
         if (!site) continue;
-        addSpan(readable, site.file, site.line_start, site.line_end);
+        // TRA-1141: `readable` counts only symbols whose bytes are in the
+        // bundle. Signature-only entries are listed, not shown — scoring them
+        // as readable is the same class of lie TRA-1090 found in
+        // changed_symbol_readable.
+        if (item.source_included) addSpan(readable, site.file, site.line_start, site.line_end);
         addSpan(pointed, site.file, site.line_start, site.line_end);
       }
     }

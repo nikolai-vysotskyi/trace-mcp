@@ -194,3 +194,74 @@ describe('getContextBundle() — behavioural contract', () => {
     expect(result.isErr()).toBe(true);
   });
 });
+
+/**
+ * TRA-1141: `__module__:foo` spans the whole file, so asking for it together
+ * with a function inside it — which is what a changed-symbol review bundle does
+ * on every commit that touches top-level code — shipped that function's body
+ * twice. Measured on the PR-context benchmark's 13 losing PRs: 49 770 → 40 991
+ * tokens across the set, worst case −136% → −52% against reading the files.
+ */
+describe('getContextBundle() — a container and its member ship one copy', () => {
+  const MOD_SRC = [
+    "const banner = 'top-level';",
+    'export function inner() {',
+    "  return 'INNER_BODY_MARKER';",
+    '}',
+    '',
+  ].join('\n');
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    rootPath = createTmpFixture({ 'src/mod.ts': MOD_SRC });
+    store = createTestStore();
+    const fileId = store.insertFile('src/mod.ts', 'typescript', 'h-mod', MOD_SRC.length);
+    store.insertSymbol(fileId, {
+      symbolId: 'src/mod.ts::__module__#namespace',
+      name: '__module__:mod',
+      kind: 'namespace',
+      fqn: '__module__:mod',
+      byteStart: 0,
+      byteEnd: MOD_SRC.length,
+      lineStart: 1,
+      lineEnd: 5,
+      signature: '(module body) src/mod.ts',
+    });
+    store.insertSymbol(fileId, {
+      symbolId: 'src/mod.ts::inner#function',
+      name: 'inner',
+      kind: 'function',
+      fqn: 'inner',
+      byteStart: MOD_SRC.indexOf('export function inner'),
+      byteEnd: MOD_SRC.lastIndexOf('}') + 1,
+      lineStart: 2,
+      lineEnd: 4,
+      signature: 'function inner()',
+    });
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('emits the member body once, and still reports both symbols as delivered', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: ['src/mod.ts::__module__#namespace', 'src/mod.ts::inner#function'],
+      outputFormat: 'markdown',
+      tokenBudget: 8000,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    const content = bundle.content ?? '';
+    expect(content).toContain('INNER_BODY_MARKER');
+    expect(content.split('INNER_BODY_MARKER').length - 1).toBe(1);
+    // Both stay in the reported list: the member's bytes are inside the
+    // container that replaced it, so neither claim is a lie.
+    expect(bundle.primary.map((p) => p.symbol_id).sort()).toEqual([
+      'src/mod.ts::__module__#namespace',
+      'src/mod.ts::inner#function',
+    ]);
+    expect(bundle.primary.every((p) => p.source_included)).toBe(true);
+  });
+});

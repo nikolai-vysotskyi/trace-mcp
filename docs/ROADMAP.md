@@ -49,6 +49,12 @@ own naive column — the struck row above is only comparable to the naive number
 measured in the same pass. Both bars met.
 The token figure moved the other way in the same correction: **90.6% → 70.5%**,
 median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
+**Re-measured later the same day (TRA-1141): 70.5% → 75.2%**, median 13,595 →
+3,214, non-paying PRs 23 → 21. The corrected bundle was emitting a symbol and
+the container holding it in full, twice; comprehension is unchanged in a
+head-to-head on the 13 PRs that changed most, and `dependent_readable` falls
+58% → 38% (eight of those points were the metric counting listed symbols as
+readable). Same page has the diagnosis.
 
 Everything below that was written from the struck numbers — item 1 in
 particular — needs re-deciding on the corrected ones at the next revision of
