@@ -80,7 +80,7 @@ Rules for keeping it honest:
 | [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Do not ping. Re-read 2026-10-05 | 2026-09-05 |
 | [yzfly/awesome-context-engineering](https://github.com/yzfly/awesome-context-engineering) | **Submitted, not merged** — [PR #44](https://github.com/yzfly/awesome-context-engineering/pull/44), opened 2026-09-05 | One line each in `README.md` and `README_CN.md`, section `Memory & Compression` / `记忆与压缩`, next to `lean-ctx`, `headroom` and `skillreaper` (140★) | PR to both READMEs — `CONTRIBUTING.md` requires the English and Chinese versions to stay in sync, so an entry that touches one file only is incomplete. **This is the door with a real merge rate in this class:** five external PRs merged in the two weeks to 2026-08-30, three of them in one batch, authors unaffiliated with the maintainer. Re-check 2026-09-19 | 2026-09-05 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
-| GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05, then carried "100% local" until 2026-09-07. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 70.5% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own, comprehension at parity. 81 languages, 87 frameworks. Your code and index never leave the machine; an anonymous usage ping is on by default and opt-out." (327 of the 350 characters GitHub allows) | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/`. **No longer on trust: `scripts/check-remote-claims.mjs` fetches this string nightly and compares it to `docs/_data/`** (TRA-1120) | 2026-09-07 |
+| GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05, then carried "100% local" until 2026-09-07. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 70.5% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own, comprehension at parity. 81 languages, 87 frameworks. Your code and index never leave the machine; an anonymous usage ping is on by default and opt-out." (327 of the 350 characters GitHub allows) | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/`. **No longer on trust: `scripts/check-remote-claims.mjs` fetches this string nightly and compares it to `docs/_data/`** (TRA-1120). **Lags again since TRA-1141 re-measured the median to 72.8%** — the live GitHub and npm strings still say 70.5% and the nightly check will report them as not-in-`docs/_data/` until the description is patched and the next release republishes npm. | 2026-09-07 |
 | [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
 | [linny006/mcp-servers-live](https://github.com/linny006/mcp-servers-live) + [its Pages site](https://linny006.github.io/mcp-servers-live/r/nikolai-vysotskyi/trace-mcp/) | **Yes — never submitted** | Auto-index of MCP servers refreshed every 15 minutes; we are #49 by stars with a per-repo page. Its whole body is our GitHub description, repeated 5× on that page | Nothing to submit. Links only `github.com`, never `trace-mcp.com`, so it adds nothing to the domain count below. Its value is that it demonstrates the description-propagation above | 2026-09-05 |
 | [linny006/trending-claude-skills](https://github.com/linny006/trending-claude-skills) | **Yes — never submitted** | Trending table, **rank 3**, 133★, same auto-copied description | Same scraper family as the row above; one operator, two indexes. Nothing to submit | 2026-09-05 |
@@ -519,7 +519,7 @@ the replacement is 21% over 18,319 measured calls (`docs/_data/response_tokens.j
 generated by `scripts/gen-response-tokens-data.ts`, guarded by
 `tests/docs/savings-claims.test.ts`). `server.json` now carries the PR-benchmark
 figure instead, so the registry entry changes at the next release by the rule
-above. When re-submitting anywhere: quote 70.5% (PR context, other people's repos)
+above. When re-submitting anywhere: quote 72.8% (PR context, other people's repos)
 or 21% with its two caveats — one machine's call mix, and a baseline that is
 still an estimate — and never the old range. It was 29.3% until TRA-945 measured
 the remaining twelve tools and the figure fell; re-read this line before quoting
@@ -539,7 +539,7 @@ a measurement that was never of the product — do not restore it.
 
 **The headline number a listing scrapes changed on 2026-09-02 (TRA-647).** The
 README's above-the-fold claim is no longer "40–50% fewer tokens on average" — it
-is the PR-context benchmark, "70.5% fewer input tokens", measured on 60 merged
+is the PR-context benchmark, "72.8% fewer input tokens", measured on 60 merged
 pull requests in six repositories we do not own, with a link to the method page.
 Every listing that scrapes the README or the npm page live — glama.ai above, and
 any other in this table whose "how it can be changed" column says the same —
@@ -1443,3 +1443,86 @@ decompilation, which is not our domain.
 PR #1066 — it was measured on a context that contained no source code, and the
 corrected run is 67% against 65% at the same 70.5% median token saving. Anything
 outgoing that still carries −15 п.п. is quoting a bug, not a result.
+
+### Fifth pass, 2026-09-07: the first maintainer reply of the week, and two doors inside one 27k★ tracker
+
+**`Ivy-Apps/deslop#173` answered within 27 minutes.** `ILIYANGERMANOV` replied to this
+morning's `export … from` note: the fix is his current task and Deslop users should
+expect a release with it this week. That is the second live human reply this
+category has produced for us (after `sosalejandro/atlas`), and both came from the
+same move — reading their code first and sending the traps we already paid for,
+with no ask attached. Nothing is owed there now; a thank-you reply would only cost
+them a notification.
+
+**Method note, because the search that worked twice has started failing.** GitHub
+issue search on engineering phrases (`"symbol index" stale`, `"codebase index"`,
+`"code graph" MCP`) now returns mostly machine-generated repositories: agent
+planning tickets, daily-digest repos, benchmark-report bots. Of 75 distinct repos
+across five queries, 19 had ≥100 stars and 12 were worth opening. **Filter the
+result set by stargazers before reading any body** — it costs one `gh api repos/…`
+per repo and removes about three quarters of the noise.
+
+**Both of today's second-pass doors are in `Kilo-Org/kilocode` (27,210★), which
+ships codebase indexing of its own, so the disclosure line does real work.**
+
+- [`#13843`](https://github.com/Kilo-Org/kilocode/issues/13843) (opened today):
+  their indexing manager fails on git worktrees with CJK paths on Windows — a
+  `git rev-parse --path-format=absolute …` command line arrives at
+  `fs.realpathSync` as a single string, with the backslash before `目录A` eaten.
+  The reporter had already disassembled their minified CLI to find it. What we
+  added is the two ways we avoid the class: `execFileSync` with an argv array
+  never builds a command string, and `resolveGitMetadataDir` in `src/global.ts`
+  answers `--git-common-dir` from disk alone (`.git` file → `gitdir:` → the admin
+  dir's `commondir`, falling back to `<admin>/../..`), so no locale or argv is
+  involved. Plus the shape half of their own footnote: in a linked worktree `.git`
+  is a *file*, so an `isDirectory()` test reports "not a git repo" on every
+  platform. And the design half: their
+  `Waiting for the primary worktree index to become available` is a state we chose
+  not to have, because a linked worktree shares the main repo's index
+  (`src/registry-worktree.ts`).
+  [Comment](https://github.com/Kilo-Org/kilocode/issues/13843#issuecomment-5571830423).
+- [`#12707`](https://github.com/Kilo-Org/kilocode/issues/12707) (open and
+  unanswered since 2026-07-30): codebase search ran 41 minutes with no deadline
+  when VS Code was opened at a broad root. They ask for exactly the two behaviours
+  we shipped, so the comment is what each cost: the broad-root rule is a literal
+  deny-list rather than a size heuristic (a big monorepo is indistinguishable from
+  `/` until it has been walked), with the three traps inside ours — `/private/tmp`
+  arriving pre-resolved, Windows dirs matched below the drive letter, and the
+  `/\\+$/` trim that CodeQL flags as polynomial ReDoS on a client-supplied path.
+  And the part that surprises: fixing root resolution moves the hang to "index not
+  built yet", so the answer is answering instead of blocking — 503 with
+  `Retry-After: 3` on routes needing a complete index, with registered-but-unloaded
+  and folder-missing as distinct answers.
+  [Comment](https://github.com/Kilo-Org/kilocode/issues/12707#issuecomment-5571830697).
+
+**Competitor intel: three new entrants, all found through catalog submission
+queues rather than through their own repos.** `pmgarg/cgraphy` (0★, PyPI, official
+MCP registry), `UnboundCompute/lachesis` (3★, compiler-precise code property graph,
+AGPL-3.0, ghcr image), `myelixlabs/synapse-mcp` (1★, "60% token savings", 14 tools).
+Two facts follow. First, every one of them leads with a token-savings number and
+none publishes anything about answer quality, which is the gap TRA-1140 named and
+the reason our corrected 67% vs 65% at 70.5% is worth publishing rather than
+sitting in a PR. Second, `chatmcp/mcpso` (2,715★) and `cline/mcp-marketplace`
+(785★) accept submissions from 0-star projects by issue — cheap to enter and
+therefore weak as a signal, which is an argument for keeping the catalog
+moratorium rather than against it. Both queues stay recorded here as addresses for
+the day `acquisition` starts reading.
+
+**Checked and skipped, with reasons, so the next pass does not re-derive them:**
+`Sharper-Flow/lgrep#12` (3★, last push 2026-08-07), `ending0421/Ward#6` (0★),
+`mupozg823/codelens-mcp-plugin#396` (3★, 49 open issues, stale) — all three are
+genuinely in our defect class (stale index answering `ok:true` with an empty
+result set) and all three are too small and too quiet to be worth a touch;
+`zilliztech/claude-context#419/#420` (12,496★) — real defects in a direct
+competitor's tracker, which is not a place we comment;
+`warpdotdev/warp#12569` (multi-GB indexing memory spikes) — closed-source product,
+our daemon memory work says nothing they can act on;
+`anthropics/claude-code#75993` and `continuedev/continue#12853` — audience, not
+usefulness, the same call the fourth pass made.
+
+**Threads re-checked 2026-09-07 evening, silent, nothing owed:**
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`,
+`tolkonepiu/best-of-mcp-servers#384`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`,
+`Nano-Collective/nanocoder#1197`. No pings due before 2026-09-19.

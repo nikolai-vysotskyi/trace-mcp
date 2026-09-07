@@ -49,6 +49,15 @@ own naive column — the struck row above is only comparable to the naive number
 measured in the same pass. Both bars met.
 The token figure moved the other way in the same correction: **90.6% → 70.5%**,
 median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
+**Re-measured later the same day (TRA-1141): 70.5% → 72.8%**, median 13,595 →
+3,286, non-paying PRs 23 → 21. The corrected bundle was emitting a symbol and
+the container holding it in full, twice; comprehension is unchanged in a
+head-to-head on the 13 PRs that changed most. Two coverage columns now measure
+delivery instead of listing and both fall: `dependent_readable` 58% → 22%, and
+`changed_symbol_readable` 100% → 71% — on 42 of 60 PRs the bundle's budget
+falls back to a signature for at least one changed symbol, which the old metric
+scored as readable (TRA-1144). Most of both drops is the metric: the previous
+bundle measures 28% and 67% on it. Same page has the diagnosis.
 
 Everything below that was written from the struck numbers — item 1 in
 particular — needs re-deciding on the corrected ones at the next revision of

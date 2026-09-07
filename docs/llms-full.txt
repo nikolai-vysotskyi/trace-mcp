@@ -3706,6 +3706,7 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + subproject graph
   analytics.db              # session analytics (cross-project)
+  activity.db               # tool-call history behind the Activity tab (7-day retention)
   savings.json              # cumulative token savings tracker
   index/
     my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
@@ -3727,6 +3728,17 @@ The **decision memory database** (`decisions.db`) is also shared across all proj
 - **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
 - **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
 - **Mined sessions tracker** — prevents re-processing already-mined session files
+
+The **activity database** (`activity.db`) records every MCP tool call the daemon
+serves, keyed by project root: timestamp, tool, params summary, result count and
+tokens, latency, error flag, session id. It answers one question — *what has been
+happening in this project* — which is why it is on disk rather than in the
+`SessionJournal`: a journal belongs to one MCP session and dies with it, so the
+Activity tab read `0 calls` in every window while agents were actively working
+(TRA-1071). Entries are batched (128 rows or 2 s) and pruned to 7 days, which is
+what lets the tab offer a 24h window honestly. The API reports `recording_since`
+so the UI can say when recording started instead of presenting a young install's
+empty 24h window as a confident zero.
 
 Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_wake_up`) via the enrichment layer in `src/memory/enrichment.ts`.
 
@@ -4465,8 +4477,17 @@ repo so the run reproduces.
 
 Assembling review context for a pull request with trace-mcp costs a median
 **{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens** than
-loading the diff plus every file it touches — while making *more* of the code
-the change can break visible, not less.
+loading the diff plus every file it touches. It makes *more* of the code the
+change can break visible — {{ site.data.pr_context_bench.trace_dependent_readable }}
+of affected call sites readable against
+{{ site.data.pr_context_bench.baseline_dependent_readable }}, and
+{{ site.data.pr_context_bench.trace_dependent_pointed }} at least located — and
+*less* of the changed code itself:
+{{ site.data.pr_context_bench.trace_changed_symbol_readable }} of changed symbols
+arrive with their bodies, against
+{{ site.data.pr_context_bench.baseline_changed_symbol_readable }} for whole
+files. That second number misses a
+[preregistered bar]({{ '/perf/prereg-pr-context/' | relative_url }}).
 
 The review written from it holds up. Sending both contexts to the same model on
 the same PRs, the trace-mcp arm understood the change as often as the naive one
@@ -4581,21 +4602,31 @@ a reviewer does not need.
 
 Two further limits worth stating plainly:
 
-- **The truncation failure mode did not fire here.** The trace-mcp arm is
-  capped at an 8,000-token context bundle; on this dataset no PR was large
-  enough for that cap to drop a changed symbol, so changed-symbol readability
-  is {{ site.data.pr_context_bench.trace_changed_symbol_readable }} in both
-  arms. On a substantially larger PR it would bite, and the benchmark reports
-  it as a `truncated` loss when it does. We have not measured that regime.
+- **The truncation failure mode fires on most of this dataset.** The trace-mcp
+  arm is capped at an 8,000-token context bundle, and changed-symbol
+  readability is {{ site.data.pr_context_bench.trace_changed_symbol_readable }}
+  against the naive arm's
+  {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} — a third of
+  changed symbols arrive without their bodies, 113 of 338 across the corpus.
+  This page said the opposite until 2026-09-07, because the metric counted
+  whether the bundle *listed* a symbol rather than whether it carried the body;
+  it now scores `detail === 'full'`. That miss is registered against the
+  [preregistered quality floor]({{ '/perf/prereg-pr-context/' | relative_url }}),
+  which the bar does not move for. The token figure is unaffected — it was
+  always counted on the assembled text. Whether the missing bodies are
+  module-level pseudo-symbols (whose body is a whole file, which is what this
+  index exists not to ship) or symbols the budget drops is not yet measured.
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file
   and line. It does not mean a model used it correctly.
-- **"Readable" counts pointers, not bodies.** The metric records a span
-  whenever the bundle lists a symbol; it never checks that the body arrived.
-  That is how it read 100% through a three-month stretch in which the
-  benchmark's trace arm carried no source code at all — see the
-  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) of that
-  defect and the correction it forced on the figures above.
+- **"Readable" counted pointers, not bodies — until 2026-09-07.** The metric
+  recorded a span whenever the bundle listed a symbol and never checked that the
+  body arrived, which is how it read 100% through a three-month stretch in which
+  the benchmark's trace arm carried no source code at all. It now scores the
+  bundle's own `detail` field, and every coverage figure on this page is the
+  first measured under that definition. The
+  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) has the
+  account of the original defect.
 
 ## Does the thinner context produce a worse review?
 
@@ -5303,6 +5334,48 @@ edge to all of it would be closer to noise than signal. On a large real repo
 produced edges for 12 of them — roughly 0.2%. See
 `src/indexer/edge-resolvers/csharp-imports.ts` for the reasoning and
 `src/indexer/plugins/language/csharp/helpers.ts` for extraction.
+
+## Import resolution depth on real repos
+
+C#'s 0.2% above is not an outlier worth a special paragraph — it is one point
+on a spread every resolver-bearing language sits somewhere on. `Imports: yes`
+only means a pipeline pass exists; it says nothing about how much of a real
+codebase that pass actually connects. Measured on one well-known public repo
+per language — clone it, run the real indexing pipeline, read the
+`{ created, external, ambiguous }` counts each resolver already logs
+(`src/indexer/edge-resolvers/*-imports.ts`), filtered by that resolver's exact
+log message so a multi-language repo can't attribute one language's counts to
+another — the reusable, reproducible measurement is
+`scripts/measure-import-resolution.ts`, and its output is
+`docs/_data/import-resolution.json`:
+
+| Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| c | curl/curl | 8f6046485e15 | 3138 | 990 | 0 | 76.0% |
+| php | guzzle/guzzle | 93939470950a | 374 | 247 | 0 | 60.2% |
+| ruby | sinatra/sinatra | cb22afd7902b | 131 | 88 | 0 | 59.8% |
+| rust | BurntSushi/ripgrep | 3fce3b5bb023 | 453 | 447 | 0 | 50.3% |
+| typescript | colinhacks/zod | 7a00236683c7 | 660 | 660 | 0 | 50.0% |
+| go | spf13/cobra | adbc8813901b | 159 | 178 | 0 | 47.2% |
+| java | google/gson | b3f4ca20087f | 1085 | 1586 | 0 | 40.6% |
+| kotlin | square/okhttp | dfcfab38248e | 2621 | 4330 | 0 | 37.7% |
+| cpp | fmtlib/fmt | 2d4d8a13c2b4 | 155 | 411 | 0 | 27.4% |
+| python | pallets/flask | d318b6834711 | 96 | 333 | 0 | 22.4% |
+| csharp | JamesNK/Newtonsoft.Json | 09bb545d7296 | 12 | 4979 | 0 | 0.2% |
+
+**"Left external" does not mean "missed," but it does not always mean
+"correctly out of scope" either — read the resolver.** Most of the time a
+specifier a resolver leaves external is genuinely a third-party or standard
+library import (`import "github.com/spf13/pflag"`, `import os`), and
+resolving it to a file in this repo would be wrong. But the bucket's exact
+meaning is resolver-specific: csharp's `external` count also holds plain
+`using Namespace;` directives that are **internal to the repo** — left
+unresolved by design because a namespace can span most of a codebase (see the
+C# paragraph above), not because the target lives outside it. Treat this table
+as what "the resolver exists" costs out to on one real codebase per language,
+not as a defect list. Every row is n=1 — one repo's import style, not a
+distribution; re-run the script against a second repo per language before
+treating any row as a trend rather than a data point.
 
 ## Matrix
 
