@@ -917,6 +917,13 @@ Pick CodeGraphContext when compiler-grade references on a mainstream language ju
 
 Where it differs is infrastructure and semantics. SocratiCode requires Docker running local Qdrant and Ollama containers (or external API keys), advertises all 25 tools unconditionally without preset filtering, parses syntax without resolving framework connections, and ships under copyleft AGPL-3.0. trace-mcp runs locally with zero external infrastructure (your code and index stay on your machine — see [privacy](/privacy.html))—single `npx trace-mcp` with embedded SQLite+FTS5 and local ONNX embeddings—under permissive MIT, with {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, and active refactoring tools. Full head-to-head: [trace-mcp vs SocratiCode](/vs/socraticode.html).
 
+### trace-mcp vs TokenSave — 86 advertised tools vs framework-aware graph depth
+{: #vs-tokensave}
+
+[TokenSave](https://github.com/aovestdipaperino/tokensave) (aovestdipaperino/tokensave, {{ site.data.competitors.tokensave.stars }} stars, Rust, MIT, v7.11.1) builds a code knowledge graph stored in embedded libSQL (a SQLite fork) with tree-sitter AST parsing across 50+ languages. It defines 86 specialized MCP tools, isolates grammar parsing in subprocess worker pools to guard against tree-sitter crashes, supports opt-in multi-branch indexing, and provides string replacement edit primitives (`tokensave_str_replace`, `tokensave_insert_at`).
+
+Where it differs is prompt overhead, framework depth, and refactoring semantics. TokenSave advertises all 85+ tools by default on standard MCP hosts (only 5 carry `anthropic/alwaysLoad`), consuming ~12-15K tokens in schema listing before the agent begins work, and its extractors capture language syntax with zero framework route/controller/model awareness. Its code modification tools operate on text replacement slices rather than semantic AST nodes. trace-mcp ships a lean 28-tool `minimal` default (~11.6K tokens), constructs typed semantic edges across {{ site.data.counts.frameworks }} frameworks, provides verified AST refactoring tools (`refactor_rename`, `refactor_extract`, `refactor_move`), and runs OWASP Top-10 taint analysis. Full head-to-head: [trace-mcp vs TokenSave](/vs/tokensave.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -929,7 +936,13 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 7, 2026 — current
+### Pass of September 8, 2026 — current
+
+- **First source read of TokenSave** (aovestdipaperino/tokensave, Rust, MIT, v7.11.1, {{ site.data.competitors.tokensave.stars }} stars), from the previous pass's priority queue. Read through the GitHub API at `master`: package metadata, `Cargo.toml`, `server.json`, `src/mcp/tools/definitions.rs`, `src/mcp/server.rs`, `src/tokensave/memory.rs`, `src/tokensave/staleness.rs`, `src/accounting/`, and the extraction worker pool (`src/extraction_worker.rs`). It corrected the table: written in **Rust** (edition 2021), embedded libSQL (SQLite fork) + FTS5 with ONNX Runtime (`ort`) embeddings, **86 MCP tools defined and 85+ advertised on standard MCP hosts** (only 5 carry `anthropic/alwaysLoad: true`), costing ~12-15K tokens in schema overhead per session start; tree-sitter AST parsing across 50+ languages in three feature tiers; subprocess worker crash isolation; bounded catch-up sync ceiling (2,000 files); and string replacement primitives. Head-to-head analysis: [trace-mcp vs TokenSave](/vs/tokensave.html). Findings and the take-or-pass on each mechanism are in the profiling depth tracker at the end of this page.
+- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp 166 → 170, jCodeMunch 2.7K (2,668), TokenSave 621, SocratiCode 3.3K (3,287), codegraph 69.9K (69,891), codebase-memory-mcp 42.5K (42,504), Serena 28.9K (28,902), Repomix 28.2K (28,221), Context Mode 20.5K (20,487), code-review-graph 31.2K (31,219), CodeGraphContext 4.2K (4,168), CodeGraph (codegraph-ai) 80.
+- Rows for other projects were not re-checked in this pass and carry the September 7 figures.
+
+### Pass of September 7, 2026
 
 - **First source read of SocratiCode** (giancarloerra/SocratiCode, TypeScript, AGPL-3.0-only / commercial dual, v1.13.0, {{ site.data.competitors.socraticode.stars }} stars), the highest-star direct code-graph MCP peer remaining unprofiled at source. Read through the GitHub API at `main`: package metadata, `src/constants.ts`, `src/config.ts`, `src/index.ts`, and all tool implementations in `src/tools/`. It corrected the table: **{{ site.data.competitors.socraticode.stars }} stars** (3,287, not ~900), **25 MCP tools advertised by default** (not 21), Docker-managed Qdrant vector DB (`:16333`) + Ollama (`:11435`) storage, AST parsing across 19 languages via `@ast-grep/napi` with zero framework awareness, and an interactive browser HTML visualizer (`codebase_graph_visualize`). Head-to-head analysis: [trace-mcp vs SocratiCode](/vs/socraticode.html). Findings and the take-or-pass on each mechanism are in the profiling depth tracker at the end of this page.
 - **First source read of CodeGraph** (codegraph-ai, Rust, Apache-2.0, v0.20.1), from the previous pass's priority queue. Read through the GitHub API at `main`, no clone and nothing executed: root metadata, `Cargo.toml`, `crates/codegraph/`, `crates/codegraph-server/` (the dual LSP/MCP backend and tool registrar), `crates/codegraph-memory/` (storage and vector embeddings), and the individual parser crates. It corrected the table: written in **Rust** (43-crate Cargo workspace, edition 2021), not C as GitHub's linguist tag implied from vendored grammars. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
@@ -993,7 +1006,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Session memory | ✓ built-in | ✗ | ✓ SQLite FTS5 journal | ✗ | ✓ index persistence | ✓ persistent graph | ✗ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
-_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (signatures kept, bodies dropped); **tokensave** (601 stars, 40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now {{ site.data.competitors.codegraph.stars }} stars; its August 2026 re-measurement claims 62% fewer tokens / 88% fewer tool calls / 44% lower cost across seven repos, with model, queries, run count and a correction to its own earlier harness disclosed — self-run, not third-party reproduced, and the most transparent self-benchmark in this field; see [vs codegraph](/vs/codegraph.html)); **Headroom** (68.1K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` could not be re-verified in June 2026 — possibly renamed or inactive. `Context Mode` **is** active and got its source deep-dive on August 30, 2026 (mksglu/context-mode, 20,245 stars, commit `8a35367` = v1.0.169): eleven MCP tools, all advertised, and **no code parser at all** — its eight runtime dependencies contain no tree-sitter, and none of its tools resolves a symbol, an import edge or a call edge. Its "12 languages" are subprocess runtimes for *executing* agent-written scripts, not grammars for parsing your code, and its 98% figure measures tool-output bytes on 14 committed fixtures rather than task success. It also ships under the Elastic License 2.0 rather than an OSI licence. It compresses what tools return; we make questions about code cheap to ask — adjacent lanes that compose rather than compete. See [vs Context Mode](/vs/context-mode.html). The June "could not verify" note was wrong and is retracted here._
+_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (signatures kept, bodies dropped); **tokensave** ({{ site.data.competitors.tokensave.stars }} stars, 86 tools, 50+ langs, Rust/libSQL; see [vs tokensave](/vs/tokensave.html)); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now {{ site.data.competitors.codegraph.stars }} stars; its August 2026 re-measurement claims 62% fewer tokens / 88% fewer tool calls / 44% lower cost across seven repos, with model, queries, run count and a correction to its own earlier harness disclosed — self-run, not third-party reproduced, and the most transparent self-benchmark in this field; see [vs codegraph](/vs/codegraph.html)); **Headroom** (68.1K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` could not be re-verified in June 2026 — possibly renamed or inactive. `Context Mode` **is** active and got its source deep-dive on August 30, 2026 (mksglu/context-mode, 20,245 stars, commit `8a35367` = v1.0.169): eleven MCP tools, all advertised, and **no code parser at all** — its eight runtime dependencies contain no tree-sitter, and none of its tools resolves a symbol, an import edge or a call edge. Its "12 languages" are subprocess runtimes for *executing* agent-written scripts, not grammars for parsing your code, and its 98% figure measures tool-output bytes on 14 committed fixtures rather than task success. It also ships under the Elastic License 2.0 rather than an OSI licence. It compresses what tools return; we make questions about code cheap to ask — adjacent lanes that compose rather than compete. See [vs Context Mode](/vs/context-mode.html). The June "could not verify" note was wrong and is retracted here._
 
 **codebase-memory-mcp's stars more than doubled over two revisions (18.1K → 41.0K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
 
@@ -1194,9 +1207,9 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode, jCodeMunch.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode, jCodeMunch, TokenSave.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Narsil-MCP, tokensave, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Narsil-MCP, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -1280,7 +1293,16 @@ Three mechanisms were read at source and each got a decision:
 - **Agent configuration hygiene auditing (`audit_agent_config`): taking the idea for doc and config linting.** `audit_agent_config` cross-references `CLAUDE.md`, `.cursorrules`, and `copilot-instructions.md` against the symbol index to find dead symbol names, broken paths, and token waste. We already check doc-to-code path integrity (`verify_docs`, `tests/docs/doc-path-refs.test.ts`), and extending this to user-facing agent instruction files is a high-value developer workflow.
 - **Text-based refactoring plan generation (`plan_refactoring`): passing, we already do better.** `plan_refactoring` generates text find-and-replace candidate blocks `{old_text, new_text}` using regexes on imports. trace-mcp provides native AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) that execute atomic, syntax-verified transformations directly in the AST. Nothing to take.
 
-Priority for next deep-dive: **tokensave** (620 stars, Rust/Python — 40+ tools, 30+ languages, pre-indexed semantic knowledge graph), the highest-star direct code-graph peer remaining unprofiled at source.
+**TokenSave profiled this pass** (September 8, 2026 — read through the GitHub API at `master`, no clone and nothing executed: repository metadata, `Cargo.toml`, `server.json`, `src/mcp/tools/definitions.rs`, `src/mcp/server.rs`, `src/tokensave/memory.rs`, `src/tokensave/staleness.rs`, `src/accounting/`, `src/extraction_worker.rs`). 621 stars (GitHub API, this pass), MIT, Rust (edition 2021), v7.11.1. It defines 86 MCP tools in `get_tool_definitions()` and advertises all 85+ on standard MCP hosts, with only 5 tools carrying `anthropic/alwaysLoad: true` (`tokensave_search`, `tokensave_context`, `tokensave_callees`, `tokensave_impact`, `tokensave_status`). Storage is embedded libSQL (SQLite fork) with FTS5 and local ONNX runtime (`ort`) embeddings. AST extraction covers 50+ languages across three compilation tiers (lite 11, medium +9, full +40 more) with zero framework awareness. See the full head-to-head: [trace-mcp vs TokenSave](/vs/tokensave.html).
+
+Four mechanisms were read at source and each got a decision:
+
+- **Subprocess-isolated extraction worker pool (`extraction_worker.rs`): noting the architecture, our runtime is already safer.** To prevent crashes (segfaults, aborts) in native C/Rust tree-sitter grammars from killing the MCP server daemon, TokenSave routes file extraction through a pool of isolated worker child processes that can be respawned if killed. trace-mcp instead executes tree-sitter parsers inside a WebAssembly sandbox (`web-tree-sitter`), where memory safety and process isolation are enforced by the V8 WASM runtime — eliminating native segfaults and panics by design without subprocess IPC overhead. Nothing to take.
+- **Bounded catch-up sync ceiling (`AutoSyncScope::TooManyStale`): taking the guard concept.** Automatic background syncs on tool calls or server start cap sync volume at 2,000 stale files, refusing to turn a background access check into a runaway initial indexing pass over multi-terabyte uninitialized trees. We already track dirty files incrementally, but formalizing an explicit ceiling on automatic background syncs is a sound defensive pattern.
+- **Multi-branch isolated index databases: passing, unified index is more efficient.** TokenSave allows opting into separate libSQL database files per git branch (`.tokensave/branches/<branch>.db`), with a branch drift guard (`BranchDrift`) stopping cross-branch writes. trace-mcp tracks branch and commit SHAs directly in unified SQLite WAL tables, allowing instant branch switches and cross-branch diff queries without managing fragmented database files. Nothing to take.
+- **String replacement primitives (`tokensave_str_replace`): passing, we already do better.** TokenSave provides text-slice find-and-replace tools with anchor matching. trace-mcp provides verified AST refactoring tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) that execute atomic, syntax-checked code transformations with cross-file import graph rewrites. Nothing to take.
+
+Priority for next deep-dive: **Narsil-MCP** (~100 stars, 32 languages, 90 tools, multi-engine AST graph), the next direct code-graph peer remaining unprofiled at source.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
@@ -1887,6 +1909,145 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 - **Safe, automated refactoring**: You want your AI agent to execute atomic renames, extractions, and file moves with syntax validation.
 - **Integrated security auditing**: You want OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting built directly into your MCP workflow.
 - **Zero infrastructure setup**: You want immediate execution via `npx -y trace-mcp` with no Python virtual environment, uv, or local compilation required.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
+- Explore all MCP tools in the [tools reference](/tools-reference.html).
+- Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- See how trace-mcp compares to other servers in the [comparisons hub](/comparisons.html).
+- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+
+---
+
+# TokenSave alternative: trace-mcp vs TokenSave
+
+Source: https://trace-mcp.com/vs/tokensave.html
+
+
+
+**TL;DR.** TokenSave is a Rust-based code intelligence MCP server that indexes code into an embedded libSQL (SQLite) database with tree-sitter parsers across 50+ languages. It features 86 specialized MCP tools, subprocess-isolated grammar extraction, multi-branch indexing, git blame integration, and text replacement editing primitives.
+
+The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 28-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
+
+Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ languages (including shaders, Basic dialects, and mainframe languages) with multi-branch database isolation. Pick trace-mcp if you develop web applications in modern frameworks, require compiler-calibrated 5-tier call graphs, need safe AST refactoring write tools, and want zero-setup distribution via npm.
+
+## Head-to-head
+
+| Capability | trace-mcp | TokenSave |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.tokensave.stars }} |
+| License | **MIT** (permissive open-source) | **MIT** (permissive open-source) |
+| Written in | TypeScript (Node.js) | Rust (edition 2021) |
+| Installation / Distribution | `npx -y trace-mcp@latest` (npm registry) | `cargo binstall tokensave` / Homebrew tap / Scoop / prebuilt binary |
+| Underlying storage | Embedded SQLite + FTS5 + local ONNX | Embedded libSQL (SQLite fork) + FTS5 + ONNX runtime (`ort`) |
+| Languages (AST parsing) | **{{ site.data.counts.languages }}** (tree-sitter WASM) | 50+ (tree-sitter native, lite/medium/full tiers) |
+| Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
+| Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
+| MCP tools defined | {{ site.data.counts.tools }} | 86 tools |
+| Default advertised tools | **28** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
+| Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 5 tools marked `anthropic/alwaysLoad`; 85+ returned on `tools/list` |
+| Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal (`callers`, `callees`, `call_chain`) over AST call sites |
+| Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | String replacement primitives (`str_replace`, `multi_str_replace`, `insert_at`) |
+| Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ (`tokensave_unsafe_patterns` syntactic grep only) |
+| Session memory | ✓ code-linked decision graph with staleness checks | Text decisions with 14-day recency decay (`tokensave_record_decision`) |
+| Extraction crash safety | WASM sandbox (memory-safe, crash-isolated by runtime) | Subprocess worker pool (`extraction_worker.rs`) |
+| Multi-branch indexing | Git-aware commit/file tracking in unified SQLite WAL | Opt-in separate libSQL database per git branch |
+
+Verified on September 8, 2026 against TokenSave's repository at `master` (v7.11.1, {{ site.data.competitors.tokensave.stars }} stars). Tool definitions from `src/mcp/tools/definitions.rs`, server dispatch from `src/mcp/server.rs`, memory architecture from `src/tokensave/memory.rs`, storage and extraction from `src/db/` and `src/extraction/`.
+
+## Key architectural differences
+
+### 1. Tool Surface Management: 86 Advertised Tools vs. 28-Tool Minimal Preset
+
+The number of tools an MCP server exposes directly impacts agent performance. Every tool definition consumes prompt tokens in the initial `tools/list` response, and large tool lists increase parameter hallucination and tool mis-selection rates (dispatch dilution).
+
+TokenSave defines 86 MCP tools in `get_tool_definitions()`. In Anthropic-specific environments supporting the deferred-loading proposal (`_meta: { "anthropic/alwaysLoad": true }`), TokenSave tags 5 tools (`tokensave_search`, `tokensave_context`, `tokensave_callees`, `tokensave_impact`, `tokensave_status`). However, on all standard MCP hosts (including Claude Code, Codex CLI, Cursor, Antigravity, OpenCode, and Zed), the `tools/list` endpoint returns all 85+ tool definitions unconditionally. TokenSave's own source comments in `src/mcp/server.rs` record this reality:
+> *"The original metric only counted the tool's own answer text, so overhead that's very real to the model — 80+ tool schemas, the call itself, warning banners — was invisible."*
+
+To balance this, TokenSave implements session debt accounting (`settle_session_debt`), charging the schema overhead against future token savings over multiple turns.
+
+trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
+- **28-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
+- **Workflow-tailored presets**: Dedicated presets for `review` (32 tools), `architecture` (41 tools), or `dev` (42 tools).
+- **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
+
+### 2. Pure Syntax Parsing vs. 87 Framework Semantic Integrations
+
+Both trace-mcp and TokenSave parse source code using tree-sitter grammars. Where they diverge is how structural syntax is translated into architectural comprehension.
+
+TokenSave is language-broad: it includes tree-sitter grammars for 50+ languages across three compilation tiers (`lite` with 11 core languages, `medium` with 9, and `full` adding 40+ including GLSL/HLSL/Metal shaders, CUDA, Fortran, Cobol, and Basic dialects). However, its extractors capture purely syntactic constructs: functions, classes, structs, methods, import statements, and call expressions. It contains no framework-specific extractors:
+- It knows an Express or FastAPI file has a function call named `app.get()`, but creates no route-to-handler relationship in the graph.
+- It cannot connect a backend controller to a React/Vue/Svelte frontend component or Blade/Jinja template.
+- It cannot link an ORM model (Prisma, TypeORM, Drizzle, SQLAlchemy, Django ORM) to database schema migrations.
+
+trace-mcp builds a true semantic code graph across {{ site.data.counts.frameworks }} frameworks:
+- **HTTP Routing & Middleware**: Explicit directed edges connect route definitions to handler functions, parameter schemas, and authentication middleware chains across Express, Fastify, NestJS, Next.js, Django, Flask, FastAPI, Rails, Spring Boot, Gin, Actix, and Axum.
+- **Component & View Hierarchies**: Resolves relationships between backend controllers, API endpoints, and UI view layers.
+- **Data Layer & ORM Models**: Connects models directly to database tables, migration files, and query callsites.
+
+When an agent asks "what breaks if I change this endpoint parameter?", trace-mcp traverses typed framework edges. In TokenSave, the agent must trace raw call sites and manually infer route bindings.
+
+### 3. Code Modification: String Replacement Primitives vs. AST-Verified Refactoring
+
+AI agents frequently introduce syntax errors or broken imports when editing code. The two tools approach code modification with fundamentally different primitives.
+
+TokenSave provides string-level and regex-anchored editing tools:
+- `tokensave_str_replace`: Uniquely anchored find-and-replace for string blocks.
+- `tokensave_multi_str_replace`: Applies an array of string replacements atomically.
+- `tokensave_insert_at`: Inserts text before or after a matched anchor string.
+- `tokensave_ast_grep_rewrite`: Optional structural pattern replacement via ast-grep CLI.
+
+While anchored string replacement is safer than raw shell sed commands, it operates on text slices rather than semantic symbols. If a symbol is renamed across a project, string replacement cannot update importing files or adjust lexical scopes.
+
+trace-mcp provides a complete suite of **AST-native refactoring write tools**:
+- `refactor_rename`: Performs scope-aware symbol renames across all referencing files, updating import statements and call sites while verifying syntax integrity.
+- `refactor_extract`: Extracts code blocks into new functions with inferred arguments and return signatures.
+- `refactor_move`: Relocates functions or classes across module boundaries with automatic import resolution.
+- `refactor_codemod`: Applies structural AST transformation patterns with compiler-level validation.
+
+### 4. Memory Models: Text Recency Decay vs. Symbol-Bound Staleness Verification
+
+Both tools provide persistent memory across agent sessions, recognizing that agents should not re-learn project architectural decisions from scratch on every turn.
+
+TokenSave implements decision and code area memory (`src/tokensave/memory.rs`):
+- `tokensave_record_decision`: Saves title, rationale, and consequences into libSQL.
+- `tokensave_record_code_area`: Records high-interest file paths and architectural components.
+- **Exponential recency decay**: Decisions have a 14-day half-life (`RECALL_DECAY_HALF_LIFE_SECS = 14 days`), gently lowering older decisions in search rank without expiring them.
+- **Session start delta**: Summarizes the top 5 recent decisions and code areas on session startup.
+
+However, TokenSave's decisions are stored as free-form text and path strings. If a referenced function is deleted, renamed, or refactored, the decision remains in the database and continues to be recalled.
+
+trace-mcp implements **Symbol-Bound Decision Memory**:
+- Decisions are bound directly to symbol IDs (`src/db/connection.ts::Pool#class`) and file nodes in the code graph.
+- When `get_change_impact` is run on a symbol, linked decisions appear directly in the output.
+- **Staleness verification**: At recall time, trace-mcp verifies that referenced symbols and files still exist in the current index. If code was removed, stale decisions are suppressed rather than misleading the agent.
+
+### 5. Security & Quality Gates: General Intelligence vs. OWASP Top-10 Taint Analysis in CI
+
+trace-mcp integrates static application security testing directly into the MCP server:
+- **OWASP Top-10 Taint Analysis**: Tracks data flows from untrusted inputs (HTTP parameters, request bodies) to sensitive sinks (SQL queries, shell execution, HTML output) with type-aware pruning.
+- **OASIS SARIF 2.1.0 Export**: Generates standardized vulnerability reports for GitHub Code Scanning, GitLab CI, and Azure DevOps.
+- **Configurable Quality Gates**: Enforces architectural boundaries, dependency cycles, and dead-code thresholds in CI.
+
+TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern matching for known hazardous constructs (such as `eval` or `unsafe` blocks in Rust), but provides no cross-file taint analysis, no source-to-sink data flow tracking, and no SARIF report generation.
+
+## When to choose TokenSave
+
+- **Polyglot codebases with niche or shader languages**: Your repository contains GLSL/HLSL/Metal shaders, CUDA, Fortran, Cobol, Pascal, or QuickBasic alongside general-purpose code.
+- **Independent multi-branch index databases**: You work in multiple active git worktrees and prefer completely separate libSQL databases per branch.
+- **Git blame and commit archaeology**: You want native blame-graph metrics (`tokensave_blame`, `tokensave_log`, `tokensave_diff`) built into your MCP queries.
+- **You prefer a compiled Rust native binary**: You want a self-contained single binary installed via `cargo binstall` or Homebrew rather than running Node.js.
+
+## When to choose trace-mcp
+
+- **Modern web and backend frameworks**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORM models.
+- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Safe, automated AST refactoring**: You want your AI agent to perform atomic renames, extractions, and file moves with syntax validation and import graph updates.
+- **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
+- **Integrated CI security & quality gates**: You want OWASP Top-10 taint analysis and SARIF reporting built into your code graph workflow.
+- **Zero-setup npm distribution**: You want instant execution via `npx -y trace-mcp@latest` with embedded SQLite and bundled ONNX embeddings.
 
 ## Next steps
 
