@@ -43,10 +43,16 @@ at least fails predictably from the oldest end.
 The by-kind split contradicts the prediction: `detail` facts survived best
 (79.2%), not worst. Compactness is not what is dropping them.
 
+The result does not rest on the one confounded task below. Dropping `recall-08`
+entirely still leaves the state arm at 83.3% against 100% — a 16.7-point gap,
+still outside the −10 threshold. (Independently recomputed during review.)
+
 **Invention appears, in one arm only.** 0.33 fabricated identifier codes per
 task in the state arm, 0 in both transcript arms. Under the H4 threshold, but
-the sign is one-directional and worth watching: rewriting facts from memory is
-where invented ones come from.
+the sign is one-directional and the mechanism is legible: the rewrite keeps an
+identifier's trailing digits and swaps its prefix, turning `EDGE_RESOLVER_3557`
+into `DEAD_END_3557`. The loop is not forgetting the fact so much as corrupting
+its handle, which scores as a miss and an invention at once.
 
 ## The confound, named
 
