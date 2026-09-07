@@ -241,7 +241,7 @@ function bannerHtml(t, narrow = false) {
       <span><b>${counts.tools}</b> tools</span><span class="sep"></span>
       <span><b>${counts.languages}</b> languages</span><span class="sep"></span>
       <span><b>${counts.frameworks}</b> framework integrations</span><span class="sep"></span>
-      <span><b>100%</b> local</span><span class="sep"></span>
+      <span>your code stays <b>local</b></span><span class="sep"></span>
       <span><b>MIT</b></span>
     </div>
   </div>`;

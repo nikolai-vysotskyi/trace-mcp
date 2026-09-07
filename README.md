@@ -16,7 +16,7 @@
     <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
     <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
-    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,951 with it — 70.5% less, median over 60 merged PRs in 6 open-source repos that are not ours. 181 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
+    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,951 with it — 70.5% less, median over 60 merged PRs in 6 open-source repos that are not ours. 181 tools, 81 languages, 87 framework integrations, your code stays local, MIT." />
   </picture>
 </p>
 
@@ -69,6 +69,8 @@ trace add                  # index the repo you are in
 **70.5% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 3,951 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
 <sub>Measured at trace-mcp 3.22.0 (`3edecbfb`) on 7 September 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
+
+Cheaper is not the same as better, so the same 60 pull requests were reviewed twice and scored blind. The trace-mcp arm **understood the change in 67%** of them against **65%** for naive file loading, at **0.80** false positives per PR against **0.58**. [Quality half of the benchmark →](https://trace-mcp.com/perf/prereg-pr-quality/)
 
 <p align="center">
   <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
