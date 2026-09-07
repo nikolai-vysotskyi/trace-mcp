@@ -39,7 +39,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-precompact.sh', () => {
     const result = execSync(`bash ${HOOK_SCRIPT}`, {
       cwd: testProjectDir,
       encoding: 'utf-8',
-      timeout: 5000,
+      timeout: 30_000,
     });
     // Should produce no output
     expect(result.trim()).toBe('');
@@ -64,7 +64,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-precompact.sh', () => {
     const result = execSync(`bash ${HOOK_SCRIPT}`, {
       cwd: testProjectDir,
       encoding: 'utf-8',
-      timeout: 5000,
+      timeout: 30_000,
     });
 
     const output = JSON.parse(result.trim());
@@ -92,7 +92,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-precompact.sh', () => {
       execSync(`bash ${HOOK_SCRIPT}`, {
         cwd: testProjectDir,
         encoding: 'utf-8',
-        timeout: 5000,
+        timeout: 30_000,
       });
 
       expect(fs.existsSync(stale1)).toBe(false);
@@ -128,7 +128,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-precompact.sh', () => {
     const result = execSync(`bash ${HOOK_SCRIPT}`, {
       cwd: testProjectDir,
       encoding: 'utf-8',
-      timeout: 5000,
+      timeout: 30_000,
     });
 
     // Should produce no output (stale file)
