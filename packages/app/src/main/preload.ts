@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInEditor: (filePath: string): Promise<void> => ipcRenderer.invoke('open-in-editor', filePath),
   openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('open-external', url),
+  /** TRA-1155: "Get help" opens a new issue prefilled with this copy's facts. */
+  helpUrl: (): Promise<string> => ipcRenderer.invoke('help-url'),
   showInFolder: (target: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('show-in-folder', target),
   detectIdeApps: (): Promise<{ id: string; name: string; bundlePath: string }[]> =>

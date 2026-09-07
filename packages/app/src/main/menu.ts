@@ -26,7 +26,7 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
-import { type GlobalActionId, globalAction } from '../shared/global-actions.js';
+import { type GlobalActionId, globalAction, helpUrl } from '../shared/global-actions.js';
 import { isLocale } from '../shared/i18n/locales.js';
 import { startI18n, t } from './i18n';
 import { readLocale, writeLocale } from './locale';
@@ -70,12 +70,27 @@ function closeWindowGroup(): void {
   }
 }
 
+/** The "Get help" destination for THIS copy of the app. The main process is
+    the only one that knows all four facts, so the renderer asks it for the
+    finished URL over IPC rather than assembling its own (TRA-1155). */
+export function currentHelpUrl(): string {
+  return helpUrl({
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    autoUpdate: app.isPackaged,
+  });
+}
+
 /** One item of the shared global-action list (TRA-363). The sidebar's app menu
     renders the SAME entry, so the label and the key are read here, never typed
     here — that is the whole point of `src/shared/global-actions.ts`. */
 function actionItem(id: GlobalActionId): MenuItemConstructorOptions {
   const action = globalAction(id);
-  const url = action.url;
+  // "Get help" is the one link whose destination depends on this copy of the
+  // app: the issue form arrives with the version, platform and update channel
+  // already in it (TRA-1155).
+  const url = action.id === 'get-help' ? currentHelpUrl() : action.url;
   return url
     ? { label: t(action.labelKey), click: () => void shell.openExternal(url) }
     : {

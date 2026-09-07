@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { resolveAutoUpdaterExport } from './autoupdater-interop';
 import { t } from './i18n';
-import { registerAppMenu } from './menu';
+import { currentHelpUrl, registerAppMenu } from './menu';
 import { getLauncherDir } from './trace-home';
 import { appendUpdateLog, updateLogPath } from './update-log';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
@@ -76,6 +76,11 @@ ipcMain.handle('open-external', async (_event, url: string) => {
   await shell.openExternal(url);
   return { ok: true };
 });
+
+// IPC: the "Get help" destination, with this copy's version, platform and
+// update channel already in the issue body (TRA-1155). Built here because the
+// renderer knows none of those.
+ipcMain.handle('help-url', () => currentHelpUrl());
 
 // IPC: reveal a path in Finder/Explorer. Reveals, never opens: the duplicate
 // install the app menu points at is an `.app`, and `shell.openPath` on one would
