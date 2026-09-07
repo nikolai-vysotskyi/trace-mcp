@@ -169,6 +169,24 @@ describe('getContextBundle() — behavioural contract', () => {
     expect(result._unsafeUnwrap().totalTokens).toBeLessThanOrEqual(100);
   });
 
+  /**
+   * TRA-1090: the markdown bundle carried only signatures for three months —
+   * `FileReadCache` used a bare `require('node:fs')`, which throws under ESM
+   * and was swallowed by a catch. Nothing asserted that a body ever reached
+   * the caller, so the PR-context benchmark measured a source-free context and
+   * reported it as 90.6% savings. Assert on the body, not on the shape.
+   */
+  it('markdown output carries the primary symbol body, not just its signature', () => {
+    const result = getContextBundle(ctx.store, ctx.rootPath, {
+      symbolIds: [ctx.primaryAId],
+      outputFormat: 'markdown',
+      tokenBudget: 8000,
+    });
+    expect(result.isOk()).toBe(true);
+    const content = result._unsafeUnwrap().content ?? '';
+    expect(content).toContain('return shared();');
+  });
+
   it('unknown symbol_id returns err with NOT_FOUND', () => {
     const result = getContextBundle(ctx.store, ctx.rootPath, {
       symbolIds: ['src/does-not-exist.ts::nope#function'],

@@ -8,35 +8,67 @@ measurement: pr_context_quality
 data_file: docs/_data/pr_context_quality.json
 preregistration: prospective
 written_on: 2026-09-06
-verdict: MISSED
+verdict: MET
 ---
 
 # Preregistration — PR review quality benchmark
 
 **This file was written before the run.** It was committed on 2026-09-06 with
-`verdict: PENDING`, ahead of the 180 model calls it describes; the verdict line
-was filled in from `docs/_data/pr_context_quality.json` afterwards and nothing
-else in this file changed. The [token arm's
+`verdict: PENDING`, ahead of the 180 model calls it describes. The [token arm's
 preregistration](./prereg-pr-context.md) was retrospective and said so — this
 one is the correction of that.
 
-## Verdict: MISSED, on both bars
+Everything below *Question* is as registered and has not been edited. Only the
+verdict has been rewritten, once: the first run was invalidated by a defect in
+the harness's trace arm, the bars did not move, and both the struck numbers and
+the re-run's are below.
 
-The registered prediction was wrong, and in the direction that costs us. On 60
-pull requests the trace-mcp arm understood the change **50%** of the time
-against the naive arm's **65%** — a **15 point** loss where the bar allowed 10
-— and produced **1.20** false positives per PR against **0.65**, a **+0.55**
-where the bar allowed +0.50. The prediction registered below was a 0–8 point
-loss with the primary bar met. It was not met.
+## Verdict: MET, on both bars — after the first run was found invalid
 
-Latency went the other way, as a tenth of the input predicts: 74.5 s median
-against 90.0 s.
+**Two runs sit under this preregistration, and the first one does not count.**
 
-The bar does not move. The finding is that at the current `get_context_bundle`
-budget the 90% token saving [measured in the token
-arm](../pr-context-benchmark.md) is bought with a measurable amount of review
-quality, and the next issue is closing that gap on this same harness — not
-rewriting the question.
+The 2026-09-06 run published MISSED on both bars: the trace arm understood the
+change 50% of the time against the naive arm's 65% (a 15 point loss where the
+bar allowed 10) and produced 1.20 false positives per PR against 0.65 (+0.55
+where the bar allowed +0.50). On 2026-09-07, TRA-1090 diagnosed the 13 pull
+requests behind that gap and found they had nothing in common except this: the
+trace arm's context contained **no source code at all**. `get_context_bundle`
+read symbol bodies through a bare `require('node:fs')`, which throws under ESM
+and was swallowed by a catch, so the harness — which imports `src/` as real ESM
+— assembled signatures only. The shipped build was never affected. The
+[diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) has the
+account.
+
+That run therefore measured a context the product does not serve. It is struck,
+not defended.
+
+**The re-run, same 60 pull requests, same bars, unchanged:**
+
+| | naive file loading | trace-mcp | bar |
+|---|---:|---:|---|
+| understood the change | {{ site.data.pr_context_quality.baseline_understood }} | **{{ site.data.pr_context_quality.trace_understood }}** | ≥ baseline − 10 pp |
+| false positives per PR | {{ site.data.pr_context_quality.baseline_false_positives }} | **{{ site.data.pr_context_quality.trace_false_positives }}** | ≤ baseline + 0.5 |
+
+The trace arm comes out **{{ site.data.pr_context_quality.trace_understood }}**
+against **{{ site.data.pr_context_quality.baseline_understood }}** — non-inferiority
+met with the sign in our favour, which the bar did not require and which a 60-PR
+sample cannot make significant. Read it as parity, not as a win. False positives are +0.22, inside
+the 0.5 allowed and close to the +0.2–0.5 the prediction below registered.
+Per-PR agreement: both arms understood {{ site.data.pr_context_quality.both_understood }},
+only the naive arm {{ site.data.pr_context_quality.baseline_only }} (13 in the
+struck run), only trace-mcp {{ site.data.pr_context_quality.trace_only }},
+neither {{ site.data.pr_context_quality.neither }}.
+
+The baseline arm scored **{{ site.data.pr_context_quality.baseline_understood }}**
+in both runs — the same 65% it scored against the broken trace arm. It was never
+touched by the defect, and that is the control this correction rests on.
+
+Latency is the column that changed hands. The struck run had trace at 74.5 s
+against 90.0 s, which was the speed of a context with the code removed. With
+bodies restored the two arms are level:
+{{ site.data.pr_context_quality.trace_median_latency_s }} s against
+{{ site.data.pr_context_quality.baseline_median_latency_s }} s. The saving is in
+input tokens, not in wall clock.
 
 ## Question
 

@@ -6,6 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
@@ -121,7 +122,7 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<str
         reject(new Error('Too many redirects'));
         return;
       }
-      const mod = targetUrl.startsWith('https') ? https : (require('node:http') as typeof https);
+      const mod = targetUrl.startsWith('https') ? https : http;
       mod
         .get(targetUrl, { timeout: timeoutMs, headers: { 'User-Agent': 'trace-mcp' } }, (res) => {
           if ((res.statusCode === 302 || res.statusCode === 301) && res.headers.location) {
