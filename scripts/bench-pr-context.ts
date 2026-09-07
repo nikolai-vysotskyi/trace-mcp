@@ -670,7 +670,14 @@ async function run(limit?: number, only?: Set<string>): Promise<void> {
 
   if (only || nonDefaultBudget) {
     const why = only ? `--only, ${only.size} selected` : `--bundle-budget ${BUNDLE_TOKEN_BUDGET}`;
-    console.log(`\n${rows.length} PRs run; artifacts not written (${why})`);
+    // A diagnostic still has to report its headline, or the only way to read a
+    // budget sweep is to let it overwrite the artifacts — which is the mistake
+    // this guard exists to prevent.
+    console.log(
+      `\n${rows.length} PRs run; artifacts not written (${why}); ` +
+        `median ${results.aggregates.baseline_tokens.median} → ${results.aggregates.trace_tokens.median} tokens ` +
+        `(${results.aggregates.median_savings_pct.toFixed(1)}% saved)`,
+    );
     return;
   }
 

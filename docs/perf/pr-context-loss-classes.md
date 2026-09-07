@@ -188,11 +188,12 @@ which now publishes as MISSED.
 The cause is not what this page first guessed. 88 of the 117 are the
 8,000-token bundle budget truncating — module-level pseudo-symbols, the
 suspect named here on 2026-09-07, are 53, and 51 of those are also just the
-budget. Re-running the identical corpus at a 64,000-token budget brings 309 of
-338 bodies through and takes the median saving from 70.5% to **−5.8%**: the
-assembled context then costs more than reading the files. Coverage and cost are
-the same dial, so the missed floor is a packing problem — which symbols get the
-budget — not a budget-size problem.
+budget. Re-running the identical corpus at larger budgets trades bodies for saving
+monotonically — 16,000: 245 bodies at 29.7%; 32,000: 281 at −0.4%; 64,000: 309
+at −5.8% — so the saving crosses zero while 57 bodies are still missing. There
+is no budget on this corpus that buys full coverage *and* a token win. The
+missed floor is therefore a packing problem — which symbols get the budget —
+not a budget-size problem.
 
 29 bodies arrive missing at *any* budget (11 dropped from the bundle outright
 rather than kept as a stub). That residual is the part a tradeoff does not

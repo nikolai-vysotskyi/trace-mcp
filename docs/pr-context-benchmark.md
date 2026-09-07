@@ -182,15 +182,16 @@ Two further limits worth stating plainly:
   which the bar does not move for. The token figure is unaffected — it was
   always counted on the assembled text.
 - **The coverage gap is what buys the saving.** Of those 117, **88 are budget
-  truncation**: re-running the same corpus at a 64,000-token bundle budget
-  brings 309 of 338 bodies through — and takes the median saving from
-  {{ site.data.pr_context_bench.median_savings_pct }}% to **−5.8%**, i.e. the
-  assembled context then costs more than loading the files. Coverage and cost
-  are the same dial on this dataset, so the honest way to read the headline is
-  "a third of the changed bodies is the price of the
+  truncation**. Re-running the same corpus at larger bundle budgets trades one
+  for the other, monotonically: 8,000 → 221 of 338 bodies at
+  {{ site.data.pr_context_bench.median_savings_pct }}% saved; 16,000 → 245 at
+  29.7%; 32,000 → 281 at **−0.4%**; 64,000 → 309 at **−5.8%**. The saving
+  crosses zero while 57 bodies are still missing, so on this dataset there is no
+  budget that buys full changed-symbol coverage *and* a token win — the honest
+  way to read the headline is "a third of the changed bodies is the price of the
   {{ site.data.pr_context_bench.median_savings_pct }}%". 29 bodies never arrive
-  at any budget; those are a defect, not a tradeoff, and are open. The per-symbol
-  counts are in
+  at any budget; those are a defect, not a tradeoff, and are open. Per-symbol
+  counts:
   [`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json).
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file

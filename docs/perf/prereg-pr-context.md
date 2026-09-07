@@ -125,22 +125,24 @@ were always counted on the assembled text.
 
 This was published as unmeasured on 2026-09-07 and is measured now, because the
 guess in that sentence turned out to be wrong. Re-running the identical corpus
-with `--bundle-budget 64000` (a diagnostic run; it writes no artifacts) moves
-the split:
+at four bundle budgets (`--bundle-budget N`; a non-default budget is a
+diagnostic and writes no artifacts):
 
-| of 338 changed symbols | at the shipped 8,000 | at 64,000 |
-|---|---:|---:|
-| body present | 221 | 309 |
-| bodyless — module-level node | 53 | 2 |
-| bodyless — ordinary symbol | 64 | 27 |
-| median token saving | **70.5%** | **−5.8%** |
+| of 338 changed symbols | 8,000 (shipped) | 16,000 | 32,000 | 64,000 |
+|---|---:|---:|---:|---:|
+| body present | 221 | 245 | 281 | 309 |
+| bodyless — module-level node | 53 | 38 | 15 | 2 |
+| bodyless — ordinary symbol | 64 | 55 | 42 | 27 |
+| **median token saving** | **70.5%** | **29.7%** | **−0.4%** | **−5.8%** |
 
 **88 of the 117 are budget truncation**, not the module-level pseudo-symbols the
 earlier note guessed at — those are 53, and 51 of them are also just budget.
-Raising the budget recovers them and **destroys the measurement they were
-bought with**: at 64,000 the assembled context costs *more* than loading the
-files outright. The 70.5% is not a saving that happens to come with a coverage
-gap; the coverage gap is what pays for it.
+
+The curve is monotone in both columns, and that is the finding: every body
+recovered costs saving, and **the saving crosses zero between 16,000 and 32,000
+— while 57 bodies are still missing.** There is no budget at which this corpus
+gets full changed-symbol coverage *and* a token win. The 70.5% is not a saving
+that happens to come with a coverage gap; the coverage gap is what pays for it.
 
 That reframes what the missed floor asks for. It cannot be met by turning the
 budget up. It is a packing question — which symbols get the budget — not a size
