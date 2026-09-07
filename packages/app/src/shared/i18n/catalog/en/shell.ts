@@ -8,6 +8,7 @@
 export const shell = {
   // ── Sections ────────────────────────────────────────────────────────────
   navWorkspace: 'Workspace',
+  navSavings: 'Savings',
   navClients: 'MCP Clients',
   navOverview: 'Overview',
   navAsk: 'Ask',

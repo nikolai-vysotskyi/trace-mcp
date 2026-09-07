@@ -15,95 +15,144 @@ product forward — not day-to-day bugs, tool tweaks, or indexing hygiene
 (those live as regular issues, tracked by other autopilots). An item is
 removed here once it ships, is superseded, or turns out not to matter.
 
-## Where the product stands (revised 2026-09-05)
+## Where the product stands (revised 2026-09-07)
 
-The 2026-09-02 revision said the engine room was not the problem and the
-binding gap was reach and first value. That still holds. What changed in
-three days is *what we know about our own numbers*, and it is large enough
-that it reorders everything below.
+The 2026-09-05 revision said honest measurement was the only unoccupied
+position in this category and that we held the artefacts to take it. We then
+ran the measurement it demanded, and it came back against us. That is the
+week, and it reorders everything below.
 
-**The headline savings counter was an arithmetic identity, not a
-measurement** (TRA-880, PR #915, merged). `SavingsTracker.recordCall` ran
-*before* the tool executed, so every call could only be scored as
-`RAW_COST_ESTIMATES[name] × 0.15`. In a real store: 5,123 `search_text`
-calls, 13,063,650 tokens "saved" — exactly 2,550 each, zero variance. That
-counter is on the homepage, in the README, and rides the usage ping.
-Measured against real `tools/call` responses on the wire, across twelve
-tools covering 17,947 of 20,187 recorded calls: **23,048,005 claimed vs
-9,547,447 measured — 41%**. The 0.15 constant is off by 2.5–10x on the four
-tools that are 94% of all calls, and **four of twelve tools return more
-tokens than the baseline they were credited with replacing** while booking a
-positive number on every call. Fixed by estimate-then-reconcile; the
-published counter goes down and now reports a measurement. Everything this
-project published about aggregate savings before 2026-09-05 carries that.
+**The quality arm of our one external benchmark missed both preregistered
+bars** (TRA-568, PR #1017, merged, shipped in v3.21.0). Same 60 merged
+bug-fix PRs from six other people's repositories, same model, same settings,
+byte-identical prompts dumped from the token run:
 
-**The same week told us the whole category does this** (TRA-855 / TRA-859).
-No competitor has demonstrated an honest order of magnitude on a solved
-end-to-end task: published 10× figures exist only on isolated slices, and
-Codebase-Memory's is paid for with answer quality falling 92% → 83%. An
-independent JetBrains audit (July 2026, 80 paired tasks in Claude Code)
-found `rtk` **increased** task cost by 7.6% against a claimed 60–90% saving,
-because mutating terminal output broke Anthropic's prefix cache ($3.75/M
-write vs $0.30/M read). The real ceiling of leading products and papers is
-**1.3–1.6× per task** (Augment −32% tokens on SWE-bench Pro; HCP 50K → 8K on
-dependency context; EET −32% cost).
+| 60 PRs | naive file loading | trace-mcp | Δ (bar) |
+| --- | ---: | ---: | ---: |
+| understood the change | 65.0% | **50.0%** | **−15 pp** (allowed −10) |
+| false positives per PR | 0.65 | **1.20** | **+0.55** (allowed +0.50) |
+| error density | 18.6% | **29.3%** | |
+| review latency, median | 90.0 s | 74.5 s | −17% |
 
-Put those two together and the strategic conclusion is not "we were wrong".
-It is that **honest measurement is the only unoccupied position in this
-category**, we now hold the two artefacts that occupy it — a corrected
-counter and TRA-534's median measured on 60 merged PRs from six
-*other people's* repositories — and nobody else does. Items 1 and 2 below
-are about putting that where a visitor sees it, with its quality arm
-attached so it is not the thing we criticise peers for.
+**Struck on 2026-09-07 by TRA-1090 — this run measured a defect, not the
+product.** The 13 pull requests behind that gap had exactly one thing in
+common: the trace arm's context contained no source code at all.
+`get_context_bundle` read symbol bodies through a bare `require('node:fs')`,
+which throws under ESM and was swallowed by a catch, so the harness — which
+imports `src/` as real ESM — assembled signatures only. The shipped build was
+never affected. Re-run on the same 60 PRs against the same unmoved bars:
+comprehension **65.0% naive vs 66.7% trace** (parity; the sign is in our favour
+and 60 PRs cannot make that significant), false positives **0.58 vs 0.80**,
+naive-only losses **13 → 3**, latency level at 93 s both ways. Both bars met.
+The token figure moved the other way in the same correction: **90.6% → 70.5%**,
+median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
 
-**Presets moved 3.5% of the problem.** The E6 decomposition of a real
-startup block (TRA-726, median 62K on the owner's machine) reads: client
-native tools 41%, client system prompt 14%, third-party MCP servers 17%,
-CLAUDE.md/instruction files 16%, hooks and skill listings 11%, **trace-mcp
-schemas 3.5%**. The flagship 67–86% preset win is 67–86% of that last row.
-Roughly 44% of the block is reachable by us and almost none of it is our
-schemas. Two mechanisms shipped this week aim at the reachable part and are
-measured, not assumed: Read/Bash **mirrors** (TRA-749/750) hold 77% of the
-paid Read/Bash mass with 52% compression on the band and **0 pp solve-rate
-change** across 108 live runs, and the **startup-text compressor**
-(TRA-759/770) addresses the 27% of the block that is instruction and hook
-text. Both are bigger levers than the tool surface ever was. See item 4 —
-this is a category question, not a feature list.
+Everything below that was written from the struck numbers — item 1 in
+particular — needs re-deciding on the corrected ones at the next revision of
+this file.
 
-**The rename evidence flipped, and it confirms the decision rather than
-reopening it** (TRA-879). Thirty days of GSC data for `sc-domain:trace-mcp.com`:
-53 clicks total, 41 of them (77%) from the exact strings `trace-mcp` and
-`trace mcp`, 83% from some variant of the name, and **zero clicks from any
-query describing what the product does**. The largest
-impression source is a collision we already lose — `traceix mcp` (61
-impressions, 0 clicks), a different product sharing our prefix. The
-second, `mcp tracing` (54 impressions, 0 clicks), is **not** a collision:
-it is our own observability intent, `/telemetry.html` targets it, and the
-homepage was cannibalizing it — see `ops/index-coverage.md` (TRA-974). So
-the boundary fixed in
-`ops/rename-to-trace.md` — short name only on things that live on a
-developer's own disk, `trace-mcp` everywhere public — is now backed by
-search data, not just by the 0.74–1.23% token measurement. Nothing that a
-search engine or a human types may move.
+Read it precisely, because both over-readings are wrong. It is one task
+(reviewing a merged bug-fix PR, where the defect is inside the diff), one
+packing strategy (default bundle budget, no `pack_context` tuning — excluded
+by that issue's own scope), one judge. It is **not** a verdict that trace-mcp
+makes agents worse in general. But it is the only end-to-end quality number
+this project has, it is measured better than anyone in this category measures
+themselves, and it is the exact failure mode we documented in a competitor
+(Codebase-Memory's 10× costing 9 pp of answer quality, TRA-859). Having caught
+it in ourselves is worth nothing if we only publish it.
 
-## The one thing this roadmap is now about
+**So the roadmap stops being a publishing problem and becomes a retrieval
+problem.** Restating the savings numbers on the corrected basis is done
+(TRA-904, TRA-880); the category sentence is written (`ops/positioning.md`,
+TRA-906); the counter measures responses instead of multiplying a constant.
+The remaining edge is not another honest number — it is the first product
+programme aimed at what the numbers say is broken: *what does our packer drop
+that a naive read keeps, and can it be fixed to inside the bar?* The levers are
+already named and already measured elsewhere: unresolved import edges
+(TRA-451 — 13 languages extract imports that never become graph edges),
+per-language `resolution_tier` depth, `pack_context` budgeting, and the
+over-baseline tool shaping that TRA-952 / TRA-1026 / TRA-1049 started. The
+harness that found the gap is the gate that closes it. Item 1.
 
-We can read the adoption metric of record, and on 2026-09-05 it says **107
-monthly active installs** against 22 daily — with the 28-day window still
-filling (`days_observed: 8`, `month_window_full: false`), so that is not
-growth and must not be graded as such.
+**The business model got its first real analysis, and its answer is growth
+before pricing** (TRA-1047, deepened in TRA-1061, corrected in TRA-1076). At
+127 monthly active installs any price yields tens of dollars a month, so
+pricing today is a distribution plan with a checkout at the end. Two measured
+facts frame it. Demand in the adjacent category is enormous and proven: eleven
+free Claude-quota meters hold **38,199 stars** between them, two of them
+already native macOS menu-bar apps. Willingness to pay in that same category is
+approximately zero: **75,183 stars across eight of those authors, one public
+sponsor**. And paid acquisition is closed by arithmetic — measured
+impression→install of 0.199% puts CAC at $9.90–80 against $1.51–3.02 of
+expected revenue per install. What none of those 38,199 stars does is *give
+anything back*: every one of them **measures** consumption, and the only tool
+in the lane that **reduces** it is unrelated to code (`pxpipe`, 7,349★,
+rendering text as images). We are the only product positioned to say how much
+of your weekly limit it handed back. That is a growth wedge, not a paywall —
+see "Business model" below, where the decision and its expiry conditions are
+written down.
 
-Beside it: **four of the funnel's five stages read `null`**, and not one of
-them for a reason in our code. Six event fields the ping already sends are
-unregistered in the GA4 property and one PAT is unset (TRA-747, TRA-886).
-GA4 does not backfill, so every day this waits is deleted, not delayed.
-Five of this week's twenty focus items depend on it.
+**We can finally name an acquisition channel and count it through to
+installs** (TRA-1036). The 2026-09-05 star burst traced to an unsolicited X
+post by Dan Kornas (98,495 followers) at 00:28:56 UTC, first burst star at
+00:52:39 UTC: 5,003 views → 38 stars → roughly **+10 installs above a +14/day
+baseline** (`installs_28d.new` differenced on `origin/adoption-data`), with
+`active_users.week` moving 107 → 120 across the same step. That is the first
+external event this project has ever traced to the metric of record — and a
+correction to the previous run, whose search for a common source could only see
+inside GitHub, where a tweet leaves no trace. Directory listings still show
+zero attributable arrivals. The listings moratorium stands; effort belongs
+where the one measured conversion actually happened.
 
-The production ratio is unchanged and still the argument: 27 autopilots
-shipping at a rate almost nothing else matches, for roughly a hundred
-users. The next weeks of *strategic* work are measured in users reaching
-first value and in numbers we can defend when someone checks them — not in
-capability shipped.
+**The daemon does not currently pay for itself** (TRA-931 baselines, TRA-941).
+At nine concurrent sessions the system *with* the daemon holds 804 MB more RSS
+(2,449 vs 1,645) and reaches its first answer 1.7× later (3,608 ms vs
+2,164 ms; 2.9× at N=1). The daemon costs 528 MB resident while a proxied
+session saves only 36 MB, because a proxied session still builds nearly the
+whole stack. Its one genuine win is the growth rate — 3.64× versus 9.06× RSS
+from N=1 to N=9. This is the same class of finding as the quality gap: a
+component whose cost we shipped for months without being able to state it.
+
+**Presets are still 3.5% of the problem**, and the 2026-09-05 decomposition
+(TRA-726) stands unchanged: client native tools 41%, client system prompt 14%,
+third-party MCP servers 17%, instruction files 16%, hooks and skill listings
+11%, trace-mcp schemas 3.5%. The Read/Bash mirrors (77% of the paid band, 52%
+compression, 0 pp solve-rate change over 108 live runs) and the startup-text
+compressor remain the larger levers.
+
+**The rename stays closed.** TRA-879's search data — 83% of organic clicks are
+some spelling of the name, zero clicks from any query describing what the
+product does — is unchanged, and TRA-974/TRA-1025 turned the second-largest
+impression source into a page instead of a collision. Nothing public moves.
+
+## The two numbers this roadmap is now about
+
+**50% and 127.**
+
+The first is comprehension in the quality arm — half the PRs where the agent,
+given our context, did not understand the change, against 65% for a naive
+read. Everything downstream of install is capped by it. An install that
+reaches value and is served a worse answer is worse than no install, and no
+amount of reach fixes it. Item 1.
+
+The second is monthly active installs (2026-09-06 snapshot: 34 day / 120 week /
+127 month, `days_observed: 9`, `month_window_full: false` — still filling, so
+not growth and not to be graded as such). 89 first-ever pings in 28 days. It is
+the denominator every business-model number divides by, and the reason the
+answer to monetization this quarter is "grow first".
+
+Between them sits the funnel, and **four of its five stages still read
+`null`** for reasons entirely outside our code: six event fields the ping
+already sends are unregistered in the GA4 property and one PAT is unset
+(TRA-886, which owns the ask — do not open another). GA4 does not backfill, so
+every day of waiting is deleted rather than delayed. One thing did improve on
+its own: `client_reporting.readable` is now **true at 51%** (was false at 37%),
+because the field is finally upgrading past v3.12.0. The client-portability
+question is now readable-in-principle and blocked only on the `calls`
+dimension.
+
+The production ratio is unchanged and still the argument: 28 autopilots
+shipping at a rate almost nothing else matches, for roughly 127 users.
 
 ## Adoption — metric of record
 
@@ -177,6 +226,7 @@ suspect until corroborated.
 | 2026-09-03 | **39 / 90 / 90** | |
 | 2026-09-04 | **39 / 102 / 102** | |
 | 2026-09-05 | **22 / 107 / 107** | `days_observed: 8`. `savings.inflation_suspected: true` at `raw_ratio: 3.78`, 2 of 7 days capped. Clients placed: 17 claude-code, 7 codex, 1 each antigravity / grok / opencode / pi — but `client_reporting.readable: false` at 37%. Versions: 3.10.0 (28), 3.11.0 (24), 3.15.0 (23), 3.8.0 (21), 3.14.0 (16), 3.17.1 (5); 3.9.0 still absent. |
+| 2026-09-06 | **34 / 120 / 127** | `days_observed: 9`, window still filling. 612 events in 28 days; 89 first-ever pings. `savings` re-based on the measured counter: 14,402,995 tokens over 1 day, `raw_ratio: 1`, `inflation_suspected: false`, 0 capped days — not comparable to anything before 2026-09-05. `client_reporting.readable` **true at 51%** (80 at or above v3.12.0, 78 below, 36 unknown). Versions: 3.10.0 (28), 3.11.0 (25), 3.15.0 (25), 3.17.1 (22), 3.8.0 (21), 3.14.0 (16), 3.18.0 (13), 3.19.0 (2). |
 
 **`savings.tokens_saved` in that file is not comparable across 2026-09-05.**
 Until PR #915 the counter was `RAW_COST_ESTIMATES[tool] × 0.15`, booked before
@@ -369,210 +419,191 @@ read it before planning any listings work.
 
 ## Ready to start
 
-The five items the 2026-09-02 revision listed here are all `done`
-(TRA-643, 644, 645, 646, 647, 673). What replaces them is shaped by the
-measurement findings above, not by a fresh idea list.
+Items 1, 2 and 4 of the 2026-09-05 revision are done: the savings figures are
+restated on the corrected basis (TRA-904), the quality arm ran (TRA-568), and
+the category sentence is written (TRA-906, `ops/positioning.md`). What replaces
+them is what those results created.
 
-### 1. Restate every published savings number on the corrected basis (new, TRA-904)
-TRA-880 changed what `tokens_saved` means, and the correction is a
-reduction. Right now the homepage, the README, `server.json`, the ten
-external listings and the daily ping quote a figure produced by
-`calls × constant`. Leaving them is not neutral: it is publishing a number
-we have internally disproved.
+### 1. Close the quality gap — the packer, graded on the harness that found it (new, TRA-1090)
+−15 pp comprehension and +0.55 false positives per PR is the largest open
+product defect this project has, and it is invisible to every test we run:
+10,372 unit tests pass while the assembled context loses to `cat`.
 
-**Why this is item 1 and not documentation hygiene.** The one position
-nobody in this category occupies is honest measurement (see above). We
-cannot take it while our own storefront carries the inflated figure — and
-we get the credibility *only* if we say why it moved, in public, rather
-than letting it quietly re-render. The correction is the asset.
+**Why this is item 1 and nothing else is.** Every efficiency claim we publish,
+every listing one-liner, every hero number, and the whole "honest measurement"
+position assumes the cheaper context is *as good*. We now have evidence it is
+not, in the one measurement of ours that uses other people's repositories. The
+asset is not the finding — it is being the only product in the category with a
+harness that can grade a fix.
 
-Work: sweep every published savings figure to a generated source; where the
-number moves, say so in `CHANGELOG.md` and on the page; extend the
-`readme-claims` guard so a savings or benchmark figure that is not read from
-a generated data file fails CI (TRA-762 was the same defect in the
-benchmark prose and was caught by a human read, not by a test). Note
-`adoption.yml` also carries `inflation_suspected: true` at
-`raw_ratio: 3.78` — two of seven days capped — so the field aggregate is
-compromised on a second, independent axis and must be cited with that.
+Work, in order: diagnose before tuning — take the 13 PRs the naive arm
+understood and ours did not and classify *what was missing* (an unresolved
+import edge, a symbol below the bundle budget, a file never retrieved, a
+truncated body); fix the largest class; re-run the same 60 PRs; publish the
+delta whichever way it goes. Bars stay as preregistered (≤10 pp, ≤+0.50 FP).
+Named suspects with existing measurements: TRA-451 (13 languages whose imports
+never become edges), per-language `resolution_tier` depth, `pack_context`
+budgeting, and the over-baseline tool shaping of TRA-952/1026/1049. Wire the
+harness into CI as a gate on the retrieval path once one arm can move it.
 
-### 2. Ship the quality arm of the one external benchmark (TRA-568, unblocked here)
-TRA-534 is the only number this project has that was not produced by the
-tool measuring itself on its own repository: median 13,595 → 3,951 input
-tokens (70.5%) across 60 merged bug-fix PRs from six OSS repos. **Corrected
-2026-09-07 by TRA-1090** — it read 90.6% (1,326 tokens) until the trace arm was
-found to contain no source code at all; same corpus, same SHAs, bodies
-restored. TRA-883 put it into the registry one-liners. It is still a token
-number without a quality number.
+### 2. Give the quota back visibly — the free wedge into a 38,199-star demand pool (new, TRA-1091)
+Eleven free tools that *measure* Claude quota consumption hold 38,199 stars;
+we have 159. Not one of them returns any of it. trace-mcp does, and never says
+so where a user can see it: `savings.tokens_saved` goes to a GA4 ping, and the
+number a user could repeat — "trace-mcp handed back N tokens of your week" —
+exists nowhere in the CLI, the app, or the client session.
 
-That is precisely the move TRA-859 catches competitors making — and
-Codebase-Memory's 10× costing 9 pp of answer quality is the exact failure
-mode. **A token number without a quality number is an efficiency claim, not
-a value claim.** TRA-568 has sat `blocked` for a week; the paid end-to-end
-design was cancelled for budget (TRA-778), so it must be re-scoped to what a
-subscription can run — TRA-778's option 1 (localisation rather than
-solution, 5–15 requests per task instead of 220) with its contamination
-caveat stated in the same breath, or option 2's 12–15 task end-to-end run.
-Pick one, run it, publish the result including a negative one.
+This is a growth item, not a pricing item (see Business model). It is the only
+place where our actual mechanism and a proven, enormous, already-searching
+demand overlap. Ship it free, per install, locally computed, no account. Gate
+it on the same discipline as everything else: the number shown must be the
+measured one (post-TRA-880 basis), never the pre-correction identity.
 
 ### 3. Unblock the funnel — six fields and one token (TRA-886, owns the ask)
-Four of five stages `null`; `activation`, `usage` and `daemon` return error
-strings instead of data; `acquisition` returns HTTP 403. Cause is entirely
-outside our code: four event-scoped custom **dimensions** (`repos_indexed`,
-`calls`, `preset`, `tools_advertised`), two custom **metrics**
-(`daemon_starts`, unclean stops) and one fine-grained PAT with
-`Administration: read`. **TRA-886 owns this ask — do not open a fourth
-issue for it, and do not re-investigate the causes; they are settled.**
+Unchanged and still blocked. Four event-scoped custom **dimensions**
+(`repos_indexed`, `calls`, `preset`, `tools_advertised`), two custom
+**metrics** (`daemon_starts` and its unclean-stop companion) and one
+fine-grained PAT with `Administration: read`. Causes are settled; do not
+re-investigate them and do not open a fourth issue. Every unregistered day is
+unrecoverable, and it blocks the preset field check, the use-vs-setup split,
+the daemon field signal (TRA-671, shipped and reading zero), and every arrivals
+judgement distribution and SEO currently make on taste.
 
-Every day unregistered is unrecoverable, and it blocks: the preset field
-check (item 1's companion), the use-vs-setup question (item 5 below), the
-daemon field signal (TRA-671, shipped and reading zero), and every arrivals
-judgement the distribution and SEO work is currently making on taste.
+### 4. Decide what the daemon is for, in numbers (TRA-941 follow-through)
+At N=9 the daemon costs 804 MB and 1.7× time-to-first-answer and buys a 2.5×
+slower memory growth curve. Either the proxied session gets radically cheaper,
+or the daemon does, or the default changes. TRA-948 already proved the first
+answer need not wait for it. This is an architecture decision with measurements
+attached, not a perf ticket — write the answer down where the app's defaults
+are set.
 
-### 4. Name the category the product actually moved into — answered (TRA-906)
-**Done 2026-09-05. The written position is `ops/positioning.md`; read that
-before editing any public description.** The answer was neither of the two
-options below: the sentence that covers everything shipped is a
-generalisation of the one already on the homepage, and the site's own eyebrow
-(*Recomputation → Reuse*) has carried the category claim all along. The
-finding that forced it was not the graph's token share but that **two of the
-five mechanisms are not MCP tools at all** — trace-mcp outgrew "an MCP
-server" before it outgrew "a code graph". The ledger also fixes what falls
-out of the headline, the two doors, why `server.json` must *not* carry the
-category sentence, and the surfaces this obliges us to change. Those surfaces
-are now ordinary issues; what remains here is history.
+### 5. Answer client portability the moment `calls` is registered (TRA-673 follow-through)
+Half-unblocked this week: `client_reporting.readable` flipped to true at 51%,
+so the split is now readable-in-principle. It still needs the `calls`
+dimension from item 3. The stakes are unchanged and opposite: if tool use holds
+across clients, reach goes wide; if it collapses without the PreToolUse hook,
+our addressable market is clients that can enforce routing and a large share of
+distribution effort points at installs that will never reach value. Do not
+conclude from `by_client_used_pct` before both halves are true.
 
-Five mechanisms now ship under one binary and only one of them is code
-intelligence: the graph and its tools, **decision memory**, the Read/Bash
-**mirrors**, and the **startup-text compressor** — plus `trace_state_*`
-(item 8). The
-decomposition above says the schema surface we lead with is 3.5% of the
-context an agent actually pays for, and the two new mechanisms sit on much
-larger shares with measured, gated results behind them.
+## Business model — decided 2026-09-07, revisit at 800 MAU
 
-Every public surface still describes a code-graph MCP server. That was
-accurate in June. The question this item answers is whether trace-mcp is
-"a code graph for your agent" or "the thing that manages an agent's context
-budget end to end" — and if it is the second, the homepage, README,
-`server.json` and every listing describe a fraction of the product.
+First real analysis: TRA-1047, deepened in TRA-1061, corrected in TRA-1076.
+The decision, so no run re-litigates it:
 
-**Positioning pass, not code.** One sentence a user repeats; what falls out
-of the surface if it does not fit; whether the mirrors and the compressor
-need their own door or belong behind the same one. This supersedes the
-narrower version of the same question asked about the State Engine alone
-(item 8) — answer them together or the answer is two products by default.
-
-### 5. Answer the client-portability question the moment it becomes readable (TRA-673 follow-through)
-The mechanism that actually routes an agent to our tools is the PreToolUse
-guard hook, and it is Claude Code only; Cursor and Windsurf get a rules
-file; everyone else gets tool descriptions, which ask rather than route.
-Session mining has two providers. We ship into MCP directories on a premise
-of client neutrality we have never tested.
-
-**Two things now stand between us and the answer, and only one is item 3.**
-`client_reporting.readable` is `false` at **37%**: installs below v3.12.0
-report `unknown` whatever they run, because of the ping bug TRA-643 fixed,
-and the field is still 63% below that line. So the client split will be
-*readable* before it is *representative*. That makes upgrade lag a
-strategic blocker rather than a hygiene item — see the weekly focus for
-Update Health. Do not conclude anything from `by_client_used_pct` while
-`readable` is false; re-read and record.
-
-The stakes are unchanged and opposite: if use holds across clients, reach
-goes wide; if it collapses without a hook, our addressable market is
-clients that can enforce routing and half of current distribution effort
-points at installs that will never reach value.
+- **No paywall, no pricing page, no sponsor drive as a strategy this quarter.**
+  At 127 MAU every pricing model in the shortlist lands within noise of $38/mo,
+  and the adjacent category is evidence that stars do not convert: 75,183 stars
+  across eight authors of free quota meters, one public sponsor (a floor —
+  private sponsors are invisible — but not one that overturns the order of
+  magnitude). Building a 3–4 week paywall before distribution exists is the
+  most expensive available mistake.
+- **Paid acquisition is closed arithmetically**, not by preference: measured
+  impression→install 0.199%, CAC $9.90–80 against $1.51–3.02 expected revenue
+  per install. Do not propose ad spend without moving one of those two numbers
+  first.
+- **The wedge is "reduces" against 38,199 stars of "measures"** — item 2 above,
+  shipped free.
+- **Hardware-as-rental (the Darkbloom M5 Ultra comparison) is not this
+  product's business** and does not belong in this roadmap. TRA-1047's original
+  arithmetic was wrong on both sides and TRA-1076 corrected it against
+  Nikolai's own observed earnings; whatever its merits, it is a separate
+  operation.
+- **Revisit condition, written now so it is not a matter of mood:** ~800 MAU,
+  or a `used_pct` reading that shows the product is actually used, whichever
+  comes first.
 
 ## Big bets — design pass before any code
 
-### 6. Deterministic codemods on the local CPU — the one unoccupied niche (new, TRA-862)
-Top of the TRA-855 intelligence ranking, and the only gap the market read
-found: **every competitor is read-only** — codegraph, codebase-memory-mcp,
-Serena, Context Mode. Nobody does bulk edits by deterministic parsing.
-
-The argument is sharper than compression: work done by code costs **zero**
-tokens, not few. Renaming a symbol across its uses, adding a parameter to
-every call site, replacing a deprecated API, adding a field and fixing its
-readers — today an agent does these by reasoning, file by file, with the
-whole transcript in context. We already hold the parsed tree, the symbol
-graph and the located uses; what is missing is applying the edit, not
-computing it.
-
-**The gate before any code is a measurement, and it can kill the bet.**
-TRA-705 estimated 30% of edit work as mechanical and flagged the estimate
-as unproven — it came from the share of Edit payloads, not from reading
-what those edits were. Get it honestly: classify real edit sequences in a
-corpus by whether a deterministic transformation expresses them. If the
-mechanical share is small, the bet does not repay the build, and that is
-worth knowing first. Safety boundaries (dirty-tree refusal, verification,
-one-action undo — TRA-867) are more important than the feature and are part
-of the design pass, not a follow-up.
-
-### 7. One door instead of 178 — a router preset (TRA-646, design done, unbuilt)
+### 6. One door instead of 181 — a router preset (TRA-646, design done, unbuilt)
 Unchanged in substance and still the right shape: advertise a router plus a
-catalog (`plan_turn` and `load_tools` already exist) so the advertised
-surface stops scaling with the tool count. codegraph (68.7K★) advertises
-**one** of its eight tools by default at ~1.9K tokens total, and its stated
-reason in source is not token cost but that *presence itself steers
-mis-picks*.
+catalog (`plan_turn` and `load_tools` already exist) so the advertised surface
+stops scaling with the tool count. codegraph (68.7K★) advertises **one** of its
+eight tools by default at ~1.9K tokens total, and its stated reason in source
+is not token cost but that *presence itself steers mis-picks*.
 
-**What the decomposition above does to its priority.** The prize is bounded
-by the 3.5% schema row, so this is no longer a top-line efficiency play — it
-is a *routing quality* play, which is what codegraph says it is for.
-Sequence it behind items 1–4 and judge it on mis-pick rate, not on tokens.
-The open empirical question is unchanged and cheap: does a model reliably
-reach for a tool it cannot see? That is A/B-able today with `load_tools` as
-it stands. Ships as a preset (`router`), so no contract break.
+The 3.5% schema row bounds the token prize, so this is a routing-quality play,
+not a top-line efficiency one — and after TRA-568 that reads differently than
+it did a week ago: mis-picks are now a measured product defect, not a
+hypothesis. The cheap open question is unchanged and A/B-able today with
+`load_tools` as it stands: does a model reliably reach for a tool it cannot
+see? Ships as a preset (`router`), so no contract break. Sequence behind items
+1–3.
 
-### 8. Decide what the State Engine makes us — and read its A/B sceptically (TRA-649)
-Phase 4 reported −66.8% prompt tokens, −59.2% total, O(T) instead of O(T²)
-prompt growth, loops 2.7% → 0.0%, sub-millisecond patch overhead. The
-engine is real and merged (TRA-884), and the MCP prompt is wired (TRA-799).
+### 7. Read the State Engine A/B sceptically before publishing it (TRA-1008)
+The engine is merged (TRA-884), the MCP prompt is wired (TRA-799), and the A/B
+reports −66.8% prompt tokens, −59.2% total, O(T) instead of O(T²) growth, loops
+2.7% → 0.0%. It also reports **Pass@1 100% in both arms** over 18 pinned tasks
+and 777 steps. Equal success at a ceiling means task success was never at risk
+in that harness: the run demonstrates compression and does not demonstrate that
+compression is free.
 
-**Read the quality half before quoting the token half.** The A/B reports
-**Pass@1 100% in both arms** over 18 pinned tasks and 777 steps. Equal
-success at a ceiling means task success was never at risk in that harness,
-so the run demonstrates compression and does not yet demonstrate that
-compression is free. That is structurally the same shape as the claim
-TRA-880 just disproved about our own counter, and exactly what item 2 exists
-to stop us shipping. Before this number reaches a public surface it needs
-one arm where the baseline can fail.
+TRA-568 is what that sentence looks like when someone finally checks — same
+shape of claim, and the answer was −15 pp. `docs/SKILL_STATE.md` is correctly
+held (TRA-1008) until an arm exists where the baseline can fail. Do not
+publish the token half alone. The positioning half is settled
+(`ops/positioning.md`): `trace_state_*` stays behind the tool surface and does
+not get its own door.
 
-**The positioning half of this item is answered** (item 4, `ops/positioning.md`):
-`trace_state_*` is one of four non-graph mechanisms in the binary, it stays
-behind the tool surface and does **not** get its own door, and deciding that
-separately from the others would have produced two products by accident. What
-survives here is the quality half above — the A/B still owes one arm where the
-baseline can fail before any of it reaches a public surface.
+### 8. Decide what the desktop app is for (new)
+The Electron app is the largest surface we maintain and the least evidenced.
+Across 148 releases it has **6 `.dmg` downloads** against 793 `mac.zip` and 987
+auto-updater polls for `latest-mac.yml` (`gh api .../releases --paginate`,
+counted in TRA-1047), and **zero public reviews of it exist anywhere**
+(`ops/user-signal.md`, private repo). One QA pass over an installed v3.22.0
+(TRA-1059) produced seven confirmed defects and roughly twenty open tickets —
+projects pointing at deleted directories counted as healthy, an empty project
+graded A, analytics three days stale reporting `stale: false`.
+
+Both readings are live and neither has been argued: it is either door number
+two for people who will never edit a JSON config — in which case those twenty
+tickets are the roadmap and it needs a first-run funnel measured like any
+other — or it is a demo of the daemon that costs a fifth of our defect budget.
+The numbers above make the question answerable; nobody has asked it. Cheapest
+first step: the app's own installs are already distinguishable in the ping
+(`install_type`), so read them before arguing.
 
 ### 9. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 Unchanged. The design pass is done and stays valid; its smallest slice is a
-network-reachable server component, which is in the one category reserved
-for Nikolai's explicit call. **Correctly parked, not stalled** — and with
-~107 installs across 20 countries and no evidence of a single multi-seat
-user, there is still no demand-side reason to unpark it.
+network-reachable server component, which is in the one category reserved for
+Nikolai's explicit call. **Correctly parked, not stalled** — and with 127
+installs across 20 countries and no evidence of a single multi-seat user, there
+is still no demand-side reason to unpark it.
 
 ## Explicitly not doing right now
 
-- **Tool consolidation as a token play.** Superseded by presets. Do not
-  reopen it for efficiency reasons; only merge two tools if they are
-  genuinely the same tool.
-- **Moving any public occurrence of the name.** TRA-879 closed this with
-  data: 83% of organic clicks are the name, and the two nearest
-  descriptive/adjacent queries are collisions we lose at 0 clicks on 115
-  impressions. The CLI verb, the server key and `~/.trace` are on disk and
-  unindexed; everything a search engine or a human types stays `trace-mcp`.
-- **Chasing competitor feature/tool-count parity.** Count was never the
-  metric in either direction, and the two largest peers compete in the
-  opposite direction.
-- **Publishing another aggregate savings figure before item 1 lands.** Any
-  number sourced from the pre-TRA-880 counter is 2.4x overstated by
-  construction, and `inflation_suspected` is true on top of that.
+- **Deterministic codemods (the former big bet 6) — killed by its own gate.**
+  TRA-862 measured 8,843 Edit/MultiEdit payloads across 2,766 session
+  transcripts: 14.5% are deterministically expressible as a generous upper
+  bound, and only **0.8% both expressible and repeated** (≥3 edits of one shape
+  across ≥2 files in a session), against the 30% the bet assumed. The largest
+  repeating group in 935 editing sessions is six edits over six files. The
+  failure was not "too few mechanical edits" but that they do not repeat, and a
+  one-off mechanical edit costs more through a codemod than through the Edit it
+  replaces. Threshold sweeps in the feature's favour cap it below 1.5%. Do not
+  reopen without a new corpus and a new measurement; the harness is in PR #905.
+- **A paywall, a pricing page, or paid acquisition** — see Business model
+  above; the revisit condition is written there.
+- **Tool consolidation as a token play.** Superseded by presets. Only merge two
+  tools if they are genuinely the same tool.
+- **Moving any public occurrence of the name.** TRA-879 closed this with data.
+  The CLI verb, the server key and `~/.trace` are on disk and unindexed;
+  everything a search engine or a human types stays `trace-mcp`.
+- **Chasing competitor feature/tool-count parity.** Count was never the metric
+  in either direction.
+- **Quoting the token saving without the quality result beside it.**
+  `docs/pr-context-benchmark.md` now carries both, at their corrected values
+  (70.5% and parity on comprehension); any surface that carries one carries the
+  other.
+- **Publishing the State Engine A/B as a value claim** before an arm exists
+  where the baseline can fail (item 7).
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
-  ceiling, filed in `comparisons.md`, not a roadmap item until something
-  forces it.
+  ceiling, filed in `comparisons.md`, not a roadmap item until something forces
+  it.
 - **Adding language #82 or framework #88 as a headline.** Per-language edge
   *resolution depth* (`resolution_tier`, already stored) is the claim worth
-  making; the count is not.
+  making — and after TRA-568 it is also a suspect in the quality gap, which is
+  a better reason to publish it than marketing ever was.
 - **A paid end-to-end benchmark run.** Budget approval was withdrawn
-  2026-09-04 (TRA-778). Do not restart that conversation — re-scope to what
-  a subscription runs, per item 2.
+  2026-09-04 (TRA-778). The quality arm was run without it on the `claude` CLI
+  headless transport (TRA-568) — that route works; use it.

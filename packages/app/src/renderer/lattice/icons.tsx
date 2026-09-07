@@ -99,6 +99,11 @@ const GLYPHS: Record<string, string> = {
   git_branch:
     '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="9" r="3"/><path d="M18 12a9 9 0 0 1-9 9M6 9v6"/>',
   favorite: '<path d="M12 21s-7-4.5-9-9a4.5 4.5 0 0 1 9-2 4.5 4.5 0 0 1 9 2c-2 4.5-9 9-9 9z"/>',
+  /* "Savings" names what came BACK, so the glyph is a return arrow — a line
+     that leaves to the right, turns, and comes home pointing left. Not a
+     coin, not a piggy bank: this screen counts tokens, and a money glyph on a
+     free local tool reads as a price tag for something that has none. */
+  savings: '<path d="M8 7h7a4 4 0 0 1 0 8H6"/><path d="M9 4L6 7l3 3"/>',
   grid_view:
     '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
   // Project "Overview" landing tab — a compass needle echoing the Lattice app

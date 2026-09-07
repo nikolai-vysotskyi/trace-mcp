@@ -59,18 +59,21 @@ const MemoryExplorer = lazy(() =>
   import('./tabs/MemoryExplorer').then((m) => ({ default: m.MemoryExplorer })),
 );
 const Notebook = lazy(() => import('./tabs/Notebook').then((m) => ({ default: m.Notebook })));
+const Savings = lazy(() => import('./tabs/Savings').then((m) => ({ default: m.Savings })));
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=workspace → Menu window (sidebar + Workspace/Clients/Settings)
 // ?view=project&root=/path → Project window (sidebar + Overview/Graph)
 
-type GlobalTab = 'workspace' | 'clients' | 'settings';
+type GlobalTab = 'workspace' | 'savings' | 'clients' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
 // Built per render, not frozen at module scope: switching the language has to
 // relabel the sidebar, quick open AND the native menu these are published to.
 const globalTabs = (): { id: GlobalTab; label: string; icon: string }[] => [
   { id: 'workspace', label: t('shell:navWorkspace'), icon: 'grid_view' },
+  /* What trace-mcp gave back, not what the agent spent (TRA-1091). */
+  { id: 'savings', label: t('shell:navSavings'), icon: 'savings' },
   { id: 'clients', label: t('shell:navClients'), icon: 'cable' },
 ];
 
@@ -79,7 +82,13 @@ const globalTabs = (): { id: GlobalTab; label: string; icon: string }[] => [
  * persisted by older builds. Both pre-merge tabs collapse to `workspace`.
  */
 function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
-  if (value === 'clients' || value === 'settings' || value === 'workspace') return value;
+  if (
+    value === 'clients' ||
+    value === 'settings' ||
+    value === 'workspace' ||
+    value === 'savings'
+  )
+    return value;
   // 'projects' / 'dashboard' / anything else → workspace (the new home).
   return 'workspace';
 }
@@ -676,6 +685,11 @@ function MenuContent({
   return (
     <>
       {tab === 'workspace' && <Workspace />}
+      {tab === 'savings' && (
+        <Suspense fallback={null}>
+          <Savings />
+        </Suspense>
+      )}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && (
         <Settings

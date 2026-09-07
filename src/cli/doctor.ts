@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import * as p from '@clack/prompts';
 import Database from 'better-sqlite3';
 import { Command } from 'commander';
+import { buildSavingsReport, formatSavingsReport, type SavingsReport } from '../savings-report.js';
 import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH } from '../global.js';
 import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
 import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
@@ -124,6 +125,12 @@ function printServeRootReport(r: ServeRootReport): void {
   if (r.status !== 'ok') console.log(`  ${r.detail}`);
 }
 
+/** The give-back figure, printed alongside the health checks (TRA-1091). */
+function printSavingsReport(r: SavingsReport): void {
+  console.log(formatSavingsReport(r));
+  console.log('');
+}
+
 export const doctorCommand = new Command('doctor')
   .description('Check trace-mcp health: registry/DB integrity and competing tools')
   .option('--fix', 'Automatically fix all fixable conflicts')
@@ -191,6 +198,8 @@ export const doctorCommand = new Command('doctor')
         // Not in a project — scan global only
       }
 
+      const savings = buildSavingsReport();
+
       const report = detectConflicts(projectRoot);
       const { conflicts } = report;
 
@@ -208,6 +217,7 @@ export const doctorCommand = new Command('doctor')
                 topologyFix,
                 decisions,
                 decisionsFix,
+                savings,
                 conflicts,
                 fixes: results,
               },
@@ -217,7 +227,11 @@ export const doctorCommand = new Command('doctor')
           );
         } else {
           console.log(
-            JSON.stringify({ serveRoot, registry, topology, decisions, ...report }, null, 2),
+            JSON.stringify(
+              { serveRoot, registry, topology, decisions, savings, ...report },
+              null,
+              2,
+            ),
           );
         }
         return;
@@ -227,6 +241,7 @@ export const doctorCommand = new Command('doctor')
       printRegistryReport(registry);
       printTopologyReport(topology);
       printDecisionsReport(decisions);
+      printSavingsReport(savings);
 
       if (registryFix) {
         printRegistryFixResult(registryFix, { dryRun: !!opts.dryRun });
