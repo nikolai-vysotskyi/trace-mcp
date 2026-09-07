@@ -145,8 +145,10 @@ were cases where the index barely earned its keep:
 
 They share a shape: a small change to one or two small files. When the whole
 file is 200 lines, loading it outright is already cheap, and the symbol bodies
-plus the impact list come to nearly the same size. `got#2379` is the extreme —
-{{ site.data.pr_context_bench.losses[0].savings_pct }}% saved, which is noise.
+plus the callers and the impact list come to more than the files themselves —
+which is why 13 of these rows are negative, not merely small. `got#2379` is the
+extreme at {{ site.data.pr_context_bench.losses[0].savings_pct }}%: the assembled
+context costs more than twice what reading both files would.
 **If your repository is small, or your PRs touch only small files, this index
 does not solve a problem you have.** The saving scales with how much of a file
 a reviewer does not need.
@@ -162,6 +164,12 @@ Two further limits worth stating plainly:
 - **Call-site coverage is structural, not semantic.** "Readable" means the
   symbol's body is in the context; "located" means it is named with its file
   and line. It does not mean a model used it correctly.
+- **"Readable" counts pointers, not bodies.** The metric records a span
+  whenever the bundle lists a symbol; it never checks that the body arrived.
+  That is how it read 100% through a three-month stretch in which the
+  benchmark's trace arm carried no source code at all — see the
+  [diagnosis]({{ '/perf/pr-context-loss-classes/' | relative_url }}) of that
+  defect and the correction it forced on the figures above.
 
 ## The thinner context also produces a worse review
 

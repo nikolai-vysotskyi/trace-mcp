@@ -78,11 +78,25 @@ result would be a result about trace-mcp, not about a guessed baseline. It is
 also the reason this figure, and not the aggregate in
 [prereg-response-tokens](./prereg-response-tokens.md), leads the storefront.
 
-## Verdict — MET (retrospective)
+## Verdict — MET (retrospective), at a corrected 70.5%
 
-Median 90.6% (13,595 → 1,326 input tokens), changed symbols readable 100% in
-both arms, affected call sites readable 60% against 20%. Five of the 60 pull
-requests are published as near-ties or losses in
+**Corrected 2026-09-07 (TRA-1090).** The 2026-08-30 run measured a trace-mcp arm
+that contained no source code: `get_context_bundle` read symbol bodies through a
+bare `require('node:fs')`, which throws under ESM and was swallowed by a catch,
+so the benchmark — which imports `src/` as real ESM under `tsx` — assembled
+signatures only. The shipped build was never affected (its `createRequire`
+banner defines `require`), but the published number was measured on a context
+the product does not serve. The [diagnosis]({{ '/perf/pr-context-loss-classes/'
+| relative_url }}) has the full account.
+
+The same 60 pull requests, same pinned SHAs, re-run with bodies restored:
+**median 70.5%** (13,595 → 3,951 input tokens), against the 90.6% first
+published. The bar was ≥50% and is still met; the previous figure is struck, not
+defended. Changed symbols read 100% readable in both arms then and now — a
+metric [since shown to count pointers, not
+bodies]({{ '/perf/pr-context-loss-classes/' | relative_url }}), which is why it
+did not fire. Pull requests where the index did not pay off went from 5 to 23,
+13 of which now cost more than reading the files outright; they are published in
 [`docs/_data/pr_context_bench.json`](../_data/pr_context_bench.json) and on the
 [benchmark page]({{ '/pr-context-benchmark.html' | relative_url }}).
 
