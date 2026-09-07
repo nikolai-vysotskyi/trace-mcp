@@ -439,8 +439,86 @@ over-baseline list from one sample (TRA-1049). At 136 tokens the recorded
 overhead block is nearer 101 000 tokens than 445 000.
 
 That is a frame question, not a product one, and this page's rule is that
-editing the frame is a visible act in its own commit. It is filed separately;
-nothing on this page has been repriced here.
+editing the frame is a visible act in its own commit. It was filed separately as
+TRA-1107 and repriced there — see the next section; nothing on this page was
+repriced in TRA-1098's own commit.
+
+## `register_edit` repriced: 345 tokens was one file, and the frame already had the right stratum (TRA-1107)
+
+TRA-1098 left `register_edit` priced at **345 tokens** from a single harness
+call on `src/savings.ts`, and said in the same breath that the field mean was
+2.5x lower. This is the reprice. It is a **re-framing, not a product change** —
+nothing shipped in it, no response got smaller, and the headline moves anyway.
+That is the whole reason it is its own commit and its own
+[preregistration](https://trace-mcp.com/perf/prereg-response-tokens/) entry,
+written before the run.
+
+**The objection that delayed it was wrong.** TRA-1107 argued there was no
+stratum for "a file with a representative number of near-duplicate symbols", so
+a frame entry would have to be built and frozen first.
+`benchmarks/response-tokens/frame.json` has carried a `file` stratum since
+TRA-993 — fifteen indexed non-test `.ts` files under `src/`, path-sorted, every
+Nth, committed on 2026-09-06, re-checked against the repository by
+`tests/docs/response-token-frame.test.ts`. `get_outline` already prices against
+it and `register_edit`'s argument is a file path. The basket was already there.
+Building a duplication-stratified one instead would have meant inventing a
+selection rule for "representative number of similarities" after seeing which
+files are expensive, which is the move TRA-985 showed decides the headline.
+
+**The spread, fifteen committed files, median of three runs:**
+
+| | tokens |
+|---|---:|
+| `src/ai/abort.ts`, `src/retrieval/index.ts` (no similarities) | 48 |
+| median of the basket | **183** |
+| mean of the basket — the published figure | **219** |
+| `src/indexer/edge-resolvers/imports.ts` | 453 |
+| previous published figure (`src/savings.ts`, one call) | 345 |
+
+A 9.4x spread, and the file the harness happened to pick sat above the 80th
+percentile of it. Six of the fifteen carry no similarity at all and answer in
+under 52 tokens — the bookkeeping floor.
+
+**Three readings, and they agree about the shape:**
+
+| | median | p90 | max | n |
+|---|---:|---:|---:|---:|
+| frame basket, this repo | 183 | — | 453 | 15 |
+| recorded field calls, five months | 67 | 408 | 712 | 710 |
+| old published figure | — | — | — | **1** |
+
+The field row is every non-error `register_edit` call this machine has made
+since 2026-04-06, converted at the tool's own measured chars-to-token ratio
+(`node scripts/field-response-distribution.mjs register_edit`). It sits *below*
+the frame, as preregistered: the frame asks each file once, while the field is
+weighted by which files a maintainer edits repeatedly, and TRA-1098's memo
+suppresses the repeats. The field is the cross-check, not the price — it is one
+machine, and it prices this laptop's editing habits the way `list_projects`
+prices its project count.
+
+**What it moves.** `register_edit` is credited zero and counted as pure
+overhead, so the whole change lands on the all-in figure:
+
+| | before | after |
+|---|---:|---:|
+| `register_edit` per call | 345 | **219** |
+| recorded overhead block (1 289 calls + `reindex`) | 455 561 | **293 147** |
+| `reduction_pct_incl_overhead` | 66.1% | **{{ site.data.response_tokens.reduction_pct_incl_overhead }}%** |
+
+**Read that 1.0-point move as two things, not one.** 0.6 points of it is this
+reprice (162 414 tokens over a 27 729 800-token baseline). The rest is that the
+bench re-measures every tool on every run, and this run sits eleven commits past
+the previous artifact: `get_call_graph` 802 → 904, `get_index_health` 299 → 338,
+`get_tests_for` 90 → 115, `search_text` 641 → 608, and `get_changed_symbols`
+258 → 62, which reports the diff of whatever working tree it runs on and is not
+comparable between runs at all. Those also take `reduction_pct` from 67.7% to
+{{ site.data.response_tokens.reduction_pct }}%, and none of them is a product
+change either.
+
+**The direction is the uncomfortable part.** This reprice makes our published
+number better by 0.6 points without making the product one token cheaper, and
+we knew it would before we ran it — which is why the prediction saying so is
+registered, dated and one commit earlier than the result.
 
 ## The four tools still over baseline, and why none of them is next (TRA-1098)
 
