@@ -126,6 +126,12 @@ positives from +0.55 to +0.22, and latency from 17% faster to level. The naive
 arm scored 65.0% in both runs — measured twice, independently, at the same
 value.
 
+One row of the re-run needed a second attempt: `honojs/hono#5283` failed with a
+transport error (`claude exited 1`) and was filled by re-invoking the same
+script, which re-runs only the directories with no cached judgement. Nothing
+inspects a row's outcome before deciding to keep it — the retry closed a gap in
+the artifact, it did not re-roll a result.
+
 Both bars are met (≤10 pp comprehension loss, ≤+0.5 false positives): the trace
 arm lands 1.7 points *above* the naive one, which the bar never asked for and
 which 60 pull requests cannot make significant — parity is the honest reading.
