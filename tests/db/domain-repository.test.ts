@@ -105,22 +105,26 @@ describe('DomainRepository ORM models and associations', () => {
     const userId = store.insertOrmModel({ name: 'User', orm: 'sequelize' }, fileA);
     const postId = store.insertOrmModel({ name: 'Post', orm: 'sequelize' }, fileB);
 
+    // Declared directly in fileA — covers the `file_id IN (${ph})` branch.
+    store.insertOrmAssociation(userId, postId, 'Post', 'hasMany', undefined, fileA);
     // Already resolved (target_model_id set) and declared in fileB — out of
     // scope for fileA: it doesn't need re-resolving, the edge already exists.
     store.insertOrmAssociation(postId, userId, 'User', 'belongsTo', undefined, fileB);
-    // Unresolved (no target_model_id, no file_id) but its target name matches
+    // Unresolved (no target_model_id) — as it would read after fileA's model
+    // node was dropped by deleteEntitiesByFile — but its target name matches
     // a model that lives in fileA — must surface when scoped to fileA so a
-    // reindex of fileA can re-link it.
-    store.insertOrmAssociation(postId, null, 'User', 'hasMany', undefined, undefined);
+    // reindex of fileA can re-link it. Declared in fileB, matching the
+    // reindex lifecycle: only the *target's* file is scoped, not the source's.
+    store.insertOrmAssociation(postId, null, 'User', 'hasMany', undefined, fileB);
     // Unrelated: neither declared in, nor targeting, the scoped files.
     const fileC = store.insertFile('src/Comment.ts', 'typescript', 'h', 10, null, null);
     const commentId = store.insertOrmModel({ name: 'Comment', orm: 'sequelize' }, fileC);
     store.insertOrmAssociation(commentId, null, 'Other', 'hasMany', undefined, fileC);
 
     const scoped = store.getAllOrmAssociations([fileA]);
-    expect(scoped.map((r) => r.kind).sort()).toEqual(['hasMany']);
+    expect(scoped.map((r) => r.kind).sort()).toEqual(['hasMany', 'hasMany']);
 
-    expect(store.getAllOrmAssociations()).toHaveLength(3);
+    expect(store.getAllOrmAssociations()).toHaveLength(4);
     expect(
       store
         .getOrmAssociationsByModel(postId)
