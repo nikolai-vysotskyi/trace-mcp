@@ -1,9 +1,8 @@
 {
-  "measured_at": "2026-09-06T20:43:42.745Z",
+  "measured_at": "2026-09-07T08:24:17.943Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "8f41412e",
-    "dirty": true
+    "commit": "9f499d67"
   },
   "target": "self",
   "runs": 3,
@@ -89,24 +88,24 @@
     {
       "tool": "get_index_health",
       "ok": true,
-      "chars": 977,
-      "est": 281,
-      "real": 299,
+      "chars": 1135,
+      "est": 327,
+      "real": 338,
       "ms": 2,
       "runs": 3,
-      "real_min": 296,
-      "real_max": 299
+      "real_min": 338,
+      "real_max": 340
     },
     {
       "tool": "get_tests_for",
       "ok": true,
-      "chars": 380,
-      "est": 110,
-      "real": 90,
-      "ms": 5,
+      "chars": 494,
+      "est": 143,
+      "real": 115,
+      "ms": 4,
       "runs": 3,
-      "real_min": 90,
-      "real_max": 90
+      "real_min": 115,
+      "real_max": 115
     },
     {
       "tool": "get_context_bundle",
@@ -122,46 +121,35 @@
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 14400,
-      "est": 4140,
-      "real": 4041,
-      "ms": 5,
+      "chars": 14499,
+      "est": 4169,
+      "real": 4060,
+      "ms": 4,
       "runs": 3,
-      "real_min": 4041,
-      "real_max": 4042
+      "real_min": 4059,
+      "real_max": 4060
     },
     {
       "tool": "get_call_graph",
       "ok": true,
-      "chars": 3319,
-      "est": 955,
-      "real": 802,
+      "chars": 3737,
+      "est": 1075,
+      "real": 904,
       "ms": 1,
       "runs": 3,
-      "real_min": 802,
-      "real_max": 802
+      "real_min": 904,
+      "real_max": 904
     },
     {
       "tool": "get_complexity_report",
       "ok": true,
-      "chars": 6865,
-      "est": 1974,
-      "real": 1820,
+      "chars": 6821,
+      "est": 1962,
+      "real": 1812,
       "ms": 3,
       "runs": 3,
-      "real_min": 1820,
-      "real_max": 1820
-    },
-    {
-      "tool": "register_edit",
-      "ok": true,
-      "chars": 1189,
-      "est": 342,
-      "real": 345,
-      "ms": 145,
-      "runs": 3,
-      "real_min": 345,
-      "real_max": 345
+      "real_min": 1812,
+      "real_max": 1812
     },
     {
       "tool": "reindex",
@@ -169,7 +157,7 @@
       "chars": 227,
       "est": 66,
       "real": 59,
-      "ms": 493,
+      "ms": 551,
       "runs": 3,
       "real_min": 59,
       "real_max": 59
@@ -177,13 +165,13 @@
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 9734,
-      "est": 2799,
-      "real": 2800,
-      "ms": 53,
+      "chars": 9858,
+      "est": 2835,
+      "real": 2828,
+      "ms": 5,
       "runs": 3,
-      "real_min": 2799,
-      "real_max": 2801
+      "real_min": 2827,
+      "real_max": 2828
     },
     {
       "tool": "get_env_vars",
@@ -191,7 +179,7 @@
       "chars": 59,
       "est": 17,
       "real": 13,
-      "ms": 1,
+      "ms": 0,
       "runs": 3,
       "real_min": 13,
       "real_max": 13
@@ -199,24 +187,24 @@
     {
       "tool": "get_dead_code",
       "ok": true,
-      "chars": 11066,
-      "est": 3182,
-      "real": 2725,
-      "ms": 58,
+      "chars": 11179,
+      "est": 3214,
+      "real": 2741,
+      "ms": 60,
       "runs": 3,
-      "real_min": 2725,
-      "real_max": 2725
+      "real_min": 2741,
+      "real_max": 2741
     },
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 1038,
-      "est": 299,
-      "real": 258,
-      "ms": 53,
+      "chars": 179,
+      "est": 52,
+      "real": 62,
+      "ms": 50,
       "runs": 3,
-      "real_min": 258,
-      "real_max": 258
+      "real_min": 62,
+      "real_max": 62
     },
     {
       "tool": "check_quality_gates",
@@ -224,7 +212,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 409,
+      "ms": 410,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -257,7 +245,7 @@
       "chars": 4437,
       "est": 1276,
       "real": 1099,
-      "ms": 19,
+      "ms": 14,
       "runs": 3,
       "real_min": 1099,
       "real_max": 1099
@@ -268,7 +256,7 @@
       "chars": 120,
       "est": 35,
       "real": 38,
-      "ms": 552,
+      "ms": 565,
       "runs": 3,
       "real_min": 38,
       "real_max": 38
@@ -279,7 +267,7 @@
       "chars": 5485,
       "est": 1577,
       "real": 2017,
-      "ms": 1,
+      "ms": 3,
       "runs": 3,
       "real_min": 2017,
       "real_max": 2017
@@ -287,13 +275,13 @@
     {
       "tool": "search_text",
       "ok": true,
-      "chars": 2302,
-      "est": 662,
-      "real": 641,
-      "ms": 67,
+      "chars": 2213,
+      "est": 637,
+      "real": 608,
+      "ms": 66,
       "runs": 3,
-      "real_min": 638,
-      "real_max": 641
+      "real_min": 608,
+      "real_max": 608
     },
     {
       "tool": "get_outline",
@@ -309,52 +297,63 @@
     {
       "tool": "search",
       "ok": true,
-      "chars": 1469,
-      "est": 423,
-      "real": 414,
-      "ms": 29,
+      "chars": 1512,
+      "est": 435,
+      "real": 419,
+      "ms": 26,
       "runs": 3,
-      "real_min": 414,
-      "real_max": 414
+      "real_min": 419,
+      "real_max": 419
     },
     {
       "tool": "find_usages",
       "ok": true,
-      "chars": 2599,
-      "est": 748,
-      "real": 659,
+      "chars": 2588,
+      "est": 745,
+      "real": 660,
       "ms": 1,
       "runs": 3,
-      "real_min": 659,
+      "real_min": 660,
       "real_max": 660
+    },
+    {
+      "tool": "register_edit",
+      "ok": true,
+      "chars": 854,
+      "est": 246,
+      "real": 219,
+      "ms": 88,
+      "runs": 3,
+      "real_min": 219,
+      "real_max": 219
     }
   ],
   "items": [
     {
       "tool": "search_text",
       "item": "advanced",
-      "real": 2250,
-      "real_min": 2250,
-      "real_max": 2250,
-      "chars": 8305,
+      "real": 2244,
+      "real_min": 2244,
+      "real_max": 2244,
+      "chars": 8368,
       "hits": 50
     },
     {
       "tool": "search_text",
       "item": "nestjs",
-      "real": 2180,
+      "real": 2128,
       "real_min": 2128,
-      "real_max": 2180,
-      "chars": 7484,
+      "real_max": 2128,
+      "chars": 7300,
       "hits": 50
     },
     {
       "tool": "search_text",
       "item": "Error",
-      "real": 2058,
-      "real_min": 2052,
-      "real_max": 2061,
-      "chars": 7270,
+      "real": 1950,
+      "real_min": 1950,
+      "real_max": 1950,
+      "chars": 6950,
       "hits": 50
     },
     {
@@ -432,10 +431,10 @@
     {
       "tool": "search_text",
       "item": "Community",
-      "real": 2216,
-      "real_min": 2216,
-      "real_max": 2235,
-      "chars": 7894,
+      "real": 1736,
+      "real_min": 1736,
+      "real_max": 1736,
+      "chars": 6590,
       "hits": 50
     },
     {
@@ -633,10 +632,10 @@
     {
       "tool": "search",
       "item": "advanced",
-      "real": 750,
-      "real_min": 750,
-      "real_max": 750,
-      "chars": 2573,
+      "real": 950,
+      "real_min": 950,
+      "real_max": 950,
+      "chars": 3416,
       "hits": 0
     },
     {
@@ -651,108 +650,108 @@
     {
       "tool": "search",
       "item": "Error",
-      "real": 1604,
-      "real_min": 1604,
-      "real_max": 1604,
-      "chars": 6108,
+      "real": 1596,
+      "real_min": 1596,
+      "real_max": 1596,
+      "chars": 6107,
       "hits": 40
     },
     {
       "tool": "search",
       "item": "ServiceInfo",
-      "real": 305,
-      "real_min": 305,
-      "real_max": 305,
+      "real": 297,
+      "real_min": 297,
+      "real_max": 297,
       "chars": 1041,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ToolResultEvent",
-      "real": 287,
-      "real_min": 287,
-      "real_max": 287,
+      "real": 279,
+      "real_min": 279,
+      "real_max": 279,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "handshakeDiagnosticLine",
-      "real": 313,
-      "real_min": 313,
-      "real_max": 313,
+      "real": 305,
+      "real_min": 305,
+      "real_max": 305,
       "chars": 1085,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "AdminRegistration",
-      "real": 461,
-      "real_min": 461,
-      "real_max": 461,
-      "chars": 1835,
+      "real": 453,
+      "real_min": 453,
+      "real_max": 453,
+      "chars": 1838,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "ZodSchema",
-      "real": 396,
-      "real_min": 396,
-      "real_max": 396,
-      "chars": 1390,
+      "real": 388,
+      "real_min": 388,
+      "real_max": 388,
+      "chars": 1388,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "extractRuneProps",
-      "real": 314,
-      "real_min": 314,
-      "real_max": 314,
+      "real": 306,
+      "real_min": 306,
+      "real_max": 306,
       "chars": 1083,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ExportOptions",
-      "real": 366,
-      "real_min": 366,
-      "real_max": 366,
-      "chars": 1269,
+      "real": 358,
+      "real_min": 358,
+      "real_max": 358,
+      "chars": 1271,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "symbolAtLine",
-      "real": 306,
-      "real_min": 306,
-      "real_max": 306,
+      "real": 298,
+      "real_min": 298,
+      "real_max": 298,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "Community",
-      "real": 425,
-      "real_min": 425,
-      "real_max": 425,
-      "chars": 1517,
+      "real": 417,
+      "real_min": 417,
+      "real_max": 417,
+      "chars": 1519,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "checkSymbol",
-      "real": 330,
-      "real_min": 330,
-      "real_max": 330,
+      "real": 322,
+      "real_min": 322,
+      "real_max": 322,
       "chars": 1149,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "matchesV4Cidr",
-      "real": 321,
-      "real_min": 321,
-      "real_max": 321,
+      "real": 313,
+      "real_min": 313,
+      "real_max": 313,
       "chars": 997,
       "hits": 1
     },
@@ -768,9 +767,9 @@
     {
       "tool": "search",
       "item": "min session bytes",
-      "real": 298,
-      "real_min": 298,
-      "real_max": 298,
+      "real": 290,
+      "real_min": 290,
+      "real_max": 290,
       "chars": 1008,
       "hits": 1
     },
@@ -804,20 +803,20 @@
     {
       "tool": "search",
       "item": "json parse",
-      "real": 290,
-      "real_min": 290,
-      "real_max": 290,
-      "chars": 965,
+      "real": 282,
+      "real_min": 282,
+      "real_max": 282,
+      "chars": 966,
       "hits": 1
     },
     {
       "tool": "find_usages",
       "item": "Error",
-      "real": 4032,
-      "real_min": 4032,
+      "real": 4037,
+      "real_min": 4037,
       "real_max": 4037,
-      "chars": 16251,
-      "hits": 262
+      "chars": 16116,
+      "hits": 263
     },
     {
       "tool": "find_usages",
@@ -917,6 +916,126 @@
       "real_max": 283,
       "chars": 974,
       "hits": 1
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/ai/abort.ts",
+      "real": 48,
+      "real_min": 48,
+      "real_max": 48,
+      "chars": 156
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/bundles.ts",
+      "real": 119,
+      "real_min": 119,
+      "real_max": 119,
+      "chars": 446
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/daemon/project-relay.ts",
+      "real": 49,
+      "real_min": 49,
+      "real_max": 49,
+      "chars": 168
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/edge-resolvers/imports.ts",
+      "real": 453,
+      "real_min": 453,
+      "real_max": 453,
+      "chars": 1700
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/plugins/integration/framework/laravel/broadcasting.ts",
+      "real": 452,
+      "real_min": 452,
+      "real_max": 452,
+      "chars": 1865
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/plugins/integration/tooling/commander/index.ts",
+      "real": 418,
+      "real_min": 418,
+      "real_max": 418,
+      "chars": 1721
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/plugins/language/assembly/index.ts",
+      "real": 52,
+      "real_min": 52,
+      "real_max": 52,
+      "chars": 187
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/plugins/language/kotlin/index.ts",
+      "real": 402,
+      "real_min": 402,
+      "real_max": 402,
+      "chars": 1692
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/indexer/plugins/language/xml/index.ts",
+      "real": 400,
+      "real_min": 400,
+      "real_max": 400,
+      "chars": 1593
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/memory/decision-consolidator.ts",
+      "real": 309,
+      "real_min": 309,
+      "real_max": 309,
+      "chars": 1186
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/retrieval/index.ts",
+      "real": 48,
+      "real_min": 48,
+      "real_max": 48,
+      "chars": 163
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/server/parent-death-watch.ts",
+      "real": 50,
+      "real_min": 50,
+      "real_max": 50,
+      "chars": 173
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/tools/advanced/subproject-clone.ts",
+      "real": 183,
+      "real_min": 183,
+      "real_max": 183,
+      "chars": 668
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/tools/navigation/related.ts",
+      "real": 245,
+      "real_min": 245,
+      "real_max": 245,
+      "chars": 909
+    },
+    {
+      "tool": "register_edit",
+      "item": "src/tools/register/navigation/lookup-tools.ts",
+      "real": 50,
+      "real_min": 50,
+      "real_max": 50,
+      "chars": 186
     }
   ]
 }
