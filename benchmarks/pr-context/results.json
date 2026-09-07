@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-07T13:51:11.398Z",
+  "generated_at": "2026-09-07T14:25:49.862Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "9a432d87"
+    "commit": "47755aeb"
   },
   "model_for_pricing": "claude-sonnet-4-5",
   "input_usd_per_mtok": 3,
@@ -100,7 +100,7 @@
     "trace_dependent_readable": 0.2830188679245283,
     "baseline_dependent_pointed": 0.2,
     "trace_dependent_pointed": 1,
-    "median_index_ms": 387
+    "median_index_ms": 273.5
   },
   "losses": [
     {
@@ -741,7 +741,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 78.79291251384275,
-      "index_ms": 392
+      "index_ms": 364
     },
     {
       "repo": "honojs/hono",
@@ -763,7 +763,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 75.6571194343393,
-      "index_ms": 252
+      "index_ms": 243
     },
     {
       "repo": "honojs/hono",
@@ -785,7 +785,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -7.0381703978096315,
-      "index_ms": 552
+      "index_ms": 606
     },
     {
       "repo": "honojs/hono",
@@ -807,7 +807,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 85.61602265830467,
-      "index_ms": 529
+      "index_ms": 516
     },
     {
       "repo": "honojs/hono",
@@ -829,7 +829,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 43.73171750940242,
-      "index_ms": 382
+      "index_ms": 343
     },
     {
       "repo": "honojs/hono",
@@ -851,7 +851,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 87.31653119700601,
-      "index_ms": 423
+      "index_ms": 387
     },
     {
       "repo": "honojs/hono",
@@ -873,7 +873,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 80.5767753017222,
-      "index_ms": 426
+      "index_ms": 289
     },
     {
       "repo": "honojs/hono",
@@ -895,7 +895,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.86112524163191,
-      "index_ms": 761
+      "index_ms": 406
     },
     {
       "repo": "honojs/hono",
@@ -917,7 +917,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.59714332984062,
-      "index_ms": 849
+      "index_ms": 510
     },
     {
       "repo": "honojs/hono",
@@ -939,7 +939,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 86.69633446539407,
-      "index_ms": 399
+      "index_ms": 268
     },
     {
       "repo": "honojs/hono",
@@ -961,7 +961,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 23.947998631542937,
-      "index_ms": 479
+      "index_ms": 274
     },
     {
       "repo": "honojs/hono",
@@ -983,7 +983,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 86.94887300714679,
-      "index_ms": 1062
+      "index_ms": 1192
     },
     {
       "repo": "axios/axios",
@@ -1005,7 +1005,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 49.81817021819574,
-      "index_ms": 1171
+      "index_ms": 416
     },
     {
       "repo": "axios/axios",
@@ -1027,7 +1027,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -46.38130104196001,
-      "index_ms": 1713
+      "index_ms": 671
     },
     {
       "repo": "axios/axios",
@@ -1049,7 +1049,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 98.04501396418597,
-      "index_ms": 502
+      "index_ms": 275
     },
     {
       "repo": "axios/axios",
@@ -1071,7 +1071,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 87.51011829529801,
-      "index_ms": 1255
+      "index_ms": 273
     },
     {
       "repo": "axios/axios",
@@ -1093,7 +1093,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 39.002605135839225,
-      "index_ms": 1029
+      "index_ms": 275
     },
     {
       "repo": "axios/axios",
@@ -1115,7 +1115,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 43.11717227943223,
-      "index_ms": 691
+      "index_ms": 291
     },
     {
       "repo": "axios/axios",
@@ -1137,7 +1137,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 31.45985401459854,
-      "index_ms": 582
+      "index_ms": 293
     },
     {
       "repo": "axios/axios",
@@ -1159,7 +1159,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -59.794109236488424,
-      "index_ms": 339
+      "index_ms": 140
     },
     {
       "repo": "axios/axios",
@@ -1181,7 +1181,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -43.71108343711084,
-      "index_ms": 333
+      "index_ms": 371
     },
     {
       "repo": "axios/axios",
@@ -1203,7 +1203,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -97.42388758782201,
-      "index_ms": 255
+      "index_ms": 373
     },
     {
       "repo": "axios/axios",
@@ -1225,7 +1225,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -42.58321273516643,
-      "index_ms": 137
+      "index_ms": 197
     },
     {
       "repo": "axios/axios",
@@ -1247,7 +1247,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -23.333333333333332,
-      "index_ms": 317
+      "index_ms": 462
     },
     {
       "repo": "expressjs/express",
@@ -1269,7 +1269,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 96.6053321576908,
-      "index_ms": 185
+      "index_ms": 370
     },
     {
       "repo": "expressjs/express",
@@ -1291,7 +1291,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -0.36994877632327827,
-      "index_ms": 61
+      "index_ms": 99
     },
     {
       "repo": "expressjs/express",
@@ -1313,7 +1313,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 96.66336591036294,
-      "index_ms": 259
+      "index_ms": 351
     },
     {
       "repo": "expressjs/express",
@@ -1335,7 +1335,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 85.22417756485791,
-      "index_ms": 190
+      "index_ms": 308
     },
     {
       "repo": "expressjs/express",
@@ -1357,7 +1357,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -7.823657249301459,
-      "index_ms": 93
+      "index_ms": 173
     },
     {
       "repo": "expressjs/express",
@@ -1379,7 +1379,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -3.8077403245942576,
-      "index_ms": 67
+      "index_ms": 159
     },
     {
       "repo": "expressjs/express",
@@ -1401,7 +1401,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -0.4242965609647164,
-      "index_ms": 97
+      "index_ms": 150
     },
     {
       "repo": "expressjs/express",
@@ -1423,7 +1423,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -14.65919701213819,
-      "index_ms": 77
+      "index_ms": 189
     },
     {
       "repo": "psf/requests",
@@ -1445,7 +1445,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 46.701013794249626,
-      "index_ms": 490
+      "index_ms": 459
     },
     {
       "repo": "psf/requests",
@@ -1467,7 +1467,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 73.93114385779423,
-      "index_ms": 596
+      "index_ms": 330
     },
     {
       "repo": "psf/requests",
@@ -1489,7 +1489,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 64.90147129123068,
-      "index_ms": 652
+      "index_ms": 390
     },
     {
       "repo": "psf/requests",
@@ -1511,7 +1511,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.15021485956281,
-      "index_ms": 357
+      "index_ms": 244
     },
     {
       "repo": "psf/requests",
@@ -1533,7 +1533,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 88.63447007785791,
-      "index_ms": 251
+      "index_ms": 268
     },
     {
       "repo": "psf/requests",
@@ -1555,7 +1555,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 52.19432314410481,
-      "index_ms": 289
+      "index_ms": 208
     },
     {
       "repo": "psf/requests",
@@ -1577,7 +1577,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 88.15631587481758,
-      "index_ms": 306
+      "index_ms": 196
     },
     {
       "repo": "psf/requests",
@@ -1599,7 +1599,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 96.71389451125134,
-      "index_ms": 189
+      "index_ms": 197
     },
     {
       "repo": "psf/requests",
@@ -1621,7 +1621,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 80.21523891519587,
-      "index_ms": 229
+      "index_ms": 214
     },
     {
       "repo": "psf/requests",
@@ -1643,7 +1643,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 50.22341376228776,
-      "index_ms": 526
+      "index_ms": 248
     },
     {
       "repo": "pallets/flask",
@@ -1665,7 +1665,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 81.49787805697189,
-      "index_ms": 1721
+      "index_ms": 463
     },
     {
       "repo": "pallets/flask",
@@ -1687,7 +1687,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 85.30299729216595,
-      "index_ms": 1407
+      "index_ms": 314
     },
     {
       "repo": "pallets/flask",
@@ -1709,7 +1709,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 76.3258674712777,
-      "index_ms": 556
+      "index_ms": 330
     },
     {
       "repo": "pallets/flask",
@@ -1731,7 +1731,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 90.83132589351555,
-      "index_ms": 453
+      "index_ms": 85
     },
     {
       "repo": "pallets/flask",
@@ -1753,7 +1753,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 75.42846874368247,
-      "index_ms": 1358
+      "index_ms": 231
     },
     {
       "repo": "pallets/flask",
@@ -1775,7 +1775,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 60.67886268459335,
-      "index_ms": 234
+      "index_ms": 71
     },
     {
       "repo": "sindresorhus/got",
@@ -1797,7 +1797,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 83.84395043277912,
-      "index_ms": 1461
+      "index_ms": 461
     },
     {
       "repo": "sindresorhus/got",
@@ -1819,7 +1819,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 82.78869856519815,
-      "index_ms": 716
+      "index_ms": 189
     },
     {
       "repo": "sindresorhus/got",
@@ -1841,7 +1841,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 34.75729623468925,
-      "index_ms": 1192
+      "index_ms": 285
     },
     {
       "repo": "sindresorhus/got",
@@ -1863,7 +1863,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 89.0974677410671,
-      "index_ms": 133
+      "index_ms": 72
     },
     {
       "repo": "sindresorhus/got",
@@ -1885,7 +1885,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 61.358046380885455,
-      "index_ms": 899
+      "index_ms": 237
     },
     {
       "repo": "sindresorhus/got",
@@ -1907,7 +1907,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 44.95157961581203,
-      "index_ms": 161
+      "index_ms": 83
     },
     {
       "repo": "sindresorhus/got",
@@ -1929,7 +1929,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 63.38159255429162,
-      "index_ms": 143
+      "index_ms": 64
     },
     {
       "repo": "sindresorhus/got",
@@ -1951,7 +1951,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 42.28014895445431,
-      "index_ms": 104
+      "index_ms": 70
     },
     {
       "repo": "sindresorhus/got",
@@ -1973,7 +1973,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -129.3091168091168,
-      "index_ms": 88
+      "index_ms": 66
     },
     {
       "repo": "sindresorhus/got",
@@ -1995,7 +1995,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 92.74111945465197,
-      "index_ms": 136
+      "index_ms": 109
     },
     {
       "repo": "sindresorhus/got",
@@ -2017,7 +2017,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 67.1259842519685,
-      "index_ms": 108
+      "index_ms": 97
     },
     {
       "repo": "sindresorhus/got",
@@ -2039,7 +2039,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 96.59243915069912,
-      "index_ms": 193
+      "index_ms": 184
     }
   ]
 }

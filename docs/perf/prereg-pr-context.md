@@ -112,15 +112,43 @@ definition:
 | affected call sites readable | {{ site.data.pr_context_bench.baseline_dependent_readable }} | {{ site.data.pr_context_bench.trace_dependent_readable }} |
 | affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | {{ site.data.pr_context_bench.trace_dependent_pointed }} |
 
-A third of the changed symbols arrive without their bodies (113 of 338 across
-the corpus) — though how much of that is module-level pseudo-symbols, whose
-"body" is an entire file and is exactly what this index exists not to ship,
-versus symbols the 8,000-token budget drops, is **not yet measured**. The
-previously-published 58% call-site readability was the same pointer count; it is
-28% when bodies are required. **The bar was registered as unadjustable and it is
-not being adjusted: this publishes as MISSED.** The token saving is unaffected —
-70.5% is the same number under either definition, because tokens were always
-counted on the assembled text.
+A third of the changed symbols arrive without their bodies — **117 of 338**
+across the corpus, counted per symbol in
+[`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json).
+The previously-published 58% call-site readability was the same pointer count;
+it is 28% when bodies are required. **The bar was registered as unadjustable and
+it is not being adjusted: this publishes as MISSED.** The token saving is
+unaffected — 70.5% is the same number under either definition, because tokens
+were always counted on the assembled text.
+
+### What the 117 are, and what they cost to recover
+
+This was published as unmeasured on 2026-09-07 and is measured now, because the
+guess in that sentence turned out to be wrong. Re-running the identical corpus
+with `--bundle-budget 64000` (a diagnostic run; it writes no artifacts) moves
+the split:
+
+| of 338 changed symbols | at the shipped 8,000 | at 64,000 |
+|---|---:|---:|
+| body present | 221 | 309 |
+| bodyless — module-level node | 53 | 2 |
+| bodyless — ordinary symbol | 64 | 27 |
+| median token saving | **70.5%** | **−5.8%** |
+
+**88 of the 117 are budget truncation**, not the module-level pseudo-symbols the
+earlier note guessed at — those are 53, and 51 of them are also just budget.
+Raising the budget recovers them and **destroys the measurement they were
+bought with**: at 64,000 the assembled context costs *more* than loading the
+files outright. The 70.5% is not a saving that happens to come with a coverage
+gap; the coverage gap is what pays for it.
+
+That reframes what the missed floor asks for. It cannot be met by turning the
+budget up. It is a packing question — which symbols get the budget — not a size
+question.
+
+**29 bodies never arrive at any budget** (27 ordinary symbols, 2 module-level;
+11 of them dropped from the bundle entirely rather than kept as a stub). Those
+are the ones a budget cannot explain, and they are the next thing to look at.
 
 What it does *not* say is that the review suffers: the
 [quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a

@@ -1,0 +1,2723 @@
+{
+  "generated_at": "2026-09-07T14:25:49.906Z",
+  "measured_build": {
+    "version": "3.22.0",
+    "commit": "47755aeb"
+  },
+  "total": 338,
+  "counts": {
+    "module:no_source": 51,
+    "symbol:full": 180,
+    "module:full": 41,
+    "symbol:no_source": 50,
+    "symbol:dropped": 11,
+    "symbol:signature_only": 3,
+    "module:dropped": 2
+  },
+  "rows": [
+    {
+      "repo": "honojs/hono",
+      "number": 5291,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5291,
+      "symbol_id": "src/client/client.ts::hc#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "symbol_id": "src/client/client.ts::appendQueryParams#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "symbol_id": "src/client/client.ts::ClientRequestImpl#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "symbol_id": "src/client/client.ts::hc#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "symbol_id": "src/middleware/etag/digest.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "symbol_id": "src/middleware/etag/digest.ts::generateDigest#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "symbol_id": "src/middleware/etag/index.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "symbol_id": "src/middleware/etag/index.test.ts::createPatternedBody#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5288,
+      "symbol_id": "src/request.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5288,
+      "symbol_id": "src/request.ts::cloneRawRequest#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "symbol_id": "src/request.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "symbol_id": "src/request.ts::HonoRequest#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "symbol_id": "src/request.ts::HonoRequest::#getDecodedParam#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "symbol_id": "src/request.ts::HonoRequest::#getAllDecodedParams#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5215,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5215,
+      "symbol_id": "src/client/client.ts::ClientRequestImpl#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/hono.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.ts::Node#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.ts::Node::insert#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.ts::Node::#pushHandlerSets#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/node.ts::Node::search#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/router.ts::TrieRouter#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "symbol_id": "src/router/trie-router/router.ts::TrieRouter::add#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5282,
+      "symbol_id": "src/request.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5282,
+      "symbol_id": "src/request.ts::cloneRawRequest#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5244,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5244,
+      "symbol_id": "src/client/client.ts::ClientRequestImpl#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5202,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5202,
+      "symbol_id": "src/client/client.ts::ClientRequestImpl#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5250,
+      "symbol_id": "src/middleware/csrf/index.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5280,
+      "symbol_id": "src/client/client.test.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5280,
+      "symbol_id": "src/client/client.ts::ClientRequestImpl#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/adapters/http.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/core/Axios.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/core/dispatchRequest.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::parseIPv4Octets#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::stripTrailingDots#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::normalizeNoProxyHost#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::ipv4ToBytes#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::pushIPv6Group#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::ipv6ToBytes#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::hostToBytes#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::parseCIDREntry#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::isInCIDR#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/shouldBypassProxy.js::isLoopbackIPv4#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/toFormData.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/toFormData.js::toFormDataOptions#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "lib/helpers/toFormData.js::toFormData#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "test/unit/core/prototypePollution.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "test/unit/helpers/shouldBypassProxy.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "symbol_id": "test/unit/helpers/toFormData.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::countHandlers#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::trimHandlers#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::syncHandlerEntries#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::use#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::forEach#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "symbol_id": "tests/unit/core/InterceptorManager.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11119,
+      "symbol_id": "README.md::README#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11119,
+      "symbol_id": "README.md::README#Multiple interceptors#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/adapters/http.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/adapters/http.js::resolveFamily#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/adapters/http.js::normalizeLookup#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/core/Axios.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/core/Axios.js::Axios#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/core/Axios.js::Axios::_request#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/core/mergeConfig.js::mergeConfig#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/core/methodList.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "lib/defaults/index.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "tests/unit/adapters/http.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "symbol_id": "tests/unit/axios.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Unreleased#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::trimHandlers#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::syncHandlerEntries#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::constructor#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::use#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::eject#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::clear#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "lib/core/InterceptorManager.js::InterceptorManager::forEach#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "tests/browser/adapter.browser.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "tests/browser/interceptors.browser.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "symbol_id": "tests/unit/core/InterceptorManager.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_DOCS.md::PRE_RELEASE_DOCS#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_DOCS.md::PRE_RELEASE_DOCS#RFC 9110 HTTP status code names#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_DOCS.md::PRE_RELEASE_DOCS#Streaming reads from download progress events#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "PRE_RELEASE_DOCS.md::PRE_RELEASE_DOCS#Typed request params#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "lib/adapters/xhr.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "lib/helpers/progressEventReducer.js::progressEventReducer#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "lib/helpers/throttle.js::throttle#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::ProgressEventTarget#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::ProgressEventTarget::constructor#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::ProgressEventTarget::addEventListener#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest#class",
+      "kind": "class",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::constructor#method",
+      "kind": "method",
+      "detail": "signature_only",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::abort#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::getListenerCount#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::emit#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/browser/progress.browser.test.js::MockXMLHttpRequest::respondWith#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/unit/helpers/progressEventReducer.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "dropped",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "symbol_id": "tests/unit/helpers/throttle.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "dropped",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "lib/adapters/xhr.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "lib/helpers/normalizeURLForProtocolCheck.js::normalizeURLForProtocolCheck#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/browser/requests.browser.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::constructor#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::open#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::setRequestHeader#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::getAllResponseHeaders#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::abort#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::StubXMLHttpRequest::send#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "symbol_id": "tests/unit/adapters/xhr.test.js::importAxiosForPage#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "lib/core/Axios.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "lib/core/Axios.js::Axios#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "lib/core/Axios.js::Axios::request#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "symbol_id": "tests/unit/core/Axios.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11078,
+      "symbol_id": "docs/pages/advanced/config-defaults.md::config-defaults#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11078,
+      "symbol_id": "docs/pages/advanced/config-defaults.md::config-defaults#Config defaults#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11039,
+      "symbol_id": "lib/helpers/progressEventReducer.js::progressEventReducer#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11039,
+      "symbol_id": "tests/unit/helpers/progressEventReducer.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "symbol_id": "PRE_RELEASE_CHANGELOG.md::PRE_RELEASE_CHANGELOG#Bug Fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "symbol_id": "lib/helpers/composeSignals.js::composeSignals#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "symbol_id": "tests/unit/composeSignals.test.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11073,
+      "symbol_id": "sandbox/server.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11073,
+      "symbol_id": "sandbox/server.js::requestHandler#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7390,
+      "symbol_id": "History.md::History#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7390,
+      "symbol_id": "History.md::History#🚀 Improvements#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7390,
+      "symbol_id": "History.md::History#⚡ Performance#class",
+      "kind": "heading",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7265,
+      "symbol_id": "lib/request.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 5555,
+      "symbol_id": "History.md::History#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 5555,
+      "symbol_id": "lib/response.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 5555,
+      "symbol_id": "test/res.location.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "History.md::History#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "History.md::History#Unreleased Changes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "History.md::History#🐞 Bug fixes#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "History.md::History#🚀 Improvements#class",
+      "kind": "heading",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "lib/response.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "symbol_id": "test/res.send.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7159,
+      "symbol_id": "Readme.md::Readme#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7159,
+      "symbol_id": "Readme.md::Readme#Installation#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7029,
+      "symbol_id": "Readme.md::Readme#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7029,
+      "symbol_id": "Readme.md::Readme#Security Issues#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6088,
+      "symbol_id": "lib/request.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6088,
+      "symbol_id": "test/req.acceptsCharsets.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6274,
+      "symbol_id": "examples/search/index.js::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6274,
+      "symbol_id": "examples/search/index.js::initializeRedis#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6806,
+      "symbol_id": "src/requests/adapters.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6806,
+      "symbol_id": "src/requests/adapters.py::HTTPAdapter#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6806,
+      "symbol_id": "src/requests/adapters.py::HTTPAdapter::build_connection_pool_key_attributes#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6951,
+      "symbol_id": "docs/conf.py::<module>#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6951,
+      "symbol_id": "docs/conf.py::copyright#variable",
+      "kind": "variable",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6951,
+      "symbol_id": "docs/conf.py::author#variable",
+      "kind": "variable",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/_types.py::<module>#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/models.py::Request#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/models.py::Request::headers#property",
+      "kind": "property",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/models.py::Request::files#property",
+      "kind": "property",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/models.py::Request::__init__#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/sessions.py::Session#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "symbol_id": "src/requests/sessions.py::Session::request#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "src/requests/utils.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "src/requests/utils.py::get_netrc_auth#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestGetNetrcAuth#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestGetNetrcAuth::test_works#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestGetNetrcAuth.test_works#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestGetNetrcAuth::test_not_vulnerable_to_bad_url_parsing#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestGetNetrcAuth.test_not_vulnerable_to_bad_url_parsing#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "symbol_id": "tests/test_utils.py::TestToKeyValList#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "src/requests/models.py::RequestEncodingMixin#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "src/requests/models.py::RequestEncodingMixin::_encode_files#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::TestRequests#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::TestRequests::test_post_named_tempfile#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::TestRequests.test_post_named_tempfile#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::TestRequests::test_unicode_multipart_post#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "symbol_id": "tests/test_requests.py::TestRequests.test_unicode_multipart_post#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7425,
+      "symbol_id": "src/requests/_types.py::<module>#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7425,
+      "symbol_id": "src/requests/sessions.py::Session#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7425,
+      "symbol_id": "src/requests/sessions.py::Session::request#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "src/requests/adapters.py::HTTPAdapter#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "src/requests/adapters.py::HTTPAdapter::build_connection_pool_key_attributes#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "tests/test_requests.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "tests/test_requests.py::TestRequests#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "tests/test_requests.py::TestRequests::test_errors#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "symbol_id": "tests/test_requests.py::TestRequests.test_errors#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "symbol_id": "tests/test_requests.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "symbol_id": "tests/test_requests.py::TestRequests#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "symbol_id": "tests/test_requests.py::TestRequests::test_basicauth_with_netrc_leak#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "symbol_id": "tests/test_requests.py::TestRequests.test_basicauth_with_netrc_leak#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "src/requests/models.py::PreparedRequest#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "src/requests/models.py::PreparedRequest::prepare_body#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "tests/test_requests.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "tests/test_requests.py::TestRequests#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "tests/test_requests.py::TestRequests::test_getattr_proxy_stream_follows_redirect#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "tests/test_requests.py::TestRequests.test_getattr_proxy_stream_follows_redirect#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "symbol_id": "tests/test_requests.py::TestRequests::_patch_adapter_gzipped_redirect#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7306,
+      "symbol_id": "pyproject.toml::project.optional-dependencies#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7306,
+      "symbol_id": "pyproject.toml::dependency-groups#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7306,
+      "symbol_id": "pyproject.toml::dependency-groups::test#constant",
+      "kind": "constant",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "src/flask/app.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "src/flask/app.py::Flask#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "src/flask/app.py::Flask::run#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "src/flask/testing.py::FlaskClient#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "src/flask/testing.py::FlaskClient::session_transaction#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "tests/test_basic.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "tests/test_basic.py::test_run_from_config#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "tests/test_testing.py::test_session_transaction_ipv6#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "tests/test_testing.py::test_session_transaction_ipv6::index#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "symbol_id": "tests/test_testing.py::test_session_transactions_no_null_sessions#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "src/flask/sansio/app.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "src/flask/sansio/app.py::App#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "src/flask/sansio/app.py::App::add_url_rule#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_attr_disable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_attr_enable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_attr_enable::index#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_arg_disable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_arg_disable::index#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_method_disable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_basic.py::test_provide_automatic_options_method_disable::index#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_blueprints.py::test_default_static_max_age#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_blueprints.py::test_default_static_max_age::MyBlueprint#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::TestRoutes#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::TestRoutes::test_sort#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::TestRoutes.test_sort#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::TestRoutes::test_all_methods#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_cli.py::TestRoutes.test_all_methods#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_view_provide_automatic_options_attr_disable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_view_provide_automatic_options_attr_disable::Index#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_view_provide_automatic_options_attr_enable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_view_provide_automatic_options_attr_enable::Index#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_provide_automatic_options_method_disable#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_provide_automatic_options_method_disable::Index#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "symbol_id": "tests/test_views.py::test_endpoint_override#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5808,
+      "symbol_id": "src/flask/sansio/app.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5808,
+      "symbol_id": "src/flask/sansio/app.py::App#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5808,
+      "symbol_id": "src/flask/sansio/app.py::App::select_jinja_autoescape#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5647,
+      "symbol_id": "src/flask/testing.py::FlaskCliRunner#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5647,
+      "symbol_id": "src/flask/testing.py::FlaskCliRunner::invoke#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "pyproject.toml::tool.pyright::include#constant",
+      "kind": "constant",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "pyproject.toml::tool.pyright::typeCheckingMode#constant",
+      "kind": "constant",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/app.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/app.py::Flask#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/app.py::Flask::open_resource#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/app.py::Flask::make_response#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/blueprints.py::Blueprint#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/blueprints.py::Blueprint::open_resource#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::ScriptInfo#class",
+      "kind": "class",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::ScriptInfo::load_app#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::FlaskGroup#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::FlaskGroup::__init__#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::FlaskGroup::_load_plugin_commands#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/cli.py::run_command#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/helpers.py::get_root_path#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/sansio/app.py::<module>#function",
+      "kind": "function",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/sansio/app.py::App#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/sansio/app.py::App::add_url_rule#method",
+      "kind": "method",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/testing.py::EnvironBuilder#class",
+      "kind": "class",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/testing.py::EnvironBuilder::__init__#method",
+      "kind": "method",
+      "detail": "signature_only",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/views.py::<module>#function",
+      "kind": "function",
+      "detail": "signature_only",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/views.py::View#class",
+      "kind": "class",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/views.py::View::decorators#property",
+      "kind": "property",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/views.py::View::as_view#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/wrappers.py::Request#class",
+      "kind": "class",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "symbol_id": "src/flask/wrappers.py::Request::on_json_loading_failed#method",
+      "kind": "method",
+      "detail": "dropped",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5627,
+      "symbol_id": "examples/javascript/tests/test_js_example.py::test_index#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5627,
+      "symbol_id": "examples/tutorial/flaskr/db.py::<module>#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5627,
+      "symbol_id": "examples/tutorial/flaskr/db.py::init_app#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "source/core/index.ts::Request#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "source/core/index.ts::Request::_final#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "test/retry.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "test/retry.ts::RequestEndErrorScenario#type",
+      "kind": "type",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "symbol_id": "test/retry.ts::createRequestWithEndError#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "symbol_id": "source/core/index.ts::Request#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "symbol_id": "source/core/index.ts::Request::_beforeError#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "symbol_id": "test/retry.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/2-options.md::2-options#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/2-options.md::2-options#`resolveBodyOnly`#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/4-pagination.md::4-pagination#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/4-pagination.md::4-pagination#`transform`#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/migration-guides/axios.md::axios#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/migration-guides/axios.md::axios#Response#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/quick-start.md::quick-start#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "symbol_id": "documentation/quick-start.md::quick-start#Getting and posting data with promises#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "symbol_id": "source/core/options.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "symbol_id": "source/core/options.ts::Options#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "symbol_id": "source/core/options.ts::Options::searchParams#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "symbol_id": "test/hooks.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "symbol_id": "test/normalize-arguments.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "symbol_id": "source/core/timed-out.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "symbol_id": "source/core/timed-out.ts::timedOut#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "symbol_id": "test/retry.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "symbol_id": "test/retry.ts::createSocketTimeoutStream#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "symbol_id": "test/timeout.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "symbol_id": "source/core/index.ts::Request#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "symbol_id": "source/core/index.ts::Request::constructor#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "symbol_id": "test/abort.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2391,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2391,
+      "symbol_id": "source/core/index.ts::Request#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2391,
+      "symbol_id": "source/core/index.ts::Request::_final#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "symbol_id": "source/core/index.ts::Request#class",
+      "kind": "class",
+      "detail": "no_source",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "symbol_id": "source/core/index.ts::Request::_prepareCache#method",
+      "kind": "method",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "symbol_id": "test/cache.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2379,
+      "symbol_id": "documentation/cache.md::cache#namespace",
+      "kind": "namespace",
+      "detail": "full",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2379,
+      "symbol_id": "documentation/cache.md::cache#Cache#class",
+      "kind": "heading",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2379,
+      "symbol_id": "source/core/response.ts::PlainResponse#type",
+      "kind": "type",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2362,
+      "symbol_id": "source/core/options.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2362,
+      "symbol_id": "source/core/options.ts::getHttp2TimeoutOption#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2362,
+      "symbol_id": "source/core/utils/options-to-url.ts::optionsToUrl#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2367,
+      "symbol_id": "source/create.ts::create#function",
+      "kind": "function",
+      "detail": "full",
+      "module_level": false
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2367,
+      "symbol_id": "test/arguments.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2266,
+      "symbol_id": "source/core/index.ts::__module__#namespace",
+      "kind": "namespace",
+      "detail": "no_source",
+      "module_level": true
+    }
+  ]
+}

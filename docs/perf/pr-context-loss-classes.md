@@ -178,3 +178,24 @@ location" was always the honest claim for that one. The same field backs a
 cheap CI gate (`tests/ci/context-bundle-body-coverage.test.ts`) that fails on
 partial body loss, not just total loss — see the [preregistration's release
 gate section]({{ '/perf/prereg-pr-quality/' | relative_url }}#release-gate-tra-1100).
+
+**And once it measured something, it failed.** Under the corrected definition
+the trace arm reads 67% against the naive arm's 100%: 117 of 338 changed
+symbols across the corpus arrive without their bodies. That misses a
+[preregistered quality floor]({{ '/perf/prereg-pr-context/' | relative_url }}),
+which now publishes as MISSED.
+
+The cause is not what this page first guessed. 88 of the 117 are the
+8,000-token bundle budget truncating — module-level pseudo-symbols, the
+suspect named here on 2026-09-07, are 53, and 51 of those are also just the
+budget. Re-running the identical corpus at a 64,000-token budget brings 309 of
+338 bodies through and takes the median saving from 70.5% to **−5.8%**: the
+assembled context then costs more than reading the files. Coverage and cost are
+the same dial, so the missed floor is a packing problem — which symbols get the
+budget — not a budget-size problem.
+
+29 bodies arrive missing at *any* budget (11 dropped from the bundle outright
+rather than kept as a stub). That residual is the part a tradeoff does not
+explain, and it is open. Per-symbol counts:
+[`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json);
+reproduce with `--symbol-detail` and `--bundle-budget`.
