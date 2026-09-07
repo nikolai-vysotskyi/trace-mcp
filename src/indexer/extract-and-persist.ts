@@ -4,6 +4,7 @@ import { disableFts5Triggers, enableFts5Triggers, ensureFts5Triggers } from '../
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext } from '../plugin-api/types.js';
+import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
@@ -203,6 +204,11 @@ export async function extractAndPersist(
         );
       } else {
         for (let c = 0; c < batch.length; c += CONCURRENCY) {
+          // In-process extraction (no worker pool: dev mode, tests, sub-100
+          // file batches) parses on the main thread, so a chunk is a synchronous
+          // unit like any other and has to take its turn — otherwise every
+          // project's chunk lands in the same one.
+          await yieldToEventLoopFair();
           const chunk = batch.slice(c, c + CONCURRENCY);
           const results = await Promise.all(
             chunk.map((relPath) => extractor.extract(relPath, force)),
@@ -230,7 +236,12 @@ export async function extractAndPersist(
       }
 
       if (extractions.length > 0) {
-        persister.persistBatch(extractions);
+        // persistBatch is one synchronous SQLite transaction over up to 500
+        // files — stacked back-to-back across batches (or across projects) it
+        // starves the event loop, /health stops answering, and the desktop
+        // app's watchdog kills the daemon mid-warm-up. Giving it a turn of its
+        // own bounds that window at negligible cost.
+        await runInOwnTurn(() => persister.persistBatch(extractions));
         result.indexed += extractions.length;
       }
 
@@ -249,12 +260,6 @@ export async function extractAndPersist(
 
       const processed = result.indexed + result.skipped + result.errors;
       progress?.update('indexing', { processed });
-      // persistBatch is one synchronous SQLite transaction over up to 500
-      // files — stacked back-to-back across batches it starves the event
-      // loop, /health stops answering, and the desktop app's watchdog kills
-      // the daemon mid-warm-up. One macrotask turn per batch keeps the
-      // process responsive at negligible cost.
-      await new Promise<void>((r) => setImmediate(r));
     }
   } finally {
     // Always restore FTS triggers + rebuild if we dropped them for the bulk

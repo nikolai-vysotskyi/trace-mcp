@@ -50,3 +50,43 @@ export function getYieldCount(): number {
 export function _resetYieldCountForTests(): void {
   yieldCount = 0;
 }
+
+/**
+ * TRA-1127: a *fair* macrotask boundary — only one caller's synchronous unit
+ * runs per event-loop turn, process-wide.
+ *
+ * `yieldToEventLoop()` alone is not enough when several indexers run at once.
+ * Node drains the whole check-phase queue before returning to poll, so N
+ * concurrent workers that each "yield" between chunks still stack N chunks
+ * into a single turn — measured on a plain HTTP server: 40 × 50 ms chunks give
+ * a p50 request latency of 100 ms at N=1 and 2 100 ms at N=21, i.e. the
+ * daemon's /health latency scales linearly with the number of projects
+ * indexing. That is the starvation window this fixes.
+ *
+ * Callers queue behind each other, so each turn carries exactly one unit and
+ * the wait a pending health check sees is bounded by the largest single unit
+ * rather than by their sum. Total throughput is unchanged — they were sharing
+ * one thread either way — only the interleaving is.
+ */
+let fairChain: Promise<void> = Promise.resolve();
+
+export function yieldToEventLoopFair(): Promise<void> {
+  const mine = fairChain.then(() => yieldToEventLoop());
+  fairChain = mine.catch(() => {});
+  return mine;
+}
+
+/**
+ * Run one synchronous unit of work in an event-loop turn of its own.
+ *
+ * The yield must come *immediately before* the sync work, not after it: a
+ * yield placed after the unit is only fair if nothing else can resume the
+ * caller in between. Awaiting extraction workers does exactly that, which is
+ * how two projects' persist transactions ended up in one turn even with the
+ * fair yield in place. Wrapping the unit makes the invariant impossible to
+ * get wrong at the call site.
+ */
+export async function runInOwnTurn<T>(fn: () => T): Promise<T> {
+  await yieldToEventLoopFair();
+  return fn();
+}
