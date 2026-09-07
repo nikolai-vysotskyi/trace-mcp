@@ -1097,15 +1097,29 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
   // iteration, so a perfectly good /opt/homebrew/bin/node listed BEFORE the
   // `$HOME` entry never gets emitted either. Both reproduced.
   describe('client spawned without HOME (TRA-1163)', () => {
-    it('starts from the config instead of aborting on an unbound HOME', () => {
+    // HOME="" is the other real spawn shape: a launcher that exports every
+    // variable it knows of, set or not. `-n` catches it, but `~` does NOT —
+    // tilde consults passwd only when HOME is *unset*, so a plain
+    // `[ -n "$HOME" ] || HOME=~` leaves it empty and every path below roots at
+    // `/`. That is why the guard unsets first.
+    it('does not root its paths at / when HOME is set but empty', () => {
       const { traceHome, node, cli } = setupFakeHome();
       writeConfig(traceHome, node, cli);
+      // Report HOME rather than argv — the empty value is what has to be gone.
+      fs.writeFileSync(
+        node,
+        `#!/bin/bash\nif [ "\${1:-}" = "-v" ]; then echo v22.22.2; exit 0; fi\necho "HOME_SEEN:\${HOME:-EMPTY}"\n`,
+        { mode: 0o755 },
+      );
 
-      const { status, stdout, stderr } = runLauncher({ TRACE_MCP_HOME: traceHome }, ['serve']);
+      const { status, stdout, stderr } = runLauncher({ HOME: '', TRACE_MCP_HOME: traceHome }, [
+        'serve',
+      ]);
 
       expect(stderr).not.toMatch(SHELL_DIAGNOSTIC);
       expect(status).toBe(0);
-      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+      expect(stdout.trim()).not.toBe('HOME_SEEN:EMPTY');
+      expect(stdout.trim()).toMatch(/^HOME_SEEN:\/./);
     });
 
     // The probe half. Which node it lands on is not assertable here — the

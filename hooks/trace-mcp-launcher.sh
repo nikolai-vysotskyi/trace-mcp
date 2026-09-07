@@ -22,9 +22,26 @@ set -u
 # One guard here rather than `${HOME:-}` at ~15 call sites: the failure is the
 # class, not any one path. Bash expands `~` from the passwd database when HOME
 # is unset, which is exactly the value the missing variable should have had.
+#
+# The `unset` is load-bearing, not tidiness. HOME set to the EMPTY STRING is a
+# real spawn shape (a launcher that exports every variable it knows, known or
+# not), and `~` consults the passwd database ONLY when HOME is unset — with
+# HOME="" it expands to the current value, i.e. stays empty, and every path
+# below resolves against `/`: `$HOME/.trace` becomes `/.trace`, which is
+# unwritable for a normal user and, in a container running as root, is
+# silently CREATED at the filesystem root.
+#
+# If passwd has no home either, refuse to root paths at `/` — a nonexistent
+# directory makes the probe fall through to its npm-prefix sources and, at
+# worst, die with the recovery message, which is the honest outcome.
+#
 # Exported, because cli.js resolves its own state directory from it and an
 # unset HOME there is a second outage hiding behind this one.
-[ -n "${HOME:-}" ] || HOME=~
+if [ -z "${HOME:-}" ]; then
+  unset HOME
+  HOME=~
+  [ -n "$HOME" ] || HOME=/nonexistent
+fi
 export HOME
 
 # The shim inherits the MCP client's PATH, and a client started in a project
