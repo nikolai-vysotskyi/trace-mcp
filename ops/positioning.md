@@ -130,7 +130,7 @@ spec table or a product page where it is still checkable.
    should not try (see Doors). Our own surfaces should stop leading with the
    transport.
 
-**Not falling out:** the PR-review number — **72.8%** since 2026-09-07 (70.5%
+**Not falling out:** the PR-review number — **72.7%** since 2026-09-07 (70.5%
 earlier the same day, re-measured in TRA-1141), not the
 90.6% first published (TRA-1090: the benchmark's trace arm carried no source
 code; `docs/perf/pr-context-loss-classes.md` has the account). The correction
@@ -269,7 +269,7 @@ phrase on a door-1 channel, the same carve-out this section already makes.
 Languages and frameworks stay: they measure coverage a registry reader is
 actually shopping for, not surface they will pay for. The description reads:
 
-> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 72.8% fewer PR-review tokens
+> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 72.7% fewer PR-review tokens
 
 The registry caps `description` at 100 characters (`manifest-sync.test.ts`), so
 anything added here costs something already in the line.
