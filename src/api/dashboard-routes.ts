@@ -302,6 +302,9 @@ function saveCacheToDisk(): void {
   }
 }
 
+/** Resolved by `waitForIdleForTests` once the in-flight background pass ends. */
+let idleWaiters: Array<() => void> = [];
+
 /**
  * Background recompute. Never awaited by a request.
  *
@@ -381,7 +384,25 @@ async function refreshAll(force = false): Promise<void> {
     saveCacheToDisk();
   } finally {
     computing = false;
+    const waiters = idleWaiters;
+    idleWaiters = [];
+    for (const resolve of waiters) resolve();
   }
+}
+
+/**
+ * Test-only: resolves once the in-flight background pass (if any) has fully
+ * settled, including every DB handle it opened being closed. `refreshAll` is
+ * fire-and-forget by design (never awaited by a request — that's the whole
+ * point of TRA-1053), so a test that tears down the registry's temp
+ * directory right after its last request has no other way to know the pass
+ * is done short of polling for a Windows file-lock to clear (EBUSY on an
+ * open project DB, since POSIX tolerates unlinking an open file but Windows
+ * does not).
+ */
+export function waitForIdleForTests(): Promise<void> {
+  if (!computing) return Promise.resolve();
+  return new Promise((resolve) => idleWaiters.push(resolve));
 }
 
 function placeholder(entry: RegistryEntry): ProjectHealth {
