@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.23.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.23.0...v3.23.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **app:** drop the false role=grid on the projects list (TRA-1108) ([#1110](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1110)) ([c5b9ce0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c5b9ce01c86fc3054e8095c0419e842a091bc8a2))
+
+
+### Performance
+
+* **context-bundle:** stop shipping the same bytes twice (TRA-1141) ([#1107](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1107)) ([5f868b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5f868b8e30c99e41fcbca4e0703d2d53b3615ff1))
+
 ## [3.23.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.22.0...v3.23.0) (2026-09-07)
 
 
