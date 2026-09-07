@@ -1,9 +1,8 @@
 {
-  "generated_at": "2026-09-07T14:58:41.605Z",
+  "generated_at": "2026-09-07T15:38:36.534Z",
   "measured_build": {
-    "version": "3.22.0",
-    "commit": "8dc120de",
-    "dirty": true
+    "version": "3.23.0",
+    "commit": "3da60731"
   },
   "pr_count": 60,
   "repo_count": 6,
@@ -27,7 +26,7 @@
   "trace_dependent_pointed": "100%",
   "baseline_changed_symbol_readable": "100%",
   "trace_changed_symbol_readable": "71%",
-  "median_index_ms": 239,
+  "median_index_ms": 221,
   "loss_count": 56,
   "losses": [
     {
