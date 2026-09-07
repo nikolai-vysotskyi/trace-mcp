@@ -193,4 +193,110 @@ describe('getContextBundle() — behavioural contract', () => {
     });
     expect(result.isErr()).toBe(true);
   });
+
+  /**
+   * TRA-1100 code review: a dependency assembly drops entirely (no source,
+   * no signature — `tryAssemble` returns null) must not appear in the
+   * returned `dependencies` array, and must not shift a later, valid
+   * dependency out of the list. A count-based slice of the pre-assembly
+   * list gets this wrong: it keeps the first N *requested* deps regardless
+   * of which ones assembly actually kept, so metadata can list a dropped
+   * symbol and omit a rendered one.
+   */
+  it('a dependency assembly drops entirely is excluded, without displacing a later one', () => {
+    const primarySrc = `import { depBefore } from "./before";\nimport { depGhost } from "./ghost";\nimport { depAfter } from "./after";\nexport function primary() { return depBefore() + depAfter(); }\n`;
+    const beforeSrc = 'export function depBefore() { return 1; }\n';
+    const afterSrc = 'export function depAfter() { return 2; }\n';
+    const rootPath = createTmpFixture({
+      'src/primary.ts': primarySrc,
+      'src/before.ts': beforeSrc,
+      'src/after.ts': afterSrc,
+      // 'src/ghost.ts' deliberately not written — its symbol has no readable
+      // source, and (below) no signature either, so it can't be assembled.
+    });
+    const store = createTestStore();
+
+    const primaryFile = store.insertFile('src/primary.ts', 'typescript', 'h-p', primarySrc.length);
+    const primaryInternalId = store.insertSymbol(primaryFile, {
+      symbolId: 'src/primary.ts::primary#function',
+      name: 'primary',
+      kind: 'function',
+      fqn: 'primary',
+      byteStart: 0,
+      byteEnd: primarySrc.length,
+      lineStart: 1,
+      lineEnd: 1,
+      signature: 'function primary()',
+    });
+    const primaryNid = store.getNodeId('symbol', primaryInternalId)!;
+
+    const beforeFile = store.insertFile('src/before.ts', 'typescript', 'h-b', beforeSrc.length);
+    const beforeInternalId = store.insertSymbol(beforeFile, {
+      symbolId: 'src/before.ts::depBefore#function',
+      name: 'depBefore',
+      kind: 'function',
+      fqn: 'depBefore',
+      byteStart: 0,
+      byteEnd: beforeSrc.length,
+      lineStart: 1,
+      lineEnd: 1,
+      signature: 'function depBefore()',
+    });
+    const beforeNid = store.getNodeId('symbol', beforeInternalId)!;
+
+    // No file written on disk for 'src/ghost.ts' and no `signature` given —
+    // tryAssemble has neither source nor signature to fall back to.
+    const ghostFile = store.insertFile('src/ghost.ts', 'typescript', 'h-g', 0);
+    const ghostInternalId = store.insertSymbol(ghostFile, {
+      symbolId: 'src/ghost.ts::depGhost#function',
+      name: 'depGhost',
+      kind: 'function',
+      fqn: 'depGhost',
+      byteStart: 0,
+      byteEnd: 0,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+    const ghostNid = store.getNodeId('symbol', ghostInternalId)!;
+
+    const afterFile = store.insertFile('src/after.ts', 'typescript', 'h-a', afterSrc.length);
+    const afterInternalId = store.insertSymbol(afterFile, {
+      symbolId: 'src/after.ts::depAfter#function',
+      name: 'depAfter',
+      kind: 'function',
+      fqn: 'depAfter',
+      byteStart: 0,
+      byteEnd: afterSrc.length,
+      lineStart: 1,
+      lineEnd: 1,
+      signature: 'function depAfter()',
+    });
+    const afterNid = store.getNodeId('symbol', afterInternalId)!;
+
+    store.insertEdge(primaryNid, beforeNid, 'esm_imports', true, undefined, false, 'ast_resolved');
+    store.insertEdge(primaryNid, ghostNid, 'esm_imports', true, undefined, false, 'ast_resolved');
+    store.insertEdge(primaryNid, afterNid, 'esm_imports', true, undefined, false, 'ast_resolved');
+
+    try {
+      const result = getContextBundle(store, rootPath, {
+        symbolIds: ['src/primary.ts::primary#function'],
+        outputFormat: 'markdown',
+        tokenBudget: 8000,
+      });
+      expect(result.isOk()).toBe(true);
+      const bundle = result._unsafeUnwrap();
+
+      const depIds = bundle.dependencies.map((d) => d.symbol_id);
+      expect(depIds).not.toContain('src/ghost.ts::depGhost#function');
+      expect(depIds).toContain('src/before.ts::depBefore#function');
+      expect(depIds).toContain('src/after.ts::depAfter#function');
+      expect(bundle.dependencies.every((d) => d.detail === 'full')).toBe(true);
+
+      const content = bundle.content ?? '';
+      expect(content).toContain('return 1;');
+      expect(content).toContain('return 2;');
+    } finally {
+      removeTmpDir(rootPath);
+    }
+  });
 });
