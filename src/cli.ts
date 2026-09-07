@@ -2977,8 +2977,9 @@ program
 
       // ── Activity tab — snapshot of recent journal entries for a project ──
       // Live updates flow through /api/events as `journal_entry` events; this
-      // endpoint returns the last N entries from the most-recently-active
-      // session's journal so the tab can populate on first mount.
+      // endpoint returns the last N recorded entries for the project — every
+      // session of it, past ones included — so the tab can populate on first
+      // mount.
       if (req.method === 'GET' && url.pathname === '/api/projects/journal') {
         const projectRoot = url.searchParams.get('project');
         const limit = Math.min(

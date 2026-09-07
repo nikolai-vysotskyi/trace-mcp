@@ -22,6 +22,7 @@
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
+import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 
 export const ACTIVITY_DB_PATH = path.join(TRACE_MCP_HOME, 'activity.db');
@@ -85,6 +86,8 @@ export class ActivityStore {
   private buffer: ActivityEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private lastPruneAt = 0;
+  /** One log line per failure kind — a full disk would otherwise write a line per batch. */
+  private warned = { flush: false, prune: false };
   private readonly insertStmt: Database.Statement;
   private readonly recordingSinceMs: number;
 
@@ -160,9 +163,16 @@ export class ActivityStore {
           });
         }
       })(batch);
-    } catch {
+    } catch (e) {
       // A failed batch is a hole in a chart, not a reason to take the daemon
       // down. Dropped deliberately — retrying would grow the buffer unbounded.
+      // Silently, though, this reproduces the very bug this store exists to
+      // fix: a disk that fills up after the daemon opened the DB sends Activity
+      // back to zero with nothing in the log to say why. Say it once.
+      if (!this.warned.flush) {
+        this.warned.flush = true;
+        logger.warn({ err: e }, 'activity store write failed — Activity history will have gaps');
+      }
     }
     this.prune();
   }
@@ -203,8 +213,12 @@ export class ActivityStore {
     this.lastPruneAt = now;
     try {
       this.db.prepare('DELETE FROM journal_entries WHERE ts < ?').run(now - RETENTION_MS);
-    } catch {
+    } catch (e) {
       // Retention is best-effort; a locked DB just means we prune next hour.
+      if (!this.warned.prune) {
+        this.warned.prune = true;
+        logger.warn({ err: e }, 'activity store prune failed — retrying next hour');
+      }
     }
   }
 
