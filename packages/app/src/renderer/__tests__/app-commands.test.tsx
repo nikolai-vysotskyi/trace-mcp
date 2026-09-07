@@ -93,6 +93,7 @@ describe('application-menu commands', () => {
     await renderApp('/?view=menu&tab=workspace');
     expect(reportedSections).toEqual([
       { id: 'workspace', label: 'Workspace' },
+      { id: 'savings', label: 'Savings' },
       { id: 'clients', label: 'MCP Clients' },
     ]);
   });
@@ -112,8 +113,8 @@ describe('application-menu commands', () => {
 
   it('select-section switches the surface', async () => {
     await renderApp('/?view=menu&tab=workspace');
-    await act(async () => dispatch('select-section', 2));
-    // MCP Clients is ⌘2 in the menu window.
+    await act(async () => dispatch('select-section', 3));
+    // MCP Clients is ⌘3 in the menu window — Savings took ⌘2 (TRA-1091).
     expect(document.querySelector('.ws-sb-row.is-selected')?.textContent).toContain('MCP Clients');
   });
 

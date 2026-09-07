@@ -1032,6 +1032,11 @@ trace setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on c
   --global                 # Install globally
   --uninstall              # Remove hook
 
+# What trace-mcp gave back (local, measured — see docs/perf/response-tokens.md)
+trace savings              # Input tokens this install got back, and what that is worth
+  --json                   # Output as JSON
+                           # Also printed by `trace doctor`.
+
 # Analytics (see docs/analytics.md)
 trace analytics sync       # Parse session logs into analytics DB
   --full                   # Force full rescan

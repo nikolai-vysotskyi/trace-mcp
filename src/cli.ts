@@ -55,6 +55,7 @@ import { daemonCommand } from './cli/daemon.js';
 import { consentCommand } from './cli/consent.js';
 import { detectLlmCommand } from './cli/detect-llm.js';
 import { doctorCommand } from './cli/doctor.js';
+import { savingsCommand } from './cli/savings.js';
 import { evalCommand } from './cli/eval.js';
 import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
@@ -2450,6 +2451,20 @@ program
       }
 
       // GET /api/stats — daemon reindex telemetry summary (optional ?since=1h)
+      // What trace-mcp gave back to this install (TRA-1091). Local read of
+      // ~/.trace-mcp/savings.json; the desktop app renders exactly this.
+      if (req.method === 'GET' && url.pathname === '/api/savings') {
+        try {
+          const { buildSavingsReport } = await import('./savings-report.js');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(buildSavingsReport()));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/stats') {
         try {
           const { getReindexStats } = await import('./daemon/reindex-stats.js');
@@ -3711,6 +3726,7 @@ program.addCommand(addCommand);
 program.addCommand(removeCommand);
 program.addCommand(pruneCommand);
 program.addCommand(doctorCommand);
+program.addCommand(savingsCommand);
 program.addCommand(detectLlmCommand);
 program.addCommand(consentCommand);
 program.addCommand(ciReportCommand);

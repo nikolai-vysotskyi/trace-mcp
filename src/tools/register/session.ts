@@ -644,11 +644,18 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // --- Session Stats ---
   _originalTool(
     'get_session_stats',
-    'Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/error_rate). Read-only. Returns JSON: { session: { ..., latency_per_tool }, cumulative, dedup_saved_tokens }.',
+    'Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/error_rate). Read-only. Returns JSON: { session: { ..., latency_per_tool }, cumulative, dedup_saved_tokens, report }.',
     {},
     async () => {
       const stats = savings.getFullStats();
       const dedupTokens = journal.getDedupSavedTokens();
+      // Deliberately not its own tool (TRA-1091): the figure rides an existing
+      // response, so the agent can see and quote it at zero added schema cost.
+      const { buildSavingsReport } = await import('../../savings-report.js');
+      // The report reads the persistent store, so land this session's calls in
+      // it first — otherwise the agent is quoted a figure that stops at the
+      // last periodic flush. Delta-based, so this is a no-op when idle.
+      savings.flush();
       return {
         content: [
           {
@@ -656,6 +663,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             text: j({
               ...stats,
               dedup_saved_tokens: dedupTokens,
+              report: buildSavingsReport(),
             }),
           },
         ],

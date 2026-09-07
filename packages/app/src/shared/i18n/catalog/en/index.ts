@@ -13,6 +13,7 @@ import { memory } from './memory.js';
 import { menu } from './menu.js';
 import { notebook } from './notebook.js';
 import { overview } from './overview.js';
+import { savings } from './savings.js';
 import { settings } from './settings.js';
 import { shell } from './shell.js';
 import { stats } from './stats.js';
@@ -33,6 +34,7 @@ export const en = {
   menu,
   notebook,
   overview,
+  savings,
   settings,
   shell,
   stats,

@@ -1,5 +1,6 @@
 export const shell = {
   navWorkspace: 'ワークスペース',
+  navSavings: '削減量',
   navClients: 'MCP クライアント',
   navOverview: '概要',
   navAsk: '質問',

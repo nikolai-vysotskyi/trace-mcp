@@ -462,8 +462,16 @@ export function createServer(
     return landmarks;
   });
 
+  // A daemon session can outlive many `trace savings` / desktop-app reads, and
+  // savings.json is what those read. Flushing only at shutdown showed the user
+  // a figure that ignored everything they had just done (TRA-1091). The write
+  // is a small atomic JSON; the delta check makes an idle tick a no-op.
+  const savingsFlushTimer = setInterval(() => savings.flush(), 60_000);
+  savingsFlushTimer.unref?.();
+
   let sessionFlushed = false;
   const flushAll = () => {
+    clearInterval(savingsFlushTimer);
     savings.flush();
     if (telemetrySink) {
       try {
