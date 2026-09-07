@@ -65,6 +65,11 @@ function seedTwoModuleProject(store: Store): void {
 
   // Low complexity in src/lib.
   insertFn(store, fLeaf, 'simpleFn', 2);
+
+  // Padding above MIN_SYMBOLS_FOR_GRADE (TRA-1057) — cyclomatic 0 so these
+  // don't skew the complexity average, they exist only to keep this fixture
+  // past the "enough data to grade" floor the other tests below exercise.
+  for (let i = 0; i < 20; i++) insertFn(store, fFoo, `helper${i}`, 0);
 }
 
 describe('getTechDebt() — behavioural contract (get_tech_debt)', () => {
@@ -147,6 +152,20 @@ describe('getTechDebt() — behavioural contract (get_tech_debt)', () => {
     expect(value.project_score).toBe(0);
     // No modules → nothing was scored. `null`, not the "A" a naive
     // mean-of-zero would produce — an empty project isn't a healthy one.
+    expect(value.project_grade).toBeNull();
+  });
+
+  it('a handful of symbols scores modules but withholds project_grade (TRA-1057)', () => {
+    // 1 file / 1 symbol — same shape as the real `tra925proj` fixture that
+    // shipped a grade B on essentially no data.
+    const fLeaf = insertFile(store, 'src/lib/leaf.ts');
+    insertFn(store, fLeaf, 'simpleFn', 2);
+
+    const value = getTechDebt(store, '/project')._unsafeUnwrap();
+    // The module itself is still scored/returned — useful detail for anyone
+    // calling get_tech_debt directly — only the project-level rollup grade
+    // is withheld for being too small a sample to mean anything.
+    expect(value.modules.length).toBeGreaterThan(0);
     expect(value.project_grade).toBeNull();
   });
 });
