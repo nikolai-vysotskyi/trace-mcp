@@ -434,12 +434,14 @@ export function WorkspaceTableView({
   return (
     <div
       ref={scrollRef}
-      // One tab stop for the whole grid, then ↑↓ to move and ⏎ to open — the
-      // list-navigation contract every Mac list follows.
+      // ↑↓ move a row cursor, ⏎ opens it — the list-navigation contract every
+      // Mac list follows. No role here: the `<table>` below already carries
+      // native table/row/cell semantics, and this wrapper is just the
+      // scrollable, keyboard-focusable region around it (TRA-1108 — a prior
+      // `role="grid"` promised row/cell/roving-tabindex structure this view
+      // never implemented).
       tabIndex={0}
-      role="grid"
       aria-label={t('projectsGrid')}
-      aria-rowcount={projects.length}
       className="flex-1 overflow-auto"
       style={
         {
@@ -474,7 +476,7 @@ export function WorkspaceTableView({
           box-shadow on cells in the collapsed model, which is why the pinned
           seams below have declared a hairline since TRA-265 and never drawn
           one. The row hairline lives on the cells there. */}
-      <table className="ws-table w-full text-[13px]">
+      <table className="ws-table w-full text-[13px]" aria-label={t('projectsGrid')}>
         {/* STICKY_HEADER_BG, not a bare --fill-quaternary: that token is
             translucent, so rows scrolling under a sticky header showed
             straight through the column labels. Same reason the pinned cells

@@ -142,6 +142,11 @@ interface JournalStats {
   // caller can confirm which window the response covers. Optional — the
   // "window ends at now" path omits it.
   window_end?: number;
+  // Unix ms from which the daemon has actually been recording activity. A
+  // window that reaches further back than this cannot be full, and the bar
+  // says so rather than presenting a confident zero (TRA-1071). Absent on
+  // daemons older than this field.
+  recording_since?: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -806,6 +811,18 @@ function StatsSummaryBar({
           aria-label={t('statsWindow')}
         />
       </div>
+      {/* The window can outrun the recorded history — a fresh install has
+          minutes of data behind a "24h" label. Say which, instead of letting
+          the zero read as "nothing happened". */}
+      {typeof stats.recording_since === 'number' && Date.now() - windowMs < stats.recording_since && (
+        <span
+          className="shrink-0 text-[11px] leading-[13px]"
+          style={{ color: 'var(--label-secondary)' }}
+          title={formatDate(stats.recording_since, { dateStyle: 'medium', timeStyle: 'short' })}
+        >
+          {t('recordingStarted', { when: relativeTime(stats.recording_since) })}
+        </span>
+      )}
       <span
         className="flex items-center gap-1 text-[13px] leading-4"
         style={{ color: 'var(--label)' }}

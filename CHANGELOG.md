@@ -6,6 +6,102 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.23.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.22.0...v3.23.0) (2026-09-07)
+
+
+### Features
+
+* **docs:** rebalance the row lockup — icon +16%, word -16% (TRA-780) ([#1036](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1036)) ([a74d7f7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a74d7f79b2878cb878a26abce1eafedc1d4231bd))
+* **doctor:** answer 'what would serve index from here' first (TRA-1087) ([#1060](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1060)) ([724e8b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/724e8b8eb26ff8aff9571e65a3e5f32e1a84a44b))
+* notice the user when the daemon auto-registers a project root ([#936](https://github.com/nikolai-vysotskyi/trace-mcp/issues/936)) ([#1068](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1068)) ([427059a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/427059a159d2b0c74d51f91447cd8dcfbffaf2c8))
+* **ops:** gate the GitHub and npm descriptions against docs/_data (TRA-1120) ([#1086](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1086)) ([d4d27a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4d27a24042ce51f2256f7bb885cb9471b7516b4))
+* **quality:** CI structural gate + release threshold check for context-bundle quality (TRA-1100) ([#1106](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1106)) ([9a432d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a432d87a70352b5620a1aa1615679cb755ccdb0))
+* **server:** say what the server is in serverInfo (TRA-1119) ([#1084](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1084)) ([3b08e27](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3b08e273956b35c6d4335ce05f0502b42758edbf))
+* show the user how much token spend trace-mcp gave back (TRA-1091) ([#1064](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1064)) ([866aa8a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/866aa8ab3e4d9b3ead0b78ed138ee0d5ced4f524))
+
+
+### Bug Fixes
+
+* **activity:** keep tool-call history on disk so the tab stops reading zero (TRA-1071) ([#1111](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1111)) ([30957bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30957bf8a07fdce4a3de668414973c5e7591e627))
+* **activity:** stop cross-project filter leak and contradictory empty state (TRA-1055) ([#1074](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1074)) ([256cacf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/256cacf61c806c1acd7adf5bd363184a022c2ce2))
+* **analysis:** label communities in the Graph tab, not just detect_communities ([#1054](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1054)) ([ba0283c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ba0283c24d4d4e0403a9a0c0c5498847249e7b05))
+* **analysis:** make community labels unique across communities ([#1052](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1052)) ([6432481](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6432481e6bf1dd7af6baacac7b590441022fdf67))
+* **analytics:** stop reporting stale:false when project freshness is unknown (TRA-1072) ([#1073](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1073)) ([022f103](https://github.com/nikolai-vysotskyi/trace-mcp/commit/022f103bb7f91d1421d073b2da8c1fc948c31979))
+* **app:** contract-test daemon wire responses; fix pagerank/hotspot/search/get_symbol field drift ([#1055](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1055)) ([98eafd4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/98eafd48b1eb8ba1f17090af047789f3fd9d70fa))
+* **app:** disambiguate identically-named projects in Recent/Quick Open (TRA-1058) ([#1050](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1050)) ([27e918c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27e918c2c3f2d378c264bbd10ea96a749b7b7e3d))
+* **context-bundle:** restore symbol bodies under ESM, correct the PR-context figure to 70.5% ([#1066](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1066)) ([b6748b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b6748b8768a548a7837449a9ba01fca4805dcdec))
+* **daemon:** gate watcher rescans by parallel_initial_index (TRA-1138) ([#1102](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1102)) ([d5bc8da](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5bc8da9a443446074c945d9453b6ef3016b591e))
+* **daemon:** lazy-load idle-unloaded projects over HTTP, reconcile status periodically (TRA-1052, TRA-1067) ([#1053](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1053)) ([1b345ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b345abbb5039b5f96d81a43d05b6128364bbfee))
+* **daemon:** stop /health starvation scaling with the number of indexing projects (TRA-1127) ([#1094](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1094)) ([4e9b1b9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e9b1b92251bbfcad0346219db5f03eee6570aea))
+* **daemon:** stop reporting a busy daemon as idle, and name the idle RSS ceiling (TRA-1125) ([#1092](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1092)) ([ee2fd58](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ee2fd5804eb757c7f6ac03f9483fd32b5b54ebd4))
+* **docs:** anchor every count claim to counts.yml, not the registry ([#1061](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1061)) ([8f065a7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f065a7b93643d699cc6affcdf189dd0792723e5))
+* **guard:** find the heartbeat sentinel from a subdirectory (TRA-1088) ([#1062](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1062)) ([4f25380](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f25380861a6bee66a251011e26359668152d410))
+* **guard:** match shared ancestors across the macOS /private symlink ([#1065](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1065)) ([4a783a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4a783a1985c4c437a43fe42dddce0f8db3ecde13))
+* **indexer:** normalize backslash paths in indexFiles/deleteFiles on Windows (TRA-1045) ([#1041](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1041)) ([d48a858](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d48a858270f09ba1cbd7cf794e53be2ae20f788f))
+* **indexer:** resolve C# using-directive imports (TRA-1027) ([#1028](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1028)) ([5a8bccf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5a8bccf1d5f1130191d91907c9387a7e0233ac77))
+* **indexer:** resolve Kotlin imports, the next language after C# (TRA-451) ([#1039](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1039)) ([096f46a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/096f46a1aedf056232805fceba89ea60fdec045a))
+* **init:** pin the tweakcc npx spec and stop detection from installing it (TRA-1133) ([#1099](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1099)) ([385bff4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/385bff46569555d3e0f81787bd7fe743fa80dd4a))
+* **launcher:** require a non-empty cli.js before exec (TRA-1132) ([#1097](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1097)) ([94eb399](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94eb399d717146c507bc92cc1ef03bb1c3d402e9))
+* **launcher:** verify the configured node still runs on every start (TRA-1040) ([#1038](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1038)) ([d21c9e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d21c9e03c1fdda90aae65add927d941be6013ee9))
+* **ops:** mention sweep was blind to every multi-term query (TRA-1085) ([#1059](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1059)) ([0f1a6e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0f1a6e73bce2d001e008e712445bf1f7a2b344b8))
+* **proxy:** never let a failed local fallback orphan the client handshake ([#1116](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1116)) ([9d0128f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9d0128f22900d84c3d8a0079d41f7b94e9cbddbc))
+* **quality:** reject stale spans in get_changed_symbols/compare_branches ([#1049](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1049)) ([d03ec58](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d03ec5858066639c01b765dee0b2c791e6a442ea))
+* **registry:** route unregistered one-shot workdirs at the ephemeral index dir (TRA-1136) ([#1101](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1101)) ([696f243](https://github.com/nikolai-vysotskyi/trace-mcp/commit/696f24343dcee84d469ea6a20fabdd06770c8cd9))
+* **registry:** sweep a dead one-shot workdir without the 7-day grace ([#1071](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1071)) ([7eea38c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7eea38c1909e0c1347ca730e8f0c00fab4f97b25))
+* **router:** promote to local mode when a proxy send fails (TRA-1080) ([#1056](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1056)) ([1bd3d68](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1bd3d6808c2bef4edef9bba11516f1c6290a412e))
+* **tests:** raise dashboard-routes beforeAll hook timeout for Windows CI ([#1057](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1057)) ([bcf9872](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bcf98726d4f60f204b41d30b3b5c4bb926ae988f))
+
+
+### Performance
+
+* **dashboard:** serve /api/dashboard/projects from cache, compute in background (TRA-1053) ([#1051](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1051)) ([c2196ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2196ec839d33b5ecc0334d404f73bf1a0230834))
+* **find_usages:** cap the response tail, and price the tool from a basket (TRA-1049) ([#1045](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1045)) ([851169c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/851169cfdddba33b83308e1b3975473e43bf9775))
+* **register_edit:** stop re-reporting duplicates the edit did not introduce (TRA-1098) ([#1069](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1069)) ([3ed903c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ed903c39938f3af0e0a4ad32aadfc7ec3b03670))
+
+
+### Documentation
+
+* **benchmarks:** what share of a subscription can trace-mcp actually save ([#1046](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1046)) ([7c9e979](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7c9e97994e602ad12c13377ff0c4cd394f40c7e2))
+* CodeGraph (codegraph-ai) deep dive, competitor star refresh, and t.co distribution ledger update (TRA-1074) ([#1048](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1048)) ([4ae2b5c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4ae2b5c0b6f52b830416b1383b190081804500f8))
+* **contributing:** require screen-to-code path for UI defect fixes ([#1072](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1072)) ([760c192](https://github.com/nikolai-vysotskyi/trace-mcp/commit/760c19289f968363cef70dceaabe82516e1e0f2c))
+* **language-matrix:** measure import resolution depth per language on real repos (TRA-1145) ([#1109](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1109)) ([3bebb50](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3bebb509f29bb33987b925125d22ac48188fa954))
+* **ops:** assess Homebrew as an install path and correct the tracedecay reading (TRA-1097) ([#1067](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1067)) ([91e2b5c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/91e2b5c74b238f516f44d75c09816057aa46ad04))
+* **ops:** merge duplicate hermes-agent rows, add pre-submission dedupe check, record the 2026-09-06 trial-plan sweep (TRA-1046) ([#1042](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1042)) ([8694475](https://github.com/nikolai-vysotskyi/trace-mcp/commit/86944757bfde3a244f1e05dd94a3ee32c68d64b9))
+* **ops:** record 2026-09-07 evening outreach pass ([#1115](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1115)) ([3384abc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3384abc6a680842d577816ab3297621a98806fd7))
+* **ops:** record the 2026-09-07 outreach pass — nanocoder [#1197](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1197) and deslop [#173](https://github.com/nikolai-vysotskyi/trace-mcp/issues/173) ([#1093](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1093)) ([adc5b49](https://github.com/nikolai-vysotskyi/trace-mcp/commit/adc5b4929bb1542c60b3959a6ed9a2e453018759))
+* **ops:** third trial-plan sweep, the atlas reply that found TRA-1075, and a competitor with no catalog presence ([#1047](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1047)) ([05343e1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/05343e1bc2b12c147d51aff3a051d12de139ad11))
+* **perf:** reprice register_edit from the frame, 345 → 219 tokens (TRA-1107) ([#1087](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1087)) ([6ca4d37](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ca4d37092dffa78618663efcee28c239b4aad53))
+* **perf:** republish PR-context coverage under the corrected readability metric ([#1112](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1112)) ([3144f17](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3144f17b3db1b77449b9a50eb716f17052579639))
+* **roadmap:** 2026-09-07 revision — the quality arm missed, and it reorders the roadmap ([#1063](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1063)) ([d106639](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d10663988b1163f208bea9edf0121ec80066295f))
+* **security:** record standing verdicts for js/log-injection and the registry.ts key-write pair ([#1096](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1096)) ([a5a5142](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5a5142772f1a372b6978e561426b3ebb59996b8))
+* **seo:** add /code-graph-mcp landing page and record 09-07 GSC crawl findings (TRA-1083) ([#1058](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1058)) ([39e00a9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39e00a91be4c824a2d8eae23035657745718d1c2))
+* **seo:** integrate SocratiCode into /code-graph-mcp, carry quality half, and record 09-07 16:00 GSC crawl (TRA-1139) ([#1105](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1105)) ([adf8dc1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/adf8dc122732a187111ed456526943931547fa3f))
+* **site:** carry the quality half in the homepage hero, and drop the locality absolutes (TRA-1122) ([#1090](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1090)) ([8259245](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8259245a707495de2fe4d3cde87ce7902d73a05f))
+* **site:** stop setting the hero's quality evidence as fine print (TRA-1143) ([#1108](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1108)) ([74b1d24](https://github.com/nikolai-vysotskyi/trace-mcp/commit/74b1d2413f74c757409ade54f397592674e7c7b0))
+* stop claiming 100% local, and never publish the saving without the quality half (TRA-1013) ([#1088](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1088)) ([58f401a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/58f401a1c3d33301e834c223057f1fff353f9829))
+* **vs:** add /vs/socraticode comparison page and profile competitor (TRA-1114) ([#1085](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1085)) ([526241f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/526241fff1e30cd9f98f578ed54240f3198705fc))
+* **vs:** add trace-mcp vs code-review-graph comparison page (TRA-1001) ([#1040](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1040)) ([3423b56](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3423b56aae7568db32c3d52a1cbdf051276d2ce2))
+* **vs:** head-to-head page for CodeGraphContext, refresh its facts (TRA-1034) ([#1034](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1034)) ([d6a235c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6a235c99f3d6516e3130e9dc0fedb4f46580d93))
+
+
+### Tests
+
+* **bench:** a SKILL.state A/B whose arms can fail — and one does (TRA-1115) ([#1091](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1091)) ([c148138](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c148138e803c31356fcf944e31d2efe377860938))
+* **daemon:** close the guard's SQLite handles so Windows can clean up (TRA-1127) ([#1100](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1100)) ([f4e0b1a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f4e0b1a2ca2f5291bdd9c8190673c843c6343cc3))
+* **daemon:** unflake the /health starvation guard — compare p99, not max (TRA-1127) ([#1098](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1098)) ([0560afc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0560afcc77936a39d31e705e7299f3c59097a030))
+* **dashboard-routes:** seed in one transaction instead of 2000 commits (TRA-1104) ([#1070](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1070)) ([d4e5806](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4e580610c2f8fe6725829688989975c9c3d939a))
+* **db:** cover DomainRepository (TRA-1111) ([#1080](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1080)) ([2583fde](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2583fde6cd43d62f4053f7d5a8e52b8173541814))
+* **hooks:** raise hook subprocess timeouts 5s -&gt; 30s (TRA-1117) ([#1081](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1081)) ([4d0811e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d0811ef233f30ab1b445ef28418ab540c335cb9))
+* **launcher:** cover the daemon-aware proxy routing (TRA-1050) ([#1044](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1044)) ([c2548c1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2548c19826ce30adcfa7276a8312d597cf6f43e))
+* **proxy:** guard the daemon-death rescue against the built bundle (TRA-1112) ([#1082](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1082)) ([385596c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/385596c4a647efe2a321ebabe6409826463df86a))
+* **proxy:** wait for the child to exit before removing its sandbox ([#1103](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1103)) ([66f835f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/66f835f78f3a75c9eedbf89093944535d926bea8))
+* stop subproject-clone ref test from doing a real git clone ([#1083](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1083)) ([ea99422](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ea9942203b758b87afd85540a3ca58807caa2f63))
+
+
+### CI/CD
+
+* run cross-platform tests on any PR touching shipped code (TRA-1048) ([#1043](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1043)) ([ab17d0b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ab17d0b6ed510669b97c1c1dcaf3fbc75156cc26))
+
 ## [3.22.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.21.0...v3.22.0) (2026-09-06)
 
 

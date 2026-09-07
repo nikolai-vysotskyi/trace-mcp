@@ -201,3 +201,125 @@ nodes, 11 of them dropped from the bundle outright rather than kept as a stub. T
 explain, and it is open. Per-symbol counts:
 [`benchmarks/pr-context/symbol-detail.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/benchmarks/pr-context/symbol-detail.json);
 reproduce with `--symbol-detail` and `--bundle-budget`.
+---
+
+## Second pass, same 13 PRs: the context was paying for the same bytes twice
+
+*Added 2026-09-07 (TRA-1141), after the correction above.*
+
+With bodies restored, 13 of the 60 PRs cost **more** than reading the files
+outright. Breaking those 13 prompts down by section — token counts per section
+of the dumped prompts, `gpt-tokenizer`, same pinned SHAs — puts the excess in
+one place. In 10 of 13 the "Primary Symbol" section alone was larger than the
+naive arm's entire file dump.
+
+The reason is containment. `__module__:foo` spans its whole file and
+`note:Readme` spans its whole document, and a changed-symbol review bundle asks
+for both the container and the functions or headings inside it — so the members'
+bytes shipped twice. `axios#11118` sent `InterceptorManager.js` as a module
+body and then again as three functions, a class and two methods. Two related
+cases cost as much: an entire markdown document inlined because a wikilink
+mentions the symbol (32% of `got#2379`'s prompt), and an entire test file
+inlined as a "caller" (94% of `axios#11039`'s excess).
+
+`get_context_bundle` now emits a contained symbol once, inside the container
+that already carries it, and keeps whole-file and prose symbols in the
+dependency and caller lists as pointers rather than bodies. Same 60 PRs, same
+SHAs, same corpus:
+
+| | before | after |
+|---|---:|---:|
+| median input tokens, trace arm | 3,951 | **3,286** |
+| median saving | 70.5% | **72.8%** |
+| PRs costing *more* than reading the files | 13 | 13 |
+| worst single PR | −129.3% | **−62.4%** |
+
+The loss *count* moved as well, 23 → 56, for a reason that has nothing to do
+with this table: the metric behind it changed in the same run. The two sections
+below are that story.
+
+The 13 costliest PRs stay costlier, and that is structural rather than
+fixable: when the changed symbol *is* the module container, the bundle's
+primary section is the file, so it can approach the cost of reading the file
+but never beat it, and the diff, callers and impact list sit on top. What
+changed is the size of the overrun — across those 13 prompts, 49,770 → 40,991
+tokens.
+
+**What it cost on the quality side.** Shaping a response without checking
+comprehension is the failure this whole page exists to prevent, so the two
+bundle versions were run head-to-head on the 13 PRs the change touched most:
+same judge protocol, same model, blind and order-randomised, arm A the old
+bundle and arm B the new one.
+
+| 13 PRs | old bundle | new bundle |
+|---|---:|---:|
+| understood the change | 69.2% | **69.2%** |
+| false positives per PR | 0.23 | **0.38** |
+| findings per PR | 2.85 | 2.31 |
+
+Comprehension is identical (9 of 13 each; 8 understood by both, one by each
+arm alone). The false-positive difference is two claims across 13 PRs — a
+number this sample cannot resolve, reported because it moved the wrong way,
+not because it means anything.
+
+## What the honest metric reads, now that it has been run
+
+TRA-1100 landed `detail` and pointed both readability columns at it, in
+parallel with this work and without re-running the benchmark — so the published
+artifact still carried the figures the old metric produced. This is that re-run.
+Holding everything else constant, `dependent_readable` in the trace arm:
+
+| trace arm, dependent_readable | value |
+|---|---:|
+| published, listing counted as readable | 58% |
+| same bundle, honest metric | 28% |
+| new bundle, honest metric | **22%** |
+
+Thirty of those thirty-six points were the metric; six are real — bodies the new
+rules moved into the pointer list. `dependent_pointed` stays 100%: every
+dependent is still named with a location the agent can fetch. That trade is the
+change's actual cost, and it belongs next to the 72.8%, not underneath it.
+
+## And the finding that costs the most: half the changed bodies never shipped
+
+The same re-run moves the column that had read 100% since this benchmark was
+written. `changed_symbol_readable` counted a changed symbol as readable
+whenever the bundle listed it; scored against `detail === 'full'`, on the same
+60 pull requests:
+
+| 60 PRs, trace arm | published | old bundle, honest | new bundle, honest |
+|---|---:|---:|---:|
+| changed_symbol_readable (median) | 100% | 67% | **71%** |
+| PRs where the index did not pay off | 23 | 56 | **56** — 42 truncated, 13 costlier, 1 marginal |
+
+Nothing about what the product serves changed between the first two columns.
+This is the same defect as the one at the top of this page, one level deeper:
+the budget was truncating changed-symbol bodies all along, and the metric
+recorded a span whenever the bundle listed the symbol. A third of the PRs never
+had the changed code in front of them.
+
+The third column is this change, and it is the reason the median saving reads
+72.8% rather than 75.2%. Deduplicating a member into its container is only free
+while the container's body survives assembly; when the budget reduces the
+container to a signature, the member was the one thing that could still have
+fitted. The bundle now notices that and re-assembles with those members
+restored — which costs 2.4 points of saving and buys back four points of
+changed-symbol coverage against the old bundle, on top of the eleven the
+deduplication had cost.
+
+The mechanism is visible in the extremes. `axios#11119` edits a line of
+`README.md`; the changed symbol is the whole 24,000-token document, it cannot
+fit the primary category's share of an 8,000-token budget, and what shipped was
+its first line. `psf/requests#7371` fixes a typo in a comment inside a 30,000-
+token test module; what shipped was `module tests/test_requests.py`. Both are
+counted in the 72.8% median saving, and in both the saving is partly the cost
+of not sending the code — 349 tokens against 24,348, and 282 against 25,197.
+
+**This does not retract the token figure**, which counts what the arms actually
+sent and is unchanged by the metric fix, and it does not contradict the
+comprehension parity measured in TRA-568 — that judgement was made on these
+same prompts. It does say the bundle needs a better answer than a signature
+when the changed symbol is larger than its budget: the sub-symbols the diff
+actually touched, or the hunks' surroundings, rather than the container's first
+line. That is TRA-1144, filed from this run, and it is now measurable because
+the metric finally moves when it happens.
