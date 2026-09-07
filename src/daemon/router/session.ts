@@ -561,6 +561,21 @@ export class StdioSession {
       // An error the client can surface beats a connection that never
       // resolves: clients retry, and by then the swap window has closed.
       this.router.forgetPending(id);
+      // Detach the backend we are answering over the top of. Every other path
+      // that answers a stuck id reaches `router.swap()`, whose step 3 does
+      // exactly this before anything else is forwarded; this branch is the one
+      // that answers without swapping, so it has to do it itself. Otherwise a
+      // merely slow daemon — the `proxy-initialize-timeout` trigger, as
+      // opposed to a dead one — delivers its real `initialize` response after
+      // we gave up, `wireBackend` forwards it, and the client gets two
+      // responses for one id. The interceptor's `id === this.initializeId`
+      // guard does not catch it: `clearInitializeWatchdog()` nulled that at
+      // the top of this method.
+      //
+      // Unconditional is safe here: this only ever runs for `initialize`, so
+      // no other in-flight id shares this backend yet.
+      const stale = this.router.getActiveBackend();
+      if (stale) stale.onmessage = undefined;
       await this.sendAndSettleListChanged({
         jsonrpc: '2.0',
         id,

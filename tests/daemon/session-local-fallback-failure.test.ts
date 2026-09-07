@@ -35,13 +35,37 @@ vi.mock('../../src/daemon/router/local-backend.js', () => ({
 const { TraceMcpConfigSchema } = await import('../../src/config.js');
 const { StdioSession } = await import('../../src/daemon/router/session.js');
 
-/** /health is fine, /mcp answers the handshake with an error — forces fallbackToLocal. */
-async function startSplitHealthServer(): Promise<{ port: number; close: () => Promise<void> }> {
+/**
+ * /health is fine; /mcp either fails fast (`fail` — a dead daemon) or answers
+ * the handshake successfully but only after the watchdog has given up (`slow`
+ * — a daemon that is merely busy). Both force `fallbackToLocal`; only `slow`
+ * can still deliver a late frame afterwards.
+ */
+async function startSplitHealthServer(
+  mcp: 'fail' | 'slow' = 'fail',
+): Promise<{ port: number; close: () => Promise<void> }> {
+  const timers: NodeJS.Timeout[] = [];
   const server = http.createServer((req, res) => {
     req.resume();
     if (req.url?.startsWith('/mcp')) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end('daemon is not well');
+      if (mcp === 'fail') {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('daemon is not well');
+        return;
+      }
+      // Answers correctly, just too late: past PROXY_INITIALIZE_TIMEOUT_MS.
+      timers.push(
+        setTimeout(() => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'd' } },
+            }),
+          );
+        }, 2_000),
+      );
       return;
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -53,6 +77,7 @@ async function startSplitHealthServer(): Promise<{ port: number; close: () => Pr
     port,
     close: () =>
       new Promise<void>((resolve) => {
+        for (const t of timers) clearTimeout(t);
         server.closeAllConnections();
         server.close(() => resolve());
       }),
@@ -73,8 +98,17 @@ describe('StdioSession local fallback failure (TRA-1148)', () => {
     cleanup = null;
   });
 
-  it('answers initialize even when the local backend cannot be built', async () => {
-    const daemon = await startSplitHealthServer();
+  // `fail` is the dead daemon: without the fix nobody answered at all.
+  // `slow` is the merely-busy one, and the harder case — the proxy backend is
+  // still wired when the fallback gives up, so its late-but-valid response
+  // gets forwarded on top of the error we already sent, and the client gets
+  // two responses for one id. Every other path that answers a stuck id goes
+  // through `router.swap()`, which detaches the old backend first; this branch
+  // answers without swapping and has to detach for itself.
+  it.each(['fail', 'slow'] as const)(
+    'answers initialize exactly once when the local backend cannot be built (%s daemon)',
+    async (mode) => {
+    const daemon = await startSplitHealthServer(mode);
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     const session = new StdioSession({
@@ -106,13 +140,18 @@ describe('StdioSession local fallback failure (TRA-1148)', () => {
     await session.bootstrap();
     stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })}\n`);
 
+    // Settle past the slow daemon's 2 s reply, so a late second frame lands
+    // inside the window rather than after the assertion.
     await new Promise<void>((resolve) => {
-      const t = setTimeout(resolve, 1_500);
+      const t = setTimeout(resolve, mode === 'slow' ? 3_000 : 1_500);
       t.unref?.();
     });
 
-    // A failed fallback may not silently eat the handshake. One answer, and an
-    // error the client can surface beats a connection that never resolves.
+    // Exactly one: a failed fallback may neither silently eat the handshake
+    // (0 — the hang this PR fixes) nor answer it twice (2 — the late frame a
+    // still-wired proxy backend forwards). An error the client can surface
+    // beats a connection that never resolves.
     expect(responsesFor(frames, 1)).toHaveLength(1);
-  });
+    },
+  );
 });
