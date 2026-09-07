@@ -77,6 +77,9 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
 
   if (projects.length === 0) return null;
   const roots = projects.map((p) => p.root);
+  // A `missing` root (TRA-1054) has no directory to re-index — reindexing it
+  // is a guaranteed server-side failure, not a partial success.
+  const hasMissing = projects.some((p) => p.displayStatus === 'missing');
 
   const handleReindex = async () => {
     setBusy(true);
@@ -126,7 +129,12 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
       <span style={{ width: 1, height: 14, background: 'var(--separator)' }} aria-hidden />
       {!confirmRemove ? (
         <>
-          <Button size="small" disabled={busy} onClick={() => void handleReindex()}>
+          <Button
+            size="small"
+            disabled={busy || hasMissing}
+            title={hasMissing ? t('bulkReindexDisabledMissing') : undefined}
+            onClick={() => void handleReindex()}
+          >
             {t('reindex')}
           </Button>
           <Button

@@ -61,12 +61,14 @@ export const workspace = {
   filterStatusOkTitle: 'Проекты, которые проиндексировались без ошибок',
   filterStatusIndexingTitle: 'Проекты, которые индексируются сейчас',
   filterStatusErrorTitle: 'Проекты, последняя индексация которых не удалась',
+  filterStatusMissingTitle: 'Проекты, чья папка больше не существует',
 
   statusOk: 'ОК',
   statusIndexing: 'Индексация',
   statusComputing: 'Расчёт',
   statusError: 'Ошибка',
   statusNotLoaded: 'Не загружен',
+  statusMissing: 'Папка удалена',
 
   kpiProjects: 'Проекты',
   kpiFiles: 'Файлы',
@@ -148,6 +150,7 @@ export const workspace = {
   bulkSelected_other: 'Выбрано {{n}}',
   bulkRemove: 'Убрать',
   bulkReindexFailed: 'Не удалось переиндексировать хотя бы один проект',
+  bulkReindexDisabledMissing: 'Переиндексация невозможна — папка больше не существует',
   bulkRemoveFailed: 'Не удалось убрать хотя бы один проект',
   bulkExportJson: 'Экспорт JSON',
   bulkExportCsv: 'Экспорт CSV',

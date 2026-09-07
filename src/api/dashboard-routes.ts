@@ -40,7 +40,14 @@ export type TechDebtGrade = 'A' | 'B' | 'C' | 'D' | 'F';
 export interface ProjectHealth {
   root: string;
   name: string;
-  status: 'ok' | 'error' | 'indexing' | 'not_loaded' | 'computing';
+  /**
+   * `missing` — the registry entry's `root` directory no longer exists on
+   * disk (TRA-1054). Distinct from `not_loaded` (directory is fine, just
+   * never indexed): a `missing` row has nothing to open or re-index, so the
+   * UI must not offer either, and it must not count toward "Projects" or any
+   * KPI derived from it.
+   */
+  status: 'ok' | 'error' | 'indexing' | 'not_loaded' | 'computing' | 'missing';
   lastIndexed: string | null;
   totalFiles: number;
   totalSymbols: number;
@@ -136,6 +143,10 @@ function queryBasics(entry: RegistryEntry): ProjectHealth {
     ...ZERO,
   };
 
+  // The root itself is gone (deleted temp dir, moved repo, ...) — a dead
+  // registry row, not "not yet indexed". Checked before the dbPath test
+  // below: the index DB can outlive the source directory it was built from.
+  if (!fs.existsSync(entry.root)) return { ...base, status: 'missing' };
   if (!fs.existsSync(entry.dbPath)) return { ...base, status: 'not_loaded' };
 
   let db: Database.Database | undefined;
@@ -202,7 +213,9 @@ async function enrich(entry: RegistryEntry, basics: ProjectHealth): Promise<Proj
 
     try {
       const debtResult = getTechDebt(store, entry.root, {});
-      if (debtResult.isOk()) out.techDebtGrade = debtResult.value.project_grade;
+      if (debtResult.isOk() && debtResult.value.project_grade) {
+        out.techDebtGrade = debtResult.value.project_grade;
+      }
     } catch {
       /* leave undefined */
     }
@@ -330,14 +343,18 @@ async function refreshAll(force = false): Promise<void> {
       ) {
         stale.add(entry.root);
       }
+      // A `missing` root has no pass 2 to wait on — carrying its last known
+      // grade/findings forward would let a project that has since been
+      // deleted keep reading as healthy (TRA-1054/TRA-1057).
+      const carryForward = basics.status !== 'missing';
       cache.set(entry.root, {
         ...basics,
         // Carry the previous run's expensive metrics rather than blanking the
         // screen back to zeros while pass 2 recomputes them.
-        deadExports: prev?.deadExports ?? 0,
-        untestedSymbols: prev?.untestedSymbols ?? 0,
-        securityFindings: prev?.securityFindings ?? 0,
-        techDebtGrade: prev?.techDebtGrade,
+        deadExports: carryForward ? (prev?.deadExports ?? 0) : 0,
+        untestedSymbols: carryForward ? (prev?.untestedSymbols ?? 0) : 0,
+        securityFindings: carryForward ? (prev?.securityFindings ?? 0) : 0,
+        techDebtGrade: carryForward ? prev?.techDebtGrade : undefined,
         status: basics.status === 'ok' && prev === undefined ? 'computing' : basics.status,
       });
       await tick();
@@ -347,7 +364,13 @@ async function refreshAll(force = false): Promise<void> {
     for (const entry of entries) {
       if (!stale.has(entry.root)) continue;
       const basics = cache.get(entry.root);
-      if (!basics || basics.status === 'not_loaded' || basics.status === 'error') continue;
+      if (!basics) continue;
+      if (
+        basics.status === 'not_loaded' ||
+        basics.status === 'error' ||
+        basics.status === 'missing'
+      )
+        continue;
       const enriched = await enrich(entry, basics);
       cache.set(entry.root, enriched);
       if (enriched.status === 'ok') enrichedAt.set(entry.root, fingerprints.get(entry.root) ?? 0);

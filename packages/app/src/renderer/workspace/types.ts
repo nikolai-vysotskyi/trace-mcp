@@ -37,7 +37,11 @@ export type ProjectHealthStatus =
   | 'error'
   | 'indexing'
   | 'not_loaded'
-  | 'computing';
+  | 'computing'
+  /** The registry's `root` directory no longer exists on disk (TRA-1054).
+   *  Distinct from `not_loaded`: there is nothing to open or re-index, and
+   *  it does not count toward "Projects" or any KPI derived from it. */
+  | 'missing';
 
 export type TechDebtGrade = 'A' | 'B' | 'C' | 'D' | 'F';
 
@@ -258,10 +262,15 @@ export function mergeIntoViewModel(
     if (existing) {
       // Live status overrides cached status when daemon is in a transient
       // pipeline state OR when dashboard hasn't decided yet ('not_loaded').
+      // `missing` always wins: it is a fact about the filesystem (the root
+      // directory is gone), and a daemon that has not noticed yet — it does
+      // not re-stat a loaded project's root — must not un-flag it (TRA-1054).
       const displayStatus =
-        liveIsTransient || existing.displayStatus === 'not_loaded'
-          ? liveCanonical
-          : existing.displayStatus;
+        existing.displayStatus === 'missing'
+          ? 'missing'
+          : liveIsTransient || existing.displayStatus === 'not_loaded'
+            ? liveCanonical
+            : existing.displayStatus;
       byRoot.set(p.root, {
         ...existing,
         displayStatus,
@@ -292,6 +301,7 @@ export function mergeIntoViewModel(
 // ── KPI derivation ─────────────────────────────────────────────────────────
 
 export function deriveKpis(projects: ProjectViewModel[]): WorkspaceKpis {
+  let totalProjects = 0;
   let healthy = 0;
   let needsAttention = 0;
   let indexing = 0;
@@ -299,6 +309,11 @@ export function deriveKpis(projects: ProjectViewModel[]): WorkspaceKpis {
   let totalSymbols = 0;
 
   for (const p of projects) {
+    // A dead registry row (deleted directory) is not a project — it must not
+    // inflate "Projects" or any "x of N" denominator derived from it
+    // (TRA-1054).
+    if (p.displayStatus === 'missing') continue;
+    totalProjects++;
     if (p.displayStatus === 'indexing' || p.displayStatus === 'computing') {
       indexing++;
     }
@@ -316,7 +331,7 @@ export function deriveKpis(projects: ProjectViewModel[]): WorkspaceKpis {
   }
 
   return {
-    totalProjects: projects.length,
+    totalProjects,
     totalFiles,
     totalSymbols,
     healthy,
@@ -394,6 +409,7 @@ const STATUS_ORDER: Record<ProjectHealthStatus, number> = {
   computing: 2,
   error: 3,
   not_loaded: 4,
+  missing: 5,
 };
 
 export function compareViewModels(
@@ -440,6 +456,7 @@ export function statusToDot(status: ProjectHealthStatus): Tone {
     case 'error':
       return 'red';
     case 'not_loaded':
+    case 'missing':
       return 'neutral';
   }
 }
@@ -456,6 +473,8 @@ export function statusLabel(status: ProjectHealthStatus): string {
       return t('workspace:statusError');
     case 'not_loaded':
       return t('workspace:statusNotLoaded');
+    case 'missing':
+      return t('workspace:statusMissing');
   }
 }
 

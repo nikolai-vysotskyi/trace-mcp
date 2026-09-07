@@ -140,12 +140,13 @@ describe('getTechDebt() — behavioural contract (get_tech_debt)', () => {
     expect(complexityRec!.priority).toBe('high');
   });
 
-  it('empty index returns ok envelope with empty modules + grade A', () => {
+  it('empty index returns ok envelope with empty modules + no grade (TRA-1057)', () => {
     const empty = createTestStore();
     const value = getTechDebt(empty, '/project')._unsafeUnwrap();
     expect(value.modules).toEqual([]);
-    // No modules → mean score is 0 → grade A (best).
     expect(value.project_score).toBe(0);
-    expect(value.project_grade).toBe('A');
+    // No modules → nothing was scored. `null`, not the "A" a naive
+    // mean-of-zero would produce — an empty project isn't a healthy one.
+    expect(value.project_grade).toBeNull();
   });
 });

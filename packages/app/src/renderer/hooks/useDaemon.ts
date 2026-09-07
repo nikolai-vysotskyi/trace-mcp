@@ -87,6 +87,9 @@ export interface SettingsData {
 export interface SettingsState {
   settings: SettingsData;
   path: string;
+  /** Per-project override paths (`settings.projects` keys) whose folder no
+   *  longer exists on disk — TRA-1054, same rule as the project registry. */
+  staleProjectPaths: string[];
   daemon: DaemonInfo;
 }
 
@@ -404,17 +407,21 @@ export function useDaemon() {
 
   // Actions
   const addProject = useCallback(async (root: string) => {
-    try {
-      await daemonFetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ root }),
-      });
-      // Optimistic: add immediately, SSE will update status
-      setProjects((prev) => [...prev, { root, status: 'pending' }]);
-    } catch {
-      // SSE will reconcile
+    const res = await daemonFetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root }),
+    });
+    // The server already validates the path (400 on a directory that does
+    // not exist) — TRA-1077 was this response being ignored: the row got
+    // added to state and the popover closed regardless of `res.ok`, so a
+    // rejected add looked identical to a successful one.
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `Failed to add project (${res.status})`);
     }
+    // Optimistic: add immediately, SSE will update status
+    setProjects((prev) => [...prev, { root, status: 'pending' }]);
   }, []);
 
   const removeProject = useCallback(async (root: string) => {
