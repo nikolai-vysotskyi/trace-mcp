@@ -800,6 +800,28 @@ the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
 (Intel)`, `Download for Windows` — never a platform the page has not confirmed
 and never an architecture the visitor is left to guess at.
 
+**Three body sizes under the headline, and shade says which kind of sentence
+it is** (TRA-1143). `.hero-desc` is the claim — 19px, `--text-primary`, its
+number at `--text-display` through `.accent-text`. `.hero-evidence` is the
+other half of the same measurement, the quality result that says the cheap
+context was worth having — 15px, but `--text-primary` too, with its four
+numbers on the same `.accent-text`. `.hero-boundary` is the scope note about
+what the product does to your machine — 15px, `--text-secondary`.
+
+Size separates evidence from claim; shade groups them and drops the scope note
+out. Getting this wrong is not a nuance: for one release the evidence and the
+scope note shared `.hero-boundary` and rendered identically at
+15px/`--text-secondary`, so the answer to "is the thinner context worse?" was
+set in the same grey as a legal boundary and read as small print under the
+number it qualifies. The saving was loud and the proof it had not been bought
+with worse reviews was quiet — the exact shape the page exists to avoid.
+
+**A number that qualifies a claim gets the claim's own emphasis, on both
+sides of the comparison.** All four of `.hero-evidence`'s figures take
+`.accent-text`, including the ones where we lose: `0.80 false positives per PR
+against 0.58` is us being worse, and it is set as brightly as the half we win.
+Dimming the losing number is how a comparison becomes a boast.
+
 **Three mono caps rows, one treatment, three greys.** `.hero-eyebrow`
 (`--text-secondary`, above the headline, carrying the service label and the
 version + licence the old two-column `.hero-meta` used to spend a whole row on),
@@ -854,13 +876,25 @@ never lands on a separator.
 one tested step wider than the failure. Inline behaviour is what you get above
 700px, not at it.
 
-**The first screen fits a 13" laptop, and that is a measurement.** At
-1440×900 with the header, `.hero` bottom sits at 720px, the button at 483px and
-the trust line at 656px — 180px of clearance, with the metrics strip already
-showing underneath.
-Re-measure `getBoundingClientRect().bottom` on `.hero` after any change to the
-headline wording, the description, or the hero's padding; a first screen whose
-button falls below 900px is a regression however good it looks at 1440×1080.
+**The first screen fits a 13" laptop, and that is a measurement.** Measured
+on the **live published page** at 1440×900 — `getBoundingClientRect().top`
+plus `scrollY`, document coordinates: the button top sits at 630px and the
+trust line at 841px, with the metrics strip below the fold.
+
+Take the figure on `trace-mcp.com`, not on a local preview, and say which you
+took. Without a Jekyll build there is no faithful local render of this page —
+a Liquid-lite substitution reads roughly 48px lower on every hero element than
+the live page does, so a preview number recorded here as the baseline is a
+regression the next run will chase and not find. The rule is the button, not
+the hero — a first screen whose button falls below 900px is a regression
+however good it looks at 1440×1080.
+
+Re-measure `getBoundingClientRect()` on `.hero-cta` and `.hero-trust` after any
+change to the headline wording, either paragraph, or the hero's padding. The
+figures here have been refreshed once already (TRA-1143): they read 483px and
+656px from before the evidence line existed, which made a stale record look
+like a passing check. If you change the hero and do not re-measure, the next
+run reads your numbers as the truth.
 
 ---
 
