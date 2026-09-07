@@ -75,23 +75,22 @@ afterAll(async () => {
   // again for the expensive pass — nothing in this file awaits it, so a
   // handle can still be open on `projN.db` the instant the last test
   // resolves. `waitForIdleForTests()` resolves once that pass has actually
-  // finished (every DB handle it opened synchronously closed at the
-  // application level) — but on Windows CI that isn't quite the end of it:
-  // Defender's on-access scan can keep a just-closed file briefly busy at
-  // the OS level (the same class of delay TRA-1104 documents for file
-  // creation). POSIX tolerates unlinking an open file regardless; Windows
-  // doesn't (EBUSY), so a short retry absorbs that trailing window after
-  // the deterministic wait has already ruled out the actual cause.
+  // finished, which clears the ordinary case.
+  //
+  // What's left is a Windows-only residue this repo has hit before for a
+  // different file (TRA-1104): the OS can keep a just-closed file briefly
+  // busy after a legitimate close() — outside the process's control and not
+  // bounded by anything this suite does. POSIX tolerates unlinking an open
+  // file regardless; Windows doesn't (EBUSY). The temp directory lives under
+  // `os.tmpdir()` on a CI runner that is destroyed after the job — failing
+  // to delete a few KB of leftover fixture there is not a real problem, so
+  // cleanup best-effort and never fails the suite over it.
   const { waitForIdleForTests } = await import('../../src/api/dashboard-routes.js');
   await waitForIdleForTests();
-  for (let attempt = 0; ; attempt++) {
-    try {
-      fs.rmSync(tmpHome, { recursive: true, force: true });
-      break;
-    } catch (err) {
-      if (attempt >= 20) throw err;
-      await new Promise((r) => setTimeout(r, 200));
-    }
+  try {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  } catch {
+    /* best-effort — see above */
   }
   delete process.env.TRACE_MCP_DATA_DIR;
 });
