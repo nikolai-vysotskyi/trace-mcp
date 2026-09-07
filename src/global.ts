@@ -142,6 +142,56 @@ export const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
  */
 export const EPHEMERAL_INDEX_DIR = path.join(INDEX_DIR, 'ephemeral');
 
+/**
+ * Path shape Multica's `repo checkout` uses for one-shot agent-run workdirs:
+ * `.../multica_workspaces_<host>/<workspace-id>/<run-id>/workdir`. Each task
+ * run gets a brand-new directory, so a project matching this shape is queried
+ * exactly once, for the lifetime of that single run, and never touched again.
+ *
+ * TRA-527: the run directory is the container, not the project root — `repo
+ * checkout` clones into `workdir/<repo>`, and a monorepo package sits deeper
+ * still. Anchoring on `workdir$` therefore missed every root an agent actually
+ * opens, and those leaked back into registry.json (three on the reported
+ * machine within hours of TRA-396 shipping). Nothing below a run's workdir
+ * outlives the run, so match the whole subtree.
+ */
+const EPHEMERAL_WORKDIR_PATTERN =
+  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
+
+/**
+ * The same runtime's other one-shot layout: a task given a scratch directory
+ * instead of a workspace checkout lands in `<tmp>/multica-task-<run-id>/...`.
+ * `EPHEMERAL_WORKDIR_PATTERN` above never matched those, so each was persisted
+ * like a real project — 17 of the 37 rows in the reported registry.json, all
+ * dead within the hour, each pinning a `.config.json` section for the full
+ * 7-day `sweepMissingRoots` grace (TRA-992).
+ *
+ * The container is matched, not the leaf: a run drops several roots under it
+ * (its own scratch dirs, benchmark fixtures) and none outlive the run. The
+ * numeric run id keeps this off a user directory that merely says
+ * "multica-task".
+ *
+ * Note for tests: such a runtime also exports TMPDIR as its own task
+ * directory, so `os.tmpdir()` itself can match this. A fixture that must stay
+ * persistent has to be built outside it — see `tmpRootOutsideTaskDir` in
+ * tests/test-utils.ts.
+ */
+const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
+
+/**
+ * True when `root` is a one-shot agent-run checkout, in either layout the
+ * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
+ * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
+ * registry.json — see the `_ephemeralEntries` note in registry.ts.
+ *
+ * Lives here rather than in registry.ts (which re-exports it) because
+ * {@link getDbPath} needs it, and global.ts must stay import-free.
+ */
+export function isEphemeralProjectRoot(root: string): boolean {
+  const abs = path.resolve(root);
+  return EPHEMERAL_WORKDIR_PATTERN.test(abs) || EPHEMERAL_TASK_DIR_PATTERN.test(abs);
+}
+
 /** Global project registry. */
 export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 
@@ -456,21 +506,19 @@ export function getSnapshotPath(projectRoot: string): string {
  * `resolveDbPath()` helper across `src/cli/*.ts`), so this function only ever
  * actually runs for a root that isn't registered yet — i.e. exactly the
  * "first checkout of this repo, or a non-git / remote-less project" case.
+ *
+ * TRA-1136: which is also why the ephemeral-subdir choice belongs here and not
+ * only in `registerProject`. A one-shot workdir's registry entry is
+ * process-local (`_ephemeralEntries`), so every *other* process — and every
+ * code path that never registers at all, notably `ProjectManager.addProject`
+ * with `persist: false` — fell through to a plain `INDEX_DIR` path and created
+ * a DB no sweep could ever reach. That is the 818 MB / 250-file orphan pile;
+ * routing on the path shape makes the two agree without a registry lookup.
  */
 export function getDbPath(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);
-  return path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
-}
-
-/**
- * Same as {@link getDbPath} but under {@link EPHEMERAL_INDEX_DIR}. Used for
- * one-shot agent-run checkouts that couldn't share a canonical sibling's DB,
- * so the leftover is collectable by age instead of sitting in the main index
- * dir forever with no registry row to explain it (TRA-396).
- */
-export function getEphemeralDbPath(projectRoot: string): string {
-  const absRoot = path.resolve(projectRoot);
-  return path.join(EPHEMERAL_INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
+  const dir = isEphemeralProjectRoot(absRoot) ? EPHEMERAL_INDEX_DIR : INDEX_DIR;
+  return path.join(dir, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
 }
 
 /**
