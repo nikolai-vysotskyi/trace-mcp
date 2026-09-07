@@ -51,7 +51,7 @@ dependency context; EET −32% cost).
 Put those two together and the strategic conclusion is not "we were wrong".
 It is that **honest measurement is the only unoccupied position in this
 category**, we now hold the two artefacts that occupy it — a corrected
-counter and TRA-534's 90.6% median measured on 60 merged PRs from six
+counter and TRA-534's median measured on 60 merged PRs from six
 *other people's* repositories — and nobody else does. Items 1 and 2 below
 are about putting that where a visitor sees it, with its quality arm
 attached so it is not the thing we criticise peers for.
@@ -397,9 +397,11 @@ compromised on a second, independent axis and must be cited with that.
 
 ### 2. Ship the quality arm of the one external benchmark (TRA-568, unblocked here)
 TRA-534 is the only number this project has that was not produced by the
-tool measuring itself on its own repository: median 13,595 → 1,326 input
-tokens (90.6%) across 60 merged bug-fix PRs from six OSS repos, p90 44,246 →
-3,667. TRA-883 put it into the registry one-liners. It is still a token
+tool measuring itself on its own repository: median 13,595 → 3,951 input
+tokens (70.5%) across 60 merged bug-fix PRs from six OSS repos. **Corrected
+2026-09-07 by TRA-1090** — it read 90.6% (1,326 tokens) until the trace arm was
+found to contain no source code at all; same corpus, same SHAs, bodies
+restored. TRA-883 put it into the registry one-liners. It is still a token
 number without a quality number.
 
 That is precisely the move TRA-859 catches competitors making — and
