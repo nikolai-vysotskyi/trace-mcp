@@ -74,14 +74,25 @@ afterAll(async () => {
   // (`void refreshAll()` in dashboard-routes.ts) and opens each project's DB
   // again for the expensive pass — nothing in this file awaits it, so a
   // handle can still be open on `projN.db` the instant the last test
-  // resolves. POSIX tolerates unlinking an open file; Windows does not
-  // (EBUSY). `waitForIdleForTests()` resolves only once that pass has
-  // actually finished (every DB handle it opened synchronously closed),
-  // so cleanup is deterministic rather than a guess at how long Windows'
-  // slower, antivirus-scanned I/O (TRA-1104) needs.
+  // resolves. `waitForIdleForTests()` resolves once that pass has actually
+  // finished (every DB handle it opened synchronously closed at the
+  // application level) — but on Windows CI that isn't quite the end of it:
+  // Defender's on-access scan can keep a just-closed file briefly busy at
+  // the OS level (the same class of delay TRA-1104 documents for file
+  // creation). POSIX tolerates unlinking an open file regardless; Windows
+  // doesn't (EBUSY), so a short retry absorbs that trailing window after
+  // the deterministic wait has already ruled out the actual cause.
   const { waitForIdleForTests } = await import('../../src/api/dashboard-routes.js');
   await waitForIdleForTests();
-  fs.rmSync(tmpHome, { recursive: true, force: true });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+      break;
+    } catch (err) {
+      if (attempt >= 20) throw err;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
   delete process.env.TRACE_MCP_DATA_DIR;
 });
 
