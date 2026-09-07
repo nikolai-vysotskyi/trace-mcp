@@ -1,7 +1,7 @@
 ---
 title: "What trace init installs — guard hooks, Read/Bash mirrors and client config"
 description: "What trace init writes to your machine and how to audit it: guard hooks, opt-in Read/Bash mirrors, the routing block, client config, tweakcc tiers."
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # What `trace init` installs
@@ -176,13 +176,17 @@ invoke it, at the Max tier, is ours, and saying anything softer than that would
 be untrue of the code.
 
 The version is **pinned**, not `latest`: the exact spec lives in
-`src/init/tweakcc.ts` (`TWEAKCC_VERSION`), is mirrored into `package.json` as an
-optional peer dependency so it appears in the dependency graph, the release SBOM
-and dependabot, and `tests/ci/supply-chain-pins.test.ts` fails the build if the
-two drift apart or if any `npx` in `src/` loses its version. A bump is therefore
-a reviewable PR, not something the registry can decide on your machine after our
-release. Detection is a `--no-install` probe, so nothing is fetched before you
-answer the tier question.
+`src/init/tweakcc.ts` (`TWEAKCC_VERSION`), is mirrored into `package.json` so it
+appears in the dependency graph, the release SBOM and dependabot, and
+`tests/ci/supply-chain-pins.test.ts` fails the build if the two drift apart or if
+any `npx` in `src/` loses its version. A bump is therefore a reviewable PR, not
+something the registry can decide on your machine after our release.
+
+Deciding whether you already have tweakcc is a **filesystem check** — the config
+directory, then the `PATH`. It used to be `npx tweakcc --version`, which is not a
+check: npx installs a missing package, and with the output piped it does so
+without prompting. Nothing is downloaded and no third-party binary is run before
+you answer the tier question.
 
 **Max is the default when `init` runs non-interactively** against Claude Code,
 Claw Code or Claude Desktop. Interactively it is the preselected option and the
