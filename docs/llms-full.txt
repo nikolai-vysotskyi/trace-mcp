@@ -895,6 +895,13 @@ Where it differs from us is surface, storage and scope. Its `tool_definitions.py
 
 Pick CodeGraphContext when compiler-grade references on a mainstream language justify installing an indexer toolchain, or when a pre-built bundle saves you an index you would otherwise build. If you are looking for a CodeGraphContext alternative, pick trace-mcp when you want one embedded store, framework edges and a write path. The full head-to-head, including where their reference resolution beats ours: [trace-mcp vs CodeGraphContext](/vs/codegraphcontext.html).
 
+### trace-mcp vs SocratiCode — hybrid vector search vs zero-setup code intelligence
+{: #vs-socraticode}
+
+[SocratiCode](https://github.com/giancarloerra/SocratiCode) (giancarloerra/SocratiCode, {{ site.data.competitors.socraticode.stars }} stars, TypeScript, AGPL-3.0-only / commercial dual license, v1.13.0) pairs Qdrant vector search with ast-grep AST syntax parsing across 19 languages. It delivers hybrid dense-vector plus keyword search via Reciprocal Rank Fusion (RRF), manages cross-agent concurrency locks for multi-agent workflows, and generates an interactive in-browser HTML graph visualization with Vis.js (`codebase_graph_visualize`).
+
+Where it differs is infrastructure and semantics. SocratiCode requires Docker running local Qdrant and Ollama containers (or external API keys), advertises all 25 tools unconditionally without preset filtering, parses syntax without resolving framework connections, and ships under copyleft AGPL-3.0. trace-mcp runs 100% locally with zero external infrastructure—single `npx trace-mcp` with embedded SQLite+FTS5 and local ONNX embeddings—under permissive MIT, with {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, and active refactoring tools. Full head-to-head: [trace-mcp vs SocratiCode](/vs/socraticode.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -909,8 +916,9 @@ re-checked in it.
 
 ### Pass of September 7, 2026 — current
 
-- **First source read of CodeGraph** (codegraph-ai, Rust, Apache-2.0, v0.20.1), the last entry from the previous pass's priority queue. Read through the GitHub API at `main`, no clone and nothing executed: root metadata, `Cargo.toml`, `crates/codegraph/`, `crates/codegraph-server/` (the dual LSP/MCP backend and tool registrar), `crates/codegraph-memory/` (storage and vector embeddings), and the individual parser crates. It corrected the table: written in **Rust** (43-crate Cargo workspace, edition 2021), not C as GitHub's linguist tag implied from vendored grammars. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
-- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp 158 → 159, Serena 28.8K → 28.9K (28,902), codebase-memory-mcp 42.1K → 42.4K (42,445), codegraph 69.4K → 69.8K (69,841), Context Mode 20.3K → 20.5K (20,487), code-review-graph 31.2K (31,219), CodeGraphContext 4.2K (4,168), CodeGraph (codegraph-ai) 80.
+- **First source read of SocratiCode** (giancarloerra/SocratiCode, TypeScript, AGPL-3.0-only / commercial dual, v1.13.0, {{ site.data.competitors.socraticode.stars }} stars), the highest-star direct code-graph MCP peer remaining unprofiled at source. Read through the GitHub API at `main`: package metadata, `src/constants.ts`, `src/config.ts`, `src/index.ts`, and all tool implementations in `src/tools/`. It corrected the table: **{{ site.data.competitors.socraticode.stars }} stars** (3,287, not ~900), **25 MCP tools advertised by default** (not 21), Docker-managed Qdrant vector DB (`:16333`) + Ollama (`:11435`) storage, AST parsing across 19 languages via `@ast-grep/napi` with zero framework awareness, and an interactive browser HTML visualizer (`codebase_graph_visualize`). Head-to-head analysis: [trace-mcp vs SocratiCode](/vs/socraticode.html). Findings and the take-or-pass on each mechanism are in the profiling depth tracker at the end of this page.
+- **First source read of CodeGraph** (codegraph-ai, Rust, Apache-2.0, v0.20.1), from the previous pass's priority queue. Read through the GitHub API at `main`, no clone and nothing executed: root metadata, `Cargo.toml`, `crates/codegraph/`, `crates/codegraph-server/` (the dual LSP/MCP backend and tool registrar), `crates/codegraph-memory/` (storage and vector embeddings), and the individual parser crates. It corrected the table: written in **Rust** (43-crate Cargo workspace, edition 2021), not C as GitHub's linguist tag implied from vendored grammars. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
+- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp 158 → 166, Serena 28.8K → 28.9K (28,926), codebase-memory-mcp 42.1K → 42.5K (42,504), codegraph 69.4K → 69.9K (69,891), Context Mode 20.3K → 20.5K (20,508), code-review-graph 31.2K (31,230), CodeGraphContext 4.2K (4,169), CodeGraph (codegraph-ai) 80, SocratiCode 3.3K (3,287).
 - Rows for other projects were not re-checked in this pass and carry the September 5 figures.
 
 ### Pass of September 5, 2026
@@ -1023,15 +1031,15 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 | Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.serena.stars }} | {{ site.data.competitors.code_review_graph.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} | ~900 | ~100 | ~510 |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.serena.stars }} | {{ site.data.competitors.code_review_graph.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} | {{ site.data.competitors.socraticode.stars }} | ~100 | ~510 |
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 21 | 90 | 246 defined / 17 default `core` (8 presets) |
-| Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | ✗ | ✗ | ✗ |
+| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
+| Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | partial (context artifacts, not code-linked) | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | partial (`query_project`, optional, no cross-repo edges) | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
-| Control-flow / data-flow | ✓ CFG w/ basic blocks + loop back-edges + dataflow | ✗ | ✗ | ✗ | ✗ | ✓ CFG w/ basic blocks + loop edges; type-aware taint | ✗ |
+| Control-flow / data-flow | ✓ CFG w/ basic blocks + loop back-edges + dataflow | ✗ | ✗ | ✗ | ✓ `codebase_flow` (call flow) | ✓ CFG w/ basic blocks + loop edges; type-aware taint | ✗ |
 | Security scanning | ✓ OWASP/taint, type-aware pruning | ✗ | ✗ | ✗ | ✗ | ✓ 147 rules (taint/OWASP/CWE) + SBOM + OSV/supply-chain | ✗ |
 | IaC as graph nodes | ✓ K8s/Kustomize/HCL/Docker, cross-file resolved to real nodes | ✗ | ✗ | ✓ K8s/Kustomize/HCL/Docker | ✗ | ✗ | ✗ |
 | Compiler-grade precision | ✓ opt-in LSP + offline SCIP ingestion (`scip_resolved` tier) | ✓ live LSP (rename/refs/diagnostics) | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -1171,9 +1179,9 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai).
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** SocratiCode, Narsil-MCP, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Narsil-MCP, tokensave, jCodeMunch, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -1241,7 +1249,15 @@ Three mechanisms were read at source and each got a decision:
 - **HNSW indexing over RocksDB for memory: passing, we already do better.** RocksDB introduces C++ compilation and native linking overhead that complicates cross-platform distribution. trace-mcp's embedded SQLite+FTS5 plus bundled ONNX embeddings provide zero-dependency local search with single-file portability.
 - **`codegraph_pr_context` markdown generator: already covered, and ours is benchmarked.** trace-mcp's PR context generation is the core of our PR benchmark ({{ site.data.pr_context_bench.median_savings_pct }}% input token reduction across {{ site.data.pr_context_bench.pr_count }} open-source PRs). Nothing to take.
 
-Priority for next deep-dive: **SocratiCode** (~900 stars, TypeScript — 21 MCP tools, 19 languages, polyglot dep graph), the highest-star direct code-graph MCP peer remaining unprofiled at source.
+**SocratiCode profiled this pass** (September 7, 2026 — read through the GitHub API at `main`, no clone and nothing executed: `package.json`, `src/constants.ts`, `src/config.ts`, `src/index.ts`, `src/tools/`, `src/services/code-graph.ts`, `src/services/graph-impact.ts`). 3,287 stars (GitHub API, this pass), AGPL-3.0-only / commercial dual license, TypeScript, v1.13.0 (released September 2026). It had been a table row on ~900 stars and 21 tools; reading the source corrects both: **{{ site.data.competitors.socraticode.stars }} stars** (3,287) and **25 MCP tools advertised by default** (all 25 exposed unconditionally: 9 index/manage tools, 7 graph tools, 5 query/symbol tools, 4 context tools). Storage is Docker-managed Qdrant (`qdrant/qdrant:v1.17.0`) on `:16333` + Ollama (`ollama/ollama:latest`) on `:11435` with `nomic-embed-text` (768 dimensions), with optional external/cloud Qdrant URLs. AST parsing uses `@ast-grep/napi` across 19 languages with zero framework awareness. See the full head-to-head: [trace-mcp vs SocratiCode](/vs/socraticode.html).
+
+Three mechanisms were read at source and each got a decision:
+
+- **Interactive in-browser graph visualization (`codebase_graph_visualize`): passing for core CLI, noting for desktop.** It generates a self-contained HTML file using Vis.js and calls `openInBrowser` to spawn a tab in the user's default browser. For automated CLI workflows (Claude Code, Codex), opening browser windows steals focus and interrupts headless execution. trace-mcp already exports standard GraphML/Mermaid/JSON via `export_graph` and provides an optional hardware-accelerated Electron app (`cosmos.gl`) for visual inspection without disrupting the CLI run. Nothing to take.
+- **Docker-managed vector database container: passing, we already do better.** Requiring Docker with open network ports (`16333`, `11435`) adds heavy operational dependencies, fails in restricted containerized environments, and consumes substantial idle memory. trace-mcp's embedded SQLite+FTS5 plus bundled ONNX embeddings provide zero-dependency local search with single-file portability and zero network attack surface.
+- **Cross-process locking for multi-agent concurrency: passing, already handled.** SocratiCode uses `proper-lockfile` to prevent duplicate index builds when multiple agent processes access the same directory. trace-mcp's background daemon architecture natively serializes index mutations through SQLite WAL mode and a centralized worker pool. Nothing to take.
+
+Priority for next deep-dive: **jCodeMunch** (2.6K stars, Python — AST chunking, 21 frameworks route/middleware, blast radius), the highest-star direct code-graph peer remaining unprofiled at source.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
@@ -1614,6 +1630,112 @@ Portable `.cgc` graph snapshots, published to a Hugging Face-hosted registry and
 - The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
 - [Language matrix](/language-matrix.html) — what resolution tier each language actually reaches.
 - [Get started](/#install) — no configuration required.
+
+---
+
+# SocratiCode alternative: trace-mcp vs SocratiCode
+
+Source: https://trace-mcp.com/vs/socraticode.html
+
+
+
+**TL;DR.** SocratiCode is a hybrid retrieval engine for AI agents that pairs vector embeddings in Qdrant with syntax AST dependency graphs via ast-grep. It excels at semantic natural-language chunk search, multi-agent concurrency locking, and includes an interactive browser-based HTML graph viewer.
+
+The trade-off is infrastructure and depth. SocratiCode requires running Docker containers for Qdrant and Ollama (or paying for cloud API keys), exposes all 25 tools unconditionally, parses 19 languages without resolving framework-specific connections (route → handler, controller → template, model → table), and ships under AGPL-3.0. trace-mcp requires zero infrastructure—one embedded SQLite file via `npx trace-mcp`—under permissive MIT, with {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, and a safe refactoring write path.
+
+Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search with an interactive in-browser graph visualization. Pick trace-mcp if you want zero-setup local intelligence that understands your framework and writes code as well as reading it.
+
+## Head-to-head
+
+| Capability | trace-mcp | SocratiCode |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.socraticode.stars }} |
+| License | **MIT** (permissive) | AGPL-3.0-only / Commercial dual |
+| Written in | TypeScript | TypeScript |
+| Infrastructure required | **Zero** (single npx / CLI) | **Docker** (Qdrant + Ollama) or cloud APIs |
+| Underlying storage | Embedded SQLite + FTS5 + local ONNX | Qdrant vector DB (`:16333`) + JSON caches |
+| Languages (AST parsing) | **{{ site.data.counts.languages }}** (tree-sitter WASM) | 19 (@ast-grep/napi) |
+| Framework integrations | **{{ site.data.counts.frameworks }}** integrations | ✗ (syntax AST only) |
+| Framework-aware edges | ✓ route → handler, template, ORM model | ✗ |
+| MCP tools defined | {{ site.data.counts.tools }} | 25 |
+| MCP tools advertised by default | 28 (~11.6K tok) | **25** (~5.2K tok) |
+| Surface trimming / Presets | ✓ adaptive presets (`minimal`, `review`, etc.) | ✗ (all 25 tools always advertised) |
+| Search mechanism | Structural AST + FTS5 + ONNX embeddings | Hybrid RRF (dense vector + keyword) |
+| Call flow & impact analysis | ✓ bidirectional call graph + blast radius | ✓ `codebase_flow` + `codebase_impact` |
+| Graph visualization | Desktop app (cosmos.gl) + GraphML/JSON | **Interactive HTML viewer** (`codebase_graph_visualize`) |
+| Refactoring tools | ✓ rename, move, signature, codemod, extract | ✗ (read-only) |
+| Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ |
+| Session memory | ✓ code-linked decision graph with staleness checks | partial (context artifacts in Qdrant, not code-linked) |
+| Multi-agent concurrency | Daemon process pool | Cross-process lockfile (`proper-lockfile`) |
+| Cloud / Team edition | 100% local, self-hosted | SocratiCode Cloud (private beta) |
+
+Verified on September 7, 2026 against SocratiCode's repository at `main` (v1.13.0, commit `fdcb17d`, {{ site.data.competitors.socraticode.stars }} stars). Tool definitions from `src/index.ts` and `src/tools/`, storage architecture from `src/constants.ts` and `src/config.ts`, language mappings from `src/constants.ts`.
+
+## Key architectural differences
+
+### 1. Zero-dependency local SQLite vs. Docker-managed Qdrant
+
+SocratiCode's storage model is built around [Qdrant](https://qdrant.tech/), an external vector database. When run locally, SocratiCode automatically starts and manages a Docker container (`qdrant/qdrant:v1.17.0`) bound to port 16333, plus an Ollama container (`ollama/ollama:latest`) on port 11435 to compute embeddings (defaulting to `nomic-embed-text`). If Docker is not available, you must configure a remote Qdrant URL and an external embedding API key (OpenAI, Gemini, Cohere).
+
+trace-mcp is designed for zero infrastructure overhead. It runs entirely in-process using an embedded SQLite database with FTS5 full-text indexing and bundled local ONNX vector embeddings. There is no daemon to start in Docker, no open network ports, no container volume management, and zero third-party API dependencies. You run `npx trace-mcp` and it works out of the box on any macOS, Linux, or Windows machine.
+
+### 2. Syntax AST vs. Framework Semantics
+
+Both tools use abstract syntax trees for parsing code structure—SocratiCode via `@ast-grep/napi` (19 languages) and trace-mcp via `tree-sitter-wasm` ({{ site.data.counts.languages }} languages).
+
+Where they diverge is semantic understanding. SocratiCode stops at lexical and syntactic relationships: file imports, function definitions, and call hierarchy. It does not know what a web framework is doing. If your codebase is a Next.js, Django, Spring Boot, or Ruby on Rails application, SocratiCode sees isolated controllers, route handlers, and database models with no edges between them.
+
+trace-mcp ships {{ site.data.counts.frameworks }} framework integrations. It extracts semantic domain edges that AST parsers miss:
+- HTTP routes mapped directly to their controller handlers and middleware chains.
+- Templates and UI components (React, Vue, Svelte, Blade, Jinja) connected to their backend view controllers.
+- ORM entities connected to database tables and migration files.
+- Event emitters connected to asynchronous listeners.
+
+When an AI agent asks "what does modifying this database column affect?", trace-mcp traces through the ORM model, the API handler, the validation schema, and the frontend component. SocratiCode only finds literal text or import matches.
+
+### 3. Tool Surface & Context Budget
+
+Every tool advertised by an MCP server consumes prompt tokens on every turn of an agent session, even when not called.
+
+SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
+
+trace-mcp advertises 28 tools on its default minimal preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- For ultra-lean contexts, select the 5-tool minimal preset (`minimal`, ~2.4K tokens).
+- For focused tasks, choose task-tailored presets: `review` (PR analysis), `architecture` (system boundaries), or `dev` (implementation).
+- Any tool not in the current preset remains accessible dynamically via `load_tools` without restarting the server.
+
+### 4. Interactive Browser Visualization: where SocratiCode shines
+
+SocratiCode includes `codebase_graph_visualize`, a dedicated tool that generates a standalone, interactive HTML file using Vis.js and automatically opens it in the developer's default web browser. Developers can visually inspect file clusters, dependency arrows, and isolated nodes without external tooling.
+
+trace-mcp prioritizes agent workflow continuity: opening browser tabs during automated CLI runs can steal window focus. For visual inspection, trace-mcp exports standard GraphML, Mermaid, and JSON via `export_graph`, and provides an optional native Electron desktop app (`trace-mcp.app`) powered by cosmos.gl for hardware-accelerated rendering of massive 100k+ node codebases.
+
+### 5. Licensing: Permissive MIT vs. Copyleft AGPL-3.0
+
+SocratiCode is dual-licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** for open source, requiring any organisation offering modified versions over a network to publish their complete source code. For proprietary enterprise use, a commercial license must be purchased from Altaire Limited.
+
+trace-mcp is 100% open-source under the **MIT License**. It is freely usable in commercial products, private cloud environments, CI/CD pipelines, and internal tools without copyright assignment, copyleft obligations, or license fees.
+
+## When to choose SocratiCode
+
+- **You want semantic natural-language chunk search**: If your primary workflow is asking questions like "where is user authentication rate limiting configured?" and expecting embedding-ranked text chunks, SocratiCode's Qdrant RRF hybrid search is purpose-built for that.
+- **You want an instant interactive graph in your browser**: The `codebase_graph_visualize` tool produces an interactive HTML canvas with zero extra setup.
+- **You already have Docker or Qdrant in your stack**: If running Docker containers is standard in your local environment, SocratiCode's container-backed architecture fits right in.
+
+## When to choose trace-mcp
+
+- **Zero setup and local privacy**: You want code intelligence that runs instantly with `npx trace-mcp`, requiring no Docker, no external ports, and no API keys.
+- **Framework-heavy applications**: You work with React, Vue, Next.js, Django, Laravel, Spring Boot, or Rails, and need your agent to understand routes, middleware, ORM mappings, and component hierarchies.
+- **Refactoring and writing code**: You need the agent to execute atomic renames, move files, extract functions, and apply AST codemods safely.
+- **Security & Quality Gates**: You want automated OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting directly in your agent loop.
+- **Permissive licensing**: You need an enterprise-safe MIT-licensed tool with no AGPL copyleft strings.
+
+## Next steps
+
+- Explore all MCP tools in the [tools reference](/tools-reference.html).
+- Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- See how trace-mcp stacks up against other alternatives in the [comparisons hub](/comparisons.html).
+- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "CodeGraphContext Alternative: trace-mcp vs CodeGraphContext for AI agents"
 description: "CodeGraphContext drives 11 SCIP indexers into a graph database you choose. trace-mcp ships one embedded store, framework edges and a write path."
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # CodeGraphContext alternative: trace-mcp vs CodeGraphContext
@@ -40,7 +40,7 @@ updated: 2026-09-06
           "name": "What is the core difference between CodeGraphContext and trace-mcp?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "CodeGraphContext goes further than anyone on compiler-grade references: an opt-in path shells out to eleven Sourcegraph SCIP indexer families and folds their symbol data into a property graph held in a graph database you choose from six backends. trace-mcp ships one embedded SQLite+FTS5 store with no backend decision, resolves framework edges across 87 integrations, and writes code as well as reading it."
+            "text": "CodeGraphContext goes further than anyone on compiler-grade references: an opt-in path shells out to eleven Sourcegraph SCIP indexer families and folds their symbol data into a property graph held in a graph database you choose from six backends. trace-mcp ships one embedded SQLite+FTS5 store with no backend decision, resolves framework edges across {{ site.data.counts.frameworks }} integrations, and writes code as well as reading it."
           }
         },
         {
