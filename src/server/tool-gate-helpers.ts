@@ -26,7 +26,7 @@ import { getToolAnnotations } from './tool-annotations.js';
 import { encodeWire, type WireFormat } from './wire-format.js';
 
 /** Shape of a tool response coming back from a wrapped callback. */
-type WrappedToolResponse = {
+export type WrappedToolResponse = {
   content: Array<{ type: string; text: string }>;
   isError?: boolean;
 };
@@ -361,7 +361,7 @@ async function handleDuplicate(
  * `typeof`, not truthiness: an empty string is a real, measured zero-token
  * response, not a missing one.
  */
-function responseTokens(result: WrappedToolResponse | undefined): number | undefined {
+export function responseTokens(result: WrappedToolResponse | undefined): number | undefined {
   const text = result?.content?.[0]?.text;
   return typeof text === 'string' ? Math.ceil(text.length / 4) : undefined;
 }

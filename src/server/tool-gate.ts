@@ -12,9 +12,11 @@ import {
   createGatedCallback,
   type GatedCallbackContext,
   injectAnnotations,
+  responseTokens,
   schemaIndexOf,
   type SchemaTransformConfig,
   stampAlwaysLoad,
+  type WrappedToolResponse,
 } from './tool-gate-helpers.js';
 import { createToolFilter } from './tool-filter.js';
 import type { ToolResponse } from './types.js';
@@ -168,6 +170,53 @@ export function installToolGate(
     return registered as ReturnType<typeof server.tool>;
   }) as typeof server.tool;
 
+  /**
+   * Count meta-tool calls, which the gate never saw (TRA-1162).
+   *
+   * `annotatedOriginalTool` injected annotations and the always-load stamp but
+   * left the callback alone, so `savings.recordCall` — which only ever runs
+   * inside `createGatedCallback` — never fired for any of UNGATED_META_TOOLS.
+   * On a store of 27 959 calls across 2 604 sessions, all ten read exactly
+   * zero. That is not "nobody calls them": `load_tools` is the escalation hatch
+   * that makes `minimal` defensible as the shipped default — the whole argument
+   * for a small default surface is that anything outside it is one round-trip
+   * away — and we had no way to see whether sessions were taking that trip once
+   * a day or forty times an hour.
+   *
+   * Deliberately not the full gate: budget clamping, dedup and wire-format
+   * re-encoding have no business rewriting an introspection response, and
+   * clamping `load_tools` could make the escape hatch itself fail under budget
+   * pressure. This records and nothing else.
+   *
+   * `batch` is skipped: `registerSessionTools` already records each dispatched
+   * sub-call individually, so scoring the envelope too would count the same
+   * response tokens twice. The sub-calls are the meaningful unit.
+   */
+  function recordMetaToolCalls(name: string, oArgs: unknown[]): void {
+    if (name === 'batch') return;
+    const cbIdx = oArgs.length - 1;
+    const originalCb = oArgs[cbIdx];
+    if (typeof originalCb !== 'function') return;
+    const cb = originalCb as (...args: unknown[]) => unknown;
+    oArgs[cbIdx] = async (...cbArgs: unknown[]) => {
+      savings.recordCall(name);
+      let result: unknown;
+      try {
+        result = await cb(...cbArgs);
+      } catch (err) {
+        savings.recordFailedCall(name);
+        throw err;
+      }
+      const resultObj = result as WrappedToolResponse;
+      const tokens = responseTokens(resultObj);
+      if (tokens !== undefined) {
+        if (resultObj?.isError) savings.recordFailedCall(name, tokens);
+        else savings.recordActualTokens(name, tokens);
+      }
+      return result;
+    };
+  }
+
   // Wrap _originalTool so tools registered outside the gate (session meta-tools)
   // also get annotations injected automatically — and the always-load _meta
   // stamp, so meta-tools like `batch` (registered through this path) inherit
@@ -176,6 +225,7 @@ export function installToolGate(
     const oName = oArgs[0] as string;
     ungatedToolNames.push(oName);
     injectAnnotations(oArgs);
+    recordMetaToolCalls(oName, oArgs);
     const registered = (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
     stampAlwaysLoad(oName, registered);
     return registered;
