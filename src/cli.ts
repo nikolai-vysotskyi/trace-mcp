@@ -921,6 +921,18 @@ program
     // Reverse lookup: projectRoot → Set<sessionId> (for cleanup)
     const projectSessions = new Map<string, Set<string>>();
 
+    // Durable activity log. Journals die with their session — every agent run
+    // is a client that disconnects — so the Activity tab read zero on every
+    // window regardless of how busy the project was (TRA-1071). Entries are
+    // appended here as they are broadcast and read back per time window.
+    let activityStore: import('./session/activity-store.js').ActivityStore | null = null;
+    try {
+      const { ActivityStore } = await import('./session/activity-store.js');
+      activityStore = new ActivityStore();
+    } catch (e) {
+      logger.warn(`activity store unavailable: ${(e as Error)?.message ?? e}`);
+    }
+
     async function createSessionTransport(
       projectRoot: string,
       /**
@@ -967,9 +979,9 @@ program
         onJournalEntry: (
           data: import('./server/journal-broadcast.js').JournalEntryCallbackData,
         ) => {
-          broadcastEvent(
-            buildJournalEvent({ ...data, project: projectRoot, session_id: sessionId }),
-          );
+          const entry = { ...data, project: projectRoot, session_id: sessionId };
+          broadcastEvent(buildJournalEvent(entry));
+          activityStore?.record(entry);
         },
         // R09 v2: lets MCP tools (embed_repo, snapshot_graph) emit
         // pipeline-lifecycle events through the existing SSE bus.
@@ -2978,15 +2990,39 @@ program
           res.end(JSON.stringify({ error: 'project query param is required' }));
           return;
         }
-        const sids = projectSessions.get(projectRoot);
+        // Read the durable log: it covers every session of this project, not
+        // just the newest one, and it survives the disconnects and daemon
+        // restarts that used to empty this feed (TRA-1071). Without a store
+        // (open failed) fall back to the live journals so the tab still shows
+        // the current session.
         let snapshot: ReturnType<typeof buildJournalSnapshot> = [];
-        if (sids && sids.size > 0) {
-          // Pick the most recently created session (last inserted into the Set).
-          const sid = [...sids].pop()!;
-          const handle = sessionHandles.get(sid);
-          if (handle) {
-            snapshot = buildJournalSnapshot(handle.journal, projectRoot, sid, limit);
+        if (activityStore) {
+          const now = Date.now();
+          snapshot = activityStore
+            .listForProject(projectRoot, now - 24 * 60 * 60 * 1000, now)
+            .slice(-limit)
+            .reverse()
+            .map((r) => ({
+              type: 'journal_entry' as const,
+              project: projectRoot,
+              ts: r.ts,
+              tool: r.tool,
+              params_summary: r.params_summary,
+              result_count: r.result_count,
+              result_tokens: r.result_tokens ?? undefined,
+              latency_ms: r.latency_ms ?? undefined,
+              is_error: r.is_error === 1,
+              session_id: r.session_id,
+            }));
+        } else {
+          const sids = projectSessions.get(projectRoot);
+          for (const sid of sids ?? []) {
+            const handle = sessionHandles.get(sid);
+            if (handle)
+              snapshot.push(...buildJournalSnapshot(handle.journal, projectRoot, sid, limit));
           }
+          snapshot.sort((a, b) => b.ts - a.ts);
+          snapshot = snapshot.slice(0, limit);
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(snapshot));
@@ -2995,7 +3031,21 @@ program
 
       // ── Activity stats — aggregated journal metrics for the Activity tab ─
       const journalStatsCtx: JournalStatsContext = {
-        listEntriesForProject(projectRoot) {
+        listEntriesForProject(projectRoot, since, until) {
+          const end = until ?? Date.now();
+          const start = since ?? end - 24 * 60 * 60 * 1000;
+          if (activityStore) {
+            return activityStore.listForProject(projectRoot, start, end).map((r) => ({
+              ts: r.ts,
+              tool: r.tool,
+              params_summary: r.params_summary,
+              result_count: r.result_count,
+              result_tokens: r.result_tokens ?? undefined,
+              latency_ms: r.latency_ms ?? undefined,
+              is_error: r.is_error === 1,
+              session_id: r.session_id,
+            }));
+          }
           const sids = projectSessions.get(projectRoot);
           if (!sids || sids.size === 0) return [];
           const out: ReturnType<typeof buildJournalSnapshot> = [];
@@ -3003,8 +3053,9 @@ program
             const handle = sessionHandles.get(sid);
             if (handle) out.push(...buildJournalSnapshot(handle.journal, projectRoot, sid, 10_000));
           }
-          return out;
+          return out.filter((e) => e.ts >= start && e.ts <= end);
         },
+        recordingSince: () => activityStore?.recordingSince(),
       };
       if (handleJournalStatsRequest(req, res, url, journalStatsCtx)) return;
 
@@ -3115,6 +3166,7 @@ program
       }
       sessionHandles.clear();
       sessionClients.clear();
+      activityStore?.close();
       // Close all session transports
       for (const transport of sessionTransports.values()) {
         await transport.close().catch(() => {});

@@ -24,6 +24,8 @@ export const activity = {
   window1h: '1h',
   window6h: '6h',
   window24h: '24h',
+  /** `when` is a relative time from i18n/format.ts, e.g. "12 minutes ago". */
+  recordingStarted: 'recording started {{when}}',
 
   // ── Feed state, shared by both surfaces ──
   feedLive: 'Live',
