@@ -10,7 +10,8 @@
  *   2. Writes ~/.trace/launcher.env with absolute Node + dist/cli.js paths.
  *   3. Installs the launcher shim at ~/.trace/bin/trace (POSIX) or
  *      ~/.trace/bin/trace.cmd (Windows) by copying from hooks/, and preserves
- *      ~/.trace-mcp/bin/trace-mcp as a compat symlink when (1) migrated.
+ *      repoints ~/.trace-mcp/bin/trace-mcp at it as a compat symlink whenever a
+ *      client may still be registered there, so an upgrade reaches that path too.
  *   4. On macOS: installs/refreshes ~/Library/LaunchAgents/com.trace-mcp.server.plist
  *      and bootstraps it with launchd. Kickstarts the service if it was
  *      already loaded so the new binary is picked up.
@@ -28,6 +29,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -259,25 +261,93 @@ function installLauncherShim() {
   }
 }
 
+/** Header line every shim we ship carries. Mirrors src/init/launcher.ts. */
+const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
+
+/** True only for a shim this project wrote, so we never clobber a user's file. */
+function isOwnedShim(file) {
+  try {
+    return LAUNCHER_HEADER_RE.test(fs.readFileSync(file, 'utf-8').slice(0, 256));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Preserve `~/.trace-mcp/bin/trace-mcp` as a symlink to the new
  * `~/.trace/bin/trace` shim, mirroring src/init/launcher.ts's
  * installLegacyBinCompat(). Gated on LEGACY_MIGRATION_MARKER (durable) rather
  * than TRACE_MCP_HOME_MIGRATED (true only for the one process that performed
  * the rename) so a failed symlink attempt gets retried on the next install.
+ *
+ * The legacy path must *delegate*, not be a copy — and this is the only
+ * installer an upgrade actually runs, since `npm i -g trace-mcp` never reaches
+ * `trace init` (TRA-1156). Returning early on "already present in any shape"
+ * was the bug: an MCP client registered at the legacy absolute path kept
+ * spawning whatever shim happened to be there — the pre-rename copy, or the one
+ * the desktop app writes from its own bundled payload — and no launcher fix
+ * shipped through npm could ever reach it. That is the frozen-copy outage
+ * TRA-716 closed on the `trace init` path and this one still had.
+ *
+ * Three states are repaired: nothing there, a stale regular file we recognise
+ * as ours, and a symlink whose target is gone (TRA-910 — the one state that
+ * really does spawn nothing). Anything else at that path is a user's own
+ * wrapper and is left alone.
  */
 function installLegacyBinCompat(shimPath) {
-  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
   const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  // Either durable signal that a legacy path may still be registered. The bin
+  // directory matters on its own: a machine that migrated by symlinking its
+  // home has no marker, yet its clients still spawn the legacy name.
+  if (
+    !fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER)) &&
+    !fs.existsSync(legacyDir)
+  ) {
+    return;
+  }
+  // When the legacy home *is* the launcher home, this path would point at
+  // itself. Compare real paths: a `~/.trace-mcp` symlinked onto `~/.trace`
+  // makes the two lexically different and physically the same.
   try {
-    if (fs.lstatSync(legacyPath)) return; // already present (symlink or file)
+    if (fs.realpathSync(legacyPath) === fs.realpathSync(shimPath)) return;
+  } catch {
+    /* one of them is missing — nothing resolved, carry on */
+  }
+  let existing = null;
+  try {
+    existing = fs.lstatSync(legacyPath);
   } catch {
     /* ENOENT — proceed to create it */
   }
+  if (existing) {
+    // A symlink that still resolves is already delegating; a dangling one is
+    // repaired. existsSync follows the link, lstat above did not.
+    if (existing.isSymbolicLink() && fs.existsSync(legacyPath)) return;
+    if (!existing.isSymbolicLink() && !isOwnedShim(legacyPath)) return;
+  }
   try {
     ensureDir(legacyDir);
-    fs.symlinkSync(shimPath, legacyPath);
+    // Build beside the old entry and swap with one rename: unlinking first and
+    // then failing would take the client's launcher away entirely, which is
+    // worse than the stale shim we came to replace. `.tmp.<pid>.<12 hex>` is
+    // the shape the server's orphan sweeper collects (TRA-982).
+    // ponytail: symlink only. Windows needs a delegating `.cmd` instead, and
+    // writing one means carrying the version marker isOwnedShim looks for —
+    // `trace init` already does that (src/init/launcher.ts::writeLegacyCompat),
+    // so a Windows machine keeps recovering there rather than here.
+    const tmp = `${legacyPath}.tmp.${process.pid}.${randomBytes(6).toString('hex')}`;
+    try {
+      fs.symlinkSync(shimPath, tmp);
+      fs.renameSync(tmp, legacyPath);
+    } catch (err) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch {
+        /* nothing to clean up */
+      }
+      throw err;
+    }
   } catch {
     /* best-effort — a legacy script can still recover via `trace init` */
   }
