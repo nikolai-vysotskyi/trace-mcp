@@ -119,8 +119,45 @@ const SPEC_SHAPE = /^(\$\{\w+\}|@?[\w.-]+(\/[\w.-]+)?(@[^\s]+)?)$/;
  */
 const DYNAMIC = /\$\{/;
 
-/** Our own CLI, appearing in help text — not third-party code. */
-const OWN_PACKAGES = new Set(['trace', 'trace-mcp']);
+/**
+ * Our own package, appearing in help text — not third-party code. Only the
+ * package name: `trace` is the *binary* alias, and `npx trace` would resolve
+ * the unrelated registry package of that name, so exempting it would license
+ * silent third-party execution.
+ */
+const OWN_PACKAGES = new Set(['trace-mcp']);
+
+/**
+ * npx flags that take no value. The list is an allowlist on purpose: an
+ * unrecognized flag may consume the next token (`--cache <dir>` does), which
+ * means the scanner cannot prove which token is the package — and a scanner
+ * that cannot prove it must fail closed, not guess and drop the line as prose.
+ */
+const BOOLEAN_FLAGS = new Set([
+  '-y',
+  '--yes',
+  '--no',
+  '--no-install',
+  '-q',
+  '--quiet',
+  '--silent',
+  '--offline',
+  '--prefer-offline',
+  '--prefer-online',
+  '--ignore-existing',
+  '-h',
+  '--help',
+  '-v',
+  '--version',
+]);
+
+/**
+ * A spec that does not name a registry release: `github:owner/repo` tracks a
+ * mutable default branch, and the URL/file forms are outside anything we can
+ * pin here. None exist today; if one is ever justified, decide its immutable
+ * form (a 40-char commit for `github:`) and whitelist it deliberately.
+ */
+const NON_REGISTRY = /^[a-z][a-z+.-]*:/i;
 
 export function findUnpinnedNpx(source: string, fileName = 'probe.ts'): string[] {
   const sf = ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true);
@@ -129,10 +166,19 @@ export function findUnpinnedNpx(source: string, fileName = 'probe.ts'): string[]
   const check = (text: string) => {
     // `npx` must stand as its own word — `npx/uvx` in prose is not a call.
     for (const m of text.matchAll(/\bnpx(?=[\s'"`]|$)([^\n]*)/g)) {
-      const spec = extractSpec(m[1]);
+      const scan = extractSpec(m[1]);
+      if (scan.kind === 'none') continue;
+      if (scan.kind === 'unprovable') {
+        offenders.push(`npx ${scan.token} … (unrecognized option — spec unprovable)`);
+        continue;
+      }
+      const { spec } = scan;
+      if (NON_REGISTRY.test(spec)) {
+        offenders.push(`npx ${spec}`);
+        continue;
+      }
       // Not spec-shaped: prose that merely contains the word npx, e.g.
       // "auto-installs tweakcc via npx (recommended)".
-      if (spec === null) continue;
       if (!DYNAMIC.test(spec) && !SPEC_SHAPE.test(spec)) continue;
       if (!isPinned(spec)) offenders.push(`npx ${spec}`);
     }
@@ -173,24 +219,32 @@ function flattenText(node: ts.Node): string {
   return '${dynamic}';
 }
 
-/**
- * The package spec an `npx` invocation would execute, or null when the line
- * carries no spec at all (`npx` alone, or only flags).
- */
-function extractSpec(rest: string): string | null {
+type SpecScan =
+  | { kind: 'none' }
+  | { kind: 'unprovable'; token: string }
+  | { kind: 'spec'; spec: string };
+
+/** The package spec an `npx` invocation would execute. */
+function extractSpec(rest: string): SpecScan {
   const tokens = rest.trim().split(/\s+/).filter(Boolean);
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
     // `--package=<spec>` / `-p <spec>` name the package explicitly, and npx
     // then runs a *command* name that is not the package — read the spec here.
-    if (tok.startsWith('--package=')) return tok.slice('--package='.length);
-    if (tok === '--package' || tok === '-p') return tokens[i + 1] ?? null;
-    if (tok.startsWith('-')) continue;
+    if (tok.startsWith('--package=')) return { kind: 'spec', spec: tok.slice(10) };
+    if (tok === '--package' || tok === '-p') {
+      const next = tokens[i + 1];
+      return next ? { kind: 'spec', spec: next } : { kind: 'none' };
+    }
+    if (tok.startsWith('-')) {
+      if (BOOLEAN_FLAGS.has(tok) || tok.includes('=')) continue;
+      return { kind: 'unprovable', token: tok };
+    }
     // Strip markdown/punctuation the spec is quoted with when it appears
     // inside a user-facing message: "run `npx -y tweakcc@4.3.3` manually".
-    return tok.replace(/[`'",.;:)]+$/, '');
+    return { kind: 'spec', spec: tok.replace(/[`'",.;)]+$/, '') };
   }
-  return null;
+  return { kind: 'none' };
 }
 
 /**
@@ -245,10 +299,6 @@ describe('findUnpinnedNpx', () => {
     ]);
   });
 
-  it('ignores our own CLI in help text', () => {
-    expect(flags(`console.log('   npx trace-mcp init')`)).toEqual([]);
-  });
-
   it('ignores prose that merely contains the word npx', () => {
     expect(flags(`const hint = 'auto-installs tweakcc via npx (recommended)';`)).toEqual([]);
     expect(flags(`const s = 'launched via npx/uvx by the client';`)).toEqual([]);
@@ -266,6 +316,26 @@ describe('findUnpinnedNpx', () => {
     expect(flags('execSync(`npx -y ${config.package} --version`)')).toEqual(['npx ${dynamic}']);
     expect(flags(`execSync('npx ' + packageFromConfig)`)).toEqual(['npx \${packageFromConfig}']);
     expect(flags('execSync(`npx ${name}@1.0.0`)')).toEqual(['npx ${name}@1.0.0']);
+  });
+
+  it('fails closed on an option it cannot prove is valueless', () => {
+    // `--cache <dir>` eats the next token; the package is the one after it.
+    expect(flags(`execSync('npx --cache /tmp/c unversioned-package --version')`)).toEqual([
+      'npx --cache … (unrecognized option — spec unprovable)',
+    ]);
+    expect(flags(`execSync('npx --cache=/tmp/c pkg@1.0.0')`)).toEqual([]);
+  });
+
+  it('rejects specs that do not name a registry release', () => {
+    expect(flags(`execSync('npx github:example/pkg --version')`)).toEqual([
+      'npx github:example/pkg',
+    ]);
+    expect(flags(`execSync('npx file:../pkg')`)).toEqual(['npx file:../pkg']);
+  });
+
+  it('does not exempt the `trace` binary alias — that is someone else on npm', () => {
+    expect(flags(`execSync('npx trace --version')`)).toEqual(['npx trace']);
+    expect(flags(`console.log('   npx trace-mcp init')`)).toEqual([]);
   });
 
   it('sees through the markdown quoting of a user-facing message', () => {
