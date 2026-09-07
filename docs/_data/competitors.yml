@@ -12,11 +12,11 @@
 # record of a verification pass, not a live figure: leave those alone.
 verified: 2026-09-07
 
-# Re-read 2026-09-07 (TRA-1074) across all tracked competitors.
+# Re-read 2026-09-07 across all tracked competitors.
 trace_mcp:
   repo: nikolai-vysotskyi/trace-mcp
-  stars_exact: 159
-  stars: "159"
+  stars_exact: 166
+  stars: "166"
 repomix:
   repo: yamadashy/repomix
   stars_exact: 28221
@@ -27,8 +27,8 @@ serena:
   stars: "28.9K"
 codebase_memory_mcp:
   repo: DeusData/codebase-memory-mcp
-  stars_exact: 42445
-  stars: "42.4K"
+  stars_exact: 42504
+  stars: "42.5K"
 code_review_graph:
   repo: tirth8205/code-review-graph
   stars_exact: 31219
@@ -39,8 +39,8 @@ codegraphcontext:
   stars: "4.2K"
 codegraph:
   repo: colbymchenry/codegraph
-  stars_exact: 69841
-  stars: "69.8K"
+  stars_exact: 69891
+  stars: "69.9K"
 context_mode:
   repo: mksglu/context-mode
   stars_exact: 20487
@@ -49,3 +49,7 @@ codegraph_ai:
   repo: codegraph-ai/CodeGraph
   stars_exact: 80
   stars: "80"
+socraticode:
+  repo: giancarloerra/SocratiCode
+  stars_exact: 3287
+  stars: "3.3K"
