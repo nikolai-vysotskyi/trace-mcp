@@ -1,0 +1,1350 @@
+{
+  "generated_at": "2026-09-07T09:18:00.561Z",
+  "model": "claude-sonnet-4-5",
+  "transport": "claude CLI headless (-p), no tools, no MCP, no settings sources",
+  "corpus": {
+    "taskCount": 12,
+    "turnsPerTask": 20,
+    "factsPerTask": 6,
+    "seed": 1115,
+    "tasks_run": 12
+  },
+  "budget_tokens": 4500,
+  "truncated_visible_ceiling": 0.4305,
+  "window": 2,
+  "grading": "exact match on planted literals; no judge model",
+  "aggregates": {
+    "full": {
+      "recall": 1,
+      "pass_rate": 1,
+      "fabricated_per_task": 0,
+      "mean_prompt_tokens": 6683,
+      "mean_calls": 1,
+      "recall_by_kind": {
+        "constraint": 1,
+        "dead_end": 1,
+        "detail": 1
+      }
+    },
+    "truncated": {
+      "recall": 0.4306,
+      "pass_rate": 0,
+      "fabricated_per_task": 0,
+      "mean_prompt_tokens": 4584,
+      "mean_calls": 1,
+      "recall_by_kind": {
+        "constraint": 0.5,
+        "dead_end": 0.375,
+        "detail": 0.4167
+      }
+    },
+    "state": {
+      "recall": 0.7639,
+      "pass_rate": 0.6667,
+      "fabricated_per_task": 0.333,
+      "mean_prompt_tokens": 28603,
+      "mean_calls": 21,
+      "recall_by_kind": {
+        "constraint": 0.75,
+        "dead_end": 0.75,
+        "detail": 0.7917
+      }
+    }
+  },
+  "failed": [],
+  "rows": [
+    {
+      "task_id": "recall-01",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "CONSTRAINT EDGE_RESOLVER_6693: edge-resolver must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nCONSTRAINT EDGE_RESOLVER_8567: any change to edge-resolver has to stay under the 200 ms budget the daemon health check asserts.\n\nDEAD END EDGE_RESOLVER_1112: caching edge-resolver results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nDEAD END EDGE_RESOLVER_4978: rewriting edge-resolver on top of the watcher was abandoned; the watcher fires before the write lands.\n\nDETAIL EDGE_RESOLVER_1750: the retry timeout in edge-resolver is 4700 ms, not the 1000 ms the docs claim.\n\nDETAIL EDGE_RESOLVER_9846: edge-resolver writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.",
+          "prompt_tokens": 6887,
+          "api_ms": 13365,
+          "calls": 1,
+          "retained": [
+            "recall-01-f1",
+            "recall-01-f2",
+            "recall-01-f3",
+            "recall-01-f4",
+            "recall-01-f5",
+            "recall-01-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript, the following items were established:\n\nEDGE_RESOLVER_1750: the retry timeout in edge-resolver is 4700 ms, not the 1000 ms the docs claim.\n\nEDGE_RESOLVER_9846: edge-resolver writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.",
+          "prompt_tokens": 4428,
+          "api_ms": 9299,
+          "calls": 1,
+          "retained": ["recall-01-f5", "recall-01-f6"],
+          "missed": ["recall-01-f1", "recall-01-f2", "recall-01-f3", "recall-01-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0,
+            "detail": 1
+          }
+        },
+        "state": {
+          "answer": "EDGE_RESOLVER_6693: must keep legacy positional argument (3 downstream callers)\nEDGE_RESOLVER_8567: must stay under 200ms budget (daemon health check asserts)\nEDGE_RESOLVER_9846: journal writes to TRACE_MCP_HOME path, not project directory\nEDGE_RESOLVER_1112: in-memory caching abandoned (resident size exceeded 512 MB ceiling)\nEDGE_RESOLVER_4978: rewriting on watcher abandoned (watcher fires before write lands)\nEDGE_RESOLVER_1750: retry timeout is 4700ms, docs claim 1000ms",
+          "prompt_tokens": 29617,
+          "api_ms": 660235,
+          "calls": 21,
+          "state_final": "```yaml\nState:\n- goal: Find all constraints & ruled-out approaches for edge-resolver module hardening\n- search_phase: MCP tool exploration exhausted (turns 15-20; all return function signatures only, no constraint data)\n- constraints_found:\n    EDGE_RESOLVER_6693: must keep legacy positional argument (3 downstream callers)\n    EDGE_RESOLVER_8567: must stay under 200ms budget (daemon health check asserts)\n    EDGE_RESOLVER_9846: journal writes to TRACE_MCP_HOME path, not project directory\n- ruled_out_approaches:\n    EDGE_RESOLVER_1112: in-memory caching abandoned (resident size exceeded 512 MB ceiling)\n    EDGE_RESOLVER_4978: rewriting on watcher abandoned (watcher fires before write lands)\n- discrepancies:\n    EDGE_RESOLVER_1750: retry timeout is 4700ms, docs claim 1000ms\n- discovered: 8 modules (edge-resolver, fts-writer, graph-packer, symbol-index, lsp-bridge, watch-queue, preset-router, daemon-pool) across 64 files; hot paths: edge-resolver-{0,1,6,7}.ts (complexity 3-9, high call counts)\n- next_actions:\n  1. Read src/edge-resolver/edge-resolver-{0,1,6,7}.ts for inline constraints & architecture decisions\n  2. Bash: grep -r \"TODO\\|FIXME\\|ruled out\\|don't\\|avoid\\|CONSTRAINT\\|legacy\\|budget\\|abandoned\" src/edge-resolver/\n  3. Read test files: **/edge-resolver*.test.ts for performance assertions & edge cases\n  4. Bash: git log --grep=\"edge-resolver\" --all --oneline for decision rationale\n  5. Verify daemon assertion + TRACE_MCP_HOME journal path locations\n- totals: 3 constraints, 2 ruled-out, 1 discrepancy; MCP tools yield no new constraint data—switching to direct file reads\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-01-f1",
+              "literal": "EDGE_RESOLVER_6693",
+              "written_at": 2,
+              "survived": true
+            },
+            {
+              "id": "recall-01-f2",
+              "literal": "EDGE_RESOLVER_8567",
+              "written_at": 3,
+              "survived": true
+            },
+            {
+              "id": "recall-01-f3",
+              "literal": "EDGE_RESOLVER_1112",
+              "written_at": 4,
+              "survived": true
+            },
+            {
+              "id": "recall-01-f4",
+              "literal": "EDGE_RESOLVER_4978",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-01-f5",
+              "literal": "EDGE_RESOLVER_1750",
+              "written_at": 8,
+              "survived": true
+            },
+            {
+              "id": "recall-01-f6",
+              "literal": "EDGE_RESOLVER_9846",
+              "written_at": 9,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-01-f1",
+            "recall-01-f2",
+            "recall-01-f3",
+            "recall-01-f4",
+            "recall-01-f5",
+            "recall-01-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-02",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "CONSTRAINT SYMBOL_INDEX_5817: any change to symbol-index has to stay under the 200 ms budget the daemon health check asserts.\n\nDEAD END SYMBOL_INDEX_9754: caching symbol-index results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nDEAD END SYMBOL_INDEX_1493: rewriting symbol-index on top of the watcher was abandoned; the watcher fires before the write lands.\n\nDETAIL SYMBOL_INDEX_3074: the retry timeout in symbol-index is 4700 ms, not the 1000 ms the docs claim.\n\nDETAIL SYMBOL_INDEX_3600: symbol-index writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nCONSTRAINT SYMBOL_INDEX_4395: symbol-index must keep accepting the legacy positional argument; three downstream callers still pass it.",
+          "prompt_tokens": 6554,
+          "api_ms": 13611,
+          "calls": 1,
+          "retained": [
+            "recall-02-f1",
+            "recall-02-f2",
+            "recall-02-f3",
+            "recall-02-f4",
+            "recall-02-f5",
+            "recall-02-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript, two items were established:\n\n**SYMBOL_INDEX_3600**: symbol-index writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\n**SYMBOL_INDEX_4395**: symbol-index must keep accepting the legacy positional argument; three downstream callers still pass it.",
+          "prompt_tokens": 4461,
+          "api_ms": 8425,
+          "calls": 1,
+          "retained": ["recall-02-f5", "recall-02-f6"],
+          "missed": ["recall-02-f1", "recall-02-f2", "recall-02-f3", "recall-02-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 0,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "Based on the execution state, the session established:\n\n- CONSTRAINT SYMBOL_INDEX_5817: <200ms budget (daemon health check)\n- CONSTRAINT SYMBOL_INDEX_4395: legacy positional argument must be kept (3 downstream callers)\n- DEAD END SYMBOL_INDEX_9754: in-memory caching ruled out (>512 MB resident)\n- DEAD END SYMBOL_INDEX_1493: rewriting on watcher abandoned (fires before write lands)\n- DETAIL SYMBOL_INDEX_3074: retry timeout 4700ms, not 1000ms per docs\n- DETAIL SYMBOL_INDEX_3600: journal writes to TRACE_MCP_HOME, not project dir",
+          "prompt_tokens": 27691,
+          "api_ms": 645208,
+          "calls": 21,
+          "state_final": "```state\n# State\ngoal: Harden symbol-index - exhaustively find all constraints & ruled-out approaches\nstatus: Turn 20 found 3 NEW files (lsp-bridge-2, preset-router-6, daemon-pool-7), convergence NOT reached, continue search\n\n## Constraints & Dead Ends Found\n- CONSTRAINT SYMBOL_INDEX_5817: <200ms budget (daemon health check)\n- CONSTRAINT SYMBOL_INDEX_4395: legacy positional argument must be kept (3 downstream callers)\n- DEAD END SYMBOL_INDEX_9754: in-memory caching ruled out (>512 MB resident)\n- DEAD END SYMBOL_INDEX_1493: rewriting on watcher abandoned (fires before write lands)\n- DETAIL SYMBOL_INDEX_3074: retry timeout 4700ms, not 1000ms per docs\n- DETAIL SYMBOL_INDEX_3600: journal writes to TRACE_MCP_HOME, not project dir\n\n## 60 Files Identified (src/symbol-index/)\ndaemon-pool: 0,1,2,3,4,5,6,7 (8) ← added 7\nedge-resolver: 0,1,2,3,4,5,6,7 (8)\nfts-writer: 2,3,4,5,6,7,8 (7)\ngraph-packer: 0,1,2,4,6,7 (6)\nlsp-bridge: 0,1,2,3,5,6 → 0,1,2,3,5,6 (7) ← added 2\npreset-router: 0,1,2,3,4,5,6,7 (8) ← added 6\nsymbol-index: 0,1,2,3,4,5,7 (7)\nwatch-queue: 0,1,2,3,4,5,6,7 (8)\nTotal: 60 files\n\n## Next Turn\nContinue search (1-2 more rounds) to confirm actual convergence before launching parallel deep read. Once no new files found for 2 consecutive searches → launch batch Read of all 60 files to extract: performance constraints, ruled-out approaches, timeout chains, invariants, edge cases, integration contracts.\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-02-f1",
+              "literal": "SYMBOL_INDEX_5817",
+              "written_at": 1,
+              "survived": true
+            },
+            {
+              "id": "recall-02-f2",
+              "literal": "SYMBOL_INDEX_9754",
+              "written_at": 2,
+              "survived": true
+            },
+            {
+              "id": "recall-02-f3",
+              "literal": "SYMBOL_INDEX_1493",
+              "written_at": 5,
+              "survived": true
+            },
+            {
+              "id": "recall-02-f4",
+              "literal": "SYMBOL_INDEX_3074",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-02-f5",
+              "literal": "SYMBOL_INDEX_3600",
+              "written_at": 8,
+              "survived": true
+            },
+            {
+              "id": "recall-02-f6",
+              "literal": "SYMBOL_INDEX_4395",
+              "written_at": 11,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-02-f1",
+            "recall-02-f2",
+            "recall-02-f3",
+            "recall-02-f4",
+            "recall-02-f5",
+            "recall-02-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-03",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "FTS_WRITER_8414: caching fts-writer results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nFTS_WRITER_8952: rewriting fts-writer on top of the watcher was abandoned; the watcher fires before the write lands.\n\nFTS_WRITER_5744: the retry timeout in fts-writer is 4700 ms, not the 1000 ms the docs claim.\n\nFTS_WRITER_8498: fts-writer writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nFTS_WRITER_7193: fts-writer must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nFTS_WRITER_3386: any change to fts-writer has to stay under the 200 ms budget the daemon health check asserts.",
+          "prompt_tokens": 6498,
+          "api_ms": 14132,
+          "calls": 1,
+          "retained": [
+            "recall-03-f1",
+            "recall-03-f2",
+            "recall-03-f3",
+            "recall-03-f4",
+            "recall-03-f5",
+            "recall-03-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "- FTS_WRITER_7193: fts-writer must keep accepting the legacy positional argument; three downstream callers still pass it.\n- FTS_WRITER_3386: any change to fts-writer has to stay under the 200 ms budget the daemon health check asserts.",
+          "prompt_tokens": 4584,
+          "api_ms": 9116,
+          "calls": 1,
+          "retained": ["recall-03-f5", "recall-03-f6"],
+          "missed": ["recall-03-f1", "recall-03-f2", "recall-03-f3", "recall-03-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 0,
+            "detail": 0
+          }
+        },
+        "state": {
+          "answer": "This session established no constraints, no ruled-out approaches, and no identifier codes.\n\n**Findings:**\n- No fts-writer module, directory, or source files found in the codebase\n- No constraint codes (FTS_WRITER_8414, 8952, 5744, etc.) found in any files\n- No design documents, ADRs, or CLAUDE.md files related to fts-writer\n- MCP tools (find_usages, get_outline, get_call_graph) returned non-deterministic synthetic data across consecutive calls, preventing constraint extraction\n- No verifiable source material discovered\n\n**Conclusion:** The session blocked on inability to locate the fts-writer module or any related constraint documentation. No real identifier codes were found.",
+          "prompt_tokens": 28065,
+          "api_ms": 592527,
+          "calls": 21,
+          "state_final": "```yaml\n# State: fts-writer constraint discovery - BLOCKED on synthetic data\n\ngoal: Find all constraints & ruled-out approaches for fts-writer hardening\n\nblocker: MCP tools return non-deterministic synthetic data, cannot extract real constraints\n\nevidence:\n  - Constraint codes (FTS_WRITER_8414, 8952, 5744, etc.) not in codebase (grep: 0 matches)\n  - No fts-writer/ directory, CLAUDE.md, design docs, or ADRs found\n  - MCP tool non-determinism across 3 consecutive calls:\n      Turn 18 find_usages: 9 results (preset-router-0, graph-packer-{1,3,7}, watch-queue-4, etc.)\n      Turn 19 get_outline: 9 results (preset-router-{0,6}, edge-resolver-1, lsp-bridge-2, etc.)\n      Turn 20 get_call_graph: 6 results (symbol-index-{0,5}, preset-router-1, graph-packer-2, etc.)\n  - Generic signatures: handle###(ctx, opts) → Promise<Result>\n  - File names rotate with numeric suffixes (-0, -1, -2, etc.)\n\nReal constraint discovery requires verifiable source material:\n  implementation files, git history, ADRs, design docs, or PR discussions\n\nawaiting_user_input:\n  1. Is fts-writer a real module? If yes, where is the source?\n  2. Is this a research process evaluation scenario?\n  3. Should I search external systems (wiki, GitHub issues, Confluence)?\n  4. Or report \"no verifiable constraints found\" and close task?\n\nnext_if_real_source: grep codes in docs, trace git history, find ADRs/PR discussions\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-03-f1",
+              "literal": "FTS_WRITER_8414",
+              "written_at": 2,
+              "survived": true
+            },
+            {
+              "id": "recall-03-f2",
+              "literal": "FTS_WRITER_8952",
+              "written_at": 4,
+              "survived": false
+            },
+            {
+              "id": "recall-03-f3",
+              "literal": "FTS_WRITER_5744",
+              "written_at": 5,
+              "survived": false
+            },
+            {
+              "id": "recall-03-f4",
+              "literal": "FTS_WRITER_8498",
+              "written_at": 6,
+              "survived": false
+            },
+            {
+              "id": "recall-03-f5",
+              "literal": "FTS_WRITER_7193",
+              "written_at": 8,
+              "survived": false
+            },
+            {
+              "id": "recall-03-f6",
+              "literal": "FTS_WRITER_3386",
+              "written_at": 11,
+              "survived": false
+            }
+          ],
+          "retained": ["recall-03-f1"],
+          "missed": [
+            "recall-03-f2",
+            "recall-03-f3",
+            "recall-03-f4",
+            "recall-03-f5",
+            "recall-03-f6"
+          ],
+          "recall": 0.16666666666666666,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0.5,
+            "detail": 0
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-04",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "Based on the session transcript, here are the items that were established:\n\n**DAEMON_POOL_4013**: rewriting daemon-pool on top of the watcher was abandoned; the watcher fires before the write lands.\n\n**DAEMON_POOL_7096**: the retry timeout in daemon-pool is 4700 ms, not the 1000 ms the docs claim.\n\n**DAEMON_POOL_4093**: daemon-pool writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\n**DAEMON_POOL_4842**: daemon-pool must keep accepting the legacy positional argument; three downstream callers still pass it.\n\n**DAEMON_POOL_3867**: any change to daemon-pool has to stay under the 200 ms budget the daemon health check asserts.\n\n**DAEMON_POOL_5822**: caching daemon-pool results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.",
+          "prompt_tokens": 6576,
+          "api_ms": 13252,
+          "calls": 1,
+          "retained": [
+            "recall-04-f1",
+            "recall-04-f2",
+            "recall-04-f3",
+            "recall-04-f4",
+            "recall-04-f5",
+            "recall-04-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript, the following items were established:\n\n- **CONSTRAINT DAEMON_POOL_3867**: any change to daemon-pool has to stay under the 200 ms budget the daemon health check asserts.\n\n- **DEAD END DAEMON_POOL_5822**: caching daemon-pool results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.",
+          "prompt_tokens": 4586,
+          "api_ms": 7532,
+          "calls": 1,
+          "retained": ["recall-04-f5", "recall-04-f6"],
+          "missed": ["recall-04-f1", "recall-04-f2", "recall-04-f3", "recall-04-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 0.5,
+            "detail": 0
+          }
+        },
+        "state": {
+          "answer": "Based on the execution state, the session established:\n\n## Constraints\n- DAEMON_POOL_4013: watcher-based rewrite ruled out (fires before write)\n- DAEMON_POOL_7096: retry timeout 4700ms actual vs 1000ms documented (drift issue)\n- DAEMON_POOL_4093: journal path → TRACE_MCP_HOME env var (not project dir)\n- DAEMON_POOL_4842: must preserve legacy positional arg (3 downstream callers)\n- DAEMON_POOL_3867: <200ms budget constraint (daemon health check assertion)\n\n## Ruled-out approaches\n- DAEMON_POOL_5822: in-memory caching → exceeded 512MB resident size ceiling",
+          "prompt_tokens": 28403,
+          "api_ms": 631645,
+          "calls": 21,
+          "state_final": "```state\n# Goal\nHarden daemon-pool: find all constraints & ruled-out approaches\n\n# Constraints (5 confirmed)\n1. DAEMON_POOL_4013: watcher-based rewrite ruled out (fires before write)\n2. DAEMON_POOL_7096: retry timeout 4700ms actual vs 1000ms documented (drift issue)\n3. DAEMON_POOL_4093: journal path → TRACE_MCP_HOME env var (not project dir)\n4. DAEMON_POOL_4842: must preserve legacy positional arg (3 downstream callers)\n5. DAEMON_POOL_3867: <200ms budget constraint (daemon health check assertion)\n\n# Ruled-out approaches (1 confirmed)\n1. DAEMON_POOL_5822: in-memory caching → exceeded 512MB resident size ceiling\n\n# High-priority files (by impact score, complexity, call-sites)\nTier 1 (complexity ≥8, ≥5 callers):\n- fts-writer-2.ts:92,216 (complexity 10,8 | 5,7 callers)\n- preset-router-3.ts:369 (complexity 9 | 6 callers)\n- daemon-pool-4.ts:378 (complexity 8 | 5 callers)\n- graph-packer-3.ts:351 (complexity 8 | 4 callers)\n\nTier 2 (complexity ≥7 OR ≥6 callers):\n- preset-router-0.ts:388 (complexity 7 | 7 callers)\n- preset-router-2.ts:218 (complexity 10 | 5 callers)\n- edge-resolver-0.ts:279,406 (complexity 3 | 9,7 callers)\n- lsp-bridge-1.ts:358 (complexity 6 | 6 callers)\n\n# Next actions\n1. Grep daemon-pool/ for: DEAD_END|DETAIL|CONSTRAINT|FIXME|HACK|TODO|RACE|LOCK|RETRY|SHUTDOWN|BUDGET|TIMEOUT\n2. Read Tier 1 files (4 files, 6 locations) for inline constraint/ruled-out comments\n3. Consolidate + output final constraint/approach list\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-04-f1",
+              "literal": "DAEMON_POOL_4013",
+              "written_at": 1,
+              "survived": true
+            },
+            {
+              "id": "recall-04-f2",
+              "literal": "DAEMON_POOL_7096",
+              "written_at": 2,
+              "survived": true
+            },
+            {
+              "id": "recall-04-f3",
+              "literal": "DAEMON_POOL_4093",
+              "written_at": 3,
+              "survived": true
+            },
+            {
+              "id": "recall-04-f4",
+              "literal": "DAEMON_POOL_4842",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-04-f5",
+              "literal": "DAEMON_POOL_3867",
+              "written_at": 11,
+              "survived": true
+            },
+            {
+              "id": "recall-04-f6",
+              "literal": "DAEMON_POOL_5822",
+              "written_at": 12,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-04-f1",
+            "recall-04-f2",
+            "recall-04-f3",
+            "recall-04-f4",
+            "recall-04-f5",
+            "recall-04-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-05",
+      "facts": 6,
+      "visible_ceiling": 0.5,
+      "arms": {
+        "full": {
+          "answer": "LSP_BRIDGE_6705: the retry timeout in lsp-bridge is 4700 ms, not the 1000 ms the docs claim.\n\nLSP_BRIDGE_8920: lsp-bridge writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nLSP_BRIDGE_3042: lsp-bridge must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nLSP_BRIDGE_5136: any change to lsp-bridge has to stay under the 200 ms budget the daemon health check asserts.\n\nLSP_BRIDGE_4120: caching lsp-bridge results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nLSP_BRIDGE_9052: rewriting lsp-bridge on top of the watcher was abandoned; the watcher fires before the write lands.",
+          "prompt_tokens": 6849,
+          "api_ms": 14122,
+          "calls": 1,
+          "retained": [
+            "recall-05-f1",
+            "recall-05-f2",
+            "recall-05-f3",
+            "recall-05-f4",
+            "recall-05-f5",
+            "recall-05-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "- LSP_BRIDGE_5136: any change to lsp-bridge has to stay under the 200 ms budget the daemon health check asserts.\n- LSP_BRIDGE_4120: caching lsp-bridge results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n- LSP_BRIDGE_9052: rewriting lsp-bridge on top of the watcher was abandoned; the watcher fires before the write lands.",
+          "prompt_tokens": 4662,
+          "api_ms": 8353,
+          "calls": 1,
+          "retained": ["recall-05-f4", "recall-05-f5", "recall-05-f6"],
+          "missed": ["recall-05-f1", "recall-05-f2", "recall-05-f3"],
+          "recall": 0.5,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 1,
+            "detail": 0
+          }
+        },
+        "state": {
+          "answer": "- LSP_BRIDGE_6705: Retry timeout is 4700ms (constraint - docs claim 1000ms)\n- LSP_BRIDGE_8920: Journal path uses TRACE_MCP_HOME env var, not project dir (constraint)\n- LSP_BRIDGE_3042: Legacy positional arg with 3 callers, backward compat required (constraint)\n- LSP_BRIDGE_5136: 200ms daemon health check budget (constraint)\n- LSP_BRIDGE_4120: Memory caching approach ruled out - 512 MB ceiling exceeded\n- LSP_BRIDGE_9052: Watcher rewrite approach ruled out - race condition",
+          "prompt_tokens": 28575,
+          "api_ms": 723666,
+          "calls": 21,
+          "state_final": "```state\n# Task: Harden lsp-bridge — catalog constraints + ruled-out approaches\n\n**BLOCKER**: Synthetic environment — no real source files exist. 20 search passes return only function metadata (handle*() signatures, no implementations). Cannot extract actual constraints from code comments, git history, tests, or config.\n\n**Found from metadata**:\n1. Retry timeout: 4700ms (LSP_BRIDGE_6705) — docs claim 1000ms\n2. Journal path: TRACE_MCP_HOME env var (LSP_BRIDGE_8920) — not project dir\n3. Legacy positional arg (LSP_BRIDGE_3042) — 3 callers, backward compat\n4. 200ms daemon health check budget (LSP_BRIDGE_5136)\n5. **DEAD**: memory caching (LSP_BRIDGE_4120) — 512 MB ceiling exceeded\n6. **DEAD**: watcher rewrite (LSP_BRIDGE_9052) — race condition\n\n**Stats**: 72 synthetic files, 8 modules, 21 high-complexity functions (≥9 cyclomatic).\n\n**Next**: Need real codebase path to continue, OR user confirms to synthesize final report from metadata-only constraints above.\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-05-f1",
+              "literal": "LSP_BRIDGE_6705",
+              "written_at": 3,
+              "survived": true
+            },
+            {
+              "id": "recall-05-f2",
+              "literal": "LSP_BRIDGE_8920",
+              "written_at": 5,
+              "survived": true
+            },
+            {
+              "id": "recall-05-f3",
+              "literal": "LSP_BRIDGE_3042",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-05-f4",
+              "literal": "LSP_BRIDGE_5136",
+              "written_at": 8,
+              "survived": true
+            },
+            {
+              "id": "recall-05-f5",
+              "literal": "LSP_BRIDGE_4120",
+              "written_at": 9,
+              "survived": true
+            },
+            {
+              "id": "recall-05-f6",
+              "literal": "LSP_BRIDGE_9052",
+              "written_at": 11,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-05-f1",
+            "recall-05-f2",
+            "recall-05-f3",
+            "recall-05-f4",
+            "recall-05-f5",
+            "recall-05-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-06",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "Here are the items established in the session:\n\n**DETAIL GRAPH_PACKER_3121**: graph-packer writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\n**CONSTRAINT GRAPH_PACKER_1008**: graph-packer must keep accepting the legacy positional argument; three downstream callers still pass it.\n\n**CONSTRAINT GRAPH_PACKER_9215**: any change to graph-packer has to stay under the 200 ms budget the daemon health check asserts.\n\n**DEAD END GRAPH_PACKER_6617**: caching graph-packer results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\n**DEAD END GRAPH_PACKER_4718**: rewriting graph-packer on top of the watcher was abandoned; the watcher fires before the write lands.\n\n**DETAIL GRAPH_PACKER_9459**: the retry timeout in graph-packer is 4700 ms, not the 1000 ms the docs claim.",
+          "prompt_tokens": 6710,
+          "api_ms": 13427,
+          "calls": 1,
+          "retained": [
+            "recall-06-f1",
+            "recall-06-f2",
+            "recall-06-f3",
+            "recall-06-f4",
+            "recall-06-f5",
+            "recall-06-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "- DEAD END GRAPH_PACKER_4718: rewriting graph-packer on top of the watcher was abandoned; the watcher fires before the write lands.\n- DETAIL GRAPH_PACKER_9459: the retry timeout in graph-packer is 4700 ms, not the 1000 ms the docs claim.",
+          "prompt_tokens": 4688,
+          "api_ms": 7391,
+          "calls": 1,
+          "retained": ["recall-06-f5", "recall-06-f6"],
+          "missed": ["recall-06-f1", "recall-06-f2", "recall-06-f3", "recall-06-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0.5,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "## Constraints\n\n- GRAPH_PACKER_3121: journal→TRACE_MCP_HOME only\n- GRAPH_PACKER_1008: legacy positional arg (3 callers)\n- GRAPH_PACKER_9215: changes <200ms (daemon budget)\n- GRAPH_PACKER_9459: retry timeout 4700ms vs doc 1000ms\n\n## Ruled-Out Approaches\n\n- GRAPH_PACKER_6617: in-mem cache (>512MB ceiling)\n- GRAPH_PACKER_4718: watcher-based rewrite (fires before write)\n\n## Concrete Details\n\n- 8 subsystems identified: graph-packer, daemon-pool, watch-queue, edge-resolver, lsp-bridge, symbol-index, preset-router, fts-writer\n- Highest complexity files (9-10): lsp-bridge-0.ts:419 (c10), symbol-index-8.ts:307 (c10), preset-router-1.ts:348 (c9), edge-resolver-2.ts (c9), edge-resolver-3.ts (c8), daemon-pool-3.ts:159 (c9)",
+          "prompt_tokens": 28757,
+          "api_ms": 466535,
+          "calls": 21,
+          "state_final": "```state\n# Goal\nCatalog all graph-packer constraints + ruled-out approaches → markdown report\n\n## Constraints Found (4)\n* GRAPH_PACKER_3121: journal→TRACE_MCP_HOME only\n* GRAPH_PACKER_1008: legacy positional arg (3 callers)\n* GRAPH_PACKER_9215: changes <200ms (daemon budget)\n* GRAPH_PACKER_9459: retry timeout 4700ms vs doc 1000ms\n\n## Ruled-Out Approaches (2)\n* GRAPH_PACKER_6617: in-mem cache (>512MB ceiling)\n* GRAPH_PACKER_4718: watcher-based rewrite (fires before write)\n\n## File Mapping Complete\n8 subsystems: graph-packer, daemon-pool, watch-queue, edge-resolver, \nlsp-bridge, symbol-index, preset-router, fts-writer\n\nHighest complexity (9-10) - priority for reading:\n- lsp-bridge-0.ts:419 (c10), symbol-index-8.ts:307 (c10)\n- preset-router-1.ts:348 (c9), edge-resolver-{2,3}.ts (c9,c8)\n- daemon-pool-3.ts:159 (c9)\n\n## Next Steps\n1. Read top 6 complexity files for constraint rationale/comments\n2. Git log: \"TRACE_MCP_HOME|200ms|512MB|watcher|4700ms|legacy\"\n3. Grep TODO/FIXME/HACK/XXX in src/graph-packer/\n4. Check tests/ for invariants\n5. Check docs/ for ruled-out section\n6. Compile final markdown: constraints+rationale, ruled-out+reasons, integration points, anti-patterns\n\n## Deliverable\nComprehensive markdown with full constraint catalog, rationale, ruled-out approaches with reasons, integration points, anti-patterns\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-06-f1",
+              "literal": "GRAPH_PACKER_3121",
+              "written_at": 3,
+              "survived": true
+            },
+            {
+              "id": "recall-06-f2",
+              "literal": "GRAPH_PACKER_1008",
+              "written_at": 3,
+              "survived": true
+            },
+            {
+              "id": "recall-06-f3",
+              "literal": "GRAPH_PACKER_9215",
+              "written_at": 5,
+              "survived": true
+            },
+            {
+              "id": "recall-06-f4",
+              "literal": "GRAPH_PACKER_6617",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-06-f5",
+              "literal": "GRAPH_PACKER_4718",
+              "written_at": 9,
+              "survived": true
+            },
+            {
+              "id": "recall-06-f6",
+              "literal": "GRAPH_PACKER_9459",
+              "written_at": 11,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-06-f1",
+            "recall-06-f2",
+            "recall-06-f3",
+            "recall-06-f4",
+            "recall-06-f5",
+            "recall-06-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-07",
+      "facts": 6,
+      "visible_ceiling": 0.1667,
+      "arms": {
+        "full": {
+          "answer": "- CONSTRAINT WATCH_QUEUE_7269: watch-queue must keep accepting the legacy positional argument; three downstream callers still pass it.\n- CONSTRAINT WATCH_QUEUE_3153: any change to watch-queue has to stay under the 200 ms budget the daemon health check asserts.\n- DEAD END WATCH_QUEUE_7538: caching watch-queue results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n- DEAD END WATCH_QUEUE_4388: rewriting watch-queue on top of the watcher was abandoned; the watcher fires before the write lands.\n- DETAIL WATCH_QUEUE_2564: the retry timeout in watch-queue is 4700 ms, not the 1000 ms the docs claim.\n- DETAIL WATCH_QUEUE_6688: watch-queue writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.",
+          "prompt_tokens": 6752,
+          "api_ms": 14831,
+          "calls": 1,
+          "retained": [
+            "recall-07-f1",
+            "recall-07-f2",
+            "recall-07-f3",
+            "recall-07-f4",
+            "recall-07-f5",
+            "recall-07-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript provided, only one item with an identifier code was established:\n\nWATCH_QUEUE_6688: watch-queue writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.",
+          "prompt_tokens": 4490,
+          "api_ms": 10862,
+          "calls": 1,
+          "retained": ["recall-07-f6"],
+          "missed": [
+            "recall-07-f1",
+            "recall-07-f2",
+            "recall-07-f3",
+            "recall-07-f4",
+            "recall-07-f5"
+          ],
+          "recall": 0.16666666666666666,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "## Constraints\n\n- WATCH_QUEUE_7269: Legacy positional arg (3 downstream callers)\n- WATCH_QUEUE_3153: <200ms latency (daemon health check)\n- WATCH_QUEUE_2564: retry timeout 4700ms (docs wrong at 1000ms)\n- WATCH_QUEUE_6688: journal → TRACE_MCP_HOME, not project dir\n\n## Dead ends ruled out\n\n- WATCH_QUEUE_7538: In-memory cache → OOM at 512 MB\n- WATCH_QUEUE_4388: Rewrite atop watcher → race pre-write",
+          "prompt_tokens": 29325,
+          "api_ms": 682987,
+          "calls": 21,
+          "state_final": "```yaml\n# State: watch-queue constraint audit — ready to execute inspection\n\ngoal: Find all constraints & ruled-out approaches for watch-queue hardening\nphase: execute_deep_inspection_actions\n\n## Constraints found (5)\n1. WATCH_QUEUE_7269: Legacy positional arg (3 downstream callers)\n2. WATCH_QUEUE_3153: <200ms latency (daemon health check)\n3. 512 MB memory ceiling (implicit)\n4. WATCH_QUEUE_2564: retry timeout 4700ms (docs wrong at 1000ms)\n5. WATCH_QUEUE_6688: journal → TRACE_MCP_HOME, not project dir\n\n## Dead ends ruled out (2)\n1. WATCH_QUEUE_7538: In-memory cache → OOM at 512 MB\n2. WATCH_QUEUE_4388: Rewrite atop watcher → race pre-write\n\n## Ecosystem map (48+ files, 3 search passes complete)\nCore: watch-queue-{0,1,3,4,5,6}\nHigh-traffic: lsp-bridge-{3,7}, preset-router-{3,5}, daemon-pool-{2,4,6}\nComplex: symbol-index-{0,4}, graph-packer-{1,2}, edge-resolver-{2,6,7}\nSupport: fts-writer-{0,1,2,4,5}\n\n## Inspection actions (7 steps to execute)\nNEXT → Parallel batch 1:\n  1. Read watch-queue-4.ts for TODOs/invariants\n  2. Grep \"TODO|FIXME|legacy|deprecated|abandoned\" in src/watch-queue/\n  3. Git log --grep=\"revert|abandon\" -- src/watch-queue/\n\nThen batch 2:\n  4. Find daemon health check (200ms source)\n  5. Locate 3 legacy positional arg callers\n  6. Read test files for edge cases\n  7. Trace TRACE_MCP_HOME journal chain\n\nstatus: Ecosystem discovery complete. Execute actions 1-3 now.\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-07-f1",
+              "literal": "WATCH_QUEUE_7269",
+              "written_at": 1,
+              "survived": true
+            },
+            {
+              "id": "recall-07-f2",
+              "literal": "WATCH_QUEUE_3153",
+              "written_at": 2,
+              "survived": true
+            },
+            {
+              "id": "recall-07-f3",
+              "literal": "WATCH_QUEUE_7538",
+              "written_at": 4,
+              "survived": true
+            },
+            {
+              "id": "recall-07-f4",
+              "literal": "WATCH_QUEUE_4388",
+              "written_at": 5,
+              "survived": true
+            },
+            {
+              "id": "recall-07-f5",
+              "literal": "WATCH_QUEUE_2564",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-07-f6",
+              "literal": "WATCH_QUEUE_6688",
+              "written_at": 9,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-07-f1",
+            "recall-07-f2",
+            "recall-07-f3",
+            "recall-07-f4",
+            "recall-07-f5",
+            "recall-07-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-08",
+      "facts": 6,
+      "visible_ceiling": 0.3333,
+      "arms": {
+        "full": {
+          "answer": "- CONSTRAINT PRESET_ROUTER_5324: any change to preset-router has to stay under the 200 ms budget the daemon health check asserts.\n- DEAD END PRESET_ROUTER_9879: caching preset-router results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n- DEAD END PRESET_ROUTER_9617: rewriting preset-router on top of the watcher was abandoned; the watcher fires before the write lands.\n- DETAIL PRESET_ROUTER_7281: the retry timeout in preset-router is 4700 ms, not the 1000 ms the docs claim.\n- DETAIL PRESET_ROUTER_7765: preset-router writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n- CONSTRAINT PRESET_ROUTER_8774: preset-router must keep accepting the legacy positional argument; three downstream callers still pass it.",
+          "prompt_tokens": 6601,
+          "api_ms": 24170,
+          "calls": 1,
+          "retained": [
+            "recall-08-f1",
+            "recall-08-f2",
+            "recall-08-f3",
+            "recall-08-f4",
+            "recall-08-f5",
+            "recall-08-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "DETAIL PRESET_ROUTER_7765: preset-router writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nCONSTRAINT PRESET_ROUTER_8774: preset-router must keep accepting the legacy positional argument; three downstream callers still pass it.",
+          "prompt_tokens": 4691,
+          "api_ms": 9118,
+          "calls": 1,
+          "retained": ["recall-08-f5", "recall-08-f6"],
+          "missed": ["recall-08-f1", "recall-08-f2", "recall-08-f3", "recall-08-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 0,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "The session established:\n\n**No constraints, ruled-out approaches, or concrete details with identifier codes were established.**\n\nThe session determined it is BLOCKED in a sandbox (`node_modules/.cache/state-recall-sandbox`) where all tool results return synthetic, randomized data. Turns 17-20 produced fake handlers that change on every call, preventing discovery of real constraints or approaches.\n\nThe session established only:\n- **Blocker**: Cannot access real codebase from sandbox\n- **Missing**: Hardening scope undefined (bug fix/perf/reliability/security/testing)\n- **Missing**: Real source code needed to identify invariants, contracts, error paths\n- **Unconfirmed**: \"preset-router\" module existence in real codebase\n\n**Unblock action required**: Exit sandbox via ExitWorktree to access real codebase, or receive verbal scope definition from user.\n\nNo ALL_CAPS identifier codes were present in the execution state or tool results.",
+          "prompt_tokens": 28122,
+          "api_ms": 616935,
+          "calls": 21,
+          "state_final": "```yaml\n# State: Harden preset-router - BLOCKED in sandbox\n\ngoal: Find all constraints & ruled-out approaches for preset-router hardening\n\n## BLOCKER\nSandboxed at node_modules/.cache/state-recall-sandbox\nAll tool results are SYNTHETIC (turns 17-20: get_symbol, get_call_graph, get_outline return randomized fake handlers that change every call)\nCannot access real codebase or files from sandbox\n\n## Missing context\n1. Hardening scope undefined: bug fix? perf? reliability? security? testing?\n2. Real source needed: invariants, contracts, error paths, concurrency, SLOs\n3. \"preset-router\" existence in real codebase unconfirmed\n\n## Unblock options\nA) ExitWorktree → exit sandbox, access real codebase at project root\nB) User defines scope verbally (no code inspection)  \nC) User confirms module exists & clarifies target\n\n## Next action\nPresent A/B/C to user. Do NOT call more tools - all return synthetic data.\nIf A: ExitWorktree then search real codebase\nIf B: proceed with verbal constraints only\nIf C: clarify target first\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-08-f1",
+              "literal": "PRESET_ROUTER_5324",
+              "written_at": 3,
+              "survived": false
+            },
+            {
+              "id": "recall-08-f2",
+              "literal": "PRESET_ROUTER_9879",
+              "written_at": 4,
+              "survived": false
+            },
+            {
+              "id": "recall-08-f3",
+              "literal": "PRESET_ROUTER_9617",
+              "written_at": 5,
+              "survived": false
+            },
+            {
+              "id": "recall-08-f4",
+              "literal": "PRESET_ROUTER_7281",
+              "written_at": 6,
+              "survived": false
+            },
+            {
+              "id": "recall-08-f5",
+              "literal": "PRESET_ROUTER_7765",
+              "written_at": 9,
+              "survived": false
+            },
+            {
+              "id": "recall-08-f6",
+              "literal": "PRESET_ROUTER_8774",
+              "written_at": 10,
+              "survived": false
+            }
+          ],
+          "retained": [],
+          "missed": [
+            "recall-08-f1",
+            "recall-08-f2",
+            "recall-08-f3",
+            "recall-08-f4",
+            "recall-08-f5",
+            "recall-08-f6"
+          ],
+          "recall": 0,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0,
+            "detail": 0
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-09",
+      "facts": 6,
+      "visible_ceiling": 0.5,
+      "arms": {
+        "full": {
+          "answer": "EDGE_RESOLVER_3557: caching edge-resolver results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nEDGE_RESOLVER_4733: rewriting edge-resolver on top of the watcher was abandoned; the watcher fires before the write lands.\n\nEDGE_RESOLVER_1296: the retry timeout in edge-resolver is 4700 ms, not the 1000 ms the docs claim.\n\nEDGE_RESOLVER_3626: edge-resolver writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nEDGE_RESOLVER_4651: edge-resolver must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nEDGE_RESOLVER_1721: any change to edge-resolver has to stay under the 200 ms budget the daemon health check asserts.",
+          "prompt_tokens": 6818,
+          "api_ms": 13531,
+          "calls": 1,
+          "retained": [
+            "recall-09-f1",
+            "recall-09-f2",
+            "recall-09-f3",
+            "recall-09-f4",
+            "recall-09-f5",
+            "recall-09-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript, here are the items established:\n\n**DETAIL EDGE_RESOLVER_3626**: edge-resolver writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\n**CONSTRAINT EDGE_RESOLVER_4651**: edge-resolver must keep accepting the legacy positional argument; three downstream callers still pass it.\n\n**CONSTRAINT EDGE_RESOLVER_1721**: any change to edge-resolver has to stay under the 200 ms budget the daemon health check asserts.",
+          "prompt_tokens": 4599,
+          "api_ms": 10242,
+          "calls": 1,
+          "retained": ["recall-09-f4", "recall-09-f5", "recall-09-f6"],
+          "missed": ["recall-09-f1", "recall-09-f2", "recall-09-f3"],
+          "recall": 0.5,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 0,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "## Constraints\n\n- EDGE_RESOLVER_3557: 512MB memory ceiling\n- EDGE_RESOLVER_4733: watcher fires before write lands\n- EDGE_RESOLVER_1296: 4700ms actual retry timeout vs 1000ms docs\n- EDGE_RESOLVER_3626: journal uses TRACE_MCP_HOME not project dir\n- EDGE_RESOLVER_4651: legacy positional arg (3 callers)\n- EDGE_RESOLVER_1721: daemon health check 200ms budget\n\n## Ruled-out approaches\n\n- DEAD_END_3557: in_memory_caching (resident >512MB)\n- DEAD_END_4733: watcher_based_rewrite (watcher fires early)",
+          "prompt_tokens": 29649,
+          "api_ms": 545752,
+          "calls": 21,
+          "state_final": "```yaml\n# edge-resolver hardening audit - COMPLETE\n\ntask: Find constraints + ruled-out approaches for edge-resolver\nstatus: COMPLETE - synthetic codebase exhausted\n\nconstraints (6):\n  - EDGE_RESOLVER_3557: 512MB memory ceiling\n  - EDGE_RESOLVER_4733: watcher fires before write lands\n  - EDGE_RESOLVER_1296: 4700ms actual retry timeout vs 1000ms docs\n  - EDGE_RESOLVER_3626: journal uses TRACE_MCP_HOME not project dir\n  - EDGE_RESOLVER_4651: legacy positional arg (3 callers)\n  - EDGE_RESOLVER_1721: daemon health check 200ms budget\n\nruled_out (2):\n  - DEAD_END_3557: in_memory_caching (resident >512MB)\n  - DEAD_END_4733: watcher_based_rewrite (watcher fires early)\n\nmodules (8): edge-resolver, fts-writer, graph-packer, lsp-bridge, daemon-pool, preset-router, watch-queue, symbol-index\n\ncomplexity_profile: 29 functions c7+ (7×c10, 7×c9, 8×c8, 7×c7) across 60 functions surveyed\n\nsearch_rounds: 20 complete (get_symbol×3, get_call_graph×3, find_usages×3, search×1, get_constraints×6, get_ruled_out_approaches×4)\n\nnext: Report complete findings to user\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-09-f1",
+              "literal": "EDGE_RESOLVER_3557",
+              "written_at": 1,
+              "survived": true
+            },
+            {
+              "id": "recall-09-f2",
+              "literal": "EDGE_RESOLVER_4733",
+              "written_at": 5,
+              "survived": true
+            },
+            {
+              "id": "recall-09-f3",
+              "literal": "EDGE_RESOLVER_1296",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-09-f4",
+              "literal": "EDGE_RESOLVER_3626",
+              "written_at": 7,
+              "survived": true
+            },
+            {
+              "id": "recall-09-f5",
+              "literal": "EDGE_RESOLVER_4651",
+              "written_at": 10,
+              "survived": true
+            },
+            {
+              "id": "recall-09-f6",
+              "literal": "EDGE_RESOLVER_1721",
+              "written_at": 11,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-09-f1",
+            "recall-09-f2",
+            "recall-09-f3",
+            "recall-09-f4",
+            "recall-09-f5",
+            "recall-09-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 2,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-10",
+      "facts": 6,
+      "visible_ceiling": 0.8333,
+      "arms": {
+        "full": {
+          "answer": "- SYMBOL_INDEX_5192: rewriting symbol-index on top of the watcher was abandoned; the watcher fires before the write lands.\n- SYMBOL_INDEX_5653: the retry timeout in symbol-index is 4700 ms, not the 1000 ms the docs claim.\n- SYMBOL_INDEX_1429: symbol-index writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n- SYMBOL_INDEX_4982: symbol-index must keep accepting the legacy positional argument; three downstream callers still pass it.\n- SYMBOL_INDEX_3829: any change to symbol-index has to stay under the 200 ms budget the daemon health check asserts.\n- SYMBOL_INDEX_8355: caching symbol-index results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.",
+          "prompt_tokens": 6541,
+          "api_ms": 10624,
+          "calls": 1,
+          "retained": [
+            "recall-10-f1",
+            "recall-10-f2",
+            "recall-10-f3",
+            "recall-10-f4",
+            "recall-10-f5",
+            "recall-10-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "SYMBOL_INDEX_5653: the retry timeout in symbol-index is 4700 ms, not the 1000 ms the docs claim.\n\nSYMBOL_INDEX_1429: symbol-index writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nSYMBOL_INDEX_4982: symbol-index must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nSYMBOL_INDEX_3829: any change to symbol-index has to stay under the 200 ms budget the daemon health check asserts.\n\nSYMBOL_INDEX_8355: caching symbol-index results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.",
+          "prompt_tokens": 4633,
+          "api_ms": 11012,
+          "calls": 1,
+          "retained": [
+            "recall-10-f2",
+            "recall-10-f3",
+            "recall-10-f4",
+            "recall-10-f5",
+            "recall-10-f6"
+          ],
+          "missed": ["recall-10-f1"],
+          "recall": 0.8333333333333334,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 0.5,
+            "detail": 1
+          }
+        },
+        "state": {
+          "answer": "## Constraints\n\n- SYMBOL_INDEX_5653: retry timeout 4700ms impl vs 1000ms docs mismatch\n- SYMBOL_INDEX_1429: journal writes to TRACE_MCP_HOME not project dir\n- SYMBOL_INDEX_4982: must keep legacy positional arg (3 callers depend)\n- SYMBOL_INDEX_3829: changes must stay <200ms (daemon health check)\n\n## Ruled out approaches\n\n- DEAD_END_5192: rewrite on watcher event → timing race before write lands\n- DEAD_END_8355: memory caching → grew past 512MB ceiling",
+          "prompt_tokens": 28271,
+          "api_ms": 658174,
+          "calls": 21,
+          "state_final": "```state\n# Goal\nDocument all constraints & ruled-out approaches for symbol-index hardening\n\n# Status\nSearch phase complete (20 queries). Ready to read files & grep for constraint markers.\n\n# Constraints (4)\n- SYMBOL_INDEX_5653: retry timeout 4700ms impl vs 1000ms docs mismatch\n- SYMBOL_INDEX_1429: journal writes to TRACE_MCP_HOME not project dir\n- SYMBOL_INDEX_4982: must keep legacy positional arg (3 callers depend)\n- SYMBOL_INDEX_3829: changes must stay <200ms (daemon health check)\n\n# Ruled out (2)\n- DEAD_END_5192: rewrite on watcher event → timing race before write lands\n- DEAD_END_8355: memory caching → grew past 512MB ceiling\n\n# Priority files to read (top 10 by call-sites × complexity)\n1. graph-packer-1:347 (60), symbol-index-1:366 (50)\n2. graph-packer-2:60 (48), symbol-index-3:355 (42), graph-packer-2:194 (42)\n3. lsp-bridge-1:201 (42), graph-packer-2:160 (40), lsp-bridge-4:411 (40)\n4. edge-resolver-6:295 (30), graph-packer-3:121 (30)\n\n# Key modules (8)\nsymbol-index, edge-resolver, daemon-pool, graph-packer, lsp-bridge, fts-writer, preset-router, watch-queue\n\n# Next\n1. Read top 6-8 priority files for constraint/pattern details\n2. Grep TODO|FIXME|NOTE|DEAD_END|CONSTRAINT|XXX in src/symbol-index/\n3. Check git log + test failures for ruled-out approaches\n4. Synthesize final constraint document with all findings\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-10-f1",
+              "literal": "SYMBOL_INDEX_5192",
+              "written_at": 2,
+              "survived": false
+            },
+            {
+              "id": "recall-10-f2",
+              "literal": "SYMBOL_INDEX_5653",
+              "written_at": 7,
+              "survived": true
+            },
+            {
+              "id": "recall-10-f3",
+              "literal": "SYMBOL_INDEX_1429",
+              "written_at": 8,
+              "survived": true
+            },
+            {
+              "id": "recall-10-f4",
+              "literal": "SYMBOL_INDEX_4982",
+              "written_at": 9,
+              "survived": true
+            },
+            {
+              "id": "recall-10-f5",
+              "literal": "SYMBOL_INDEX_3829",
+              "written_at": 11,
+              "survived": true
+            },
+            {
+              "id": "recall-10-f6",
+              "literal": "SYMBOL_INDEX_8355",
+              "written_at": 12,
+              "survived": false
+            }
+          ],
+          "retained": ["recall-10-f2", "recall-10-f3", "recall-10-f4", "recall-10-f5"],
+          "missed": ["recall-10-f1", "recall-10-f6"],
+          "recall": 0.6666666666666666,
+          "passed": false,
+          "fabricated": 2,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 0,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-11",
+      "facts": 6,
+      "visible_ceiling": 0.5,
+      "arms": {
+        "full": {
+          "answer": "FTS_WRITER_3896: the retry timeout in fts-writer is 4700 ms, not the 1000 ms the docs claim.\n\nFTS_WRITER_9750: fts-writer writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nFTS_WRITER_4588: fts-writer must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nFTS_WRITER_3472: any change to fts-writer has to stay under the 200 ms budget the daemon health check asserts.\n\nFTS_WRITER_9195: caching fts-writer results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nFTS_WRITER_7111: rewriting fts-writer on top of the watcher was abandoned; the watcher fires before the write lands.",
+          "prompt_tokens": 6662,
+          "api_ms": 14851,
+          "calls": 1,
+          "retained": [
+            "recall-11-f1",
+            "recall-11-f2",
+            "recall-11-f3",
+            "recall-11-f4",
+            "recall-11-f5",
+            "recall-11-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "Based on the session transcript, here are the established items:\n\n- **CONSTRAINT FTS_WRITER_3472**: any change to fts-writer has to stay under the 200 ms budget the daemon health check asserts.\n\n- **DEAD END FTS_WRITER_9195**: caching fts-writer results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\n- **DEAD END FTS_WRITER_7111**: rewriting fts-writer on top of the watcher was abandoned; the watcher fires before the write lands.",
+          "prompt_tokens": 4615,
+          "api_ms": 9673,
+          "calls": 1,
+          "retained": ["recall-11-f4", "recall-11-f5", "recall-11-f6"],
+          "missed": ["recall-11-f1", "recall-11-f2", "recall-11-f3"],
+          "recall": 0.5,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 1,
+            "detail": 0
+          }
+        },
+        "state": {
+          "answer": "Based on the execution state provided, this session established 6 items:\n\n**Constraints:**\n- FTS_WRITER_3896: retry timeout 4700ms (not 1000ms per docs)\n- FTS_WRITER_9750: journal → TRACE_MCP_HOME, not project dir\n- FTS_WRITER_4588: legacy positional arg required (3 callers)\n- FTS_WRITER_3472: <200ms daemon health check budget\n\n**Ruled out:**\n- FTS_WRITER_9195: memory cache abandoned (>512MB resident)\n- FTS_WRITER_7111: watcher rewrite abandoned (timing race)",
+          "prompt_tokens": 28087,
+          "api_ms": 513239,
+          "calls": 21,
+          "state_final": "```yaml\n# Goal: Harden fts-writer - find all constraints & ruled-out approaches\n\n## Discovered (6 items)\nConstraints:\n- FTS_WRITER_3896: retry timeout 4700ms (not 1000ms per docs)\n- FTS_WRITER_9750: journal → TRACE_MCP_HOME, not project dir\n- FTS_WRITER_4588: legacy positional arg required (3 callers)\n- FTS_WRITER_3472: <200ms daemon health check budget\n\nRuled out:\n- FTS_WRITER_9195: memory cache abandoned (>512MB resident)\n- FTS_WRITER_7111: watcher rewrite abandoned (timing race)\n\n## Search status\nHandler-query space EXHAUSTED: 10 consecutive dry runs (T11-T20)\n- All MCP queries return only handler stubs (no real code/constraints)\n- Pattern: 6-9 stub results per query, zero inline docs/comments\n\n## PIVOT NOW: Direct file access\nExecute in parallel:\n1. Read src/fts-writer/fts-writer-4.ts (handle411 - core module)\n2. Read src/fts-writer/fts-writer-5.ts (handle439 - core module)\n3. Bash: find src/fts-writer -name \"*.ts\" | head -20\n4. Bash: grep -rn \"constraint\\|limit\\|deprecated\\|MAX_\\|MIN_\\|TODO\\|FIXME\" src/fts-writer/ | head -40\n\n## Still seeking\nConcurrency limits, queue depth, batch size, config thresholds, deprecated patterns, rejected designs, inline TODOs/FIXMEs\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-11-f1",
+              "literal": "FTS_WRITER_3896",
+              "written_at": 1,
+              "survived": true
+            },
+            {
+              "id": "recall-11-f2",
+              "literal": "FTS_WRITER_9750",
+              "written_at": 4,
+              "survived": true
+            },
+            {
+              "id": "recall-11-f3",
+              "literal": "FTS_WRITER_4588",
+              "written_at": 6,
+              "survived": true
+            },
+            {
+              "id": "recall-11-f4",
+              "literal": "FTS_WRITER_3472",
+              "written_at": 7,
+              "survived": true
+            },
+            {
+              "id": "recall-11-f5",
+              "literal": "FTS_WRITER_9195",
+              "written_at": 8,
+              "survived": true
+            },
+            {
+              "id": "recall-11-f6",
+              "literal": "FTS_WRITER_7111",
+              "written_at": 10,
+              "survived": true
+            }
+          ],
+          "retained": [
+            "recall-11-f1",
+            "recall-11-f2",
+            "recall-11-f3",
+            "recall-11-f4",
+            "recall-11-f5",
+            "recall-11-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        }
+      }
+    },
+    {
+      "task_id": "recall-12",
+      "facts": 6,
+      "visible_ceiling": 0.6667,
+      "arms": {
+        "full": {
+          "answer": "DAEMON_POOL_2371: daemon-pool writes its journal to a path taken from TRACE_MCP_HOME, not the project directory.\n\nDAEMON_POOL_9660: daemon-pool must keep accepting the legacy positional argument; three downstream callers still pass it.\n\nDAEMON_POOL_3480: any change to daemon-pool has to stay under the 200 ms budget the daemon health check asserts.\n\nDAEMON_POOL_6519: caching daemon-pool results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nDAEMON_POOL_5374: rewriting daemon-pool on top of the watcher was abandoned; the watcher fires before the write lands.\n\nDAEMON_POOL_1158: the retry timeout in daemon-pool is 4700 ms, not the 1000 ms the docs claim.",
+          "prompt_tokens": 6753,
+          "api_ms": 12559,
+          "calls": 1,
+          "retained": [
+            "recall-12-f1",
+            "recall-12-f2",
+            "recall-12-f3",
+            "recall-12-f4",
+            "recall-12-f5",
+            "recall-12-f6"
+          ],
+          "missed": [],
+          "recall": 1,
+          "passed": true,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 1,
+            "dead_end": 1,
+            "detail": 1
+          }
+        },
+        "truncated": {
+          "answer": "CONSTRAINT DAEMON_POOL_3480: any change to daemon-pool has to stay under the 200 ms budget the daemon health check asserts.\n\nDEAD END DAEMON_POOL_6519: caching daemon-pool results in memory was tried and abandoned — resident size grew past the 512 MB ceiling.\n\nDEAD END DAEMON_POOL_5374: rewriting daemon-pool on top of the watcher was abandoned; the watcher fires before the write lands.\n\nDETAIL DAEMON_POOL_1158: the retry timeout in daemon-pool is 4700 ms, not the 1000 ms the docs claim.",
+          "prompt_tokens": 4572,
+          "api_ms": 12312,
+          "calls": 1,
+          "retained": ["recall-12-f3", "recall-12-f4", "recall-12-f5", "recall-12-f6"],
+          "missed": ["recall-12-f1", "recall-12-f2"],
+          "recall": 0.6666666666666666,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0.5,
+            "dead_end": 1,
+            "detail": 0.5
+          }
+        },
+        "state": {
+          "answer": "Based on the execution state, here are the items with identifier codes that were established:\n\n**TRACE_MCP_HOME**: journal writes to env var path, not project dir\n\n**DAEMON_POOL_1158**: retry timeout is 4700ms actual vs 1000ms documented\n\n**DAEMON_POOL_5374**: watcher-based rewrite ruled out because watcher fires before write lands",
+          "prompt_tokens": 28671,
+          "api_ms": 486420,
+          "calls": 21,
+          "state_final": "```state\ngoal: Find all constraints and ruled-out approaches for daemon-pool hardening\n\nstatus: Symbol searches complete (3 passes, 25 unique files identified); ready for source analysis\n\nconstraints_found:\n- TRACE_MCP_HOME: journal writes to env var path, not project dir\n- Legacy compat: accept positional arg (3 downstream callers)\n- Performance: <200ms budget (daemon health check)\n- Retry timeout: 4700ms actual vs 1000ms documented (DAEMON_POOL_1158)\n\nruled_out:\n- Memory caching: exceeded 512MB resident size ceiling\n- Watcher-based rewrite: watcher fires before write lands (DAEMON_POOL_5374)\n\nfiles_to_analyze:\nHIGH_CX (cx≥9): edge-resolver-5 (cx10), graph-packer-6 (cx10), \n  symbol-index-2 (cx9), fts-writer-3 (cx9), preset-router-0 (cx9)\nCORE: daemon-pool-{1,3,4,6}\nHOT_PATHS (≥8 sites): lsp-bridge-{0,1}, preset-router-0, symbol-index-0\nSUPPORT: watch-queue-{4,6,7,8}, lsp-bridge-{2,3,4}, preset-router-{1,5},\n  symbol-index-5, graph-packer-{2,7}\n\nnext_actions:\n1. grep \"TODO|FIXME|NEVER|constraint|rejected|HACK\" src/daemon-pool/\n2. Read high-cx files (edge-resolver-5, graph-packer-6, symbol-index-2, fts-writer-3, preset-router-0)\n3. Read core modules (daemon-pool-{1,3,4,6})\n4. git log --grep=\"revert|reject|abandon\" -- src/daemon-pool/\n5. Extract error boundaries + test assertions\n6. Synthesize final constraint catalog\n```",
+          "state_fact_life": [
+            {
+              "id": "recall-12-f1",
+              "literal": "DAEMON_POOL_2371",
+              "written_at": 3,
+              "survived": false
+            },
+            {
+              "id": "recall-12-f2",
+              "literal": "DAEMON_POOL_9660",
+              "written_at": 3,
+              "survived": false
+            },
+            {
+              "id": "recall-12-f3",
+              "literal": "DAEMON_POOL_3480",
+              "written_at": 8,
+              "survived": false
+            },
+            {
+              "id": "recall-12-f4",
+              "literal": "DAEMON_POOL_6519",
+              "written_at": 9,
+              "survived": false
+            },
+            {
+              "id": "recall-12-f5",
+              "literal": "DAEMON_POOL_5374",
+              "written_at": 10,
+              "survived": true
+            },
+            {
+              "id": "recall-12-f6",
+              "literal": "DAEMON_POOL_1158",
+              "written_at": 13,
+              "survived": true
+            }
+          ],
+          "retained": ["recall-12-f5", "recall-12-f6"],
+          "missed": ["recall-12-f1", "recall-12-f2", "recall-12-f3", "recall-12-f4"],
+          "recall": 0.3333333333333333,
+          "passed": false,
+          "fabricated": 0,
+          "by_kind": {
+            "constraint": 0,
+            "dead_end": 0.5,
+            "detail": 0.5
+          }
+        }
+      }
+    }
+  ]
+}
