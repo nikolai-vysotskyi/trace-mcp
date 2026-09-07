@@ -69,8 +69,23 @@ beforeAll(() => {
   // again, the seed got expensive — fix the seed, not the ceiling (TRA-790).
 });
 
-afterAll(() => {
-  fs.rmSync(tmpHome, { recursive: true, force: true });
+afterAll(async () => {
+  // The background refreshAll() this suite triggers is fire-and-forget
+  // (`void refreshAll()` in dashboard-routes.ts) and opens each project's DB
+  // again for the expensive pass — nothing in this file awaits it, so it can
+  // still hold a handle open on `projN.db` the instant the last test
+  // resolves. POSIX tolerates unlinking an open file; Windows does not
+  // (EBUSY), so retry with backoff instead of asserting the handle is
+  // already gone.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      fs.rmSync(tmpHome, { recursive: true, force: true });
+      break;
+    } catch (err) {
+      if (attempt >= 10) throw err;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
   delete process.env.TRACE_MCP_DATA_DIR;
 });
 
