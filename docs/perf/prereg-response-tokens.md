@@ -497,3 +497,56 @@ frame run, 710 non-error calls between 2026-04-06 and 2026-09-06:
 | 38 | 57 | **67** | 112 | 408 | 712 | 141 | 710 |
 
 Registered at trace-mcp `ea994220`, 7 September 2026.
+
+## Verdict — four for four, and the headline moved in our favour anyway (TRA-1107, 2026-09-07)
+
+Registered above at `ea994220`, run at `9f499d67`, two commits later. The
+harness change is one basket swap: `register_edit` now runs over the frame's
+committed `file` stratum instead of one hand-picked path.
+
+| prediction | result | |
+|---|---|---|
+| 1. frame mean below 345 | **219** | ✅ |
+| 2. frame mean between 80 and 250 | 219 | ✅ |
+| 3. frame median above the field median (67) and below the frame mean | median **183**, mean 219 | ✅ |
+| 4. `reduction_pct_incl_overhead` rises | 66.1% → **67.1%** | ✅ |
+
+**Four correct predictions is a weaker result than it looks, and the reason is
+the one worth recording.** Every one of them was inferable from data that
+already existed — TRA-1098 had published the composition table and the field
+mean before this entry was written. Predicting a number you have already half
+measured is not a test of a model; it is a test of arithmetic. The
+preregistration's value here is not that it was right, it is prediction 4:
+**registering, before the run, that the change would improve our published
+figure without improving the product.** That is the claim a reader can hold us
+to, and it is the only one that could have been embarrassing.
+
+The spread across the fifteen committed files is 48 to 453 tokens, 9.4x, with
+six files at the bookkeeping floor because they carry no similarity at all. The
+old 345 sat above the 80th percentile of that.
+
+**The 1.0-point move on the all-in figure is not all reprice.** 0.6 points is
+`register_edit` (162 414 tokens over a 27 729 800-token baseline). The remainder
+is the bench re-measuring all 24 tools eleven commits later — `get_call_graph`
+802 → 904, `get_index_health` 299 → 338, `get_changed_symbols` 258 → 62 — which
+also carries `reduction_pct` 67.7% → 68.2%. Neither half is a product change.
+The bench regenerates the whole artifact on every run, so a reframing commit
+cannot avoid dragging a re-measurement along with it; the two are separated here
+by hand, and separating them mechanically is not solved.
+
+**What this does not fix**, unchanged from TRA-1049 and now the only structural
+gap left on this metric: `baseline_per_call` is still the hand-written
+`RAW_COST_ESTIMATES` table. `register_edit` is exempt from it — it is a
+no-baseline tool by TRA-945 — so this reprice is one of the few figures on the
+page that is measured on both sides, for the trivial reason that one side is
+zero. Every ratio that is not is still measured on one side and guessed on the
+other.
+
+`reindex` (59 tokens, still one sample) and the four remaining over-baseline
+tools are untouched. `reindex` is a genuine one-sample tool with no argument to
+vary, so a frame cannot help it; its variance is index state, and that is a
+different measurement.
+
+Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
+(`{{ site.data.response_tokens.measured_build.commit }}`)** on
+{{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.
