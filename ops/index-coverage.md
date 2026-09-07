@@ -423,3 +423,29 @@ intent that a comparison page cannot serve. Reasoning in `ops/positioning.md`.
 Read this set together with the two collisions already tracked above
 (`traceix mcp`, `mcp tracing`): those measure impressions we get and do not
 want, this set measures a SERP we want and do not appear in.
+
+## Reading 2026-09-07 (TRA-1083): 7 newly indexed pages, README links verified, launch of /code-graph-mcp.html
+
+Full GSC Search Analytics (28 d) and URL Inspection pass across all sitemap URLs on 2026-09-07.
+
+**Major indexation update: 7 newly indexed pages (from 13 to 20 indexed).**
+Following the sitemap resubmission on 2026-09-06 (TRA-1022) and the GitHub README head-to-head anchors (TRA-905), Googlebot ran an active crawl wave throughout 2026-09-06:
+
+| URL | 09-04 / 09-05 | 2026-09-07 status | Last crawl | Referring source credited by GSC |
+|---|---|---|---|---|
+| `/pr-context-benchmark.html` | URL is unknown | **Submitted and indexed** | 2026-09-06T07:19Z | `https://github.com/nikolai-vysotskyi/trace-mcp` |
+| `/vs/context-mode.html` | Discovered | **Submitted and indexed** | 2026-09-06T08:58Z | `https://github.com/nikolai-vysotskyi/trace-mcp` |
+| `/what-trace-init-installs.html` | (not submitted) | **Submitted and indexed** | 2026-09-06T10:55Z | `/pr-context-benchmark.html` |
+| `/config-index.html` | (not submitted) | **Submitted and indexed** | 2026-09-06T11:44Z | `/privacy.html` |
+| `/vs/codegraph.html` | URL is unknown | **Submitted and indexed** | 2026-09-06T16:25Z | `/perf/prereg-pr-context/`, `/development.html` |
+| `/language-matrix.html` | URL is unknown | **Submitted and indexed** | 2026-09-06T16:32Z | `/privacy.html` |
+| `/perf/response-tokens/` | (not asked) | **Submitted and indexed** | 2026-09-06T23:56Z | `https://github.com/nikolai-vysotskyi/trace-mcp` |
+| `/vs/repomix-vs-codegraph.html` | URL is unknown | **Discovered - currently not indexed** | — | `https://github.com/nikolai-vysotskyi/trace-mcp` |
+| `/reduce-claude-code-token-usage.html` | URL is unknown | **Discovered - currently not indexed** | — | `/configuration.html` |
+| `/privacy.html` | (not submitted) | **Discovered - currently not indexed** | — | `/pr-context-benchmark.html` |
+
+### Key takeaways:
+1. **GitHub README backlinks actively drive discovery and indexation.** GSC URL inspection explicitly credits `https://github.com/nikolai-vysotskyi/trace-mcp` as the referring URL for `/vs/context-mode.html`, `/pr-context-benchmark.html`, `/perf/response-tokens/`, and `/vs/repomix-vs-codegraph.html`. The hypothesis from TRA-905 is confirmed: README links are the primary external discovery mechanism for deep URLs.
+2. **Two `/vs/` spokes are now indexed.** `/vs/codegraph.html` and `/vs/context-mode.html` crossed into the index. The cluster is no longer locked out.
+3. **Dedicated category landing page `/code-graph-mcp.html` launched.** Following TRA-1024, `docs/code-graph-mcp.md` was created to target `code graph mcp` / `codegraph mcp`. Cites the 90.6% PR benchmark, models framework semantics across 87 frameworks, and links outward to `comparisons.html` and all `/vs/` spokes. Sitemaps updated to 31 URLs and resubmitted to GSC.
+
