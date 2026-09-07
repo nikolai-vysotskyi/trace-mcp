@@ -12,6 +12,11 @@ Measured 2026-09-04 on darwin 25.5.0 / arm64, daemon v3.16.0 (`serve-http`, 8 pr
 registered). TRA-811. Everything below is a reading, not an estimate — the commands are
 in each section so the next run can repeat them instead of re-deriving.
 
+> **Correction, 2026-09-07 (TRA-1125): the 949 MB below is not an idle measurement.**
+> The `projects_indexing == 0` filter it relies on could never see incremental reindex
+> work, so "idle" samples include the daemon at 99% CPU. The honest single-project idle
+> figure is **301 MB**. See the 2026-09-07 section at the end before quoting anything here.
+
 ## The starting number
 
 `Daemon vitals` in `~/.trace/daemon.log` reported, over 2 178 idle samples
@@ -80,3 +85,96 @@ hour of a workday kept the pool warm the whole time. `KEEPALIVE_IDLE_TERMINATE_M
 45 seconds — comfortably inside the 60s idle bar from the acceptance criteria — with a
 per-instance `keepAliveIdleMs` override on `ExtractPoolOptions` so tests don't have to
 wait out the real default.
+
+---
+
+## 2026-09-07 — the field confirmation, and why it took three weeks (TRA-1125)
+
+Two results, and the second one invalidates how we had been reading the first.
+
+### The prediction held. Idle RSS settles at 301 MB.
+
+Measured on darwin 25.5.0 / arm64, daemon v3.22.0, built from `c148138e`, isolated
+`TRACE_MCP_DATA_DIR` on port 3799 so nothing else on the machine could touch it. One
+project (this repo, 2 240 files indexed in 3.8 s), then left alone:
+
+| Since index finished | RSS | CPU |
+|---|---|---|
+| 0 s | 624 MB | — |
+| 15 s | 410 MB | 0.0% |
+| **45 s** | **301 MB** | 0.0% |
+| 45 s → 255 s | 301 MB, flat | 0.0% |
+
+The step at 45 s is `KEEPALIVE_IDLE_TERMINATE_MS` releasing the extract pool, exactly as
+TRA-971 intended. It is flat afterwards to the sample resolution, at 0.0% CPU. The
+`-420 MB` this document predicted in 2026-09-04 and could not confirm is real: **624 → 301
+MB, -323 MB, and the remainder never accumulates.**
+
+Repeating with four projects registered (four full trace-mcp checkouts):
+
+| | RSS |
+|---|---|
+| peak during the concurrent index | 1 222 MB |
+| settled, flat | 478 MB |
+
+So, from two points: **base ≈ 242 MB + ≈ 59 MB per loaded project**, and a transient peak
+during concurrent indexing of ~2.6× the settled floor.
+
+### The ceiling
+
+A flat number is the wrong shape — this daemon is asked to hold 1 project on one machine
+and 23 on another. The ceiling scales with what it was asked to hold:
+
+> **`idle_rss_mb ≤ 250 + 75 × projects_loaded`**, measured ≥ 45 s after the last indexing
+> work finishes, with CPU at 0.0%.
+
+Measured today: 301 MB against a 325 MB ceiling at N=1; 478 MB against 550 MB at N=4.
+Both inside, with ~10% of headroom. The 75 MB slope is the measured 59 MB plus room for
+repositories larger than this one — this corpus is 2 240 files, and field repositories run
+several times bigger, so the slope is a floor and must be re-measured on a large repo
+before it is quoted as a general law.
+
+This replaces the flat `tree_rss_idle_mb > 500` trigger in the autopilot brief, which
+cannot be right: at four ordinary projects a correctly-behaving daemon exceeds it.
+
+### The number that was wrong for three weeks: 949 MB was never an idle measurement
+
+The 949 MB median at the top of this document, and every figure since derived by filtering
+`Daemon vitals` on `projects_indexing == 0`, is a mix of idle and busy samples.
+
+`projects_indexing` was computed only from `ManagedProject.status`, which
+`project-manager.ts` sets on the **initial load** path.
+`reindex-file-handler.ts` — every incremental reindex, which is what a daemon on an active
+machine spends its day doing — *requires* status `ready` to proceed (it returns 503
+otherwise) and never changes it. By construction, incremental reindex work could not
+appear in the counter.
+
+Observed directly on 2026-09-07: daemon pid 2113 logged **264 vitals samples, 264 of them
+reporting `projects_indexing: 0`**, over a 4.5 h window that includes the moment
+`/health` timed out with no response at all after 5 s while the process burned 99.3% CPU
+and held 1 454 MB. `sample(1)` on it put 4 652 of 7 519 main-thread samples — **62% of the
+wall clock — inside synchronous `better-sqlite3` `sqlite3_step`** (`JS_run` 3 565,
+`JS_all` 1 087) on the same thread that serves `/health`. The daemon called that idle.
+
+Consequences worth stating plainly:
+
+1. Filtered on the fixed counter, the honest single-project idle figure is **301 MB**, not
+   949 MB. The old number was measuring indexing bursts and calling them rest.
+2. The `922 MB` median this run first computed from the same filter is contaminated the
+   same way, and is not published as an idle number here.
+3. Any conclusion drawn from "idle" daemon RSS before v3.23.0 should be re-derived.
+
+Fixed in this PR: `beginReindex()` / `countReindexingProjects()` in
+`reindex-file-handler.ts` track in-flight single-file reindexes, and `getCounts` in
+`cli.ts` adds them to `projects_indexing`. **Both** reindex paths are counted — the HTTP
+handler and `register_edit` in `src/tools/register/core.ts`, which reindexes in-process on
+the daemon's own MCP server and is the path CLAUDE.md tells every agent to call after
+every edit. Covering only the HTTP path (as the first revision of this change did) would
+have left the dominant share of a busy daemon's work still reporting idle. Guarded by
+`src/daemon/__tests__/reindex-in-flight-vitals.test.ts`.
+
+### Still open
+
+`/health` returning nothing for 5 s while the main thread sits in synchronous SQLite is a
+separate defect from the counter that hid it — a health endpoint starved by the work it
+reports on. Not fixed here; filed separately.

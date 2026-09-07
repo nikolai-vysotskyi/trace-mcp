@@ -17,6 +17,44 @@ export type ReindexFileResult =
   | { ok: false; status: 400 | 404 | 500; error: string }
   | { ok: false; status: 503; error: string; retryAfterSec: number };
 
+/**
+ * Projects with a single-file reindex in flight right now.
+ *
+ * TRA-1125: `projects_indexing` in the vitals line only ever counted projects
+ * in the initial-load path — `project-manager.ts` sets `status = 'indexing'`
+ * there. This handler *requires* status `ready` to proceed and never changes
+ * it, so by construction every incremental reindex was logged as idle. In the
+ * measured window 264 of 264 vitals samples reported `projects_indexing: 0`
+ * while the daemon burned 99.3% CPU on a reindex burst, which made every
+ * "idle RSS" figure in docs/perf a silent mix of idle and busy.
+ */
+const inFlight = new Map<string, number>();
+
+/** Distinct projects with reindex work in flight. Feeds the vitals line. */
+export function countReindexingProjects(): number {
+  return inFlight.size;
+}
+
+/**
+ * Mark a reindex as started; the returned function marks it finished and is
+ * safe to call more than once. Both reindex paths must use this — the HTTP
+ * handler below and `register_edit` in `src/tools/register/core.ts`, which
+ * reindexes in-process on the daemon's own MCP server. `register_edit` is the
+ * path CLAUDE.md tells every agent to call after every edit, so counting only
+ * the HTTP one would still report most of a busy daemon's work as idle.
+ */
+export function beginReindex(project: string): () => void {
+  inFlight.set(project, (inFlight.get(project) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const n = (inFlight.get(project) ?? 1) - 1;
+    if (n > 0) inFlight.set(project, n);
+    else inFlight.delete(project);
+  };
+}
+
 export interface ReindexFileDeps {
   getProject: (root: string) =>
     | {
@@ -107,6 +145,7 @@ export async function handleReindexFile(
 
   const lock = deps.lock ?? withLock;
 
+  const endReindex = beginReindex(project);
   try {
     const result = (await lock(
       { lockDir: LOCKS_DIR, name: `${projectHash(project)}-reindex`, op: 'reindex-file-http' },
@@ -172,5 +211,7 @@ export async function handleReindexFile(
       error: true,
     });
     return { ok: false, status: 500, error: String(err) };
+  } finally {
+    endReindex();
   }
 }
