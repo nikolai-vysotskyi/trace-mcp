@@ -46,15 +46,24 @@ function spin(ms: number): void {
   }
 }
 
-/** Max event-loop stall observed while `run()` is in flight, in ms. This is
- *  what a pending /health request waits for: the handler itself is a constant
- *  -time JSON reply, so its latency IS the loop delay. */
-async function maxLoopDelayDuring(run: () => Promise<unknown>): Promise<number> {
+/** Event-loop stall observed while `run()` is in flight, in ms. This is what a
+ *  pending /health request waits for: the handler itself is a constant-time
+ *  JSON reply, so its latency IS the loop delay.
+ *
+ *  Both statistics are returned because they behave differently on a shared
+ *  runner. `max` is a single sample, so anything that preempts the process once
+ *  — another job on the box, a GC pause, the VM's own scheduler — lands in it
+ *  whole. With this fix in place, `max` over the 10-project run measured 25 ms
+ *  locally and 176-181 ms on GitHub's macOS and Windows runners for the same
+ *  code, while `p99` stayed inside its band. Comparisons across arms therefore
+ *  use `p99`; `max` is kept for the synthetic primitive test, where the run is
+ *  two seconds of pure spin and there is nothing for noise to hide behind. */
+async function loopDelayDuring(run: () => Promise<unknown>): Promise<{ max: number; p99: number }> {
   const h = monitorEventLoopDelay({ resolution: 5 });
   h.enable();
   await run();
   h.disable();
-  return h.max / 1e6;
+  return { max: h.max / 1e6, p99: h.percentile(99) / 1e6 };
 }
 
 describe('runInOwnTurn keeps the stall window flat as concurrency grows', () => {
@@ -66,12 +75,12 @@ describe('runInOwnTurn keeps the stall window flat as concurrency grows', () => 
   }
 
   it('one indexer: the window is one unit', async () => {
-    const max = await maxLoopDelayDuring(() => worker());
+    const { max } = await loopDelayDuring(() => worker());
     expect(max).toBeLessThan(UNIT_MS * 3);
   }, 30_000);
 
   it('eight indexers: the window is still one unit, not eight', async () => {
-    const max = await maxLoopDelayDuring(() =>
+    const { max } = await loopDelayDuring(() =>
       Promise.all(Array.from({ length: 8 }, () => worker())),
     );
     // Pre-fix this is ~8 x UNIT_MS (the whole check-phase queue drains before
@@ -119,13 +128,13 @@ describe('real indexing load: many projects at once', () => {
     );
   }
 
-  async function maxDelayIndexing(
+  async function delayIndexing(
     dbName: string,
     mode: 'concurrent' | 'sequential',
-  ): Promise<number> {
+  ): Promise<{ max: number; p99: number }> {
     const pipelines = roots.map((r) => makePipeline(r, dbName));
     try {
-      return await maxLoopDelayDuring(async () => {
+      return await loopDelayDuring(async () => {
         if (mode === 'concurrent') {
           await Promise.all(pipelines.map((p) => p.indexAll(false)));
         } else {
@@ -143,11 +152,19 @@ describe('real indexing load: many projects at once', () => {
     // Doing all of them at once must not make that window wider — pre-fix it
     // grew with the project count, which is how a busy daemon stopped
     // answering /health for seconds at a time with 21 projects loaded.
-    const sequential = await maxDelayIndexing('seq.db', 'sequential');
-    const concurrent = await maxDelayIndexing('conc.db', 'concurrent');
+    const sequential = await delayIndexing('seq.db', 'sequential');
+    const concurrent = await delayIndexing('conc.db', 'concurrent');
     console.log(
-      `max loop delay: sequential=${sequential.toFixed(1)}ms concurrent=${concurrent.toFixed(1)}ms`,
+      `loop delay p99: sequential=${sequential.p99.toFixed(1)}ms concurrent=${concurrent.p99.toFixed(1)}ms ` +
+        `(max: ${sequential.max.toFixed(1)}ms / ${concurrent.max.toFixed(1)}ms)`,
     );
-    expect(concurrent).toBeLessThan(sequential * 2);
+    // 3x, not 2x, and on p99 rather than max. Measured with the fairness chain
+    // disabled, concurrent p99 is 4x sequential (107 ms vs 27 ms) and max is
+    // 5-7x; with it, concurrent p99 sits at or below sequential (24 ms vs
+    // 28 ms). The bound therefore sits in a wide empty gap. It was 2x on max,
+    // which put it inside the runner's own jitter: both macOS and Windows CI
+    // failed the case at 2.1x on the very commit that introduced it, with
+    // sequential itself three times its local value.
+    expect(concurrent.p99).toBeLessThan(sequential.p99 * 3);
   }, 300_000);
 });
