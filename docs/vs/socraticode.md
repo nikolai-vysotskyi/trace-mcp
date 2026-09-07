@@ -1,6 +1,6 @@
 ---
 title: "SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents"
-description: "SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs fully local with SQLite, 81 languages, framework edges, and refactoring."
+description: "SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring."
 updated: 2026-09-07
 ---
 
@@ -40,7 +40,7 @@ updated: 2026-09-07
           "name": "What is the core difference between SocratiCode and trace-mcp?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "SocratiCode combines hybrid vector search (Qdrant via Docker) with ast-grep syntax parsing across 19 languages. trace-mcp is fully local and self-contained: single npx invocation, embedded SQLite+FTS5 store, zero Docker requirement, {{ site.data.counts.languages }} languages via tree-sitter, and semantic framework edges across {{ site.data.counts.frameworks }} integrations."
+            "text": "SocratiCode combines hybrid vector search (Qdrant via Docker) with ast-grep syntax parsing across 19 languages. trace-mcp is local-first and self-contained: single npx invocation, embedded SQLite+FTS5 store, zero Docker requirement, {{ site.data.counts.languages }} languages via tree-sitter, and semantic framework edges across {{ site.data.counts.frameworks }} integrations."
           }
         },
         {
@@ -109,7 +109,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ |
 | Session memory | ✓ code-linked decision graph with staleness checks | partial (context artifacts in Qdrant, not code-linked) |
 | Multi-agent concurrency | Daemon process pool | Cross-process lockfile (`proper-lockfile`) |
-| Cloud / Team edition | 100% local, self-hosted | SocratiCode Cloud (private beta) |
+| Cloud / Team edition | Local-first, self-hosted ([privacy](/privacy.html)) | SocratiCode Cloud (private beta) |
 
 Verified on September 7, 2026 against SocratiCode's repository at `main` (v1.13.0, commit `88a8ff5`, {{ site.data.competitors.socraticode.stars }} stars). Tool definitions from `src/index.ts` and `src/tools/`, storage architecture from `src/constants.ts` and `src/config.ts`, language mappings from `src/constants.ts`.
 
@@ -174,6 +174,8 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
 - See how trace-mcp stacks up against other alternatives in the [comparisons hub](/comparisons.html).
