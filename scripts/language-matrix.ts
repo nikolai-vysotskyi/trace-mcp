@@ -271,6 +271,40 @@ produced edges for 12 of them — roughly 0.2%. See
 \`src/indexer/edge-resolvers/csharp-imports.ts\` for the reasoning and
 \`src/indexer/plugins/language/csharp/helpers.ts\` for extraction.
 
+## Import resolution depth on real repos
+
+C#'s 0.2% above is not an outlier worth a special paragraph — it is one point
+on a spread every resolver-bearing language sits somewhere on. \`Imports: yes\`
+only means a pipeline pass exists; it says nothing about how much of a real
+codebase that pass actually connects. Measured on one well-known public repo
+per language — clone it, run the real indexing pipeline, read the
+\`{ created, external, ambiguous }\` counts each resolver already logs
+(\`src/indexer/edge-resolvers/*-imports.ts\`) — the reusable, reproducible
+measurement is \`scripts/measure-import-resolution.ts\`:
+
+| Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| python | pallets/flask | d318b6834711 | 96 | 1 | 0 | 99.0% |
+| c | curl/curl | 8f6046485e15 | 3178 | 990 | 0 | 76.2% |
+| ruby | sinatra/sinatra | cb22afd7902b | 131 | 88 | 0 | 59.8% |
+| rust | BurntSushi/ripgrep | 3fce3b5bb023 | 453 | 447 | 0 | 50.3% |
+| go | spf13/cobra | adbc8813901b | 159 | 178 | 0 | 47.2% |
+| java | google/gson | b3f4ca20087f | 1085 | 1586 | 0 | 40.6% |
+| kotlin | square/okhttp | dfcfab38248e | 2622 | 4788 | 0 | 35.4% |
+| cpp | fmtlib/fmt | 2d4d8a13c2b4 | 155 | 411 | 0 | 27.4% |
+| csharp | JamesNK/Newtonsoft.Json | 09bb545d7296 | 12 | 4979 | 0 | 0.2% |
+
+**Read "left external" as "correctly left external," not "missed."** A
+resolver seeing \`import "github.com/spf13/pflag"\` or \`import os\` and leaving
+it unresolved has done its job — that target is a third-party package or the
+standard library, not a file in this repo, and a file-level edge to it would
+be noise. This table is not a defect list; it is what "the resolver exists"
+costs out to on one real codebase per language. Two things it does surface as
+real gaps: **kotlin and cpp sit closer to csharp than to python** on a single
+sample, and every row is n=1 — one repo's import style, not a distribution.
+Re-run the script against a second repo per language before treating any row
+as a trend rather than a data point.
+
 ## Matrix
 
 | Language | Extensions | Parser | Default | Imports | Calls | Types | Tests |
