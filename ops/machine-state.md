@@ -72,7 +72,7 @@ it, which is why that file doubles as the checklist for this one.
 |---|---|---|---|---|
 | `~/.trace/` + `.config.json` created | any command (`ensureGlobalDirs`) | no | `rm -rf ~/.trace` | Silent |
 | `index/<project>.db` | `add` / `init --index` / **auto-registration** | only when the user asked | `remove <path>`, `prune` | Silent *when asked* |
-| `registry.json` entry | `add`, `init`, **and any MCP client connecting from a new root** (`src/cli.ts:2409`, gated only by `isDangerousProjectRoot`) | **no** | `remove <path> --keep-db` | **Consent** — #936 |
+| `registry.json` entry | `add`, `init`, **and any MCP client connecting from a new root** (`src/cli.ts`, gated only by `isDangerousProjectRoot`) | **yes, once** — the session that triggers it gets a notice in its `initialize` instructions naming `remove <path>`, and `list` marks the entry `[auto-added on MCP connect]` (TRA-1101) | `remove <path> --keep-db` | **Notice** — #936 |
 | `topology.db`, `decisions.db`, `state.db`, `sessions/`, `corpora/`, `bundles/`, `locks/`, `status/`, `embed-watermarks.json`, `startup-watch.json` | normal operation | no | `rm -rf ~/.trace` | Silent |
 | `startup-backups/` | `apply_startup_recommendations` | yes, it is the undo manifest | `rollback…` | Silent |
 | `telemetry-state.json` (install UUID) | first server start | **no** | `TRACE_MCP_TELEMETRY=off` | Notice (state) / **Consent** (the ping — below) |
