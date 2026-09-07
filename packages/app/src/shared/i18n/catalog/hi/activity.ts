@@ -13,6 +13,7 @@ export const activity = {
   window1h: '1घं',
   window6h: '6घं',
   window24h: '24घं',
+  recordingStarted: 'रिकॉर्डिंग {{when}} शुरू हुई',
 
   feedLive: 'लाइव',
   feedIdle: 'निष्क्रिय',

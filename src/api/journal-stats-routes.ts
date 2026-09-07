@@ -53,7 +53,23 @@ export interface JournalEntryForStats {
  * newest-first or any order (the handler sorts by ts internally).
  */
 export interface JournalStatsContext {
-  listEntriesForProject(projectRoot: string): JournalEntryForStats[];
+  /**
+   * Entries for a project. `since`/`until` bound the read when given — the
+   * durable store windows in SQL rather than handing back every row it has.
+   * Callers that omit them get whatever the implementation considers "recent".
+   */
+  listEntriesForProject(
+    projectRoot: string,
+    since?: number,
+    until?: number,
+  ): JournalEntryForStats[];
+  /**
+   * Unix ms from which activity has actually been recorded — the point before
+   * which a wider window cannot have data. Undefined when the integrator has no
+   * durable store, in which case the response omits `recording_since` and the
+   * UI keeps its old "no idea" behaviour.
+   */
+  recordingSince?(): number | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,6 +107,13 @@ export interface ByMinute {
 
 export interface JournalStatsResponse {
   window_ms: number;
+  /**
+   * Unix ms from which activity has been recorded. A window reaching further
+   * back than this is not empty because nothing happened — it is empty because
+   * nobody was writing it down yet, and the UI says so instead of showing a
+   * confident zero (TRA-1071).
+   */
+  recording_since?: number;
   /** Window end timestamp (Unix ms) — echoes the `before` query param (or now). */
   window_end?: number;
   total_calls: number;
@@ -305,7 +328,21 @@ export function handleJournalStatsRequest(
     return true;
   }
 
+  // `parseInt` used to accept "24h" and silently return a 24-millisecond
+  // window. The app only ever sends digits, so nothing broke visibly — but an
+  // external caller got a plausible-looking answer to a question it did not
+  // ask (TRA-1071). Milliseconds or a 400.
   const rawWindow = url.searchParams.get('window');
+  if (rawWindow !== null && !/^\d+$/.test(rawWindow.trim())) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        error: 'window must be a positive integer number of milliseconds',
+        got: rawWindow,
+      }),
+    );
+    return true;
+  }
   const windowMs = rawWindow
     ? Math.min(MAX_WINDOW_MS, Math.max(1, parseInt(rawWindow, 10) || DEFAULT_WINDOW_MS))
     : DEFAULT_WINDOW_MS;
@@ -316,8 +353,10 @@ export function handleJournalStatsRequest(
   const beforeParsed = beforeRaw ? Number(beforeRaw) : Date.now();
   const before = Number.isFinite(beforeParsed) && beforeParsed > 0 ? beforeParsed : Date.now();
 
-  const entries = ctx.listEntriesForProject(projectRoot);
+  const entries = ctx.listEntriesForProject(projectRoot, before - windowMs, before);
   const stats = aggregate(entries, windowMs, before);
+  const recordingSince = ctx.recordingSince?.();
+  if (typeof recordingSince === 'number') stats.recording_since = recordingSince;
 
   res.writeHead(200, {
     'Content-Type': 'application/json',

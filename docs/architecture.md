@@ -98,6 +98,7 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + subproject graph
   analytics.db              # session analytics (cross-project)
+  activity.db               # tool-call history behind the Activity tab (7-day retention)
   savings.json              # cumulative token savings tracker
   index/
     my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
@@ -119,6 +120,17 @@ The **decision memory database** (`decisions.db`) is also shared across all proj
 - **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
 - **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
 - **Mined sessions tracker** — prevents re-processing already-mined session files
+
+The **activity database** (`activity.db`) records every MCP tool call the daemon
+serves, keyed by project root: timestamp, tool, params summary, result count and
+tokens, latency, error flag, session id. It answers one question — *what has been
+happening in this project* — which is why it is on disk rather than in the
+`SessionJournal`: a journal belongs to one MCP session and dies with it, so the
+Activity tab read `0 calls` in every window while agents were actively working
+(TRA-1071). Entries are batched (128 rows or 2 s) and pruned to 7 days, which is
+what lets the tab offer a 24h window honestly. The API reports `recording_since`
+so the UI can say when recording started instead of presenting a young install's
+empty 24h window as a confident zero.
 
 Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_wake_up`) via the enrichment layer in `src/memory/enrichment.ts`.
 

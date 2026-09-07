@@ -20,6 +20,7 @@ export const activity = {
   window1h: '1ч',
   window6h: '6ч',
   window24h: '24ч',
+  recordingStarted: 'запись началась {{when}}',
 
   feedLive: 'В эфире',
   feedIdle: 'Простой',
