@@ -1526,3 +1526,82 @@ usefulness, the same call the fourth pass made.
 `tolkonepiu/best-of-mcp-servers#384`, `natsukium/mcp-servers-nix#606`,
 `narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`,
 `Nano-Collective/nanocoder#1197`. No pings due before 2026-09-19.
+
+### Sixth pass, 2026-09-07 (night): SCIP turned out to be the thing we can speak about, and our own ingest fails the invariant we were quoting
+
+Two touches, both about SCIP, both grounded in reading our own
+`src/scip/` before writing a word. Zero catalog submissions — the moratorium
+holds until `acquisition` reads.
+
+**`sosalejandro/atlas#105` (the thread that has now produced three exchanges).**
+The maintainer re-scoped the issue at 18:25 today: Tier 2 (Rust stack-graphs
+sidecar) is on hold because TypeScript 7.0 is a Go compiler, and `atlas scip
+ingest` is being taken now as pure Go with no new toolchain. He restated the
+acceptance criterion as "an ingest that resolves nothing must not look like a
+clean no-op". We went to check how ours behaves and it fails exactly that, so
+that is what we sent, plus two things he can use before writing the code: count
+*rejected documents* separately from *unresolved occurrences*, and his
+D-below-A tier ordering is more defensible than ours (we rank `scip_resolved`
+above our own type-checked `lsp_resolved`, so a stale third-party index wins a
+conflict against an edge we verified). Also the part that is free and the part
+that is not: ingest is language-agnostic, acquiring the `.scip` is not — we ship
+three known indexers and each carries a command, an arg template, a project-shape
+`detect`, and a language-id mapping.
+[Comment](https://github.com/sosalejandro/atlas/issues/105#issuecomment-5574817038).
+
+**`facebook/pyrefly#4583` (6,944★), open since 19 Aug with one "Thanks" on it.**
+Someone asked on Discord how much of a lift SCIP emission would be for Pyrefly.
+The consumer side of that contract is smaller than the spec looks: our decoder is
+258 lines with no protobuf dependency and reads six fields
+(`Index.documents`; `Document.relative_path`/`occurrences`/`language`;
+`Occurrence.range`/`symbol`/`symbol_roles`), skipping `SymbolInformation` and
+everything else by wire type — so an emitter that produces only occurrences with
+correct roles is already usable. Plus the two traps we paid for: `range` is
+`repeated int32` and therefore plain varint, not zig-zag (we read it as zig-zag,
+got negative lines on every real file, emitted zero edges, and our synthetic
+tests missed it for months because the test writer zig-zagged too), and the base
+`relative_path` is relative to decides whether an index is usable at all.
+[Comment](https://github.com/facebook/pyrefly/issues/4583#issuecomment-5575275357).
+
+**What the first touch cost us in the good sense: TRA-1161.** `ingestScipIndex`
+looks up each document with `store.getFile(doc.relativePath)` and `continue`s
+before incrementing any counter, so an index whose path base differs from ours by
+one segment returns all-zero counts — byte-identical to a correct index with
+nothing to add — while `ScipBridge.ingest` still appends the language to
+`indexersRun` and logs "SCIP ingestion completed". `unresolvedReferences` cannot
+catch it: it only counts occurrences inside documents already matched. Same
+silhouette one level up, where a decode failure warns and returns the empty
+result. Same class as TRA-880 and TRA-1057: a green answer where nothing
+happened.
+
+**Checked and skipped, with reasons.** `scip-code/scip#468` (782★) — a governance
+thread about which indexers move to the `scip-code` org; well run, five comments,
+the maintainer has already stated a five-point migration bar and said yes to
+.NET bindings. Nothing a downstream consumer could add that they would be glad
+to receive. `vitali87/code-graph-rag#1584` (5,071★) — real defect (dependents
+reparse before `DELETE_MODULE`, so the external-node fallback is never taken)
+but written by the repo owner with the fix already specified, six comments deep.
+`DeusData/codebase-memory-mcp#1296` — direct competitor's tracker, which stays a
+place we do not comment. Sub-10★ and machine-generated: `tmustafiz/graph-rag`,
+`samchon/compiler-knowledge-graph`, `LightspeedDMS/code-indexer`,
+`MrNedimBoztepe/Shonkor`, `oneprolabs/sourcelens`, `rafacm/clew.nvim`,
+`kyanosq/groundgraph`.
+
+**Method note that held again.** The star filter from the fifth pass keeps
+working: three GitHub issue-search queries returned ~60 distinct repos, of which
+three cleared 500★. Filter on stargazers before opening a single body.
+
+**`Nano-Collective/nanocoder#1197` answered, and adopted all three points.**
+`addyCooks` is adding a seventh generated fixture instead of vendoring, is
+considering a dedicated assertion for the `Math.min(...xs)` crash class, and is
+committing thresholds with a literal `verdict: PENDING` line before the baseline
+runs. Third live human reply this category has produced. Nothing owed — a
+thank-you would only cost them a notification.
+
+**Threads re-checked 2026-09-07 night, silent, nothing owed, no pings due before
+2026-09-19:** `eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+`natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`,
+`iansmith/slopstop#633`, `Ivy-Apps/deslop#173`, `Kilo-Org/kilocode#13843`,
+`Kilo-Org/kilocode#12707`.
