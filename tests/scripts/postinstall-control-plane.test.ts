@@ -68,7 +68,11 @@ function stageFakePkg(fakePkg: string): void {
   fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
   fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
   fs.copyFileSync(ATTRIBUTION_PATH, path.join(fakePkg, 'scripts', 'daemon-attribution.mjs'));
-  for (const name of ['trace-mcp-launcher.sh', 'trace-mcp-launcher.cmd', 'trace-mcp-launcher.ps1']) {
+  for (const name of [
+    'trace-mcp-launcher.sh',
+    'trace-mcp-launcher.cmd',
+    'trace-mcp-launcher.ps1',
+  ]) {
     const src = path.join(REPO_ROOT, 'hooks', name);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(fakePkg, 'hooks', name));
   }
@@ -84,17 +88,21 @@ describe('postinstall-control-plane', () => {
 
   /** Run the staged script against the fake home, with the real default paths. */
   function runFakePkg(fakePkg: string): void {
-    execFileSync(process.execPath, [path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs')], {
-      env: buildEnv({
-        HOME: home,
-        USERPROFILE: home,
-        CI: 'true',
-        TRACE_MCP_DATA_DIR: undefined,
-        TRACE_MCP_HOME: undefined,
-      }),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf-8',
-    });
+    execFileSync(
+      process.execPath,
+      [path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs')],
+      {
+        env: buildEnv({
+          HOME: home,
+          USERPROFILE: home,
+          CI: 'true',
+          TRACE_MCP_DATA_DIR: undefined,
+          TRACE_MCP_HOME: undefined,
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      },
+    );
   }
 
   beforeEach(() => {
