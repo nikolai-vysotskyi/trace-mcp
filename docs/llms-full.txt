@@ -944,6 +944,7 @@ re-checked in it.
 
 ### Pass of September 7, 2026
 
+- **Category-wide audit of what anyone here measures besides tokens.** Every project on this page with a benchmark tree had that tree read at source — not its headline — to answer one question: does its published measurement grade the *answer*, or only the cost of getting there. Ten projects classified, five benchmark methodologies read in full. The result is the new section [Does anyone here measure quality, or only tokens?](#does-anyone-here-measure-quality-or-only-tokens) — four peers grade retrieval, one grades the agent's own opinion, none runs a baseline-versus-tool comparison of task correctness, and one of them ships a CI gate we do not have.
 - **First source read of SocratiCode** (giancarloerra/SocratiCode, TypeScript, AGPL-3.0-only / commercial dual, v1.13.0, {{ site.data.competitors.socraticode.stars }} stars), the highest-star direct code-graph MCP peer remaining unprofiled at source. Read through the GitHub API at `main`: package metadata, `src/constants.ts`, `src/config.ts`, `src/index.ts`, and all tool implementations in `src/tools/`. It corrected the table: **{{ site.data.competitors.socraticode.stars }} stars** (3,287, not ~900), **25 MCP tools advertised by default** (not 21), Docker-managed Qdrant vector DB (`:16333`) + Ollama (`:11435`) storage, AST parsing across 19 languages via `@ast-grep/napi` with zero framework awareness, and an interactive browser HTML visualizer (`codebase_graph_visualize`). Head-to-head analysis: [trace-mcp vs SocratiCode](/vs/socraticode.html). Findings and the take-or-pass on each mechanism are in the profiling depth tracker at the end of this page.
 - **First source read of CodeGraph** (codegraph-ai, Rust, Apache-2.0, v0.20.1), from the previous pass's priority queue. Read through the GitHub API at `main`, no clone and nothing executed: root metadata, `Cargo.toml`, `crates/codegraph/`, `crates/codegraph-server/` (the dual LSP/MCP backend and tool registrar), `crates/codegraph-memory/` (storage and vector embeddings), and the individual parser crates. It corrected the table: written in **Rust** (43-crate Cargo workspace, edition 2021), not C as GitHub's linguist tag implied from vendored grammars. Findings and the take-or-pass on each are in the profiling depth tracker at the end of this page.
 - **Star re-check against the GitHub API** for all tracked competitors: trace-mcp 158 → 166, Serena 28.8K → 28.9K (28,926), codebase-memory-mcp 42.1K → 42.5K (42,504), codegraph 69.4K → 69.9K (69,891), Context Mode 20.3K → 20.5K (20,508), code-review-graph 31.2K (31,230), CodeGraphContext 4.2K (4,169), CodeGraph (codegraph-ai) 80, SocratiCode 3.3K (3,287).
@@ -1006,7 +1007,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Session memory | ✓ built-in | ✗ | ✓ SQLite FTS5 journal | ✗ | ✓ index persistence | ✓ persistent graph | ✗ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
-_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (signatures kept, bodies dropped); **tokensave** ({{ site.data.competitors.tokensave.stars }} stars, 86 tools, 50+ langs, Rust/libSQL; see [vs tokensave](/vs/tokensave.html)); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now {{ site.data.competitors.codegraph.stars }} stars; its August 2026 re-measurement claims 62% fewer tokens / 88% fewer tool calls / 44% lower cost across seven repos, with model, queries, run count and a correction to its own earlier harness disclosed — self-run, not third-party reproduced, and the most transparent self-benchmark in this field; see [vs codegraph](/vs/codegraph.html)); **Headroom** (68.1K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` could not be re-verified in June 2026 — possibly renamed or inactive. `Context Mode` **is** active and got its source deep-dive on August 30, 2026 (mksglu/context-mode, 20,245 stars, commit `8a35367` = v1.0.169): eleven MCP tools, all advertised, and **no code parser at all** — its eight runtime dependencies contain no tree-sitter, and none of its tools resolves a symbol, an import edge or a call edge. Its "12 languages" are subprocess runtimes for *executing* agent-written scripts, not grammars for parsing your code, and its 98% figure measures tool-output bytes on 14 committed fixtures rather than task success. It also ships under the Elastic License 2.0 rather than an OSI licence. It compresses what tools return; we make questions about code cheap to ask — adjacent lanes that compose rather than compete. See [vs Context Mode](/vs/context-mode.html). The June "could not verify" note was wrong and is retracted here._
+_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (signatures kept, bodies dropped); **tokensave** ({{ site.data.competitors.tokensave.stars }} stars, 86 tools, 50+ langs, Rust/libSQL; see [vs tokensave](/vs/tokensave.html)); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now {{ site.data.competitors.codegraph.stars }} stars; its August 2026 re-measurement claims 62% fewer tokens / 88% fewer tool calls / 44% lower cost across seven repos, with model, queries, run count and a correction to its own earlier harness disclosed — self-run, not third-party reproduced, and the most transparent self-benchmark in this field; see [vs codegraph](/vs/codegraph.html)); **Headroom** (headroomlabs-ai/headroom, renamed from `chopratejas/headroom`; 69.2K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` could not be re-verified in June 2026 — possibly renamed or inactive. `Context Mode` **is** active and got its source deep-dive on August 30, 2026 (mksglu/context-mode, 20,245 stars, commit `8a35367` = v1.0.169): eleven MCP tools, all advertised, and **no code parser at all** — its eight runtime dependencies contain no tree-sitter, and none of its tools resolves a symbol, an import edge or a call edge. Its "12 languages" are subprocess runtimes for *executing* agent-written scripts, not grammars for parsing your code, and its 98% figure measures tool-output bytes on 14 committed fixtures rather than task success. It also ships under the Elastic License 2.0 rather than an OSI licence. It compresses what tools return; we make questions about code cheap to ask — adjacent lanes that compose rather than compete. See [vs Context Mode](/vs/context-mode.html). The June "could not verify" note was wrong and is retracted here._
 
 **codebase-memory-mcp's stars more than doubled over two revisions (18.1K → 41.0K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
 
@@ -1152,6 +1153,109 @@ What makes it more than a nice message is that the blind spots are **data keyed 
 
 Their storage model is otherwise conventional and holds no surprise for us: a single SQLite file with `nodes` / `edges` / `metadata` tables, qualified-name strings rather than ids as edge endpoints, tree-sitter via `tree-sitter-language-pack`, networkx for traversal, igraph only as an optional extra for communities. → [trace-mcp vs code-review-graph](/vs/code-review-graph.html)
 
+## Does anyone here measure quality, or only tokens?
+
+Every project on this page that publishes a number publishes a *cost* number.
+This section asks the other question — whether the tool changes how well the
+agent does the job — and answers it by reading each project's own benchmark
+tree rather than its headline. Read September 7, 2026 through the GitHub API;
+nothing was cloned or executed.
+
+The axis that matters is not "is there a benchmark". It is **what is being
+graded, against what ground truth, and next to what baseline.** Retrieval
+metrics grade the ranked list. Capability inventories grade whether a tool can
+answer at all. Only an answer-level arm grades the thing a user actually cares
+about: did the agent get it right.
+
+| Project | What its published benchmark grades | Baseline arm | Ground truth | Published a result against itself |
+|---|---|---|---|---|
+| **trace-mcp** | Answer level — did the review understand the change | Naive file loading | The PR's own diff, judged blind | Yes |
+| jCodeMunch | Tokens; separately nDCG@k / MRR@k / Recall@k | grep-top-3 and read-all | Pinned `(query, expected ids)` fixtures | Yes, repeatedly |
+| code-review-graph | Impact precision/recall, search quality | grep-top-3 | Git co-change, plus a circular mode labelled as one | Yes |
+| LeanKG | Context precision/recall/F1 and tokens | No-tool arm | Committed `ground_truth.json` | Yes |
+| codegraph | Retrieval recall and MRR | Per-benchmark A/B | Expected symbol lists | Per-experiment |
+| Serena | Capability delta over built-in tools | Built-in tools, same tasks | None — the agent judges itself | Yes, qualitatively |
+| codebase-memory-mcp | Whether each tool answers 12 questions per language | None | Hand-graded PASS/PARTIAL/FAIL | Per-language scores |
+| Roam-Code | Tokens and turns | Vanilla agent | Preregistered targets | Yes — publishes MISSED |
+| Context Mode | Tool-output bytes | Uncompressed output | Committed fixtures | No |
+| CodeGraphContext, SocratiCode, CodeGraph (codegraph-ai) | No quality benchmark — parser micro-benchmarks or one perf script | — | — | — |
+
+What that table means, project by project, in the places where the summary line
+is doing too much work:
+
+- **jCodeMunch is the most careful token benchmark in this field, and it says
+  so about its own limits first.** `benchmarks/METHODOLOGY.md` states in its
+  scope section that the benchmark "does **not** measure answer quality,
+  latency, or end-to-end task completion". Every modelling choice in its
+  realistic baseline is documented as made *against* itself — grep costed at
+  `rg -l` paths only, with a note that costing matched lines instead would move
+  its own headline from ~28× to ~49×. It also ships the one retrieval-quality
+  **CI gate** anyone in this field runs: a replay harness of pinned query
+  fixtures scoring aggregate nDCG/MRR/Recall, wired to a workflow that exits
+  non-zero if any metric drops more than 2% relative to a committed golden
+  baseline.
+- **code-review-graph runs the honest-ground-truth argument in source.** Its
+  impact benchmark emits two ground-truth modes side by side and names the first
+  one `"graph-derived (circular — upper bound)"` in a string constant, with a
+  docstring explaining that recall in that mode is an upper bound by
+  construction. The second mode seeds one changed file and grades against the
+  *other* files the author touched in the same commit. A second docstring
+  records that a thrown analysis used to fall back to `predicted = set(changed)`,
+  "guaranteeing a fake recall of 1.0" — a self-inflicted defect published rather
+  than quietly fixed.
+- **Serena is the only peer measuring anything at the workflow level, and it
+  argues explicitly against ground truth.** Its evaluation is one prompt, ~20
+  tasks run twice — once with its tools, once with built-ins — across five
+  agent/codebase pairs, with the agent acting as both executor and judge. The
+  methodology page devotes a section to why fixed-answer benchmarks are a poor
+  fit for an augmentation layer. The reports do carry negative deltas honestly
+  (small edits ~4.5× cheaper with built-ins). What they cannot carry is a
+  correctness rate: there is nothing to be correct against.
+- **codebase-memory-mcp's quality benchmark has no baseline arm.** Its published
+  `docs/BENCHMARK.md` grades whether its own tools answer 12 questions per
+  language, with up to five retry strategies per question — a capability
+  inventory, not a delta. The design that *would* be a delta, a blind LLM-judge
+  A/B against a Grep/Glob/Read arm with randomized labels and a position-bias
+  check, is a careful piece of work and is unexecuted: `docs/EVALUATION_PLAN.md`
+  opens by stating it "is a **plan, not a result set**" and "contains no scores".
+- **Roam-Code's preregistration is still the best method move anyone here has
+  made**, and we adopted it. Its agent-eval matrix (4 agents × 3 modes × 5
+  build tasks) would be an answer-quality measurement if it ran; the tree holds
+  prompts and scoring scripts with no result set, and its score is computed by
+  the product's own health command — the tool under test grading its own effect.
+
+**So the position, stated plainly: measuring the cost of context is normal here,
+and measuring what the context does to the answer is not.** Four projects grade
+retrieval — which list came back — and one grades the agent's own opinion of the
+workflow. None publishes a baseline-versus-tool comparison of whether the agent
+got the task right. That is the arm this project runs: the same
+{{ site.data.pr_context_quality.pr_count }} merged pull requests reviewed twice,
+scored blind against each PR's own diff, at
+{{ site.data.pr_context_quality.trace_understood }} understood against naive file
+loading's {{ site.data.pr_context_quality.baseline_understood }} and
+{{ site.data.pr_context_quality.trace_false_positives }} false positives per PR
+against {{ site.data.pr_context_quality.baseline_false_positives }}. It is one
+task, one packing strategy and one judge, and it is not offered as proof of
+anything wider. Its credential is the run before this one: on September 6, 2026
+the same harness published **MISSED** on both preregistered bars — 50%
+understood against the naive arm's 65%, a 15-point loss — and that verdict
+stayed on [the preregistration page](/perf/prereg-pr-quality/) while the defect
+behind it was found and fixed. A bar you can fail is the only kind worth
+declaring.
+
+**And the one place this audit puts us behind — which is not where we expected.**
+A retrieval-quality regression gate is deterministic and costs no model calls:
+frozen query fixtures, aggregate rank and recall metrics, a committed golden
+baseline, a build that fails on a relative drop. We already have that harness.
+`benchmarks/replay/` holds the fixtures and `scripts/replay-eval.ts` scores
+them against `benchmarks/replay/baseline.json`. What we do not have is the wire:
+no workflow runs it, no contributor doc mentions it, and the committed baseline
+is dated April 30, 2026 at a flat 1.0 on every metric. So between a ranking
+change and a release there is nothing — the harness that would object has not
+run in four months. That is worse than not having one, because the file in the
+tree reads like coverage. Filed internally against the existing context-quality
+gate work.
+
 ## Honest assessment: where competitors lead
 
 No tool is uniformly ahead. trace-mcp is the only one combining framework-aware code intelligence + a refactoring engine + code-linked session memory in a single local MCP server — but on individual axes, specialists go deeper. As of July 2026, six of the seven gaps identified in the June re-verification have shipped and gone through an adversarial deep-validation pass (not just unit tests — a second pass that tried specifically to break each feature). That pass surfaced real bugs, which is itself worth being transparent about:
@@ -1284,6 +1388,14 @@ Three mechanisms were read at source and each got a decision:
 - **Interactive in-browser graph visualization (`codebase_graph_visualize`): passing for core CLI, noting for desktop.** It generates a self-contained HTML file using Vis.js and calls `openInBrowser` to spawn a tab in the user's default browser. For automated CLI workflows (Claude Code, Codex), opening browser windows steals focus and interrupts headless execution. trace-mcp already exports standard GraphML/Mermaid/JSON via `export_graph` and provides an optional hardware-accelerated Electron app (`cosmos.gl`) for visual inspection without disrupting the CLI run. Nothing to take.
 - **Docker-managed vector database container: passing, we already do better.** Requiring Docker with open network ports (`16333`, `11435`) adds heavy operational dependencies, fails in restricted containerized environments, and consumes substantial idle memory. trace-mcp's embedded SQLite+FTS5 plus bundled ONNX embeddings provide zero-dependency local search with single-file portability and zero network attack surface.
 - **Cross-process locking for multi-agent concurrency: passing, already handled.** SocratiCode uses `proper-lockfile` to prevent duplicate index builds when multiple agent processes access the same directory. trace-mcp's background daemon architecture natively serializes index mutations through SQLite WAL mode and a centralized worker pool. Nothing to take.
+
+**Quality-measurement audit, and two registry debts closed with it** (September 7, 2026 — read through the GitHub API at each project's default branch, no clones and nothing executed). Files read in full: `benchmarks/METHODOLOGY.md` and `benchmarks/README.md` (jCodeMunch); `code_review_graph/eval/benchmarks/{impact_accuracy,agent_baseline,search_quality}.py` (code-review-graph); `docs/04-evaluation/010_methodology.md` and `030_results/000_evaluation-results.md` (Serena); `docs/BENCHMARK.md` and `docs/EVALUATION_PLAN.md` (codebase-memory-mcp); `benchmark/README.md` (LeanKG); `__tests__/evaluation/scoring.ts` (codegraph); `benchmarks/agent-eval/README.md` and its tree (Roam-Code). Findings are the section above. Three facts worth recording rather than re-deriving:
+
+- **The gate we are missing is the wire, not the harness — and the audit found that by looking for the harness.** jCodeMunch runs a replay benchmark in CI as its `Replay` workflow: pinned `(query, expected ids)` fixtures, aggregate nDCG@k / MRR@k / Recall@k, and a non-zero exit when any metric falls more than 2% relative to a committed golden JSON. Deterministic, no model calls, cheap per push. Checking whether we had an equivalent turned up `scripts/replay-eval.ts` and `benchmarks/replay/` — eight golden queries, the same three metrics, a `--update-baseline` flag and a `replay:check` script — shipped in April 2026 and referenced by no workflow, no contributor doc and no other pass of this page since. Its baseline is dated April 30, 2026 and reads 1.0 on all three metrics. Filed internally against the existing context-quality gate work rather than as a parallel effort: the ask is a workflow and a fixture set worth failing on, not a new harness.
+- **code-review-graph's third-week debt is closed.** Its architecture was read on September 2 and its evaluation harness on September 7; the ~19K star figure this page once carried is two passes stale and now reads {{ site.data.competitors.code_review_graph.stars }}. Nothing further is owed on this entry — it is fully profiled, and the one mechanism worth taking from it (labelling a graph-derived ground truth as a circular upper bound, and grading against git co-change instead) is a discipline our own temporal-holdout calibration already follows.
+- **Headroom's two registry entries are one project.** `chopratejas/headroom` redirects to `headroomlabs-ai/headroom`: the repository was renamed, not forked, and the entry profiled on August 30 is the same one a directory listed by hand later. Stars 68.1K → **69.2K** (GitHub API, this pass). No second row is owed.
+
+**pi-shazam added to the registry** (gjczone/pi-shazam, 7 stars, TypeScript, MIT, `pi-shazam@0.31.0`, first release June 2026, last pushed August 16, 2026). Small, and on this page for shape rather than size: four of its seven tools — project overview, symbol lookup, blast radius, and git-diff-by-symbol — map one-to-one onto ours, over the same tree-sitter-plus-LSP substrate. What is worth recording is the packaging, not the features: it ships as a **native extension of its host agent**, with an MCP server offered second, for "everyone else". That is the same overhead argument that got a 15-tool MCP peer dropped from a host's extension set in August 2026, and it is an axis on which a seven-tool native surface wins by construction. Its `/shazam-doctor` health check — LSP status, recent errors, slow calls — was a real gap when this entry was first written and is no longer one: `trace doctor` shipped in September 2026. Nothing else to take at this size; kept in the registry so the next pass does not rediscover it.
 
 **jCodeMunch profiled this pass** (September 7, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `pyproject.toml`, `LICENSE`, `src/jcodemunch_mcp/server.py`, `src/jcodemunch_mcp/counter.py`, `src/jcodemunch_mcp/tier_switch_cost.py`, `src/jcodemunch_mcp/storage/sqlite_store.py`, `src/jcodemunch_mcp/tools/_call_graph.py`, `src/jcodemunch_mcp/tools/plan_refactoring.py`, `src/jcodemunch_mcp/parser/context/framework_profiles.py`). 2,668 stars (GitHub API, this pass), Dual-Use License v1.1 (free for non-commercial use only; commercial use prohibited without license), Python, v1.108.317 (released September 2026). It defines ~90 MCP tools and fronts them on first-ever installs through "The Counter" (a 3-tool meta-dispatch surface: `order`, `menu`, `route`). Storage is SQLite WAL with tables for symbols, files, and runtime tracking (`runtime_calls`, `runtime_edges`). Route detection across ~13 frameworks uses regexes in context providers rather than true semantic graph edges. See the full head-to-head: [trace-mcp vs jCodeMunch](/vs/jcodemunch.html).
 
