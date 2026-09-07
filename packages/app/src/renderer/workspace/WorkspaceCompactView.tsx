@@ -5,6 +5,11 @@
  * head-truncated paths, 24×24 hit targets, labelled actions, a right-click
  * menu with the same actions, and ↑ / ↓ + ⏎ list navigation. Selection and
  * mutation contracts match WorkspaceTableView.
+ *
+ * `role="list"` / `role="listitem"`, not `"grid"` (TRA-1108) — rows are not
+ * cells and there is no roving-tabindex/arrow-key-between-cells behaviour to
+ * back a grid role's promise; each row's checkbox and actions stay separate
+ * Tab stops.
  */
 import { type MouseEvent, type UIEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -72,8 +77,7 @@ function CompactRow({
 
   return (
     <div
-      role="row"
-      aria-selected={selected}
+      role="listitem"
       className="flex items-center gap-2 px-3 cursor-pointer transition-colors"
       style={{
         minHeight: COMPACT_ROW_H,
@@ -173,7 +177,7 @@ export function WorkspaceCompactView({
     <div
       ref={scrollRef}
       tabIndex={0}
-      role="grid"
+      role="list"
       aria-label={t('projectsGrid')}
       className="flex-1 overflow-auto"
       style={{
