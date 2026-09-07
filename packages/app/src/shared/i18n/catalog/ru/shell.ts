@@ -5,6 +5,7 @@
 
 export const shell = {
   navWorkspace: 'Рабочая область',
+  navSavings: 'Экономия',
   navClients: 'MCP-клиенты',
   navOverview: 'Обзор',
   navAsk: 'Вопрос',

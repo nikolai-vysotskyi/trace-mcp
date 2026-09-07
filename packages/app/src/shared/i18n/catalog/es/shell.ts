@@ -1,5 +1,6 @@
 export const shell = {
   navWorkspace: 'Espacio de trabajo',
+  navSavings: 'Ahorro',
   navClients: 'Clientes MCP',
   navOverview: 'Resumen',
   navAsk: 'Preguntar',
