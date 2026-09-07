@@ -1791,7 +1791,7 @@ Pick jCodeMunch if you are an individual working on personal non-commercial proj
 | MCP tools defined | {{ site.data.counts.tools }} | ~90 tools |
 | Default advertised tools | 28 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
 | Tool dispatch model | Direct MCP tool invocation with presets | Meta-dispatch verb (`order(action, args)`) |
-| Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) | Word-token matching (`_word_match` regex + import map) |
+| Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
 | Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | Anti-pattern presets (`search_ast`) + secret redaction |
 | Config hygiene | ✓ `verify_docs` + docs-to-code audit | ✓ `audit_agent_config` (CLAUDE.md / .cursorrules token audit) |
@@ -1842,25 +1842,25 @@ trace-mcp addresses context cost through **Adaptive Task Presets**:
 - Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (41 tools), or `dev` (42 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
-### 4. Call Graph Precision: Multi-Tier Confidence vs. Word-Token Matching
+### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
 
-Understanding who calls a function is essential for safe code edits.
+Understanding who calls a function is essential for safe code edits, and both tools implement multi-tier resolution ladders rather than single-strategy lookups.
 
-In jCodeMunch, static call graph resolution (`_call_graph.py`) relies on text heuristics:
-1. It identifies files that import the target symbol's file.
-2. It slices the source body of symbols in those files and checks whether the target symbol's name appears as a word token using `_word_match` (`\b<name>\b` regex).
-3. In reverse, callees are found by slicing the caller's body and matching words against symbols exported by imported files.
+jCodeMunch (`_call_graph.py`) resolves callers and callees through a tiered dispatch pipeline:
+1. `_dispatch_callers`: Interface-to-implementation resolution (`lsp_dispatch`).
+2. `_lsp_callers`: Live LSP-resolved caller locations (`lsp_resolved`).
+3. `_callers_from_references`: AST-derived call sites stored in the symbol index (`call_references`, v8+ schema), tagged `ast_resolved` or `ast_inferred`.
+4. Text heuristic fallback: If call-site data is missing or indexing is partial, it falls back to word-token regex matching (`_word_match` scanning imported file bodies for `\b<name>\b`).
 
-While fast, word-token matching lacks type resolution and cannot disambiguate common function names (e.g. `validate`, `execute`, `init`, `format`) shared across multiple modules.
-
-trace-mcp maintains an explicit, directed edge graph in SQLite with **5 resolution tiers**:
-- `compiler_verified`: Direct compiler/SCIP evidence.
-- `scope_resolved`: Lexical AST scope resolution.
-- `import_bound`: Explicit module import binding.
-- `type_inferred`: Type-inferred call targets.
-- `fuzzy_matched`: Fallback heuristic match with explicit confidence flags.
-
-AI agents receiving call graph responses from trace-mcp know exactly how confident each relationship is, avoiding dangerous assumptions during refactoring.
+The key architectural differences lie in persistence and confidence contracts:
+- **Index-resident vs. query-time traversal**: trace-mcp precomputes and indexes explicit directed graph edges directly in SQLite during the indexing pass. Relationships (including cross-file framework edges) are materialized before the agent queries them, rather than reconstructed at query time across import tables.
+- **5-tier resolution with calibrated confidence**: trace-mcp tags every edge with an explicit confidence level and resolution tier:
+  - `compiler_verified`: Direct compiler/SCIP evidence.
+  - `scope_resolved`: Lexical AST scope resolution.
+  - `import_bound`: Explicit module import binding.
+  - `type_inferred`: Type-inferred call targets.
+  - `fuzzy_matched`: Fallback heuristic match with explicit confidence flags.
+- **Transparent edge contracts**: When an AI agent queries trace-mcp for call hierarchy or change impact, the client receives calibrated confidence scores per edge, distinguishing exact compiler-grade links from heuristic inferences. In jCodeMunch, callers must inspect the resolution tier to verify whether an edge came from AST call sites or from the text-regex fallback (`_word_match`).
 
 ### 5. Code Modification: AST-Native Transforms vs. Text Replacement Blocks
 
@@ -1883,7 +1883,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 - **Commercial and enterprise development**: You require permissive MIT licensing with no restrictions on revenue generation, enterprise distribution, or cloud deployment.
 - **Modern framework architectures**: You work with React, Vue, Next.js, Django, FastAPI, Laravel, Spring Boot, or Rails, and need true semantic edges between routes, middleware, models, and UI templates.
-- **High-confidence impact analysis**: You need a 5-tier call graph that distinguishes compiler-verified relationships from fuzzy token matches.
+- **High-confidence impact analysis**: You need a 5-tier call graph with calibrated confidence distinguishing compiler-verified relationships from heuristic fallbacks.
 - **Safe, automated refactoring**: You want your AI agent to execute atomic renames, extractions, and file moves with syntax validation.
 - **Integrated security auditing**: You want OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting built directly into your MCP workflow.
 - **Zero infrastructure setup**: You want immediate execution via `npx -y trace-mcp` with no Python virtual environment, uv, or local compilation required.
