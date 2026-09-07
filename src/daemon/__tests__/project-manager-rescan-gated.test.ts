@@ -113,7 +113,14 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     expect(peakIndexAll).toBeLessThanOrEqual(2); // default parallel_initial_index
   }, 30_000);
 
-  it('still rescans after shutdown() cleared the limiter', async () => {
+  // NOT a race test: the real FileWatcher.stop() unsubscribes and then drains
+  // the in-flight rescan, and shutdown() clears the limiter only after that,
+  // so a live rescan never sees a null limiter (Reviewer C verified this
+  // against the unmocked watcher). FakeWatcher.stop() is a no-op, which is
+  // what lets the callback be fired here at all. What this pins is only the
+  // defensive branch itself: an unset limiter degrades to an ungated re-walk
+  // instead of throwing inside a watcher callback.
+  it('runs the rescan ungated when the limiter is unset', async () => {
     const { ProjectManager } = await import('../project-manager.js');
     const pm = new ProjectManager();
     pmRef = pm;
@@ -127,7 +134,7 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     pmRef = undefined;
     peakIndexAll = 0;
 
-    // A rescan racing shutdown must not throw on the null limiter.
+    // The defensive branch must not throw on the null limiter.
     await expect(rescan()).resolves.toBeUndefined();
     expect(peakIndexAll).toBe(1);
   }, 30_000);

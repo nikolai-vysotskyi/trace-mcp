@@ -751,7 +751,12 @@ export class ProjectManager {
           // Gated by the same limiter as initial indexing: wake-from-sleep
           // drops events in EVERY registered project at once, and N full
           // re-walks is exactly the load `parallel_initial_index` bounds.
-          // Limiter is null after shutdown() — run ungated rather than crash.
+          // The null branch is belt-and-braces, not a live race: shutdown()
+          // clears the limiter only after watcher.stop() has drained the
+          // in-flight rescan (TRA-834), and stop() unsubscribes before
+          // draining, so this read cannot observe null today. It stays so a
+          // regression in that ordering degrades to an ungated re-walk
+          // instead of a TypeError inside a watcher callback.
           onRescan: async () => {
             const limit = this.indexAllLimit;
             await (limit ? limit(() => pipeline.indexAll()) : pipeline.indexAll());
