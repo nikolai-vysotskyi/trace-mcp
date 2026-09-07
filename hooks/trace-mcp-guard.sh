@@ -448,12 +448,24 @@ project_hash_of() {
 # agents run trace-mcp-guard.cmd, which has no sentinel logic at all.
 # ponytail: two copies of one policy, so they can drift — a bash hook cannot
 # import the TS module; unify only if a third reader ever appears.
+#
+# Each candidate is also tested with a leading `/private` stripped. macOS
+# resolves /tmp and /var through that symlink, and the two spellings reach this
+# function from different sides: `pwd` yields the resolved form while $TMPDIR
+# holds the unresolved one, so `/private/var/folders/.../T` never compared equal
+# to a TMP_HOME of `/var/folders/.../T` and the per-user scratch root sailed
+# through the check. dangerous-root.ts hits the same seam and answers it the
+# same way, with an explicit '/private/tmp' beside '/tmp'. Caught by CI on
+# macOS; invisible locally, where the two spellings happened to agree.
 is_shared_ancestor() {
-  [[ "$1" == "/" || "$1" == "$HOME" || "$1" == "${TMP_HOME%/}" ]] && return 0
-  case "$1" in
-    /Users|/home|/root|/System|/Library|/private|/tmp|/private/tmp|/var|/etc) return 0 ;;
-    /bin|/sbin|/usr|/opt|/dev|/Volumes|/Applications|/Network|/cores|/proc|/sys) return 0 ;;
-  esac
+  local candidate
+  for candidate in "$1" "${1#/private}"; do
+    [[ "$candidate" == "/" || "$candidate" == "$HOME" || "$candidate" == "${TMP_HOME%/}" ]] && return 0
+    case "$candidate" in
+      /Users|/home|/root|/System|/Library|/private|/tmp|/private/tmp|/var|/etc) return 0 ;;
+      /bin|/sbin|/usr|/opt|/dev|/Volumes|/Applications|/Network|/cores|/proc|/sys) return 0 ;;
+    esac
+  done
   return 1
 }
 
