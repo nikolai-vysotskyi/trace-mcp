@@ -632,15 +632,18 @@ describe('docs site numeric claims (TRA-174)', () => {
    * and then shipped ourselves. So: a surface that quotes the saving quotes the
    * quality result too, and both come from the generated data.
    *
-   * README.md is the surface this gates today. docs/index.html (the hero) and
-   * docs/comparisons.md quote the saving without the quality half as well, but
-   * they belong to the site and competitor mandates — filed as TRA-1122 and
-   * TRA-1123; add their paths to QUOTES_THE_SAVING once they carry it.
+   * README.md and docs/comparisons.md (TRA-1123) are the surfaces this gates
+   * today. A Jekyll page reads the figures through Liquid rather than typing
+   * them, so a `site.data.pr_context_quality.<key>` reference counts as
+   * carrying the number — the literal one never appears in its source.
+   * docs/index.html (the hero) still quotes the saving without the quality
+   * half; it belongs to the site mandate and is filed as TRA-1122 — add its
+   * path here once it carries it.
    */
   const QUALITY = JSON.parse(
     readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_quality.json'), 'utf-8'),
   ) as Record<string, unknown>;
-  const QUOTES_THE_SAVING = ['README.md'];
+  const QUOTES_THE_SAVING = ['README.md', 'docs/comparisons.md'];
 
   /** One-line surfaces cannot carry four numbers, so they carry the verdict
    *  instead — the same phrase the live GitHub repo description already runs. */
@@ -649,18 +652,20 @@ describe('docs site numeric claims (TRA-174)', () => {
   it('no surface publishes the token saving without the quality result (TRA-1013)', () => {
     for (const path of QUOTES_THE_SAVING) {
       const src = readFileSync(join(REPO_ROOT, path), 'utf-8');
-      for (const [label, needle] of [
-        ['trace understood rate', QUALITY.trace_understood],
-        ['baseline understood rate', QUALITY.baseline_understood],
-        ['trace false positives', QUALITY.trace_false_positives],
-        ['baseline false positives', QUALITY.baseline_false_positives],
+      for (const [label, key] of [
+        ['trace understood rate', 'trace_understood'],
+        ['baseline understood rate', 'baseline_understood'],
+        ['trace false positives', 'trace_false_positives'],
+        ['baseline false positives', 'baseline_false_positives'],
       ] as const) {
+        const needle = String(QUALITY[key]);
         expect(
-          src.includes(String(needle)),
+          src.includes(needle) || src.includes(`site.data.pr_context_quality.${key}`),
           `${path} states the ${BENCH.median_savings_pct}% token saving but not the ${label} ` +
             `("${needle}") from docs/_data/pr_context_quality.json. Cheaper is not better: the ` +
             'quality half travels with the saving. Re-run `npx tsx scripts/bench-pr-quality.ts` ' +
-            'and update the block under the benchmark headline.',
+            'and update the block under the benchmark headline. On a Jekyll page, read it ' +
+            `through Liquid instead: {{ site.data.pr_context_quality.${key} }}.`,
         ).toBe(true);
       }
     }
