@@ -1285,3 +1285,70 @@ already paid (TRA-1075). The HOL ownership-claim reminder on
 sign-in-and-authorize flow on a third-party site in exchange for a badge, which is
 the same trade we refused on their scanner action. If a second reminder arrives,
 the answer is still nothing.
+
+### Fourth pass, 2026-09-07: two doors found by searching for the work, not the listing
+
+Catalogs stay under moratorium and every open thread was re-checked and is silent
+(list below), so this pass spent itself on mandate item 3 — repositories where our
+own defects are worth more to them than a listing is to us. The search that found
+both was GitHub issue search on phrases from *our* engineering log, not on our name:
+`"repo map" "tokens"`, `"import graph" "re-export"`, `"symbol index" "stale"`.
+
+**`Nano-Collective/nanocoder#1197` (2,455★).** A community contributor
+(`addyCooks`) is building an agent-evaluation harness under `benchmarks/agent/`:
+six *vendored* fixture trees, five runs per task, median and IQR, baselines against
+`main` and `v1.29.0`, and an explicit Gate 0 that reconsiders the whole indexing
+roadmap (#1186 Phases 1–4) if the gap does not reproduce. LLM-as-judge scoring is
+rejected by name.
+
+Read the split first: `will-lamerton` asked for Phase 0 to move out of #1186 and for
+#1186 to stay frozen as the design record. The first draft of our comment was aimed
+at #1186 and would have reopened a thread its maintainers had just agreed to close —
+caught in review, not in the field. **Whenever an issue references a split, read both
+halves before writing to either.**
+
+What we sent them is the thing our own corpus taught us, framed for their design
+rather than against it: vendoring freezes fixture size, and the regime #1186 exists
+for does not exist at that size. Our largest CI corpus was 50 000 symbols while
+`search` returned a bare "Maximum call stack size exceeded" against a user's
+152 734-symbol index ([#957](https://github.com/nikolai-vysotskyi/trace-mcp/issues/957));
+the V8 argument limit that caused it sits somewhere between ~65k and ~125k, so a
+fixture at 70k proves nothing either way, and the fixture is now *generated* at
+150 000 rather than vendored. Plus preregistering Gate 0's threshold before the
+baselines run, and the ESM/no-source failure as a point in favour of their pass/fail
+design: a token count rewarded that bug, an outcome assertion would have caught it —
+if the fixture is big enough for the missing content to change the outcome. Comment:
+[#1197 (comment)](https://github.com/Nano-Collective/nanocoder/issues/1197#issuecomment-5569107808).
+
+**`Ivy-Apps/deslop#173` (18★).** Their static import-graph analyzer does not treat
+`export … from` as an edge, so barrel files break transitive rules — the exact case
+our own outreach mandate names as the example of a repo worth writing to, and it was
+open, labelled `bug`, milestoned `0.10.2`, unanswered since 2026-08-08. Verified
+against their `src/TypeScript/Lexer.hs` on `main` that only statements beginning
+`import` are tokenized. We sent the three things that bit us: the discriminator is
+the `from` clause and not the `export` keyword (`export const x` is an edge to
+nothing), the alias direction flips relative to an import so storing one name
+silently drops the consumer side, and `export * from` carries no specifier list at
+all — so a name-keyed graph still leaves the barrel chain broken after the statement
+is lexed, which reads like the fix not working. Comment:
+[#173 (comment)](https://github.com/Ivy-Apps/deslop/issues/173#issuecomment-5569108179).
+
+**Checked and skipped, so the next pass does not re-derive them:** the
+`anthropics/claude-code` and `openai/codex` codebase-indexing feature requests
+(#4556, #75993, #5181) — real audience, but a comment there buys visibility rather
+than usefulness, which is the motive our own rules distrust; `vybestack/llxprt-code#3421`
+(700★, "hand-rolled import graph") — their fix is nx or dependency-cruiser, not us;
+`dotflow-io/pycodeloop#51` (1★) and the agent-written planning tickets from the
+trial-plan class. `chrisshaiman/lamware#254` wants a call graph over Ghidra
+decompilation, which is not our domain.
+
+**Threads re-checked 2026-09-07, all silent, nothing owed and no pings due:**
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`,
+`tolkonepiu/best-of-mcp-servers#384`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`.
+
+**One number to stop quoting.** The 15-point comprehension loss is struck as of
+PR #1066 — it was measured on a context that contained no source code, and the
+corrected run is 67% against 65% at the same 70.5% median token saving. Anything
+outgoing that still carries −15 п.п. is quoting a bug, not a result.
