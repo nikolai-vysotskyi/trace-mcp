@@ -19,6 +19,8 @@
  *   tsx scripts/bench-pr-context.ts --limit 10 # smoke run on the first 10 PRs
  *   tsx scripts/bench-pr-context.ts --dump-prompts <dir>
  *   tsx scripts/bench-pr-context.ts --only axios/axios#11073,psf/requests#6806
+ *   tsx scripts/bench-pr-context.ts --symbol-detail benchmarks/pr-context/symbol-detail.json
+ *   tsx scripts/bench-pr-context.ts --bundle-budget 64000 --symbol-detail /tmp/big.json
  *                                              # also write each arm's assembled
  *                                              # prompt, for bench-pr-quality.ts
  *
@@ -78,8 +80,15 @@ const INPUT_USD_PER_MTOK = 3.0;
 /** Context windows we report overflow against. */
 const CONTEXT_WINDOW = 200_000;
 
-/** Budget handed to the trace-mcp arm's context bundle, per PR. */
-const BUNDLE_TOKEN_BUDGET = 8000;
+/**
+ * Budget handed to the trace-mcp arm's context bundle, per PR. The published
+ * run always uses 8000 — the default the product ships. `--bundle-budget N`
+ * exists so "is the budget what drops these bodies?" can be answered by
+ * measurement instead of argument; a run with a non-default budget writes no
+ * artifacts (see `run()`).
+ */
+const DEFAULT_BUNDLE_TOKEN_BUDGET = 8000;
+let BUNDLE_TOKEN_BUDGET = DEFAULT_BUNDLE_TOKEN_BUDGET;
 
 interface PrEntry {
   repo: string;
@@ -116,6 +125,28 @@ interface PrResult {
 
 /** Set by --dump-prompts; where runOne writes each arm's assembled prompt. */
 let DUMP_DIR: string | undefined;
+
+/**
+ * Set by --symbol-detail. TRA-1090 published "a third of changed symbols arrive
+ * without their bodies" with the cause unmeasured: a module-level pseudo-symbol
+ * whose body is a whole file is a different finding from a real function the
+ * budget dropped. This records, per changed symbol, whether the bundle carried
+ * its body and what kind of symbol it was, so the split is counted rather than
+ * argued about.
+ */
+let SYMBOL_DETAIL_PATH: string | undefined;
+const SYMBOL_DETAIL_ROWS: SymbolDetailRow[] = [];
+
+interface SymbolDetailRow {
+  repo: string;
+  number: number;
+  symbol_id: string;
+  kind: string;
+  /** 'full' | 'no_source' | 'signature_only', or 'dropped' when assembly kept nothing. */
+  detail: string;
+  /** A `__module__` / `<module>` node: its "body" is the whole file. */
+  module_level: boolean;
+}
 
 const REVIEW_PREAMBLE = `You are reviewing a pull request. Identify correctness bugs,
 edge cases the change misses, and call sites the change breaks. Report findings
@@ -290,11 +321,16 @@ function siteOf(store: Store, symbolId: string): SymbolSite | undefined {
 }
 
 /** trace-mcp: the diff plus changed-symbol bodies, their imports, and dependents. */
+function isModuleLevel(symbolId: string, kind: string): boolean {
+  return symbolId.includes('__module__') || symbolId.endsWith('<module>') || kind === 'namespace';
+}
+
 function buildTrace(
   store: Store,
   dir: string,
   diff: string,
   symbolIds: string[],
+  entry?: PrEntry,
 ): { text: string; readable: Spans; pointed: Spans } {
   // `readable` = code the reviewer can actually read. `pointed` = readable plus
   // anything named with a location, which is all the impact list gives.
@@ -324,6 +360,25 @@ function buildTrace(
           addSpan(readable, site.file, site.line_start, site.line_end);
         }
         addSpan(pointed, site.file, site.line_start, site.line_end);
+      }
+    }
+
+    if (SYMBOL_DETAIL_PATH && entry) {
+      const byId = new Map((bundle.value.primary ?? []).map((i) => [i.symbol_id, i] as const));
+      for (const id of symbolIds) {
+        const item = byId.get(id);
+        const sym = store.getSymbolBySymbolId(id);
+        const kind = item?.kind ?? sym?.kind ?? 'unknown';
+        SYMBOL_DETAIL_ROWS.push({
+          repo: entry.repo,
+          number: entry.number,
+          symbol_id: id,
+          kind,
+          // Absent from the assembled primary group means assembly kept nothing
+          // for it at all — a different failure from keeping a bodyless stub.
+          detail: item ? (item.detail ?? 'unknown') : 'dropped',
+          module_level: isModuleLevel(id, kind),
+        });
       }
     }
   }
@@ -431,7 +486,7 @@ async function runOne(entry: PrEntry): Promise<PrResult | null> {
       .filter((s): s is SymbolSite => Boolean(s));
 
     const baseline = buildBaseline(dir, diff, files);
-    const trace = buildTrace(store, dir, diff, symbolIds);
+    const trace = buildTrace(store, dir, diff, symbolIds, entry);
 
     // TRA-568: the quality arm re-uses these exact texts, so it scores the same
     // prompts this script counted tokens for rather than rebuilding them.
@@ -597,10 +652,25 @@ async function run(limit?: number, only?: Set<string>): Promise<void> {
     rows,
   };
 
-  if (only) {
-    console.log(
-      `\n${rows.length} of ${only.size} selected PRs run; artifacts not written (--only)`,
+  const nonDefaultBudget = BUNDLE_TOKEN_BUDGET !== DEFAULT_BUNDLE_TOKEN_BUDGET;
+
+  if (SYMBOL_DETAIL_PATH) {
+    const counts: Record<string, number> = {};
+    for (const r of SYMBOL_DETAIL_ROWS) {
+      const bucket = `${r.module_level ? 'module' : 'symbol'}:${r.detail}`;
+      counts[bucket] = (counts[bucket] ?? 0) + 1;
+    }
+    fs.writeFileSync(
+      SYMBOL_DETAIL_PATH,
+      `${JSON.stringify({ generated_at: new Date().toISOString(), measured_build: measuredBuild(), total: SYMBOL_DETAIL_ROWS.length, counts, rows: SYMBOL_DETAIL_ROWS }, null, 2)}\n`,
     );
+    console.log(`symbol detail → ${SYMBOL_DETAIL_PATH}`);
+    console.log(JSON.stringify(counts, null, 2));
+  }
+
+  if (only || nonDefaultBudget) {
+    const why = only ? `--only, ${only.size} selected` : `--bundle-budget ${BUNDLE_TOKEN_BUDGET}`;
+    console.log(`\n${rows.length} PRs run; artifacts not written (${why})`);
     return;
   }
 
@@ -675,6 +745,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         : undefined;
     const li = argv.indexOf('--limit');
     const limit = li >= 0 ? Number(argv[li + 1]) : undefined;
+    const bb = argv.indexOf('--bundle-budget');
+    if (bb >= 0 && argv[bb + 1] && !argv[bb + 1].startsWith('-')) {
+      BUNDLE_TOKEN_BUDGET = Number(argv[bb + 1]);
+    }
+    const sd = argv.indexOf('--symbol-detail');
+    if (sd >= 0) {
+      const next = argv[sd + 1];
+      SYMBOL_DETAIL_PATH = path.resolve(
+        next && !next.startsWith('-') ? next : path.join(BENCH_DIR, 'symbol-detail.json'),
+      );
+    }
     const di = argv.indexOf('--dump-prompts');
     if (di >= 0) {
       // `--dump-prompts --limit 10` must not create a directory called "--limit".
