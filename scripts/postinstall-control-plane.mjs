@@ -264,10 +264,21 @@ function installLauncherShim() {
 /** Header line every shim we ship carries. Mirrors src/init/launcher.ts. */
 const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
 
-/** True only for a shim this project wrote, so we never clobber a user's file. */
+/**
+ * True only for a shim this project wrote, so we never clobber a user's file.
+ * Bounded read, like the original in src/init/launcher.ts: whatever sits at
+ * this path is not ours to load into memory whole.
+ */
 function isOwnedShim(file) {
   try {
-    return LAUNCHER_HEADER_RE.test(fs.readFileSync(file, 'utf-8').slice(0, 256));
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      fs.readSync(fd, buf, 0, 256, 0);
+      return LAUNCHER_HEADER_RE.test(buf.toString('utf-8'));
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch {
     return false;
   }
@@ -306,14 +317,11 @@ function installLegacyBinCompat(shimPath) {
   ) {
     return;
   }
-  // When the legacy home *is* the launcher home, this path would point at
-  // itself. Compare real paths: a `~/.trace-mcp` symlinked onto `~/.trace`
-  // makes the two lexically different and physically the same.
-  try {
-    if (fs.realpathSync(legacyPath) === fs.realpathSync(shimPath)) return;
-  } catch {
-    /* one of them is missing — nothing resolved, carry on */
-  }
+  // No self-reference guard here, unlike the twin in src/init/launcher.ts: that
+  // one compares two paths that can share a basename, this one cannot. shimPath
+  // is always `trace`/`trace.cmd` and legacyPath always `trace-mcp`, so their
+  // real paths coincide only once legacyPath is already a symlink to it — which
+  // the healthy-symlink check below returns on anyway.
   let existing = null;
   try {
     existing = fs.lstatSync(legacyPath);

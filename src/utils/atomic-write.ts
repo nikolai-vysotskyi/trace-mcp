@@ -172,7 +172,13 @@ export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_M
     const full = path.join(dir, name);
     try {
       const st = fs.lstatSync(full);
-      if (!st.isFile() || st.mtimeMs > cutoff) continue;
+      // Symlinks count. `writeLegacyCompat` (src/init/launcher.ts) and the two
+      // legacy-shim repairs that mirror it stage a *symlink* under this exact
+      // name before renaming it into place, so an `isFile()`-only gate skipped
+      // the one shape those writers can leak — in `bin`, a directory this sweep
+      // already lists. `lstat` does not follow, so this is the link's own mtime
+      // and a dangling one is collected too (TRA-1156).
+      if ((!st.isFile() && !st.isSymbolicLink()) || st.mtimeMs > cutoff) continue;
       fs.unlinkSync(full);
       removed.push(full);
     } catch {
