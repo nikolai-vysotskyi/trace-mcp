@@ -532,11 +532,62 @@ export class StdioSession {
       { id, reason, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
       'StdioSession: daemon did not complete initialize — serving this session in local mode',
     );
+    // Build BEFORE claiming the id. This is a genuine first load off disk —
+    // the thin proxy entry (TRA-970) never imports LocalBackend — so it can
+    // fail, and the event that gets us here is often the same one that makes
+    // it fail: a package swap (`npm i -g trace-mcp`, the app replacing its
+    // bundle) removes dist/local-backend.js at the exact moment it unsettles
+    // the daemon. Disk full and a native-module load failure land here too.
+    //
+    // Claiming the id first meant that throw orphaned the handshake: nobody
+    // answered it, the process safety net swallowed the rejection, and the
+    // client hung until its own timeout and reported `Failed to connect` —
+    // the outcome this watchdog exists to prevent (TRA-1148).
+    let local: LocalBackend;
+    try {
+      local = await this.buildLocalBackend();
+    } catch (err) {
+      logger.error(
+        { id, reason, err: String(err) },
+        'StdioSession: local-mode fallback could not be built — failing the handshake explicitly',
+      );
+      // Answer explicitly rather than through the router. On the timeout path
+      // the id is still pending, but on the `proxy-initialize-error` path the
+      // router already cleared it when the daemon's error response arrived —
+      // this method having swallowed that error precisely so it could replay
+      // the handshake locally. With the replay gone, the swallow has to be
+      // undone, and only this side knows the id was ever ours.
+      //
+      // An error the client can surface beats a connection that never
+      // resolves: clients retry, and by then the swap window has closed.
+      this.router.forgetPending(id);
+      // Detach the backend we are answering over the top of. Every other path
+      // that answers a stuck id reaches `router.swap()`, whose step 3 does
+      // exactly this before anything else is forwarded; this branch is the one
+      // that answers without swapping, so it has to do it itself. Otherwise a
+      // merely slow daemon — the `proxy-initialize-timeout` trigger, as
+      // opposed to a dead one — delivers its real `initialize` response after
+      // we gave up, `wireBackend` forwards it, and the client gets two
+      // responses for one id. The interceptor's `id === this.initializeId`
+      // guard does not catch it: `clearInitializeWatchdog()` nulled that at
+      // the top of this method.
+      //
+      // Unconditional is safe here: this only ever runs for `initialize`, so
+      // no other in-flight id shares this backend yet.
+      const stale = this.router.getActiveBackend();
+      if (stale) stale.onmessage = undefined;
+      await this.sendAndSettleListChanged({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32603, message: `Local fallback unavailable: ${String(err)}` },
+      } as unknown as JSONRPCMessage);
+      return;
+    }
     this.proxyDisabled = true;
     // Drop the in-flight id so the swap does not answer it with a synthetic
     // error; the replay below is the response the client actually receives.
     this.router.forgetPending(id);
-    await this.swapTo(await this.buildLocalBackend(), reason);
+    await this.swapTo(local, reason);
     if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
     await this.router.ingestFromClient(this.cachedInitialize);
   }
@@ -567,10 +618,24 @@ export class StdioSession {
       { id, err: String(err) },
       'StdioSession: proxy send failed — promoting to local mode and replaying the request',
     );
+    // Build before claiming the id, for the reason spelled out in
+    // fallbackToLocal: this import can fail, and returning false with the id
+    // still pending lets MessageRouter answer it with -32603 rather than
+    // relying on the exact moment it last checked `pendingRequestIds`.
+    let local: LocalBackend;
+    try {
+      local = await this.buildLocalBackend();
+    } catch (buildErr) {
+      logger.error(
+        { id, err: String(buildErr) },
+        'StdioSession: local-mode rescue could not be built — leaving the request for the router to fail',
+      );
+      return false;
+    }
     // Claim the id before swapping, or the swap's drain answers it with a
     // synthetic error and the client gets two responses for one request.
     this.router.forgetPending(id);
-    await this.swapTo(await this.buildLocalBackend(), 'proxy-send-failed');
+    await this.swapTo(local, 'proxy-send-failed');
     if (this.router.getActiveKind() !== 'local') return false;
     await this.router.ingestFromClient(msg);
     return true;
@@ -585,7 +650,23 @@ export class StdioSession {
       await this.swapTo(this.buildProxyBackend(), 'daemon-appeared');
     } else {
       if (currentKind === 'local') return; // already local
-      await this.swapTo(await this.buildLocalBackend(), 'daemon-disappeared');
+      // Same fallible import as the two paths above, and this one is called
+      // fire-and-forget from the watcher, which reports a stable transition
+      // exactly once — so a throw here used to leave the session pinned to a
+      // dead daemon with nothing scheduled to try again. Swallow it: the next
+      // failed send retries the build through rescueFailedProxySend, by which
+      // time a swap window has closed (TRA-1148).
+      let local: LocalBackend;
+      try {
+        local = await this.buildLocalBackend();
+      } catch (err) {
+        logger.error(
+          { err: String(err) },
+          'StdioSession: could not build local backend after the daemon disappeared — staying in proxy mode until the next request retries',
+        );
+        return;
+      }
+      await this.swapTo(local, 'daemon-disappeared');
     }
   }
 
