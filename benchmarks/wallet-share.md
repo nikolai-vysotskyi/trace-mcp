@@ -1,6 +1,6 @@
 # What share of a subscription can trace-mcp actually save?
 
-Every saving figure this project publishes — 90.6% on PR-review context, 67.4%
+Every saving figure this project publishes — 70.5% on PR-review context, 67.4%
 on mixed workloads — is a share of **tool output**. A subscription is billed on
 the **whole prompt**, re-sent on every request. Those are not the same
 denominator, and the ratio between them decides whether "cut your tool output by
@@ -82,8 +82,9 @@ is the load-bearing part of this file.
 
 1. **No subscription-multiplier claim.** 40–50% "off your plan" has the same
    provenance problem as the 40–50% we retired in #915: nobody measured it.
-2. **The task-level numbers stay.** 90.6% on PR-review context is measured,
-   external and reproducible. It answers "how much context does this step cost",
+2. **The task-level numbers stay.** 70.5% on PR-review context is measured,
+   external and reproducible, and it comes with comprehension parity on the same
+   60 PRs (TRA-1090: 65.0% naive vs 66.7% trace). It answers "how much context does this step cost",
    which is a real question — just not the wallet question.
 3. **The biggest lever is our own surface, not our responses.** At 66.7% fixed
    and 1.6% ours, a kilotoken removed from the tool list outweighs a kilotoken
