@@ -634,8 +634,8 @@ describe('docs site numeric claims (TRA-174)', () => {
    *
    * README.md is the surface this gates today. docs/index.html (the hero) and
    * docs/comparisons.md quote the saving without the quality half as well, but
-   * they belong to the site and competitor mandates — filed separately; add
-   * their paths to QUOTES_THE_SAVING once they carry it.
+   * they belong to the site and competitor mandates — filed as TRA-1122 and
+   * TRA-1123; add their paths to QUOTES_THE_SAVING once they carry it.
    */
   const QUALITY = JSON.parse(
     readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_quality.json'), 'utf-8'),
