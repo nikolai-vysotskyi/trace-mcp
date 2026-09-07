@@ -23,6 +23,7 @@
     "format:check": "biome format",
     "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
+    "check:remote-claims": "node scripts/check-remote-claims.mjs",
     "count:tools": "node scripts/count-advertised-tools.mjs",
     "record:wire-fixtures": "tsx scripts/record-wire-fixtures.ts",
     "replay:check": "tsx scripts/replay-eval.ts",
