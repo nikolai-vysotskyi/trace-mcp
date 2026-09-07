@@ -166,9 +166,16 @@ tsx scripts/bench-pr-quality.ts
 node scripts/check-pr-quality-thresholds.mjs
 ```
 
-The third command reads the `docs/_data/pr_context_quality.json` the second
-one just wrote and exits non-zero if either bar above is missed — the same
-comparison this page states in prose, kept in one place
+The third command reads `benchmarks/pr-context/quality.json` — the second
+command's raw output, not the pre-rounded `docs/_data/pr_context_quality.json`
+this page renders from — and exits non-zero if either bar above is missed, or
+if the run itself isn't the one the bar was set against: fewer than the
+registered 60 PRs, any failed model call, or the wrong reviewer/judge model.
+Code review on the first version of this checker (2026-09-07) found it read
+only four rounded display strings and would report MET on a 1-row smoke run or
+a 60-row attempt where 59 calls failed, as long as the rows that did complete
+looked fine; both are covered by `tests/scripts/check-pr-quality-thresholds.test.ts`
+now. The comparison itself is kept in one place
 (`scripts/check-pr-quality-thresholds.mjs`) so a release call does not depend
 on someone re-reading percentages correctly. A MISSED run blocks the release;
 it does not get a threshold adjustment to pass (see *Pass bar*, "unadjustable

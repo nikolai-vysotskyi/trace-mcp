@@ -7,7 +7,7 @@ import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import type { TraceMcpResult } from '../../errors.js';
-import type { ContextItem, DetailLevel } from '../../scoring/assembly.js';
+import type { AssembledItem, ContextItem, DetailLevel } from '../../scoring/assembly.js';
 import {
   assembleStructuredContext,
   renderStructuredContext,
@@ -41,6 +41,10 @@ interface BundleSymbolItem {
    * not whether its body survived assembly — which is exactly how the
    * TRA-1090 bare-`require` regression measured 100% "readable" on bundles
    * that carried no source at all.
+   *
+   * Measured cost (o200k, code review 2026-09-07): +4 tokens per item for
+   * 'full', +5 for 'no_source' or 'signature_only' — negligible next to the
+   * body text this field describes.
    */
   detail: DetailLevel;
 }
@@ -297,22 +301,31 @@ export function getContextBundle(
     totalBudget: budget,
   });
 
-  // Assembly drops or degrades items under budget pressure; look up each
-  // symbol's actual outcome by id rather than assuming array order survived.
-  const detailBySymbolId = new Map<string, DetailLevel>();
-  for (const item of [...assembled.primary, ...assembled.dependencies, ...assembled.callers]) {
-    detailBySymbolId.set(item.id, item.detail);
-  }
-  const detailOf = (symbolId: string): DetailLevel => detailBySymbolId.get(symbolId) ?? 'no_source';
+  // Assembly can drop an item entirely under budget pressure (tryAssemble
+  // returns null when even signature_only doesn't fit). The returned groups
+  // must reflect exactly what assembly produced — a count-based slice of the
+  // pre-assembly list silently disagrees with `content` whenever a middle
+  // item is dropped while a later one survives.
+  const primaryById = new Map(primarySymbols.map((p) => [p.sym.symbol_id, p] as const));
+  const depById = new Map(depSymbols.map((d) => [d.sym.symbol_id, d] as const));
+  const callerById = new Map(callerSymbols.map((c) => [c.sym.symbol_id, c] as const));
+
+  const fromAssembled = (
+    items: AssembledItem[],
+    byId: Map<string, { sym: SymbolRow; file: FileRow }>,
+  ): BundleSymbolItem[] => {
+    const out: BundleSymbolItem[] = [];
+    for (const item of items) {
+      const entry = byId.get(item.id);
+      if (entry) out.push(toBundleItem(entry.sym, entry.file, item.detail));
+    }
+    return out;
+  };
 
   const result: ContextBundleResult = {
-    primary: primarySymbols.map((p) => toBundleItem(p.sym, p.file, detailOf(p.sym.symbol_id))),
-    dependencies: depSymbols
-      .slice(0, assembled.dependencies.length)
-      .map((d) => toBundleItem(d.sym, d.file, detailOf(d.sym.symbol_id))),
-    callers: callerSymbols
-      .slice(0, assembled.callers.length)
-      .map((c) => toBundleItem(c.sym, c.file, detailOf(c.sym.symbol_id))),
+    primary: fromAssembled(assembled.primary, primaryById),
+    dependencies: fromAssembled(assembled.dependencies, depById),
+    callers: fromAssembled(assembled.callers, callerById),
     totalTokens: assembled.totalTokens,
     truncated: assembled.truncated,
   };
