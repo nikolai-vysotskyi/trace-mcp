@@ -1669,7 +1669,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Multi-agent concurrency | Daemon process pool | Cross-process lockfile (`proper-lockfile`) |
 | Cloud / Team edition | 100% local, self-hosted | SocratiCode Cloud (private beta) |
 
-Verified on September 7, 2026 against SocratiCode's repository at `main` (v1.13.0, commit `fdcb17d`, {{ site.data.competitors.socraticode.stars }} stars). Tool definitions from `src/index.ts` and `src/tools/`, storage architecture from `src/constants.ts` and `src/config.ts`, language mappings from `src/constants.ts`.
+Verified on September 7, 2026 against SocratiCode's repository at `main` (v1.13.0, commit `88a8ff5`, {{ site.data.competitors.socraticode.stars }} stars). Tool definitions from `src/index.ts` and `src/tools/`, storage architecture from `src/constants.ts` and `src/config.ts`, language mappings from `src/constants.ts`.
 
 ## Key architectural differences
 
@@ -1699,10 +1699,10 @@ Every tool advertised by an MCP server consumes prompt tokens on every turn of a
 
 SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
 
-trace-mcp advertises 28 tools on its default minimal preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
-- For ultra-lean contexts, select the 5-tool minimal preset (`minimal`, ~2.4K tokens).
-- For focused tasks, choose task-tailored presets: `review` (PR analysis), `architecture` (system boundaries), or `dev` (implementation).
-- Any tool not in the current preset remains accessible dynamically via `load_tools` without restarting the server.
+trace-mcp advertises 28 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- For focused workflows, select task-tailored presets: `review` (32 tools), `architecture` (41 tools), or `dev` (42 tools).
+- Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines
 
