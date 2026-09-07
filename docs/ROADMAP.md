@@ -42,8 +42,11 @@ which throws under ESM and was swallowed by a catch, so the harness — which
 imports `src/` as real ESM — assembled signatures only. The shipped build was
 never affected. Re-run on the same 60 PRs against the same unmoved bars:
 comprehension **65.0% naive vs 66.7% trace** (parity; the sign is in our favour
-and 60 PRs cannot make that significant), false positives **0.58 vs 0.80**,
-naive-only losses **13 → 3**, latency level at 93 s both ways. Both bars met.
+and 60 PRs cannot make that significant), false positives **0.58 vs 0.80**
+(+0.22 against the struck run's +0.55), naive-only losses **13 → 3**, latency
+level at ~93 s both ways against the struck run's 17% gap. Each run carries its
+own naive column — the struck row above is only comparable to the naive numbers
+measured in the same pass. Both bars met.
 The token figure moved the other way in the same correction: **90.6% → 70.5%**,
 median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
 

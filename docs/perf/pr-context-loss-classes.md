@@ -110,20 +110,27 @@ Per PR, on the 13:
 | [sindresorhus/got#2471](https://github.com/sindresorhus/got/pull/2471) | 31,642 | 2,222 | 5,446 | 93% → 83% |
 
 **The quality number was too bad.** The re-run, same 60 PRs, same
-preregistered bars, same judge protocol:
+preregistered bars, same judge protocol. Each run is its own pair — the naive arm was re-measured alongside the trace
+arm, so the struck run's numbers are only comparable to the struck run's naive
+column, not to this one:
 
-| 60 PRs | naive | trace-mcp, struck run | trace-mcp, re-run |
-|---|---:|---:|---:|
-| understood the change | 65.0% | 50.0% | **66.7%** |
-| false positives per PR | 0.58 | 1.20 | **0.80** |
-| PRs only the naive arm understood | — | 13 | **3** |
-| review latency, median | 93.0 s | 74.5 s | 92.9 s |
+| 60 PRs | struck run: naive | struck run: trace | re-run: naive | re-run: trace |
+|---|---:|---:|---:|---:|
+| understood the change | 65.0% | 50.0% | 65.0% | **66.7%** |
+| false positives per PR | 0.65 | 1.20 | 0.58 | **0.80** |
+| PRs only the naive arm understood | — | 13 | — | **3** |
+| review latency, median | 90.0 s | 74.5 s | 93.0 s | 92.9 s |
+
+Read across the pairs: comprehension went from −15 pp to +1.7 pp, false
+positives from +0.55 to +0.22, and latency from 17% faster to level. The naive
+arm scored 65.0% in both runs — measured twice, independently, at the same
+value.
 
 Both bars are met (≤10 pp comprehension loss, ≤+0.5 false positives): the trace
 arm lands 1.7 points *above* the naive one, which the bar never asked for and
 which 60 pull requests cannot make significant — parity is the honest reading.
-The naive arm scored 65.0% in both runs, untouched, which is the control. The
-latency advantage was the speed of a context with the code removed and is gone.
+The struck run's latency advantage was the speed of a context with the code
+removed, and it is gone.
 
 ## Why no test caught it, and what does now
 
