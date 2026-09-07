@@ -81,6 +81,7 @@ export const activity = {
   errorSampleHideShort: 'Hide sample',
   errorGroupFilter: 'Show only {{tool}} errors',
   noErrorsInWindow: 'No errors in this window.',
+  noLatencyInWindow: 'No latency data in this window.',
   clearTimeRange: 'Clear time-range filter',
   clear: 'Clear',
   sparklineTitle: '{{time}}: {{calls}} calls',

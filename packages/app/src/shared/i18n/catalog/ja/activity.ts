@@ -60,6 +60,7 @@ export const activity = {
   errorSampleHideShort: '例を隠す',
   errorGroupFilter: '{{tool}} のエラーだけを表示',
   noErrorsInWindow: 'この期間にエラーはありません。',
+  noLatencyInWindow: 'この期間にレイテンシデータはありません。',
   clearTimeRange: '期間フィルタを解除',
   clear: '解除',
   sparklineTitle: '{{time}}: 呼び出し {{calls}} 件',

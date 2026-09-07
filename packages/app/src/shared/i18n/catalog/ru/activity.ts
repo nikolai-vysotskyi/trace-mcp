@@ -79,6 +79,7 @@ export const activity = {
   errorSampleHideShort: 'Скрыть пример',
   errorGroupFilter: 'Показать только ошибки {{tool}}',
   noErrorsInWindow: 'За это время ошибок не было.',
+  noLatencyInWindow: 'За это время данных о задержке не было.',
   clearTimeRange: 'Сбросить фильтр по времени',
   clear: 'Сбросить',
   sparklineTitle: '{{time}}: вызовов {{calls}}',

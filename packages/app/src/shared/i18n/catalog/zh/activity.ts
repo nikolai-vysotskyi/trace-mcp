@@ -60,6 +60,7 @@ export const activity = {
   errorSampleHideShort: '隐藏示例',
   errorGroupFilter: '只看 {{tool}} 的错误',
   noErrorsInWindow: '这个时间窗口内没有错误。',
+  noLatencyInWindow: '这个时间窗口内没有延迟数据。',
   clearTimeRange: '清除时间范围筛选',
   clear: '清除',
   sparklineTitle: '{{time}}：{{calls}} 次调用',

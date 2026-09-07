@@ -60,6 +60,7 @@ export const activity = {
   errorSampleHideShort: '예시 숨기기',
   errorGroupFilter: '{{tool}} 오류만 표시',
   noErrorsInWindow: '이 구간에는 오류가 없습니다.',
+  noLatencyInWindow: '이 구간에는 지연 시간 데이터가 없습니다.',
   clearTimeRange: '시간 범위 필터 지우기',
   clear: '지우기',
   sparklineTitle: '{{time}}: 호출 {{calls}}회',
