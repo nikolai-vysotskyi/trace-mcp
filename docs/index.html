@@ -176,7 +176,7 @@ updated: 2026-09-07
         "name": "What is the best MCP server for giving Claude Code codebase context?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs on your machine with no API keys and no account, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
         }
       },
       {
@@ -192,7 +192,7 @@ updated: 2026-09-07
         "name": "Do I need API keys or a cloud account?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI — but everything else runs without external services."
+          "text": "No. There is no account and no key to buy: your code and your index stay on the machine. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI — but everything else runs without external services."
         }
       },
       {
@@ -2314,6 +2314,21 @@ updated: 2026-09-07
         median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own.
       </p>
 
+      <!-- TRA-1122: the saving never travels alone. The same PRs were reviewed twice
+           and scored blind, and that half is what says the cheap context was worth
+           having — a page that publishes only the saving asks the reader to take the
+           rest on trust. Reuses .hero-boundary rather than adding a class: same
+           treatment, same measure, one less thing in the hero to keep in step.
+           Gated by tests/docs/readme-claims.test.ts. -->
+      <p class="hero-boundary">
+        Cheaper is not better, so the same PRs were reviewed twice and scored blind:
+        {{ site.data.pr_context_quality.trace_understood }} understood the change against
+        {{ site.data.pr_context_quality.baseline_understood }} for naive file loading,
+        {{ site.data.pr_context_quality.trace_false_positives }} false positives per PR against
+        {{ site.data.pr_context_quality.baseline_false_positives }} &mdash;
+        <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
+      </p>
+
       <!-- The honesty boundary travels with the claim, not as a footnote further down
            the page (ops/positioning.md &sect; The boundary, carried with the claim). -->
       <p class="hero-boundary">
@@ -2354,7 +2369,10 @@ updated: 2026-09-07
       <p class="hero-trust">
         <span>Open source</span>
         <span class="dot"></span>
-        <span>100% local</span>
+        <!-- No absolute about locality (TRA-1013): src/telemetry/usage-ping.ts POSTs
+             one anonymous daily ping unless it is switched off, so `grep
+             google-analytics` over our own repo disproves it. Say the true thing. -->
+        <span>Code stays local</span>
         <span class="dot"></span>
         <span>Claude Code</span>
         <span class="dot"></span>
@@ -2888,7 +2906,7 @@ updated: 2026-09-07
         <div class="section-meta-tag"><span class="label">010 / Security</span></div>
         <div>
           <h2 class="section-title">Built for <span class="em">real-world environments.</span></h2>
-          <p class="section-lede">Runs fully local. No code leaves your machine. Refactors are reversible. Destructive operations require explicit confirmation.</p>
+          <p class="section-lede">Runs on your machine. No code leaves it. Refactors are reversible. Destructive operations require explicit confirmation.</p>
         </div>
       </div>
 
@@ -3095,7 +3113,7 @@ updated: 2026-09-07
             <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across {{ site.data.counts.languages }} languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs on your machine with no API keys and no account, works with {{ site.data.counts.frameworks }} framework integrations. Measured on its own repository, its responses cost {{ site.data.response_tokens.reduction_pct }}% fewer tokens than the file reads they replace across {{ site.data.response_tokens.calls_weighted }} real calls — against a baseline that is still an estimate — and answers stay more consistent as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
         </details>
         <details class="faq">
           <summary>
@@ -3109,7 +3127,7 @@ updated: 2026-09-07
             <h3>Do I need API keys or a cloud account?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
+          <div class="answer">No. There is no account and no key to buy: your code and your index stay on the machine. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
         </details>
         <details class="faq">
           <summary>
