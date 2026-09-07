@@ -47,10 +47,28 @@ vi.mock('../useWorkspaceProjects', () => ({
 
 /** Row labels in DOM order, read off the per-row select checkboxes. */
 function renderedLabels(container: HTMLElement): string[] {
-  return [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    .map((c) => c.getAttribute('aria-label') ?? '')
-    .filter((l) => l.startsWith('Select ') && l !== 'Select all projects')
-    .map((l) => l.slice('Select '.length));
+  return ariaLabelsWithPrefix(container, 'Select ').filter((l) => l !== 'all projects');
+}
+
+/**
+ * Every `aria-label` in the container that starts with `prefix`, with the
+ * prefix stripped — i.e. the disambiguated name each one embeds. Reads
+ * checkboxes AND buttons, so it catches the row-level Open/Re-index/Remove
+ * actions (`ProjectRowActions`) as well as Select.
+ *
+ * TRA-1058 follow-up #2: the first pass disambiguated the Select checkbox's
+ * aria-label (`labelByRoot` reached `Row`/`CompactRow`) but not Open/Re-index/
+ * Remove, which stayed on raw `project.name` inside the shared
+ * `ProjectRowActions` component one level down — a second, independent
+ * consumer of the same ambiguous field that the first fix never touched.
+ * Iterating every prefix here, rather than asserting Select alone, is the
+ * one-line guard Lead Engineer asked for so a fourth consumer can't repeat it.
+ */
+function ariaLabelsWithPrefix(container: HTMLElement, prefix: string): string[] {
+  return [...container.querySelectorAll<HTMLElement>('[aria-label]')]
+    .map((el) => el.getAttribute('aria-label') ?? '')
+    .filter((l) => l.startsWith(prefix))
+    .map((l) => l.slice(prefix.length));
 }
 
 describe('Workspace duplicate project names', () => {
@@ -74,4 +92,26 @@ describe('Workspace duplicate project names', () => {
     const labels = renderedLabels(container);
     expect(new Set(labels).size).toBe(labels.length);
   });
+
+  it.each(['table', 'compact'] as const)(
+    'disambiguates every row action label in %s view, not just Select',
+    (view) => {
+      localStorage.setItem('trace-mcp.workspace.view', view);
+      const { container } = render(<Workspace />);
+      for (const prefix of ['Select ', 'Open ', 'Re-index ']) {
+        const labels = ariaLabelsWithPrefix(container, prefix).filter((l) => l !== 'all projects');
+        expect(new Set(labels).size, `${prefix.trim()} labels: ${JSON.stringify(labels)}`).toBe(
+          labels.length,
+        );
+      }
+      // "Remove {{name}} from the workspace" has its own suffix — same check,
+      // different prefix/suffix pair.
+      const removeLabels = [...container.querySelectorAll<HTMLElement>('[aria-label]')]
+        .map((el) => el.getAttribute('aria-label') ?? '')
+        .filter((l) => l.startsWith('Remove ') && l.endsWith(' from the workspace'));
+      expect(new Set(removeLabels).size, `Remove labels: ${JSON.stringify(removeLabels)}`).toBe(
+        removeLabels.length,
+      );
+    },
+  );
 });

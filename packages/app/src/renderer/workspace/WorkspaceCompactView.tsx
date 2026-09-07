@@ -134,6 +134,7 @@ function CompactRow({
         <ProjectMetricsBadges project={project} dense />
         <ProjectRowActions
           project={project}
+          label={label}
           canMutate={canMutate}
           confirming={confirming}
           onRequestRemove={onRequestRemove}
@@ -234,6 +235,7 @@ export function WorkspaceCompactView({
       {menu && (
         <ProjectContextMenu
           project={menu.project}
+          label={labelByRoot.get(menu.project.root) ?? menu.project.name}
           canMutate={canMutate}
           x={menu.x}
           y={menu.y}
