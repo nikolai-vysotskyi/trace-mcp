@@ -794,19 +794,44 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
       continue;
     }
 
-    if (!entry.missingRootSince) {
+    // TRA-1105: the grace is for a root that can come back — an unmounted
+    // volume, a detached disk. A one-shot agent workdir cannot: the run that
+    // created it is over, and `registerProject` has refused to persist such a
+    // root since TRA-396, so any row here is legacy. Giving it the full week
+    // also pinned its `.config.json` section for the week (being registered is
+    // what `pruneProjectConfigSections` protects) — 17 of 47 sections on the
+    // reported machine. An explicit `add`/`init` of a workdir-shaped path is a
+    // deliberate act and keeps the grace.
+    const disposable =
+      isEphemeralProjectRoot(root) && !entry.explicit && entry.type !== 'multi-root';
+
+    if (!disposable && !entry.missingRootSince) {
       entry.missingRootSince = new Date().toISOString();
       newlyMissing.push(root);
       changed = true;
       continue;
     }
 
-    const missingSinceMs = Date.parse(entry.missingRootSince);
-    if (Number.isNaN(missingSinceMs) || now - missingSinceMs < graceMs) continue;
+    const missingSinceMs = Date.parse(entry.missingRootSince ?? '');
+    if (!disposable && (Number.isNaN(missingSinceMs) || now - missingSinceMs < graceMs)) continue;
 
     delete reg.projects[root];
     removed.push(root);
     changed = true;
+
+    // TRA-1105: `dbPath` is not private to this row. `registerProject` points a
+    // checkout at a sibling's DB when both resolve to the same git remote, and
+    // persists that choice — so a legacy ephemeral row can name the index of a
+    // live, canonical project. Deregistering the row is always right;
+    // unlinking the file is only right if nobody else is on it. Same two
+    // guards `removeProjectArtifacts` uses, for the same reason: a live holder
+    // marker (or an unreadable holder dir) means some process has this DB open
+    // right now, and guessing wrong here deletes someone else's index.
+    const sharedWithSibling = Object.values(reg.projects).some(
+      (other) => other.dbPath === entry.dbPath,
+    );
+    if (sharedWithSibling || hasLiveHolderOrUnknown(entry.dbPath, root)) continue;
+
     for (const suffix of MISSING_ROOT_SIDECARS) {
       try {
         fs.unlinkSync(entry.dbPath + suffix);

@@ -53,3 +53,19 @@ export function writeFixtureFile(baseDir: string, relPath: string, content: stri
   fs.mkdirSync(path.dirname(absPath), { recursive: true });
   fs.writeFileSync(absPath, content, 'utf-8');
 }
+
+/**
+ * `os.tmpdir()` that is guaranteed not to look like a one-shot agent workdir.
+ *
+ * The Multica agent runtime exports TMPDIR as its own `multica-task-<id>`
+ * scratch directory, so a fixture built under `os.tmpdir()` there matches
+ * `isEphemeralProjectRoot` and is treated as disposable — registry rows for it
+ * are not persisted, and a missing one is swept without grace. A fixture that
+ * must read as a real, persistent project has to live outside that shape.
+ */
+export function tmpRootOutsideTaskDir(prefix: string): string {
+  const base = /[/\\]multica-task-\d+[/\\]?$/i.test(os.tmpdir())
+    ? path.dirname(os.tmpdir())
+    : os.tmpdir();
+  return fs.mkdtempSync(path.join(base, prefix));
+}
