@@ -8,7 +8,7 @@ measurement: pr_context
 data_file: docs/_data/pr_context_bench.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: MET
+verdict: MISSED
 ---
 
 # Preregistration — PR review context benchmark
@@ -78,7 +78,11 @@ result would be a result about trace-mcp, not about a guessed baseline. It is
 also the reason this figure, and not the aggregate in
 [prereg-response-tokens](./prereg-response-tokens.md), leads the storefront.
 
-## Verdict — MET (retrospective), at a corrected 70.5%
+## Verdict — MISSED: primary bar met at 70.5%, quality floor failed at 67%
+
+A run that misses any registered bar publishes as MISSED, so that is the verdict
+even though the headline saving cleared its bar comfortably. Which bar failed,
+and why it failed only now, is below.
 
 **Corrected 2026-09-07 (TRA-1090).** The 2026-08-30 run measured a trace-mcp arm
 that contained no source code: `get_context_bundle` read symbol bodies through a
@@ -91,12 +95,42 @@ the product does not serve. The [diagnosis]({{ '/perf/pr-context-loss-classes/'
 
 The same 60 pull requests, same pinned SHAs, re-run with bodies restored:
 **median 70.5%** (13,595 → 3,951 input tokens), against the 90.6% first
-published. The bar was ≥50% and is still met; the previous figure is struck, not
-defended. Changed symbols read 100% readable in both arms then and now — a
-metric [since shown to count pointers, not
-bodies]({{ '/perf/pr-context-loss-classes/' | relative_url }}), which is why it
-did not fire. Pull requests where the index did not pay off went from 5 to 23,
-13 of which now cost more than reading the files outright; they are published in
+published. The primary bar was ≥50% and is still met; the previous figure is
+struck, not defended.
+
+**The quality floor is a different story, and it now fails.** It reads
+`trace_changed_symbol_readable` ≥ `baseline_changed_symbol_readable`. That
+metric counted whether the bundle *listed* a symbol, never whether it carried
+the body, so it read 100% in both arms — including through the period when the
+trace arm had no source code in it at all. TRA-1100 rewrote it to score
+`detail === 'full'`, and this is the first run measured under the corrected
+definition:
+
+| | naive | trace-mcp |
+|---|---:|---:|
+| changed symbols readable (median per PR) | {{ site.data.pr_context_bench.baseline_changed_symbol_readable }} | **{{ site.data.pr_context_bench.trace_changed_symbol_readable }}** |
+| affected call sites readable | {{ site.data.pr_context_bench.baseline_dependent_readable }} | {{ site.data.pr_context_bench.trace_dependent_readable }} |
+| affected call sites at least located | {{ site.data.pr_context_bench.baseline_dependent_pointed }} | {{ site.data.pr_context_bench.trace_dependent_pointed }} |
+
+A third of the changed symbols arrive without their bodies (113 of 338 across
+the corpus), and the previously-published 58% call-site readability was the same
+pointer count — it is 28% when bodies are required. **The bar was registered as
+unadjustable and it is not being adjusted: this publishes as MISSED.** The
+token saving is unaffected — 70.5% is the same number under either definition,
+because tokens were always counted on the assembled text.
+
+What it does *not* say is that the review suffers: the
+[quality arm]({{ '/perf/prereg-pr-quality/' | relative_url }}), which asks a
+model rather than a metric, came back at parity on the same corpus. Both are
+true, and the gap between them — a third of changed symbols missing without a
+measurable comprehension cost — is the open question, not a resolved one. The
+decomposition (module-level pseudo-symbols, whose "body" is a whole file, versus
+symbols the 8,000-token budget drops) is not yet measured.
+
+Pull requests where the index did not pay off went from 5 to 56 under the
+corrected metric — 43 of them classified `truncated`, which is that same
+finding counted per PR rather than per symbol, and 12 costing more than reading
+the files outright; they are published in
 [`docs/_data/pr_context_bench.json`](../_data/pr_context_bench.json) and on the
 [benchmark page]({{ '/pr-context-benchmark.html' | relative_url }}).
 
