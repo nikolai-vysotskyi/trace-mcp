@@ -166,9 +166,16 @@ export class ProjectManager {
    *  worker thread count regardless of project count. Lazy-init on the first
    *  addProject() so we can read the project's config for sizing. */
   private sharedPool: ExtractPool | null = null;
-  /** Configurable cap on concurrent initial indexAll() calls. Watcher-driven
-   *  indexFiles() is NOT gated. Lazy-init alongside sharedPool. */
+  /** Configurable cap on concurrent initial indexAll() calls. Lazy-init
+   *  alongside sharedPool. */
   private indexAllLimit: ReturnType<typeof pLimit> | null = null;
+  /** TRA-1127: same cap for watcher-driven reindexes, on its own limiter so a
+   *  file edit never queues behind another project's full initial index.
+   *  Ungated, N projects reindexing at once put N synchronous SQLite batches
+   *  ahead of `/health` in the macrotask queue — measured at 21 projects as a
+   *  `/health` that never answered inside 5 s, which makes every session
+   *  conclude the daemon is dead and index the repo itself. */
+  private watcherIndexLimit: ReturnType<typeof pLimit> | null = null;
   /** Optional shared TopologyStore/DecisionStore pool. When provided,
    *  stopProject() force-disposes the project's pool entry so the SQLite
    *  handles plus their in-memory state don't leak across the daemon's
@@ -199,6 +206,9 @@ export class ProjectManager {
     }
     if (!this.indexAllLimit) {
       this.indexAllLimit = pLimit(config.indexer?.parallel_initial_index ?? 2);
+    }
+    if (!this.watcherIndexLimit) {
+      this.watcherIndexLimit = pLimit(config.indexer?.parallel_initial_index ?? 2);
     }
   }
 
@@ -662,7 +672,10 @@ export class ProjectManager {
             | undefined;
           let watchErr: unknown;
           try {
-            result = await pipeline.indexFiles(toIndex);
+            // Fall through ungated if the limiter is gone (shutdown cleared it
+            // while an event was in flight) — the batch still has to run.
+            const gate = this.watcherIndexLimit ?? ((fn: () => Promise<unknown>) => fn());
+            result = (await gate(() => pipeline.indexFiles(toIndex))) as typeof result;
           } catch (err) {
             watchErr = err;
             throw err;
@@ -748,7 +761,11 @@ export class ProjectManager {
           // the index silently stale. indexAll() re-walks the root and is
           // hash-gated, so unchanged files cost a stat+hash, not a reparse.
           onRescan: async () => {
-            await pipeline.indexAll();
+            // Gated too: a wake from sleep or a bulk checkout drops events for
+            // every project at once, so every rescan would otherwise start
+            // together.
+            const gate = this.indexAllLimit ?? ((fn: () => Promise<unknown>) => fn());
+            await gate(() => pipeline.indexAll());
           },
         },
       );
@@ -1207,6 +1224,7 @@ export class ProjectManager {
       this.sharedPool = null;
     }
     this.indexAllLimit = null;
+    this.watcherIndexLimit = null;
     logger.info('ProjectManager shutdown complete');
   }
 
