@@ -50,7 +50,7 @@ measured in the same pass. Both bars met.
 The token figure moved the other way in the same correction: **90.6% → 70.5%**,
 median 13,595 → 3,951. Diagnosis: `docs/perf/pr-context-loss-classes.md`.
 **Re-measured later the same day (TRA-1141): 70.5% → 72.8%**, median 13,595 →
-3,325, non-paying PRs 23 → 21. The corrected bundle was emitting a symbol and
+3,286, non-paying PRs 23 → 21. The corrected bundle was emitting a symbol and
 the container holding it in full, twice; comprehension is unchanged in a
 head-to-head on the 13 PRs that changed most. Two coverage columns now measure
 delivery instead of listing and both fall: `dependent_readable` 58% → 22%, and

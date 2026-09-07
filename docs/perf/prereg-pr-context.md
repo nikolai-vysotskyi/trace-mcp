@@ -8,7 +8,7 @@ measurement: pr_context
 data_file: docs/_data/pr_context_bench.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: MET
+verdict: MISSED
 ---
 
 # Preregistration — PR review context benchmark
@@ -78,7 +78,7 @@ result would be a result about trace-mcp, not about a guessed baseline. It is
 also the reason this figure, and not the aggregate in
 [prereg-response-tokens](./prereg-response-tokens.md), leads the storefront.
 
-## Verdict — MET (retrospective), at a corrected 70.5%
+## Verdict — primary bar MET at 72.8%, quality floor MISSED at 71%
 
 **Corrected 2026-09-07 (TRA-1090).** The 2026-08-30 run measured a trace-mcp arm
 that contained no source code: `get_context_bundle` read symbol bodies through a
@@ -104,7 +104,7 @@ did not fire. Pull requests where the index did not pay off went from 5 to 23,
 about what the bundle contained; it was also paying for the same bytes twice,
 because a symbol and the container it lives inside were both emitted in full.
 With that duplication removed the same 60 pull requests, same pinned SHAs,
-measure **median 72.8%** (13,595 → 3,325 input tokens) and 21 non-paying PRs,
+measure **median 72.8%** (13,595 → 3,286 input tokens) and 21 non-paying PRs,
 still 13 of them costlier than reading the files. The bar was ≥50% and is met by
 a wider margin; the 70.5% figure is superseded by a re-measurement, not struck
 as wrong. The [loss-class page]({{ '/perf/pr-context-loss-classes/' |
@@ -118,6 +118,18 @@ read 28% and 67%. The saving itself counts what the two arms actually sent and
 is unaffected by the metric. The shortfall the metric exposes — the bundle's
 budget falling back to a signature when the changed symbol is larger than its
 share, on a third of the corpus — is TRA-1144.
+
+**That makes this preregistration's quality floor MISSED, and the frontmatter
+now says so.** The floor reads `trace_changed_symbol_readable` ≥
+`baseline_changed_symbol_readable`; the run measures 71% against the baseline's
+100%. It was written when that column could not fail — it scored a symbol as
+readable whenever the bundle listed it, so both arms read 100% by construction
+— and the first run able to fail it does. The bar is not moved to fit: a
+preregistration that passes on one axis and fails on another is a normal
+outcome, and the primary bar (≥50%, measured 72.8%) is unaffected by the miss.
+Raising the floor is TRA-1144's job, and until it lands this page reads MISSED.
+Caught in review of TRA-1141, which computed the number and left the verdict
+untouched.
 
 Measured at trace-mcp **{{ site.data.pr_context_bench.measured_build.version }}
 (`{{ site.data.pr_context_bench.measured_build.commit }}`)** on

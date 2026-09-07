@@ -494,3 +494,85 @@ describe('getContextBundle() — delivery is reported, not requested', () => {
     expect(content.split('METHOD_BODY_MARKER').length - 1).toBe(1);
   });
 });
+
+/**
+ * Three levels of nesting, all requested together, with the outermost too large
+ * to ship. Found in review: restoring a whole chain at once put a member back
+ * beside an ancestor that then shipped in full, which is the duplication this
+ * change removes.
+ */
+describe('getContextBundle() — restoring a dropped member does not re-duplicate', () => {
+  const FILLER = `    // padding line\n`.repeat(400);
+  const SRC = [
+    'export class Container {',
+    '  method() {',
+    '    function inner() {',
+    "      return 'INNER_MARKER';",
+    '    }',
+    '    return inner();',
+    '  }',
+    '  filler() {',
+    FILLER.trimEnd(),
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  let rootPath: string;
+  let store: Store;
+
+  beforeEach(() => {
+    rootPath = createTmpFixture({ 'src/nested.ts': SRC });
+    store = createTestStore();
+    const fileId = store.insertFile('src/nested.ts', 'typescript', 'h-nested', SRC.length);
+    const add = (id: string, name: string, kind: string, start: number, end: number) =>
+      store.insertSymbol(fileId, {
+        symbolId: id,
+        name,
+        kind,
+        fqn: name,
+        byteStart: start,
+        byteEnd: end,
+        lineStart: 1,
+        lineEnd: 2,
+        signature: `${kind} ${name}`,
+      });
+    add('src/nested.ts::Container#class', 'Container', 'class', 0, SRC.length);
+    add(
+      'src/nested.ts::Container.method#method',
+      'method',
+      'method',
+      SRC.indexOf('  method()'),
+      SRC.indexOf('  filler()'),
+    );
+    add(
+      'src/nested.ts::inner#function',
+      'inner',
+      'function',
+      SRC.indexOf('    function inner()'),
+      SRC.indexOf('    return inner();'),
+    );
+  });
+
+  afterEach(() => {
+    removeTmpDir(rootPath);
+  });
+
+  it('ships the innermost body once when the outermost container does not fit', () => {
+    const result = getContextBundle(store, rootPath, {
+      symbolIds: [
+        'src/nested.ts::Container#class',
+        'src/nested.ts::Container.method#method',
+        'src/nested.ts::inner#function',
+      ],
+      outputFormat: 'markdown',
+      tokenBudget: 900,
+    });
+    expect(result.isOk()).toBe(true);
+    const bundle = result._unsafeUnwrap();
+    const content = bundle.content ?? '';
+    // The class is too large for this budget, so the member below it comes back —
+    // but only one copy of the innermost body may appear.
+    expect(content).toContain('INNER_MARKER');
+    expect(content.split('INNER_MARKER').length - 1).toBe(1);
+  });
+});

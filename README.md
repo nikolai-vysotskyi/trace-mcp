@@ -16,7 +16,7 @@
     <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
     <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
-    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,325 with it — 72.8% less, median over 60 merged PRs in 6 open-source repos that are not ours. 181 tools, 81 languages, 87 framework integrations, your code stays local, MIT." />
+    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,286 with it — 72.8% less, median over 60 merged PRs in 6 open-source repos that are not ours. 181 tools, 81 languages, 87 framework integrations, your code stays local, MIT." />
   </picture>
 </p>
 
@@ -66,9 +66,9 @@ trace init                 # wire it into your agent, once per machine
 trace add                  # index the repo you are in
 ```
 
-**72.8% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 3,325 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
+**72.8% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 3,286 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
-<sub>Measured at trace-mcp 3.22.0 (`0bc18ef6`) on 7 September 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
+<sub>Measured at trace-mcp 3.22.0 (`190d287e`) on 7 September 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
 
 Cheaper is not the same as better, so the same 60 pull requests were reviewed twice and scored blind. The trace-mcp arm **understood the change in 67%** of them against **65%** for naive file loading, at **0.80** false positives per PR against **0.58**. [Quality half of the benchmark →](https://trace-mcp.com/perf/prereg-pr-quality/)
 
@@ -200,7 +200,7 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
 
-**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository — the first table row against real responses, everything below it by trace-mcp's own synthetic estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 3,325 input tokens against 13,595 for loading the diff plus every file it touches, **72.8% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 56 pull requests where the index did not pay off are published alongside the wins — 13 that cost more than reading the files outright, and 42 where the bundle's token budget did not deliver every changed symbol's body, a shortfall the benchmark could not see until this run made it score delivery rather than listing.
+**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository — the first table row against real responses, everything below it by trace-mcp's own synthetic estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 3,286 input tokens against 13,595 for loading the diff plus every file it touches, **72.8% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 56 pull requests where the index did not pay off are published alongside the wins — 13 that cost more than reading the files outright, and 42 where the bundle's token budget did not deliver every changed symbol's body, a shortfall the benchmark could not see until this run made it score delivery rather than listing.
 
 **What to expect — by workload:**
 

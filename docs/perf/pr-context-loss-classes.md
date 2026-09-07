@@ -207,7 +207,7 @@ SHAs, same corpus:
 
 | | before | after |
 |---|---:|---:|
-| median input tokens, trace arm | 3,951 | **3,325** |
+| median input tokens, trace arm | 3,951 | **3,286** |
 | median saving | 70.5% | **72.8%** |
 | PRs costing *more* than reading the files | 13 | 13 |
 | worst single PR | −129.3% | **−62.4%** |

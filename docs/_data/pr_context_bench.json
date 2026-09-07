@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-07T13:57:19.777Z",
+  "generated_at": "2026-09-07T14:14:06.864Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "0bc18ef6",
+    "commit": "190d287e",
     "dirty": true
   },
   "pr_count": 60,
@@ -13,13 +13,13 @@
   "baseline_median_tokens": 13595,
   "baseline_p90_tokens": 44246,
   "baseline_max_tokens": 70417,
-  "trace_median_tokens": 3325,
+  "trace_median_tokens": 3286,
   "trace_p90_tokens": 7649,
-  "trace_max_tokens": 15772,
+  "trace_max_tokens": 15955,
   "median_savings_pct": "72.8",
   "baseline_median_cost": "0.0408",
   "baseline_p90_cost": "0.1327",
-  "trace_median_cost": "0.0100",
+  "trace_median_cost": "0.0099",
   "trace_p90_cost": "0.0229",
   "baseline_dependent_readable": "20%",
   "trace_dependent_readable": "22%",
@@ -27,7 +27,7 @@
   "trace_dependent_pointed": "100%",
   "baseline_changed_symbol_readable": "100%",
   "trace_changed_symbol_readable": "71%",
-  "median_index_ms": 259,
+  "median_index_ms": 232,
   "loss_count": 56,
   "losses": [
     {
@@ -197,17 +197,6 @@
     },
     {
       "reason": "truncated",
-      "url": "https://github.com/axios/axios/pull/11121",
-      "changed_files": 8,
-      "changed_symbols": 21,
-      "baseline_tokens": 17965,
-      "trace_tokens": 10439,
-      "savings_pct": "41.9",
-      "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.7619047619047619
-    },
-    {
-      "reason": "truncated",
       "url": "https://github.com/sindresorhus/got/pull/2380",
       "changed_files": 2,
       "changed_symbols": 4,
@@ -227,6 +216,17 @@
       "savings_pct": "43.4",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.9333333333333333
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/axios/axios/pull/11121",
+      "changed_files": 8,
+      "changed_symbols": 21,
+      "baseline_tokens": 17965,
+      "trace_tokens": 10075,
+      "savings_pct": "43.9",
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.8095238095238095
     },
     {
       "reason": "truncated",
@@ -263,6 +263,17 @@
     },
     {
       "reason": "truncated",
+      "url": "https://github.com/axios/axios/pull/11172",
+      "changed_files": 8,
+      "changed_symbols": 20,
+      "baseline_tokens": 31348,
+      "trace_tokens": 15955,
+      "savings_pct": "49.1",
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.65
+    },
+    {
+      "reason": "truncated",
       "url": "https://github.com/psf/requests/pull/6806",
       "changed_files": 1,
       "changed_symbols": 3,
@@ -271,17 +282,6 @@
       "savings_pct": "49.5",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.3333333333333333
-    },
-    {
-      "reason": "truncated",
-      "url": "https://github.com/axios/axios/pull/11172",
-      "changed_files": 8,
-      "changed_symbols": 20,
-      "baseline_tokens": 31348,
-      "trace_tokens": 15772,
-      "savings_pct": "49.7",
-      "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.6
     },
     {
       "reason": "truncated",
@@ -344,10 +344,10 @@
       "changed_files": 10,
       "changed_symbols": 27,
       "baseline_tokens": 44519,
-      "trace_tokens": 10885,
-      "savings_pct": "75.5",
+      "trace_tokens": 10940,
+      "savings_pct": "75.4",
       "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.37037037037037035
+      "trace_changed_symbol_readable": 0.4074074074074074
     },
     {
       "reason": "truncated",
@@ -359,17 +359,6 @@
       "savings_pct": "76.3",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.3333333333333333
-    },
-    {
-      "reason": "truncated",
-      "url": "https://github.com/psf/requests/pull/7433",
-      "changed_files": 2,
-      "changed_symbols": 7,
-      "baseline_tokens": 34845,
-      "trace_tokens": 6014,
-      "savings_pct": "82.7",
-      "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.7142857142857143
     },
     {
       "reason": "truncated",
@@ -395,6 +384,17 @@
     },
     {
       "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/7433",
+      "changed_files": 2,
+      "changed_symbols": 7,
+      "baseline_tokens": 34845,
+      "trace_tokens": 5884,
+      "savings_pct": "83.1",
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.7142857142857143
+    },
+    {
+      "reason": "truncated",
       "url": "https://github.com/honojs/hono/pull/5283",
       "changed_files": 2,
       "changed_symbols": 4,
@@ -414,17 +414,6 @@
       "savings_pct": "84.0",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.5
-    },
-    {
-      "reason": "truncated",
-      "url": "https://github.com/psf/requests/pull/6963",
-      "changed_files": 2,
-      "changed_symbols": 9,
-      "baseline_tokens": 16057,
-      "trace_tokens": 2545,
-      "savings_pct": "84.2",
-      "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.7777777777777778
     },
     {
       "reason": "truncated",
@@ -483,17 +472,6 @@
     },
     {
       "reason": "truncated",
-      "url": "https://github.com/pallets/flask/pull/5917",
-      "changed_files": 7,
-      "changed_symbols": 26,
-      "baseline_tokens": 64258,
-      "trace_tokens": 8710,
-      "savings_pct": "86.4",
-      "baseline_changed_symbol_readable": 1,
-      "trace_changed_symbol_readable": 0.8461538461538461
-    },
-    {
-      "reason": "truncated",
       "url": "https://github.com/honojs/hono/pull/5291",
       "changed_files": 2,
       "changed_symbols": 2,
@@ -527,6 +505,17 @@
     },
     {
       "reason": "truncated",
+      "url": "https://github.com/psf/requests/pull/6963",
+      "changed_files": 2,
+      "changed_symbols": 9,
+      "baseline_tokens": 16057,
+      "trace_tokens": 2089,
+      "savings_pct": "87.0",
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.7777777777777778
+    },
+    {
+      "reason": "truncated",
       "url": "https://github.com/honojs/hono/pull/5215",
       "changed_files": 2,
       "changed_symbols": 2,
@@ -535,6 +524,17 @@
       "savings_pct": "87.3",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.5
+    },
+    {
+      "reason": "truncated",
+      "url": "https://github.com/pallets/flask/pull/5917",
+      "changed_files": 7,
+      "changed_symbols": 26,
+      "baseline_tokens": 64258,
+      "trace_tokens": 8098,
+      "savings_pct": "87.4",
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 0.8461538461538461
     },
     {
       "reason": "truncated",
@@ -564,8 +564,8 @@
       "changed_files": 2,
       "changed_symbols": 8,
       "baseline_tokens": 34807,
-      "trace_tokens": 3356,
-      "savings_pct": "90.4",
+      "trace_tokens": 3121,
+      "savings_pct": "91.0",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.75
     },
@@ -575,8 +575,8 @@
       "changed_files": 2,
       "changed_symbols": 6,
       "baseline_tokens": 30835,
-      "trace_tokens": 2585,
-      "savings_pct": "91.6",
+      "trace_tokens": 2442,
+      "savings_pct": "92.1",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.5
     },
@@ -630,8 +630,8 @@
       "changed_files": 1,
       "changed_symbols": 4,
       "baseline_tokens": 25197,
-      "trace_tokens": 828,
-      "savings_pct": "96.7",
+      "trace_tokens": 566,
+      "savings_pct": "97.8",
       "baseline_changed_symbol_readable": 1,
       "trace_changed_symbol_readable": 0.5
     },

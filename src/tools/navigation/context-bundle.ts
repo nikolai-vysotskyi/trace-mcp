@@ -140,13 +140,25 @@ function toContextItemCached(
 function containerIndexOf(entries: Array<{ sym: SymbolRow }>, i: number): number {
   const e = entries[i].sym;
   if (e.byte_start == null || e.byte_end == null) return -1;
-  return entries.findIndex(({ sym: o }, j) => {
-    if (j === i || o.file_id !== e.file_id) return false;
-    if (o.byte_start == null || o.byte_end == null) return false;
-    if (o.byte_start > e.byte_start || o.byte_end < e.byte_end) return false;
+  // The *tightest* container, not the first one found: with class ⊇ method ⊇
+  // helper all requested, naming the class as the helper's container would hide
+  // the method from the chain, and the restore pass below would put helper and
+  // method back in the same round — shipping the helper twice.
+  let best = -1;
+  let bestSpan = Number.POSITIVE_INFINITY;
+  entries.forEach(({ sym: o }, j) => {
+    if (j === i || o.file_id !== e.file_id) return;
+    if (o.byte_start == null || o.byte_end == null) return;
+    if (o.byte_start > e.byte_start || o.byte_end < e.byte_end) return;
     const sameSpan = o.byte_start === e.byte_start && o.byte_end === e.byte_end;
-    return sameSpan ? j < i : true;
+    if (sameSpan && j > i) return;
+    const span = o.byte_end - o.byte_start;
+    if (span < bestSpan) {
+      best = j;
+      bestSpan = span;
+    }
   });
+  return best;
 }
 
 function isContainedInAnother(entries: Array<{ sym: SymbolRow }>, i: number): boolean {
@@ -180,21 +192,23 @@ function containsAny(sym: SymbolRow, others: Array<{ sym: SymbolRow }>): boolean
  *
  * Spanning the file is not enough on its own: a one-function file's function
  * spans it too, and its body is exactly what the caller wants. What marks a
- * wrapper is that the indexer synthesised it to stand for the file — the three
- * names below are what the language plugins emit for that (`__module__:x` in
- * TS/JS, `x.<module>` in Python, `note:x` for a markdown document).
+ * wrapper is that the indexer synthesised it to stand for the file, which the
+ * four plugins that create one all record as `metadata.synthetic`
+ * (TypeScript/Vue/Astro's `__module__:x`, Python's `x.<module>`). Markdown
+ * documents are wrappers too but never reach here — the language check above
+ * has already caught them.
  *
- * ponytail: a name check, because neither kind nor nesting separates the two
- * cases — Python indexes its module symbol as a `function`, and a test file
- * whose bodies live inside `describe()` callbacks has no indexed children at
- * all. Move to a flag on the row if a plugin ever stops using these names.
+ * Suggested in review, replacing a match on those symbols' names: the flag is
+ * already in the row, and no real symbol can collide with it.
  */
-const WRAPPER_NAME = /(^|[^A-Za-z])(__module__|<module>)|^note:/;
-
 function isWholeFileContainer(sym: SymbolRow, file: FileRow): boolean {
   if (sym.byte_start == null || sym.byte_end == null || file.byte_length == null) return false;
   if (sym.byte_start !== 0 || sym.byte_end < file.byte_length) return false;
-  return WRAPPER_NAME.test(sym.fqn ?? sym.name);
+  try {
+    return (JSON.parse(sym.metadata ?? '{}') as { synthetic?: boolean }).synthetic === true;
+  } catch {
+    return false;
+  }
 }
 
 function toBundleItem(sym: SymbolRow, file: FileRow, detail: DetailLevel): BundleSymbolItem {
@@ -414,16 +428,37 @@ export function getContextBundle(
   // Dropping a member in favour of its container is only free while the
   // container's body actually survives assembly. When the budget reduces the
   // container to a signature, the member is the one thing that could still have
-  // fitted — so it goes back in and the bundle is assembled once more. Without
+  // fitted — so it goes back in and the bundle is assembled again. Without
   // this, deduplication costs changed-symbol coverage on exactly the PRs where
   // a small changed function lives in a file too large to ship whole.
+  //
+  // One level at a time, outermost first: restoring a whole chain at once would
+  // put a member back alongside an ancestor that then ships in full, which is
+  // the duplication this change exists to remove. Found in review.
   const shipped = (items: AssembledItem[]): Set<string> =>
     new Set(items.filter((item) => item.detail === 'full').map((item) => item.id));
-  const restored = [...dropped].filter(
-    (i) => !shipped(assembled.primary).has(primarySymbols[outermostContainer(i)].sym.symbol_id),
-  );
-  if (restored.length > 0) {
-    dropped = new Set([...dropped].filter((i) => !restored.includes(i)));
+  const ancestorsOf = (i: number): number[] => {
+    const chain: number[] = [];
+    let at = i;
+    while (primaryContainer[at] >= 0 && chain.length <= primarySymbols.length) {
+      at = primaryContainer[at];
+      chain.push(at);
+    }
+    return chain;
+  };
+  for (let pass = 0; pass < primarySymbols.length; pass++) {
+    const full = shipped(assembled.primary);
+    const uncovered = [...dropped].filter(
+      (i) =>
+        !ancestorsOf(i).some((a) => !dropped.has(a) && full.has(primarySymbols[a].sym.symbol_id)),
+    );
+    if (uncovered.length === 0) break;
+    const stillDropped = new Set(uncovered);
+    const outermostUncovered = uncovered.filter(
+      (i) => !ancestorsOf(i).some((a) => stillDropped.has(a)),
+    );
+    if (outermostUncovered.length === 0) break;
+    dropped = new Set([...dropped].filter((i) => !outermostUncovered.includes(i)));
     assembled = assembleStructuredContext({
       primary: buildPrimaryItems(dropped),
       dependencies: depItems,
