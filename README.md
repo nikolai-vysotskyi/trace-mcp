@@ -68,7 +68,7 @@ trace add                  # index the repo you are in
 
 **70.5% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 3,951 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
-<sub>Measured at trace-mcp 3.22.0 (`47755aeb`) on 7 September 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
+<sub>Measured at trace-mcp 3.22.0 (`63dbd414`) on 7 September 2026 — a result from that build, not a claim about the current one. What it set out to measure, the bar it had to clear and the verdict: [preregistration](https://trace-mcp.com/perf/prereg-pr-context/).</sub>
 
 Cheaper is not the same as better, so the same 60 pull requests were reviewed twice and scored blind. The trace-mcp arm **understood the change in 67%** of them against **65%** for naive file loading, at **0.80** false positives per PR against **0.58**. [Quality half of the benchmark →](https://trace-mcp.com/perf/prereg-pr-quality/)
 

@@ -1,9 +1,8 @@
 {
-  "generated_at": "2026-09-07T15:06:36.015Z",
+  "generated_at": "2026-09-07T15:15:30.676Z",
   "measured_build": {
     "version": "3.22.0",
-    "commit": "77a954e5",
-    "dirty": true
+    "commit": "63dbd414"
   },
   "model_for_pricing": "claude-sonnet-4-5",
   "input_usd_per_mtok": 3,
@@ -101,7 +100,7 @@
     "trace_dependent_readable": 0.2830188679245283,
     "baseline_dependent_pointed": 0.2,
     "trace_dependent_pointed": 1,
-    "median_index_ms": 223.5
+    "median_index_ms": 217.5
   },
   "losses": [
     {
@@ -742,7 +741,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 78.79291251384275,
-      "index_ms": 320
+      "index_ms": 341
     },
     {
       "repo": "honojs/hono",
@@ -764,7 +763,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 75.6571194343393,
-      "index_ms": 225
+      "index_ms": 233
     },
     {
       "repo": "honojs/hono",
@@ -786,7 +785,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -7.0381703978096315,
-      "index_ms": 531
+      "index_ms": 508
     },
     {
       "repo": "honojs/hono",
@@ -808,7 +807,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 85.61602265830467,
-      "index_ms": 512
+      "index_ms": 489
     },
     {
       "repo": "honojs/hono",
@@ -830,7 +829,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 43.73171750940242,
-      "index_ms": 358
+      "index_ms": 342
     },
     {
       "repo": "honojs/hono",
@@ -852,7 +851,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 87.31653119700601,
-      "index_ms": 387
+      "index_ms": 385
     },
     {
       "repo": "honojs/hono",
@@ -874,7 +873,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 80.5767753017222,
-      "index_ms": 293
+      "index_ms": 275
     },
     {
       "repo": "honojs/hono",
@@ -896,7 +895,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.86112524163191,
-      "index_ms": 406
+      "index_ms": 386
     },
     {
       "repo": "honojs/hono",
@@ -918,7 +917,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.59714332984062,
-      "index_ms": 473
+      "index_ms": 471
     },
     {
       "repo": "honojs/hono",
@@ -940,7 +939,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 86.69633446539407,
-      "index_ms": 243
+      "index_ms": 237
     },
     {
       "repo": "honojs/hono",
@@ -962,7 +961,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 23.947998631542937,
-      "index_ms": 281
+      "index_ms": 260
     },
     {
       "repo": "honojs/hono",
@@ -984,7 +983,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 86.94887300714679,
-      "index_ms": 502
+      "index_ms": 460
     },
     {
       "repo": "axios/axios",
@@ -1006,7 +1005,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 49.81817021819574,
-      "index_ms": 415
+      "index_ms": 399
     },
     {
       "repo": "axios/axios",
@@ -1028,7 +1027,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -46.38130104196001,
-      "index_ms": 687
+      "index_ms": 659
     },
     {
       "repo": "axios/axios",
@@ -1050,7 +1049,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 98.04501396418597,
-      "index_ms": 262
+      "index_ms": 281
     },
     {
       "repo": "axios/axios",
@@ -1072,7 +1071,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 87.51011829529801,
-      "index_ms": 271
+      "index_ms": 272
     },
     {
       "repo": "axios/axios",
@@ -1094,7 +1093,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 39.002605135839225,
-      "index_ms": 284
+      "index_ms": 293
     },
     {
       "repo": "axios/axios",
@@ -1116,7 +1115,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 43.11717227943223,
-      "index_ms": 305
+      "index_ms": 283
     },
     {
       "repo": "axios/axios",
@@ -1138,7 +1137,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 31.45985401459854,
-      "index_ms": 277
+      "index_ms": 263
     },
     {
       "repo": "axios/axios",
@@ -1160,7 +1159,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -59.794109236488424,
-      "index_ms": 121
+      "index_ms": 117
     },
     {
       "repo": "axios/axios",
@@ -1182,7 +1181,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -43.71108343711084,
-      "index_ms": 329
+      "index_ms": 311
     },
     {
       "repo": "axios/axios",
@@ -1204,7 +1203,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -97.42388758782201,
-      "index_ms": 245
+      "index_ms": 228
     },
     {
       "repo": "axios/axios",
@@ -1226,7 +1225,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -42.58321273516643,
-      "index_ms": 127
+      "index_ms": 123
     },
     {
       "repo": "axios/axios",
@@ -1248,7 +1247,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -23.333333333333332,
-      "index_ms": 282
+      "index_ms": 273
     },
     {
       "repo": "expressjs/express",
@@ -1270,7 +1269,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 96.6053321576908,
-      "index_ms": 91
+      "index_ms": 85
     },
     {
       "repo": "expressjs/express",
@@ -1314,7 +1313,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 96.66336591036294,
-      "index_ms": 206
+      "index_ms": 195
     },
     {
       "repo": "expressjs/express",
@@ -1336,7 +1335,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 85.22417756485791,
-      "index_ms": 182
+      "index_ms": 191
     },
     {
       "repo": "expressjs/express",
@@ -1358,7 +1357,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -7.823657249301459,
-      "index_ms": 87
+      "index_ms": 82
     },
     {
       "repo": "expressjs/express",
@@ -1380,7 +1379,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -3.8077403245942576,
-      "index_ms": 58
+      "index_ms": 56
     },
     {
       "repo": "expressjs/express",
@@ -1402,7 +1401,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -0.4242965609647164,
-      "index_ms": 53
+      "index_ms": 59
     },
     {
       "repo": "expressjs/express",
@@ -1424,7 +1423,7 @@
         "dependent_pointed": null
       },
       "savings_pct": -14.65919701213819,
-      "index_ms": 90
+      "index_ms": 73
     },
     {
       "repo": "psf/requests",
@@ -1446,7 +1445,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 46.701013794249626,
-      "index_ms": 213
+      "index_ms": 211
     },
     {
       "repo": "psf/requests",
@@ -1468,7 +1467,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 73.93114385779423,
-      "index_ms": 146
+      "index_ms": 149
     },
     {
       "repo": "psf/requests",
@@ -1490,7 +1489,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 64.90147129123068,
-      "index_ms": 227
+      "index_ms": 216
     },
     {
       "repo": "psf/requests",
@@ -1512,7 +1511,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 84.15021485956281,
-      "index_ms": 212
+      "index_ms": 213
     },
     {
       "repo": "psf/requests",
@@ -1534,7 +1533,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 88.63447007785791,
-      "index_ms": 241
+      "index_ms": 223
     },
     {
       "repo": "psf/requests",
@@ -1556,7 +1555,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 52.19432314410481,
-      "index_ms": 200
+      "index_ms": 189
     },
     {
       "repo": "psf/requests",
@@ -1578,7 +1577,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 88.15631587481758,
-      "index_ms": 182
+      "index_ms": 177
     },
     {
       "repo": "psf/requests",
@@ -1600,7 +1599,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 96.71389451125134,
-      "index_ms": 179
+      "index_ms": 173
     },
     {
       "repo": "psf/requests",
@@ -1622,7 +1621,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 80.21523891519587,
-      "index_ms": 210
+      "index_ms": 212
     },
     {
       "repo": "psf/requests",
@@ -1644,7 +1643,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 50.22341376228776,
-      "index_ms": 206
+      "index_ms": 202
     },
     {
       "repo": "pallets/flask",
@@ -1666,7 +1665,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 81.49787805697189,
-      "index_ms": 392
+      "index_ms": 362
     },
     {
       "repo": "pallets/flask",
@@ -1688,7 +1687,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 85.30299729216595,
-      "index_ms": 303
+      "index_ms": 284
     },
     {
       "repo": "pallets/flask",
@@ -1710,7 +1709,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 76.3258674712777,
-      "index_ms": 323
+      "index_ms": 327
     },
     {
       "repo": "pallets/flask",
@@ -1732,7 +1731,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 90.83132589351555,
-      "index_ms": 81
+      "index_ms": 89
     },
     {
       "repo": "pallets/flask",
@@ -1754,7 +1753,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 75.42846874368247,
-      "index_ms": 222
+      "index_ms": 219
     },
     {
       "repo": "pallets/flask",
@@ -1776,7 +1775,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 60.67886268459335,
-      "index_ms": 68
+      "index_ms": 69
     },
     {
       "repo": "sindresorhus/got",
@@ -1798,7 +1797,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 83.84395043277912,
-      "index_ms": 449
+      "index_ms": 429
     },
     {
       "repo": "sindresorhus/got",
@@ -1820,7 +1819,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 82.78869856519815,
-      "index_ms": 183
+      "index_ms": 195
     },
     {
       "repo": "sindresorhus/got",
@@ -1842,7 +1841,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 34.75729623468925,
-      "index_ms": 267
+      "index_ms": 262
     },
     {
       "repo": "sindresorhus/got",
@@ -1864,7 +1863,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 89.0974677410671,
-      "index_ms": 62
+      "index_ms": 59
     },
     {
       "repo": "sindresorhus/got",
@@ -1886,7 +1885,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 61.358046380885455,
-      "index_ms": 226
+      "index_ms": 230
     },
     {
       "repo": "sindresorhus/got",
@@ -1930,7 +1929,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 63.38159255429162,
-      "index_ms": 63
+      "index_ms": 78
     },
     {
       "repo": "sindresorhus/got",
@@ -1952,7 +1951,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 42.28014895445431,
-      "index_ms": 66
+      "index_ms": 69
     },
     {
       "repo": "sindresorhus/got",
@@ -1974,7 +1973,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": -129.3091168091168,
-      "index_ms": 63
+      "index_ms": 62
     },
     {
       "repo": "sindresorhus/got",
@@ -1996,7 +1995,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 92.74111945465197,
-      "index_ms": 107
+      "index_ms": 113
     },
     {
       "repo": "sindresorhus/got",
@@ -2018,7 +2017,7 @@
         "dependent_pointed": 1
       },
       "savings_pct": 67.1259842519685,
-      "index_ms": 99
+      "index_ms": 105
     },
     {
       "repo": "sindresorhus/got",
@@ -2040,7 +2039,7 @@
         "dependent_pointed": null
       },
       "savings_pct": 96.59243915069912,
-      "index_ms": 201
+      "index_ms": 181
     }
   ]
 }
