@@ -64,6 +64,7 @@ export const activity = {
   errorSampleHideShort: 'नमूना छिपाएँ',
   errorGroupFilter: 'केवल {{tool}} के एरर दिखाएँ',
   noErrorsInWindow: 'इस अवधि में कोई एरर नहीं।',
+  noLatencyInWindow: 'इस अवधि में कोई लेटेंसी डेटा नहीं।',
   clearTimeRange: 'समय-सीमा फ़िल्टर हटाएँ',
   clear: 'हटाएँ',
   sparklineTitle: '{{time}}: {{calls}} कॉल',

@@ -1029,7 +1029,18 @@ function HotFilesList({ files }: { files: HotFile[] }) {
  */
 function LatencyHistogram({ buckets }: { buckets: LatencyBucket[] }) {
   const { t } = useTranslation('activity');
+  const totalCount = buckets.reduce((s, b) => s + b.count, 0);
   const maxCount = Math.max(...buckets.map((b) => b.count), 1);
+  if (totalCount === 0) {
+    return (
+      <div>
+        <ChartTitle>{t('chartLatency')}</ChartTitle>
+        <div className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
+          {t('noLatencyInWindow')}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <ChartTitle>{t('chartLatency')}</ChartTitle>
@@ -1419,14 +1430,27 @@ function StatsPanel({
 // ── Main component ────────────────────────────────────────────────────────
 
 // ── localStorage keys for filter & control persistence ───────────────────
+// Tool filter and errors-only are scoped per project root: without this, the
+// chip a user set for one project reappeared as an already-active "1 filter"
+// on the next unrelated project they opened, looking like a preset default
+// they never chose (TRA-1055). Group-by-session is a display preference, not
+// a filter that hides data, so it stays global.
 const TOOL_FILTER_STORAGE_KEY = 'toolactivity.tools';
 const ERRORS_ONLY_STORAGE_KEY = 'toolactivity.errorsOnly';
 const GROUP_BY_SESSION_STORAGE_KEY = 'toolactivity.groupBySession';
 
-function loadToolFilter(): Set<string> {
+function toolFilterKey(root: string): string {
+  return `${TOOL_FILTER_STORAGE_KEY}:${root}`;
+}
+
+function errorsOnlyKey(root: string): string {
+  return `${ERRORS_ONLY_STORAGE_KEY}:${root}`;
+}
+
+function loadToolFilter(root: string): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
-    const raw = window.localStorage.getItem(TOOL_FILTER_STORAGE_KEY);
+    const raw = window.localStorage.getItem(toolFilterKey(root));
     if (raw === null) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
@@ -1438,10 +1462,10 @@ function loadToolFilter(): Set<string> {
   }
 }
 
-function loadErrorsOnly(): boolean {
+function loadErrorsOnly(root: string): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return window.localStorage.getItem(ERRORS_ONLY_STORAGE_KEY) === '1';
+    return window.localStorage.getItem(errorsOnlyKey(root)) === '1';
   } catch {
     return false;
   }
@@ -1664,9 +1688,9 @@ export function ToolActivity({
   const { t } = useTranslation('activity');
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   // Multi-select tool filter — empty set means "no tool restriction".
-  const [toolFilter, setToolFilter] = useState<Set<string>>(() => loadToolFilter());
+  const [toolFilter, setToolFilter] = useState<Set<string>>(() => loadToolFilter(root));
   // Combinable errors-only toggle, independent of tool filter.
-  const [errorsOnly, setErrorsOnly] = useState<boolean>(() => loadErrorsOnly());
+  const [errorsOnly, setErrorsOnly] = useState<boolean>(() => loadErrorsOnly(root));
   // Group flat list by session_id when on. Persisted.
   const [groupBySession, setGroupBySession] = useState<boolean>(() => loadGroupBySession());
   // Collapsed session ids when grouping is on. Not persisted — refresh resets
@@ -1796,25 +1820,46 @@ export function ToolActivity({
     }
   }, []);
 
-  // Persist filter state across refresh.
+  // Reload the per-project filter state whenever the project switches. This
+  // component instance is reused across projects (no `key={root}` upstream),
+  // so without this the previous project's filter chip stayed lit on the new
+  // one (TRA-1055). The skip-refs stop the persist effects below from
+  // re-saving the *previous* project's still-in-state values under the *new*
+  // root during the one render where root has changed but the reloaded
+  // toolFilter/errorsOnly haven't landed yet.
+  const skipToolPersistRef = useRef(true);
+  const skipErrorsPersistRef = useRef(true);
   useEffect(() => {
+    skipToolPersistRef.current = true;
+    skipErrorsPersistRef.current = true;
+    setToolFilter(loadToolFilter(root));
+    setErrorsOnly(loadErrorsOnly(root));
+  }, [root]);
+
+  // Persist filter state across refresh, scoped to this project.
+  useEffect(() => {
+    if (skipToolPersistRef.current) {
+      skipToolPersistRef.current = false;
+      return;
+    }
     try {
-      window.localStorage.setItem(
-        TOOL_FILTER_STORAGE_KEY,
-        JSON.stringify(Array.from(toolFilter)),
-      );
+      window.localStorage.setItem(toolFilterKey(root), JSON.stringify(Array.from(toolFilter)));
     } catch {
       /* localStorage may be unavailable — ignore */
     }
-  }, [toolFilter]);
+  }, [toolFilter, root]);
 
   useEffect(() => {
+    if (skipErrorsPersistRef.current) {
+      skipErrorsPersistRef.current = false;
+      return;
+    }
     try {
-      window.localStorage.setItem(ERRORS_ONLY_STORAGE_KEY, errorsOnly ? '1' : '0');
+      window.localStorage.setItem(errorsOnlyKey(root), errorsOnly ? '1' : '0');
     } catch {
       /* localStorage may be unavailable — ignore */
     }
-  }, [errorsOnly]);
+  }, [errorsOnly, root]);
 
   useEffect(() => {
     try {
@@ -2458,7 +2503,13 @@ export function ToolActivity({
         style={{ background: 'var(--surface)' }}
       >
         {filtered.length === 0 ? (
-          historyFailed && activeFilterCount === 0 && query === '' ? (
+          // Which empty state applies is decided by whether ANY call has
+          // landed at all (entries.length), not by whether a filter/search is
+          // currently set. A stray active filter with nothing to hide is not
+          // "filtered" — it's just an empty feed, and saying "0 calls are
+          // hidden by the current filters" over it was self-contradictory
+          // (TRA-1055).
+          historyFailed && entries.length === 0 ? (
             <EmptyState
               icon="warning"
               iconSize={32}
@@ -2470,7 +2521,7 @@ export function ToolActivity({
                 </Button>
               }
             />
-          ) : activeFilterCount === 0 && query === '' ? (
+          ) : entries.length === 0 ? (
             <EmptyState
               icon="monitoring"
               iconSize={32}
@@ -2492,7 +2543,7 @@ export function ToolActivity({
               iconSize={32}
               title={t('emptyMatchTitle')}
               subtitle={
-                activeFilterCount > 0
+                activeFilterCount > 0 && filteredOutCount > 0
                   ? t('emptyMatchFiltered', {
                       count: filteredOutCount,
                       n: formatNumber(filteredOutCount),
