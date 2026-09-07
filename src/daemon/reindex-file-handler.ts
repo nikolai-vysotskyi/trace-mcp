@@ -35,6 +35,26 @@ export function countReindexingProjects(): number {
   return inFlight.size;
 }
 
+/**
+ * Mark a reindex as started; the returned function marks it finished and is
+ * safe to call more than once. Both reindex paths must use this — the HTTP
+ * handler below and `register_edit` in `src/tools/register/core.ts`, which
+ * reindexes in-process on the daemon's own MCP server. `register_edit` is the
+ * path CLAUDE.md tells every agent to call after every edit, so counting only
+ * the HTTP one would still report most of a busy daemon's work as idle.
+ */
+export function beginReindex(project: string): () => void {
+  inFlight.set(project, (inFlight.get(project) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const n = (inFlight.get(project) ?? 1) - 1;
+    if (n > 0) inFlight.set(project, n);
+    else inFlight.delete(project);
+  };
+}
+
 export interface ReindexFileDeps {
   getProject: (root: string) =>
     | {
@@ -125,7 +145,7 @@ export async function handleReindexFile(
 
   const lock = deps.lock ?? withLock;
 
-  inFlight.set(project, (inFlight.get(project) ?? 0) + 1);
+  const endReindex = beginReindex(project);
   try {
     const result = (await lock(
       { lockDir: LOCKS_DIR, name: `${projectHash(project)}-reindex`, op: 'reindex-file-http' },
@@ -192,8 +212,6 @@ export async function handleReindexFile(
     });
     return { ok: false, status: 500, error: String(err) };
   } finally {
-    const n = (inFlight.get(project) ?? 1) - 1;
-    if (n > 0) inFlight.set(project, n);
-    else inFlight.delete(project);
+    endReindex();
   }
 }

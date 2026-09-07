@@ -10,7 +10,11 @@
  * figure we had.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { countReindexingProjects, handleReindexFile } from '../reindex-file-handler.js';
+import {
+  beginReindex,
+  countReindexingProjects,
+  handleReindexFile,
+} from '../reindex-file-handler.js';
 
 vi.mock('../../logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -73,6 +77,33 @@ describe('countReindexingProjects', () => {
         lock: (async (_o: unknown, fn: () => unknown) => await fn()) as never,
       },
     );
+    expect(countReindexingProjects()).toBe(0);
+  });
+});
+
+/**
+ * `register_edit` (`src/tools/register/core.ts`) reindexes in-process on the
+ * daemon's own MCP server, and CLAUDE.md tells every agent to call it after
+ * every edit — so it is the dominant reindex path, not the HTTP one. Counting
+ * only the HTTP handler would leave most of a busy daemon still reporting
+ * idle. Caught in review of PR #1092.
+ */
+describe('beginReindex', () => {
+  it('counts a project while held and releases it once done', () => {
+    expect(countReindexingProjects()).toBe(0);
+    const end = beginReindex('/some/project');
+    expect(countReindexingProjects()).toBe(1);
+    end();
+    expect(countReindexingProjects()).toBe(0);
+  });
+
+  it('is idempotent — a double release cannot drop a concurrent reindex', () => {
+    const first = beginReindex('/some/project');
+    const second = beginReindex('/some/project');
+    first();
+    first(); // the extra call must not cancel `second`
+    expect(countReindexingProjects()).toBe(1);
+    second();
     expect(countReindexingProjects()).toBe(0);
   });
 });

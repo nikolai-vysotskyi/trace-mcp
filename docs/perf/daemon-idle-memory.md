@@ -164,10 +164,14 @@ Consequences worth stating plainly:
    same way, and is not published as an idle number here.
 3. Any conclusion drawn from "idle" daemon RSS before v3.23.0 should be re-derived.
 
-Fixed in this PR: `countReindexingProjects()` in `reindex-file-handler.ts` tracks in-flight
-single-file reindexes, and `getCounts` in `cli.ts` adds them to `projects_indexing`.
-Guarded by `src/daemon/__tests__/reindex-in-flight-vitals.test.ts`, which fails if the
-counter goes back to reporting a busy reindex as zero.
+Fixed in this PR: `beginReindex()` / `countReindexingProjects()` in
+`reindex-file-handler.ts` track in-flight single-file reindexes, and `getCounts` in
+`cli.ts` adds them to `projects_indexing`. **Both** reindex paths are counted — the HTTP
+handler and `register_edit` in `src/tools/register/core.ts`, which reindexes in-process on
+the daemon's own MCP server and is the path CLAUDE.md tells every agent to call after
+every edit. Covering only the HTTP path (as the first revision of this change did) would
+have left the dominant share of a busy daemon's work still reporting idle. Guarded by
+`src/daemon/__tests__/reindex-in-flight-vitals.test.ts`.
 
 ### Still open
 
