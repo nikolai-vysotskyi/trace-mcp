@@ -42,7 +42,10 @@ beforeAll(() => {
     projects[root] = { name: `proj${i}`, root, dbPath, lastIndexed: null, addedAt: '' };
   }
   fs.writeFileSync(path.join(tmpHome, 'registry.json'), JSON.stringify({ version: 1, projects }));
-});
+  // Windows CI's filesystem/SQLite baseline is slow enough that 20 synchronous
+  // better-sqlite3 file creations can clear the default 15s hook timeout, even
+  // though the same seed is well under 1s on macOS/Ubuntu.
+}, 60_000);
 
 afterAll(() => {
   fs.rmSync(tmpHome, { recursive: true, force: true });
