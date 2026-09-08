@@ -10,8 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readIfExists } from '../utils/safe-fs.js';
-
-const HOME = os.homedir();
+import { getHomeDir } from './home.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,11 +166,14 @@ const COMPETING_PROJECT_FILES: { file: string; competitor: string }[] = [
 ];
 
 /** Global directories from competing tools. */
-const COMPETING_GLOBAL_DIRS: { dir: string; competitor: string }[] = [
-  { dir: path.join(HOME, '.code-index'), competitor: 'jcodemunch-mcp' },
-  { dir: path.join(HOME, '.repomix'), competitor: 'repomix' },
-  { dir: path.join(HOME, '.aider.tags.cache.v3'), competitor: 'aider' },
-];
+function getCompetingGlobalDirs(): { dir: string; competitor: string }[] {
+  const home = getHomeDir();
+  return [
+    { dir: path.join(home, '.code-index'), competitor: 'jcodemunch-mcp' },
+    { dir: path.join(home, '.repomix'), competitor: 'repomix' },
+    { dir: path.join(home, '.aider.tags.cache.v3'), competitor: 'aider' },
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Main scan
@@ -269,29 +271,30 @@ export function getMcpConfigPaths(
 ): { clientName: string; configPath: string }[] {
   const paths: { clientName: string; configPath: string }[] = [];
   const platform = os.platform();
+  const home = getHomeDir();
 
   // Claude Code
   if (projectRoot) {
     paths.push({ clientName: 'claude-code', configPath: path.join(projectRoot, '.mcp.json') });
   }
-  paths.push({ clientName: 'claude-code', configPath: path.join(HOME, '.claude.json') });
+  paths.push({ clientName: 'claude-code', configPath: path.join(home, '.claude.json') });
   paths.push({
     clientName: 'claude-code',
-    configPath: path.join(HOME, '.claude', 'settings.json'),
+    configPath: path.join(home, '.claude', 'settings.json'),
   });
 
   // Claw Code
   if (projectRoot) {
     paths.push({ clientName: 'claw-code', configPath: path.join(projectRoot, '.claw.json') });
   }
-  paths.push({ clientName: 'claw-code', configPath: path.join(HOME, '.claw', 'settings.json') });
+  paths.push({ clientName: 'claw-code', configPath: path.join(home, '.claw', 'settings.json') });
 
   // Claude Desktop
   if (platform === 'darwin') {
     paths.push({
       clientName: 'claude-desktop',
       configPath: path.join(
-        HOME,
+        home,
         'Library',
         'Application Support',
         'Claude',
@@ -299,7 +302,7 @@ export function getMcpConfigPaths(
       ),
     });
   } else if (platform === 'win32') {
-    const appData = process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming');
+    const appData = process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming');
     paths.push({
       clientName: 'claude-desktop',
       configPath: path.join(appData, 'Claude', 'claude_desktop_config.json'),
@@ -307,13 +310,13 @@ export function getMcpConfigPaths(
   }
 
   // Cursor
-  paths.push({ clientName: 'cursor', configPath: path.join(HOME, '.cursor', 'mcp.json') });
+  paths.push({ clientName: 'cursor', configPath: path.join(home, '.cursor', 'mcp.json') });
   if (projectRoot) {
     paths.push({ clientName: 'cursor', configPath: path.join(projectRoot, '.cursor', 'mcp.json') });
   }
 
   // Windsurf
-  paths.push({ clientName: 'windsurf', configPath: path.join(HOME, '.windsurf', 'mcp.json') });
+  paths.push({ clientName: 'windsurf', configPath: path.join(home, '.windsurf', 'mcp.json') });
   if (projectRoot) {
     paths.push({
       clientName: 'windsurf',
@@ -324,11 +327,11 @@ export function getMcpConfigPaths(
   // Continue
   paths.push({
     clientName: 'continue',
-    configPath: path.join(HOME, '.continue', 'mcpServers', 'mcp.json'),
+    configPath: path.join(home, '.continue', 'mcpServers', 'mcp.json'),
   });
 
   // Junie
-  paths.push({ clientName: 'junie', configPath: path.join(HOME, '.junie', 'mcp', 'mcp.json') });
+  paths.push({ clientName: 'junie', configPath: path.join(home, '.junie', 'mcp', 'mcp.json') });
   if (projectRoot) {
     paths.push({
       clientName: 'junie',
@@ -344,7 +347,7 @@ export function getMcpConfigPaths(
   // scanner consistent — AMP-specific conflicts surface during init writes instead.
 
   // Factory Droid
-  paths.push({ clientName: 'factory-droid', configPath: path.join(HOME, '.factory', 'mcp.json') });
+  paths.push({ clientName: 'factory-droid', configPath: path.join(home, '.factory', 'mcp.json') });
   if (projectRoot) {
     paths.push({
       clientName: 'factory-droid',
@@ -363,15 +366,16 @@ export function getMcpConfigPaths(
 
 function scanHooksInSettings(): Conflict[] {
   const conflicts: Conflict[] = [];
+  const home = getHomeDir();
   const settingsFiles = [
-    path.join(HOME, '.claude', 'settings.json'),
-    path.join(HOME, '.claude', 'settings.local.json'),
-    path.join(HOME, '.claw', 'settings.json'),
-    path.join(HOME, '.claw', 'settings.local.json'),
+    path.join(home, '.claude', 'settings.json'),
+    path.join(home, '.claude', 'settings.local.json'),
+    path.join(home, '.claw', 'settings.json'),
+    path.join(home, '.claw', 'settings.local.json'),
   ];
 
   // Project-scoped settings in ~/.claude/projects/*/
-  const projectsDir = path.join(HOME, '.claude', 'projects');
+  const projectsDir = path.join(home, '.claude', 'projects');
   if (fs.existsSync(projectsDir)) {
     try {
       for (const entry of fs.readdirSync(projectsDir)) {
@@ -448,7 +452,8 @@ function scanHooksInSettings(): Conflict[] {
 
 function scanHookScriptFiles(): Conflict[] {
   const conflicts: Conflict[] = [];
-  const hooksDirs = [path.join(HOME, '.claude', 'hooks'), path.join(HOME, '.claw', 'hooks')];
+  const home = getHomeDir();
+  const hooksDirs = [path.join(home, '.claude', 'hooks'), path.join(home, '.claw', 'hooks')];
 
   for (const hooksDir of hooksDirs) {
     if (!fs.existsSync(hooksDir)) continue;
@@ -494,10 +499,11 @@ function scanHookScriptFiles(): Conflict[] {
 
 function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   const conflicts: Conflict[] = [];
-  const files = [path.join(HOME, '.claude', 'CLAUDE.md'), path.join(HOME, '.claude', 'AGENTS.md')];
+  const home = getHomeDir();
+  const files = [path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.claude', 'AGENTS.md')];
 
   // Project-scoped CLAUDE.md files in ~/.claude/projects/*/
-  const projectsDir = path.join(HOME, '.claude', 'projects');
+  const projectsDir = path.join(home, '.claude', 'projects');
   if (fs.existsSync(projectsDir)) {
     try {
       for (const entry of fs.readdirSync(projectsDir)) {
@@ -626,12 +632,13 @@ const COMPETITOR_ALIASES: Record<string, string[]> = {
 
 function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
   const conflicts: Conflict[] = [];
+  const home = getHomeDir();
 
   const ruleFiles: { path: string; type: string }[] = [];
 
   // Global
-  ruleFiles.push({ path: path.join(HOME, '.cursorrules'), type: '.cursorrules (global)' });
-  ruleFiles.push({ path: path.join(HOME, '.windsurfrules'), type: '.windsurfrules (global)' });
+  ruleFiles.push({ path: path.join(home, '.cursorrules'), type: '.cursorrules (global)' });
+  ruleFiles.push({ path: path.join(home, '.windsurfrules'), type: '.windsurfrules (global)' });
 
   // Project
   if (projectRoot) {
@@ -661,7 +668,7 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
   }
 
   // Also scan .cursor/rules/ for competing .mdc files
-  const cursorRulesDirs = [path.join(HOME, '.cursor', 'rules')];
+  const cursorRulesDirs = [path.join(home, '.cursor', 'rules')];
   if (projectRoot) cursorRulesDirs.push(path.join(projectRoot, '.cursor', 'rules'));
 
   for (const rulesDir of cursorRulesDirs) {
@@ -785,11 +792,12 @@ function scanProjectConfigDirs(projectRoot: string): Conflict[] {
 
 function scanContinueConfigs(projectRoot?: string): Conflict[] {
   const conflicts: Conflict[] = [];
+  const home = getHomeDir();
 
   // Global continue config may contain competing MCP servers
   const configPaths = [
-    path.join(HOME, '.continue', 'config.yaml'),
-    path.join(HOME, '.continue', 'config.json'),
+    path.join(home, '.continue', 'config.yaml'),
+    path.join(home, '.continue', 'config.json'),
   ];
   if (projectRoot) {
     configPaths.push(
@@ -799,7 +807,7 @@ function scanContinueConfigs(projectRoot?: string): Conflict[] {
   }
 
   // Check mcpServers directory for competing server configs
-  const mcpServersDirs = [path.join(HOME, '.continue', 'mcpServers')];
+  const mcpServersDirs = [path.join(home, '.continue', 'mcpServers')];
   if (projectRoot) {
     mcpServersDirs.push(path.join(projectRoot, '.continue', 'mcpServers'));
   }
@@ -895,7 +903,7 @@ function scanGitHooks(projectRoot: string): Conflict[] {
 function scanGlobalArtifacts(): Conflict[] {
   const conflicts: Conflict[] = [];
 
-  for (const { dir, competitor } of COMPETING_GLOBAL_DIRS) {
+  for (const { dir, competitor } of getCompetingGlobalDirs()) {
     if (!fs.existsSync(dir)) continue;
 
     let size = 0;
@@ -928,7 +936,8 @@ function scanGlobalArtifacts(): Conflict[] {
 // ---------------------------------------------------------------------------
 
 function shortPath(p: string): string {
-  if (p.startsWith(HOME)) return `~${p.slice(HOME.length)}`;
+  const home = getHomeDir();
+  if (p.startsWith(home)) return `~${p.slice(home.length)}`;
   return p;
 }
 
