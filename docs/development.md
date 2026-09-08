@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # Development
@@ -35,7 +35,7 @@ updated: 2026-09-06
 
 Read [architecture](architecture.md) first — the two-pass pipeline, the plugin
 interface and the storage layout are what most of the code below is arranged
-around.
+around. To understand what the initialization command writes when run in consumer repositories, see [what trace init installs](what-trace-init-installs.md).
 
 ```bash
 git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
