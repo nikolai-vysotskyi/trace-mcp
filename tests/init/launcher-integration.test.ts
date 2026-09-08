@@ -1855,11 +1855,11 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
 
     it('recovers probe resolution across candidate homes when client runs under an isolated HOME (TRA-1206)', () => {
       const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
-      const version = 'v22.22.2';
+      const version = 'v99.99.9';
       const prefix = path.join(userHome, '.nvm', 'versions', 'node', version);
       fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
       const node = path.join(prefix, 'bin', 'node');
-      fs.writeFileSync(node, fakeNodeBody('22.22.2', 'PROBED_NVM_NODE'), { mode: 0o755 });
+      fs.writeFileSync(node, fakeNodeBody('99.99.9', 'PROBED_NVM_NODE'), { mode: 0o755 });
       fs.mkdirSync(path.join(userHome, '.nvm', 'alias'), { recursive: true });
       fs.writeFileSync(path.join(userHome, '.nvm', 'alias', 'default'), `${version}\n`);
       const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
@@ -1883,6 +1883,7 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
         env: {
           HOME: isolatedHome,
           PATH: '/usr/bin:/bin',
+          TRACE_MCP_NODE_MIN_MAJOR: '99',
         },
         encoding: 'utf-8',
         timeout: LAUNCHER_TIMEOUT_MS,
@@ -1898,7 +1899,7 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       const localBin = path.join(userHome, '.local', 'bin');
       fs.mkdirSync(localBin, { recursive: true });
       const node = path.join(localBin, 'node');
-      fs.writeFileSync(node, fakeNodeBody('22.22.2', 'PROBED_LOCAL_NODE'), { mode: 0o755 });
+      fs.writeFileSync(node, fakeNodeBody('99.99.9', 'PROBED_LOCAL_NODE'), { mode: 0o755 });
 
       const customPrefix = path.join(userHome, 'custom-npm-prefix');
       const pkgDir = path.join(customPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
@@ -1924,6 +1925,7 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
         env: {
           HOME: isolatedHome,
           PATH: '/usr/bin:/bin',
+          TRACE_MCP_NODE_MIN_MAJOR: '99',
         },
         encoding: 'utf-8',
         timeout: LAUNCHER_TIMEOUT_MS,
