@@ -22,6 +22,7 @@ import {
   removeHoldersDir,
 } from './db-holders.js';
 import { initializeGuard } from './guard-init.js';
+import { isDangerousProjectRoot } from './dangerous-root.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
 
@@ -659,13 +660,13 @@ export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandida
   return out;
 }
 
-/** Remove entries whose root directory no longer exists. Returns removed paths. */
+/** Remove entries whose root directory no longer exists or is dangerous. Returns removed paths. */
 export function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
   const removed: string[] = [];
 
   for (const [root, _entry] of Object.entries(reg.projects)) {
-    if (!fs.existsSync(root)) {
+    if (!fs.existsSync(root) || isDangerousProjectRoot(root) !== null) {
       delete reg.projects[root];
       removed.push(root);
     }
@@ -743,6 +744,25 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
   let changed = false;
 
   for (const [root, entry] of Object.entries(reg.projects)) {
+    // TRA-1197: dangerous roots (filesystem root, home dir, ~/.trace state dir, etc.)
+    // must never remain registered, even if they exist on disk.
+    const danger = isDangerousProjectRoot(root);
+    if (danger) {
+      delete reg.projects[root];
+      removed.push(root);
+      changed = true;
+      if (entry.dbPath && !hasLiveHolderOrUnknown(entry.dbPath, root)) {
+        for (const suffix of MISSING_ROOT_SIDECARS) {
+          try {
+            fs.unlinkSync(entry.dbPath + suffix);
+          } catch {
+            /* missing sidecar or already gone — fine */
+          }
+        }
+      }
+      continue;
+    }
+
     if (fs.existsSync(root)) {
       if (entry.missingRootSince) {
         delete entry.missingRootSince;

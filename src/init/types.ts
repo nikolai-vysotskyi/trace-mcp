@@ -114,4 +114,5 @@ export const MIRROR_HOOK_VERSION = '0.3.0';
 // report as "failed to connect" — and get pinned into launcher.env on the way.
 // 0.6.11 (TRA-1190): self-locate state home under isolated HOME environments
 // and retry probe_cli across package swap windows.
-export const LAUNCHER_VERSION = '0.6.11';
+// 0.6.12 (TRA-1197): strip trailing CRs from launcher config, package roots and .npmrc
+export const LAUNCHER_VERSION = '0.6.12';

@@ -550,6 +550,18 @@ program
       { projectRoot, indexRoot, idleTimeoutMs, daemonStabilityMs },
       'Starting trace-mcp stdio session...',
     );
+
+    // Soft GC in stdio session: run once asynchronously after startup so we don't
+    // delay handshake, but keep .config.json and orphan tmp files clean even when
+    // running in standalone stdio mode without the daemon (TRA-1197).
+    setImmediate(() => {
+      try {
+        softGcSweep();
+      } catch (err) {
+        logger.debug({ err }, 'stdio softGcSweep error');
+      }
+    });
+
     // Shared with the thin proxy entry (src/proxy-entry.ts, TRA-970) so both
     // processes wire signals/shutdown and exit identically.
     await runStdioSession(session);

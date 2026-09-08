@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.11
+# trace-mcp-launcher v0.6.12
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -192,6 +192,9 @@ if [ -f "$CONFIG" ] && [ -r "$CONFIG" ]; then
   # a raw bash error. The client sees neither the recovery message nor the
   # probe fallback: an unreadable config becomes a dead server (TRA-797).
   while IFS='=' read -r key value || [ -n "${key:-}" ]; do
+    # Strip trailing carriage returns for CRLF support (TRA-1197)
+    key="${key%$'\r'}"
+    value="${value%$'\r'}"
     # Skip comments and blank lines
     case "$key" in
       ''|\#*) continue ;;
@@ -310,6 +313,7 @@ node_runtime_shim_ok() {
   [ -f "$1" ] && [ -r "$1" ] || return 1
   while [ "$i" -lt 8 ] && IFS= read -r line; do
     i=$((i + 1))
+    line="${line%$'\r'}"
     case "$line" in
       '# Managed by the trace-mcp app'*) marked=1 ;;
       'exec "'*'" "$@"')
@@ -331,11 +335,13 @@ node_from_nvm_tree() {
 
   local ver
   ver=$(head -1 "$root/alias/default" 2>/dev/null)
+  ver="${ver%$'\r'}"
   # Follow up to 2 levels of alias indirection (default → lts/hydrogen → v18.x.y)
   local i
   for i in 1 2; do
     if [ -n "$ver" ] && [ -f "$root/alias/$ver" ]; then
       ver=$(head -1 "$root/alias/$ver" 2>/dev/null)
+      ver="${ver%$'\r'}"
     fi
   done
   [ -n "$ver" ] || return 1
@@ -377,6 +383,7 @@ node_from_nvm_tree() {
 node_from_pkg_roots() {
   local root candidate
   while IFS= read -r root; do
+    root="${root%$'\r'}"
     [ -n "$root" ] || continue
     # <prefix>/lib/node_modules → <prefix>/bin/node
     candidate="$root/../../bin/node"
@@ -398,6 +405,7 @@ app_bundle() {
   # but that is an accident of key order, not something this parser checks
   # (review of #1011).
   while IFS= read -r line || [ -n "${line:-}" ]; do
+    line="${line%$'\r'}"
     case "$line" in
       *'"appPath"'*)
         path="${line#*\"appPath\"}"
@@ -520,6 +528,7 @@ node_candidates() {
 probe_node() {
   local c m
   while IFS= read -r c; do
+    c="${c%$'\r'}"
     [ -n "$c" ] || continue
     m=$(node_major "$c") || continue
     if [ "$m" -ge "$NODE_MIN_MAJOR" ]; then
@@ -577,6 +586,7 @@ pkg_roots() {
   # reason: a failed first `read` under `set -u` would abort the shim.
   if [ -f "$PKG_ROOTS_FILE" ] && [ -r "$PKG_ROOTS_FILE" ]; then
     while IFS= read -r root || [ -n "${root:-}" ]; do
+      root="${root%$'\r'}"
       case "$root" in ''|\#*) continue ;; esac
       [ -d "$root" ] && echo "$root"
     done < "$PKG_ROOTS_FILE"
@@ -597,6 +607,7 @@ pkg_roots() {
   n="${NPM_CONFIG_PREFIX:-}"
   if [ -z "$n" ] && [ -r "$HOME/.npmrc" ]; then
     n=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$HOME/.npmrc" | tail -1)
+    n="${n%$'\r'}"
     # Strip surrounding quotes and expand a leading ~ — npm accepts both.
     n="${n%\"}"; n="${n#\"}"; n="${n%\'}"; n="${n#\'}"
     case "$n" in '~'/*) n="$HOME/${n#\~/}" ;; esac
@@ -621,6 +632,7 @@ probe_cli() {
   local roots="$1" root cli bak group
 
   while IFS= read -r root; do
+    root="${root%$'\r'}"
     [ -n "$root" ] || continue
     cli="$root/trace-mcp/dist/cli.js"
     if is_usable_script "$cli"; then
@@ -635,6 +647,7 @@ probe_cli() {
   # window. Serving the previous version beats losing every tool for the
   # rest of the client's session.
   while IFS= read -r root; do
+    root="${root%$'\r'}"
     [ -n "$root" ] || continue
     # Two classes, in this order: a complete backup our updater renamed aside,
     # then npm's own staging directory. Never one combined sort — npm rewrites
@@ -651,6 +664,7 @@ probe_cli() {
       "$(ls -td "$root"/.trace-mcp-* 2>/dev/null)"; do
       [ -n "$group" ] || continue
       while IFS= read -r bak; do
+        bak="${bak%$'\r'}"
         [ -n "$bak" ] || continue
         if is_usable_script "$bak/dist/cli.js"; then
           normalise_path "$bak/dist/cli.js"
