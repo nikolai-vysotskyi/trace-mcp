@@ -12,18 +12,21 @@
  * agent is asked what it learned. A fact counts as retained only if its literal
  * appears in the answer, so scoring is exact-match and needs no judge.
  *
- * Three arms, one shared per-turn prompt budget:
- *   - `full`      — whole transcript, no budget. The ceiling; it cannot fail
- *                   from truncation, only from the model not reading carefully.
- *   - `truncated` — whole transcript trimmed to the budget by dropping the
- *                   OLDEST turns. This is the arm that can fail: anything
- *                   learned early is gone.
- *   - `state`     — the two-phase loop. Each turn the model rewrites a compact
- *                   state block; the prompt is goal + state + the last two
- *                   turns, under the same budget. This arm can fail too, and
- *                   differently: a fact the model declined to write into state
- *                   is lost permanently, where truncation at least keeps recent
- *                   turns verbatim.
+ * Four arms, one shared per-turn prompt budget:
+ *   - `full`        — whole transcript, no budget. The ceiling; it cannot fail
+ *                     from truncation, only from the model not reading carefully.
+ *   - `truncated`   — whole transcript trimmed to the budget by dropping the
+ *                     OLDEST turns. This is the arm that can fail: anything
+ *                     learned early is gone.
+ *   - `state`       — the two-phase loop (prose rewrite). Each turn the model rewrites
+ *                     a compact state block; the prompt is goal + state + the last two
+ *                     turns, under the same budget. This arm can fail too, and
+ *                     differently: a fact the model declined to write into state
+ *                     is lost permanently, where truncation at least keeps recent
+ *                     turns verbatim.
+ *   - `state_patch` — the shipped two-phase loop (RFC 7396 merge patch). Each turn
+ *                     the model emits a merge patch applied through StateEngine.
+ *                     Keys not named survive across turns by construction.
  *
  * ponytail: the corpus is synthetic. Real long sessions would be better
  * evidence, but no public corpus labels "which facts did this session need to

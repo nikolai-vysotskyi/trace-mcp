@@ -27,6 +27,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import {
   QUESTION,
   type RecallTask,
@@ -35,6 +36,8 @@ import {
   scoreAnswer,
   truncateToBudget,
 } from '../src/eval/state-recall.js';
+import { StateEngine } from '../src/state/state-engine.js';
+import { serializeStateToMarkdown } from '../src/state/serializer.js';
 import { estimateTokens } from '../src/utils/token-counter.js';
 
 const ROOT = process.cwd();
@@ -61,6 +64,19 @@ turn besides the last two tool results — anything you leave out is gone for
 good. Keep it under 350 tokens. Answer with the new state block and nothing
 else.`;
 
+const STATE_PATCH_SYSTEM = `You are a coding agent running the two-phase loop: act, then patch your execution state.
+Your state is maintained by StateEngine and is the ONLY thing that survives to the next turn besides the last two tool results.
+Emit an RFC 7396 JSON merge patch to update state so it carries everything this task will still need at the end.
+Only include fields you are adding or updating. Fields not mentioned in the patch survive unchanged.
+Valid state fields:
+- facts: { architecture_notes?: string[], key_symbols?: string[], learned_constraints?: string[] }
+- blockers_and_dead_ends: { last_error?: string | null, dead_ends?: { approach: string, reason: string }[] }
+- working_context: { modified_files?: string[], test_targets?: string[], open_questions?: string[] }
+- next_action?: string | null
+
+Note: In RFC 7396, arrays replace previous array values, so when updating an array field (e.g. learned_constraints, dead_ends, architecture_notes), include both prior and new elements to retain them.
+Answer with ONLY the JSON patch object, no explanation, no markdown fencing.`;
+
 interface Answer {
   text: string;
   api_ms: number;
@@ -86,10 +102,11 @@ function spawnCli(system: string, prompt: string): Promise<string> {
     '',
     '--no-session-persistence',
   ];
+  const home = process.env.HOME?.replace(/\/\.agy\/.*$/, '') || process.env.HOME;
   return new Promise<string>((resolve, reject) => {
     const child = spawn('claude', args, {
       cwd: SANDBOX,
-      env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+      env: { ...process.env, HOME: home, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let out = '';
@@ -107,7 +124,12 @@ function spawnCli(system: string, prompt: string): Promise<string> {
     child.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve(out);
-      else reject(new Error(`claude exited ${code}: ${err.slice(-400) || '(no stderr)'}`));
+      else
+        reject(
+          new Error(
+            `claude exited ${code}: ${(err.slice(-400) || out.slice(-400) || '(empty)').trim()}`,
+          ),
+        );
     });
     child.stdin.end(prompt);
   });
@@ -230,6 +252,86 @@ async function runState(task: RecallTask): Promise<ArmRun> {
   };
 }
 
+function parsePatchJson(text: string): Record<string, unknown> {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+  }
+  return JSON.parse(cleaned);
+}
+
+async function runStatePatch(task: RecallTask): Promise<ArmRun> {
+  const engine = new StateEngine(new Database(':memory:'));
+  engine.initState(task.id, task.goal, ['Inspect tool outputs and track facts']);
+  let currentMd = serializeStateToMarkdown(engine.getState(task.id)!.state, 1);
+  let promptTokens = 0;
+  let apiMs = 0;
+  let calls = 0;
+  const trace: string[] = [];
+
+  try {
+    for (const turn of task.turns) {
+      const window = task.turns.slice(Math.max(0, turn.n - 1 - WINDOW), turn.n - 1);
+      const prompt = `## Goal\n${task.goal}\n\n## Current state\n${currentMd}\n\n## Recent turns\n${
+        window.length ? window.map(renderTurn).join('\n\n') : '(none)'
+      }\n\n## New tool result\n${renderTurn(turn)}\n\nEmit an RFC 7396 JSON merge patch to update the state with any newly discovered constraints, dead ends, details, or progress.`;
+      const a = await askModel(STATE_PATCH_SYSTEM, prompt);
+      try {
+        const patch = parsePatchJson(a.text);
+        if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
+          if (patch.blockers_and_dead_ends && typeof patch.blockers_and_dead_ends === 'object') {
+            const b = patch.blockers_and_dead_ends as Record<string, unknown>;
+            if (Array.isArray(b.dead_ends)) {
+              b.dead_ends = b.dead_ends.map((item) =>
+                typeof item === 'string' ? { approach: item, reason: item } : item,
+              );
+            }
+          }
+          engine.patchState(task.id, patch);
+        }
+      } catch {
+        // Invalid patch: state remains unchanged
+      }
+      const stateEntry = engine.getState(task.id)!;
+      currentMd = serializeStateToMarkdown(stateEntry.state, stateEntry.version);
+      trace.push(currentMd);
+      promptTokens += estimateTokens(prompt);
+      apiMs += a.api_ms;
+      calls++;
+    }
+
+    const tail = task.turns.slice(-WINDOW);
+    const finalPrompt = `## Goal\n${task.goal}\n\n## Execution state\n${currentMd}\n\n## Last ${WINDOW} turns\n${tail
+      .map(renderTurn)
+      .join('\n\n')}\n\n## Question\n${QUESTION}`;
+    const a = await askModel(AGENT_SYSTEM, finalPrompt);
+    return {
+      answer: a.text,
+      prompt_tokens: promptTokens + estimateTokens(finalPrompt),
+      api_ms: apiMs + a.api_ms,
+      calls: calls + 1,
+      state_final: currentMd,
+      state_fact_life: task.facts.map((f) => {
+        const at = trace.findIndex((block) => block.toUpperCase().includes(f.literal));
+        return {
+          id: f.id,
+          literal: f.literal,
+          written_at: at === -1 ? null : at + 1,
+          survived: currentMd.toUpperCase().includes(f.literal),
+        };
+      }),
+    };
+  } finally {
+    engine.close();
+  }
+}
+
 async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
@@ -278,16 +380,20 @@ async function main(): Promise<void> {
   fs.mkdirSync(SANDBOX, { recursive: true });
 
   const failed: string[] = [];
+  let completed = 0;
+  const startedAt = Date.now();
   const rows = (
     await mapLimit(tasks, concurrency, async (task) => {
+      const taskStart = Date.now();
       try {
-        const [full, truncated, state] = await Promise.all([
+        const [full, truncated, state, state_patch] = await Promise.all([
           runFull(task),
           runTruncated(task, budget),
           runState(task),
+          runStatePatch(task),
         ]);
-        const arms = { full, truncated, state };
-        return {
+        const arms = { full, truncated, state, state_patch };
+        const res = {
           task_id: task.id,
           facts: task.facts.length,
           visible_ceiling: Number(visibleCeiling(task, budget).toFixed(4)),
@@ -308,15 +414,28 @@ async function main(): Promise<void> {
             }),
           ),
         };
+        completed++;
+        const elapsed = ((Date.now() - startedAt) / 1000).toFixed(0);
+        const taskSec = ((Date.now() - taskStart) / 1000).toFixed(0);
+        console.log(
+          `[${completed}/${tasks.length}] ${task.id} (${taskSec}s, total ${elapsed}s) — ` +
+            `full: ${(res.arms.full.recall * 100).toFixed(0)}%, ` +
+            `trunc: ${(res.arms.truncated.recall * 100).toFixed(0)}%, ` +
+            `state: ${(res.arms.state.recall * 100).toFixed(0)}%, ` +
+            `patch: ${(res.arms.state_patch.recall * 100).toFixed(0)}%`,
+        );
+        return res;
       } catch (e) {
+        completed++;
         failed.push(`${task.id}: ${(e as Error).message}`);
+        console.error(`[${completed}/${tasks.length}] ${task.id} FAILED: ${(e as Error).message}`);
         return null;
       }
     })
   ).filter((r): r is NonNullable<typeof r> => r !== null);
 
   const agg = Object.fromEntries(
-    (['full', 'truncated', 'state'] as const).map((arm) => {
+    (['full', 'truncated', 'state', 'state_patch'] as const).map((arm) => {
       const xs = rows.map((r) => r.arms[arm]);
       return [
         arm,
