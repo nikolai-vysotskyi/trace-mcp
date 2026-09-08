@@ -34,6 +34,7 @@ import { listProjects, pruneStaleProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { sweepSessionFiles } from '../session/sweeper.js';
 
 /** Categories assigned to each DB candidate. */
 export type PruneCategory =
@@ -573,6 +574,9 @@ export const pruneCommand = new Command('prune')
       // Stale decisions / memory rows belonging to deleted project roots
       const decisionsSummary = scanOrPruneDecisions(apply);
 
+      // Stale session artifacts (snapshots >24h, end logs >7d, orphan summaries)
+      const sessionSummary = sweepSessionFiles({ dryRun: !apply });
+
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -593,6 +597,10 @@ export const pruneCommand = new Command('prune')
                 removedChunks: decisionsSummary.removedChunks,
                 removedClusters: decisionsSummary.removedClusters,
                 removedMemos: decisionsSummary.removedMemos,
+              },
+              sessions: {
+                deletedFiles: sessionSummary.deleted.length,
+                freedBytes: sessionSummary.freedBytes,
               },
             },
             null,
@@ -639,6 +647,20 @@ export const pruneCommand = new Command('prune')
           lines.push(`  ${shortPath(r)}`);
         }
         p.note(lines.join('\n'), 'Decision Memory');
+      }
+      if (sessionSummary.deleted.length > 0) {
+        const freedKb = Math.round(sessionSummary.freedBytes / 1024);
+        const heading = apply
+          ? `Removed ${sessionSummary.deleted.length} stale session file(s) (${freedKb} KB freed):`
+          : `${sessionSummary.deleted.length} stale session file(s) (${freedKb} KB) — would remove:`;
+        const lines = [heading];
+        for (const f of sessionSummary.deleted.slice(0, 10)) {
+          lines.push(`  ${f}`);
+        }
+        if (sessionSummary.deleted.length > 10) {
+          lines.push(`  ... and ${sessionSummary.deleted.length - 10} more`);
+        }
+        p.note(lines.join('\n'), 'Sessions');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');

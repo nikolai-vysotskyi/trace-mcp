@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.13
+# trace-mcp-launcher v0.6.14
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -808,15 +808,36 @@ daemon_port_open() {
 }
 
 # True when argv is a plain `serve` invocation this shim understands well
-# enough to route to the thin proxy: no args, `serve`, or `serve --preset X`.
+# enough to route to the thin proxy: no args, `serve`, `serve --preset X`,
+# `--preset X`, or `--preset=X`.
 # Anything else (serve-http, doctor, add, unrecognised flags, ...) always
 # takes the full cli.js path — Commander stays the source of truth for
 # everything this heuristic does not explicitly recognise.
 is_plain_serve() {
   case $# in
     0) return 0 ;;
-    1) [ "$1" = "serve" ] ;;
-    3) [ "$1" = "serve" ] && [ "$2" = "--preset" ] ;;
+    1)
+      if [ "$1" = "serve" ]; then
+        return 0
+      fi
+      case "$1" in
+        --preset=*) [ "${1#--preset=}" != "" ] ;;
+        *) return 1 ;;
+      esac
+      ;;
+    2)
+      if [ "$1" = "serve" ]; then
+        case "$2" in
+          --preset=*) [ "${2#--preset=}" != "" ] ;;
+          *) return 1 ;;
+        esac
+      elif [ "$1" = "--preset" ]; then
+        [ -n "$2" ] && [ "${2#-}" = "$2" ]
+      else
+        return 1
+      fi
+      ;;
+    3) [ "$1" = "serve" ] && [ "$2" = "--preset" ] && [ -n "$3" ] && [ "${3#-}" = "$3" ] ;;
     *) return 1 ;;
   esac
 }

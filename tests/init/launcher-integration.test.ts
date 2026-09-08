@@ -1609,6 +1609,30 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(out.stdout.trim()).toBe(`NODE_ARGS:${proxy} serve --preset core`);
     });
 
+    it('passes --preset variations through to the proxy (TRA-1218)', async () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+      const proxy = plantProxy(cli);
+
+      const validCases: Array<{ args: string[]; expected: string }> = [
+        { args: ['--preset', 'core'], expected: `${proxy} --preset core` },
+        { args: ['serve', '--preset=core'], expected: `${proxy} serve --preset=core` },
+        { args: ['--preset=core'], expected: `${proxy} --preset=core` },
+        { args: [], expected: `${proxy}` },
+      ];
+
+      for (const { args, expected } of validCases) {
+        const out = await withListener((port) =>
+          runLauncherAsync(
+            { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
+            args,
+          ),
+        );
+        expect(out.status).toBe(0);
+        expect(out.stdout.trim()).toBe(`NODE_ARGS:${expected}`);
+      }
+    });
+
     it('keeps cli.js for anything Commander owns, daemon or not', async () => {
       const { home, traceHome, node, cli } = setupFakeHome();
       writeConfig(traceHome, node, cli);
@@ -1616,7 +1640,15 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
 
       // serve-http, doctor and unrecognised serve flags all have to reach the
       // real CLI: the proxy only speaks plain stdio `serve`.
-      for (const args of [['serve-http'], ['doctor'], ['serve', '--http'], ['serve', '--preset']]) {
+      for (const args of [
+        ['serve-http'],
+        ['doctor'],
+        ['serve', '--http'],
+        ['serve', '--preset'],
+        ['--preset'],
+        ['serve', '--preset='],
+        ['--preset='],
+      ]) {
         const out = await withListener((port) =>
           runLauncherAsync(
             { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_DAEMON_PORT: String(port) },
