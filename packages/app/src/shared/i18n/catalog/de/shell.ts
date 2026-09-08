@@ -1,7 +1,7 @@
 export const shell = {
   // ── Sections ────────────────────────────────────────────────────────────
   navWorkspace: 'Workspace',
-  navSavings: 'Einsparung',
+  navSavings: 'Einsparungen',
   navClients: 'MCP-Clients',
   navOverview: 'Übersicht',
   navAsk: 'Fragen',
