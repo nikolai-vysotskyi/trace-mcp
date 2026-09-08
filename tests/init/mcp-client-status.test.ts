@@ -12,6 +12,7 @@ let projectRoot: string;
 
 let getMcpClientStatuses: typeof import('../../src/init/mcp-client.js').getMcpClientStatuses;
 let configureMcpClients: typeof import('../../src/init/mcp-client.js').configureMcpClients;
+let getLauncherPath: typeof import('../../src/init/launcher.js').getLauncherPath;
 
 beforeEach(async () => {
   sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-status-'));
@@ -31,6 +32,7 @@ beforeEach(async () => {
   vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
   vi.resetModules();
   ({ getMcpClientStatuses, configureMcpClients } = await import('../../src/init/mcp-client.js'));
+  ({ getLauncherPath } = await import('../../src/init/launcher.js'));
 });
 
 afterEach(() => {
@@ -329,13 +331,31 @@ describe('getMcpClientStatuses', () => {
     expect(drifted.staleReason).toBe('command');
   });
 
-  it('reports codex as `unknown` (presence-only) when section exists', () => {
-    const configPath = path.join(fakeHome, '.codex', 'config.toml');
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, '[mcp_servers.trace-mcp]\ncommand = "x"\nargs = ["serve"]\n');
-    const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
-    expect(s.status).toBe('unknown');
-    expect(s.configPath).toBe(configPath);
+  it('reports codex status correctly and flags drift', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const [initial] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(initial.status).toBe('up_to_date');
+    expect(initial.staleReason).toBeUndefined();
+
+    const configPath = initial.configPath as string;
+
+    // Command drift
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace]\ncommand = "/outdated/path"\nargs = ["serve"]\n',
+    );
+    const [cmdDrift] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(cmdDrift.status).toBe('stale');
+    expect(cmdDrift.staleReason).toBe('command');
+
+    // Legacy key drift
+    fs.writeFileSync(
+      configPath,
+      `[mcp_servers.trace-mcp]\ncommand = "${getLauncherPath()}"\nargs = ["serve"]\n`,
+    );
+    const [legacyDrift] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(legacyDrift.status).toBe('stale');
+    expect(legacyDrift.staleReason).toBe('legacy-key');
   });
 });
 

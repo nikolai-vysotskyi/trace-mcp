@@ -18,9 +18,8 @@ import type {
   DetectedMcpClient,
 } from './types.js';
 import { GUARD_HOOK_VERSION } from './types.js';
+import { getHomeDir } from './home.js';
 import { detectMcpClients } from '../../packages/app/src/shared/mcp-detector.js';
-
-const HOME = os.homedir();
 
 /** Detect everything about the project for init/upgrade. */
 export function detectProject(dir: string): DetectionResult {
@@ -193,8 +192,9 @@ function detectExistingDb(
 
 export function detectGuardHook(): { hasGuardHook: boolean; guardHookVersion: string | null } {
   const ext = process.platform === 'win32' ? '.cmd' : '.sh';
-  const hookPath = path.join(HOME, '.claude', 'hooks', `trace-mcp-guard${ext}`);
-  const clawHookPath = path.join(HOME, '.claw', 'hooks', `trace-mcp-guard${ext}`);
+  const home = getHomeDir();
+  const hookPath = path.join(home, '.claude', 'hooks', `trace-mcp-guard${ext}`);
+  const clawHookPath = path.join(home, '.claw', 'hooks', `trace-mcp-guard${ext}`);
   const content = readIfExists(hookPath) ?? readIfExists(clawHookPath);
   if (content === null) return { hasGuardHook: false, guardHookVersion: null };
 

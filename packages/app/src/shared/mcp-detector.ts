@@ -14,7 +14,10 @@ function readIfExists(filePath: string): string | null {
   }
 }
 
-function vscodeUserDir(platform = os.platform(), home = os.homedir()): string {
+function vscodeUserDir(
+  platform = os.platform(),
+  home = process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || os.homedir(),
+): string {
   if (platform === 'darwin') {
     return path.join(home, 'Library', 'Application Support', 'Code', 'User');
   }
@@ -29,7 +32,7 @@ function vscodeUserDir(platform = os.platform(), home = os.homedir()): string {
  * Reused across the CLI init command and Electron desktop app.
  */
 export function detectMcpClients(projectRoot?: string, customHome?: string): DetectedMcpClient[] {
-  const HOME = customHome ?? os.homedir();
+  const HOME = customHome?.trim() || process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || os.homedir();
   const platform = os.platform();
   const clients: DetectedMcpClient[] = [];
 
