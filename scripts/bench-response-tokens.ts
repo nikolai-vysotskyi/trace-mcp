@@ -156,6 +156,10 @@ const CALLS: Array<{
   { tool: 'check_claudemd_drift', args: {} },
   { tool: 'scan_security', args: { rules: ['all'] } },
   { tool: 'list_projects', args: {} },
+  // TRA-1159: priced at 10 433 tokens by the field tail (20.9x its baseline) —
+  // the most expensive single response in the product, and unmeasured until it
+  // showed up there. Guarded here so the shaping cannot silently come back.
+  { tool: 'get_plugin_registry', args: {} },
 ];
 
 interface Row {
