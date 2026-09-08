@@ -1,7 +1,7 @@
 ---
 title: "codebase-memory-mcp Alternative: trace-mcp vs codebase-memory-mcp"
 description: "Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, tool cost, framework awareness, refactoring and security."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # codebase-memory-mcp alternative: trace-mcp vs codebase-memory-mcp
@@ -152,7 +152,9 @@ Only trace-mcp. codebase-memory-mcp is read-only analysis.
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Decision memory](/decision-memory.html) — how code-linked decisions differ from a notes file.
 - [Get started](/#install) — no configuration required.

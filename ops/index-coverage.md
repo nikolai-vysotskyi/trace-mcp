@@ -483,4 +483,80 @@ Full Search Console API pass (URL Inspection, Search Analytics 28d, Sitemaps API
    - Augmented with blind-scored PR review quality metrics (TRA-1013 / `ops/positioning.md`).
    - Mobile PageSpeed Insights score: **Performance 99, SEO 100, Accessibility 100, Best Practices 100, FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms**.
 
+## Reading 2026-09-08 04:00 UTC (TRA-1184): 21 indexed, /vs/socraticode in Discovered, competitor SERP wins (#1 Serena, #2 Repomix), 11-page /vs/ internal linking overhaul, sitemap resubmitted to 34 URLs
+
+Full Search Console API pass (URL Inspection across all 34 sitemap URLs, Search Analytics 28d, Sitemaps API), internal linking graph audit, and PageSpeed Insights mobile CWV audit on 2026-09-08 04:00 UTC.
+
+### 1. High-Intent Competitor SERP Wins (CONFIRMED from GSC Search Analytics)
+
+Analysis of GSC Search Analytics query dimensions reveals organic Google ranking breakthroughs for competitor comparison queries landing on `/comparisons.html`:
+- `serena alternatives`: **Position 1.0** (1 imp)
+- `serena mcp vs codegraph`: **Position 1.0** (1 imp)
+- `codegraph vs serena`: **Position 1.0** (1 imp)
+- `serena mcp memory`: **Position 2.0** (1 imp)
+- `repomix vs codegraph`: **Position 2.0** (1 imp)
+- `"codegraphcontext"`: **Position 1.5** (2 imp)
+- `repomix mcp`: **Position 6.0** (1 imp)
+- `graphify neo4j`: **Position 13.0** (1 imp)
+- High-intent CTR: `/comparisons.html` generated **5 clicks / 191 impressions (CTR 2.6%)**, second only to homepage (57 clicks / 562 impressions).
+
+### 2. Indexation & Discovery Audit across 34 Sitemap URLs (CONFIRMED via URL Inspection API)
+
+- **Total Indexed: 21 URLs** (stable from 09-07 crawl wave).
+- **`/vs/socraticode.html` advanced from "URL is unknown" to "Discovered - currently not indexed"** within 16 hours of merging into master.
+- Current status across the 11 comparison pages:
+  - `/vs/codegraph.html` — **Submitted and indexed** (last crawl: 2026-09-06T16:25:58Z)
+  - `/vs/context-mode.html` — **Submitted and indexed** (last crawl: 2026-09-06T08:58:59Z)
+  - `/vs/codebase-memory-mcp.html` — **Submitted and indexed** (last crawl: 2026-09-07T00:45:55Z)
+  - `/vs/socraticode.html` — **Discovered - currently not indexed** (advanced from unknown)
+  - `/vs/code-review-graph.html` — **Discovered - currently not indexed** (ref: `/analytics.html`)
+  - `/vs/serena.html` — URL is unknown to Google
+  - `/vs/repomix.html` — URL is unknown to Google
+  - `/vs/repomix-vs-codegraph.html` — URL is unknown to Google
+  - `/vs/codegraphcontext.html` — URL is unknown to Google
+  - `/vs/jcodemunch.html` — URL is unknown to Google (newly merged TRA-1153)
+  - `/vs/tokensave.html` — URL is unknown to Google (newly merged TRA-1166)
+- Core doc status:
+  - `/tools-index.html` — **Discovered - currently not indexed**
+  - `/daemon-memory.html` — **Discovered - currently not indexed**
+  - `/reduce-claude-code-token-usage.html` — **Discovered - currently not indexed**
+  - `/what-trace-init-installs.html` — **Submitted and indexed** (last crawl: 2026-09-06T10:55:26Z)
+  - `/code-graph-mcp.html` — URL is unknown to Google (awaiting first Googlebot crawl)
+
+### 3. Comprehensive Internal Linking Overhaul (11 Comparison Pages & Orphan Eradication)
+
+A full structural graph audit of all markdown docs in `docs/` exposed critical distribution gaps:
+- `vs/tokensave.md` and `vs/jcodemunch.md` had only **1 incoming link each** (from `comparisons.md`).
+- `vs/socraticode.md` and `vs/codegraphcontext.md` had only **2 incoming links each**.
+- `what-trace-init-installs.md` had **0 incoming links** from documentation (orphan).
+- Older `/vs/` pages (`codegraph`, `serena`, `repomix`, etc.) cross-linked only 5 legacy pages, ignoring all newer spokes.
+- `docs/code-graph-mcp.md` was missing ecosystem entries for jCodeMunch and TokenSave.
+
+**Remediations implemented:**
+1. **Ecosystem expansion in `/code-graph-mcp.html`**:
+   - Added jCodeMunch (2.7K★, "The Counter" meta-dispatch, Dual-Use licence).
+   - Added TokenSave (621★, native Rust/libSQL graph, MIT).
+2. **Cluster cross-linking across all 11 `/vs/` pages**:
+   - Standardized the "The other head-to-heads" section across all 11 pages, cross-linking all 10 peers bidirectionally.
+   - Incoming internal links per page increased:
+     - `/vs/tokensave.md`: 1 -> **12 in-links**
+     - `/vs/jcodemunch.md`: 1 -> **12 in-links**
+     - `/vs/socraticode.md`: 2 -> **12 in-links**
+     - `/vs/codegraphcontext.md`: 2 -> **12 in-links**
+3. **Orphan page eliminated**:
+   - Linked `/what-trace-init-installs.html` from `code-graph-mcp.md` and `configuration.md` (0 -> 2 in-links).
+4. **Authoritative category hub links**:
+   - Added contextual links to `/code-graph-mcp.html` from `architecture.md`, `tools-reference.md`, and every `/vs/` page.
+
+### 4. Sitemap Resubmission to Search Console (34 URLs)
+
+- Sitemap verified containing 34 URLs (including `/vs/jcodemunch.html` and `/vs/tokensave.html`).
+- Submitted via Search Console API `sitemaps().submit()` at `2026-09-08T00:09:11Z` (`isPending: true`), queueing Googlebot for re-download.
+
+### 5. PageSpeed Insights & CWV Audit
+
+Lab metrics for key landing pages (mobile):
+- **Homepage (`https://trace-mcp.com/`)**: Performance **98**, FCP 1.1s, LCP 1.9s, CLS 0, TBT 0ms.
+- **Category landing (`https://trace-mcp.com/code-graph-mcp.html`)**: Performance **99**, FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms.
+
 
