@@ -123,4 +123,18 @@ describe('computeConfidence with learned weights', () => {
     // With tuning disabled, the legacy 0.4 baseline wins regardless of the file.
     expect(computeConfidence(input)).toBe(computeConfidenceLegacy(input));
   });
+
+  it('clamps confidence to <= 0.45 when content is a single line ending in a colon (TRA-1056)', () => {
+    const input = {
+      title: 'Variant E comparison',
+      content:
+        'Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool:',
+      type: 'tech_choice' as const,
+      file_path: 'src/model.ts',
+      tags: ['evaluation'],
+    };
+    // Normally code_ref + tags + tech_choice would boost confidence > 0.75
+    expect(computeConfidenceLegacy(input)).toBeLessThanOrEqual(0.45);
+    expect(computeConfidence(input)).toBeLessThanOrEqual(0.45);
+  });
 });
