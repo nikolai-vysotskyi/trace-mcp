@@ -460,7 +460,7 @@ project_hash_of() {
 is_shared_ancestor() {
   local candidate
   for candidate in "$1" "${1#/private}"; do
-    [[ "$candidate" == "/" || "$candidate" == "$HOME" || "$candidate" == "${TMP_HOME%/}" ]] && return 0
+    [[ "$candidate" == "/" || "$candidate" == "$HOME" || "$candidate" == "${TMP_HOME%/}" || "$candidate" == "$HOME/.trace" || "$candidate" == "$HOME/.trace/"* || "$candidate" == "$HOME/.trace-mcp" || "$candidate" == "$HOME/.trace-mcp/"* ]] && return 0
     case "$candidate" in
       /Users|/home|/root|/System|/Library|/private|/tmp|/private/tmp|/var|/etc) return 0 ;;
       /bin|/sbin|/usr|/opt|/dev|/Volumes|/Applications|/Network|/cores|/proc|/sys) return 0 ;;

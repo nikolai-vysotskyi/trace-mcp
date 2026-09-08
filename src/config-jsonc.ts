@@ -23,6 +23,7 @@ import {
   TRACE_MCP_HOME,
 } from './global.js';
 import { logger } from './logger.js';
+import { isDangerousProjectRoot } from './dangerous-root.js';
 import { isEphemeralProjectRoot, listProjects } from './registry.js';
 import { acquireLock, type LockHandle, LockError, releaseLock } from './utils/pid-lock.js';
 import { atomicWriteString } from './utils/atomic-write.js';
@@ -296,10 +297,11 @@ export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SE
       const keptUnregistered: string[] = [];
 
       for (const root of Object.keys(projects)) {
+        const danger = isDangerousProjectRoot(root);
         const claimed = registered.has(root);
         const dead = !claimed && !fs.existsSync(root);
         const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
-        if (dead || orphanWorkdir) removed.push(root);
+        if (danger !== null || dead || orphanWorkdir) removed.push(root);
         else if (
           !claimed &&
           isGeneratedSection(

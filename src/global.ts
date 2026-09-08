@@ -180,6 +180,15 @@ const EPHEMERAL_WORKDIR_PATTERN =
 const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
 
 /**
+ * Claude Code / Desktop scratchpad directory (TRA-1197):
+ * E.g. `/private/tmp/claude-501/.../scratchpad`
+ * These scratchpads are one-shot run checkouts that should not be permanently
+ * registered in registry.json or pinned in .config.json.
+ */
+const EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN =
+  /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i;
+
+/**
  * True when `root` is a one-shot agent-run checkout, in either layout the
  * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
  * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
@@ -190,7 +199,11 @@ const EPHEMERAL_TASK_DIR_PATTERN = /[/\\]multica-task-\d+[/\\]/i;
  */
 export function isEphemeralProjectRoot(root: string): boolean {
   const abs = path.resolve(root);
-  return EPHEMERAL_WORKDIR_PATTERN.test(abs) || EPHEMERAL_TASK_DIR_PATTERN.test(abs);
+  return (
+    EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
+    EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
+    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs)
+  );
 }
 
 /** Global project registry. */

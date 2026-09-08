@@ -43,6 +43,7 @@ const GRANDFATHERED: ReadonlySet<string> = new Set([
   'analytics/log-parser.ts',
   'cli/install-app.ts',
   'config.ts',
+  'dangerous-root.ts',
   'init/conflict-detector.ts',
   'init/detector.ts',
   'init/hermes-hooks.ts',

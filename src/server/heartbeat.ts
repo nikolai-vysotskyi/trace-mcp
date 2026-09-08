@@ -29,6 +29,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isDangerousProjectRoot } from '../dangerous-root.js';
 import { projectHash, STATUS_DIR } from '../global.js';
 import { writeTmpFileSync } from '../utils/safe-fs.js';
 
@@ -171,6 +172,30 @@ export function startHeartbeat(
 ): HeartbeatHandle {
   const file = statusPath(projectRoot);
   const legacy = legacyHeartbeatPath(projectRoot);
+  if (isDangerousProjectRoot(projectRoot) !== null) {
+    const startedAt = new Date().toISOString();
+    return {
+      path: file,
+      legacyPath: legacy,
+      recordToolCall: () => {},
+      setSessionsActive: () => {},
+      flush: () => {},
+      getState: () => ({
+        schema: STATUS_SCHEMA_VERSION,
+        pid: process.pid,
+        transport,
+        started_at: startedAt,
+        last_heartbeat_at: startedAt,
+        last_successful_tool_call_at: null,
+        last_failed_tool_call_at: null,
+        tool_calls_total: 0,
+        tool_calls_failed: 0,
+        mcp_sessions_active: 0,
+      }),
+      stop: () => {},
+    };
+  }
+
   const [tmpFile, tmpLegacy] = tmpdirSentinelPaths(projectRoot);
   try {
     fs.mkdirSync(STATUS_DIR, { recursive: true, mode: 0o700 });

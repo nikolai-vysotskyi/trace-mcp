@@ -14,6 +14,7 @@
  * keeps its grace, which is the case the last test pins.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { removeTmpDir, tmpRootOutsideTaskDir } from '../../tests/test-utils.js';
@@ -174,5 +175,30 @@ describe('sweepMissingRoots: no grace for a dead ephemeral workdir (TRA-1105)', 
 
     expect(registry.sweepMissingRoots(7).removed).toEqual([dead]);
     expect(fs.existsSync(dbPath)).toBe(true);
+  });
+
+  it('drops a dangerous root like ~/.trace immediately even if it exists on disk (TRA-1197)', () => {
+    const root = path.join(os.homedir(), '.trace');
+    const dbPath = path.join(tmpHome, 'index', 'trace.db');
+    seedRegistry(root, { dbPath });
+    seedDbFiles(dbPath);
+
+    const { removed, newlyMissing } = registry.sweepMissingRoots(7);
+
+    expect(removed).toEqual([root]);
+    expect(newlyMissing).toEqual([]);
+    expect(registry.listProjects()).toEqual([]);
+    expect(fs.existsSync(dbPath)).toBe(false);
+  });
+
+  it('drops a missing Claude scratchpad root on the first sighting (TRA-1197)', () => {
+    const root = path.join('/tmp', 'claude-501', 'hash', 'uuid', 'scratchpad');
+    seedRegistry(root);
+
+    const { removed, newlyMissing } = registry.sweepMissingRoots(7);
+
+    expect(removed).toEqual([root]);
+    expect(newlyMissing).toEqual([]);
+    expect(registry.listProjects()).toEqual([]);
   });
 });
