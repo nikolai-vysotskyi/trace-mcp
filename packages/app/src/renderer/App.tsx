@@ -983,11 +983,12 @@ function AppTabView({
   const openFileInGraph = useCallback(
     (filePath: string) => {
       if (projectTab !== 'graph') setProjectTab('graph');
-      // If GraphExplorerGPU is lazy-loaded and not yet mounted, retry until graphRef is available.
+      // If GraphExplorerGPU is lazy-loaded and not yet mounted or data is still loading, retry until focus succeeds.
       const focus = (retries = 30) => {
-        if (graphRef.current) {
-          graphRef.current.focusNode(filePath);
-        } else if (retries > 0) {
+        if (graphRef.current?.focusNode(filePath)) {
+          return;
+        }
+        if (retries > 0) {
           setTimeout(() => focus(retries - 1), 50);
         }
       };

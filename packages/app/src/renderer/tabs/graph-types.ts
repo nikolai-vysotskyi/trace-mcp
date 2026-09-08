@@ -1,5 +1,5 @@
 export interface GraphExplorerGPUHandle {
-  focusNode: (id: string) => void;
+  focusNode: (id: string) => boolean;
 }
 
 export interface GraphGPUSettings {
