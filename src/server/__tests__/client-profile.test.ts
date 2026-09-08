@@ -85,6 +85,9 @@ describe('client detection', () => {
     ['opencode', 'opencode'],
     ['OpenCode', 'opencode'],
     ['open-code', 'opencode'],
+    ['antigravity-client', 'antigravity'],
+    ['Antigravity', 'antigravity'],
+    ['antigravity', 'antigravity'],
   ])('resolves %s to the %s profile', (clientName, expected) => {
     expect(detectClientProfile(clientName)).toBe(expected);
   });
@@ -112,6 +115,7 @@ describe('resolved tool surface, per profile', () => {
     cursor: ['search_text'],
     vscode: ['search_text'],
     opencode: ['search_text'],
+    antigravity: ['search_text'],
     generic: [],
   };
 
@@ -176,6 +180,28 @@ describe('resolved tool surface, per profile', () => {
     }) as { result: { tools: Array<{ name: string }> } };
     expect(list.result.tools.map((t) => t.name)).toEqual(['search']);
   });
+
+  it('suppresses search_text and discover_hermes_sessions for antigravity', () => {
+    process.env.TRACE_MCP_CLIENT_PROFILE = 'antigravity';
+    const gate = new ClientProfileGate(cfg());
+    gate.observeFromClient({ method: 'initialize', params: {} });
+    const list = gate.applyToClient({
+      jsonrpc: '2.0',
+      id: 2,
+      result: {
+        tools: [
+          { name: 'search' },
+          { name: 'search_text' },
+          { name: 'discover_hermes_sessions' },
+          { name: 'get_symbol' },
+        ],
+      },
+    }) as { result: { tools: Array<{ name: string }> } };
+    expect(list.result.tools.map((t) => t.name)).toEqual(['search', 'get_symbol']);
+    expect(getClientProfile('antigravity').suppress).toEqual(
+      new Set(['search_text', 'discover_hermes_sessions']),
+    );
+  });
 });
 
 describe('overrides', () => {
@@ -229,6 +255,16 @@ describe('instructions retargeting', () => {
     expect(instructions).toContain('`grep`');
     expect(instructions).toContain('`glob`');
     expect(instructions).toContain('edit_file');
+    expect(instructions).not.toContain('host tool names vary');
+    expect(instructions).not.toContain('`content-match`');
+  });
+
+  it('retargets antigravity host tools', () => {
+    const { instructions } = runSession('antigravity-client');
+    expect(instructions).toContain('`view_file`');
+    expect(instructions).toContain('`grep_search`');
+    expect(instructions).toContain('`find_by_name`');
+    expect(instructions).toContain('replace_file_content/write_to_file');
     expect(instructions).not.toContain('host tool names vary');
     expect(instructions).not.toContain('`content-match`');
   });
