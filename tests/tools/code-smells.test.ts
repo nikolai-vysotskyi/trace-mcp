@@ -29,7 +29,7 @@ function insertSymbol(
   },
 ): void {
   store.insertSymbol(fileId, {
-    symbolId: `test::${opts.name}#${opts.kind}`,
+    symbolId: `test::${opts.name}#${opts.kind}:${opts.lineStart}`,
     name: opts.name,
     kind: opts.kind as any,
     byteStart: opts.byteStart,
@@ -227,6 +227,62 @@ function foo() { return 1; }
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().findings).toHaveLength(0);
     });
+
+    test('ignores BUG and TODO tags when enclosed in backticks (e.g. self-documentation) (TRA-1070)', () => {
+      writeFile(
+        store,
+        'src/docs.ts',
+        `
+// 4. \`:\` or \`(\` immediately after the tag (e.g. \`// BUG:\` or \`// BUG(jsmith):\`)
+// developer tag (\`// BUG:\` or \`// BUG(jsmith):\`).
+// see \`// TODO:\` in documentation
+function sample() {}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('still detects real TODO comments when backticks appear in description (TRA-1070)', () => {
+      writeFile(
+        store,
+        'src/real-todo.ts',
+        `
+// TODO: fix \`userId\` lookup in user service
+function fetchUser() {}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].tag).toBe('TODO');
+      expect(data.findings[0].description).toBe('fix \`userId\` lookup in user service');
+    });
+
+    test('detects real TODO when another tag appears inside inline backticks on the same line (TRA-1070)', () => {
+      writeFile(
+        store,
+        'src/mixed-todo.ts',
+        `
+// see \`// BUG: explanation\` in docs; // TODO: fix real bug
+function doSomething() {}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].tag).toBe('TODO');
+      expect(data.findings[0].description).toBe('fix real bug');
+    });
   });
 
   // -------------------------------------------------------------------
@@ -307,6 +363,187 @@ function foo() { return 1; }
         lineStart: 1,
         lineEnd: 3,
         signature: 'function real()',
+      });
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('does not flag TypeScript constructors with parameter properties (TRA-1070)', () => {
+      const content = `
+class AnthropicInferenceService {
+  constructor(
+    private apiKey: string,
+    private model: string,
+  ) {}
+}
+
+class InferenceCache {
+  constructor(private readonly db: Database) {}
+}
+
+class UserProfile {
+  constructor(public readonly id: string, protected role: string) {}
+}
+`;
+      const fileId = writeFile(store, 'src/service.ts', content, 'typescript');
+      const idx1 = content.indexOf('constructor(\n    private apiKey');
+      const end1 = content.indexOf(') {}') + 4;
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx1,
+        byteEnd: end1,
+        lineStart: 3,
+        lineEnd: 6,
+        signature: 'constructor(private apiKey: string, private model: string)',
+      });
+
+      const idx2 = content.indexOf('constructor(private readonly db');
+      const end2 = content.indexOf('Database) {}') + 12;
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx2,
+        byteEnd: end2,
+        lineStart: 10,
+        lineEnd: 10,
+        signature: 'constructor(private readonly db: Database)',
+      });
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('still flags truly empty constructors without parameter properties (TRA-1070)', () => {
+      const content = `
+class EmptyService {
+  constructor() {}
+}
+
+class PlainArgService {
+  constructor(db: Database) {}
+}
+`;
+      const fileId = writeFile(store, 'src/empty-ctor.ts', content, 'typescript');
+      const idx1 = content.indexOf('constructor()');
+      const end1 = content.indexOf('constructor() {}') + 16;
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx1,
+        byteEnd: end1,
+        lineStart: 3,
+        lineEnd: 3,
+        signature: 'constructor()',
+      });
+
+      const idx2 = content.indexOf('constructor(db: Database)');
+      const end2 = content.indexOf('Database) {}') + 12;
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx2,
+        byteEnd: end2,
+        lineStart: 7,
+        lineEnd: 7,
+        signature: 'constructor(db: Database)',
+      });
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings).toHaveLength(2);
+      expect(findings.every((f) => f.symbol === 'constructor')).toBe(true);
+    });
+
+    test('flags empty constructors with explicit access modifier on constructor (TRA-1070)', () => {
+      const content = `
+class ServiceWithAccessMods {
+  public constructor() {}
+}
+
+class PrivateCtorService {
+  private constructor() {}
+}
+
+class ProtectedCtorWithPlainArg {
+  protected constructor(db: Database) {}
+}
+
+class PublicCtorWithParamProp {
+  public constructor(private db: Database) {}
+}
+`;
+      const fileId = writeFile(store, 'src/access-mod-ctor.ts', content, 'typescript');
+      const idx1 = content.indexOf('public constructor()');
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx1,
+        byteEnd: content.indexOf('public constructor() {}') + 'public constructor() {}'.length,
+        lineStart: 3,
+        lineEnd: 3,
+        signature: 'public constructor()',
+      });
+
+      const idx2 = content.indexOf('private constructor()');
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx2,
+        byteEnd: content.indexOf('private constructor() {}') + 'private constructor() {}'.length,
+        lineStart: 7,
+        lineEnd: 7,
+        signature: 'private constructor()',
+      });
+
+      const idx3 = content.indexOf('protected constructor(db: Database)');
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx3,
+        byteEnd:
+          content.indexOf('protected constructor(db: Database) {}') +
+          'protected constructor(db: Database) {}'.length,
+        lineStart: 11,
+        lineEnd: 11,
+        signature: 'protected constructor(db: Database)',
+      });
+
+      const idx4 = content.indexOf('public constructor(private db: Database)');
+      insertSymbol(store, fileId, {
+        name: 'constructor',
+        kind: 'constructor',
+        byteStart: idx4,
+        byteEnd:
+          content.indexOf('public constructor(private db: Database) {}') +
+          'public constructor(private db: Database) {}'.length,
+        lineStart: 15,
+        lineEnd: 15,
+        signature: 'public constructor(private db: Database)',
+      });
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings).toHaveLength(3);
+      expect(findings.every((f) => f.symbol === 'constructor')).toBe(true);
+    });
+
+    test('does not flag abstract methods or .d.ts files (TRA-1070)', () => {
+      const dtsContent = `export declare function declareFn(): void;\n`;
+      const dtsId = writeFile(store, 'src/types.d.ts', dtsContent, 'typescript');
+      insertSymbol(store, dtsId, {
+        name: 'declareFn',
+        kind: 'function',
+        byteStart: 0,
+        byteEnd: dtsContent.length,
+        lineStart: 1,
+        lineEnd: 1,
+        signature: 'export declare function declareFn(): void;',
       });
 
       const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
@@ -494,6 +731,110 @@ const endpoint = 'https://api.production-server.com/v2/data';
         `
 const repo = 'https://github.com/user/repo';
 const pkg = 'https://npmjs.org/package/foo';
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
+      expect(urlFindings).toHaveLength(0);
+    });
+
+    test('does not flag DOCTYPE / DTD URLs (TRA-1070)', () => {
+      writeFile(
+        store,
+        'packages/app/src/main/daemon-plist.ts',
+        `
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
+      expect(urlFindings).toHaveLength(0);
+    });
+
+    test('does not flag placeholder URLs in configuration schemas (TRA-1070)', () => {
+      writeFile(
+        store,
+        'packages/app/src/renderer/tabs/configSchema.ts',
+        `
+placeholder: 'https://api.openai.com',
+placeholder: 'https://api.voyageai.com/v1',
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
+      expect(urlFindings).toHaveLength(0);
+    });
+
+    test('does not flag localhost / 127.0.0.1 daemon port references (TRA-1070)', () => {
+      writeFile(
+        store,
+        'src/client.ts',
+        `
+const url = 'http://127.0.0.1:3741/mcp';
+const local = 'http://localhost:3741';
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const portFindings = data.findings.filter((f) => f.tag === 'hardcoded_port');
+      expect(portFindings).toHaveLength(0);
+    });
+
+    test('does not flag URLs in translation files (TRA-1070)', () => {
+      writeFile(
+        store,
+        'locales/en.json',
+        `
+{ "doc_link": "https://docs.example-product.org/getting-started" }
+`,
+        'json',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
+      expect(urlFindings).toHaveLength(0);
+    });
+
+    test('does not flag URLs in translation files with Windows path separators (TRA-1070)', () => {
+      writeFile(
+        store,
+        'locales\\en.json',
+        `
+{ "doc_link": "https://docs.example-product.org/getting-started" }
+`,
+        'json',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
+      expect(urlFindings).toHaveLength(0);
+    });
+
+    test('does not flag placeholder URLs in JSX / HTML attribute syntax (TRA-1070)', () => {
+      writeFile(
+        store,
+        'src/components/Input.tsx',
+        `
+export const Input = () => <input placeholder="https://api.openai.com/v1" />;
 `,
         'typescript',
       );
