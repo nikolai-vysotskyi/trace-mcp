@@ -1750,3 +1750,47 @@ GitCode team.
 `thomaslwq/myclaude#981`, `illumination-k/agent-lens#494`, `jordigilh/engram#43`,
 `mshogin/archlint#163`, `srkprasad1995/dexiask#11` — all 0–30★ or personal spikes.
 
+### Ninth pass, 2026-09-08: PR-Agent maintainer reply, LastLight #372 code-graph skill vs egress, and GitNexus #3068 portable index builds
+
+**Maintainer response on open thread:**
+- [`The-PR-Agent/pr-agent#2499`](https://github.com/The-PR-Agent/pr-agent/issues/2499#issuecomment-5580870444)
+  (12,887★): Maintainer Ismael Martinez replied on 2026-09-08 (07:12:57Z).
+  He confirmed our line-shift finding (noting their own `repo_context.py` cache lacked revision pinning on a 15-minute TTL, being addressed in #3148/#3149) and adopted our finding that 1-hop inbound dependents under a strict budget ceiling settles their expansion question. He noted that 67% vs 65% on 60 PRs reads as no measured difference rather than parity, requested empirical prototype evidence passed via `extra_instructions`, and clarified that MCP client support will not arrive before v1 (Discussion #3147). No reply is owed at this stage; prototype consideration recorded.
+
+**Mention sweep and catalog moratorium:** `scripts/mention-sweep.sh` ran clean with zero unrecorded repositories outside `ops/mentions-seen.txt`. The standing moratorium on new catalog submissions continues to hold (zero attributable arrivals from directories; see `ROADMAP.md` point 3).
+
+**Two touches, both written after reading the other repo's code and sharing concrete architectural lessons:**
+
+- [`nearform/lastlight#372`](https://github.com/nearform/lastlight/issues/372#issuecomment-5583584865)
+  (22★, Enterprise AI Software Factory by NearForm, authored by NearForm CTO Clifton Cunningham).
+  A user requested MCP code graph and Jira/Confluence integration; the maintainer framed three options: Option 1 (Skills via `packages/agentic-pi/src/extensions/skills/index.ts` + egress allowlist), Option 2 (runtime extension loading), Option 3 (full MCP client). We analyzed the code paths and shared the key distinction:
+  1. Local code intelligence requires zero network egress (`TRACE_MCP_TELEMETRY=off`), so Option 1 works immediately in a hermetic container sandbox without touching `apps/server/src/sandbox/egress-allowlist.ts` or enabling unrestricted egress (unlike Jira/Confluence SaaS).
+  2. The operational trade-off of Option 1 vs 2/3 for code graphs is prompt context consumption over stdout vs structured tool calls. A CLI dumping raw symbol tables into conversation history burns context quickly unless the CLI enforces response budgeting (explicit limits, compact formats like TOON/JSON lines, truncation reporting). MCP/native tools enforce schema validation and parameter bounds, keeping models from hallucinating flags.
+  3. Pi's native skill resource loader already implements progressive disclosure, making local code-graph skills viable immediately.
+- [`abhigyanpatwari/GitNexus#3068`](https://github.com/abhigyanpatwari/GitNexus/issues/3068#issuecomment-5583589068)
+  (47,120★, client-side code knowledge graph MCP server).
+  User requested portable index output/import for isolated exact-commit builds. We contributed three failure modes from our own indexing pipeline:
+  1. The cross-device rename trap (`EXDEV`): in containerized CI, isolated checkouts often reside on `/tmp` (ephemeral fs) while workspaces reside on volume mounts. `fs.renameSync` fails with `EXDEV` across volumes; fallback to non-atomic copy breaks reader isolation. Portable export bundles unpacked on the target volume avoid cross-device swap failures.
+  2. Commit binding vs working-tree bleed: parsing disk files directly bleeds uncommitted/dirty edits into the commit-labeled index; indexing requires validating `git status --porcelain == ""` or reading git tree objects directly.
+  3. Active reader isolation and sidecar cleanup: atomic directory swaps while embedded DB readers hold open `.wal` or `.shm` sidecar descriptors cause corruption on subsequent checkpointing unless the export is fully checkpointed and readers detect generation shifts.
+
+**Threads re-checked 2026-09-08, all silent, nothing owed, no pings due before 2026-09-19 / 2026-09-20:**
+`The-PR-Agent/pr-agent#2499`, `CommunityToolkit/Aspire#1575`,
+`eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `Kilo-Org/kilocode#13843`
+and `#12707`, `facebook/pyrefly#4583`, `abhigyanpatwari/GitNexus#3127` and `#3068`,
+`watt-mind/factory#1078`, `sosalejandro/atlas#105`,
+`Nano-Collective/nanocoder#1197`, `Ivy-Apps/deslop#173`.
+
+**Checked and skipped, with reasons:**
+`myelixlabs/synapse-mcp` (1★, submission in cline/mcp-marketplace#2391, personal spike).
+`adhityaravi/maki#693` (0★, personal project).
+`PierrunoYT/patch#697` (0★, personal spike).
+`samteezy/locally#20` (0★, personal spike).
+`cajasmota/grafel#7005` (13★).
+`Aider-AI/aider#5580` (bug report already has full reproduction and root-cause analysis by yifanxiong272).
+`DeusData/codebase-memory-mcp#1460` (direct competitor tracker, already addressed by other users).
+
