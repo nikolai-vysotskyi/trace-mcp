@@ -162,12 +162,22 @@ describe('getPluginRegistry', () => {
     expect(Array.isArray(result.framework_plugins)).toBe(true);
   });
 
-  it('returns all edge types', () => {
-    const result = getPluginRegistry(store, registry, new Set());
-    expect(result.edge_types.length).toBeGreaterThan(0);
-    const edgeNames = result.edge_types.map((e) => e.name);
+  it('returns all edge types on request', () => {
+    const result = getPluginRegistry(store, registry, new Set(), true);
+    expect(result.edge_types!.length).toBeGreaterThan(0);
+    const edgeNames = result.edge_types!.map((e) => e.name);
     expect(edgeNames).toContain('imports');
     expect(edgeNames).toContain('extends');
+  });
+
+  // TRA-1159: the catalog is 44% of this tool's response and identical on every
+  // call, so it is opt-in — but the counts that say it exists are not.
+  it('summarises edge types by category by default, without listing them', () => {
+    const result = getPluginRegistry(store, registry, new Set());
+    expect(result.edge_types).toBeUndefined();
+    expect(result.edge_types_total).toBeGreaterThan(0);
+    const summed = Object.values(result.edge_type_categories).reduce((a, b) => a + b, 0);
+    expect(summed).toBe(result.edge_types_total);
   });
 
   it('returns active_frameworks list', () => {

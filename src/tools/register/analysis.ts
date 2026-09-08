@@ -116,10 +116,15 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_plugin_registry',
-    'List all registered indexer plugins and the edge types they emit. Use for debugging indexer behavior or understanding which frameworks are supported. Read-only. Returns JSON: { languagePlugins, frameworkPlugins, edgeTypes }.',
-    {},
-    async () => {
-      const result = getPluginRegistry(store, registry, frameworkNames);
+    'List registered indexer plugins and edge types. Read-only. Returns JSON: { language_plugins, framework_plugins, edge_type_categories, active_frameworks }; include_edge_types adds full catalog.',
+    {
+      include_edge_types: z
+        .boolean()
+        .optional()
+        .describe('Include every edge type with its description (~3.7k tokens). Default false.'),
+    },
+    async ({ include_edge_types }) => {
+      const result = getPluginRegistry(store, registry, frameworkNames, include_edge_types);
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );

@@ -148,10 +148,12 @@ describe('aggregate savings claims (TRA-904)', () => {
   /** Small numbers the README spells out — see the literal check below. */
   const WORD: Record<number, string> = {
     4: 'four',
+    5: 'five',
     8: 'eight',
     10: 'ten',
     12: 'twelve',
     22: 'twenty-two',
+    23: 'twenty-three',
   };
 
   /** Liquid stripped, so a tag-rendered figure is never mistaken for a typed one. */

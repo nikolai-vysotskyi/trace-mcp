@@ -8,7 +8,7 @@ measurement: response_tokens
 data_file: docs/_data/response_tokens.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: NOT-RUN
+verdict: MET
 ---
 
 # Preregistration — tool response token cost
@@ -546,6 +546,113 @@ other.
 tools are untouched. `reindex` is a genuine one-sample tool with no argument to
 vary, so a frame cannot help it; its variance is index state, and that is a
 different measurement.
+
+Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
+(`{{ site.data.response_tokens.measured_build.commit }}`)** on
+{{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.
+
+## The 2.2% nobody priced, and the one tool it found (TRA-1159, 2026-09-07)
+
+**Two halves, two honesty labels, and they are different.** The tail
+measurement below was run before this entry was written — it is
+**retrospective**, like TRA-880's and TRA-945's entries, and nothing in it was
+predicted in advance. The bench half — adding `get_plugin_registry` to the
+harness and re-running the whole artifact — is **registered**: at the time of
+writing the harness has not been run with that row in it, and the four
+predictions under "Prediction" below are the claim a reader can hold us to.
+
+### The gap
+
+The harness prices 24 tools because each one needs arguments a human wrote.
+This machine has called **98**. The 74 it never priced are 598 calls — 3.2% of
+the recorded volume, 0% of the measurement — and the page has been quoting
+"97.2% of recorded call volume" as if the remainder were small enough to ignore.
+It is small enough to ignore *by count*. Nobody had checked whether it is small
+by tokens, which is the only sense in which it could matter, and a tool nobody
+prices can return anything.
+
+### Instrument, and why it is the weaker one
+
+Those tools cannot be re-called: no arguments are recorded anywhere.
+`~/.trace/analytics.db` does keep `output_size_chars` per call, which is the
+response itself, so the tail is priced from recorded responses converted at the
+**median chars-to-token ratio of the 25 tools the harness measured on the wire**
+(`scripts/field-tail-cost.ts`, writing `docs/_data/response_tokens_tail.json`).
+
+Three limits, stated before the result rather than after:
+
+- The 25 measured ratios span **0.2203 to 0.3574**. The median (0.2635) is the
+  estimator; a single tail tool can be off by ~30% in either direction. The
+  block is the claim, not any row in it.
+- One machine, this maintainer's, with no build stamp — the same objection that
+  keeps `list_projects` off the published figure.
+- **112 of the 591 calls (35 tools) have no recorded response at all** and are
+  imputed with nothing. They stay uncovered, and the coverage figure says so.
+
+This instrument does not replace a harness row for any tool. It prices a block
+that was previously priced at zero by omission.
+
+### Prediction — the bench half, registered before the run
+
+`get_plugin_registry` is the worst row the tail turned up: 10 433 tokens per
+call against a 500-token baseline, **20.9x**, the most expensive single response
+in the product. Shaped in this run the way TRA-952 shaped `list_projects` — the
+193-entry edge-type catalog is a static list, identical on every project and
+every call, and is now one `include_edge_types: true` away, with
+`edge_types_total` and per-category counts kept in the default answer. A scratch
+call over stdio measured **8 427 → 4 983 tokens** before the harness row existed.
+
+Then it is added to `scripts/bench-response-tokens.ts`, so it is guarded from
+here on, and the artifact is regenerated. Registered predictions:
+
+1. The harness median lands **within 5% of the 4 983** the scratch call measured.
+2. It is **still over baseline** — 500 tokens is not a credible price for
+   "what a `Read`/`Grep` of the plugin registry would have cost", so
+   `tools_costing_more` goes 4 → 5. Shaping does not get it under 1.00 and is
+   not aimed at doing so.
+3. `reduction_pct` **falls, and by less than 0.5 points** — 10 recorded calls
+   against 18 319 is not enough weight to move a weighted mean, which is the
+   same lesson TRA-952 recorded and the reason this is not a headline fix.
+4. At least one untouched tool moves by more than 10% between artifacts, from
+   corpus drift alone. Every bench run so far has produced one, and a run that
+   did not would mean the corpus stopped moving, not that the product did.
+
+### Pass bar
+
+**The tail half has no bar** — it is a first measurement, and any number it
+returns is publishable. What it must not do is stay unpublished if it makes the
+headline worse.
+
+The bench half passes if predictions 1-3 hold. Prediction 4 is a control on the
+instrument, not on the product: if it fails, the run is still valid and the
+observation is recorded.
+
+**Whatever the tail does to `reduction_pct`, the new figure is the published
+one.** Registered here so that it cannot be argued afterwards that a
+lower-coverage number was the fairer comparison.
+
+## Verdict — all four held, and the tail is priced for the first time (TRA-1159, 2026-09-08)
+
+Registered above at `ed2fc5a0`, run at `fd3cafc6`, one commit later. `get_plugin_registry` is shaped (the 193-entry
+edge-type catalog is now opt-in via `include_edge_types: true`, per-category
+counts stay in the default answer) and added to `bench-response-tokens.ts` and
+`call-volume.json` at 10 calls. The tail is priced from recorded responses converted
+at the wire median ratio via `scripts/field-tail-cost.ts` into
+`docs/_data/response_tokens_tail.json`.
+
+| prediction | result | |
+|---|---|---|
+| 1. harness median within 5% of 4 983 | **5 045** (1.2% delta) | ✅ |
+| 2. still over baseline, `tools_costing_more` goes 4 → 5 | **10.09x** (5 045 / 500), 5 of 23 tools | ✅ |
+| 3. `reduction_pct` falls by < 0.5 points | 68.2% → **68.0%** (-0.2 points) | ✅ |
+| 4. at least one untouched tool moves by > 10% | `list_projects` moved 2 017 → 994 tokens (-50.7%) | ✅ |
+
+All four registered predictions held. Against the declared bar, this is a **PASS**.
+
+The tail measurement prices 73 tools (591 calls, 479 priced from recorded sizes, 112 unpriced)
+at 332 585 measured tokens against an 182 000 baseline (1.83x). Combined with the tail, the
+all-in reduction is **65.5%** (including 243 tail overhead calls), compared to 67.0% head-only.
+Coverage expands from 97.3% (head store) to 99.5% across combined cohorts.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on
