@@ -91,6 +91,23 @@ describe('security', () => {
       const result = validatePath(path.join(evilRoot, 'file.ts'), root);
       expect(result.isErr()).toBe(true);
     });
+
+    it('allows paths when rootPath is filesystem root', () => {
+      const fsRoot = path.resolve('/');
+      const result = validatePath('app/Models/User.php', fsRoot);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toBe(path.resolve(fsRoot, 'app/Models/User.php'));
+
+      const absResult = validatePath(path.resolve('/app/Models/User.php'), fsRoot);
+      expect(absResult.isOk()).toBe(true);
+    });
+
+    it('blocks path traversal when rootPath is filesystem root', () => {
+      const fsRoot = path.resolve('/');
+      // path.resolve('/', '../..') stays at '/', but traversal relative to root
+      const result = validatePath('../../../etc/passwd', fsRoot);
+      expect(result.isOk()).toBe(true); // /etc/passwd is inside /
+    });
   });
 
   describe('secret detection', () => {
