@@ -52,7 +52,8 @@ export interface DetectedMcpClient {
     | 'cline'
     | 'kilocode'
     | 'antigravity'
-    | 'kimi';
+    | 'kimi'
+    | 'opencode';
   configPath: string;
   hasTraceMcp: boolean;
 }

@@ -20,6 +20,7 @@ function throwEnoent(): never {
 }
 
 let updateClaudeMd: typeof import('../../src/init/claude-md.js').updateClaudeMd;
+let updateAgentsMd: typeof import('../../src/init/agents-md.js').updateAgentsMd;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -31,6 +32,8 @@ beforeEach(async () => {
 
   const mod = await import('../../src/init/claude-md.js');
   updateClaudeMd = mod.updateClaudeMd;
+  const agentsMod = await import('../../src/init/agents-md.js');
+  updateAgentsMd = agentsMod.updateAgentsMd;
 });
 
 afterEach(() => {
@@ -198,5 +201,52 @@ describe('updateClaudeMd', () => {
 
     const result = updateClaudeMd('/project', {});
     expect(result.action).toBe('already_configured');
+  });
+});
+
+describe('updateAgentsMd', () => {
+  it('creates AGENTS.md with neutral host-tool instructions', () => {
+    const result = updateAgentsMd('/project', {});
+    expect(result.action).toBe('created');
+    expect(result.target).toBe(path.join('/project', 'AGENTS.md'));
+    expect(mockFs.writeFileSync).toHaveBeenCalledOnce();
+
+    const content = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(content).toContain(START_MARKER);
+    expect(content).toContain(END_MARKER);
+    expect(content).toContain('trace Tool Routing');
+
+    // Neutral host tool descriptions for cross-client agents (TRA-1204)
+    expect(content).toContain(
+      'NEVER use host file-reading, grep, glob, or shell (ls, find) tools for navigating source code.',
+    );
+    expect(content).toContain(
+      'Use host file-reading and grep tools ONLY for non-code files (.md, .json, .yaml, config) or before edit.',
+    );
+    expect(content).toContain('full-file read');
+    expect(content).toContain('text grep');
+
+    // Does NOT contain Claude-specific capitalized tool names
+    expect(content).not.toContain('NEVER use Read/Grep/Glob/Bash(ls,find)');
+    expect(content).not.toContain('Use Read/Grep/Glob ONLY');
+    expect(content).not.toContain('Read (full file)');
+  });
+
+  it('preserves Claude-specific tool names in CLAUDE.md while AGENTS.md stays neutral', () => {
+    updateClaudeMd('/project', {});
+    const claudeContent = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(claudeContent).toContain('NEVER use Read/Grep/Glob/Bash(ls,find)');
+    expect(claudeContent).toContain('Read (full file)');
+
+    vi.resetAllMocks();
+    mockFs.writeFileSync.mockImplementation(() => {});
+    mockFs.readFileSync.mockImplementation(throwEnoent);
+
+    updateAgentsMd('/project', {});
+    const agentsContent = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(agentsContent).toContain(
+      'NEVER use host file-reading, grep, glob, or shell (ls, find) tools',
+    );
+    expect(agentsContent).not.toContain('NEVER use Read/Grep/Glob/Bash(ls,find)');
   });
 });
