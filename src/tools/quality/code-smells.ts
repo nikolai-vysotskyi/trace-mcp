@@ -105,6 +105,7 @@ function detectTodoComments(lines: string[], filePath: string): CodeSmellFinding
     if (!m) continue;
 
     // Ignore tags that are enclosed in backticks (e.g. documentation or regex comments)
+    let match = m;
     const tagIndex = m.index + m[0].indexOf(m[1]);
     const backticksBeforeTag = (line.slice(0, tagIndex).match(/`/g) || []).length;
     if (backticksBeforeTag % 2 === 1) {
@@ -112,10 +113,11 @@ function detectTodoComments(lines: string[], filePath: string): CodeSmellFinding
       const lineWithoutInlineCode = line.replace(/`[^`]*`/g, ' ');
       const m2 = TODO_REGEX.exec(lineWithoutInlineCode);
       if (!m2) continue;
+      match = m2;
     }
 
-    const tag = m[1].toUpperCase();
-    const message = (m[2] ?? '').trim();
+    const tag = match[1].toUpperCase();
+    const message = (match[2] ?? '').trim();
     const priority = TODO_TAG_PRIORITY.get(tag) ?? 'medium';
 
     findings.push({
@@ -229,11 +231,16 @@ function detectEmptyFunctions(
 
       // Skip TypeScript constructor parameter properties (e.g. constructor(private db: Db) {}).
       // The empty body is intentional because TypeScript auto-generates field assignments.
-      if (
-        (sym.kind === 'constructor' || sym.name === 'constructor') &&
-        /\b(?:private|protected|public|readonly)\s+[\w$]/.test(header)
-      ) {
-        continue;
+      // We must only check the parameter list between ( and ), not the entire constructor header,
+      // so access modifiers on the constructor itself (e.g. public constructor() {}) don't cause false skips.
+      if (sym.kind === 'constructor' || sym.name === 'constructor') {
+        const openParen = header.indexOf('(');
+        const closeParen = header.lastIndexOf(')');
+        const params =
+          openParen !== -1 && closeParen > openParen ? header.slice(openParen + 1, closeParen) : '';
+        if (/\b(?:private|protected|public|readonly)\s+[\w$]/.test(params)) {
+          continue;
+        }
       }
 
       // Skip abstract methods and ambient declarations (e.g. in .d.ts or declare blocks)
@@ -337,8 +344,8 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
       /(?:npmjs?|pypi|rubygems|crates|maven|nuget|packagist)\.(?:org|io|dev)/i,
       /github\.com|gitlab\.com|bitbucket\.org/i,
       /<!DOCTYPE\b|\.dtd\b/i,
-      /\bplaceholder\s*:/i,
-      /(?:locales?|i18n|translations?)\//i,
+      /\bplaceholder\s*[:=]/i,
+      /(?:locales?|i18n|translations?)[/\\]/i,
     ],
   },
   // Magic numbers in comparisons, assignments, or returns
