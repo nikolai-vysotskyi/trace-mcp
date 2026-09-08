@@ -84,6 +84,18 @@ describe('sweepOrphanTmpFiles (TRA-702)', () => {
     expect(fs.existsSync(lock)).toBe(false);
   });
 
+  it('collects postinstall control plane tmp files (no leading dot, 12-char hex)', () => {
+    const tmpEnv = makeFile('launcher.env.tmp.1234.3a8f308b3935', 3 * DAY_MS);
+    const tmpShim = makeFile('trace.tmp.5678.4eb982e9ac9d', 3 * DAY_MS);
+
+    const removed = sweepOrphanTmpFiles(dir, DAY_MS);
+
+    expect(removed).toContain(tmpEnv);
+    expect(removed).toContain(tmpShim);
+    expect(fs.existsSync(tmpEnv)).toBe(false);
+    expect(fs.existsSync(tmpShim)).toBe(false);
+  });
+
   it('sweeps the given directory only, not its children', () => {
     const sub = path.join(dir, 'sessions');
     fs.mkdirSync(sub);

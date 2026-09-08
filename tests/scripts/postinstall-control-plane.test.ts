@@ -393,4 +393,10 @@ describe('postinstall-control-plane', () => {
       expect(src).toContain('<integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>');
     }
   });
+
+  it('atomic writes in postinstall script use 12-char hex random suffix matching ORPHAN_TMP_PATTERN', () => {
+    const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(script).not.toMatch(/\.tmp\.\$\{process\.pid\}\.\$\{Date\.now\(\)\}/);
+    expect(script).toMatch(/const rand = randomBytes\(6\)\.toString\('hex'\)/);
+  });
 });

@@ -101,7 +101,8 @@ function migrateLegacyHomeDir(target: string, legacy: string): boolean {
  * import time so a user-facing change requires a process restart.
  */
 const { home: TRACE_MCP_HOME_RESOLVED, migrated: TRACE_MCP_HOME_MIGRATED_RESOLVED } = (() => {
-  const override = process.env.TRACE_MCP_DATA_DIR;
+  const override =
+    process.env.TRACE_MCP_DATA_DIR || process.env.TRACE_MCP_HOME || process.env.TRACE_HOME;
   if (override && override.length > 0) {
     const expanded = override.startsWith('~')
       ? path.join(os.homedir(), override.slice(1))
