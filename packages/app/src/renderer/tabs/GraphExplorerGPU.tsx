@@ -48,41 +48,23 @@ const DEV_TOOLS = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true
     taller than the window. */
 const MENU_GROUP_LIMIT = 6;
 
+import {
+  DEFAULT_GRAPH_GPU_SETTINGS,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
+} from './graph-types';
+
+export {
+  DEFAULT_GRAPH_GPU_SETTINGS,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
+};
+
 const COLOR_BY_OPTIONS: { value: GraphGPUSettings['colorBy']; labelKey: string }[] = [
   { value: 'community', labelKey: 'colourByCommunity' },
   { value: 'language', labelKey: 'colourByLanguage' },
   { value: 'framework_role', labelKey: 'colourByFrameworkRole' },
 ];
-
-export interface GraphExplorerGPUHandle {
-  focusNode: (id: string) => void;
-}
-
-export interface GraphGPUSettings {
-  scope: string;
-  granularity: 'file' | 'symbol';
-  hideIsolated: boolean;
-  symbolKinds: string;
-  maxNodes: string;
-  colorBy: 'community' | 'language' | 'framework_role';
-  showLabels: boolean;
-  showFPS: boolean;
-  bottlenecks: boolean;
-  stressTest: boolean;
-}
-
-export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
-  scope: 'project',
-  granularity: 'file',
-  hideIsolated: true,
-  symbolKinds: '',
-  maxNodes: '',
-  colorBy: 'community',
-  showLabels: true,
-  showFPS: false,
-  bottlenecks: false,
-  stressTest: false,
-};
 
 interface Props {
   root: string;
@@ -855,6 +837,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // Monotonic token to ignore stale worker responses if a newer payload lands
   // while an older edge-build job is in flight.
   const renderTokenRef = useRef(0);
+  // Pending node ID to focus once graph data finishes loading and rendering.
+  const pendingFocusRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Persistent by design: cleared when the next load starts, never on a timer.
   // A 7s auto-dismiss used to leave a blank pane and no account of what failed.
@@ -1244,10 +1228,14 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // ── focusNode (for imperative handle) ─────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: highlightNeighborhood is declared further below (TDZ); see highlightBottleneckEdgesFor for the same pattern.
   const focusNode = useCallback(
-    (id: string) => {
+    (id: string): boolean => {
       const graph = graphRef.current;
       const idx = indexByIdRef.current.get(id);
-      if (!graph || idx == null) return;
+      if (!graph || idx == null) {
+        pendingFocusRef.current = id;
+        return false;
+      }
+      pendingFocusRef.current = null;
       graph.fitViewByPointIndices([idx], 500, 0.3);
       const node = nodesRef.current[idx];
       if (node) setSelected(node);
@@ -1259,6 +1247,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       } else {
         highlightNeighborhood([idx]);
       }
+      return true;
     },
     [settings.bottlenecks, settings.stressTest, highlightBottleneckEdgesFor],
   );
@@ -2132,6 +2121,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // would otherwise be at full magnitude and close-pair repulsion
         // spikes make individual points visibly pop.
         graph.start(0.4);
+        if (pendingFocusRef.current) {
+          const pendingId = pendingFocusRef.current;
+          if (indexByIdRef.current.has(pendingId)) {
+            pendingFocusRef.current = null;
+            focusNode(pendingId);
+          }
+        }
       };
       if (graph.isReady) applyPointData();
       else

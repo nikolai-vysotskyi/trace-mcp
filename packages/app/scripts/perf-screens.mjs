@@ -63,7 +63,7 @@ const PORT_RANGE = [9354, 9374];
 const USEFUL_DEADLINE_MS = 30_000;
 
 /** Screens reachable in the menu window, in sidebar order. */
-const MENU_SCREENS = ['workspace', 'clients'];
+const MENU_SCREENS = ['workspace', 'savings', 'clients'];
 /** Screens reachable in a project window. `graph` is excluded: it needs a GPU
     context the harness's unmapped window does not always get, and its own
     settle time is a different measurement (renderer_cpu_idle_pct). */

@@ -51,7 +51,7 @@ median of the last five runs; four improved. The `artifact_mb` rows come from
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_first_content_ms` | 93 | — | **the startup metric of record** — 97 last time |
+| `renderer_first_content_ms` | 89 | — | **the startup metric of record** — 93 last time |
 | `renderer_fcp_ms` | null | — | structurally unavailable offscreen — see below |
 | `cold_start_ms` | 415 | 3000 | ok, load-sensitive |
 | `window_interactive_ms` | 141 | — | load-sensitive, do not trend it |
@@ -66,8 +66,8 @@ median of the last five runs; four improved. The `artifact_mb` rows come from
 | `tree_cpu_peak_pct` (combined, sums cores) | 133 | — | ok vs 180 |
 | `rss_after_index_settle_mb` (daemon only) | 196 | 500 | ok — was 316 |
 | `main_cpu_idle_pct` | 0.1 | 2 | ok |
-| `renderer_eager_kb` | 2084 | — | **the size metric of record** — -0.9% |
-| `renderer_bundle_kb` | 2346 | — | +3.3%, all of it in lazy chunks |
+| `renderer_eager_kb` | **1358** | — | **the size metric of record** — -34.8% vs 2084 KB (TRA-1185) |
+| `renderer_bundle_kb` | 2379 | — | flat vs 2346 KB (+1.4%), code-split behind lazy chunks |
 | `artifact_mb.mac_app_unpacked` | 350 | x1.5 growth | +1.1% vs the 346.2 re-anchor |
 | `artifact_mb.mac_server_payload` | 80 | **100 MB, absolute** | ok, watch it |
 | `artifact_mb.mac_asar` | 7 | x1.5 growth | ok |
@@ -379,6 +379,18 @@ reported a search *median* of 0 against 64 in the previous entry while p95 barel
 a median that collapses while the tail does not is a measurement fault, not a speed-up.
 Fixed by arming the observer first; the primitive moved into `packages/app/scripts/perf-lib.mjs` as
 `MEASURE_SRC` so a jsdom test can run the same text the renderer runs.
+
+**2026-09-08 — GraphExplorerGPU and cosmos.gl were sitting in the eager startup payload (TRA-1185).**
+`GraphExplorerGPU` was statically imported in `App.tsx`, and `manualChunks` in `packages/app/vite.config.ts`
+isolated `@cosmos.gl/graph` into a `cosmos` chunk. Because Rollup assigned Vite's dynamic-import preload helper
+to that chunk and the entry module needed that helper, `index.html` was generated with
+`<link rel="modulepreload" href="assets/cosmos-*.js">`, forcing every window to download, parse, and compile
+the entire 702 KB cosmos WebGL stack during cold start. Moving `GraphExplorerGPU` behind `React.lazy`
+(with polling focus retry in `openFileInGraph`) and removing the `cosmos` entry from `manualChunks` dropped
+`renderer_eager_kb` from 2084 KB to **1358 KB** (-726 KB, -34.8% vs last baseline, -35.7% vs 2112 KB pre-fix)
+while total bundle size remained flat at 2379 KB (was 2346 KB). `renderer_first_content_ms` improved 93 → 89 ms.
+Covered by `lazy-tabs.test.ts` (now asserting `Savings` and `GraphExplorerGPU`), `perf-marks.test.ts`,
+and `perf-screens.mjs`.
 
 **2026-09-02 — four secondary tabs were sitting in the startup chunk (TRA-593).**
 `Activity`, `Insights`, `MemoryExplorer` and `Notebook` were static imports in `App.tsx`, so
