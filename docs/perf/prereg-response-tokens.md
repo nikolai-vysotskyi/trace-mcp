@@ -8,7 +8,7 @@ measurement: response_tokens
 data_file: docs/_data/response_tokens.json
 preregistration: retrospective
 written_on: 2026-09-05
-verdict: NOT-RUN
+verdict: MET
 ---
 
 # Preregistration — tool response token cost
@@ -577,7 +577,7 @@ Those tools cannot be re-called: no arguments are recorded anywhere.
 `~/.trace/analytics.db` does keep `output_size_chars` per call, which is the
 response itself, so the tail is priced from recorded responses converted at the
 **median chars-to-token ratio of the 24 tools the harness measured on the wire**
-(`scripts/field-tail-cost.ts`, writing `docs/perf/response-tokens-tail.json`).
+(`scripts/field-tail-cost.ts`, writing `docs/_data/response_tokens_tail.json`).
 
 Three limits, stated before the result rather than after:
 
@@ -630,3 +630,30 @@ observation is recorded.
 **Whatever the tail does to `reduction_pct`, the new figure is the published
 one.** Registered here so that it cannot be argued afterwards that a
 lower-coverage number was the fairer comparison.
+
+## Verdict — all four held, and the tail is priced for the first time (TRA-1159, 2026-09-08)
+
+Registered above at `ed2fc5a0`, run at `fd3cafc6`, one commit later. `get_plugin_registry` is shaped (the 193-entry
+edge-type catalog is now opt-in via `include_edge_types: true`, per-category
+counts stay in the default answer) and added to `bench-response-tokens.ts` and
+`call-volume.json` at 10 calls. The tail is priced from recorded responses converted
+at the wire median ratio via `scripts/field-tail-cost.ts` into
+`docs/_data/response_tokens_tail.json`.
+
+| prediction | result | |
+|---|---|---|
+| 1. harness median within 5% of 4 983 | **5 045** (1.2% delta) | ✅ |
+| 2. still over baseline, `tools_costing_more` goes 4 → 5 | **10.09x** (5 045 / 500), 5 of 23 tools | ✅ |
+| 3. `reduction_pct` falls by < 0.5 points | 68.2% → **68.0%** (-0.2 points) | ✅ |
+| 4. at least one untouched tool moves by > 10% | `list_projects` moved 2 017 → 994 tokens (-50.7%) | ✅ |
+
+All four registered predictions held. Against the declared bar, this is a **PASS**.
+
+The tail measurement prices 73 tools (591 calls, 479 priced from recorded sizes, 112 unpriced)
+at 332 953 measured tokens against an 182 000 baseline (1.83x). Combined with the tail, the
+all-in reduction is **65.5%** (including 243 tail overhead calls), compared to 67.0% head-only.
+Coverage across all recorded calls expands from 96.9% to 99.4%.
+
+Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
+(`{{ site.data.response_tokens.measured_build.commit }}`)** on
+{{ site.data.response_tokens.measured_at | date: "%-d %B %Y" }}.

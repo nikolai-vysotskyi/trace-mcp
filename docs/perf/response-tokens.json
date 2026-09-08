@@ -1,8 +1,9 @@
 {
-  "measured_at": "2026-09-07T08:24:17.943Z",
+  "measured_at": "2026-09-08T16:38:07.874Z",
   "measured_build": {
-    "version": "3.22.0",
-    "commit": "9f499d67"
+    "version": "3.23.2",
+    "commit": "fd3cafc6",
+    "dirty": true
   },
   "target": "self",
   "runs": 3,
@@ -90,11 +91,11 @@
       "ok": true,
       "chars": 1135,
       "est": 327,
-      "real": 338,
-      "ms": 2,
+      "real": 337,
+      "ms": 3,
       "runs": 3,
-      "real_min": 338,
-      "real_max": 340
+      "real_min": 335,
+      "real_max": 338
     },
     {
       "tool": "get_tests_for",
@@ -110,35 +111,35 @@
     {
       "tool": "get_context_bundle",
       "ok": true,
-      "chars": 454,
-      "est": 131,
-      "real": 127,
+      "chars": 470,
+      "est": 136,
+      "real": 131,
       "ms": 1,
       "runs": 3,
-      "real_min": 127,
-      "real_max": 127
+      "real_min": 131,
+      "real_max": 131
     },
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 14499,
-      "est": 4169,
-      "real": 4060,
+      "chars": 14548,
+      "est": 4183,
+      "real": 4074,
       "ms": 4,
       "runs": 3,
-      "real_min": 4059,
-      "real_max": 4060
+      "real_min": 4074,
+      "real_max": 4075
     },
     {
       "tool": "get_call_graph",
       "ok": true,
-      "chars": 3737,
-      "est": 1075,
-      "real": 904,
+      "chars": 3536,
+      "est": 1017,
+      "real": 851,
       "ms": 1,
       "runs": 3,
-      "real_min": 904,
-      "real_max": 904
+      "real_min": 851,
+      "real_max": 851
     },
     {
       "tool": "get_complexity_report",
@@ -157,7 +158,7 @@
       "chars": 227,
       "est": 66,
       "real": 59,
-      "ms": 551,
+      "ms": 544,
       "runs": 3,
       "real_min": 59,
       "real_max": 59
@@ -165,13 +166,13 @@
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 9858,
-      "est": 2835,
-      "real": 2828,
+      "chars": 9764,
+      "est": 2808,
+      "real": 2809,
       "ms": 5,
       "runs": 3,
-      "real_min": 2827,
-      "real_max": 2828
+      "real_min": 2809,
+      "real_max": 2809
     },
     {
       "tool": "get_env_vars",
@@ -187,24 +188,24 @@
     {
       "tool": "get_dead_code",
       "ok": true,
-      "chars": 11179,
-      "est": 3214,
-      "real": 2741,
-      "ms": 60,
+      "chars": 11133,
+      "est": 3201,
+      "real": 2725,
+      "ms": 57,
       "runs": 3,
-      "real_min": 2741,
-      "real_max": 2741
+      "real_min": 2725,
+      "real_max": 2725
     },
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 179,
-      "est": 52,
-      "real": 62,
-      "ms": 50,
+      "chars": 1495,
+      "est": 430,
+      "real": 394,
+      "ms": 86,
       "runs": 3,
-      "real_min": 62,
-      "real_max": 62
+      "real_min": 394,
+      "real_max": 394
     },
     {
       "tool": "check_quality_gates",
@@ -212,7 +213,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 410,
+      "ms": 418,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -245,7 +246,7 @@
       "chars": 4437,
       "est": 1276,
       "real": 1099,
-      "ms": 14,
+      "ms": 16,
       "runs": 3,
       "real_min": 1099,
       "real_max": 1099
@@ -256,7 +257,7 @@
       "chars": 120,
       "est": 35,
       "real": 38,
-      "ms": 565,
+      "ms": 579,
       "runs": 3,
       "real_min": 38,
       "real_max": 38
@@ -264,13 +265,24 @@
     {
       "tool": "list_projects",
       "ok": true,
-      "chars": 5485,
-      "est": 1577,
-      "real": 2017,
+      "chars": 2781,
+      "est": 800,
+      "real": 994,
       "ms": 3,
       "runs": 3,
-      "real_min": 2017,
-      "real_max": 2017
+      "real_min": 994,
+      "real_max": 994
+    },
+    {
+      "tool": "get_plugin_registry",
+      "ok": true,
+      "chars": 16796,
+      "est": 4829,
+      "real": 5045,
+      "ms": 2,
+      "runs": 3,
+      "real_min": 5045,
+      "real_max": 5045
     },
     {
       "tool": "search_text",
@@ -299,11 +311,11 @@
       "ok": true,
       "chars": 1512,
       "est": 435,
-      "real": 419,
+      "real": 420,
       "ms": 26,
       "runs": 3,
-      "real_min": 419,
-      "real_max": 419
+      "real_min": 420,
+      "real_max": 420
     },
     {
       "tool": "find_usages",
@@ -311,7 +323,7 @@
       "chars": 2588,
       "est": 745,
       "real": 660,
-      "ms": 1,
+      "ms": 2,
       "runs": 3,
       "real_min": 660,
       "real_max": 660
@@ -322,7 +334,7 @@
       "chars": 854,
       "est": 246,
       "real": 219,
-      "ms": 88,
+      "ms": 86,
       "runs": 3,
       "real_min": 219,
       "real_max": 219
@@ -650,108 +662,108 @@
     {
       "tool": "search",
       "item": "Error",
-      "real": 1596,
-      "real_min": 1596,
-      "real_max": 1596,
-      "chars": 6107,
+      "real": 1598,
+      "real_min": 1598,
+      "real_max": 1598,
+      "chars": 6104,
       "hits": 40
     },
     {
       "tool": "search",
       "item": "ServiceInfo",
-      "real": 297,
-      "real_min": 297,
-      "real_max": 297,
+      "real": 299,
+      "real_min": 299,
+      "real_max": 299,
       "chars": 1041,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ToolResultEvent",
-      "real": 279,
-      "real_min": 279,
-      "real_max": 279,
+      "real": 281,
+      "real_min": 281,
+      "real_max": 281,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "handshakeDiagnosticLine",
-      "real": 305,
-      "real_min": 305,
-      "real_max": 305,
+      "real": 307,
+      "real_min": 307,
+      "real_max": 307,
       "chars": 1085,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "AdminRegistration",
-      "real": 453,
-      "real_min": 453,
-      "real_max": 453,
+      "real": 455,
+      "real_min": 455,
+      "real_max": 455,
       "chars": 1838,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "ZodSchema",
-      "real": 388,
-      "real_min": 388,
-      "real_max": 388,
-      "chars": 1388,
+      "real": 390,
+      "real_min": 390,
+      "real_max": 390,
+      "chars": 1390,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "extractRuneProps",
-      "real": 306,
-      "real_min": 306,
-      "real_max": 306,
+      "real": 308,
+      "real_min": 308,
+      "real_max": 308,
       "chars": 1083,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ExportOptions",
-      "real": 358,
-      "real_min": 358,
-      "real_max": 358,
+      "real": 360,
+      "real_min": 360,
+      "real_max": 360,
       "chars": 1271,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "symbolAtLine",
-      "real": 298,
-      "real_min": 298,
-      "real_max": 298,
+      "real": 300,
+      "real_min": 300,
+      "real_max": 300,
       "chars": 975,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "Community",
-      "real": 417,
-      "real_min": 417,
-      "real_max": 417,
+      "real": 419,
+      "real_min": 419,
+      "real_max": 419,
       "chars": 1519,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "checkSymbol",
-      "real": 322,
-      "real_min": 322,
-      "real_max": 322,
+      "real": 324,
+      "real_min": 324,
+      "real_max": 324,
       "chars": 1149,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "matchesV4Cidr",
-      "real": 313,
-      "real_min": 313,
-      "real_max": 313,
+      "real": 315,
+      "real_min": 315,
+      "real_max": 315,
       "chars": 997,
       "hits": 1
     },
@@ -767,9 +779,9 @@
     {
       "tool": "search",
       "item": "min session bytes",
-      "real": 290,
-      "real_min": 290,
-      "real_max": 290,
+      "real": 292,
+      "real_min": 292,
+      "real_max": 292,
       "chars": 1008,
       "hits": 1
     },
@@ -803,9 +815,9 @@
     {
       "tool": "search",
       "item": "json parse",
-      "real": 282,
-      "real_min": 282,
-      "real_max": 282,
+      "real": 284,
+      "real_min": 284,
+      "real_max": 284,
       "chars": 966,
       "hits": 1
     },
@@ -816,7 +828,7 @@
       "real_min": 4037,
       "real_max": 4037,
       "chars": 16116,
-      "hits": 263
+      "hits": 266
     },
     {
       "tool": "find_usages",
