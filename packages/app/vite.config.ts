@@ -14,7 +14,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ['react', 'react-dom', 'react-dom/client'],
-          cosmos: ['@cosmos.gl/graph'],
         },
       },
     },

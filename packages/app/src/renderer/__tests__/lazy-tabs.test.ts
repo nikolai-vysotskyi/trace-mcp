@@ -36,4 +36,16 @@ describe('lazily loaded tabs', () => {
     const mod = await import('../tabs/Notebook');
     expect(typeof mod.Notebook).toBe('function');
   });
+
+  it('Savings is still a named export', async () => {
+    const mod = await import('../tabs/Savings');
+    expect(typeof mod.Savings).toBe('function');
+  });
+
+  it('GraphExplorerGPU is still a named export', async () => {
+    const mod = await import('../tabs/GraphExplorerGPU');
+    // React.forwardRef returns an object, standard functional components return a function.
+    expect(['function', 'object']).toContain(typeof mod.GraphExplorerGPU);
+    expect(mod.GraphExplorerGPU).toBeTruthy();
+  });
 });

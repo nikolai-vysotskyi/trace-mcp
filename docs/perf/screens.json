@@ -136,6 +136,40 @@
           "never_useful": 0
         }
       }
+    },
+    {
+      "date": "2026-09-08T00:26:33.850Z",
+      "mode": "live-daemon",
+      "daemon": "http://127.0.0.1:3741",
+      "project": null,
+      "profile": "cold (fresh per sample)",
+      "samples": 3,
+      "deadline_ms": 30000,
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "v22.22.3"
+      },
+      "metrics": {
+        "workspace": {
+          "cold_ms": 485,
+          "cold_shell_ms": 47,
+          "warm_ms": null,
+          "never_useful": 0
+        },
+        "savings": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 311,
+          "never_useful": 0
+        },
+        "clients": {
+          "cold_ms": null,
+          "cold_shell_ms": null,
+          "warm_ms": 208,
+          "never_useful": 0
+        }
+      }
     }
   ]
 }

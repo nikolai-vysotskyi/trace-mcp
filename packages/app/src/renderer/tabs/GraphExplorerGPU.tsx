@@ -48,41 +48,23 @@ const DEV_TOOLS = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true
     taller than the window. */
 const MENU_GROUP_LIMIT = 6;
 
+import {
+  DEFAULT_GRAPH_GPU_SETTINGS,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
+} from './graph-types';
+
+export {
+  DEFAULT_GRAPH_GPU_SETTINGS,
+  type GraphExplorerGPUHandle,
+  type GraphGPUSettings,
+};
+
 const COLOR_BY_OPTIONS: { value: GraphGPUSettings['colorBy']; labelKey: string }[] = [
   { value: 'community', labelKey: 'colourByCommunity' },
   { value: 'language', labelKey: 'colourByLanguage' },
   { value: 'framework_role', labelKey: 'colourByFrameworkRole' },
 ];
-
-export interface GraphExplorerGPUHandle {
-  focusNode: (id: string) => void;
-}
-
-export interface GraphGPUSettings {
-  scope: string;
-  granularity: 'file' | 'symbol';
-  hideIsolated: boolean;
-  symbolKinds: string;
-  maxNodes: string;
-  colorBy: 'community' | 'language' | 'framework_role';
-  showLabels: boolean;
-  showFPS: boolean;
-  bottlenecks: boolean;
-  stressTest: boolean;
-}
-
-export const DEFAULT_GRAPH_GPU_SETTINGS: GraphGPUSettings = {
-  scope: 'project',
-  granularity: 'file',
-  hideIsolated: true,
-  symbolKinds: '',
-  maxNodes: '',
-  colorBy: 'community',
-  showLabels: true,
-  showFPS: false,
-  bottlenecks: false,
-  stressTest: false,
-};
 
 interface Props {
   root: string;
