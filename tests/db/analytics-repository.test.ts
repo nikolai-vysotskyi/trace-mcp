@@ -17,7 +17,7 @@ describe('AnalyticsRepository — env vars', () => {
 
     const id2 = store.analytics.insertEnvVar(fileId, {
       key: 'APP_KEY',
-      valueType: 'string',
+      valueType: 'secret',
       valueFormat: null,
       comment: null,
       quoted: true,
@@ -30,11 +30,17 @@ describe('AnalyticsRepository — env vars', () => {
     const rows = store.analytics.getEnvVarsByFile(fileId);
     expect(rows).toHaveLength(2);
     // Ordered by line ascending: line 2 comes before line 10
+    expect(rows[0].id).toBe(id2);
+    expect(rows[0].file_id).toBe(fileId);
     expect(rows[0].key).toBe('APP_KEY');
+    expect(rows[0].value_type).toBe('secret');
     expect(rows[0].line).toBe(2);
     expect(rows[0].quoted).toBe(1);
 
+    expect(rows[1].id).toBe(id1);
+    expect(rows[1].file_id).toBe(fileId);
     expect(rows[1].key).toBe('DATABASE_URL');
+    expect(rows[1].value_type).toBe('string');
     expect(rows[1].line).toBe(10);
     expect(rows[1].value_format).toBe('uri');
     expect(rows[1].comment).toBe('Primary PostgreSQL database');
