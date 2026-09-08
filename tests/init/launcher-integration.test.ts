@@ -1817,5 +1817,51 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(res.stdout).toContain('SAFE_NODE');
       expect(res.status).toBe(0);
     });
+
+    it('handles CRLF line endings in launcher.env (TRA-1197)', () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      fs.writeFileSync(
+        path.join(traceHome, 'launcher.env'),
+        [`TRACE_MCP_NODE="${node}"`, `TRACE_MCP_CLI="${cli}"`, ''].join('\r\n'),
+      );
+      const res = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('handles CRLF line endings in pkg-roots (TRA-1197)', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      // Configure dead node/cli to force probe fallback
+      writeConfig(traceHome, '/dead/node', '/dead/cli.js');
+
+      // Set up a custom prefix and record it in pkg-roots with CRLF
+      const customPrefix = path.join(home, 'custom-prefix');
+      const pkgDir = path.join(customPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      const customCli = path.join(pkgDir, 'cli.js');
+      fs.writeFileSync(customCli, '// fake cli\n');
+      const pkgRootsFile = path.join(traceHome, 'pkg-roots');
+      fs.writeFileSync(
+        pkgRootsFile,
+        [`# recorded prefixes\r\n`, `${customPrefix}/lib/node_modules\r\n`].join(''),
+      );
+
+      // Node in PATH so probe_node finds it
+      const binDir = path.join(home, 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.copyFileSync(node, path.join(binDir, 'node'));
+
+      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
+        env: {
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          PATH: `${binDir}:/usr/bin:/bin`,
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toContain('serve');
+    });
   });
 });

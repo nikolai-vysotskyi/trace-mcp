@@ -98,6 +98,15 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     expect(Object.keys(readProjects())).toEqual([real]);
   });
 
+  it('drops sections whose root is a dangerous directory like ~/.trace (TRA-1197)', () => {
+    const real = fs.mkdtempSync(path.join(tmpHome, 'real-'));
+    const traceDir = path.join(os.homedir(), '.trace');
+    writeConfig({ [traceDir]: { root: '.' }, [real]: { root: '.' } });
+
+    expect(configJsonc.pruneProjectConfigSections()).toEqual([traceDir]);
+    expect(Object.keys(readProjects())).toEqual([real]);
+  });
+
   it('keeps a registered project whose root is only transiently missing', () => {
     // An unmounted drive must not cost the user their config. registry.json is
     // the authority, and it already runs its own 7-day grace period.
