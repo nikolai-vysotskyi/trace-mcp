@@ -65,3 +65,7 @@ ripwire:
   repo: redhat-et/ripwire
   stars_exact: 1731
   stars: "1.7K"
+narsil_mcp:
+  repo: postrv/narsil-mcp
+  stars_exact: 182
+  stars: "182"

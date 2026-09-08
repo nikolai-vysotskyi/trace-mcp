@@ -1894,4 +1894,20 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 `macanderson/stella#6018` (12★, internal rust crate test harness).
 `mmnto-ai/totem#2667` (17★, internal R14 round finding).
 
+## Run summary — 2026-09-09 (TRA-1234)
+
+**Landing page & competitor profiling: Narsil-MCP (`/vs/narsil-mcp.html`)**
+- Profiled `postrv/narsil-mcp` (182★, Rust, v1.7.0): Code Property Graph (CPG) & Code Context Graph (CCG) implementation with embedded Axum web UI and SPARQL 1.1 RDF endpoint.
+- Shipped `/vs/narsil-mcp.html` with Schema.org `TechArticle` + `FAQPage` (5 Q&As), compliant 148-char meta description, and 5 architectural deep dives:
+  1. Retrieval architecture: SPARQL 1.1 RDF queries vs typed deterministic MCP tools (`get_callers`, `get_change_impact`).
+  2. Context efficiency: 90 tools / 47.2K tokens flat overhead vs 28-tool `minimal` preset (~11.6K tokens) with `load_tools` dynamic escalation.
+  3. Ecosystem coverage: 32 raw languages vs 81 languages + 87 web framework semantics.
+  4. Agent actionability: Read-only graph traversal vs safe AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`).
+  5. Security taint: Syntactic regex pattern matching vs AST dataflow taint tracking with OASIS SARIF 2.1.0 output.
+- Linked in `docs/_data/competitors.yml`, `docs/_data/docs_nav.yml`, `docs/llms.txt`, `docs/sitemap.xml`, and `docs/comparisons.md`.
+
+**Mention sweep & telemetry:**
+- `scripts/mention-sweep.sh` run: identified `KryptosAI/mcp-observatory` (146★), verified as `dynatrace-mcp-server` collision and recorded in `ops/mentions-seen.txt`.
+- Standing catalog moratorium holds (0 attributable conversions from directories).
+
 
