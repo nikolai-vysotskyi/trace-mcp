@@ -1686,3 +1686,67 @@ reports `complete` while indexing the default branch — the same "no-op that lo
 like success" invariant as TRA-1161), `#3068` (portable index export for
 exact-commit builds), `#3014` (read path never loads VECTOR). One door per pass,
 not a sweep.
+
+### Eighth pass, 2026-09-08: diff-scoped graph review in PR-Agent, and C# namespace fan-out in Aspire
+
+**Mention sweep and catalog moratorium:** `scripts/mention-sweep.sh` ran clean
+with zero unrecorded repositories outside `ops/mentions-seen.txt`. The
+standing moratorium on new catalog submissions continues to hold (zero
+attributable arrivals from directories; see `ROADMAP.md` point 3).
+
+**Two touches, both written after reading the maintainers' open issues and comparing against our own implementation:**
+
+- [`The-PR-Agent/pr-agent#2499`](https://github.com/The-PR-Agent/pr-agent/issues/2499#issuecomment-5579065247)
+  (12,887★, open-source AI PR review tool). Maintainer Ismael Martinez confirmed
+  on 2026-09-07 that querying an existing graph for only the symbols a diff
+  touches is the planned integration shape and asked for empirical prototype
+  evidence and failure modes before deciding architecture. We sent the three
+  concrete findings from our 60-PR benchmark:
+  1. The line-shift trap (TRA-1075): mapping diff hunk headers
+     (`git diff --unified=0 <since>..<until>`) to AST spans silently attributes
+     code to the wrong enclosing functions unless the index was built at the
+     exact commit being compared; a commit-SHA equality assertion is required.
+  2. Context structure: packaging only changed symbol definitions loses caller
+     context and causes the model to hallucinate impact assumptions, while full
+     transitive dependents exceed context limits. The balanced structure that
+     held comprehension was: direct definition + imports (`context_bundle`) plus
+     1-hop inbound dependents (`change_impact`), under an explicit token budget.
+  3. Measured token vs quality trade-off: 72.7% median prompt token reduction
+     with bug-fix comprehension holding at parity (67% vs 65% across 60 merged
+     PRs in 6 public repos).
+- [`CommunityToolkit/Aspire#1575`](https://github.com/CommunityToolkit/Aspire/issues/1575#issuecomment-5579067592)
+  (626★, official .NET Foundation / Community Toolkit repository). Maintainer
+  Aaron Powell and contributors are evaluating repository-level code graph
+  navigation tools for AI assistants in Aspire, with proposals to integrate
+  CodeGraph. We shared the architectural trap from our C# import resolver
+  (`src/indexer/edge-resolvers/csharp-imports.ts`): unlike file-scoped Python
+  or JS modules, C# `using Namespace;` directives do not equal file dependency
+  edges. Naive resolution on namespace imports in real .NET repos (e.g.
+  Newtonsoft.Json) creates an average of 86 resolved edges per file, producing
+  a dense hairball that pollutes agent context. Clean C# graph extraction
+  requires distinguishing between namespace `using` statements (scope only),
+  exact type imports (`using static`, `using Alias =`), and symbol-level call/reference edges.
+
+**Threads re-checked 2026-09-08, all silent, nothing owed, no pings due before 2026-09-19 / 2026-09-20:**
+`eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `Kilo-Org/kilocode#13843`
+and `#12707`, `facebook/pyrefly#4583`, `abhigyanpatwari/GitNexus#3127`,
+`watt-mind/factory#1078`, `sosalejandro/atlas#105`,
+`Nano-Collective/nanocoder#1197`, `Ivy-Apps/deslop#173`.
+
+**Checked and skipped, with reasons:**
+`kirodotdev/KiroCrew#5303` (3,697★, import-graph test selector for PRs) —
+maintainer already performed deep design triage on 08-30 and marked it
+`needs-investigation` / `crew: needs human`; our input would duplicate their
+internal Vitest / pytest separation.
+`Kilo-Org/kilocode#13784` (27,210★, indexing initializing state) — maintainer
+already triaged and linked pending fix in PR #13796.
+`openJiuwen-ai/jiuwenswarm#2665` & `agent-core#462` (8,436★) — automated GitCode
+bot mirror; external GitHub comments are not routed to the underlying internal
+GitCode team.
+`thomaslwq/myclaude#981`, `illumination-k/agent-lens#494`, `jordigilh/engram#43`,
+`mshogin/archlint#163`, `srkprasad1995/dexiask#11` — all 0–30★ or personal spikes.
+
