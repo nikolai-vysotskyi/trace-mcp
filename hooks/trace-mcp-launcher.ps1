@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.10 (Windows)
+# trace-mcp-launcher v0.6.11 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -7,7 +7,39 @@
 
 $ErrorActionPreference = 'Stop'
 
-$TraceHome = if ($env:TRACE_MCP_HOME) { $env:TRACE_MCP_HOME } else { Join-Path $env:USERPROFILE '.trace' }
+# Determine $TraceHome:
+# 1. Explicit TRACE_MCP_HOME or TRACE_MCP_DATA_DIR override.
+# 2. Sibling directory of this shim: installed at <TraceHome>\bin\trace.cmd
+#    and trace-mcp-launcher.ps1. If launcher.env or .config.json exists in
+#    the parent directory, use it. This survives modified USERPROFILE or isolated homes.
+# 3. $USERPROFILE\.trace
+# 4. $USERPROFILE\.trace-mcp (legacy)
+$TraceHome = ''
+if ($env:TRACE_MCP_HOME) {
+    $TraceHome = $env:TRACE_MCP_HOME
+} elseif ($env:TRACE_MCP_DATA_DIR) {
+    $TraceHome = $env:TRACE_MCP_DATA_DIR
+} else {
+    if ($PSScriptRoot) {
+        $candidate = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+        if ((Test-Path -LiteralPath (Join-Path $candidate 'launcher.env') -PathType Leaf) -or (Test-Path -LiteralPath (Join-Path $candidate '.config.json') -PathType Leaf)) {
+            $TraceHome = $candidate
+        }
+    }
+    if (-not $TraceHome -and $env:USERPROFILE) {
+        $defaultTrace = Join-Path $env:USERPROFILE '.trace'
+        if ((Test-Path -LiteralPath $defaultTrace -PathType Container) -or -not (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.trace-mcp') -PathType Container)) {
+            $TraceHome = $defaultTrace
+        } else {
+            $TraceHome = Join-Path $env:USERPROFILE '.trace-mcp'
+        }
+    }
+}
+if (-not $TraceHome) { $TraceHome = Join-Path $env:USERPROFILE '.trace' }
+
+$env:TRACE_MCP_HOME = $TraceHome
+$env:TRACE_MCP_DATA_DIR = $TraceHome
+
 $ConfigPath = Join-Path $TraceHome 'launcher.env'
 $LogPath    = Join-Path $TraceHome 'launcher.log'
 
@@ -456,7 +488,15 @@ if (-not (Test-NodeBinary $NodePath)) {
 if (-not (Test-CliFile $CliPath)) {
     $CliPath = Find-Cli $NodePath
     if (-not $CliPath) {
-        Die 'trace-mcp package not found in any known npm prefix - run: npm i -g trace-mcp && trace-mcp init'
+        $retry = 0
+        while ($retry -lt 5 -and -not $CliPath) {
+            Start-Sleep -Milliseconds 300
+            $retry++
+            $CliPath = Find-Cli $NodePath
+        }
+        if (-not $CliPath) {
+            Die 'trace-mcp package not found in any known npm prefix - run: npm i -g trace-mcp && trace-mcp init'
+        }
     }
     Write-LauncherLog "probe: cli=$CliPath"
     $Healed = $true
