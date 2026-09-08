@@ -1,5 +1,5 @@
 export const savings = {
-  title: 'Einsparung',
+  title: 'Einsparungen',
   refresh: 'Aktualisieren',
   heroLabel: 'Zurückgegebene Eingabe-Tokens',
   heroValue: 'Mindestens {{tokens}}',

@@ -3,7 +3,7 @@ export const settings = {
   title: 'Einstellungen',
   back: 'Zurück',
   moreActions: 'Weitere Aktionen',
-  search: 'Einstellungen durchsuchen',
+  search: 'Einstellungen suchen',
   copyDaemon: 'Daemon-Details kopieren',
   editConfigFile: 'Konfigurationsdatei bearbeiten…',
   noMatches: 'Keine Einstellung passt zu „{{query}}“.',
@@ -358,5 +358,5 @@ export const settings = {
 
   /* ── Setup wizard ── */
   'app.setupWizard': "Einrichtungsassistent",
-  'app.runSetupWizard': "Assistent starten…",
+  'app.runSetupWizard': "Einrichten…",
 } as const;
