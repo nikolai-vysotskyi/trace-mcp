@@ -131,8 +131,7 @@ export class MessageRouter {
           }
           if (handled) return;
         }
-        this.clearPending(msg.id);
-        await this.sendErrorResponseSafely(msg.id, -32603, `Backend send failed: ${String(err)}`);
+        await this.failPendingRequest(msg.id, -32603, `Backend send failed: ${String(err)}`);
       }
     }
   }
@@ -161,7 +160,10 @@ export class MessageRouter {
       // 1. Wait for pending requests to drain (up to drainMs).
       await this.waitForDrain(drainMs);
 
-      // 2. Synthesize error responses for anything still pending.
+      // 2. Detach old backend's onmessage so late responses don't race or leak to stdout.
+      if (old) old.onmessage = undefined;
+
+      // 3. Synthesize error responses for anything still pending.
       if (this.pendingRequestIds.size > 0) {
         const stuck = [...this.pendingRequestIds];
         logger.warn(
@@ -169,13 +171,9 @@ export class MessageRouter {
           'MessageRouter: drain timeout, synthesizing errors for pending',
         );
         for (const id of stuck) {
-          await this.sendErrorResponseSafely(id, -32603, 'Request interrupted by backend switch');
+          await this.failPendingRequest(id, -32603, 'Request interrupted by backend switch');
         }
-        this.pendingRequestIds.clear();
       }
-
-      // 3. Detach old backend's onmessage so late responses don't leak to stdout.
-      if (old) old.onmessage = undefined;
 
       // 4. Stop old backend (non-blocking heavy cleanup runs in backgroundDispose).
       if (old) {
@@ -200,8 +198,7 @@ export class MessageRouter {
         } catch (err) {
           logger.error({ err: String(err) }, 'MessageRouter: flush send failed');
           if (isRequest(m) && this.pendingRequestIds.has(m.id)) {
-            this.clearPending(m.id);
-            await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
+            await this.failPendingRequest(m.id, -32603, `Backend send failed: ${String(err)}`);
           }
         }
       }
@@ -230,8 +227,7 @@ export class MessageRouter {
       } catch (err) {
         logger.error({ err: String(err) }, 'MessageRouter: flushPending send failed');
         if (isRequest(m) && this.pendingRequestIds.has(m.id)) {
-          this.clearPending(m.id);
-          await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
+          await this.failPendingRequest(m.id, -32603, `Backend send failed: ${String(err)}`);
         }
       }
     }
@@ -276,9 +272,8 @@ export class MessageRouter {
     // Fail fast any requests we can't possibly answer now; queue stays intact.
     if (this.pendingRequestIds.size > 0) {
       for (const id of [...this.pendingRequestIds]) {
-        await this.sendErrorResponseSafely(id, -32603, 'Server idle — request cancelled');
+        await this.failPendingRequest(id, -32603, 'Server idle — request cancelled');
       }
-      this.pendingRequestIds.clear();
     }
     this.waiters.clear();
     this.transitioning = false;
@@ -290,6 +285,18 @@ export class MessageRouter {
     b.onmessage = (msg) => {
       // Track response → clear pending id.
       if (isResponse(msg)) {
+        // A response is only valid if it matches an in-flight request we are
+        // still waiting to answer. If the id was already cleared (synthetic
+        // error on send failure, drain timeout, shutdown) or forgotten (rescued
+        // for replay), forwarding it would give the client two responses for
+        // one request id (TRA-1148, TRA-1149).
+        if (!this.pendingRequestIds.has(msg.id)) {
+          logger.warn(
+            { id: msg.id, kind: b.kind },
+            'MessageRouter: dropping late or duplicate response for non-pending id',
+          );
+          return;
+        }
         this.clearPending(msg.id);
       }
       // Forward to stdout — fire-and-forget; errors logged.
@@ -332,6 +339,20 @@ export class MessageRouter {
       const t = setTimeout(done, timeoutMs);
       t.unref?.();
     });
+  }
+
+  /**
+   * Synthesize and send an error response for a pending request, dropping it
+   * from pendingRequestIds so subsequent late responses from any backend are
+   * dropped rather than double-answering the client (TRA-1149).
+   */
+  private async failPendingRequest(
+    id: string | number,
+    code: number,
+    message: string,
+  ): Promise<void> {
+    this.clearPending(id);
+    await this.sendErrorResponseSafely(id, code, message);
   }
 
   private async sendErrorResponseSafely(

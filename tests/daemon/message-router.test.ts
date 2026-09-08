@@ -73,9 +73,25 @@ describe('MessageRouter', () => {
     await b.start();
     router.setInitialBackend(b);
 
+    await router.ingestFromClient(req(1));
     b.emitResponse(resp(1));
     expect(clientInbox).toHaveLength(1);
     expect((clientInbox[0] as { id: number }).id).toBe(1);
+  });
+
+  it('forwards backend notifications to the client without a pending request', async () => {
+    const b = new FakeBackend();
+    await b.start();
+    router.setInitialBackend(b);
+
+    b.emitResponse({
+      jsonrpc: '2.0',
+      method: 'notifications/tools/list_changed',
+      params: {},
+    } as unknown as JSONRPCMessage);
+
+    expect(clientInbox).toHaveLength(1);
+    expect((clientInbox[0] as { method: string }).method).toBe('notifications/tools/list_changed');
   });
 
   it('queues messages arriving during a swap and flushes to the new backend', async () => {
@@ -175,8 +191,47 @@ describe('MessageRouter', () => {
     expect(clientInbox.length).toBe(beforeCount);
 
     // New backend still works.
+    await router.ingestFromClient(req(100));
     b.emitResponse(resp(100));
     expect(clientInbox.find((m) => (m as { id?: number }).id === 100)).toBeDefined();
+  });
+
+  it('drops late backend response if request was forgotten (TRA-1149)', async () => {
+    const a = new FakeBackend();
+    await a.start();
+    router.setInitialBackend(a);
+
+    await router.ingestFromClient(req(43));
+    expect(a.sent).toHaveLength(1);
+
+    // Forget pending (e.g. session rescues it):
+    router.forgetPending(43);
+
+    // Backend delivers late response:
+    a.emitResponse(resp(43));
+
+    // Dropped, not forwarded:
+    expect(clientInbox).toHaveLength(0);
+  });
+
+  it('detaches old backend before synthesizing errors on swap drain timeout (TRA-1149)', async () => {
+    const a = new FakeBackend();
+    const b = new FakeBackend();
+    await a.start();
+    router.setInitialBackend(a);
+
+    await router.ingestFromClient(req(44));
+
+    // During swap drain timeout, old backend's onmessage must be detached before
+    // synthetic errors are emitted:
+    const swapPromise = router.swap(b, { drainTimeoutMs: 20 });
+    await swapPromise;
+
+    expect(a.onmessage).toBeUndefined();
+
+    // Late response on old backend is ignored:
+    a.emitResponse(resp(44));
+    expect(clientInbox.filter((m) => (m as { id?: number }).id === 44)).toHaveLength(1);
   });
 
   it('synthesizes error response when send() rejects', async () => {
@@ -192,6 +247,11 @@ describe('MessageRouter', () => {
     const err = clientInbox.find((m) => (m as { id?: number }).id === 5);
     expect(err).toBeDefined();
     expect((err as { error?: { code: number } }).error?.code).toBe(-32603);
+
+    // Late response arrives from the backend after send failure
+    a.emitResponse(resp(5));
+    // Client should have received exactly one response for id 5, not two
+    expect(clientInbox.filter((m) => (m as { id?: number }).id === 5)).toHaveLength(1);
   });
 
   it('shutdown clears pending and disposes the backend', async () => {
