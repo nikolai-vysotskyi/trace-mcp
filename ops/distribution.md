@@ -1894,4 +1894,61 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 `macanderson/stella#6018` (12★, internal rust crate test harness).
 `mmnto-ai/totem#2667` (17★, internal R14 round finding).
 
+### Twelfth pass, 2026-09-09: fullsend #297 (selective AST scoping & line-shift trap), stella #6461 (enclosing symbol envelopes vs raw rg), and competitor aft (278★)
+
+**Maintainer responses on open threads:**
+- All 28 previous threads and PRs re-checked via GitHub API:
+  - `The-PR-Agent/pr-agent#2499`: Maintainer Ismael Martinez responded on 2026-09-08 confirming agreement with our empirical findings on diff-scoped symbols (1-hop inbound with ceiling) and line-shift cache invalidation. Confirmed no MCP support before v1. Prototype via `extra_instructions` is self-serve; no response owed.
+  - All open catalog PRs and external issues re-verified:
+    `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+    `narumiruna/pi-extensions#1204`, `mattbutlerengineering/ai-tooling#585`,
+    `eltociear/awesome-AI-driven-development#119`,
+    `GetBindu/awesome-claude-code-and-skills#195`,
+    `yzfly/awesome-context-engineering#44`,
+    `ai-boost/awesome-harness-engineering#240`,
+    `tolkonepiu/best-of-mcp-servers#384`, `nearform/lastlight#372`,
+    `abhigyanpatwari/GitNexus#3068` and `#3127`, `CommunityToolkit/Aspire#1575`,
+    `iansmith/slopstop#633`, `Kilo-Org/kilocode#13843` and `#12707`,
+    `facebook/pyrefly#4583`, `watt-mind/factory#1078`, `sosalejandro/atlas#105`,
+    `Nano-Collective/nanocoder#1197`, `Ivy-Apps/deslop#173`,
+    `Intense-Visions/harness-engineering#1284`, `git-pkgs/outline#34`,
+    `headroomlabs-ai/headroom#1009`, `schalermthai/redproof#50`,
+    `Barnett-Studios/cxpak#103`.
+    All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20).
+
+**Mention sweep and catalog moratorium:**
+- `scripts/mention-sweep.sh` executed: 1 hit `KryptosAI/mcp-observatory`. Inspected and classified as a collision on their datasource connector `dynatrace-mcp-server` in `docs/safety-index/targets.json`, recorded in `ops/mentions-seen.txt`. Sweep clean.
+- Standing moratorium on new directory submissions holds (0 attributable installs from directories in `ops/arrivals.md`). Zero directory submissions made.
+
+**Two technical outreach contributions posted on GitHub:**
+
+- [`fullsend-ai/fullsend#297`](https://github.com/fullsend-ai/fullsend/issues/297#issuecomment-5592547663)
+  (125★, autonomous agent platform by `waveywaves` & `ralphbean`).
+  Maintainers opened a research issue on whether AST code graphs outperform naive grep/find for agent context packing. We contributed empirical data from our 60-PR external benchmark:
+  1. Selective context extraction: packing modified symbol + direct imports + 1-hop inbound callers under hard ceiling yields 72.7% token reduction with comprehension parity; unpruned 2+ hop caller trees degrade comprehension (−15 p.p.) and spike hallucinations (+0.55/PR).
+  2. Line-shift trap: cached AST line/col ranges break when agent edits shift lines without modifying downstream symbols; resilient architectures re-parse dirty buffers or resolve symbols by stable signature/identifier rather than byte offsets.
+  3. SQLite index vs graph DBs: lightweight SQLite WAL indexing scales to millions of symbols without external database daemon overhead.
+
+- [`macanderson/stella#6461`](https://github.com/macanderson/stella/issues/6461#issuecomment-5592549277)
+  (12★, autonomous Rust coding agent by `macanderson`).
+  Maintainer profiled routing telemetry showing 89.6% bash/grep vs 0.09% search usage on Terminal-Bench 2.1. We contributed concrete lessons on why agents route around structured code search:
+  1. N+1 turn penalty: returning bare paths forces the model to immediately call `read_file` or `cat`, making bash one-liners strictly more token/turn efficient.
+  2. Enclosing symbol envelopes: matching `rg -n` with line snippets is not enough to change routing; providing enclosing symbol scope, signature, and kind allows the model to act without a subsequent read.
+  3. Explicit truncation headers: silent truncation (`MAX_NAME_HITS = 10`) destroys model trust and forces fallback to grep; explicit headers (`Showing 10 of 47 matches. Narrow by symbol_type or parent`) maintain model predictability.
+
+**Competitor discovery — AFT (278★, CortexKit) & star re-verification:**
+- Discovered `cortexkit/aft` (278★, MIT, Rust + TS, v0.7.2), sensorimotor cortex / code intelligence sidecar for OpenCode and Pi agents with 30-language tree-sitter symbol graph, trigram search, and embedded `ast-grep` pattern matching.
+- Added `aft` to `docs/_data/competitors.yml` (278★) and profiled architecture in `docs/comparisons.md`.
+- Re-verified active competitor star counts: `context_mode` (21,358★, +242), `ripwire` (1,745★, +34).
+
+**Checked and skipped, with reasons:**
+- `fullsend-ai/fullsend#269` / `#298` (adjacent context issues actively handled by maintainer Ralph Bean).
+- `macanderson/stella#6018` (internal rust crate test harness).
+- `trailhq/Graft#310` (6,166★, user asking for comparison; unsolicited comment would be spam).
+- `cortexkit/aft#12` / repo issues (direct competitor bug tracker).
+- `ScriptedAlchemy/tracedecay#1029` (71★, direct competitor internal sprint tracker).
+- `DeusData/codebase-memory-mcp#2054` (direct competitor bug tracker).
+- `redhat-et/ripwire#59` (direct competitor bug tracker).
+
+
 
