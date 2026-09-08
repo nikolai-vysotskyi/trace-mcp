@@ -86,7 +86,7 @@ function surface(members: readonly string[] | 'all'): { tools: number; tokens: n
 const fullSurface = surface('all');
 
 console.log('========================================================================');
-console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1194)      ');
+console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1223)      ');
 console.log('========================================================================\n');
 console.log(`Directory: ${sessionsDir}`);
 console.log(
@@ -150,6 +150,15 @@ for (const [name, members] of Object.entries(TOOL_PRESETS)) {
       topMissing || '—',
     ].join('\t'),
   );
+}
+
+console.log('\n------------------------------------------------------------------------');
+console.log('   TOP TOOL CALL DISTRIBUTION (Post-Rollout N = ' + postRolloutCalls + ' calls)');
+console.log('------------------------------------------------------------------------\n');
+const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]);
+for (const [tool, count] of sorted.slice(0, 15)) {
+  const pct = ((count / postRolloutCalls) * 100).toFixed(1);
+  console.log(`  ${tool.padEnd(25)} ${String(count).padStart(5)} calls (${pct.padStart(4)}%)`);
 }
 
 console.log('\n========================================================================');
