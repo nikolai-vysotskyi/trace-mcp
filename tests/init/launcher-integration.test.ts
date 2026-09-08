@@ -1937,8 +1937,9 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
     });
 
     it('never evaluates hostile command injection in USER or LOGNAME (TRA-1206)', () => {
-      const { home, traceHome, node, cli } = setupFakeHome();
-      writeConfig(traceHome, node, cli);
+      const { home, traceHome, node } = setupFakeHome();
+      const probedCli = plantNvmPackage(home);
+      writeConfig(traceHome, node, '/dead/cli.js');
 
       const canary = path.join(home, 'should-not-exist');
       const hostileUser = `user$(touch ${canary})`;
@@ -1956,6 +1957,7 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       });
 
       expect(res.status).toBe(0);
+      expect(res.stdout).toContain(fs.realpathSync(probedCli));
       expect(fs.existsSync(canary)).toBe(false);
     });
 
