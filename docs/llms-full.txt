@@ -44,7 +44,7 @@ trace-mcp is a local-first code graph MCP server built around four architectural
 * **Polyglot tree-sitter parsing:** Parsers for {{ site.data.counts.languages }} programming languages compile into the binary, resolving symbols, classes, functions, and import chains without requiring language servers or build toolchains ([view language matrix](/language-matrix.html)).
 * **Framework-aware semantic edges:** Web applications do not live in isolated ASTs. trace-mcp resolves route-to-controller, controller-to-template, and model-to-table relationships across {{ site.data.counts.frameworks }} frameworks, including Laravel, Next.js, Django, Rails, Spring, and FastAPI ([supported frameworks](/supported-frameworks.html)).
 * **Zero-overhead local storage:** All graph nodes, edges, and FTS5 search indices live in an embedded SQLite database on your machine. No hosted services, no background daemons requiring cloud accounts, and no API keys.
-* **Controlled schema footprint:** An MCP server that advertises dozens of tools consumes thousands of tokens before the agent asks its first question. trace-mcp uses role presets to expose roughly 2K tokens of tool schemas on session start, while keeping extended tools accessible dynamically via `load_tools` ([tools reference](/tools-reference.html)).
+* **Controlled schema footprint:** An MCP server that advertises dozens of tools consumes thousands of tokens before the agent asks its first question. trace-mcp uses role presets to expose roughly 2K tokens of tool schemas on session start, while keeping extended tools accessible dynamically via `load_tools` ([tools reference](/tools-reference.html), [tool index](/tools-index.html)).
 
 ## The code graph MCP ecosystem
 
@@ -74,7 +74,7 @@ npx trace-mcp init
 
 The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.
 
-* Explore all available tools: [Tools Reference](/tools-reference.html)
+* Explore all available tools: [Tools Reference](/tools-reference.html) and the alphabetical [Tool Index](/tools-index.html)
 * Review configuration and preset options: [Configuration Guide](/configuration.html)
 * Inspect architecture and storage contracts: [Architecture Documentation](/architecture.html)
 
@@ -91,7 +91,9 @@ This page groups the ones you reach for by hand. For how a persistent
 [code graph MCP server](/code-graph-mcp.html) powers these operations to cut
 agent token costs, see the category overview. For the complete list —
 every registered tool with its one-line description, generated from the
-registrations themselves — see the [tool index](tools-index.md).
+registrations themselves — see the [tool index](tools-index.md). For measured
+wire costs and baseline token comparisons across each tool, see the
+[tool response token cost](/perf/response-tokens/) benchmark.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -856,7 +858,9 @@ pick Base after a Standard or Max run and the guard, the lifecycle hooks and the
 above, and the `tweakcc` prompt files come out through `tweakcc` itself.
 
 Nothing here deletes a config key it did not write. An entry you configured
-yourself on the MCP server object survives a rename or a re-init.
+yourself on the MCP server object survives a rename or a re-init. For the
+complete reference of configuration settings, paths, and environment variables,
+see [configuration](configuration.md) and the [config index](config-index.md).
 
 ---
 
@@ -2661,7 +2665,7 @@ What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
-- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
+- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace/.config.json`. `tools.preset` is honoured from a project-local `.trace/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
@@ -2738,6 +2742,8 @@ No — clearing forces re-derivation, which usually costs more. Compact, or hand
 ## Next steps
 
 - [Tools reference](/tools-reference.html) — every trace-mcp tool, including the outline/symbol/impact ones above.
+- [Tool index](/tools-index.html) — alphabetical index of all {{ site.data.counts.tools }} tools with availability breakdown.
+- [System prompt routing via tweakcc](/tweakcc.html) — patch Claude Code's system prompts to enforce tool routing toward trace-mcp instead of native file reads.
 - [TOON savings](/toon-savings.html) — the full measurement method behind section 4.
 - [Configuration](/configuration.html) — presets and `tools.include` / `tools.exclude`.
 - [Get started](/#install) — no configuration required.
@@ -4164,7 +4170,7 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
     api-server-b2c3d4e5.db
 ```
 
-Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself.
+Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md).
 
 The **topology database** (`topology.db`) is shared across all projects. It stores:
 - **Subprojects** (= services) — bound to projects, auto-detected or manually added
@@ -6600,7 +6606,7 @@ Source: https://trace-mcp.com/development.html
 
 Read [architecture](architecture.md) first — the two-pass pipeline, the plugin
 interface and the storage layout are what most of the code below is arranged
-around.
+around. To understand what the initialization command writes when run in consumer repositories, see [what trace init installs](what-trace-init-installs.md).
 
 ```bash
 git clone https://github.com/nikolai-vysotskyi/trace-mcp.git

@@ -91,7 +91,7 @@ trace-mcp is a local-first code graph MCP server built around four architectural
 * **Polyglot tree-sitter parsing:** Parsers for {{ site.data.counts.languages }} programming languages compile into the binary, resolving symbols, classes, functions, and import chains without requiring language servers or build toolchains ([view language matrix](/language-matrix.html)).
 * **Framework-aware semantic edges:** Web applications do not live in isolated ASTs. trace-mcp resolves route-to-controller, controller-to-template, and model-to-table relationships across {{ site.data.counts.frameworks }} frameworks, including Laravel, Next.js, Django, Rails, Spring, and FastAPI ([supported frameworks](/supported-frameworks.html)).
 * **Zero-overhead local storage:** All graph nodes, edges, and FTS5 search indices live in an embedded SQLite database on your machine. No hosted services, no background daemons requiring cloud accounts, and no API keys.
-* **Controlled schema footprint:** An MCP server that advertises dozens of tools consumes thousands of tokens before the agent asks its first question. trace-mcp uses role presets to expose roughly 2K tokens of tool schemas on session start, while keeping extended tools accessible dynamically via `load_tools` ([tools reference](/tools-reference.html)).
+* **Controlled schema footprint:** An MCP server that advertises dozens of tools consumes thousands of tokens before the agent asks its first question. trace-mcp uses role presets to expose roughly 2K tokens of tool schemas on session start, while keeping extended tools accessible dynamically via `load_tools` ([tools reference](/tools-reference.html), [tool index](/tools-index.html)).
 
 ## The code graph MCP ecosystem
 
@@ -121,6 +121,6 @@ npx trace-mcp init
 
 The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.
 
-* Explore all available tools: [Tools Reference](/tools-reference.html)
+* Explore all available tools: [Tools Reference](/tools-reference.html) and the alphabetical [Tool Index](/tools-index.html)
 * Review configuration and preset options: [Configuration Guide](/configuration.html)
 * Inspect architecture and storage contracts: [Architecture Documentation](/architecture.html)

@@ -559,4 +559,64 @@ Lab metrics for key landing pages (mobile):
 - **Homepage (`https://trace-mcp.com/`)**: Performance **98**, FCP 1.1s, LCP 1.9s, CLS 0, TBT 0ms.
 - **Category landing (`https://trace-mcp.com/code-graph-mcp.html`)**: Performance **99**, FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms.
 
+## Reading 2026-09-08 12:00 UTC (TRA-1207): 22nd page indexed (/tools-index.html), 3 URLs advance to Discovered, category target "codegraph mcp" enters SERP, internal link graph expansion
+
+Full Search Console API pass (URL Inspection across all 34 sitemap URLs, Search Analytics 28d, Sitemaps API), full internal link graph audit, and PageSpeed Insights mobile CWV audit on 2026-09-08 12:00 UTC.
+
+### 1. Google Indexation & Discovery Breakthroughs (CONFIRMED via GSC URL Inspection API)
+
+A full inspection of all 34 URLs in `sitemap.xml` verified continued crawl momentum:
+- **Total Indexed: 22 URLs** (up from 21):
+  - **`/tools-index.html` officially indexed**: Transitioned from "Discovered - currently not indexed" to **Submitted and indexed** (Googlebot crawl: `2026-09-08T03:57:26Z`).
+- **"Discovered - currently not indexed" tier expanded to 6 URLs**, with 3 pages advancing off "URL is unknown to Google":
+  - **`/code-graph-mcp.html`**: Advanced from unknown to **Discovered** (Googlebot credited referring source: `https://trace-mcp.com/analytics.html`).
+  - **`/vs/tokensave.html`**: Advanced from unknown to **Discovered** (Googlebot credited referring source: `https://trace-mcp.com/tools-index.html`).
+  - **`/vs/codegraphcontext.html`**: Advanced from unknown to **Discovered** (Googlebot credited referring source: `https://trace-mcp.com/analytics.html`).
+  - `/vs/repomix.html`: in **Discovered** (referring source: `/configuration.html`).
+  - `/reduce-claude-code-token-usage.html`: in **Discovered** (referring source: `/configuration.html`).
+  - `/daemon-memory.html`: in **Discovered** (referring source: `/pr-context-benchmark.html`).
+- **Current status across the 11 comparison pages (`/vs/`)**:
+  - Indexed (3): `/vs/codegraph.html`, `/vs/context-mode.html`, `/vs/codebase-memory-mcp.html`.
+  - Discovered (3): `/vs/repomix.html`, `/vs/codegraphcontext.html`, `/vs/tokensave.html`.
+  - Pending crawl (5): `/vs/serena.html`, `/vs/socraticode.html`, `/vs/jcodemunch.html`, `/vs/code-review-graph.html`, `/vs/repomix-vs-codegraph.html`.
+
+### 2. SERP Rankings: Target Keyword Emergence & Strong Spoke Conversion (CONFIRMED)
+
+GSC Search Analytics (28d) captured high-intent developments:
+- **Category keyword `codegraph mcp` entered Google SERP:** First impression recorded at **Position 7.0** landing directly on `/vs/codegraph.html` (previously 0 impressions on Sept 6, TRA-1024).
+- **Comparison spoke direct click:** `/vs/context-mode.html` recorded **1 click / 2 impressions (CTR 50.0%, pos 5.5)**.
+- **Category hub conversion:** `/comparisons.html` generated **5 clicks / 235 impressions (CTR 2.13%)**.
+- **Top rankings on competitor evaluation queries:**
+  - `serena alternatives`: **Position 1.0** (1 imp)
+  - `serena mcp vs codegraph`: **Position 1.0** (1 imp)
+  - `codegraph vs serena`: **Position 1.0** (1 click)
+  - `repomix vs codegraph`: **Position 2.0** (1 imp)
+  - `"codegraphcontext"`: **Position 1.5** (2 clicks)
+
+### 3. Internal Link Graph Optimization & Deficit Remediation
+
+A programmatic graph analysis of in-body internal links across all 34 documentation pages (`scratch/link_graph.py`) revealed isolated clusters and low-link pages. Remediated:
+1. **Newly indexed `tools-index.html` reinforced**:
+   - Linked from category landing `docs/code-graph-mcp.md` (0 -> 1 hub in-link).
+   - Linked from `docs/reduce-claude-code-token-usage.md` (tactic 3 & Next Steps).
+   - Total incoming in-body links increased: 1 -> **3 links**.
+2. **`tweakcc.md` bidirectional linking established**:
+   - `tweakcc.md` previously cited `reduce-claude-code-token-usage.md` as its token justification, but had no inbound link back from it. Added contextual routing link in `reduce-claude-code-token-usage.md`. Total in-links increased: 2 -> **3 links**.
+3. **`daemon-memory.md` (Discovered) connected from Architecture**:
+   - Linked from SQLite storage section in `docs/architecture.md`. Total in-links increased: 2 -> **3 links**.
+4. **`what-trace-init-installs.md` and `config-index.md` cross-linked**:
+   - Linked `config-index.md` from `what-trace-init-installs.md` configuration audit section.
+   - Linked `what-trace-init-installs.md` from `docs/development.md` setup section.
+5. **`tools-reference.md` linked to response token benchmark**:
+   - Contextual link to `/perf/response-tokens/` added in introduction.
+
+### 4. PageSpeed Insights & Mobile CWV Lab Validation
+
+Mobile Lighthouse audits executed via PageSpeed Insights API key confirm pristine performance:
+- **Homepage (`https://trace-mcp.com/`)**: Perf **98**, SEO **100**, A11y **100**, Best Practices **100** (FCP 1.1s, LCP 1.7s, CLS 0, TBT 0ms).
+- **`/code-graph-mcp.html`**: Perf **99**, SEO **100**, A11y **100**, Best Practices **100** (FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms).
+- **`/tools-index.html`**: Perf **100**, SEO **100**, A11y **100**, Best Practices **100** (FCP 0.9s, LCP 1.2s, CLS 0, TBT 0ms).
+- **`/comparisons.html`**: Perf **98**, SEO **100**, A11y **100**, Best Practices **100** (FCP 1.2s, LCP 1.4s, CLS 0, TBT 20ms).
+- **`/vs/context-mode.html`**: Perf **99**, SEO **100**, A11y **100**, Best Practices **100** (FCP 1.0s, LCP 1.2s, CLS 0, TBT 0ms).
+
 
