@@ -9,6 +9,8 @@ import { sweepOrphanTmpFiles } from '../../src/utils/atomic-write.js';
 
 const LAUNCHER_SRC = path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.sh');
 const FIXTURES = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-it-'));
+const HAS_SYSTEM_NODE =
+  fs.existsSync('/opt/homebrew/bin/node') || fs.existsSync('/usr/local/bin/node');
 
 interface RunResult {
   status: number | null;
@@ -853,9 +855,6 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
   // The two system paths the probe tries before anything under HOME are
   // absolute, so a runner that has Homebrew/system node installed resolves at
   // step 4a and never reaches the fallback under test.
-  const HAS_SYSTEM_NODE =
-    fs.existsSync('/opt/homebrew/bin/node') || fs.existsSync('/usr/local/bin/node');
-
   describe.skipIf(HAS_SYSTEM_NODE)('node resolves from a prefix only pkg_roots knows', () => {
     /** Plants a working node + package inside `prefix`, returns both realpaths. */
     function plantPrefix(prefix: string): { node: string; cli: string } {
@@ -1790,33 +1789,36 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(res.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
     });
 
-    it('never executes a node found via relative path or inside PWD from CLIENT_PATH', () => {
-      const { home, traceHome, cli } = setupFakeHome();
-      writeConfig(traceHome, '/nonexistent/node', cli);
+    it.skipIf(HAS_SYSTEM_NODE)(
+      'never executes a node found via relative path or inside PWD from CLIENT_PATH',
+      () => {
+        const { home, traceHome, cli } = setupFakeHome();
+        writeConfig(traceHome, '/nonexistent/node', cli);
 
-      const untrustedRepo = fs.mkdtempSync(path.join(FIXTURES, 'untrusted-repo-'));
-      const maliciousNode = path.join(untrustedRepo, 'node');
-      fs.writeFileSync(maliciousNode, '#!/bin/bash\necho "EXPLOITED"\nexit 0\n', { mode: 0o755 });
+        const untrustedRepo = fs.mkdtempSync(path.join(FIXTURES, 'untrusted-repo-'));
+        const maliciousNode = path.join(untrustedRepo, 'node');
+        fs.writeFileSync(maliciousNode, '#!/bin/bash\necho "EXPLOITED"\nexit 0\n', { mode: 0o755 });
 
-      const validLocalBin = path.join(home, '.local', 'bin');
-      fs.mkdirSync(validLocalBin, { recursive: true });
-      const validNode = path.join(validLocalBin, 'node');
-      fs.writeFileSync(validNode, fakeNodeBody('22.22.2', 'SAFE_NODE'), { mode: 0o755 });
+        const validLocalBin = path.join(home, '.local', 'bin');
+        fs.mkdirSync(validLocalBin, { recursive: true });
+        const validNode = path.join(validLocalBin, 'node');
+        fs.writeFileSync(validNode, fakeNodeBody('22.22.2', 'SAFE_NODE'), { mode: 0o755 });
 
-      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
-        cwd: untrustedRepo,
-        env: {
-          HOME: home,
-          TRACE_MCP_HOME: traceHome,
-          PATH: `.:./bin:${untrustedRepo}:/usr/bin:/bin`,
-        },
-        encoding: 'utf-8',
-      });
+        const res = spawnSync(LAUNCHER_SRC, ['serve'], {
+          cwd: untrustedRepo,
+          env: {
+            HOME: home,
+            TRACE_MCP_HOME: traceHome,
+            PATH: `.:./bin:${untrustedRepo}:/usr/bin:/bin`,
+          },
+          encoding: 'utf-8',
+        });
 
-      expect(res.stdout).not.toContain('EXPLOITED');
-      expect(res.stdout).toContain('SAFE_NODE');
-      expect(res.status).toBe(0);
-    });
+        expect(res.stdout).not.toContain('EXPLOITED');
+        expect(res.stdout).toContain('SAFE_NODE');
+        expect(res.status).toBe(0);
+      },
+    );
 
     it('handles CRLF line endings in launcher.env (TRA-1197)', () => {
       const { home, traceHome, node, cli } = setupFakeHome();
@@ -1831,8 +1833,8 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
 
     it('handles CRLF line endings in pkg-roots (TRA-1197)', () => {
       const { home, traceHome, node } = setupFakeHome();
-      // Configure dead node/cli to force probe fallback
-      writeConfig(traceHome, '/dead/node', '/dead/cli.js');
+      // Configure working node and dead cli so the launcher resolves CLI via pkg-roots
+      writeConfig(traceHome, node, '/dead/cli.js');
 
       // Set up a custom prefix and record it in pkg-roots with CRLF
       const customPrefix = path.join(home, 'custom-prefix');
@@ -1846,22 +1848,9 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
         [`# recorded prefixes\r\n`, `${customPrefix}/lib/node_modules\r\n`].join(''),
       );
 
-      // Node in PATH so probe_node finds it
-      const binDir = path.join(home, 'bin');
-      fs.mkdirSync(binDir, { recursive: true });
-      fs.copyFileSync(node, path.join(binDir, 'node'));
-
-      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
-        env: {
-          HOME: home,
-          TRACE_MCP_HOME: traceHome,
-          PATH: `${binDir}:/usr/bin:/bin`,
-        },
-        encoding: 'utf-8',
-      });
-
+      const res = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome });
       expect(res.status).toBe(0);
-      expect(res.stdout.trim()).toContain('serve');
+      expect(res.stdout.trim()).toBe(`NODE_ARGS:${fs.realpathSync(customCli)} serve`);
     });
   });
 });
