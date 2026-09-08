@@ -72,6 +72,12 @@ const FOREIGN_PREFIXES = [
   'src/accounting/', // TokenSave
   'src/extraction_worker.rs', // TokenSave
   'src/extraction/', // TokenSave
+  'benchmarks/agent-eval/', // Roam-Code
+  'benchmarks/METHODOLOGY.md', // jCodeMunch
+  'benchmarks/README.md', // jCodeMunch
+  'docs/04-evaluation/', // Serena
+  'docs/BENCHMARK.md', // codebase-memory-mcp
+  'docs/EVALUATION_PLAN.md', // codebase-memory-mcp
 ];
 
 /**
