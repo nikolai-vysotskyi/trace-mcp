@@ -55,6 +55,8 @@ Canonical terms and localization conventions across languages for the trace-mcp 
 | **Workspace** | Workspace | ワークスペース | Пространство | Top-level projects table |
 | **MCP Clients** | MCP-Clients | MCP クライアント | Клиенты MCP | Connected editor clients |
 | **Settings** | Einstellungen | 設定 | Настройки | App & daemon configuration |
+| **Savings** | Einsparungen | 削減量 | Экономия | Accumulated cost/token savings (DE plural: Einsparungen) |
+| **Setup Assistant** | Einrichtungsassistent | 設定アシスタント | Мастер настройки | macOS Tahoe standard (JA: 設定アシスタント, not ウィザード) |
 | **Window** (macOS) | Fenster | ウインドウ | Окно | macOS standard (JA: ウインドウ, not ウィンドウ) |
 | **Folder** (macOS) | Ordner | フォルダ | Папка | macOS standard (JA: フォルダ, not フォルダー) |
 
@@ -126,3 +128,26 @@ The `_many` plural forms added by TRA-450 carry the partitive **de** (`{{n}} de 
 `Pausar {{count}} de minutos`). That looks wrong at a glance and is right: Spanish's `many`
 category is reached at a million, where `un millón **de** minutos` is the grammatical form.
 Leave them alone.
+
+## German (de)
+
+Settled 2026-09-08 (TRA-1220). Reviewed on the running renderer across Workspace, Savings,
+MCP Clients, Settings, and Project Overview at 1280 pt and the 640×420 minimum.
+
+| English (en) | German (de) | Notes / Context |
+| :--- | :--- | :--- |
+| **Search settings** | Einstellungen suchen | SearchField placeholder in Settings. Was "Einstellungen durchsuchen" (24 chars), which truncated on the 640×420 window minimum. "Einstellungen suchen" fits comfortably without overflow. |
+| **Savings** | Einsparungen | Plural. Was "Einsparung" (singular). Standard German accounting and software terminology for accumulated savings / cost reductions. |
+| **Run setup…** | Einrichten… | Action button in Settings to launch the setup assistant. Was "Assistent starten…" (18 chars), which crowded the row at 640 px width. "Einrichten…" matches Apple's macOS Tahoe verb pattern and fits within 11 chars. |
+
+## Japanese (ja)
+
+Settled 2026-09-08 (TRA-1220). Reviewed on the running renderer across Workspace, Savings,
+MCP Clients, Settings, and Project Overview at 1280 pt and the 640×420 minimum.
+
+| English (en) | Japanese (ja) | Notes / Context |
+| :--- | :--- | :--- |
+| **Setup Assistant** | 設定アシスタント | macOS Apple HIG standard for the onboarding flow. Was Windows-legacy "初期セットアップウィザード", which was 13 chars long and caused card row crowding. |
+| **Run setup…** | 設定を開く… | Button action to launch the setup assistant. Was "ウィザードを実行…", which truncated with an ellipsis inside the button on a 640 px window width. "設定を開く…" is 6 chars and fits cleanly. |
+| **Savings estimate copy** | 控えめな下限値であり、誇張のない試算 | Replaced literal idiom translation "下限であって見出しではありません" ("a floor, not a headline"), which makes no sense in Japanese because "見出し" means article title / heading. |
+

@@ -329,6 +329,6 @@ export const settings = {
   'schema.watch.debounce.label': 'デバウンス（ミリ秒）',
 
   /* ── Setup wizard ── */
-  'app.setupWizard': "初期セットアップウィザード",
-  'app.runSetupWizard': "ウィザードを実行…",
+  'app.setupWizard': "設定アシスタント",
+  'app.runSetupWizard': "設定を開く…",
 } as const;
