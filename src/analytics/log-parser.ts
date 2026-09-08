@@ -82,12 +82,58 @@ export function extractTargetFile(
   // Built-in tools
   if (input.file_path && typeof input.file_path === 'string') return input.file_path;
   if (input.path && typeof input.path === 'string') return input.path;
-  // Bash commands with cat/head/tail
+  // Bash commands with cat/head/tail/less/more
   if (toolName === 'Bash' && typeof input.command === 'string') {
-    const m = input.command.match(
-      /(?:cat|head|tail|less|more)\s+(?:-[a-zA-Z0-9]+\s+)*["']?([^\s"'|;>-][^\s"'|;>]*)/,
-    );
-    if (m) return m[1];
+    const cmd = input.command;
+    const matches = cmd.matchAll(/(?:^|[;&|\n]\s*|\$\()(?:cat|head|tail|less|more)\s+([^;&|\n]+)/g);
+    for (const m of matches) {
+      const rest = m[1].trim();
+      if (rest.startsWith('<<')) continue; // heredoc (e.g. cat << 'EOF')
+
+      // Tokenize the command segment respecting quotes
+      const tokens: string[] = [];
+      const tokenRegex = /"([^"]*)"|'([^']*)'|(\S+)/g;
+      let tm: RegExpExecArray | null;
+      while ((tm = tokenRegex.exec(rest)) !== null) {
+        tokens.push(tm[1] ?? tm[2] ?? tm[3]);
+      }
+
+      let i = 0;
+      while (i < tokens.length) {
+        const t = tokens[i];
+        if (t === '--') {
+          i++;
+          break;
+        }
+        if (/^-\d+$/.test(t)) {
+          // e.g. -30, -50
+          i++;
+        } else if (/^-[nc]$/.test(t) || t === '--lines' || t === '--bytes') {
+          // -n 30, -c 100, --lines 50
+          i += 2;
+        } else if (/^-[nc]\+?\d+$/.test(t) || /^--(?:lines|bytes)=\+?\d+$/.test(t)) {
+          // -n30, -c100, -n+10, --lines=30
+          i++;
+        } else if (t.startsWith('-') && !t.startsWith('--')) {
+          // single-letter flags without args: -f, -v, -s, -u
+          i++;
+        } else {
+          break;
+        }
+      }
+
+      if (i < tokens.length) {
+        const candidate = tokens[i];
+        // Must not be a shell operator, redirection, descriptor, or pure number
+        if (
+          !/^[0-9]?>|^[0-9]?<|^(?:&&|\|\||[;&|])$/.test(candidate) &&
+          !/^\d+$/.test(candidate) &&
+          !candidate.includes('>&')
+        ) {
+          return candidate;
+        }
+      }
+    }
   }
   return undefined;
 }
