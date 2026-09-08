@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "3.23.2",
+  "version": "3.24.0",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 72.7% fewer input tokens to review a pull request, comprehension at parity",
   "type": "module",
