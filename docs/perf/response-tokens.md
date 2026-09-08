@@ -3,7 +3,7 @@ layout: default
 title: Tool response token cost
 permalink: /perf/response-tokens/
 description: What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the ones that cost more than the reads they replace.
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Tool response token cost
@@ -520,12 +520,12 @@ number better by 0.6 points without making the product one token cheaper, and
 we knew it would before we ran it — which is why the prediction saying so is
 registered, dated and one commit earlier than the result.
 
-## The four tools still over baseline, and why none of them is next (TRA-1098)
+## The five tools still over baseline, and why none of them is next (TRA-1098, updated TRA-1159)
 
-With `find_usages` reversed and `register_edit` shaped, the over-baseline list
-is down to four tools carrying **165 recorded calls between them** — against
-1 289 for `register_edit` alone. Each has a recorded decision now, so the next
-run does not re-derive them:
+With `find_usages` reversed, `register_edit` repriced, and `get_plugin_registry`
+shaped, the over-baseline list stands at five tools carrying **175 recorded calls
+between them** — against 1 289 for `register_edit` alone. Each has a recorded
+decision now, so the next run does not re-derive them:
 
 | tool | calls | ratio | decision |
 |---|---:|---:|---|
@@ -533,9 +533,10 @@ run does not re-derive them:
 | `get_complexity_report` | 80 | 2.27x | **Baseline, not response.** 30 rows of `{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }` is the question the caller asked. 800 tokens is not what deriving those metrics from `Read`/`Grep` would cost, and the tabular redundancy already has an answer in `output_format: "toon"`. |
 | `get_dead_code` | 53 | 2.27x | **Decided in TRA-1026:** a 1 200-token baseline for a whole-repo sweep is not credible, so cutting the tool would buy the ratio by answering less. |
 | `check_claudemd_drift` | 17 | 2.20x | Volume too low to price; same baseline objection. |
+| `get_plugin_registry` | 10 | 10.09x | Catalog shaped in TRA-1159 (edge types opt-in, 8 427 → 5 045 tokens). 500-token default baseline is not a credible cost for indexing plugin metadata. |
 
-Three of the four are baseline problems, and the baseline half is the estimate
-this whole page says is still an estimate. **None of the four is in `minimal`,
+Four of the five are baseline problems, and the baseline half is the estimate
+this whole page says is still an estimate. **None of the five is in `minimal`,
 the shipped default surface** — they live in `standard`, `review`, `perf` and
 `architecture`, where a caller has explicitly asked for that analysis. Shaping
 them further would be optimising a number nobody's default session pays.
@@ -543,6 +544,23 @@ them further would be optimising a number nobody's default session pays.
 The honest next move on this metric is not another shaping pass; it is
 measuring the baseline half. Until then, a ratio near 2x on a low-volume
 analysis tool is a statement about `RAW_COST_ESTIMATES`, not about the tool.
+
+## The 2.9% nobody priced, and the one tool it found (TRA-1159)
+
+The harness previously priced 24 tools because each needed human-written arguments.
+The other 74 tools called on this machine were 2.7% of call volume in that store (and grew to 73 tools / 591 calls in the 2026-09-08 field tail snapshot). TRA-1159 prices this tail from field response sizes
+converted at the median chars-to-token ratio (0.2635) of the 25 wire-measured tools
+(`scripts/field-tail-cost.ts` writing `docs/_data/response_tokens_tail.json`).
+
+The worst row the tail turned up was `get_plugin_registry` (10 433 tokens per call,
+20.9x baseline). The 193-entry static edge types catalog was 44% of its response.
+It is now opt-in via `include_edge_types: true` while counts by category stay in
+the default answer (8 427 scratch → 5 045 tokens).
+
+The tool is now guarded in `scripts/bench-response-tokens.ts` and added to
+`call-volume.json` at 10 calls (making 25 harness tools, 19 802 calls including overhead, 97.3% of the 20 359 calls in the 2026-09-05 store).
+Pricing the remaining 73 tail tools (591 calls, 479 priced from recorded sizes) gives an
+all-in reduction of **65.5%** with tail included, expanding measurement coverage from 97.3% to 99.5% across the combined cohorts.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 

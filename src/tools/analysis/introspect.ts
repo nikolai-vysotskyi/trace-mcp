@@ -166,14 +166,25 @@ interface EdgeTypeInfo {
 interface GetPluginRegistryResult {
   language_plugins: LanguagePluginInfo[];
   framework_plugins: FrameworkPluginInfo[];
-  edge_types: EdgeTypeInfo[];
+  /** Omitted unless `includeEdgeTypes` — see `edge_type_categories`. */
+  edge_types?: EdgeTypeInfo[];
+  edge_types_total: number;
+  /** Edge-type count per category, always present. */
+  edge_type_categories: Record<string, number>;
   active_frameworks: string[];
 }
 
+/**
+ * TRA-1159: the 193 edge-type descriptions were 44% of this tool's 8 427-token
+ * response and are a static catalog — the same bytes on every project and every
+ * call. They are one `include_edge_types: true` away; the per-category counts
+ * stay in the default answer so nothing is hidden.
+ */
 export function getPluginRegistry(
   store: Store,
   registry: PluginRegistry,
   activeFrameworkNames: Set<string>,
+  includeEdgeTypes = false,
 ): GetPluginRegistryResult {
   const languagePlugins: LanguagePluginInfo[] = registry.getLanguagePlugins().map((p) => ({
     name: p.manifest.name,
@@ -191,11 +202,15 @@ export function getPluginRegistry(
   }));
 
   const edgeTypes = store.getEdgeTypes();
+  const categories: Record<string, number> = {};
+  for (const e of edgeTypes) categories[e.category] = (categories[e.category] ?? 0) + 1;
 
   return {
     language_plugins: languagePlugins,
     framework_plugins: frameworkPlugins,
-    edge_types: edgeTypes,
+    ...(includeEdgeTypes ? { edge_types: edgeTypes } : {}),
+    edge_types_total: edgeTypes.length,
+    edge_type_categories: categories,
     active_frameworks: [...activeFrameworkNames].sort(),
   };
 }

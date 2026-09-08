@@ -1,0 +1,447 @@
+{
+  "_comment": "Committed tail call volume and field output sizes from ~/.trace/savings.json and ~/.trace/analytics.db for reproducibility (TRA-1159).",
+  "snapshot_at": "2026-09-08",
+  "source": "~/.trace/savings.json + ~/.trace/analytics.db",
+  "tail_calls_total": 591,
+  "tools_count": 73,
+  "tools": [
+    {
+      "tool": "apply_codemod",
+      "calls": 142,
+      "field_calls": 123,
+      "mean_chars": 2236
+    },
+    {
+      "tool": "remove_dead_code",
+      "calls": 88,
+      "field_calls": 3,
+      "mean_chars": 1896
+    },
+    {
+      "tool": "call_project_tool",
+      "calls": 54,
+      "field_calls": 51,
+      "mean_chars": 3885
+    },
+    {
+      "tool": "get_change_impact",
+      "calls": 20,
+      "field_calls": 9,
+      "mean_chars": 9038.1
+    },
+    {
+      "tool": "get_pagerank",
+      "calls": 17,
+      "field_calls": 1,
+      "mean_chars": 2438
+    },
+    {
+      "tool": "search_with_mode",
+      "calls": 14,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_untested_symbols",
+      "calls": 12,
+      "field_calls": 9,
+      "mean_chars": 3419.2
+    },
+    {
+      "tool": "detect_antipatterns",
+      "calls": 11,
+      "field_calls": 6,
+      "mean_chars": 8429.5
+    },
+    {
+      "tool": "get_dead_exports",
+      "calls": 11,
+      "field_calls": 5,
+      "mean_chars": 3566.4
+    },
+    {
+      "tool": "self_audit",
+      "calls": 11,
+      "field_calls": 16,
+      "mean_chars": 9951.4
+    },
+    {
+      "tool": "get_import_graph",
+      "calls": 11,
+      "field_calls": 2,
+      "mean_chars": 14025.5
+    },
+    {
+      "tool": "get_risk_hotspots",
+      "calls": 10,
+      "field_calls": 5,
+      "mean_chars": 2556.6
+    },
+    {
+      "tool": "apply_move",
+      "calls": 10,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_startup_context_audit",
+      "calls": 9,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "plan_refactoring",
+      "calls": 8,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_tech_debt",
+      "calls": 7,
+      "field_calls": 8,
+      "mean_chars": 10297.3
+    },
+    {
+      "tool": "remember_decision",
+      "calls": 7,
+      "field_calls": 1,
+      "mean_chars": 104
+    },
+    {
+      "tool": "get_decision_stats",
+      "calls": 6,
+      "field_calls": 4,
+      "mean_chars": 284.3
+    },
+    {
+      "tool": "unpin",
+      "calls": 6,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "query_decisions",
+      "calls": 6,
+      "field_calls": 1,
+      "mean_chars": 195
+    },
+    {
+      "tool": "suggest_queries",
+      "calls": 5,
+      "field_calls": 2,
+      "mean_chars": 3725.5
+    },
+    {
+      "tool": "compare_branches",
+      "calls": 5,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_project_memo",
+      "calls": 5,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "verify_index",
+      "calls": 5,
+      "field_calls": 3,
+      "mean_chars": 608
+    },
+    {
+      "tool": "assess_change_risk",
+      "calls": 5,
+      "field_calls": 3,
+      "mean_chars": 936
+    },
+    {
+      "tool": "get_control_flow",
+      "calls": 5,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_subproject_graph",
+      "calls": 4,
+      "field_calls": 4,
+      "mean_chars": 2896.5
+    },
+    {
+      "tool": "get_wake_up",
+      "calls": 4,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_project_health",
+      "calls": 4,
+      "field_calls": 6,
+      "mean_chars": 14271.8
+    },
+    {
+      "tool": "scan_code_smells",
+      "calls": 4,
+      "field_calls": 4,
+      "mean_chars": 4093
+    },
+    {
+      "tool": "get_co_changes",
+      "calls": 4,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "generate_insights_report",
+      "calls": 4,
+      "field_calls": 1,
+      "mean_chars": 9373
+    },
+    {
+      "tool": "graph_query",
+      "calls": 4,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "discover_claude_sessions",
+      "calls": 4,
+      "field_calls": 4,
+      "mean_chars": 1914
+    },
+    {
+      "tool": "analyze_perf",
+      "calls": 4,
+      "field_calls": 2,
+      "mean_chars": 235
+    },
+    {
+      "tool": "discover_hermes_sessions",
+      "calls": 3,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "predict_bugs",
+      "calls": 3,
+      "field_calls": 1,
+      "mean_chars": 10589
+    },
+    {
+      "tool": "get_artifacts",
+      "calls": 3,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "search_sessions",
+      "calls": 3,
+      "field_calls": 5,
+      "mean_chars": 8748
+    },
+    {
+      "tool": "pin_file",
+      "calls": 3,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "pin_symbol",
+      "calls": 3,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "list_pins",
+      "calls": 3,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_type_hierarchy",
+      "calls": 3,
+      "field_calls": 3,
+      "mean_chars": 19521
+    },
+    {
+      "tool": "consolidate_decisions",
+      "calls": 3,
+      "field_calls": 1,
+      "mean_chars": 118
+    },
+    {
+      "tool": "get_domain_map",
+      "calls": 2,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_symbol_owners",
+      "calls": 2,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "audit_config",
+      "calls": 2,
+      "field_calls": 1,
+      "mean_chars": 5794
+    },
+    {
+      "tool": "get_minimal_context",
+      "calls": 2,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "add_decision",
+      "calls": 2,
+      "field_calls": 2,
+      "mean_chars": 2117.5
+    },
+    {
+      "tool": "get_untested_exports",
+      "calls": 2,
+      "field_calls": 1,
+      "mean_chars": 1145
+    },
+    {
+      "tool": "get_git_churn",
+      "calls": 2,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_schema",
+      "calls": 2,
+      "field_calls": 2,
+      "mean_chars": 445
+    },
+    {
+      "tool": "get_api_surface",
+      "calls": 2,
+      "field_calls": 2,
+      "mean_chars": 111.5
+    },
+    {
+      "tool": "get_subproject_clients",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_coupling",
+      "calls": 1,
+      "field_calls": 1,
+      "mean_chars": 2373
+    },
+    {
+      "tool": "query_by_intent",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "index_sessions",
+      "calls": 1,
+      "field_calls": 1,
+      "mean_chars": 158
+    },
+    {
+      "tool": "pack_context",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_related_symbols",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "check_rename",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "detect_ast_clones",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_suggested_questions",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "check_embedding_drift",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_implementations",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_edge_bottlenecks",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "check_architecture",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "benchmark_project",
+      "calls": 1,
+      "field_calls": 5,
+      "mean_chars": 895.4
+    },
+    {
+      "tool": "check_edit_safe",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "extract_function",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "get_session_resume",
+      "calls": 1,
+      "field_calls": 1,
+      "mean_chars": 172
+    },
+    {
+      "tool": "get_workspace_map",
+      "calls": 1,
+      "field_calls": 4,
+      "mean_chars": 156.5
+    },
+    {
+      "tool": "trace_state_init",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    },
+    {
+      "tool": "trace_state_get",
+      "calls": 1,
+      "field_calls": 0,
+      "mean_chars": null
+    }
+  ]
+}
