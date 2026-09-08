@@ -82,6 +82,9 @@ describe('client detection', () => {
     ['Cursor', 'cursor'],
     ['Visual Studio Code', 'vscode'],
     ['vscode-copilot', 'vscode'],
+    ['opencode', 'opencode'],
+    ['OpenCode', 'opencode'],
+    ['open-code', 'opencode'],
   ])('resolves %s to the %s profile', (clientName, expected) => {
     expect(detectClientProfile(clientName)).toBe(expected);
   });
@@ -108,6 +111,7 @@ describe('resolved tool surface, per profile', () => {
     codex: ['search_text'],
     cursor: ['search_text'],
     vscode: ['search_text'],
+    opencode: ['search_text'],
     generic: [],
   };
 
@@ -217,6 +221,16 @@ describe('instructions retargeting', () => {
     const cursor = retargetInstructions(minimal, getClientProfile('cursor'));
     expect(cursor).toContain('`grep_search`');
     expect(cursor).not.toContain('`content-match`');
+  });
+
+  it('retargets opencode host tools', () => {
+    const { instructions } = runSession('opencode');
+    expect(instructions).toContain('`read_file`');
+    expect(instructions).toContain('`grep`');
+    expect(instructions).toContain('`glob`');
+    expect(instructions).toContain('edit_file');
+    expect(instructions).not.toContain('host tool names vary');
+    expect(instructions).not.toContain('`content-match`');
   });
 
   it('leaves an empty instructions block alone', () => {

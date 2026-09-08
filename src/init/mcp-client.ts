@@ -226,6 +226,40 @@ export function configureMcpClients(
       continue;
     }
 
+    // OpenCode: JSON format with `mcp` key and `command: string[]`
+    if (name === 'opencode') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+      const entry = buildExpectedOpenCodeEntry();
+
+      if (fs.existsSync(configPath) && opencodeEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
+        continue;
+      }
+      try {
+        const action = writeOpenCodeJsonEntry(configPath, entry);
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
+      }
+      continue;
+    }
+
     // Hermes Agent: YAML format, always global, key `mcp_servers.trace-mcp`.
     if (name === 'hermes') {
       const configPath = getConfigPath(name, projectRoot, opts.scope);
@@ -684,6 +718,96 @@ function writeFactoryJsonEntry(
 }
 
 // ---------------------------------------------------------------------------
+// OpenCode JSON writer (top-level `mcp` key, `type: "local"`, `command: string[]`)
+// ---------------------------------------------------------------------------
+
+export interface OpenCodeMcpServerEntry {
+  type: 'local';
+  command: string[];
+  enabled: boolean;
+  cwd?: string;
+  environment?: Record<string, string>;
+}
+
+function buildExpectedOpenCodeEntry(): OpenCodeMcpServerEntry {
+  return {
+    type: 'local',
+    command: [getLauncherPath(), 'serve'],
+    enabled: true,
+  };
+}
+
+function opencodeEntryMatches(configPath: string, expected: OpenCodeMcpServerEntry): boolean {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const content = parseJsonc(raw) as Record<string, unknown> | null;
+    const mcp = content?.mcp as Record<string, unknown> | undefined;
+    // A lingering legacy key must force the write path (which deletes it)
+    if (mcp && typeof mcp === 'object' && LEGACY_MCP_KEY in mcp) return false;
+    const current = mcp?.[MCP_KEY] as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object') return false;
+    if (current.type !== expected.type) return false;
+    if (JSON.stringify(current.command ?? []) !== JSON.stringify(expected.command)) return false;
+    if ((current.enabled ?? true) !== expected.enabled) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeOpenCodeJsonEntry(
+  configPath: string,
+  entry: OpenCodeMcpServerEntry,
+): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  let config: Record<string, unknown> = {};
+  let isNew = true;
+  const raw = readIfExists(configPath);
+  if (raw !== null) {
+    try {
+      config = parseJsonc(raw) as Record<string, unknown>;
+      isNew = false;
+    } catch {
+      /* malformed — overwrite */
+    }
+  }
+
+  if (!config.mcp || typeof config.mcp !== 'object') {
+    config.mcp = {};
+  }
+  const mcp = config.mcp as Record<string, unknown>;
+  delete mcp[LEGACY_MCP_KEY];
+  mcp[MCP_KEY] = entry;
+
+  atomicWriteJson(configPath, config);
+  return isNew ? 'created' : 'updated';
+}
+
+function pinpointOpenCodeEntryDrift(configPath: string, expected: OpenCodeMcpServerEntry): string {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    const content = parseJsonc(raw) as Record<string, unknown> | null;
+    const mcp = content?.mcp as Record<string, unknown> | undefined;
+    const current = mcp?.[MCP_KEY] as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object') {
+      return mcp?.[LEGACY_MCP_KEY] ? 'legacy-key' : 'entry-missing';
+    }
+    if (mcp && typeof mcp === 'object' && LEGACY_MCP_KEY in mcp) return 'legacy-key';
+    if (current.type !== expected.type) return 'type';
+    if (JSON.stringify(current.command ?? []) !== JSON.stringify(expected.command))
+      return 'command';
+    if ((current.enabled ?? true) !== expected.enabled) return 'enabled';
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';
+    return 'fields';
+  } catch {
+    return 'parse-error';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TOML writer (Codex)
 // ---------------------------------------------------------------------------
 
@@ -867,6 +991,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'kilocode',
   'antigravity',
   'kimi',
+  'opencode',
 ];
 
 /**
@@ -1003,6 +1128,25 @@ function detectClientStatus(
       } catch {
         return { client: name, configPath, status: 'missing' };
       }
+    }
+    case 'opencode': {
+      const expected = buildExpectedOpenCodeEntry();
+      const present = (() => {
+        try {
+          const raw = fs.readFileSync(configPath, 'utf-8');
+          const content = parseJsonc(raw) as Record<string, unknown> | null;
+          const mcp = content?.mcp as Record<string, unknown> | undefined;
+          return Boolean(mcp?.[MCP_KEY] ?? mcp?.[LEGACY_MCP_KEY]);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      if (opencodeEntryMatches(configPath, expected)) {
+        return { client: name, configPath, status: 'up_to_date' };
+      }
+      const reason = pinpointOpenCodeEntryDrift(configPath, expected);
+      return { client: name, configPath, status: 'stale', staleReason: reason };
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
@@ -1175,6 +1319,15 @@ export function getConfigPath(
       // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
       // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html
       return path.join(HOME, '.kimi', 'mcp.json');
+    case 'opencode': {
+      if (scope === 'global') {
+        const dir = path.join(HOME, '.config', 'opencode');
+        const jsonc = path.join(dir, 'opencode.jsonc');
+        return fs.existsSync(jsonc) ? jsonc : path.join(dir, 'opencode.json');
+      }
+      const projJsonc = path.join(projectRoot, 'opencode.jsonc');
+      return fs.existsSync(projJsonc) ? projJsonc : path.join(projectRoot, 'opencode.json');
+    }
     default:
       return null;
   }

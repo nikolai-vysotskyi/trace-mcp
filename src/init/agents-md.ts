@@ -9,7 +9,7 @@
  * insists; the default `scope: 'project'` writes next to the current project.
  */
 import path from 'node:path';
-import { upsertTraceMcpBlock } from './md-block.js';
+import { AGENTS_ROUTING_BLOCK, upsertTraceMcpBlock } from './md-block.js';
 import type { InitStepResult } from './types.js';
 
 export function updateAgentsMd(
@@ -21,5 +21,5 @@ export function updateAgentsMd(
   // to make the API symmetrical with `updateClaudeMd` for future flexibility.
   void _scope;
   const filePath = path.join(projectRoot, 'AGENTS.md');
-  return upsertTraceMcpBlock(filePath, { dryRun: opts.dryRun });
+  return upsertTraceMcpBlock(filePath, { dryRun: opts.dryRun, block: AGENTS_ROUTING_BLOCK });
 }

@@ -28,6 +28,7 @@ export const CLIENT_PROFILE_NAMES = [
   'codex',
   'cursor',
   'vscode',
+  'opencode',
   'generic',
 ] as const;
 export type ClientProfileName = (typeof CLIENT_PROFILE_NAMES)[number];
@@ -96,6 +97,17 @@ const PROFILES: Record<ClientProfileName, ClientProfile> = {
       edit: 'editFile',
     },
   },
+  opencode: {
+    name: 'opencode',
+    suppress: HOST_COVERED,
+    hostTools: {
+      rubric: "your host's own tools are `read_file`, `grep`, `glob`, `edit_file`",
+      read: '`read_file`',
+      grep: '`grep`',
+      glob: '`glob`',
+      edit: 'edit_file',
+    },
+  },
   // The fallback has to be a no-op, not a guess: a host we don't recognise may
   // have no file tools at all (Claude Desktop, a bare SDK client), and hiding
   // `search_text` there would take away its only content search.
@@ -112,6 +124,8 @@ const DETECTION: ReadonlyArray<[string, ClientProfileName]> = [
   ['visual-studio-code', 'vscode'],
   ['vscode', 'vscode'],
   ['copilot', 'vscode'],
+  ['opencode', 'opencode'],
+  ['open-code', 'opencode'],
 ];
 
 /**

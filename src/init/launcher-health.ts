@@ -92,7 +92,12 @@ function commandsFromYaml(raw: string): string[] {
 function commandsFromJson(raw: string): string[] {
   const parsed = parseJsonc(raw) as Record<string, unknown> | null;
   if (!parsed || typeof parsed !== 'object') return [];
-  const buckets: unknown[] = [parsed.mcpServers, parsed.servers, parsed['amp.mcpServers']];
+  const buckets: unknown[] = [
+    parsed.mcpServers,
+    parsed.servers,
+    parsed['amp.mcpServers'],
+    parsed.mcp,
+  ];
   const projects = parsed.projects as Record<string, { mcpServers?: unknown }> | undefined;
   if (projects && typeof projects === 'object') {
     for (const proj of Object.values(projects)) buckets.push(proj?.mcpServers);
@@ -108,6 +113,9 @@ function collectCommands(buckets: unknown[]): string[] {
     for (const key of [MCP_KEY, LEGACY_MCP_KEY]) {
       const cmd = servers[key]?.command;
       if (typeof cmd === 'string' && cmd.trim()) out.push(cmd.trim());
+      else if (Array.isArray(cmd) && typeof cmd[0] === 'string' && cmd[0].trim()) {
+        out.push(cmd[0].trim());
+      }
     }
   }
   return out;

@@ -71,7 +71,7 @@ export const initCommand = new Command('init')
   .option('--skip-app', 'Do not install or update the menu bar app')
   .option(
     '--mcp-client <name>',
-    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | kimi',
+    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | kimi | opencode',
   )
   .option('--scope <scope>', 'MCP config target: project | global', 'global')
   .option('--force', 'Overwrite existing configuration')
@@ -179,6 +179,7 @@ export const initCommand = new Command('init')
             'kilocode',
             'antigravity',
             'kimi',
+            'opencode',
           ];
           const detectedNames = new Set(mcpClients.map((c) => c.name));
 
@@ -715,10 +716,16 @@ function executeSteps(
   }
 
   // 4b. AGENTS.md (project-scope) for clients that read it from the project root.
-  // Hermes, AMP, Warp Agents, and Factory Droid all consume AGENTS.md as their
+  // Hermes, AMP, Warp Agents, Factory Droid, and OpenCode all consume AGENTS.md as their
   // primary instruction surface. Cursor/Windsurf have their own per-tool rule
   // formats (covered above), so they don't trigger AGENTS.md generation.
-  const agentsMdClients: DetectedMcpClient['name'][] = ['hermes', 'amp', 'warp', 'factory-droid'];
+  const agentsMdClients: DetectedMcpClient['name'][] = [
+    'hermes',
+    'amp',
+    'warp',
+    'factory-droid',
+    'opencode',
+  ];
   if (opts.selectedClients.some((c) => agentsMdClients.includes(c))) {
     const agentsResult = updateAgentsMd(process.cwd(), { dryRun: opts.dryRun });
     steps.push(agentsResult);
@@ -965,6 +972,7 @@ function formatClientName(name: string): string {
     kilocode: 'Kilo Code',
     antigravity: 'Antigravity',
     kimi: 'Kimi Code CLI',
+    opencode: 'OpenCode',
   };
   return names[name] ?? name;
 }

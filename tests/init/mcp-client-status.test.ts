@@ -279,6 +279,7 @@ describe('getMcpClientStatuses', () => {
       'kilocode',
       'antigravity',
       'kimi',
+      'opencode',
     ]) {
       expect(names.has(expected as never)).toBe(true);
     }
@@ -309,6 +310,21 @@ describe('getMcpClientStatuses', () => {
     c.mcpServers['trace'].command = '/old/launcher/path';
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
     const [drifted] = getMcpClientStatuses(projectRoot, 'global', ['cline']);
+    expect(drifted.status).toBe('stale');
+    expect(drifted.staleReason).toBe('command');
+  });
+
+  it('flags opencode `stale` reason="command" when the launcher command drifts', () => {
+    configureMcpClients(['opencode'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['opencode']);
+    expect(s.status).toBe('up_to_date');
+
+    const configPath = s.configPath as string;
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcp.trace.command = ['/old/launcher', 'serve'];
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+
+    const [drifted] = getMcpClientStatuses(projectRoot, 'global', ['opencode']);
     expect(drifted.status).toBe('stale');
     expect(drifted.staleReason).toBe('command');
   });
