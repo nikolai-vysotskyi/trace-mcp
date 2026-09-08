@@ -104,6 +104,16 @@ function detectTodoComments(lines: string[], filePath: string): CodeSmellFinding
     const m = TODO_REGEX.exec(line);
     if (!m) continue;
 
+    // Ignore tags that are enclosed in backticks (e.g. documentation or regex comments)
+    const tagIndex = m.index + m[0].indexOf(m[1]);
+    const backticksBeforeTag = (line.slice(0, tagIndex).match(/`/g) || []).length;
+    if (backticksBeforeTag % 2 === 1) {
+      // Check if there is another match outside backticks
+      const lineWithoutInlineCode = line.replace(/`[^`]*`/g, ' ');
+      const m2 = TODO_REGEX.exec(lineWithoutInlineCode);
+      if (!m2) continue;
+    }
+
     const tag = m[1].toUpperCase();
     const message = (m[2] ?? '').trim();
     const priority = TODO_TAG_PRIORITY.get(tag) ?? 'medium';
@@ -214,6 +224,26 @@ function detectEmptyFunctions(
         continue;
       }
       body = rawBody.slice(openBrace + 1, closeBrace);
+
+      const header = rawBody.slice(0, openBrace);
+
+      // Skip TypeScript constructor parameter properties (e.g. constructor(private db: Db) {}).
+      // The empty body is intentional because TypeScript auto-generates field assignments.
+      if (
+        (sym.kind === 'constructor' || sym.name === 'constructor') &&
+        /\b(?:private|protected|public|readonly)\s+[\w$]/.test(header)
+      ) {
+        continue;
+      }
+
+      // Skip abstract methods and ambient declarations (e.g. in .d.ts or declare blocks)
+      if (
+        filePath.endsWith('.d.ts') ||
+        /\b(?:abstract|declare)\b/.test(header) ||
+        (sym.signature != null && /\b(?:abstract|declare)\b/.test(sym.signature))
+      ) {
+        continue;
+      }
     }
 
     // Strip comment lines (single-line only — good enough for stub detection)
@@ -289,6 +319,7 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
       /process\.env|os\.environ|getenv|ENV\[|config\./i,
       /(?:\/\/|#)\s*default/i,
       /\.env|\.ya?ml|\.toml|\.ini|\.cfg|Dockerfile|docker-compose/,
+      /0\.0\.0\.0|127\.0\.0\.1|localhost/,
     ],
   },
   // Hardcoded URLs (http/https) — likely should be configurable
@@ -305,6 +336,9 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
       /swagger|openapi|license|readme|changelog/i,
       /(?:npmjs?|pypi|rubygems|crates|maven|nuget|packagist)\.(?:org|io|dev)/i,
       /github\.com|gitlab\.com|bitbucket\.org/i,
+      /<!DOCTYPE\b|\.dtd\b/i,
+      /\bplaceholder\s*:/i,
+      /(?:locales?|i18n|translations?)\//i,
     ],
   },
   // Magic numbers in comparisons, assignments, or returns
