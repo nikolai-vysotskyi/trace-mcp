@@ -1048,35 +1048,53 @@ program
 
       // Preserve the onclose handler wired by Protocol.connect() above — overwriting
       // it would skip Protocol's own state cleanup. Chain ours after it.
+      let cleanedUp = false;
+      const cleanupSessionResources = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
+
+        const sid = transport.sessionId || sessionId;
+        sessionTransports.delete(sid);
+        projectSessions.get(projectRoot)?.delete(sid);
+
+        const h =
+          sessionHandles.get(sid) ??
+          (transport as unknown as { __pendingHandle?: import('./server/server.js').ServerHandle })
+            .__pendingHandle;
+        if (h) {
+          try {
+            h.dispose();
+          } catch {
+            /* best-effort */
+          }
+          sessionHandles.delete(sid);
+          (
+            transport as unknown as { __pendingHandle?: import('./server/server.js').ServerHandle }
+          ).__pendingHandle = undefined;
+        }
+
+        const cid =
+          sessionClients.get(sid) ??
+          (transport as unknown as { __pendingClientId?: string }).__pendingClientId ??
+          clientId;
+        if (cid) {
+          if (clients.has(cid)) {
+            clients.delete(cid);
+            broadcastEvent({ type: 'client_disconnect', clientId: cid, project: projectRoot });
+          }
+          sessionClients.delete(sid);
+          (transport as unknown as { __pendingClientId?: string }).__pendingClientId = undefined;
+        }
+
+        // Release shared resources ref
+        resourcePool.release(projectRoot);
+        pokeActivity(projectRoot);
+      };
+
       const protocolOnClose = transport.onclose;
       transport.onclose = () => {
         protocolOnClose?.();
-        const sid = transport.sessionId;
-        if (sid) {
-          // Clean up session resources. Do NOT call h.server.close() here: the
-          // transport is already closing (that's why onclose fires), and
-          // server.close() → transport.close() → fires onclose synchronously
-          // again → infinite recursion → stack overflow.
-          sessionTransports.delete(sid);
-          projectSessions.get(projectRoot)?.delete(sid);
-
-          const h = sessionHandles.get(sid);
-          if (h) {
-            h.dispose();
-            sessionHandles.delete(sid);
-          }
-
-          const cid = sessionClients.get(sid);
-          if (cid) {
-            clients.delete(cid);
-            broadcastEvent({ type: 'client_disconnect', clientId: cid, project: projectRoot });
-            sessionClients.delete(sid);
-          }
-
-          // Release shared resources ref
-          resourcePool.release(projectRoot);
-          pokeActivity(projectRoot);
-        }
+        cleanupSessionResources();
       };
 
       // Store handle and client mapping (will be registered after session ID is assigned)

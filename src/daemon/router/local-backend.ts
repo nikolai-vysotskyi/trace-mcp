@@ -634,9 +634,10 @@ async function runSubprojectAutoSyncSafe(
 ): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
+  let topoStore: TopologyStore | undefined;
   try {
     ensureGlobalDirs();
-    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new SubprojectManager(topoStore);
     const { services } = await manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
@@ -658,8 +659,13 @@ async function runSubprojectAutoSyncSafe(
       },
       'Subproject auto-sync completed',
     );
-    topoStore.close();
   } catch (err) {
     logger.warn({ error: err, projectRoot }, 'Subproject auto-sync failed (non-fatal)');
+  } finally {
+    try {
+      topoStore?.close();
+    } catch {
+      /* best-effort */
+    }
   }
 }
