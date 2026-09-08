@@ -109,12 +109,36 @@ const TRACE_STATE_SUBDIRS = new Set([
 ]);
 
 function isTraceStateDirectory(absRoot: string): boolean {
+  const candidateHomes = new Set<string>();
   const homedir = os.homedir();
-  if (homedir) {
-    // ~/.trace and ~/.trace-mcp: the directory itself AND any subpath within it
-    for (const d of [path.join(homedir, '.trace'), path.join(homedir, '.trace-mcp')]) {
+  if (homedir) candidateHomes.add(homedir);
+  try {
+    const userHomedir = os.userInfo?.()?.homedir;
+    if (userHomedir) candidateHomes.add(userHomedir);
+  } catch {
+    /* ignore if userInfo unavailable */
+  }
+
+  // ~/.trace and ~/.trace-mcp across candidate homes: the directory itself AND any subpath within it
+  for (const home of candidateHomes) {
+    for (const d of [path.join(home, '.trace'), path.join(home, '.trace-mcp')]) {
       if (isInsideOrEqual(absRoot, d)) return true;
     }
+  }
+
+  // POSIX user container matching (/Users/<user>/.trace, /home/<user>/.trace, /root/.trace),
+  // mirroring the Windows check in isDangerousProjectRoot. Needed when running with an isolated HOME
+  // (e.g. HOME=/Users/name/.agy/5 in test/agent runners) where os.homedir() does not match
+  // the real user home containing the state directory.
+  if (/^\/(Users|home|root)\/[^/]+\/\.trace(-mcp)?(\/|$)/i.test(absRoot)) {
+    return true;
+  }
+
+  // Reject any path that contains .trace or .trace-mcp as a path component
+  const normalized = path.resolve(absRoot);
+  const segments = normalized.split(/[\\/]/).filter(Boolean);
+  if (segments.includes('.trace') || segments.includes('.trace-mcp')) {
+    return true;
   }
 
   // TRACE_MCP_DATA_DIR override: reject the data directory itself and known

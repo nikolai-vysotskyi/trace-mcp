@@ -59,4 +59,28 @@ describe('session transport onclose', () => {
 
     expect(oncloseCount).toBe(1);
   });
+
+  it('fires cleanup and releases resources even if transport.sessionId is never assigned (TRA-1233)', async () => {
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+    await server.connect(transport);
+
+    let released = false;
+    let cleanedUp = false;
+    const protocolOnClose = transport.onclose;
+    transport.onclose = () => {
+      protocolOnClose?.();
+      if (cleanedUp) return;
+      cleanedUp = true;
+      released = true;
+    };
+
+    expect(transport.sessionId).toBeUndefined();
+    await transport.close();
+
+    expect(cleanedUp).toBe(true);
+    expect(released).toBe(true);
+  });
 });
