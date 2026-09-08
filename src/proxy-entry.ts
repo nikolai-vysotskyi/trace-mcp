@@ -25,6 +25,7 @@ import { DEFAULT_DAEMON_PORT } from './global.js';
 import { attachFileLogging, logger } from './logger.js';
 import { detectGitWorktree } from './project-root.js';
 import { resolveDbPath } from './registry.js';
+import { parsePresetArg } from './server/tool-filter.js';
 
 async function main(): Promise<void> {
   installProcessSafetyNet('serve');
@@ -32,8 +33,7 @@ async function main(): Promise<void> {
   // Mirrors the `serve` command's `--preset <name>` option (src/cli.ts) — the
   // only flag this fast path needs to understand. Anything else and the
   // launcher shim would not have picked this file in the first place.
-  const presetIdx = process.argv.indexOf('--preset');
-  const preset = presetIdx !== -1 ? process.argv[presetIdx + 1] : undefined;
+  const preset = parsePresetArg(process.argv);
   if (preset) process.env.TRACE_MCP_PRESET = preset;
 
   const projectRoot = process.cwd();

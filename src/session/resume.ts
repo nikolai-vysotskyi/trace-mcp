@@ -7,11 +7,15 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureGlobalDirs, projectHash, TRACE_MCP_HOME } from '../global.js';
+import { ensureGlobalDirs, projectHash, SESSIONS_DIR, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
 import { atomicWriteJson } from '../utils/atomic-write.js';
 
-const SESSIONS_DIR = path.join(TRACE_MCP_HOME, 'sessions');
+export {
+  sweepSessionFiles,
+  type SessionSweepOptions,
+  type SessionSweepSummary,
+} from './sweeper.js';
 
 /** Max number of session summaries to keep per project */
 const MAX_SESSIONS = 20;

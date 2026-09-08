@@ -53,6 +53,24 @@ export function resolvePresetName(config: TraceMcpConfig): string {
   return process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? DEFAULT_PRESET;
 }
 
+/**
+ * Extract preset name from command-line arguments if present.
+ * Supports both `--preset <name>` and `--preset=<name>`.
+ */
+export function parsePresetArg(argv: string[]): string | undefined {
+  const presetIdx = argv.indexOf('--preset');
+  if (presetIdx !== -1 && presetIdx + 1 < argv.length) {
+    const val = argv[presetIdx + 1];
+    return val && !val.startsWith('-') ? val : undefined;
+  }
+  const presetEq = argv.find((arg) => arg.startsWith('--preset='));
+  if (presetEq) {
+    const val = presetEq.slice('--preset='.length);
+    return val.length > 0 ? val : undefined;
+  }
+  return undefined;
+}
+
 /** The shipped default, and the surface an unresolvable preset name falls back to. */
 export const DEFAULT_PRESET = 'minimal';
 

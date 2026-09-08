@@ -162,6 +162,7 @@ import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
+import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
 /**
@@ -331,6 +332,21 @@ function softGcSweep(): void {
     }
   } catch (err) {
     logger.warn({ err }, 'sweepOrphanTmpFiles soft-prune failed (non-fatal)');
+  }
+
+  // TRA-1218: sweep stale session snapshots, end logs, and orphaned resume
+  // summaries in SESSIONS_DIR.
+  try {
+    const sessionSummary = sweepSessionFiles();
+    if (sessionSummary.deleted.length > 0) {
+      const freedKb = Math.round(sessionSummary.freedBytes / 1024);
+      logger.info(
+        { deletedFiles: sessionSummary.deleted.length, freedKb },
+        `Pruned ${sessionSummary.deleted.length} stale session file(s) (${freedKb} KB freed)`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'sweepSessionFiles soft-prune failed (non-fatal)');
   }
 
   try {
