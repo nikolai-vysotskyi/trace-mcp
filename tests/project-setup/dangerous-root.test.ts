@@ -82,7 +82,9 @@ describe('isDangerousProjectRoot', () => {
 
     test('rejects Windows .trace and .trace-mcp paths (TRA-1197)', () => {
       expect(isDangerousProjectRoot('C:\\Users\\alice\\.trace')).toBe('trace state directory');
-      expect(isDangerousProjectRoot('C:\\Users\\alice\\.trace\\index')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('C:\\Users\\alice\\.trace\\index')).toBe(
+        'trace state directory',
+      );
       expect(isDangerousProjectRoot('D:\\Users\\bob\\.trace-mcp\\perf-fixture')).toBe(
         'trace state directory',
       );
@@ -91,7 +93,9 @@ describe('isDangerousProjectRoot', () => {
 
   describe('trace state directory (TRA-1197)', () => {
     test('rejects ~/.trace', () => {
-      expect(isDangerousProjectRoot(path.join(os.homedir(), '.trace'))).toBe('trace state directory');
+      expect(isDangerousProjectRoot(path.join(os.homedir(), '.trace'))).toBe(
+        'trace state directory',
+      );
     });
 
     test('rejects subpaths inside ~/.trace', () => {
