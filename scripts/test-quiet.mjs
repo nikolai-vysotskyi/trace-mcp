@@ -2,10 +2,12 @@
 import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
+const isWin = process.platform === 'win32';
 
-const child = spawn('pnpm', ['exec', 'vitest', 'run', ...args], {
+const child = spawn(isWin ? 'pnpm.cmd' : 'pnpm', ['exec', 'vitest', 'run', ...args], {
   stdio: ['inherit', 'pipe', 'pipe'],
   env: process.env,
+  shell: isWin,
 });
 
 let stdout = '';
