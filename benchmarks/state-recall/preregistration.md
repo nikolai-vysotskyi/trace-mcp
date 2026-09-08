@@ -1,14 +1,14 @@
 # State-recall A/B — preregistration
 
-**verdict: H1 PASS · H2 PASS · H3 FAIL · H4 PASS** — run of 2026-09-07, 12/12
-tasks, `results.json`. Thresholds below are as committed; nothing in this file
-was edited after the run except this line. The reading is in `README.md`.
+**verdict: PENDING (run 2: state_patch arm addition, 2026-09-08)**
+- Run 1 (2026-09-07, 3 arms): H1 PASS · H2 PASS · H3 FAIL · H4 PASS (`results.json`, `README.md`).
+- Run 2 (2026-09-08, 4 arms): H1, H2, H3, H4 re-evaluated + H5, H6, H7 for `state_patch` arm (TRA-1124).
 
 Committed before the first model call, per TRA-920. Thresholds below are not to
 be moved after results land; if a threshold turns out to be the wrong question,
 say so and register a new one rather than editing this file's numbers.
 
-Owner: TRA-1115 (roadmap item 12). Related: TRA-1008 holds publication of
+Owner: TRA-1115 / TRA-1124 (roadmap item 12). Related: TRA-1008 holds publication of
 `docs/SKILL_STATE.md` until an arm here can fail.
 
 ## Why this exists
@@ -53,10 +53,12 @@ drift between arms or between runs.
 | `full` | whole 20-turn transcript, no budget | Only by careless reading. This is the ceiling. |
 | `truncated` | transcript trimmed to the budget, oldest turns dropped first | Yes — early facts are physically absent. |
 | `state` | goal + a model-rewritten compact state block + the last 2 turns | Yes — a fact not written into state is gone permanently. |
+| `state_patch` | goal + StateEngine serialized markdown + the last 2 turns | Yes — a fact not patched into state is gone permanently. |
 
 The `state` arm spends one model call per turn rewriting its state block, then
-one to answer. The other two spend one call each. That cost asymmetry is real
-and is reported, not netted out.
+one to answer. The `state_patch` arm spends one model call per turn emitting an RFC 7396
+merge patch applied atomically via `StateEngine`, then one to answer. The other two spend
+one call each. That cost asymmetry is real and is reported, not netted out.
 
 ## Budget
 
@@ -88,9 +90,22 @@ state loop drops what the agent needed, exactly as our packer was shown to.
 + 0.5. Rewriting facts from memory rather than copying them out of a transcript
 is where a hallucinated identifier would come from.
 
-Secondary, not gated: recall split by fact kind. `detail` facts are the ones a
-compact state has the least reason to keep. If state loses, expect it to lose
-there first.
+### Hypotheses for `state_patch` (added 2026-09-08, TRA-1124)
+
+**H5 — state_patch beats or matches rewritten state.** `state_patch.recall` ≥ `state.recall`.
+RFC 7396 merge-patch semantics guarantee unmentioned keys survive across turns, preventing
+accidental whole-block erasure.
+
+**H6 — state_patch closes the gap to the full transcript.** `state_patch.recall` ≥ `full.recall` − 0.10.
+The test of the shipped architecture: does an atomic merge patch eliminate the 23.6-point
+retention loss observed in `state` (H3)?
+
+**H7 — no invention in state_patch.** `state_patch.fabricated_per_task` ≤ `full.fabricated_per_task` + 0.5.
+Merge patches should not invent identifiers; keys and values are added or updated incrementally.
+
+Secondary, not gated: recall split by fact kind, and sensitivity analysis reporting results
+both across all 12 tasks and excluding `recall-08` (where the rewrite arm suffered synthetic-noise
+confounding).
 
 ## What may be published
 

@@ -94,5 +94,5 @@ Next, in order:
 
 ```bash
 tsx scripts/bench-state-recall.ts --generate      # rewrite corpus.json (seeded)
-pnpm bench:state-recall --concurrency 4           # ~45 min, 276 model calls
+pnpm bench:state-recall --concurrency 3           # 4 arms (full, truncated, state, state_patch)
 ```
