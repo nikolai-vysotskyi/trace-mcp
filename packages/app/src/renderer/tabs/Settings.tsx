@@ -42,10 +42,12 @@ import {
   MenuSeparator,
   PopUpButton,
   SearchField,
+  SegmentedControl,
   StatusDot,
   Toolbar,
   useMenuAnchor,
 } from '../lattice/ui';
+import { JsonEditor } from '../components/JsonEditor';
 import { useDaemon } from '../hooks/useDaemon';
 import { type Appearance, appearanceOptions } from '../theme.js';
 import { formatAgo, type DaemonUpdateCheck, type UpdateCheck } from '../update-check.js';
@@ -384,54 +386,7 @@ function JsonCtrl({
   label: string;
   onChange: (v: unknown) => void;
 }) {
-  const [text, setText] = useState(() => (value != null ? JSON.stringify(value, null, 2) : ''));
-  const [error, setError] = useState(false);
-  return (
-    <div style={{ width: '100%' }}>
-      <textarea
-        value={text}
-        aria-label={label}
-        rows={3}
-        onChange={(e) => {
-          setText(e.target.value);
-          setError(false);
-        }}
-        onBlur={() => {
-          if (!text.trim()) {
-            setError(false);
-            onChange(undefined);
-            return;
-          }
-          try {
-            onChange(JSON.parse(text));
-            setError(false);
-          } catch {
-            setError(true);
-          }
-        }}
-        style={{
-          fontSize: 12,
-          fontFamily: 'var(--font-mono)',
-          width: '100%',
-          padding: 8,
-          borderRadius: 'var(--radius-input)',
-          resize: 'vertical',
-          border: `0.5px solid ${error ? 'var(--status-red)' : 'var(--separator)'}`,
-          background: 'var(--fill-quaternary)',
-          color: 'var(--label)',
-        }}
-      />
-      {error && (
-        <div
-          className="text-[11px] leading-[13px] mt-1"
-          style={{ color: 'var(--status-red)' }}
-          role="alert"
-        >
-          {t('settings:invalidJson')}
-        </div>
-      )}
-    </div>
-  );
+  return <JsonEditor value={value} label={label} onChange={onChange} />;
 }
 
 /* ═══ Multiselect ═══════════════════════════════════════════════════ */
@@ -1288,35 +1243,14 @@ function ProjectsScreen({
               </div>
               {editKey === p && (
                 <div className="mt-2">
-                  <textarea
+                  <JsonEditor
                     value={editJson}
                     aria-label={t('settings:projects.overridesAria', { path: p })}
-                    rows={4}
-                    onChange={(e) => {
-                      setEditJson(e.target.value);
+                    onChange={(val) => {
+                      setEditJson(typeof val === 'string' ? val : JSON.stringify(val, null, 2));
                       setEditError(false);
                     }}
-                    style={{
-                      fontSize: 12,
-                      fontFamily: 'var(--font-mono)',
-                      width: '100%',
-                      padding: 8,
-                      borderRadius: 'var(--radius-input)',
-                      resize: 'vertical',
-                      border: `0.5px solid ${editError ? 'var(--status-red)' : 'var(--separator)'}`,
-                      background: 'var(--fill-quaternary)',
-                      color: 'var(--label)',
-                    }}
                   />
-                  {editError && (
-                    <div
-                      className="text-[11px] leading-[13px] mt-1"
-                      style={{ color: 'var(--status-red)' }}
-                      role="alert"
-                    >
-                      {t('settings:invalidJson')}
-                    </div>
-                  )}
                   <div className="mt-2">
                     <Button
                       size="small"
@@ -1519,8 +1453,16 @@ function AppPrefsCard({
             a name that disagrees with the label a sighted user reads out loud is
             a voice-control dead end (WCAG 2.5.3). "App" is the GROUP heading. */}
         <PrefRow label={t('settings:appearance.theme')}>
-          <PopUpButton
-            options={appearanceOptions()}
+          <SegmentedControl
+            options={appearanceOptions().map((opt) => ({
+              value: opt.value,
+              label: (
+                <span className="flex items-center justify-center">
+                  <Icon name={opt.icon} size={13} />
+                </span>
+              ),
+              title: opt.label,
+            }))}
             value={appearance}
             onChange={onChange}
             aria-label={t('settings:appearance.theme')}

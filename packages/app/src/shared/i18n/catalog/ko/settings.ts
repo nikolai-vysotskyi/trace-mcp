@@ -47,6 +47,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: 설정 안 됨',
   invalidJson: '잘못된 JSON',
+  'json.format': '포맷',
 
   'models.select': '모델 선택…',
   'models.filter': '모델 필터',

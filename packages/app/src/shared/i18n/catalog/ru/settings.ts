@@ -56,6 +56,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: не задано',
   invalidJson: 'Некорректный JSON',
+  'json.format': 'Форматировать',
 
   'models.select': 'Выбрать модель…',
   'models.filter': 'Фильтр моделей',

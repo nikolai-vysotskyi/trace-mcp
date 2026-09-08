@@ -49,6 +49,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: sin definir',
   invalidJson: 'JSON no válido',
+  'json.format': 'Formatear',
 
   'models.select': 'Selecciona un modelo…',
   'models.filter': 'Filtrar los modelos',
