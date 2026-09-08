@@ -1,7 +1,7 @@
 ---
 title: "code-review-graph Alternative: trace-mcp vs code-review-graph"
 description: "code-review-graph builds an incremental SQLite graph; trace-mcp adds framework awareness, refactoring, security and memory. Head-to-head comparison."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # code-review-graph alternative: trace-mcp vs code-review-graph

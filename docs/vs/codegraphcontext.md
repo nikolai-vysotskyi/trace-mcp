@@ -1,7 +1,7 @@
 ---
 title: "CodeGraphContext Alternative: trace-mcp vs CodeGraphContext for AI agents"
 description: "CodeGraphContext drives 11 SCIP indexers into a graph database you choose. trace-mcp ships one embedded store, framework edges and a write path."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # CodeGraphContext alternative: trace-mcp vs CodeGraphContext

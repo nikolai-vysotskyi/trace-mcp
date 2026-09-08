@@ -1,7 +1,7 @@
 ---
 title: "jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents"
 description: "jCodeMunch offers Python AST exploration under non-commercial license. trace-mcp is permissive MIT with 81 languages, framework edges, and refactoring."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # jCodeMunch alternative: trace-mcp vs jCodeMunch
