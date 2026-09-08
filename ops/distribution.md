@@ -1794,3 +1794,55 @@ and `#12707`, `facebook/pyrefly#4583`, `abhigyanpatwari/GitNexus#3127` and `#306
 `Aider-AI/aider#5580` (bug report already has full reproduction and root-cause analysis by yifanxiong272).
 `DeusData/codebase-memory-mcp#1460` (direct competitor tracker, already addressed by other users).
 
+### Tenth pass, 2026-09-08: nanocoder & deslop maintainer validations, harness-engineering #1284 resolution tiers, and git-pkgs/outline #34 Go/Python graph resolvers
+
+**Maintainer responses on open threads:**
+- [`Nano-Collective/nanocoder#1197`](https://github.com/Nano-Collective/nanocoder/issues/1197#issuecomment-5573428910)
+  (2,455★): Maintainer addyCooks replied enthusiastically on 2026-09-07 (15:40:34Z):
+  "Thanks for this, that's a rare kind of comment, actual numbers from having hit the failure mode rather than a hunch about it. Fair catch, and I don't want to argue with a repro. Vendoring six hand-picked trees does cap the corpus at a size where the regime #1186 is about never shows up."
+  He added a 7th fixture generated from a seeded generator sized to >150k characters, adopted the pre-registered `verdict: PENDING` baseline committed before tests, and folded all three points into their spec before writing fixtures. No further reply owed.
+- [`Ivy-Apps/deslop#173`](https://github.com/Ivy-Apps/deslop/issues/173#issuecomment-5573510294)
+  (18★): Maintainer ILIYANGERMANOV replied on 2026-09-07 (10:43:06Z):
+  "Thanks for taking the time to write this up and share this context @nikolai-vysotskyi! Seriously appreciate the heads-up on those edge cases, this is super helpful. Btw, I'm addressing this as we speak (my current task) and Deslop users should expect a version with a fix this week." No reply owed.
+- [`sosalejandro/atlas#105`](https://github.com/sosalejandro/atlas/issues/105#issuecomment-5574921040)
+  (0★): Maintainer closed out Tier 2 (stack-graphs) after verifying it was archived and adds zero languages over SCIP, aligning with our architectural analysis. No reply owed.
+
+**Mention sweep and catalog moratorium:** `scripts/mention-sweep.sh` ran clean with zero unrecorded repositories outside `ops/mentions-seen.txt`. The standing moratorium on new catalog submissions continues to hold (zero attributable arrivals from directories; see `ROADMAP.md` point 3).
+
+**Two touches, both written after reading the other repo's code and sharing concrete architectural lessons:**
+
+- [`Intense-Visions/harness-engineering#1284`](https://github.com/Intense-Visions/harness-engineering/issues/1284#issuecomment-5586540013)
+  (20★, Mechanical constraints for AI agents, by maintainer chadjw).
+  Maintainer opened an issue analyzing multi-language code-graph coverage and the need to publish honest per-language resolution quality tiers to prevent silent downstream degradation in impact analysis and blast radius (referencing `DeusData/codebase-memory-mcp`'s 13-language Hybrid LSP vs 158 tree-sitter grammars). We contributed three concrete findings from our own resolution measurement harness (`scripts/measure-import-resolution.ts`, TRA-1145):
+  1. The denominator trap: in real codebases (e.g. Flask), third-party and stdlib imports dominate total import statements. If external imports are omitted from the denominator, resolution looks deceptively high (99%), while true internal resolution was 22.4%. Honest tiering requires three buckets: resolved-internal, external/unresolvable, and ambiguous.
+  2. The syntactic namespace barrier: unlike JS/Python/Go where imports map cleanly to file paths, C# (`using Namespace;`) and Java/Kotlin package imports reference logical namespaces rather than file paths. Without an index-wide namespace-to-file symbol mapping, purely syntactic/tree-sitter resolvers achieve near 0% internal resolution (measured 0.2% on Newtonsoft.Json) because intra-repo imports are syntactically indistinguishable from external libraries.
+  3. Propagating resolution boundaries: when imports or call targets are unresolved, treating them as leaf nodes produces false-negative blast radius reports ("0 downstream affected, safe to refactor"). We explicitly surface untracked/opaque boundaries so downstream consumers know the graph is open-ended.
+- [`git-pkgs/outline#34`](https://github.com/git-pkgs/outline/pull/34#issuecomment-5586541778)
+  (11★, Go library to reduce a source tree to a structural skeleton for LLMs, by Libraries.io creator Andrew Nesbitt / andrew).
+  Maintainer opened PR #34 adding cross-file code graph resolution with Go and Python resolvers. We reviewed `resolve.go` and shared three specific failure modes from our own language resolvers:
+  1. Go `/v2`+ major version module suffixes in `defaultAlias` (`resolve.go:275`): `module[strings.LastIndexByte(module, '/')+1:]` yields `"v2"` or `"v3"` for versioned module paths like `github.com/stretchr/testify/v2`, causing call receiver lookups (`testify.Equal(...)`) to miss `sc.mods` and fall through to `ext:`. Trimming trailing `/v[0-9]+` before taking the segment fixes versioned imports without parsing remote package clauses.
+  2. Go external test package namespace collision in `indexGoPackages` (`resolve.go:13`): grouping declarations by directory (`path.Dir(f.path)`) causes symbols in external test packages (`package foo_test`) to leak into `foo.go`'s package scope. Keying by `dir + ":" + f.a.Package` isolates test package scopes.
+  3. Python `__init__.py` re-exports in `moduleExports`: when `__init__.py` re-exports symbols imported from private submodules (`from ._impl import Helper`), callers doing `from . import Helper` resolve to `mod:python:pkg`, but `moduleExports` only inspects declarations directly in `__init__.py`. Propagating `ImportNamed` targets into the module's export table resolves re-exports to internal definitions.
+
+**Threads re-checked 2026-09-08, all silent, nothing owed, no pings due before 2026-09-19 / 2026-09-20:**
+`The-PR-Agent/pr-agent#2499`, `nearform/lastlight#372`, `abhigyanpatwari/GitNexus#3068` and `#3127`,
+`CommunityToolkit/Aspire#1575`, `eltociear/awesome-AI-driven-development#119`,
+`GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+`ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `Kilo-Org/kilocode#13843`
+and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
+`sosalejandro/atlas#105`, `Nano-Collective/nanocoder#1197`, `Ivy-Apps/deslop#173`,
+`headroomlabs-ai/headroom#1009`, `mattbutlerengineering/ai-tooling#585`.
+
+**Checked and skipped, with reasons:**
+`openJiuwen-ai/jiuwenswarm#2665` (8,450★, automated GitCode bot mirror; external GitHub comments are not routed to the underlying internal GitCode team).
+`ScriptedAlchemy/tracedecay#1029` (71★, direct competitor internal sprint tracker by Zack Jackson).
+`sdsrss/code-graph-mcp#41` (73★, maintainer already fixed the CLI path in v0.141.0 and user closed).
+`code-yeongyu/oh-my-openagent#7975` (68.8k★, internal OMO compaction accounting bug where prompt injection is not deducted from context limits).
+`colbymchenry/codegraph#1747` (69.9k★, internal TS wrapper extraction issue).
+`willow-memory/willow-mcp#401` (2★, personal spike).
+`nelsonfrugeri-tech/oh-my-harness#118` (1★, personal fork).
+`dirge-code/dirge#700` (343★, stale July proposal already approved by maintainer).
+
+
