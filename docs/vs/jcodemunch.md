@@ -150,7 +150,7 @@ While The Counter reduces resident schema tokens, it introduces significant fric
 
 trace-mcp addresses context cost through **Adaptive Task Presets**:
 - Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (41 tools), or `dev` (42 tools).
+- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
 ### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
