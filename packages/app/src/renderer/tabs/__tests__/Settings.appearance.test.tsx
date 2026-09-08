@@ -69,19 +69,20 @@ afterEach(() => {
 });
 
 describe('Settings — app preferences', () => {
-  it('offers Auto / Light / Dark even with no daemon', () => {
+  it('offers Auto / Light / Dark as a segmented control even with no daemon', () => {
     renderSettings();
-    const select = screen.getByLabelText('Theme') as HTMLSelectElement;
-    expect([...select.options].map((o) => o.text)).toEqual(['Auto', 'Light', 'Dark']);
-    expect(select.value).toBe('auto');
+    const group = screen.getByRole('group', { name: 'Theme' });
+    expect(group).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Auto' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Light' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('reports the picked appearance upwards', () => {
     const onChange = vi.fn();
     renderSettings({ onAppearanceChange: onChange });
-    const select = screen.getByLabelText('Theme') as HTMLSelectElement;
-    select.value = 'dark';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    const darkBtn = screen.getByRole('button', { name: 'Dark' });
+    fireEvent.click(darkBtn);
     expect(onChange).toHaveBeenCalledWith('dark');
   });
 
