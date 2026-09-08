@@ -285,6 +285,24 @@ async function runStatePatch(task: RecallTask): Promise<ArmRun> {
       try {
         const patch = parsePatchJson(a.text);
         if (patch && typeof patch === 'object' && !Array.isArray(patch)) {
+          if (
+            Array.isArray(patch.learned_constraints) ||
+            Array.isArray(patch.architecture_notes) ||
+            Array.isArray(patch.key_symbols)
+          ) {
+            patch.facts = {
+              ...(typeof patch.facts === 'object' && patch.facts !== null
+                ? (patch.facts as Record<string, unknown>)
+                : {}),
+              ...(Array.isArray(patch.learned_constraints)
+                ? { learned_constraints: patch.learned_constraints }
+                : {}),
+              ...(Array.isArray(patch.architecture_notes)
+                ? { architecture_notes: patch.architecture_notes }
+                : {}),
+              ...(Array.isArray(patch.key_symbols) ? { key_symbols: patch.key_symbols } : {}),
+            };
+          }
           if (patch.blockers_and_dead_ends && typeof patch.blockers_and_dead_ends === 'object') {
             const b = patch.blockers_and_dead_ends as Record<string, unknown>;
             if (Array.isArray(b.dead_ends)) {

@@ -120,3 +120,38 @@ describe('scoreAnswer', () => {
     expect(scoreAnswer('ALPHA_1111 BETA_2222', task).fabricated).toBe(0);
   });
 });
+
+describe('StateEngine RFC 7396 merge patch retention', () => {
+  it('preserves unmentioned keys across successive patches', async () => {
+    const { StateEngine } = await import('../../state/state-engine.js');
+    const { serializeStateToMarkdown } = await import('../../state/serializer.js');
+    const Database = (await import('better-sqlite3')).default;
+
+    const engine = new StateEngine(new Database(':memory:'));
+    try {
+      engine.initState('task-1', 'Goal', ['step 1']);
+      // Turn 1: adds constraint
+      engine.patchState('task-1', {
+        facts: {
+          learned_constraints: ['CONSTRAINT ALPHA_1111: legacy mode required'],
+        },
+      });
+      // Turn 2: adds dead end without mentioning facts
+      engine.patchState('task-1', {
+        blockers_and_dead_ends: {
+          dead_ends: [{ approach: 'DEAD END BETA_2222', reason: 'oom' }],
+        },
+      });
+      // Turn 3: updates next_action
+      engine.patchState('task-1', {
+        next_action: 'proceed to verify',
+      });
+
+      const md = serializeStateToMarkdown(engine.getState('task-1')!.state, 3);
+      expect(md).toContain('ALPHA_1111');
+      expect(md).toContain('BETA_2222');
+    } finally {
+      engine.close();
+    }
+  });
+});
