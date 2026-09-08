@@ -209,6 +209,9 @@ export function isEphemeralProjectRoot(root: string): boolean {
 /** Global project registry. */
 export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 
+/** Global sessions directory (snapshots, end logs, resume summaries). */
+export const SESSIONS_DIR = path.join(TRACE_MCP_HOME, 'sessions');
+
 /** Topology database (cross-service graph). */
 export const TOPOLOGY_DB_PATH = path.join(TRACE_MCP_HOME, 'topology.db');
 

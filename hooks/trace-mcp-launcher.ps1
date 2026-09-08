@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.13 (Windows)
+# trace-mcp-launcher v0.6.14 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -297,12 +297,22 @@ function Test-DaemonPortOpen {
 }
 
 # True when argv is a plain `serve` invocation this shim understands well
-# enough to route to the thin proxy: no args, `serve`, or `serve --preset X`.
+# enough to route to the thin proxy: no args, `serve`, `serve --preset X`,
+# `--preset X`, or `--preset=X`.
 function Test-PlainServe {
     param([string[]]$CommandArgs)
     if (-not $CommandArgs -or $CommandArgs.Count -eq 0) { return $true }
-    if ($CommandArgs.Count -eq 1 -and $CommandArgs[0] -eq 'serve') { return $true }
-    if ($CommandArgs.Count -eq 3 -and $CommandArgs[0] -eq 'serve' -and $CommandArgs[1] -eq '--preset') { return $true }
+    if ($CommandArgs.Count -eq 1) {
+        if ($CommandArgs[0] -eq 'serve') { return $true }
+        if ($CommandArgs[0].StartsWith('--preset=') -and $CommandArgs[0].Length -gt 9) { return $true }
+        return $false
+    }
+    if ($CommandArgs.Count -eq 2) {
+        if ($CommandArgs[0] -eq 'serve' -and $CommandArgs[1].StartsWith('--preset=') -and $CommandArgs[1].Length -gt 9) { return $true }
+        if ($CommandArgs[0] -eq '--preset' -and -not [string]::IsNullOrEmpty($CommandArgs[1]) -and -not $CommandArgs[1].StartsWith('-')) { return $true }
+        return $false
+    }
+    if ($CommandArgs.Count -eq 3 -and $CommandArgs[0] -eq 'serve' -and $CommandArgs[1] -eq '--preset' -and -not [string]::IsNullOrEmpty($CommandArgs[2]) -and -not $CommandArgs[2].StartsWith('-')) { return $true }
     return $false
 }
 
