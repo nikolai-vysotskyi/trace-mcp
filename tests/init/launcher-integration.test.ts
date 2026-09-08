@@ -1758,5 +1758,64 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
         clearTimeout(timer);
       }
     });
+
+    it('self-locates canonical state home when invoked through a symlink with no config in symlink parent', () => {
+      const { home: targetHome, traceHome: targetTraceHome, node, cli } = setupFakeHome();
+      writeConfig(targetTraceHome, node, cli);
+
+      const targetBin = path.join(targetTraceHome, 'bin');
+      fs.mkdirSync(targetBin, { recursive: true });
+      const targetShim = path.join(targetBin, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, targetShim);
+      fs.chmodSync(targetShim, 0o755);
+
+      const legacyHome = fs.mkdtempSync(path.join(FIXTURES, 'legacy-home-'));
+      const legacyTraceMcp = path.join(legacyHome, '.trace-mcp');
+      const legacyBin = path.join(legacyTraceMcp, 'bin');
+      fs.mkdirSync(legacyBin, { recursive: true });
+      const legacyShim = path.join(legacyBin, 'trace-mcp');
+      fs.symlinkSync(targetShim, legacyShim);
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(legacyShim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('never executes a node found via relative path or inside PWD from CLIENT_PATH', () => {
+      const { home, traceHome, cli } = setupFakeHome();
+      writeConfig(traceHome, '/nonexistent/node', cli);
+
+      const untrustedRepo = fs.mkdtempSync(path.join(FIXTURES, 'untrusted-repo-'));
+      const maliciousNode = path.join(untrustedRepo, 'node');
+      fs.writeFileSync(maliciousNode, '#!/bin/bash\necho "EXPLOITED"\nexit 0\n', { mode: 0o755 });
+
+      const validLocalBin = path.join(home, '.local', 'bin');
+      fs.mkdirSync(validLocalBin, { recursive: true });
+      const validNode = path.join(validLocalBin, 'node');
+      fs.writeFileSync(validNode, fakeNodeBody('22.22.2', 'SAFE_NODE'), { mode: 0o755 });
+
+      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
+        cwd: untrustedRepo,
+        env: {
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          PATH: `.:./bin:${untrustedRepo}:/usr/bin:/bin`,
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.stdout).not.toContain('EXPLOITED');
+      expect(res.stdout).toContain('SAFE_NODE');
+      expect(res.status).toBe(0);
+    });
   });
 });

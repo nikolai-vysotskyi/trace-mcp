@@ -67,16 +67,30 @@ if [ -n "${TRACE_MCP_HOME:-}" ]; then
 elif [ -n "${TRACE_MCP_DATA_DIR:-}" ]; then
   TRACE_HOME="$TRACE_MCP_DATA_DIR"
 else
-  SHIM_DIR=""
+  SHIM_FILE=""
   if [ -n "${BASH_SOURCE[0]:-}" ]; then
-    SHIM_DIR="$(dirname "${BASH_SOURCE[0]}")"
+    SHIM_FILE="${BASH_SOURCE[0]}"
   elif [ -n "${0:-}" ]; then
-    SHIM_DIR="$(dirname "$0")"
+    SHIM_FILE="$0"
   fi
-  if [ -n "$SHIM_DIR" ] && [ -d "$SHIM_DIR" ]; then
-    CANDIDATE_HOME="$(cd "$SHIM_DIR/.." 2>/dev/null && pwd -P)"
-    if [ -n "$CANDIDATE_HOME" ] && { [ -f "$CANDIDATE_HOME/launcher.env" ] || [ -f "$CANDIDATE_HOME/.config.json" ]; }; then
-      TRACE_HOME="$CANDIDATE_HOME"
+  if [ -n "$SHIM_FILE" ]; then
+    REAL_SHIM="$SHIM_FILE"
+    # Dereference symlinks so invoking via ~/.trace-mcp/bin/trace-mcp (which symlinks
+    # to ~/.trace/bin/trace) resolves to the canonical install directory holding
+    # launcher.env even when ~/.trace-mcp has no config of its own.
+    while [ -L "$REAL_SHIM" ]; do
+      target="$(readlink "$REAL_SHIM" 2>/dev/null)" || break
+      case "$target" in
+        /*) REAL_SHIM="$target" ;;
+        *) REAL_SHIM="$(dirname "$REAL_SHIM")/$target" ;;
+      esac
+    done
+    SHIM_DIR="$(dirname "$REAL_SHIM")"
+    if [ -d "$SHIM_DIR" ]; then
+      CANDIDATE_HOME="$(cd "$SHIM_DIR/.." 2>/dev/null && pwd -P)"
+      if [ -n "$CANDIDATE_HOME" ] && { [ -f "$CANDIDATE_HOME/launcher.env" ] || [ -f "$CANDIDATE_HOME/.config.json" ]; }; then
+        TRACE_HOME="$CANDIDATE_HOME"
+      fi
     fi
   fi
   if [ -z "${TRACE_HOME:-}" ]; then
@@ -465,13 +479,24 @@ node_candidates() {
   done
 
   # 4f. Node found on the client's original PATH (e.g. custom toolchains, non-standard managers).
-  # Exclude any entry carrying `node_modules` to avoid repo-controlled wrappers.
+  # Exclude any relative entry, anything inside $PWD, or any entry carrying node_modules
+  # to prevent untrusted repo-controlled executables from being invoked.
   if [ -n "${CLIENT_PATH:-}" ]; then
-    local p client_dirs
+    local p client_dirs pwd_real
+    pwd_real="$(pwd -P 2>/dev/null || echo "$PWD")"
     IFS=':' read -ra client_dirs <<< "$CLIENT_PATH"
     for p in "${client_dirs[@]}"; do
       case "$p" in
-        *node_modules*|'') continue ;;
+        /*) ;; # Must be an absolute path
+        *) continue ;;
+      esac
+      case "$p" in
+        *node_modules*|"$PWD"|"$PWD"/*|"$pwd_real"|"$pwd_real"/*) continue ;;
+      esac
+      local p_real
+      p_real="$(cd "$p" 2>/dev/null && pwd -P)" || p_real="$p"
+      case "$p_real" in
+        *node_modules*|"$PWD"|"$PWD"/*|"$pwd_real"|"$pwd_real"/*) continue ;;
       esac
       [ -x "$p/node" ] && [ ! -d "$p/node" ] && echo "$p/node"
     done
