@@ -47,6 +47,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: 未設定',
   invalidJson: 'JSON が不正です',
+  'json.format': '整形',
 
   'models.select': 'モデルを選択…',
   'models.filter': 'モデルを絞り込む',

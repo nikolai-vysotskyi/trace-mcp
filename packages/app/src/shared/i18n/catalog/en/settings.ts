@@ -68,6 +68,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: not set',
   invalidJson: 'Invalid JSON',
+  'json.format': 'Format',
 
   /* ── Model picker ──────────────────────────────────────────────────── */
   'models.select': 'Select model…',

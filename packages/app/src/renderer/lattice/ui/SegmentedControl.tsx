@@ -46,6 +46,7 @@ export function SegmentedControl<T extends string>({
           title={opt.title}
           disabled={opt.disabled}
           aria-pressed={opt.value === value}
+          aria-label={typeof opt.label === 'string' ? undefined : opt.title}
           onClick={() => onChange(opt.value)}
         >
           {opt.label}

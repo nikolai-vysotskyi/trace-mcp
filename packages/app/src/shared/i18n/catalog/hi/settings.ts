@@ -48,6 +48,7 @@ export const settings = {
   'field.aria': '{{label}}: {{value}}',
   'field.ariaUnset': '{{label}}: सेट नहीं',
   invalidJson: 'अमान्य JSON',
+  'json.format': 'प्रारूप',
 
   'models.select': 'मॉडल चुनें…',
   'models.filter': 'मॉडल फ़िल्टर करें',

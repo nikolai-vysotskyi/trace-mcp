@@ -45,6 +45,7 @@ export const settings = {
   'field.aria': '{{label}}：{{value}}',
   'field.ariaUnset': '{{label}}：未设置',
   invalidJson: 'JSON 无效',
+  'json.format': '格式化',
 
   'models.select': '选择模型…',
   'models.filter': '筛选模型',
