@@ -26,6 +26,7 @@ import {
   scoreWithWeights,
   WEIGHTS_PATH,
 } from './confidence-tuner.js';
+import { isSingleLineEndingWithColon } from './decision-quality.js';
 import type { DecisionInput } from './decision-types.js';
 
 const BASE = 0.4;
@@ -55,7 +56,11 @@ export function computeConfidenceLegacy(input: DecisionInputForScoring): number 
   if ((input.tags?.length ?? 0) > 0) c += W_TAGS;
   if (HIGH_SIGNAL_TYPES.has(input.type)) c += W_TYPE;
   if (input.service_name) c += W_SERVICE;
-  return Math.max(0, Math.min(1, c));
+  let score = Math.max(0, Math.min(1, c));
+  if (input.content && isSingleLineEndingWithColon(input.content)) {
+    score = Math.min(score, 0.45);
+  }
+  return score;
 }
 
 // ─── Cached learned-weights loader ─────────────────────────────────
@@ -145,5 +150,9 @@ function inputToSignals(input: DecisionInputForScoring) {
 export function computeConfidence(input: DecisionInputForScoring): number {
   if (!weightTuningEnabled) return computeConfidenceLegacy(input);
   const weights = getCachedWeights();
-  return scoreWithWeights(inputToSignals(input), weights);
+  let score = scoreWithWeights(inputToSignals(input), weights);
+  if (input.content && isSingleLineEndingWithColon(input.content)) {
+    score = Math.min(score, 0.45);
+  }
+  return score;
 }

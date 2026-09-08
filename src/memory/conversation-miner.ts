@@ -15,7 +15,7 @@ import { logger } from '../logger.js';
 import { detectGitWorktree } from '../project-root.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
 import { computeConfidence } from './decision-confidence.js';
-import { minedDecisionRejectReason } from './decision-quality.js';
+import { isSingleLineEndingWithColon, minedDecisionRejectReason } from './decision-quality.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 import { type LlmExtractedDecision, extractDecisionsWithLlm } from './llm-extractor.js';
@@ -702,13 +702,18 @@ function adaptLlmDecisions(
       file_path: fileHint,
       tags: d.tags,
     });
+    let confidence = Math.max(heuristic, d.confidence);
+    if (isSingleLineEndingWithColon(d.content)) {
+      confidence = Math.min(confidence, 0.45);
+    }
     out.push({
       title: cleanTitle,
       content: d.content,
       type: d.type,
       // Take the higher of the LLM's self-estimate and the heuristic — LLM
       // overconfidence is real, but so is heuristic blindness to nuance.
-      confidence: Math.max(heuristic, d.confidence),
+      // Clamped if content is a single line ending with colon (TRA-1056).
+      confidence,
       file_path: fileHint,
       symbol_id: symbolHint,
       tags: d.tags ?? [],
