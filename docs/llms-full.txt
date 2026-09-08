@@ -59,6 +59,8 @@ Different tools approach codebase context from distinct angles:
 | **SCIP-driven graph** | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) | Orchestrates eleven external Sourcegraph SCIP indexers into graph snapshots. | External indexer pipelines, but requires external binaries and complex backend choices. [trace-mcp vs CodeGraphContext](/vs/codegraphcontext.html) |
 | **Review graph** | [code-review-graph](https://github.com/code-review-graph/code-review-graph) | Tracks incremental changes with empty-result uncertainty explanations. | Specialised for review navigation, but advertises 29 tools without preset filtering. [trace-mcp vs code-review-graph](/vs/code-review-graph.html) |
 | **Hybrid vector-AST graph** | [SocratiCode](https://github.com/giancarloerra/SocratiCode) | Combines Qdrant vector embeddings with ast-grep in Docker. | Semantic vector search, but requires Docker runtime and lacks framework routing. [trace-mcp vs SocratiCode](/vs/socraticode.html) |
+| **Meta-dispatch graph** | [jCodeMunch](https://github.com/johann-petrak/jCodeMunch) | Fronts 90+ Python tools through "The Counter" meta-dispatch (`order`, `menu`, `route`). | Dual-Use license (non-commercial only) and regex route detection. [trace-mcp vs jCodeMunch](/vs/jcodemunch.html) |
+| **Native Rust libSQL graph** | [TokenSave](https://github.com/aovestdipaperino/tokensave) | Native Rust binary with libSQL storage, multi-branch indexing, and subprocess isolation. | Advertises 85+ tools by default (~12-15K schema tokens) with no framework routing. [trace-mcp vs TokenSave](/vs/tokensave.html) |
 
 For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code graph comparisons hub](/comparisons.html).
 
@@ -70,7 +72,7 @@ Install trace-mcp in your project root:
 npx trace-mcp init
 ```
 
-The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database.
+The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.
 
 * Explore all available tools: [Tools Reference](/tools-reference.html)
 * Review configuration and preset options: [Configuration Guide](/configuration.html)
@@ -85,7 +87,9 @@ Source: https://trace-mcp.com/tools-reference.html
 
 trace-mcp exposes {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources.
 
-This page groups the ones you reach for by hand. For the complete list —
+This page groups the ones you reach for by hand. For how a persistent
+[code graph MCP server](/code-graph-mcp.html) powers these operations to cut
+agent token costs, see the category overview. For the complete list —
 every registered tool with its one-line description, generated from the
 registrations themselves — see the [tool index](tools-index.md).
 
@@ -1391,8 +1395,9 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Comparing Repomix against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — packing against indexing, on their own terms.
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.
@@ -1487,8 +1492,10 @@ Serena on a cold repo — no index build, though the language server still has t
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
 
@@ -1571,8 +1578,10 @@ Only trace-mcp. codebase-memory-mcp is read-only analysis.
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Decision memory](/decision-memory.html) — how code-linked decisions differ from a notes file.
 - [Get started](/#install) — no configuration required.
 
@@ -1671,8 +1680,10 @@ Portable `.cgc` graph snapshots, published to a Hugging Face-hosted registry and
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Language matrix](/language-matrix.html) — what resolution tier each language actually reaches.
 - [Get started](/#install) — no configuration required.
 
@@ -1778,10 +1789,11 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- See how trace-mcp stacks up against other alternatives in the [comparisons hub](/comparisons.html).
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---
@@ -1913,10 +1925,11 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- See how trace-mcp compares to other servers in the [comparisons hub](/comparisons.html).
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---
@@ -2052,10 +2065,11 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- See how trace-mcp compares to other servers in the [comparisons hub](/comparisons.html).
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---
@@ -2150,8 +2164,9 @@ No. Both index locally into SQLite, need no API key, and survive restarts.
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Comparing codegraph against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — indexing against packing, on their own terms.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
@@ -2261,8 +2276,9 @@ Yes, and for a codebase-heavy agent that also drives browsers or CI, that is pro
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — seven tactics, ordered by measured impact.
 - [Get started](/#install) — no configuration required.
 
@@ -2369,8 +2385,9 @@ code-review-graph supports 23 languages plus Jupyter notebooks via tree-sitter-l
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
@@ -2473,8 +2490,9 @@ Yes. Repomix for a remote repository you want to look at once; codegraph for the
 
 ## Next steps
 
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers, with the same sourcing discipline.
-- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with any of these tools.
 
 ---
@@ -3364,7 +3382,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 ## Supported MCP clients
 
-`trace init` (or `trace-mcp init`) detects installed MCP clients and writes a `trace` server entry into each one's native config format (with `trace-mcp` legacy compatibility preserved). Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
+`trace init` (or `trace-mcp init`) detects installed MCP clients and writes a `trace` server entry into each one's native config format (with `trace-mcp` legacy compatibility preserved). Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs. For an exhaustive audit of guard hooks, routing blocks, and client config files written by this command, see [what trace init installs](/what-trace-init-installs.html).
 
 | Client | Config path | Format | Top-level key | Notes |
 |---|---|---|---|---|
@@ -3947,7 +3965,9 @@ Source: https://trace-mcp.com/architecture.html
 
 This page describes how the index is built. What it exposes once built is the
 [tools reference](tools-reference.md); which languages reach which depth of the
-pipeline below is the [language capability matrix](language-matrix.md).
+pipeline below is the [language capability matrix](language-matrix.md). For how
+persistent graph indexing reduces AI coding agent token costs, see
+[how a code graph MCP server works](/code-graph-mcp.html).
 
 trace-mcp uses a two-pass indexing pipeline:
 
