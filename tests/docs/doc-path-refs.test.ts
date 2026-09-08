@@ -81,6 +81,14 @@ const FOREIGN_PREFIXES = [
   'docs/04-evaluation/', // Serena
   'docs/BENCHMARK.md', // codebase-memory-mcp
   'docs/EVALUATION_PLAN.md', // codebase-memory-mcp
+  'src/tool_metadata.rs', // Narsil-MCP
+  'src/config/preset.rs', // Narsil-MCP
+  'src/taint/', // Narsil-MCP
+  'src/persistence/sparql.rs', // Narsil-MCP
+  'docs/ccg-spec.md', // Narsil-MCP
+  'src/cmds/', // RTK
+  'src/servers/', // claude-mem
+  'src/token_savior/', // Token Savior
 ];
 
 /**
