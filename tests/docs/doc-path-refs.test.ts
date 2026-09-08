@@ -60,6 +60,9 @@ const FOREIGN_PREFIXES = [
   'src/codegraphcontext/', // CodeGraphContext
   'src/constants.ts', // SocratiCode
   'src/services/', // SocratiCode
+  'src/graph/', // Graft
+  'src/claude/', // Graft
+  'src/hosts/', // Graft
   'src/executor.ts', // Context Mode
   'src/server.ts', // Context Mode
   'src/http/client.ts', // hypothetical file in the reader's own repo
