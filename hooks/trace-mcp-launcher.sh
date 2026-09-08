@@ -390,9 +390,12 @@ candidate_homes() {
       esac
     fi
   fi
-  # 3. System passwd user home
+  # 3. System passwd user home (sanitize strictly to POSIX username chars to prevent injection via eval)
   for u in "${USER:-}" "${LOGNAME:-}"; do
     [ -n "$u" ] || continue
+    case "$u" in
+      ""|*[!a-zA-Z0-9_.-]*) continue ;;
+    esac
     u_home="$(eval echo "~$u" 2>/dev/null || true)"
     case "$u_home" in
       ""|"~$u"|"~") continue ;;
@@ -599,6 +602,11 @@ pkg_roots() {
     echo "$(dirname "$1")/../lib/node_modules"
   fi
 
+  # Custom prefix from NPM_CONFIG_PREFIX env var if set (overrides .npmrc)
+  if [ -n "${NPM_CONFIG_PREFIX:-}" ] && [ -d "$NPM_CONFIG_PREFIX/lib/node_modules" ]; then
+    echo "$NPM_CONFIG_PREFIX/lib/node_modules"
+  fi
+
   # Version-manager prefixes across candidate homes: that is where `npm i -g` lands for nvm /
   # Herd / fnm / Volta users, which is most of them.
   while IFS= read -r h; do
@@ -625,8 +633,8 @@ pkg_roots() {
     [ -d "$h/.hermes/node/lib/node_modules" ] &&
       echo "$h/.hermes/node/lib/node_modules"
 
-    # Custom prefixes (`npm config set prefix`) from $h/.npmrc
-    if [ -r "$h/.npmrc" ]; then
+    # Custom prefixes (`npm config set prefix`) from $h/.npmrc (only when NPM_CONFIG_PREFIX is unset)
+    if [ -z "${NPM_CONFIG_PREFIX:-}" ] && [ -r "$h/.npmrc" ]; then
       local n_npmrc
       n_npmrc=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$h/.npmrc" | tail -1)
       n_npmrc="${n_npmrc%$'\r'}"
@@ -654,11 +662,6 @@ pkg_roots() {
       case "$root" in ''|\#*) continue ;; esac
       [ -d "$root" ] && echo "$root"
     done < "$PKG_ROOTS_FILE"
-  fi
-
-  # Custom prefix from NPM_CONFIG_PREFIX env var if set
-  if [ -n "${NPM_CONFIG_PREFIX:-}" ] && [ -d "$NPM_CONFIG_PREFIX/lib/node_modules" ]; then
-    echo "$NPM_CONFIG_PREFIX/lib/node_modules"
   fi
 
   return 0
