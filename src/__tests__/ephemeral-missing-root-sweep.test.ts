@@ -191,6 +191,26 @@ describe('sweepMissingRoots: no grace for a dead ephemeral workdir (TRA-1105)', 
     expect(fs.existsSync(dbPath)).toBe(false);
   });
 
+  it('does NOT delete the index DB when a dangerous root shares it with a live project (TRA-1197)', () => {
+    const dangerous = path.join(os.homedir(), '.trace');
+    const live = path.join(tmpHome, 'live-project');
+    fs.mkdirSync(live, { recursive: true });
+    const sharedDb = path.join(tmpHome, 'index', 'shared.db');
+
+    seedRegistryRows([
+      { root: dangerous, dbPath: sharedDb },
+      { root: live, dbPath: sharedDb },
+    ]);
+    seedDbFiles(sharedDb);
+
+    const { removed } = registry.sweepMissingRoots(7);
+
+    expect(removed).toEqual([dangerous]);
+    expect(registry.listProjects().map((p) => p.root)).toEqual([live]);
+    expect(fs.existsSync(sharedDb)).toBe(true);
+    expect(fs.existsSync(`${sharedDb}-wal`)).toBe(true);
+  });
+
   it('drops a missing Claude scratchpad root on the first sighting (TRA-1197)', () => {
     const root = path.join('/tmp', 'claude-501', 'hash', 'uuid', 'scratchpad');
     seedRegistry(root);
