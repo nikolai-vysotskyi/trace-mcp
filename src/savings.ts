@@ -117,6 +117,22 @@ export const NO_BASELINE_TOOLS: ReadonlySet<string> = new Set([
   // backups. Nothing a Read could have done.
   'apply_startup_recommendations',
   'rollback_startup_recommendations',
+  // Session meta-tools (TRA-1162). They report on the session itself or change
+  // its tool surface; there is no file an agent could have read instead, so the
+  // subtraction has no left-hand side — same reasoning as the mutations above.
+  // They started being counted when the gate stopped skipping them, and without
+  // this each one would have booked DEFAULT_RAW_COST per call on first sight.
+  // `batch` is deliberately absent: it is never scored as itself, only through
+  // the sub-calls it dispatches.
+  'load_tools',
+  'plan_turn',
+  'get_preset_info',
+  'get_session_stats',
+  'get_session_analytics',
+  'get_optimization_report',
+  'get_coverage_report',
+  'get_real_savings',
+  'get_usage_trends',
 ]);
 
 /**

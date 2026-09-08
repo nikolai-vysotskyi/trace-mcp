@@ -5,6 +5,45 @@
  * Framework-conditional and config-conditional guards still apply on top of presets.
  */
 
+/**
+ * The lookup floor: what any code-intelligence surface has to be able to answer
+ * regardless of the role it is shaped for (TRA-1162).
+ *
+ * The five TRA-603 role presets were each written as a standalone list, and
+ * three of them — `perf`, `security`, `architecture` — came out unable to call
+ * `find_usages` at all. That is the 6th busiest tool in the maintainer's store
+ * (821 of 27 394 recorded calls, 3.0%), it is in {@link ALWAYS_LOAD_TOOLS}
+ * because the server asks clients to keep it eagerly loaded, and its schema
+ * costs 380 tokens. A preset that can find a symbol but not its callers is not
+ * a cheaper surface, it is an incomplete one: the tool is one `load_tools`
+ * round-trip away either way, so deferring it only pays off in sessions that
+ * never ask who calls anything.
+ *
+ * Deliberately the *cheap* five, not all fifteen of `ALWAYS_LOAD_TOOLS`. The
+ * remaining gaps (`get_feature_context`, `get_task_context`,
+ * `get_context_bundle`, `get_call_graph`, `get_change_impact`,
+ * `suggest_queries`) are each under 160 recorded calls — 0.6% of volume — and
+ * closing all of them costs `architecture` 2 024 tokens on every session. The
+ * store cannot say whether an *architecture* session wants them, because it
+ * does not record which preset a call ran under, so that trade stays unmade
+ * rather than guessed. `router` (empty by design, dispatches through `batch`)
+ * and `state` (a composable suite, not a standalone surface) opt out.
+ *
+ * Composing rather than re-listing is what stops the drift coming back.
+ * Deduplicated so `listPresets()` keeps reporting a real tool count.
+ */
+export const NAVIGATION_PRIMITIVES: readonly string[] = [
+  'search',
+  'search_text',
+  'get_outline',
+  'get_symbol',
+  'find_usages',
+];
+
+const withLookupFloor = (roleTools: string[]): string[] => [
+  ...new Set([...NAVIGATION_PRIMITIVES, ...roleTools]),
+];
+
 export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
   // The router surface (TRA-675): membership is deliberately empty, so a
   // session advertises only UNGATED_META_TOOLS — 10 tools, 1,604 tokens, 95.6%
@@ -139,7 +178,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
 
   full: 'all',
 
-  review: [
+  review: withLookupFloor([
     'search',
     'search_text',
     'get_symbol',
@@ -163,9 +202,9 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_untested_symbols',
     'register_edit',
     'batch',
-  ],
+  ]),
 
-  dev: [
+  dev: withLookupFloor([
     'search',
     'search_text',
     'get_outline',
@@ -199,9 +238,9 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'batch',
     'remember_decision',
     'query_decisions',
-  ],
+  ]),
 
-  security: [
+  security: withLookupFloor([
     'search',
     'search_text',
     'get_symbol',
@@ -228,9 +267,9 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'query_decisions',
     'register_edit',
     'batch',
-  ],
+  ]),
 
-  design: [
+  design: withLookupFloor([
     'search',
     'search_text',
     'get_symbol',
@@ -248,9 +287,9 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_model_context',
     'register_edit',
     'batch',
-  ],
+  ]),
 
-  perf: [
+  perf: withLookupFloor([
     'search',
     'search_text',
     'get_symbol',
@@ -280,9 +319,9 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_usage_trends',
     'register_edit',
     'batch',
-  ],
+  ]),
 
-  architecture: [
+  architecture: withLookupFloor([
     'get_project_map',
     'get_index_health',
     'search',
@@ -315,7 +354,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'generate_insights_report',
     'query_decisions',
     'remember_decision',
-  ],
+  ]),
 };
 
 /** Resolve a preset by name, returning the tool set or null if unknown. */

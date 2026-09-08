@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
 import { UNGATED_META_TOOLS } from '../../src/server/tool-filter.js';
-import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
+import {
+  NAVIGATION_PRIMITIVES,
+  TOOL_PRESETS,
+  resolvePreset,
+} from '../../src/tools/project/presets.js';
 
 describe('Tool config schema', () => {
   it('defaults tools.preset to "minimal", not "full" (TRA-402: deferred surface)', () => {
@@ -33,6 +37,26 @@ describe('Tool config schema', () => {
       expect(tools, `preset "${name}" is missing get_symbol`).toContain('get_symbol');
       expect(tools, `preset "${name}" is missing register_edit`).toContain('register_edit');
       expect(tools, `preset "${name}" is missing batch`).toContain('batch');
+    }
+  });
+
+  it('every role preset can answer a lookup, including "who calls this" (TRA-1162)', () => {
+    // `perf`, `security` and `architecture` shipped without `find_usages` — the
+    // 6th busiest tool in the maintainer's store (881 of 27 959 recorded calls)
+    // and a member of ALWAYS_LOAD_TOOLS, which is the server telling clients to
+    // keep it eagerly loaded. A preset that finds a symbol but not its callers
+    // is incomplete rather than cheap: the tool is one `load_tools` round-trip
+    // away either way. `TOOL_PRESETS` composes the floor in, so this asserts the
+    // composition was not bypassed by a later hand-written preset.
+    //
+    // `router` (empty by design, dispatches through `batch`) and `state` (a
+    // composable suite, not a standalone surface) opt out on purpose.
+    const exempt = new Set(['router', 'state']);
+    for (const [name, tools] of Object.entries(TOOL_PRESETS)) {
+      if (tools === 'all' || exempt.has(name)) continue;
+      for (const primitive of NAVIGATION_PRIMITIVES) {
+        expect(tools, `preset "${name}" cannot call ${primitive}`).toContain(primitive);
+      }
     }
   });
 
