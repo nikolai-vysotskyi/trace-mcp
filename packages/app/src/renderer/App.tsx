@@ -40,10 +40,9 @@ import {
 import { Clients } from './tabs/Clients';
 import {
   DEFAULT_GRAPH_GPU_SETTINGS,
-  GraphExplorerGPU,
   type GraphExplorerGPUHandle,
   type GraphGPUSettings,
-} from './tabs/GraphExplorerGPU';
+} from './tabs/graph-types';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
@@ -54,6 +53,9 @@ import { Workspace } from './workspace/Workspace';
 // tool feeds are not loaded during window cold start.
 const Activity = lazy(() => import('./tabs/Activity').then((m) => ({ default: m.Activity })));
 const AskTab = lazy(() => import('./tabs/AskTab').then((m) => ({ default: m.AskTab })));
+const GraphExplorerGPU = lazy(() =>
+  import('./tabs/GraphExplorerGPU').then((m) => ({ default: m.GraphExplorerGPU })),
+);
 const Insights = lazy(() => import('./tabs/Insights').then((m) => ({ default: m.Insights })));
 const MemoryExplorer = lazy(() =>
   import('./tabs/MemoryExplorer').then((m) => ({ default: m.MemoryExplorer })),
@@ -981,8 +983,16 @@ function AppTabView({
   const openFileInGraph = useCallback(
     (filePath: string) => {
       if (projectTab !== 'graph') setProjectTab('graph');
-      // Defer until the GPU graph has mounted (one tick is enough).
-      setTimeout(() => graphRef.current?.focusNode(filePath), 0);
+      // If GraphExplorerGPU is lazy-loaded and not yet mounted or data is still loading, retry until focus succeeds.
+      const focus = (retries = 30) => {
+        if (graphRef.current?.focusNode(filePath)) {
+          return;
+        }
+        if (retries > 0) {
+          setTimeout(() => focus(retries - 1), 50);
+        }
+      };
+      focus();
     },
     [projectTab],
   );

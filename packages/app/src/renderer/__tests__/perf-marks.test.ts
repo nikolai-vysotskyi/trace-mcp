@@ -25,6 +25,7 @@ const SCREENS: Record<string, string> = {
   notebook: 'tabs/Notebook.tsx',
   insights: 'tabs/Insights.tsx',
   graph: 'tabs/GraphExplorerGPU.tsx',
+  savings: 'tabs/Savings.tsx',
 };
 
 describe('useful-paint instrumentation', () => {

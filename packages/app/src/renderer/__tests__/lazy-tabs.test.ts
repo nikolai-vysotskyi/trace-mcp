@@ -36,4 +36,40 @@ describe('lazily loaded tabs', () => {
     const mod = await import('../tabs/Notebook');
     expect(typeof mod.Notebook).toBe('function');
   });
+
+  it('Savings is still a named export', async () => {
+    const mod = await import('../tabs/Savings');
+    expect(typeof mod.Savings).toBe('function');
+  });
+
+  it('GraphExplorerGPU is still a named export', async () => {
+    const mod = await import('../tabs/GraphExplorerGPU');
+    // React.forwardRef returns an object, standard functional components return a function.
+    expect(['function', 'object']).toContain(typeof mod.GraphExplorerGPU);
+    expect(mod.GraphExplorerGPU).toBeTruthy();
+  });
+
+  it('retries focus until focusNode returns true', async () => {
+    let callCount = 0;
+    const fakeHandle = {
+      focusNode: (_path: string) => {
+        callCount++;
+        return callCount >= 3;
+      },
+    };
+    let resolved = false;
+    const focus = (retries = 30) => {
+      if (fakeHandle.focusNode('foo.ts')) {
+        resolved = true;
+        return;
+      }
+      if (retries > 0) {
+        setTimeout(() => focus(retries - 1), 5);
+      }
+    };
+    focus();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(resolved).toBe(true);
+    expect(callCount).toBe(3);
+  });
 });
