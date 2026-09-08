@@ -1845,4 +1845,53 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 `nelsonfrugeri-tech/oh-my-harness#118` (1★, personal fork).
 `dirge-code/dirge#700` (343★, stale July proposal already approved by maintainer).
 
+### Eleventh pass, 2026-09-08: redproof #50 (@ast-grep/napi codemod realities), cxpak #103 (ESM/NodeNext .js→.ts import resolution), and competitor ripwire (1.7k★)
+
+**Maintainer responses on open threads:**
+- All 26 previous threads and PRs re-checked via GitHub API:
+  `The-PR-Agent/pr-agent#2499`, `nearform/lastlight#372`, `abhigyanpatwari/GitNexus#3068` and `#3127`,
+  `CommunityToolkit/Aspire#1575`, `eltociear/awesome-AI-driven-development#119`,
+  `GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`,
+  `ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`,
+  `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+  `narumiruna/pi-extensions#1204`, `iansmith/slopstop#633`, `Kilo-Org/kilocode#13843`
+  and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
+  `sosalejandro/atlas#105`, `Nano-Collective/nanocoder#1197`, `Ivy-Apps/deslop#173`,
+  `Intense-Visions/harness-engineering#1284`, `git-pkgs/outline#34`,
+  `headroomlabs-ai/headroom#1009`, `mattbutlerengineering/ai-tooling#585`.
+  All quiet, nothing owed, no reminders due before 2026-09-19 / 2026-09-20.
+
+**Mention sweep and catalog moratorium:**
+`scripts/mention-sweep.sh` executed and yielded 1 hit: `HolmesGPT/holmesgpt`. Inspected and identified as a collision on their datasource connector `dynatrace-mcp` (`datasource-catalog.json`), recorded in `ops/mentions-seen.txt`. Standing moratorium on new catalog submissions continues to hold (0 attributable installs from directories).
+
+**Two technical outreach contributions posted on GitHub:**
+
+- [`schalermthai/redproof#50`](https://github.com/schalermthai/redproof/issues/50#issuecomment-5589725034)
+  (8★, Guardrails harness for coding agents, by maintainer schalermthai).
+  Maintainer proposed `@redproof/ast-grep` to provide structural `find` and `mutate` in TypeScript, sketching `ast.replace(ast.locate(...), 'eval($SRC)')` and converting ast-grep ranges to JS string offsets (D3). We shared three practical realities from our `@ast-grep/napi` engine (`src/tools/refactoring/codemod-ast.ts`):
+  1. Metavariable substitution in `node.replace()`: the NAPI binding is a matcher, not a template engine. Calling `node.replace('eval($SRC)')` inserts the literal string. Captures must be resolved in JS via `node.getMatch('SRC')?.text()` (and `node.getMultipleMatches('ARGS')` for variadics `$$$`, where `getMatch` returns null) and interpolated before passing the string to `node.replace()`.
+  2. Range conversions (D3) vs `root.commitEdits()`: manual slicing using byte/column ranges risks multi-byte UTF-8 vs UTF-16 code unit indexing errors. `root.commitEdits(edits)` on `SgRoot` natively applies non-overlapping edits in Rust and returns the full rewritten source string without manual slicing.
+  3. Native binding failure trap: `@ast-grep/napi` relies on platform-specific optional dependencies (`@ast-grep/napi-<os>-<arch>`). In environments where optional packages were skipped or in minimal containers, static top-level imports throw an uncatchable module evaluation error (`Cannot find native binding`). Dynamic loading with try/catch allows emitting `result.refuse` gracefully.
+
+- [`Barnett-Studios/cxpak#103`](https://github.com/Barnett-Studios/cxpak/issues/103#issuecomment-5589727731)
+  (27★, LLM context-packing briefing engine, by maintainer lyubomir-bozhinov).
+  Maintainer reported that modern ESM/NodeNext import specifiers with extensions (`import x from "./c.js"`) fail resolution in their Rust dependency graph and result in an empty graph / pagerank 0.000 across all files. We contributed two edge cases:
+  1. Asymmetrical extension aliases: under NodeNext, Node strictly requires `.js` in the specifier even when source on disk is `c.ts`/`c.tsx`. Probing must map paired extensions (`.js` → `.ts`, `.tsx`, `.js`, `.jsx`; `.mjs` → `.mts`, `.mjs`; `.cjs` → `.cts`, `.cjs`), but must disable directory index probing (`c/index.ts`) for explicit extensioned specifiers to prevent false edges when a file `auth.ts` and directory `auth/` co-exist.
+  2. Rust resolver standardization: highlighted the `oxc_resolver` crate (Boshen / Oxc project), which provides a specification-compliant, zero-alloc Rust implementation of Node/TS resolution with native `extension_alias` support.
+
+**Competitor discovery — ripwire (1,711★, Red Hat Emerging Technologies):**
+- Discovered `redhat-et/ripwire` (1,711★, Apache-2.0, David Brewster / Red Hat Emerging Technologies), a zero-dependency C++23 CLI + MCP server for coding agents. Uses 22 vendored tree-sitter grammars, PageRank-style ranked map, blast radius analysis, and `--test-gate`.
+- Lineage analysis (`docs/LINEAGE.md`): catalogues 42 folded tools (including `trailhq/Graft` after a head-to-head on 2026-09-07) and 237 surveyed tools. Added `ripwire` to `docs/_data/competitors.yml` (1,711★).
+- Standing policy on competitor interaction holds: direct posting to `redhat-et/ripwire#59` or other internal bug trackers skipped to maintain strict isolation.
+
+**Checked and skipped, with reasons:**
+`trailhq/Graft#310` (6,166★, user asking maintainers how Graft compares to other tools — unsolicited external comment would be spam).
+`redhat-et/ripwire#59` (1,711★, direct competitor internal bug tracker).
+`ScriptedAlchemy/tracedecay#1029` (71★, direct competitor internal sprint tracker).
+`DeusData/codebase-memory-mcp#2054` / `#2077` (direct competitor bug tracker).
+`rtk-ai/rtk#3856` (79.5k★, user Micaso already actively collaborating with maintainer to open PR).
+`vitali87/code-graph-rag#1786` (5,105★, already claimed by contributor investigating recursive AST traversal).
+`macanderson/stella#6018` (12★, internal rust crate test harness).
+`mmnto-ai/totem#2667` (17★, internal R14 round finding).
+
 

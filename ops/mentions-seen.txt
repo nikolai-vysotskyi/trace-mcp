@@ -116,3 +116,4 @@ Kemalyavas/agent-skill-typosquat-bench # npm typosquat dataset, we are a "legit"
 atlaslattice/aluminum-os             # their own golden-trace-mcp
 dawsonblock/Stack0Bot                # vendored awesome-mcp-servers, matches korwabs/playwright-trace-mcp
 Josh-S-N2M/feature-pipeline          # doc id PIPELINE-TRACE-mcp-provisioning-postmortem
+HolmesGPT/holmesgpt                 # datasource-catalog.json: dynatrace-mcp (Dynatrace)
