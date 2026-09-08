@@ -15,13 +15,13 @@ parsing, the MCP tool surface.
 |------|------|------------------|----|
 | 2026-08-30 | `src/init/hermes-hooks.ts` | Guard-script install, `config.yaml` wiring (idempotency, stale refresh, foreign hooks, parse errors), shell-hook allowlist (shape, idempotency, malformed recovery), dry-run | #649 |
 | 2026-09-07 | `src/db/repositories/domain-repository.ts` | `DomainRepository` (routes, components, migrations, ORM models/associations, RN screens) had zero direct tests despite being core DB/schema surface — round-trip + lookup for each entity, `findRouteByPattern`'s LIKE-wildcard matching, `getMigrationsByTable` ordering, and `getAllOrmAssociations`' file-scoped resolved-vs-unresolved-association filter (the exact query TRA-1005 is about to touch for SQLite chunking) | #1080 |
+| 2026-09-09 | `src/db/repositories/analytics-repository.ts` | `AnalyticsRepository` (env vars, workspace stats, cross-workspace edges, workspace dependency graph, workspace exports, index stats, graph snapshot insertion/retrieval/pruning) had zero direct tests despite being core DB/schema surface — added comprehensive round-trip tests covering line ordering, cross-workspace edge resolution across symbol and file nodes, dependency graph self-edge filtering, and snapshot pruning | #1166 |
 
 ## Next candidates (highest untested-symbol counts in `src/**`, unreached)
 
-Re-derive before picking — this list ages. As of 2026-09-07:
+Re-derive before picking — this list ages. As of 2026-09-09:
 
 - `src/api/memory-routes.ts::handleMemoryRequest` — decision-store HTTP surface (renamed/refactored since the 2026-08-30 pass; re-check `src/api/memory-routes-handlers.ts` too)
-- `src/db/repositories/analytics-repository.ts::AnalyticsRepository` — DB/schema surface, same shape of gap as domain-repository (env vars, workspace stats, cross-workspace edges, graph snapshots), zero direct tests
 - `src/db/repositories/graph-repository.ts::GraphRepository` — DB/schema surface, zero direct tests
 - `src/daemon/log-error.ts::serializeError` — error serialization helper
 - `src/init/md-block.ts` (11) — rewrites the user's CLAUDE.md
