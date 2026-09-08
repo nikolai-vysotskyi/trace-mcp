@@ -71,7 +71,7 @@
     "react-i18next": "^17.0.12",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^6.4.3",
