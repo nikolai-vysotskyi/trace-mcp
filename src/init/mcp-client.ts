@@ -12,12 +12,15 @@ import YAML from 'yaml';
 import { atomicWriteJson, atomicWriteString } from '../utils/atomic-write.js';
 import { buildToolPrefixMigrationStep } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
+import { getHomeDir } from './home.js';
 import { isGuardHookInstalled } from './hooks.js';
 import { getLauncherPath } from './launcher.js';
 import { hasTweakccPrompts } from './tweakcc.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
-const HOME = os.homedir();
+function getHome(): string {
+  return getHomeDir();
+}
 
 /**
  * Server key clients register us under. `MCP_KEY` is what `init` writes
@@ -305,25 +308,11 @@ export function configureMcpClients(
         continue;
       }
 
-      // Check if already configured under the current key AND the legacy
-      // section is gone — a legacy-only or both-present `[mcp_servers.*]`
-      // section falls through to the write path below, which migrates it
-      // (see writeCodexTomlEntry). Requiring legacy absence here matters:
-      // otherwise a file with both sections short-circuits to
-      // already_configured and Codex spawns two copies of the server.
-      if (fs.existsSync(configPath)) {
-        try {
-          const content = fs.readFileSync(configPath, 'utf-8');
-          if (
-            codexSectionHeaderPattern(MCP_KEY).test(content) &&
-            !codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)
-          ) {
-            results.push({ target: configPath, action: 'already_configured', detail: name });
-            continue;
-          }
-        } catch {
-          /* malformed — will append */
-        }
+      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
+
+      if (fs.existsSync(configPath) && codexEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
       }
 
       if (opts.dryRun) {
@@ -336,10 +325,7 @@ export function configureMcpClients(
       }
 
       try {
-        const action = writeCodexTomlEntry(
-          configPath,
-          buildExpectedEntry(name, projectRoot, opts.scope),
-        );
+        const action = writeCodexTomlEntry(configPath, entry);
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
         results.push({
@@ -443,7 +429,7 @@ export function configureMcpClients(
     const effectiveScope: McpScope = ALWAYS_GLOBAL_CLIENTS.has(name) ? 'global' : opts.scope;
     const settingsFile =
       effectiveScope === 'global'
-        ? path.join(HOME, configDir, 'settings.json')
+        ? path.join(getHome(), configDir, 'settings.json')
         : path.resolve(projectRoot, configDir, 'settings.local.json');
 
     const step = buildToolPrefixMigrationStep(settingsFile, { dryRun: opts.dryRun });
@@ -844,6 +830,109 @@ function stripCodexTomlSection(content: string, key: string): string {
   return out.join('\n');
 }
 
+interface ParsedCodexEntry {
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
+export function parseCodexTomlSection(content: string, key: string): ParsedCodexEntry | null {
+  const header = codexSectionHeaderPattern(key);
+  if (!header.test(content)) return null;
+
+  const entry: ParsedCodexEntry = {};
+  let currentSection: 'main' | 'env' | 'none' = 'none';
+
+  for (const rawLine of content.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    if (line.startsWith('[')) {
+      if (header.test(line)) {
+        if (/\.env\s*\]/.test(line)) {
+          currentSection = 'env';
+        } else {
+          currentSection = 'main';
+        }
+      } else {
+        currentSection = 'none';
+      }
+      continue;
+    }
+
+    if (currentSection === 'main') {
+      const mCmd = line.match(/^command\s*=\s*["']([^"']+)["']/);
+      if (mCmd) {
+        entry.command = mCmd[1];
+        continue;
+      }
+      const mCwd = line.match(/^cwd\s*=\s*["']([^"']+)["']/);
+      if (mCwd) {
+        entry.cwd = mCwd[1];
+        continue;
+      }
+      const mArgs = line.match(/^args\s*=\s*\[(.*)\]/);
+      if (mArgs) {
+        const rawItems = mArgs[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+        entry.args = rawItems.map((s) => {
+          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+            return s.slice(1, -1);
+          }
+          return s;
+        });
+        continue;
+      }
+    } else if (currentSection === 'env') {
+      const mKv = line.match(/^([A-Za-z0-9_.-]+)\s*=\s*["']([^"']*)["']/);
+      if (mKv) {
+        if (!entry.env) entry.env = {};
+        entry.env[mKv[1]] = mKv[2];
+        continue;
+      }
+    }
+  }
+
+  return entry;
+}
+
+export function codexEntryMatches(configPath: string, expected: McpServerEntry): boolean {
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    // A lingering legacy key must force the write path (which deletes it)
+    if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return false;
+    const current = parseCodexTomlSection(content, MCP_KEY);
+    if (!current || !current.command) return false;
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    if (expected.env || current.env) {
+      if (JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function pinpointCodexEntryDrift(
+  configPath: string,
+  expected: McpServerEntry,
+): 'legacy-key' | 'command' | 'fields' {
+  try {
+    const content = fs.readFileSync(configPath, 'utf-8');
+    if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return 'legacy-key';
+    const current = parseCodexTomlSection(content, MCP_KEY);
+    if (!current || current.command !== expected.command) return 'command';
+    return 'fields';
+  } catch {
+    return 'fields';
+  }
+}
+
 function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
   const dir = path.dirname(configPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1113,18 +1202,17 @@ function detectClientStatus(
         : { client: name, configPath, status: 'stale', staleReason: 'fields' };
     }
     case 'codex': {
-      // TOML — we only do presence detection, not drift, because writing the
-      // section is append-based and we don't parse arbitrary TOML.
       try {
         const content = fs.readFileSync(configPath, 'utf-8');
         const present =
           codexSectionHeaderPattern(MCP_KEY).test(content) ||
           codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content);
-        return {
-          client: name,
-          configPath,
-          status: present ? 'unknown' : 'missing',
-        };
+        if (!present) return { client: name, configPath, status: 'missing' };
+        if (codexEntryMatches(configPath, expected as McpServerEntry)) {
+          return { client: name, configPath, status: 'up_to_date' };
+        }
+        const reason = pinpointCodexEntryDrift(configPath, expected as McpServerEntry);
+        return { client: name, configPath, status: 'stale', staleReason: reason };
       } catch {
         return { client: name, configPath, status: 'missing' };
       }
@@ -1232,40 +1320,46 @@ export function getConfigPath(
   switch (name) {
     case 'claude-code':
       return scope === 'global'
-        ? path.join(HOME, '.claude.json') // user-level MCP in Claude Code
+        ? path.join(getHome(), '.claude.json') // user-level MCP in Claude Code
         : path.join(projectRoot, '.mcp.json');
     case 'claw-code':
       return scope === 'global'
-        ? path.join(HOME, '.claw', 'settings.json')
+        ? path.join(getHome(), '.claw', 'settings.json')
         : path.join(projectRoot, '.claw.json');
     case 'claude-desktop':
       // Claude Desktop is always global
       return process.platform === 'darwin'
-        ? path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
+        ? path.join(
+            getHome(),
+            'Library',
+            'Application Support',
+            'Claude',
+            'claude_desktop_config.json',
+          )
         : path.join(
-            process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'),
+            process.env.APPDATA ?? path.join(getHome(), 'AppData', 'Roaming'),
             'Claude',
             'claude_desktop_config.json',
           );
     case 'cursor':
       return scope === 'global'
-        ? path.join(HOME, '.cursor', 'mcp.json')
+        ? path.join(getHome(), '.cursor', 'mcp.json')
         : path.join(projectRoot, '.cursor', 'mcp.json');
     case 'windsurf':
       return scope === 'global'
-        ? path.join(HOME, '.windsurf', 'mcp.json')
+        ? path.join(getHome(), '.windsurf', 'mcp.json')
         : path.join(projectRoot, '.windsurf', 'mcp.json');
     case 'continue':
       return scope === 'global'
-        ? path.join(HOME, '.continue', 'mcpServers', 'mcp.json')
+        ? path.join(getHome(), '.continue', 'mcpServers', 'mcp.json')
         : path.join(projectRoot, '.continue', 'mcpServers', 'mcp.json');
     case 'junie':
       return scope === 'global'
-        ? path.join(HOME, '.junie', 'mcp', 'mcp.json')
+        ? path.join(getHome(), '.junie', 'mcp', 'mcp.json')
         : path.join(projectRoot, '.junie', 'mcp', 'mcp.json');
     case 'codex':
       return scope === 'global'
-        ? path.join(HOME, '.codex', 'config.toml')
+        ? path.join(getHome(), '.codex', 'config.toml')
         : path.join(projectRoot, '.codex', 'config.toml');
     case 'jetbrains-ai':
       return null; // Configured through IDE Settings UI, not a file we can write
@@ -1273,7 +1367,9 @@ export function getConfigPath(
       return null; // Configured through Warp Settings UI; cloud-synced storage
     case 'amp': {
       const base =
-        scope === 'global' ? path.join(HOME, '.config', 'amp') : path.join(projectRoot, '.amp');
+        scope === 'global'
+          ? path.join(getHome(), '.config', 'amp')
+          : path.join(projectRoot, '.amp');
       // Prefer existing .jsonc, fall back to .json. Otherwise create .json.
       const jsoncPath = path.join(base, 'settings.jsonc');
       const jsonPath = path.join(base, 'settings.json');
@@ -1283,11 +1379,11 @@ export function getConfigPath(
     }
     case 'factory-droid':
       return scope === 'global'
-        ? path.join(HOME, '.factory', 'mcp.json')
+        ? path.join(getHome(), '.factory', 'mcp.json')
         : path.join(projectRoot, '.factory', 'mcp.json');
     case 'hermes':
       // Hermes Agent is always-global; project scope is a no-op here.
-      return path.join(process.env.HERMES_HOME ?? path.join(HOME, '.hermes'), 'config.yaml');
+      return path.join(process.env.HERMES_HOME ?? path.join(getHome(), '.hermes'), 'config.yaml');
     case 'cline':
       // Cline (VS Code extension saoudrizwan.claude-dev): standard mcpServers JSON,
       // global-only (lives in VS Code globalStorage, no per-project variant).
@@ -1314,14 +1410,14 @@ export function getConfigPath(
     case 'antigravity':
       // Antigravity (Google agentic IDE): standard mcpServers JSON, global-only.
       // Source: ~/.gemini/config/mcp_config.json.
-      return path.join(HOME, '.gemini', 'config', 'mcp_config.json');
+      return path.join(getHome(), '.gemini', 'config', 'mcp_config.json');
     case 'kimi':
       // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
       // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html
-      return path.join(HOME, '.kimi', 'mcp.json');
+      return path.join(getHome(), '.kimi', 'mcp.json');
     case 'opencode': {
       if (scope === 'global') {
-        const dir = path.join(HOME, '.config', 'opencode');
+        const dir = path.join(getHome(), '.config', 'opencode');
         const jsonc = path.join(dir, 'opencode.jsonc');
         return fs.existsSync(jsonc) ? jsonc : path.join(dir, 'opencode.json');
       }
@@ -1344,10 +1440,14 @@ export function getConfigPath(
  */
 function vscodeUserDir(): string {
   if (process.platform === 'darwin') {
-    return path.join(HOME, 'Library', 'Application Support', 'Code', 'User');
+    return path.join(getHome(), 'Library', 'Application Support', 'Code', 'User');
   }
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'Code', 'User');
+    return path.join(
+      process.env.APPDATA ?? path.join(getHome(), 'AppData', 'Roaming'),
+      'Code',
+      'User',
+    );
   }
-  return path.join(HOME, '.config', 'Code', 'User');
+  return path.join(getHome(), '.config', 'Code', 'User');
 }

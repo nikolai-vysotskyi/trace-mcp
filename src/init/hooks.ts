@@ -22,8 +22,8 @@ import {
   USER_PROMPT_SUBMIT_HOOK_VERSION,
   WORKTREE_HOOK_VERSION,
 } from './types.js';
+import { getHomeDir } from './home.js';
 
-const HOME = os.homedir();
 const IS_WINDOWS = process.platform === 'win32';
 const HOOK_EXT = IS_WINDOWS ? '.cmd' : '.sh';
 
@@ -218,17 +218,17 @@ const LIFECYCLE_HOOKS: readonly HookDescriptor[] = [
 // --- Helpers ---
 
 function hookDest(client: ClientDir, desc: HookDescriptor): string {
-  return path.join(HOME, client.hooksSubdir, `${desc.scriptName}${HOOK_EXT}`);
+  return path.join(getHomeDir(), client.hooksSubdir, `${desc.scriptName}${HOOK_EXT}`);
 }
 
 function settingsPath(client: ClientDir, global: boolean): string {
   return global
-    ? path.join(HOME, client.configDir, 'settings.json')
+    ? path.join(getHomeDir(), client.configDir, 'settings.json')
     : path.resolve(process.cwd(), client.configDir, 'settings.local.json');
 }
 
 function clientExists(client: ClientDir): boolean {
-  return fs.existsSync(path.join(HOME, client.configDir));
+  return fs.existsSync(path.join(getHomeDir(), client.configDir));
 }
 
 /**
@@ -687,7 +687,7 @@ export function cleanupLegacyHooks(opts: { global?: boolean; dryRun?: boolean })
     if (changed && !opts.dryRun) writeSettings(sPath, settings);
 
     // Also delete the orphaned script files
-    const hooksDir = path.join(HOME, client.hooksSubdir);
+    const hooksDir = path.join(getHomeDir(), client.hooksSubdir);
     for (const name of LEGACY_HOOK_SCRIPTS) {
       for (const ext of ['.sh', '.cmd', '.ps1']) {
         const scriptPath = path.join(hooksDir, `${name}${ext}`);

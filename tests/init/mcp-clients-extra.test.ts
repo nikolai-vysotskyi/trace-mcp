@@ -627,3 +627,54 @@ describe('OpenCode configuration', () => {
     expect(results[0].action).toBe('already_configured');
   });
 });
+
+describe('Codex configuration and drift recovery', () => {
+  it('creates codex config with trace section when missing', () => {
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const configPath = path.join(fakeHome, '.codex', 'config.toml');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content).toContain('[mcp_servers.trace]');
+    expect(content).toContain('args = ["serve"]');
+  });
+
+  it('reports already_configured when codex entry matches', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('already_configured');
+  });
+
+  it('updates codex config when launcher path drifts', () => {
+    const configPath = path.join(fakeHome, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace]\ncommand = "/outdated/dead/path/trace"\nargs = ["serve"]\n',
+    );
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('updated');
+
+    const updated = fs.readFileSync(configPath, 'utf-8');
+    expect(updated).not.toContain('/outdated/dead/path/trace');
+    expect(updated).toContain('[mcp_servers.trace]');
+    expect(updated).toContain('args = ["serve"]');
+  });
+
+  it('migrates legacy trace-mcp section to trace', () => {
+    const configPath = path.join(fakeHome, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace-mcp]\ncommand = "/some/path/trace-mcp"\nargs = ["serve"]\n',
+    );
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('updated');
+
+    const updated = fs.readFileSync(configPath, 'utf-8');
+    expect(updated).not.toContain('[mcp_servers.trace-mcp]');
+    expect(updated).toContain('[mcp_servers.trace]');
+  });
+});

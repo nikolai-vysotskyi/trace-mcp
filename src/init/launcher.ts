@@ -22,6 +22,7 @@ import { atomicWriteString } from '../utils/atomic-write.js';
 import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME } from '../global.js';
+import { getHomeDir } from './home.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -62,7 +63,7 @@ export function getLauncherDir(): string {
   // process resolves the same directory via this env var; keep it as-is.
   const envDir = process.env.TRACE_MCP_HOME?.trim();
   if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace');
+  return path.join(getHomeDir(), '.trace');
 }
 
 export function getLauncherPath(): string {
@@ -480,7 +481,7 @@ function writeLegacyCompat(legacyPath: string, current: string): void {
  * preserve, and inventing one would just be litter.
  */
 function installLegacyBinCompat(): void {
-  const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
+  const legacyDir = path.join(getHomeDir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
   const current = getLauncherPath();
   // When the legacy home *is* the launcher home, the real shim already lives at
@@ -494,7 +495,7 @@ function installLegacyBinCompat(): void {
   // legacy path gets ENOENT with nothing in launcher.log to explain it: the shim
   // never runs, so it never logs (TRA-910). A custom TRACE_MCP_HOME means "use
   // this home"; writing into a different one is never what it asked for.
-  if (path.resolve(getLauncherDir()) !== path.resolve(os.homedir(), '.trace')) return;
+  if (path.resolve(getLauncherDir()) !== path.resolve(getHomeDir(), '.trace')) return;
   try {
     // existsSync follows the link: a symlink pointing at a target that is gone
     // is the one state that actually breaks clients, so it must not be mistaken
