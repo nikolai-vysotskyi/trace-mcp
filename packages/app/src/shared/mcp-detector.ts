@@ -264,5 +264,39 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
   // Kimi Code CLI
   checkConfig('kimi', path.join(HOME, '.kimi', 'mcp.json'));
 
+  // OpenCode: JSON/JSONC with `mcp` key at ~/.config/opencode/opencode.json[c] (user)
+  // or opencode.json[c] (project).
+  {
+    const checkOpenCode = (configPath: string) => {
+      try {
+        const content = readIfExists(configPath);
+        if (content === null) return;
+        const parsed = parseJsonc(content) as Record<string, unknown> | null;
+        const servers = parsed?.mcp as Record<string, unknown> | undefined;
+        const hasTraceMcp = !!(servers?.['trace'] ?? servers?.['trace-mcp']);
+        clients.push({ name: 'opencode', configPath, hasTraceMcp });
+      } catch {
+        clients.push({ name: 'opencode', configPath, hasTraceMcp: false });
+      }
+    };
+    const openCodeUserBase = path.join(HOME, '.config', 'opencode');
+    for (const file of ['opencode.jsonc', 'opencode.json']) {
+      const p = path.join(openCodeUserBase, file);
+      if (fs.existsSync(p)) {
+        checkOpenCode(p);
+        break;
+      }
+    }
+    if (projectRoot && !clients.some((c) => c.name === 'opencode')) {
+      for (const file of ['opencode.jsonc', 'opencode.json']) {
+        const p = path.join(projectRoot, file);
+        if (fs.existsSync(p)) {
+          checkOpenCode(p);
+          break;
+        }
+      }
+    }
+  }
+
   return clients;
 }

@@ -71,11 +71,48 @@ ${END_MARKER}`;
 /** Backwards-compatible alias for legacy imports. */
 export const TRACE_MCP_ROUTING_BLOCK = TRACE_ROUTING_BLOCK;
 
+/**
+ * Neutral routing block for AGENTS.md.
+ * Unlike CLAUDE.md, which targets Claude Code and names its native tools
+ * (Read, Grep, Glob, Edit), AGENTS.md targets cross-client agents (Hermes,
+ * OpenCode, Codex, Factory Droid, AMP) and uses neutral tool descriptions.
+ */
+export const AGENTS_ROUTING_BLOCK = `${START_MARKER}
+## trace Tool Routing
+
+IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use host file-reading, grep, glob, or shell (ls, find) tools for navigating source code.
+
+| Task | trace tool | Instead of |
+|------|------------|------------|
+| Find a function/class/method | \`search\` | text grep |
+| Understand a file before editing | \`get_outline\` | full-file read |
+| Read one symbol's source | \`get_symbol\` | full-file read |
+| What breaks if I change X | \`get_change_impact\` | guessing |
+| All usages of a symbol | \`find_usages\` | text grep |
+| All implementations of an interface | \`get_implementations\` | directory search (ls/find) |
+| All classes implementing X | \`search\` with \`implements\` filter | text grep |
+| Project health / coverage gaps | \`self_audit\` | manual inspection |
+| Dead code / dead exports | \`get_dead_code\` (\`mode: "exports_only"\`) | text grep for unused |
+| Context for a task | \`get_feature_context\` | reading 15 files |
+| Tests for a symbol | \`get_tests_for\` | glob + grep |
+| Untested symbols (deep) | \`get_untested_symbols\` (deferred — load via \`load_tools\`) | manual audit |
+| HTTP request flow | \`get_request_flow\` (framework-gated) | reading route files |
+| DB model relationships | \`get_model_context\` (framework-gated) | reading model + migrations |
+| Component tree | \`get_component_tree\` (framework-gated) | reading component files |
+| Circular dependencies | \`get_circular_imports\` | manual tracing |
+| Task spanning many turns | \`trace_state_init\` once, then \`trace_state_patch\` / \`trace_state_add_dead_end\` per step, \`trace_state_get\` to re-read (deferred — \`load_tools({preset:"state"})\`) | re-reading the whole transcript every turn |
+
+Use host file-reading and grep tools ONLY for non-code files (.md, .json, .yaml, config) or before edit.
+Start sessions with \`get_project_map\` (summary_only=true).
+${END_MARKER}`;
+
 /** Upsert the trace routing block into `filePath`. Idempotent. */
 export function upsertTraceMcpBlock(
   filePath: string,
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean; block?: string } = {},
 ): InitStepResult {
+  const isAgentsMd = basename(filePath) === 'AGENTS.md';
+  const block = opts.block ?? (isAgentsMd ? AGENTS_ROUTING_BLOCK : TRACE_ROUTING_BLOCK);
   const existing = readIfExists(filePath);
 
   const hasAnyMarker =
@@ -93,7 +130,7 @@ export function upsertTraceMcpBlock(
   }
 
   if (existing === null) {
-    fs.writeFileSync(filePath, `${TRACE_ROUTING_BLOCK}\n`);
+    fs.writeFileSync(filePath, `${block}\n`);
     return { target: filePath, action: 'created' };
   }
 
@@ -108,7 +145,7 @@ export function upsertTraceMcpBlock(
   );
 
   if (markerRe.test(content)) {
-    content = content.replace(markerRe, TRACE_ROUTING_BLOCK);
+    content = content.replace(markerRe, block);
     content = cleanupWhitespace(content);
     if (content === originalContent) {
       return { target: filePath, action: 'already_configured' };
@@ -124,7 +161,7 @@ export function upsertTraceMcpBlock(
 
   content = cleanupWhitespace(content);
   const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, `${content + separator + TRACE_ROUTING_BLOCK}\n`);
+  fs.writeFileSync(filePath, `${content + separator + block}\n`);
   const cleaned = originalContent !== content;
   return {
     target: filePath,

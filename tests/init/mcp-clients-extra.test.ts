@@ -497,3 +497,133 @@ describe('Warp configuration', () => {
     expect(warp?.detail).toContain('File-based MCP servers');
   });
 });
+
+describe('OpenCode detection', () => {
+  it('parses ~/.config/opencode/opencode.json and detects trace-mcp', () => {
+    const dir = path.join(fakeHome, '.config', 'opencode');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'opencode.json'),
+      JSON.stringify({
+        mcp: {
+          'trace-mcp': {
+            type: 'local',
+            command: ['trace-mcp', 'serve'],
+            enabled: true,
+          },
+        },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const opencode = clients.find((c) => c.name === 'opencode');
+    expect(opencode).toBeDefined();
+    expect(opencode?.hasTraceMcp).toBe(true);
+  });
+
+  it('parses opencode.jsonc with comments and detects trace', () => {
+    const dir = path.join(fakeHome, '.config', 'opencode');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'opencode.jsonc'),
+      [
+        '// OpenCode user settings',
+        '{',
+        '  /* MCP servers */',
+        '  "mcp": {',
+        '    "trace": {',
+        '      "type": "local",',
+        '      "command": ["/path/to/trace-mcp", "serve"],',
+        '      "enabled": true',
+        '    }',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const opencode = clients.find((c) => c.name === 'opencode');
+    expect(opencode).toBeDefined();
+    expect(opencode?.hasTraceMcp).toBe(true);
+    expect(opencode?.configPath).toMatch(/opencode\.jsonc$/);
+  });
+
+  it('falls back to project-level opencode.json when user-level is absent', () => {
+    fs.writeFileSync(
+      path.join(projectRoot, 'opencode.json'),
+      JSON.stringify({
+        mcp: {
+          trace: {
+            type: 'local',
+            command: ['trace-mcp', 'serve'],
+            enabled: true,
+          },
+        },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const opencode = clients.find((c) => c.name === 'opencode');
+    expect(opencode?.hasTraceMcp).toBe(true);
+    expect(opencode?.configPath.startsWith(projectRoot)).toBe(true);
+  });
+});
+
+describe('OpenCode configuration', () => {
+  it('creates global opencode.json with local MCP entry', () => {
+    const results = configureMcpClients(['opencode'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+
+    const configPath = path.join(fakeHome, '.config', 'opencode', 'opencode.json');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(content.mcp).toBeDefined();
+    expect(content.mcp.trace).toEqual({
+      type: 'local',
+      command: [expect.stringContaining('trace-mcp'), 'serve'],
+      enabled: true,
+    });
+  });
+
+  it('creates project-level opencode.json when scope is project', () => {
+    const results = configureMcpClients(['opencode'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('created');
+
+    const configPath = path.join(projectRoot, 'opencode.json');
+    expect(fs.existsSync(configPath)).toBe(true);
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(content.mcp.trace.type).toBe('local');
+    expect(content.mcp.trace.enabled).toBe(true);
+    expect(content.mcp.trace.command[1]).toBe('serve');
+  });
+
+  it('migrates legacy trace-mcp key to trace in place', () => {
+    const dir = path.join(fakeHome, '.config', 'opencode');
+    fs.mkdirSync(dir, { recursive: true });
+    const configPath = path.join(dir, 'opencode.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        mcp: {
+          'trace-mcp': {
+            type: 'local',
+            command: ['trace-mcp', 'serve'],
+            enabled: true,
+          },
+        },
+      }),
+    );
+
+    const results = configureMcpClients(['opencode'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('updated');
+
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(content.mcp['trace-mcp']).toBeUndefined();
+    expect(content.mcp.trace).toBeDefined();
+    expect(content.mcp.trace.type).toBe('local');
+    expect(content.mcp.trace.enabled).toBe(true);
+  });
+
+  it('reports already_configured when entry matches', () => {
+    configureMcpClients(['opencode'], projectRoot, { scope: 'global' });
+    const results = configureMcpClients(['opencode'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('already_configured');
+  });
+});

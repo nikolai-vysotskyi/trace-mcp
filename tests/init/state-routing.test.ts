@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { installCursorRules } from '../../src/init/ide-rules.js';
-import { TRACE_ROUTING_BLOCK } from '../../src/init/md-block.js';
+import { AGENTS_ROUTING_BLOCK, TRACE_ROUTING_BLOCK } from '../../src/init/md-block.js';
 
 /**
  * The state tools (TRA-596) are deferred behind `load_tools`, so the generated
@@ -29,6 +29,7 @@ describe('SKILL.state routing', () => {
 
   it('names the state tools in the CLAUDE.md / AGENTS.md block', () => {
     mustRoute(TRACE_ROUTING_BLOCK);
+    mustRoute(AGENTS_ROUTING_BLOCK);
   });
 
   it('names the state tools in the Cursor/Windsurf rules', () => {
