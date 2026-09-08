@@ -101,6 +101,11 @@ const TRACE_STATE_SUBDIRS = new Set([
   'startup-backups',
   'perf-fixture',
   'telemetry',
+  'decisions',
+  'logs',
+  'metrics',
+  'bin',
+  'mirror',
 ]);
 
 function isTraceStateDirectory(absRoot: string): boolean {

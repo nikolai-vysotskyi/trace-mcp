@@ -128,6 +128,40 @@ describe('isDangerousProjectRoot', () => {
         process.env.TRACE_MCP_DATA_DIR = customDir;
         expect(isDangerousProjectRoot(customDir)).toBe('trace state directory');
         expect(isDangerousProjectRoot(path.join(customDir, 'index'))).toBe('trace state directory');
+        expect(isDangerousProjectRoot(path.join(customDir, 'decisions'))).toBe(
+          'trace state directory',
+        );
+        expect(isDangerousProjectRoot(path.join(customDir, 'logs'))).toBe('trace state directory');
+        expect(isDangerousProjectRoot(path.join(customDir, 'metrics'))).toBe(
+          'trace state directory',
+        );
+        expect(isDangerousProjectRoot(path.join(customDir, 'sessions'))).toBe(
+          'trace state directory',
+        );
+        expect(isDangerousProjectRoot(path.join(customDir, 'locks'))).toBe('trace state directory');
+      } finally {
+        if (prev !== undefined) {
+          process.env.TRACE_MCP_DATA_DIR = prev;
+        } else {
+          delete process.env.TRACE_MCP_DATA_DIR;
+        }
+      }
+    });
+
+    test('rejects decisions, logs, metrics under arbitrary TRACE_MCP_DATA_DIR', () => {
+      const reviewDir = '/tmp/trace-review-state';
+      const prev = process.env.TRACE_MCP_DATA_DIR;
+      try {
+        process.env.TRACE_MCP_DATA_DIR = reviewDir;
+        expect(isDangerousProjectRoot('/tmp/trace-review-state/decisions')).toBe(
+          'trace state directory',
+        );
+        expect(isDangerousProjectRoot('/tmp/trace-review-state/logs')).toBe(
+          'trace state directory',
+        );
+        expect(isDangerousProjectRoot('/tmp/trace-review-state/metrics')).toBe(
+          'trace state directory',
+        );
       } finally {
         if (prev !== undefined) {
           process.env.TRACE_MCP_DATA_DIR = prev;

@@ -751,7 +751,10 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
       delete reg.projects[root];
       removed.push(root);
       changed = true;
-      if (entry.dbPath && !hasLiveHolderOrUnknown(entry.dbPath, root)) {
+      const sharedWithSibling = Object.values(reg.projects).some(
+        (other) => other.dbPath === entry.dbPath,
+      );
+      if (entry.dbPath && !sharedWithSibling && !hasLiveHolderOrUnknown(entry.dbPath, root)) {
         for (const suffix of MISSING_ROOT_SIDECARS) {
           try {
             fs.unlinkSync(entry.dbPath + suffix);
