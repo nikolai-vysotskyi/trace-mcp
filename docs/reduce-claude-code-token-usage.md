@@ -1,7 +1,7 @@
 ---
 title: "How to Reduce Claude Code Token Usage — 7 measured tactics"
 description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the output format."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # How to reduce Claude Code token usage
@@ -112,7 +112,7 @@ What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
-- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
+- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace/.config.json`. `tools.preset` is honoured from a project-local `.trace/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
@@ -189,6 +189,8 @@ No — clearing forces re-derivation, which usually costs more. Compact, or hand
 ## Next steps
 
 - [Tools reference](/tools-reference.html) — every trace-mcp tool, including the outline/symbol/impact ones above.
+- [Tool index](/tools-index.html) — alphabetical index of all {{ site.data.counts.tools }} tools with availability breakdown.
+- [System prompt routing via tweakcc](/tweakcc.html) — patch Claude Code's system prompts to enforce tool routing toward trace-mcp instead of native file reads.
 - [TOON savings](/toon-savings.html) — the full measurement method behind section 4.
 - [Configuration](/configuration.html) — presets and `tools.include` / `tools.exclude`.
 - [Get started](/#install) — no configuration required.
