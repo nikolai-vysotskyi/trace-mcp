@@ -53,7 +53,11 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_index_health` | Index stats — file count, symbol count, edge count, errors |
 | `reindex` | Trigger full or incremental re-indexing |
 | `get_env_vars` | List environment variable keys from `.env` files with inferred value types |
-| `get_plugin_registry` | List all registered indexer plugins and the edge types they emit |
+| `get_plugin_registry` | List registered indexer plugins and edge types (opt-in full edge-type catalog via include_edge_types) |
+
+> [!NOTE]
+> **Migration note (TRA-1159): `get_plugin_registry`**
+> `get_plugin_registry` previously emitted all 193 static edge types unconditionally on every call (~10k tokens). Starting in v3.23.3, individual `edge_types` are omitted by default and replaced with `edge_type_categories` (counts per category) and `edge_types_total`. Clients requiring the full list of edge-type strings should pass `include_edge_types: true`.
 
 ## Navigation
 

@@ -547,10 +547,10 @@ analysis tool is a statement about `RAW_COST_ESTIMATES`, not about the tool.
 
 ## The 2.2% nobody priced, and the one tool it found (TRA-1159)
 
-The harness priced 24 tools because each needed human-written arguments. The
-other 74 tools called on this machine were 2.2% of call volume and 0% of the
-measurement. TRA-1159 prices this tail from `~/.trace/analytics.db` response sizes
-converted at the median chars-to-token ratio (0.2639) of the wire-measured tools
+The harness previously priced 24 tools because each needed human-written arguments.
+The other 74 tools called on this machine were 2.9% of call volume and 0% of the
+measurement. TRA-1159 prices this tail from field response sizes
+converted at the median chars-to-token ratio (0.2635) of the 25 wire-measured tools
 (`scripts/field-tail-cost.ts` writing `docs/_data/response_tokens_tail.json`).
 
 The worst row the tail turned up was `get_plugin_registry` (10 433 tokens per call,
@@ -559,9 +559,9 @@ It is now opt-in via `include_edge_types: true` while counts by category stay in
 the default answer (8 427 scratch → 5 045 tokens).
 
 The tool is now guarded in `scripts/bench-response-tokens.ts` and added to
-`call-volume.json` at 10 calls. Pricing the remaining 73 tail tools (591 calls,
-479 priced from recorded sizes) gives an all-in reduction of **65.5%** with tail
-included, expanding measurement coverage from 96.9% to 99.4%.
+`call-volume.json` at 10 calls (making 25 harness tools, 19 802 calls including overhead).
+Pricing the remaining 73 tail tools (591 calls, 479 priced from recorded sizes) gives an
+all-in reduction of **65.5%** with tail included, expanding measurement coverage from 97.1% to 99.5%.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 

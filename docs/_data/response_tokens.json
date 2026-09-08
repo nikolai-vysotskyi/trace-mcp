@@ -17,7 +17,7 @@
   "overhead_tools": 2,
   "overhead_calls": 1473,
   "overhead_tokens": 293147,
-  "calls_store_total": 20359,
+  "calls_store_total": 20393,
   "baseline_tokens": 27734800,
   "measured_tokens": 8866094,
   "reduction_pct": 68,
