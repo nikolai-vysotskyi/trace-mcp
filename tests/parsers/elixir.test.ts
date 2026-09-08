@@ -103,6 +103,29 @@ end
     expect(importModules.length).toBe(5);
   });
 
+  it('ignores comments inside multi-alias tuple syntax', async () => {
+    const code = `
+defmodule MyApp.Router do
+  alias MyApp.Controllers.{
+    # Primary controllers
+    UserController,
+    # Secondary
+    PostController
+  }
+end
+`;
+    const res = await parse(code);
+    const edges = res.edges ?? [];
+    const importModules = edges
+      .filter((e) => e.edgeType === 'imports')
+      .map((e) => (e.metadata as Record<string, unknown>)?.module);
+
+    expect(importModules).toEqual([
+      'MyApp.Controllers.UserController',
+      'MyApp.Controllers.PostController',
+    ]);
+  });
+
   it('extracts nested modules and updates moduleCtx for symbol FQNs', async () => {
     const code = `
 defmodule Outer do

@@ -65,7 +65,7 @@ export function expandMultiAlias(specifier: string): string[] {
     const prefix = match[1].trim();
     return match[2]
       .split(',')
-      .map((s) => s.trim())
+      .map((s) => s.replace(/#.*$/, '').trim())
       .filter(Boolean)
       .map((s) => `${prefix}.${s}`);
   }

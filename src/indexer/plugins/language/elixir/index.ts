@@ -133,7 +133,10 @@ function extractImportTargets(node: TSNode): string[] {
           const targets: string[] = [];
           for (let j = 0; j < right.namedChildCount; j++) {
             const item = right.namedChild(j);
-            if (item?.text) targets.push(`${prefix}.${item.text}`);
+            if (item && item.type !== 'comment' && item.text) {
+              const cleaned = item.text.replace(/#.*$/, '').trim();
+              if (cleaned) targets.push(`${prefix}.${cleaned}`);
+            }
           }
           if (targets.length > 0) return targets;
         }
@@ -144,7 +147,7 @@ function extractImportTargets(node: TSNode): string[] {
         const prefix = match[1].trim();
         return match[2]
           .split(',')
-          .map((s) => s.trim())
+          .map((s) => s.replace(/#.*$/, '').trim())
           .filter(Boolean)
           .map((s) => `${prefix}.${s}`);
       }

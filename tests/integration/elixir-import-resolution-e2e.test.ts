@@ -58,8 +58,13 @@ end
 end
 `,
   'lib/my_app/web.ex': `defmodule MyApp.Web do
-  # Multi-alias expansion
-  alias MyApp.Repo.{User, Post}
+  # Multi-alias expansion with comments inside tuple
+  alias MyApp.Repo.{
+    # Primary model
+    User,
+    # Secondary model
+    Post
+  }
   # Single alias
   alias MyApp.Accounts
   # Import
