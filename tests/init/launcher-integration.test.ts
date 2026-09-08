@@ -1676,4 +1676,146 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(out.stderr).toBe('');
     });
   });
+
+  describe('TRA-1190: self-location under isolated HOME and update swap retry', () => {
+    it('self-locates enclosing state home when TRACE_MCP_HOME is unset and HOME is isolated', () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+
+      const binDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+      const shimPath = path.join(binDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shimPath);
+      fs.chmodSync(shimPath, 0o755);
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shimPath, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('exports TRACE_MCP_HOME and TRACE_MCP_DATA_DIR pointing to resolved state directory', () => {
+      const { home, traceHome, cli } = setupFakeHome();
+      const node = path.join(home, 'echo-env-node');
+      fs.writeFileSync(
+        node,
+        '#!/bin/bash\nif [ "${1:-}" = "-v" ]; then echo "v22.22.2"; exit 0; fi\necho "HOME_ENV:$TRACE_MCP_HOME DATA_ENV:$TRACE_MCP_DATA_DIR"\n',
+        { mode: 0o755 },
+      );
+      writeConfig(traceHome, node, cli);
+
+      const binDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+      const shimPath = path.join(binDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shimPath);
+      fs.chmodSync(shimPath, 0o755);
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+      const res = spawnSync(shimPath, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.status).toBe(0);
+      const realTraceHome = fs.realpathSync(traceHome);
+      expect(res.stdout).toContain(`HOME_ENV:${realTraceHome}`);
+      expect(res.stdout).toContain(`DATA_ENV:${realTraceHome}`);
+    });
+
+    it('retries and recovers when cli.js becomes available during update swap window', async () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const missingCli = path.join(home, 'missing-cli.js');
+      writeConfig(traceHome, node, missingCli);
+
+      const nvmCli = plantNvmPackage(home);
+      fs.rmSync(nvmCli, { force: true });
+
+      const timer = setTimeout(() => {
+        try {
+          fs.writeFileSync(nvmCli, '// restored cli\n');
+        } catch {
+          // ignore
+        }
+      }, 200);
+
+      try {
+        const out = await runLauncherAsync({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+        expect(out.status).toBe(0);
+        expect(out.stdout).toContain('NODE_ARGS:');
+      } finally {
+        clearTimeout(timer);
+      }
+    });
+
+    it('self-locates canonical state home when invoked through a symlink with no config in symlink parent', () => {
+      const { home: targetHome, traceHome: targetTraceHome, node, cli } = setupFakeHome();
+      writeConfig(targetTraceHome, node, cli);
+
+      const targetBin = path.join(targetTraceHome, 'bin');
+      fs.mkdirSync(targetBin, { recursive: true });
+      const targetShim = path.join(targetBin, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, targetShim);
+      fs.chmodSync(targetShim, 0o755);
+
+      const legacyHome = fs.mkdtempSync(path.join(FIXTURES, 'legacy-home-'));
+      const legacyTraceMcp = path.join(legacyHome, '.trace-mcp');
+      const legacyBin = path.join(legacyTraceMcp, 'bin');
+      fs.mkdirSync(legacyBin, { recursive: true });
+      const legacyShim = path.join(legacyBin, 'trace-mcp');
+      fs.symlinkSync(targetShim, legacyShim);
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(legacyShim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('never executes a node found via relative path or inside PWD from CLIENT_PATH', () => {
+      const { home, traceHome, cli } = setupFakeHome();
+      writeConfig(traceHome, '/nonexistent/node', cli);
+
+      const untrustedRepo = fs.mkdtempSync(path.join(FIXTURES, 'untrusted-repo-'));
+      const maliciousNode = path.join(untrustedRepo, 'node');
+      fs.writeFileSync(maliciousNode, '#!/bin/bash\necho "EXPLOITED"\nexit 0\n', { mode: 0o755 });
+
+      const validLocalBin = path.join(home, '.local', 'bin');
+      fs.mkdirSync(validLocalBin, { recursive: true });
+      const validNode = path.join(validLocalBin, 'node');
+      fs.writeFileSync(validNode, fakeNodeBody('22.22.2', 'SAFE_NODE'), { mode: 0o755 });
+
+      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
+        cwd: untrustedRepo,
+        env: {
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          PATH: `.:./bin:${untrustedRepo}:/usr/bin:/bin`,
+        },
+        encoding: 'utf-8',
+      });
+
+      expect(res.stdout).not.toContain('EXPLOITED');
+      expect(res.stdout).toContain('SAFE_NODE');
+      expect(res.status).toBe(0);
+    });
+  });
 });

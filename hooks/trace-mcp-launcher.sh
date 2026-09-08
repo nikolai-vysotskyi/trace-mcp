@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.10
+# trace-mcp-launcher v0.6.11
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -54,7 +54,57 @@ CLIENT_PATH="$PATH"
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
 
-TRACE_HOME="${TRACE_MCP_HOME:-$HOME/.trace}"
+# Determine TRACE_HOME:
+# 1. Explicit TRACE_MCP_HOME or TRACE_MCP_DATA_DIR override always wins.
+# 2. Sibling directory of this shim: the shim is installed at <TRACE_HOME>/bin/trace
+#    or <TRACE_HOME>/bin/trace-mcp. If launcher.env exists in that parent directory,
+#    use it. This survives MCP clients spawned with an isolated or modified HOME
+#    (e.g. Antigravity, containers, launchd, Claude Code --isolated).
+# 3. $HOME/.trace (the standard default).
+# 4. $HOME/.trace-mcp (pre-TRA-611 legacy home).
+if [ -n "${TRACE_MCP_HOME:-}" ]; then
+  TRACE_HOME="$TRACE_MCP_HOME"
+elif [ -n "${TRACE_MCP_DATA_DIR:-}" ]; then
+  TRACE_HOME="$TRACE_MCP_DATA_DIR"
+else
+  SHIM_FILE=""
+  if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SHIM_FILE="${BASH_SOURCE[0]}"
+  elif [ -n "${0:-}" ]; then
+    SHIM_FILE="$0"
+  fi
+  if [ -n "$SHIM_FILE" ]; then
+    REAL_SHIM="$SHIM_FILE"
+    # Dereference symlinks so invoking via ~/.trace-mcp/bin/trace-mcp (which symlinks
+    # to ~/.trace/bin/trace) resolves to the canonical install directory holding
+    # launcher.env even when ~/.trace-mcp has no config of its own.
+    while [ -L "$REAL_SHIM" ]; do
+      target="$(readlink "$REAL_SHIM" 2>/dev/null)" || break
+      case "$target" in
+        /*) REAL_SHIM="$target" ;;
+        *) REAL_SHIM="$(dirname "$REAL_SHIM")/$target" ;;
+      esac
+    done
+    SHIM_DIR="$(dirname "$REAL_SHIM")"
+    if [ -d "$SHIM_DIR" ]; then
+      CANDIDATE_HOME="$(cd "$SHIM_DIR/.." 2>/dev/null && pwd -P)"
+      if [ -n "$CANDIDATE_HOME" ] && { [ -f "$CANDIDATE_HOME/launcher.env" ] || [ -f "$CANDIDATE_HOME/.config.json" ]; }; then
+        TRACE_HOME="$CANDIDATE_HOME"
+      fi
+    fi
+  fi
+  if [ -z "${TRACE_HOME:-}" ]; then
+    TRACE_HOME="$HOME/.trace"
+    if [ ! -d "$TRACE_HOME" ] && [ -d "$HOME/.trace-mcp" ]; then
+      TRACE_HOME="$HOME/.trace-mcp"
+    fi
+  fi
+fi
+
+# Export so cli.js (and src/global.ts) connects to the same state directory
+export TRACE_MCP_HOME="$TRACE_HOME"
+export TRACE_MCP_DATA_DIR="$TRACE_HOME"
+
 CONFIG="$TRACE_HOME/launcher.env"
 LOG="$TRACE_HOME/launcher.log"
 # One global node_modules root per line, appended by each install.
@@ -409,9 +459,9 @@ is_app_runtime() {
 node_candidates() {
   local n fnm_dir candidate
 
-  # 4a. System-wide stable paths (Homebrew, /usr/local)
+  # 4a. System-wide stable paths (Homebrew, /usr/local, ~/.local)
   # 4b. Volta — stable symlink regardless of active version
-  for candidate in /opt/homebrew/bin/node /usr/local/bin/node "$HOME/.volta/bin/node"; do
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node "$HOME/.local/bin/node" "$HOME/.volta/bin/node"; do
     [ -x "$candidate" ] && echo "$candidate"
   done
 
@@ -428,10 +478,34 @@ node_candidates() {
     [ -x "$fnm_dir/bin/node" ] && echo "$fnm_dir/bin/node"
   done
 
-  # 4f. Last resort: prefixes that only pkg_roots knows about.
+  # 4f. Node found on the client's original PATH (e.g. custom toolchains, non-standard managers).
+  # Exclude any relative entry, anything inside $PWD, or any entry carrying node_modules
+  # to prevent untrusted repo-controlled executables from being invoked.
+  if [ -n "${CLIENT_PATH:-}" ]; then
+    local p client_dirs pwd_real
+    pwd_real="$(pwd -P 2>/dev/null || echo "$PWD")"
+    IFS=':' read -ra client_dirs <<< "$CLIENT_PATH"
+    for p in "${client_dirs[@]}"; do
+      case "$p" in
+        /*) ;; # Must be an absolute path
+        *) continue ;;
+      esac
+      case "$p" in
+        *node_modules*|"$PWD"|"$PWD"/*|"$pwd_real"|"$pwd_real"/*) continue ;;
+      esac
+      local p_real
+      p_real="$(cd "$p" 2>/dev/null && pwd -P)" || p_real="$p"
+      case "$p_real" in
+        *node_modules*|"$PWD"|"$PWD"/*|"$pwd_real"|"$pwd_real"/*) continue ;;
+      esac
+      [ -x "$p/node" ] && [ ! -d "$p/node" ] && echo "$p/node"
+    done
+  fi
+
+  # 4g. Last resort: prefixes that only pkg_roots knows about.
   node_from_pkg_roots
 
-  # 4g. The Node embedded in the desktop app. Last, because a real node needs
+  # 4h. The Node embedded in the desktop app. Last, because a real node needs
   # no `ELECTRON_RUN_AS_NODE` dance — but on a DMG-only machine it is the only
   # one there is.
   node_from_app_bundle
@@ -766,7 +840,19 @@ fi
 
 if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
   ROOTS=$(pkg_roots "$NODE_PATH")
-  CLI_PATH=$(probe_cli "$ROOTS") || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
+  CLI_PATH=$(probe_cli "$ROOTS") || {
+    # An update (npm install -g or self-update) may be swapping the package
+    # directory right this second. Wait briefly and retry before declaring
+    # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
+    # kills the session permanently.
+    retry=0
+    while [ "$retry" -lt 5 ]; do
+      sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
+      retry=$((retry + 1))
+      CLI_PATH=$(probe_cli "$ROOTS") && break
+    done
+    [ -n "$CLI_PATH" ] || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
+  }
   log "probe: cli=$CLI_PATH"
   HEALED=1
 fi

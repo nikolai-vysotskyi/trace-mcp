@@ -161,7 +161,8 @@ function truncateLog() {
 
 function atomicWrite(filePath, content, mode) {
   ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
+  const rand = randomBytes(6).toString('hex');
+  const tmp = `${filePath}.tmp.${process.pid}.${rand}`;
   fs.writeFileSync(tmp, content, { mode });
   fs.renameSync(tmp, filePath);
 }
@@ -254,7 +255,8 @@ function installLauncherShim() {
     }
     const destPath = path.join(LAUNCHER_DIR, a.dest);
     const content = fs.readFileSync(srcPath);
-    const tmp = `${destPath}.tmp.${process.pid}.${Date.now()}`;
+    const rand = randomBytes(6).toString('hex');
+    const tmp = `${destPath}.tmp.${process.pid}.${rand}`;
     fs.writeFileSync(tmp, content, { mode: 0o755 });
     fs.renameSync(tmp, destPath);
     if (!IS_WINDOWS) fs.chmodSync(destPath, 0o755);
