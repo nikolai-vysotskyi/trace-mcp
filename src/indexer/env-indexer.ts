@@ -80,6 +80,14 @@ export class EnvIndexer {
       const pathCheck = validatePath(relPath, this.rootPath);
       if (pathCheck.isErr()) continue;
 
+      let fileMtimeMs: number | null = null;
+      try {
+        const stat = fs.lstatSync(absPath);
+        fileMtimeMs = Math.floor(stat.mtimeMs);
+      } catch {
+        // stat failed — readFileSync below will handle ENOENT
+      }
+
       let content: string;
       try {
         content = fs.readFileSync(absPath, 'utf-8');
@@ -91,7 +99,12 @@ export class EnvIndexer {
       const hash = hashContent(Buffer.from(content));
       const existing = this.store.getFile(relPath);
 
-      if (!force && existing && existing.content_hash === hash) continue;
+      if (!force && existing && existing.content_hash === hash) {
+        if (fileMtimeMs != null && existing.mtime_ms !== fileMtimeMs) {
+          this.store.updateFileMtime(existing.id, fileMtimeMs);
+        }
+        continue;
+      }
 
       const entries = parseEnvFile(content);
 
@@ -99,9 +112,9 @@ export class EnvIndexer {
       if (existing) {
         fileId = existing.id;
         this.store.deleteEnvVarsByFile(fileId);
-        this.store.updateFileHash(fileId, hash, content.length);
+        this.store.updateFileHash(fileId, hash, content.length, fileMtimeMs);
       } else {
-        fileId = this.store.insertFile(relPath, 'env', hash, content.length);
+        fileId = this.store.insertFile(relPath, 'env', hash, content.length, null, fileMtimeMs);
         this.store.updateFileStatus(fileId, 'ok', 'config');
       }
 

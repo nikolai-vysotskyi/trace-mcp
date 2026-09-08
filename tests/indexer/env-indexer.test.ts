@@ -76,6 +76,10 @@ describe('EnvIndexer', () => {
     expect(keysByFile.get('.env')).toEqual(['DB_HOST', 'DB_PORT', 'API_URL']);
     expect(keysByFile.get('services/api/.env')).toEqual(['SERVICE_NAME', 'JWT_SECRET']);
     expect(keysByFile.get('services/web/.env.production')).toEqual(['PUBLIC_URL', 'FEATURE_FLAG']);
+
+    const rootEnv = store.getFile('.env');
+    expect(rootEnv?.mtime_ms).toBeTypeOf('number');
+    expect(rootEnv!.mtime_ms!).toBeGreaterThan(0);
   });
 
   it('stores only keys + inferred types/formats (no raw values leak to DB)', async () => {
