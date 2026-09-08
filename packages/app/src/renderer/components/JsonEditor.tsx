@@ -1,6 +1,6 @@
 /* JsonEditor.tsx — macOS Tahoe styled JSON editor.
    Provides:
-   1. Auto-growth up to available height (minHeight: 96px, maxHeight: 520px) + vertical resize.
+   1. Auto-growth up to available height (minHeight: 96px, maxHeight: 520px).
    2. Monospace font with real-time JSON syntax highlighting via jsonc-parser tokens.
    3. Real-time JSON validation with clear parse error messages (line/col/cause).
    4. Format (prettify) action for valid JSON.
@@ -166,7 +166,15 @@ export function JsonEditor({
 
     try {
       const currentParsed = JSON.parse(text);
-      if (JSON.stringify(currentParsed) === JSON.stringify(value)) {
+      let incomingParsed = value;
+      if (typeof value === "string") {
+        try {
+          incomingParsed = JSON.parse(value);
+        } catch {
+          incomingParsed = value;
+        }
+      }
+      if (JSON.stringify(currentParsed) === JSON.stringify(incomingParsed)) {
         return; // Content is semantically identical, avoid cursor jump
       }
     } catch {
@@ -334,7 +342,7 @@ export function JsonEditor({
             whiteSpace: "pre",
             tabSize: 2,
             overflow: "auto",
-            resize: "vertical",
+            resize: "none",
             border: "none",
             outline: "none",
           }}

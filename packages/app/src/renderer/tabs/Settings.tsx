@@ -1146,8 +1146,7 @@ function ProjectsScreen({
   const projects = (config.projects ?? {}) as Record<string, unknown>;
   const [newPath, setNewPath] = useState('');
   const [editKey, setEditKey] = useState<string | null>(null);
-  const [editJson, setEditJson] = useState('');
-  const [editError, setEditError] = useState(false);
+  const [editValue, setEditValue] = useState<unknown>({});
   // `null` marks a key queued for removal but not yet saved — the server's
   // JSONC merge (applySettingsDiff) only deletes a key on an explicit `null`;
   // a key merely absent from the PUT payload is left untouched on disk, so a
@@ -1161,7 +1160,7 @@ function ProjectsScreen({
     if (!p) return;
     onUpdate({ ...config, projects: { ...projects, [p]: {} } });
     setEditKey(p);
-    setEditJson('{}');
+    setEditValue({});
     setNewPath('');
   };
 
@@ -1222,8 +1221,7 @@ function ProjectsScreen({
                       return;
                     }
                     setEditKey(p);
-                    setEditJson(JSON.stringify(projects[p], null, 2));
-                    setEditError(false);
+                    setEditValue(projects[p] ?? {});
                   }}
                 >
                   {editKey === p ? t('settings:projects.done') : t('settings:projects.edit')}
@@ -1244,26 +1242,21 @@ function ProjectsScreen({
               {editKey === p && (
                 <div className="mt-2">
                   <JsonEditor
-                    value={editJson}
+                    value={editValue}
                     aria-label={t('settings:projects.overridesAria', { path: p })}
                     onChange={(val) => {
-                      setEditJson(typeof val === 'string' ? val : JSON.stringify(val, null, 2));
-                      setEditError(false);
+                      setEditValue(val);
                     }}
                   />
                   <div className="mt-2">
                     <Button
                       size="small"
+                      disabled={typeof editValue === 'string'}
                       onClick={() => {
-                        try {
-                          onUpdate({
-                            ...config,
-                            projects: { ...projects, [p]: JSON.parse(editJson) },
-                          });
-                          setEditError(false);
-                        } catch {
-                          setEditError(true);
-                        }
+                        onUpdate({
+                          ...config,
+                          projects: { ...projects, [p]: editValue },
+                        });
                       }}
                     >
                       {t('settings:projects.apply')}

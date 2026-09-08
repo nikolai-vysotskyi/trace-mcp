@@ -95,4 +95,24 @@ describe("JsonEditor component", () => {
     expect(textarea.value).toContain("reset");
     expect(textarea.value).not.toContain("original");
   });
+
+  it("does not reset text when value is semantically identical string", () => {
+    const { rerender } = render(
+      <JsonEditor value={{ foo: "bar" }} onChange={() => {}} label="SemanticTest" />,
+    );
+    const textarea = screen.getByLabelText("SemanticTest") as HTMLTextAreaElement;
+    const initialText = textarea.value;
+
+    // Rerender with a string that is semantically identical JSON:
+    rerender(
+      <JsonEditor value={JSON.stringify({ foo: "bar" })} onChange={() => {}} label="SemanticTest" />,
+    );
+    expect(textarea.value).toBe(initialText);
+  });
+
+  it("sets resize to none on textarea", () => {
+    render(<JsonEditor value={{}} onChange={() => {}} label="ResizeTest" />);
+    const textarea = screen.getByLabelText("ResizeTest") as HTMLTextAreaElement;
+    expect(textarea.style.resize).toBe("none");
+  });
 });
