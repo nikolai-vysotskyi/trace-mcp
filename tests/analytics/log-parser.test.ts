@@ -43,6 +43,44 @@ describe('extractTargetFile', () => {
     );
   });
 
+  it('extracts target file with flags and options', () => {
+    expect(extractTargetFile('Bash', { command: 'head -n 20 src/foo.ts' })).toBe('src/foo.ts');
+    expect(extractTargetFile('Bash', { command: 'head -n +5 src/foo.ts' })).toBe('src/foo.ts');
+    expect(extractTargetFile('Bash', { command: 'head -c 3000 /tmp/founder_body.html' })).toBe(
+      '/tmp/founder_body.html',
+    );
+    expect(
+      extractTargetFile('Bash', {
+        command: 'tail -20 /private/tmp/tasks/bqbck1slr.output',
+      }),
+    ).toBe('/private/tmp/tasks/bqbck1slr.output');
+    expect(
+      extractTargetFile('Bash', {
+        command: 'cat "path with spaces/file.txt" | head -5',
+      }),
+    ).toBe('path with spaces/file.txt');
+  });
+
+  it('ignores piped stdin and heredocs without extracting bogus filenames', () => {
+    expect(
+      extractTargetFile('Bash', { command: 'cd ... && npm run build 2>&1 | tail -30' }),
+    ).toBeUndefined();
+    expect(extractTargetFile('Bash', { command: 'grep -n ... | head -40' })).toBeUndefined();
+    expect(
+      extractTargetFile('Bash', {
+        command: 'ls ... | head -50 && echo "---" && ls ... | head -30',
+      }),
+    ).toBeUndefined();
+    expect(
+      extractTargetFile('Bash', { command: "cat <<'EOF'\nfix: restore apt nodejs\nEOF" }),
+    ).toBeUndefined();
+    expect(
+      extractTargetFile('Bash', {
+        command: 'pnpm docs:sitemap 2>&1 | tail -5 && npx vitest run tests/docs 2>&1 | tail -30',
+      }),
+    ).toBeUndefined();
+  });
+
   it('returns undefined for non-file tools', () => {
     expect(extractTargetFile('TodoWrite', { todos: [] })).toBeUndefined();
   });

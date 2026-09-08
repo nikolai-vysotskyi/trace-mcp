@@ -185,8 +185,9 @@ const ARTISAN_WHITELIST = new Set(['route:list', 'model:show', 'event:list']);
 export function validatePath(filePath: string, rootPath: string): TraceMcpResult<string> {
   const resolved = path.resolve(rootPath, filePath);
   const normalizedRoot = path.resolve(rootPath);
+  const prefix = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
 
-  if (!resolved.startsWith(normalizedRoot + path.sep) && resolved !== normalizedRoot) {
+  if (!resolved.startsWith(prefix) && resolved !== normalizedRoot) {
     return err(securityViolation(`Path traversal detected: ${filePath}`));
   }
 
