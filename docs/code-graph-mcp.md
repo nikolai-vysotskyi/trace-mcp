@@ -1,7 +1,7 @@
 ---
 title: "Code Graph MCP Server for AI Coding Agents"
 description: "How a code graph MCP server gives AI coding agents persistent symbol, call, and framework relationships without re-reading whole repositories."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Code graph MCP server for AI coding agents
@@ -106,6 +106,8 @@ Different tools approach codebase context from distinct angles:
 | **SCIP-driven graph** | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) | Orchestrates eleven external Sourcegraph SCIP indexers into graph snapshots. | External indexer pipelines, but requires external binaries and complex backend choices. [trace-mcp vs CodeGraphContext](/vs/codegraphcontext.html) |
 | **Review graph** | [code-review-graph](https://github.com/code-review-graph/code-review-graph) | Tracks incremental changes with empty-result uncertainty explanations. | Specialised for review navigation, but advertises 29 tools without preset filtering. [trace-mcp vs code-review-graph](/vs/code-review-graph.html) |
 | **Hybrid vector-AST graph** | [SocratiCode](https://github.com/giancarloerra/SocratiCode) | Combines Qdrant vector embeddings with ast-grep in Docker. | Semantic vector search, but requires Docker runtime and lacks framework routing. [trace-mcp vs SocratiCode](/vs/socraticode.html) |
+| **Meta-dispatch graph** | [jCodeMunch](https://github.com/johann-petrak/jCodeMunch) | Fronts 90+ Python tools through "The Counter" meta-dispatch (`order`, `menu`, `route`). | Dual-Use license (non-commercial only) and regex route detection. [trace-mcp vs jCodeMunch](/vs/jcodemunch.html) |
+| **Native Rust libSQL graph** | [TokenSave](https://github.com/aovestdipaperino/tokensave) | Native Rust binary with libSQL storage, multi-branch indexing, and subprocess isolation. | Advertises 85+ tools by default (~12-15K schema tokens) with no framework routing. [trace-mcp vs TokenSave](/vs/tokensave.html) |
 
 For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code graph comparisons hub](/comparisons.html).
 
@@ -117,7 +119,7 @@ Install trace-mcp in your project root:
 npx trace-mcp init
 ```
 
-The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database.
+The init command inspects your repository, detects your frameworks and languages, sets up client configurations for Claude Code, Cursor, or Windsurf, and indexes your codebase into a local `.trace/` database. See [what trace init installs](/what-trace-init-installs.html) for a complete breakdown of guard hooks, routing blocks, and client configurations written to your project.
 
 * Explore all available tools: [Tools Reference](/tools-reference.html)
 * Review configuration and preset options: [Configuration Guide](/configuration.html)

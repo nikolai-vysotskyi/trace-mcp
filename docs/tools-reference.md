@@ -1,7 +1,7 @@
 ---
 title: "MCP Tools Reference — code-intelligence tools by task and framework"
 description: "The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # Tools reference
@@ -33,7 +33,9 @@ updated: 2026-09-06
 </script>
 trace-mcp exposes {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources.
 
-This page groups the ones you reach for by hand. For the complete list —
+This page groups the ones you reach for by hand. For how a persistent
+[code graph MCP server](/code-graph-mcp.html) powers these operations to cut
+agent token costs, see the category overview. For the complete list —
 every registered tool with its one-line description, generated from the
 registrations themselves — see the [tool index](tools-index.md).
 

@@ -1,7 +1,7 @@
 ---
 title: "Architecture — indexing pipeline, storage, and MCP server internals"
 description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server on top."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Architecture
@@ -35,7 +35,9 @@ updated: 2026-09-07
 
 This page describes how the index is built. What it exposes once built is the
 [tools reference](tools-reference.md); which languages reach which depth of the
-pipeline below is the [language capability matrix](language-matrix.md).
+pipeline below is the [language capability matrix](language-matrix.md). For how
+persistent graph indexing reduces AI coding agent token costs, see
+[how a code graph MCP server works](/code-graph-mcp.html).
 
 trace-mcp uses a two-pass indexing pipeline:
 

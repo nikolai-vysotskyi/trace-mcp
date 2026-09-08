@@ -1,7 +1,7 @@
 ---
 title: "jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents"
 description: "jCodeMunch offers Python AST exploration under non-commercial license. trace-mcp is permissive MIT with 81 languages, framework edges, and refactoring."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # jCodeMunch alternative: trace-mcp vs jCodeMunch
@@ -202,8 +202,9 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
-- See how trace-mcp compares to other servers in the [comparisons hub](/comparisons.html).
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.

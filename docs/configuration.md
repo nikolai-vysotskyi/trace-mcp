@@ -1,7 +1,7 @@
 ---
 title: "Configuration Reference — all config options (works with none)"
 description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # Configuration
@@ -791,7 +791,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 ## Supported MCP clients
 
-`trace init` (or `trace-mcp init`) detects installed MCP clients and writes a `trace` server entry into each one's native config format (with `trace-mcp` legacy compatibility preserved). Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
+`trace init` (or `trace-mcp init`) detects installed MCP clients and writes a `trace` server entry into each one's native config format (with `trace-mcp` legacy compatibility preserved). Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs. For an exhaustive audit of guard hooks, routing blocks, and client config files written by this command, see [what trace init installs](/what-trace-init-installs.html).
 
 | Client | Config path | Format | Top-level key | Notes |
 |---|---|---|---|---|
