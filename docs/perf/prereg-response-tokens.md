@@ -576,7 +576,7 @@ prices can return anything.
 Those tools cannot be re-called: no arguments are recorded anywhere.
 `~/.trace/analytics.db` does keep `output_size_chars` per call, which is the
 response itself, so the tail is priced from recorded responses converted at the
-**median chars-to-token ratio of the 24 tools the harness measured on the wire**
+**median chars-to-token ratio of the 25 tools the harness measured on the wire**
 (`scripts/field-tail-cost.ts`, writing `docs/_data/response_tokens_tail.json`).
 
 Three limits, stated before the result rather than after:
@@ -652,7 +652,7 @@ All four registered predictions held. Against the declared bar, this is a **PASS
 The tail measurement prices 73 tools (591 calls, 479 priced from recorded sizes, 112 unpriced)
 at 332 585 measured tokens against an 182 000 baseline (1.83x). Combined with the tail, the
 all-in reduction is **65.5%** (including 243 tail overhead calls), compared to 67.0% head-only.
-Coverage across all recorded calls expands from 97.1% to 99.5%.
+Coverage expands from 97.3% (head store) to 99.5% across combined cohorts.
 
 Measured at trace-mcp **{{ site.data.response_tokens.measured_build.version }}
 (`{{ site.data.response_tokens.measured_build.commit }}`)** on

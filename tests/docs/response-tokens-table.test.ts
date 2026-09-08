@@ -45,4 +45,40 @@ describe('response-tokens page', () => {
       `${PAGE} states these tools' numbers as literals — render them from ${DATA} instead`,
     ).toEqual([]);
   });
+
+  it('keeps the field-tail prose and numbers in sync with generated tail data (TRA-1159)', () => {
+    const TAIL_DATA = 'docs/_data/response_tokens_tail.json';
+    const tailData = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, TAIL_DATA), 'utf8')) as {
+      tail_tools: number;
+      tail_calls: number;
+      coverage_pct_before: number;
+      coverage_pct_after: number;
+      headline: { reduction_pct_incl_overhead_with_tail: number };
+    };
+
+    expect(page).toContain(`Pricing the remaining ${tailData.tail_tools} tail tools`);
+    expect(page).toContain(
+      `reduction of **${tailData.headline.reduction_pct_incl_overhead_with_tail}%**`,
+    );
+    expect(page).toContain(`${tailData.coverage_pct_before}% to ${tailData.coverage_pct_after}%`);
+
+    const prereg = fs.readFileSync(
+      path.join(REPO_ROOT, 'docs/perf/prereg-response-tokens.md'),
+      'utf8',
+    );
+    expect(prereg).toContain(`The tail measurement prices ${tailData.tail_tools} tools`);
+    expect(prereg).toContain(
+      `reduction is **${tailData.headline.reduction_pct_incl_overhead_with_tail}%**`,
+    );
+    expect(prereg).toContain(
+      `${tailData.coverage_pct_before}% (head store) to ${tailData.coverage_pct_after}%`,
+    );
+
+    const ref = fs.readFileSync(path.join(REPO_ROOT, 'docs/tools-reference.md'), 'utf8');
+    expect(ref).toContain('Migration note (TRA-1159)');
+    expect(ref).toContain('include_edge_types: true');
+    expect(ref).toContain('name');
+    expect(ref).toContain('category');
+    expect(ref).toContain('description');
+  });
 });

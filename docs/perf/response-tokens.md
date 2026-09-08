@@ -545,11 +545,10 @@ The honest next move on this metric is not another shaping pass; it is
 measuring the baseline half. Until then, a ratio near 2x on a low-volume
 analysis tool is a statement about `RAW_COST_ESTIMATES`, not about the tool.
 
-## The 2.2% nobody priced, and the one tool it found (TRA-1159)
+## The 2.9% nobody priced, and the one tool it found (TRA-1159)
 
 The harness previously priced 24 tools because each needed human-written arguments.
-The other 74 tools called on this machine were 2.9% of call volume and 0% of the
-measurement. TRA-1159 prices this tail from field response sizes
+The other 74 tools called on this machine were 2.7% of call volume in that store (and grew to 73 tools / 591 calls in the 2026-09-08 field tail snapshot). TRA-1159 prices this tail from field response sizes
 converted at the median chars-to-token ratio (0.2635) of the 25 wire-measured tools
 (`scripts/field-tail-cost.ts` writing `docs/_data/response_tokens_tail.json`).
 
@@ -559,9 +558,9 @@ It is now opt-in via `include_edge_types: true` while counts by category stay in
 the default answer (8 427 scratch → 5 045 tokens).
 
 The tool is now guarded in `scripts/bench-response-tokens.ts` and added to
-`call-volume.json` at 10 calls (making 25 harness tools, 19 802 calls including overhead).
+`call-volume.json` at 10 calls (making 25 harness tools, 19 802 calls including overhead, 97.3% of the 20 359 calls in the 2026-09-05 store).
 Pricing the remaining 73 tail tools (591 calls, 479 priced from recorded sizes) gives an
-all-in reduction of **65.5%** with tail included, expanding measurement coverage from 97.1% to 99.5%.
+all-in reduction of **65.5%** with tail included, expanding measurement coverage from 97.3% to 99.5% across the combined cohorts.
 
 ## The table on this page was hand-typed, and it had gone stale (TRA-1020)
 

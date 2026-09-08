@@ -2,9 +2,10 @@
 /**
  * TRA-1159: what the tools the harness never priced actually cost.
  *
- * `scripts/bench-response-tokens.ts` prices 24 tools — 97.2% of recorded call
- * volume — because each one needs arguments a human wrote. The other 74 tools
- * this machine has called are 2.2% of the volume and 0% of the measurement, and
+ * `scripts/bench-response-tokens.ts` prices 25 tools — 97.3% of recorded call
+ * volume in the 2026-09-05 store — because each one needs arguments a human wrote.
+ * The other 73 tools in the 2026-09-08 field tail snapshot account for 591 calls
+ * (2.9% of the combined cohorts) and 0% of the harness wire measurement, and
  * "the rest is small" is an assumption, not a number: a tool nobody prices can
  * return anything.
  *
@@ -12,7 +13,7 @@
  * `~/.trace/analytics.db` keeps `output_size_chars` for every mined call, which
  * is the response itself — the same source `field-response-distribution.mjs`
  * uses to cross-check a single tool. Chars become o200k tokens at the median
- * chars->token ratio of the 24 tools the harness *did* measure on the wire
+ * chars->token ratio of the 25 tools the harness *did* measure on the wire
  * (they span 0.220 to 0.368; the median is the estimator, and the spread is
  * published next to the result so the reader can size the error).
  *
@@ -171,7 +172,26 @@ const out = {
   priced_calls: sum(rows.map((r) => r.calls)),
   unpriced_calls: sum(unpriced.map((u) => u.calls)),
   unpriced_tools: unpriced.length,
-  coverage_pct_before: Number(((100 * headCalls) / totalCalls).toFixed(1)),
+  head_cohort: {
+    source: 'benchmarks/response-tokens/call-volume.json (2026-09-05)',
+    head_tools: bench.rows.length,
+    head_calls: headCalls,
+    head_store_total: published.calls_store_total,
+    coverage_pct: Number(((100 * headCalls) / published.calls_store_total).toFixed(1)),
+  },
+  tail_cohort: {
+    source: 'benchmarks/response-tokens/tail-snapshot.json (2026-09-08)',
+    tail_tools: rows.length + unpriced.length,
+    tail_calls: tailCalls,
+    priced_calls: sum(rows.map((r) => r.calls)),
+    unpriced_calls: sum(unpriced.map((u) => u.calls)),
+  },
+  combined_cohorts: {
+    total_calls: totalCalls,
+    priced_calls: pricedCalls,
+    coverage_pct: Number(((100 * pricedCalls) / totalCalls).toFixed(1)),
+  },
+  coverage_pct_before: Number(((100 * headCalls) / published.calls_store_total).toFixed(1)),
   coverage_pct_after: Number(((100 * pricedCalls) / totalCalls).toFixed(1)),
   tail_measured_tokens: tailMeasured,
   tail_baseline_tokens: tailBaseline,
