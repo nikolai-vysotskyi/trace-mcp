@@ -595,7 +595,7 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 | [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](https://trace-mcp.com/decision-memory.html) | Decision knowledge graph, session mining, cross-session search, wake-up context |
 | [Analytics](https://trace-mcp.com/analytics.html) | Session analytics, token savings tracking, optimization reports, benchmarks |
-| [Quality gates](https://trace-mcp.com/quality-gates.html) | Complexity, security and coverage thresholds, and how `quality_gates.rules` overrides the CLI defaults |
+| [Quality gates](https://trace-mcp.com/quality-gates.html) | Complexity, security and coupling thresholds, and how `quality_gates.rules` overrides the CLI defaults |
 | [TOON savings](https://trace-mcp.com/toon-savings.html) | Measured token savings of the TOON output format on real tool calls |
 | [Telemetry](https://trace-mcp.com/telemetry.html) | OpenTelemetry-compatible spans for every AI provider call and MCP tool call |
 | [System prompt routing](https://trace-mcp.com/tweakcc.html) | Optional tweakcc integration for maximum tool routing enforcement |
