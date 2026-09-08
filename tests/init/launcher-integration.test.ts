@@ -1852,5 +1852,157 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(res.status).toBe(0);
       expect(res.stdout.trim()).toBe(`NODE_ARGS:${fs.realpathSync(customCli)} serve`);
     });
+
+    it('recovers probe resolution across candidate homes when client runs under an isolated HOME (TRA-1206)', () => {
+      const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
+      const version = 'v99.99.9';
+      const prefix = path.join(userHome, '.nvm', 'versions', 'node', version);
+      fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+      const node = path.join(prefix, 'bin', 'node');
+      fs.writeFileSync(node, fakeNodeBody('99.99.9', 'PROBED_NVM_NODE'), { mode: 0o755 });
+      fs.mkdirSync(path.join(userHome, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(userHome, '.nvm', 'alias', 'default'), `${version}\n`);
+      const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      const cli = path.join(pkgDir, 'cli.js');
+      fs.writeFileSync(cli, '// fake cli\n');
+
+      const traceHome = path.join(userHome, '.trace');
+      const shimDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(shimDir, { recursive: true });
+      const shim = path.join(shimDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shim);
+      fs.chmodSync(shim, 0o755);
+
+      // launcher.env with dead targets so launcher must probe
+      writeConfig(traceHome, '/dead/node', '/dead/cli.js');
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+          TRACE_MCP_NODE_MIN_MAJOR: '99',
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain('PROBED_NVM_NODE');
+      expect(res.stdout).toContain(fs.realpathSync(cli));
+    });
+
+    it('resolves custom .npmrc prefix from enclosing candidate home under isolated HOME (TRA-1206)', () => {
+      const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
+      const localBin = path.join(userHome, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      const node = path.join(localBin, 'node');
+      fs.writeFileSync(node, fakeNodeBody('99.99.9', 'PROBED_LOCAL_NODE'), { mode: 0o755 });
+
+      const customPrefix = path.join(userHome, 'custom-npm-prefix');
+      const pkgDir = path.join(customPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      const cli = path.join(pkgDir, 'cli.js');
+      fs.writeFileSync(cli, '// fake cli\n');
+
+      fs.writeFileSync(path.join(userHome, '.npmrc'), `prefix = ${customPrefix}\n`);
+
+      const traceHome = path.join(userHome, '.trace');
+      const shimDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(shimDir, { recursive: true });
+      const shim = path.join(shimDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shim);
+      fs.chmodSync(shim, 0o755);
+
+      // launcher.env with dead targets
+      writeConfig(traceHome, '/dead/node', '/dead/cli.js');
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+          TRACE_MCP_NODE_MIN_MAJOR: '99',
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain('PROBED_LOCAL_NODE');
+      expect(res.stdout).toContain(fs.realpathSync(cli));
+    });
+
+    it('never evaluates hostile command injection in USER or LOGNAME (TRA-1206)', () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      writeConfig(traceHome, node, cli);
+
+      const canary = path.join(home, 'should-not-exist');
+      const hostileUser = `user$(touch ${canary})`;
+
+      const res = spawnSync(LAUNCHER_SRC, ['serve'], {
+        env: {
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          PATH: '/usr/bin:/bin',
+          USER: hostileUser,
+          LOGNAME: hostileUser,
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(fs.existsSync(canary)).toBe(false);
+    });
+
+    it('prefers NPM_CONFIG_PREFIX over candidate home .npmrc (TRA-1206)', () => {
+      const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
+      const localBin = path.join(userHome, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      const node = path.join(localBin, 'node');
+      fs.writeFileSync(node, fakeNodeBody('22.22.2', 'CONFIG_NODE'), { mode: 0o755 });
+
+      // Candidate home .npmrc prefix
+      const npmrcPrefix = path.join(userHome, 'npmrc-prefix');
+      const npmrcPkgDir = path.join(npmrcPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(npmrcPkgDir, { recursive: true });
+      fs.writeFileSync(path.join(npmrcPkgDir, 'cli.js'), '// npmrc cli\n');
+      fs.writeFileSync(path.join(userHome, '.npmrc'), `prefix = ${npmrcPrefix}\n`);
+
+      // Env var prefix (higher priority)
+      const envPrefix = path.join(userHome, 'env-prefix');
+      const envPkgDir = path.join(envPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(envPkgDir, { recursive: true });
+      const envCli = path.join(envPkgDir, 'cli.js');
+      fs.writeFileSync(envCli, '// env cli\n');
+
+      const traceHome = path.join(userHome, '.trace');
+      const shimDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(shimDir, { recursive: true });
+      const shim = path.join(shimDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shim);
+      fs.chmodSync(shim, 0o755);
+
+      writeConfig(traceHome, node, '/dead/cli.js');
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+          NPM_CONFIG_PREFIX: envPrefix,
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain(fs.realpathSync(envCli));
+    });
   });
 });

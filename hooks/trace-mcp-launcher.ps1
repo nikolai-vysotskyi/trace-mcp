@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.12 (Windows)
+# trace-mcp-launcher v0.6.13 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -264,6 +264,58 @@ function Get-NodeMajor {
     return $null
 }
 
+# --- TRA-970: daemon-aware fast path ---
+#
+# When a trace-mcp daemon is already listening, exec the thin proxy bundle
+# (dist/proxy.js, sibling of cli.js) instead of cli.js itself: it skips
+# loading Commander, PluginRegistry, better-sqlite3 and tree-sitter into this
+# process entirely, rather than loading all of it and only then discovering a
+# daemon exists - cli.js pays that cost just by being started, no matter which
+# subcommand runs.
+function Test-DaemonPortOpen {
+    $port = 3741
+    if ($env:TRACE_MCP_DAEMON_PORT) {
+        $parsedPort = 0
+        if ([int]::TryParse($env:TRACE_MCP_DAEMON_PORT, [ref]$parsedPort) -and $parsedPort -gt 0) {
+            $port = $parsedPort
+        }
+    }
+    try {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        $asyncResult = $client.BeginConnect('127.0.0.1', $port, $null, $null)
+        $success = $asyncResult.AsyncWaitHandle.WaitOne(100, $false)
+        if ($success -and $client.Connected) {
+            $client.EndConnect($asyncResult)
+            $client.Close()
+            return $true
+        }
+        $client.Close()
+        return $false
+    } catch {
+        return $false
+    }
+}
+
+# True when argv is a plain `serve` invocation this shim understands well
+# enough to route to the thin proxy: no args, `serve`, or `serve --preset X`.
+function Test-PlainServe {
+    param([string[]]$CommandArgs)
+    if (-not $CommandArgs -or $CommandArgs.Count -eq 0) { return $true }
+    if ($CommandArgs.Count -eq 1 -and $CommandArgs[0] -eq 'serve') { return $true }
+    if ($CommandArgs.Count -eq 3 -and $CommandArgs[0] -eq 'serve' -and $CommandArgs[1] -eq '--preset') { return $true }
+    return $false
+}
+
+function Resolve-ExecTarget {
+    param([string]$Cli, [string[]]$CommandArgs)
+    $dir = Split-Path -Parent $Cli
+    $proxy = Join-Path $dir 'proxy.js'
+    if ((Test-CliFile $proxy) -and (Test-PlainServe $CommandArgs) -and (Test-DaemonPortOpen)) {
+        return $proxy
+    }
+    return $Cli
+}
+
 # --- 3. Fast path: config is good -> exec directly ---
 #
 # "Good" means the recorded pair still exists AND the recorded node still runs;
@@ -302,12 +354,28 @@ if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath)) {
 }
 
 if ((Test-NodeBinary $NodePath) -and (Test-CliFile $CliPath)) {
-    Write-LauncherLog "exec(config) node=$NodePath cli=$CliPath argc=$($args.Count)"
-    & $NodePath $CliPath @args
+    $execTarget = Resolve-ExecTarget $CliPath $args
+    Write-LauncherLog "exec(config) node=$NodePath cli=$CliPath target=$execTarget argc=$($args.Count)"
+    & $NodePath $execTarget @args
     exit $LASTEXITCODE
 }
 
-# --- 4. Probe fallback (stable sources only) ---
+# Candidate user profiles to probe for node managers and global packages.
+# Survives MCP clients spawned with an isolated or modified USERPROFILE.
+function Get-CandidateProfiles {
+    $profiles = @()
+    if ($env:USERPROFILE -and (Test-Path -LiteralPath $env:USERPROFILE -PathType Container)) {
+        $profiles += $env:USERPROFILE
+    }
+    if ($TraceHome) {
+        $thName = Split-Path -Leaf $TraceHome
+        $thParent = Split-Path -Parent $TraceHome
+        if (($thName -eq '.trace' -or $thName -eq '.trace-mcp') -and $thParent -and (Test-Path -LiteralPath $thParent -PathType Container)) {
+            $profiles += $thParent
+        }
+    }
+    return ($profiles | Select-Object -Unique)
+}
 
 function Get-NodeCandidates {
     # Every node.exe we know how to locate, most-preferred first.
@@ -323,9 +391,11 @@ function Get-NodeCandidates {
         if ($c -and (Test-NodeBinary $c)) { $found += $c }
     }
 
-    # 4b. Volta (stable shim dir)
-    $volta = Join-Path $env:USERPROFILE '.volta\bin\node.exe'
-    if (Test-NodeBinary $volta) { $found += $volta }
+    # 4b. Volta (stable shim dir across candidate profiles)
+    foreach ($profile in (Get-CandidateProfiles)) {
+        $volta = Join-Path $profile '.volta\bin\node.exe'
+        if (Test-NodeBinary $volta) { $found += $volta }
+    }
 
     # 4c. nvm-windows: $APPDATA\nvm\<ver>\node.exe; active one symlinked via %NVM_SYMLINK%
     if ($env:NVM_SYMLINK) {
@@ -427,11 +497,16 @@ function Get-PkgRoots {
     # so spawning a PATH-resolved npm would turn a stale config into code
     # execution from the opened repository.
     $prefix = $env:NPM_CONFIG_PREFIX
-    if (-not $prefix -and $env:USERPROFILE) {
-        foreach ($line in (Read-LauncherLines (Join-Path $env:USERPROFILE '.npmrc'))) {
-            if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
-                $prefix = $Matches[1].Trim('"').Trim("'")
+    if (-not $prefix) {
+        foreach ($profile in (Get-CandidateProfiles)) {
+            $npmrc = Join-Path $profile '.npmrc'
+            foreach ($line in (Read-LauncherLines $npmrc)) {
+                if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
+                    $prefix = $Matches[1].Trim('"').Trim("'")
+                    break
+                }
             }
+            if ($prefix) { break }
         }
     }
     if ($prefix) {
@@ -505,6 +580,7 @@ if (-not (Test-CliFile $CliPath)) {
 # Overrides are a debugging escape hatch; never bake them into the config.
 if ($Healed -and -not $UsingOverride) { Save-LauncherConfig $NodePath $CliPath }
 
-Write-LauncherLog "exec(probe) node=$NodePath cli=$CliPath argc=$($args.Count)"
-& $NodePath $CliPath @args
+$execTarget = Resolve-ExecTarget $CliPath $args
+Write-LauncherLog "exec(probe) node=$NodePath cli=$CliPath target=$execTarget argc=$($args.Count)"
+& $NodePath $execTarget @args
 exit $LASTEXITCODE

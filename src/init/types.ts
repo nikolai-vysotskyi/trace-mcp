@@ -115,4 +115,5 @@ export const MIRROR_HOOK_VERSION = '0.3.0';
 // 0.6.11 (TRA-1190): self-locate state home under isolated HOME environments
 // and retry probe_cli across package swap windows.
 // 0.6.12 (TRA-1197): strip trailing CRs from launcher config, package roots and .npmrc
-export const LAUNCHER_VERSION = '0.6.12';
+// 0.6.13 (TRA-1206): candidate homes resolution under isolated HOME, Windows thin proxy daemon fast path
+export const LAUNCHER_VERSION = '0.6.13';

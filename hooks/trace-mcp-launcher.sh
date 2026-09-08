@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.12
+# trace-mcp-launcher v0.6.13
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -369,6 +369,47 @@ node_from_nvm_tree() {
   return 1
 }
 
+# Candidate user homes to probe for node managers and global packages.
+# Survives MCP clients spawned with an isolated or modified HOME
+# (e.g. Antigravity setting HOME=~/.agy/4, sandboxed runners, launchd, Claude Code --isolated).
+candidate_homes() {
+  local seen=":" th_base th_parent u u_home
+  # 1. $HOME
+  if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
+    seen="$seen$HOME:"
+    echo "$HOME"
+  fi
+  # 2. Enclosing home of TRACE_HOME
+  if [ -n "${TRACE_HOME:-}" ]; then
+    th_base="$(basename "$TRACE_HOME" 2>/dev/null || true)"
+    th_parent="$(dirname "$TRACE_HOME" 2>/dev/null || true)"
+    if { [ "$th_base" = ".trace" ] || [ "$th_base" = ".trace-mcp" ]; } && [ -n "$th_parent" ] && [ -d "$th_parent" ]; then
+      case "$seen" in
+        *":$th_parent:"*) ;;
+        *) seen="$seen$th_parent:"; echo "$th_parent" ;;
+      esac
+    fi
+  fi
+  # 3. System passwd user home (sanitize strictly to POSIX username chars to prevent injection via eval)
+  for u in "${USER:-}" "${LOGNAME:-}"; do
+    [ -n "$u" ] || continue
+    case "$u" in
+      ""|*[!a-zA-Z0-9_.-]*) continue ;;
+    esac
+    u_home="$(eval echo "~$u" 2>/dev/null || true)"
+    case "$u_home" in
+      ""|"~$u"|"~") continue ;;
+    esac
+    if [ -d "$u_home" ]; then
+      case "$seen" in
+        *":$u_home:"*) ;;
+        *) seen="$seen$u_home:"; echo "$u_home" ;;
+      esac
+      break
+    fi
+  done
+}
+
 # Node shipped inside a prefix we only know about because our package lives
 # there: a bundled runtime (Hermes, Antigravity) or a corporate
 # `npm config set prefix`. pkg_roots() already enumerates those roots for the
@@ -465,26 +506,32 @@ is_app_runtime() {
 
 # Every node worth trying, one per line, most-likely-first.
 node_candidates() {
-  local n fnm_dir candidate
+  local n fnm_dir candidate h
 
-  # 4a. System-wide stable paths (Homebrew, /usr/local, ~/.local)
-  # 4b. Volta — stable symlink regardless of active version
-  for candidate in /opt/homebrew/bin/node /usr/local/bin/node "$HOME/.local/bin/node" "$HOME/.volta/bin/node"; do
+  # 4a. System-wide stable paths (Homebrew, /usr/local)
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node; do
     [ -x "$candidate" ] && echo "$candidate"
   done
 
-  # 4c. nvm default alias (dereference chained aliases; handle major-only shortcuts)
-  # 4d. Herd (same nvm-compatible tree)
-  n=$(node_from_nvm_tree "$HOME/.nvm") && echo "$n"
-  n=$(node_from_nvm_tree "$HOME/Library/Application Support/Herd/config/nvm") && echo "$n"
+  # 4b. Stable candidate-home paths: ~/.local, ~/.volta, nvm, Herd, fnm
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    [ -x "$h/.local/bin/node" ] && echo "$h/.local/bin/node"
+    [ -x "$h/.volta/bin/node" ] && echo "$h/.volta/bin/node"
 
-  # 4e. fnm default alias (three possible locations)
-  for fnm_dir in \
-    "$HOME/.local/share/fnm/aliases/default" \
-    "$HOME/.fnm/aliases/default" \
-    "$HOME/Library/Application Support/fnm/aliases/default"; do
-    [ -x "$fnm_dir/bin/node" ] && echo "$fnm_dir/bin/node"
-  done
+    # 4c. nvm default alias (dereference chained aliases; handle major-only shortcuts)
+    # 4d. Herd (same nvm-compatible tree)
+    n=$(node_from_nvm_tree "$h/.nvm") && echo "$n"
+    n=$(node_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm") && echo "$n"
+
+    # 4e. fnm default alias (three possible locations)
+    for fnm_dir in \
+      "$h/.local/share/fnm/aliases/default" \
+      "$h/.fnm/aliases/default" \
+      "$h/Library/Application Support/fnm/aliases/default"; do
+      [ -x "$fnm_dir/bin/node" ] && echo "$fnm_dir/bin/node"
+    done
+  done <<< "$(candidate_homes)"
 
   # 4f. Node found on the client's original PATH (e.g. custom toolchains, non-standard managers).
   # Exclude any relative entry, anything inside $PWD, or any entry carrying node_modules
@@ -550,28 +597,53 @@ probe_node() {
 # $1 (optional): the node binary we are about to use; its own prefix is tried
 # first, since that is the pair `trace-mcp init` recorded.
 pkg_roots() {
-  local n fnm_dir root
+  local n fnm_dir root h
   if [ -n "${1:-}" ]; then
     echo "$(dirname "$1")/../lib/node_modules"
   fi
 
-  # Version-manager prefixes first: that is where `npm i -g` lands for nvm /
+  # Custom prefix from NPM_CONFIG_PREFIX env var if set (overrides .npmrc)
+  if [ -n "${NPM_CONFIG_PREFIX:-}" ] && [ -d "$NPM_CONFIG_PREFIX/lib/node_modules" ]; then
+    echo "$NPM_CONFIG_PREFIX/lib/node_modules"
+  fi
+
+  # Version-manager prefixes across candidate homes: that is where `npm i -g` lands for nvm /
   # Herd / fnm / Volta users, which is most of them.
-  if n=$(node_from_nvm_tree "$HOME/.nvm"); then
-    echo "$(dirname "$n")/../lib/node_modules"
-  fi
-  if n=$(node_from_nvm_tree "$HOME/Library/Application Support/Herd/config/nvm"); then
-    echo "$(dirname "$n")/../lib/node_modules"
-  fi
-  for fnm_dir in \
-    "$HOME/.local/share/fnm/aliases/default" \
-    "$HOME/.fnm/aliases/default" \
-    "$HOME/Library/Application Support/fnm/aliases/default"; do
-    [ -d "$fnm_dir/lib/node_modules" ] && echo "$fnm_dir/lib/node_modules"
-  done
-  # Volta keeps each global package under its own image directory.
-  [ -d "$HOME/.volta/tools/image/packages/trace-mcp/lib/node_modules" ] &&
-    echo "$HOME/.volta/tools/image/packages/trace-mcp/lib/node_modules"
+  while IFS= read -r h; do
+    [ -n "$h" ] || continue
+    if n=$(node_from_nvm_tree "$h/.nvm"); then
+      echo "$(dirname "$n")/../lib/node_modules"
+    fi
+    if n=$(node_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm"); then
+      echo "$(dirname "$n")/../lib/node_modules"
+    fi
+    for fnm_dir in \
+      "$h/.local/share/fnm/aliases/default" \
+      "$h/.fnm/aliases/default" \
+      "$h/Library/Application Support/fnm/aliases/default"; do
+      [ -d "$fnm_dir/lib/node_modules" ] && echo "$fnm_dir/lib/node_modules"
+    done
+    # Volta keeps each global package under its own image directory.
+    [ -d "$h/.volta/tools/image/packages/trace-mcp/lib/node_modules" ] &&
+      echo "$h/.volta/tools/image/packages/trace-mcp/lib/node_modules"
+
+    # Runtimes that bundle their own node and install us into it. Named here
+    # because their prefix is on no standard list and predates the registry
+    # above — an install under one of them now records itself too.
+    [ -d "$h/.hermes/node/lib/node_modules" ] &&
+      echo "$h/.hermes/node/lib/node_modules"
+
+    # Custom prefixes (`npm config set prefix`) from $h/.npmrc (only when NPM_CONFIG_PREFIX is unset)
+    if [ -z "${NPM_CONFIG_PREFIX:-}" ] && [ -r "$h/.npmrc" ]; then
+      local n_npmrc
+      n_npmrc=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$h/.npmrc" | tail -1)
+      n_npmrc="${n_npmrc%$'\r'}"
+      # Strip surrounding quotes and expand a leading ~ — npm accepts both.
+      n_npmrc="${n_npmrc%\"}"; n_npmrc="${n_npmrc#\"}"; n_npmrc="${n_npmrc%\'}"; n_npmrc="${n_npmrc#\'}"
+      case "$n_npmrc" in '~'/*) n_npmrc="$h/${n_npmrc#\~/}" ;; esac
+      [ -n "$n_npmrc" ] && [ -d "$n_npmrc/lib/node_modules" ] && echo "$n_npmrc/lib/node_modules"
+    fi
+  done <<< "$(candidate_homes)"
 
   # System prefixes.
   for root in /opt/homebrew/lib/node_modules /usr/local/lib/node_modules; do
@@ -591,28 +663,6 @@ pkg_roots() {
       [ -d "$root" ] && echo "$root"
     done < "$PKG_ROOTS_FILE"
   fi
-
-  # Runtimes that bundle their own node and install us into it. Named here
-  # because their prefix is on no standard list and predates the registry
-  # above — an install under one of them now records itself too.
-  [ -d "$HOME/.hermes/node/lib/node_modules" ] &&
-    echo "$HOME/.hermes/node/lib/node_modules"
-
-  # Custom prefixes (`npm config set prefix`) and bundled runtimes we don't
-  # know by name. Read from config, never by running `npm root -g`: the shim
-  # inherits the MCP client's PATH, which in a project directory can contain a
-  # repository-controlled `node_modules/.bin`, so spawning a PATH-resolved
-  # `npm` would turn a stale config into code execution from the opened repo
-  # (and could hang the handshake on top of that).
-  n="${NPM_CONFIG_PREFIX:-}"
-  if [ -z "$n" ] && [ -r "$HOME/.npmrc" ]; then
-    n=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$HOME/.npmrc" | tail -1)
-    n="${n%$'\r'}"
-    # Strip surrounding quotes and expand a leading ~ — npm accepts both.
-    n="${n%\"}"; n="${n#\"}"; n="${n%\'}"; n="${n#\'}"
-    case "$n" in '~'/*) n="$HOME/${n#\~/}" ;; esac
-  fi
-  [ -n "$n" ] && [ -d "$n/lib/node_modules" ] && echo "$n/lib/node_modules"
 
   return 0
 }
