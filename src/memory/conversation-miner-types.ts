@@ -17,7 +17,11 @@
  */
 
 import type { DecisionType } from './decision-types.js';
-import { minedDecisionRejectReason } from './decision-quality.js';
+import {
+  isCompleteStatement,
+  isSingleLineEndingWithColon,
+  minedDecisionRejectReason,
+} from './decision-quality.js';
 import { isContentNonEnglish, sanitizeTitle } from './title-extractor.js';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -172,6 +176,39 @@ function truncateTitle(s: string): string | null {
   return sanitizeTitle(s);
 }
 
+function cleanComparisonPrefix(prefix: string): string {
+  let s = prefix.trim();
+  s = s.replace(/^(?:[#>*\-]+\s+|\d+\.\s+)+/, '');
+  const lastComma = s.lastIndexOf(',');
+  if (lastComma !== -1) {
+    const afterComma = s.slice(lastComma + 1).trim();
+    if (afterComma.length >= 10) {
+      s = afterComma;
+    }
+  }
+  if (s.length > 80) {
+    const spaceIdx = s.indexOf(' ', s.length - 80);
+    if (spaceIdx !== -1) {
+      s = s.slice(spaceIdx + 1).trim();
+    }
+  }
+  return s;
+}
+
+function cleanComparisonSuffix(suffix: string): string {
+  let s = suffix.trim();
+  s = s.replace(/[:;—–].*$/, '').trim();
+  s = s.replace(/\s+(?:because|since|due to|as it|as we)\b.*$/i, '').trim();
+  s = s.replace(/[\s,;:—–\-]+$/, '').trim();
+  if (s.length > 60) {
+    const spaceIdx = s.lastIndexOf(' ', 60);
+    if (spaceIdx !== -1) {
+      s = s.slice(0, spaceIdx).trim();
+    }
+  }
+  return s;
+}
+
 const DECISION_PATTERNS: DecisionPattern[] = [
   // Architecture decisions: "decided to", "we'll use", "going with", "chose X over Y"
   {
@@ -189,19 +226,23 @@ const DECISION_PATTERNS: DecisionPattern[] = [
     confidence: 0.8,
     titleExtractor: (m) => truncateTitle(`Use ${m[1].trim()}: ${m[2].trim()}`),
   },
-  // "X instead of Y" / "X rather than Y". `over` was dropped from this
-  // alternation (#TRA-34): it's an ordinary preposition ("the issue in
-  // `in_progress` over `in_review`", "the contentious zone over the pool")
-  // that fires on any comparison-shaped sentence, decision or not. "instead
-  // of" / "rather than" are decision-specific idioms with far lower false
-  // positive rates. Genuine "chose X over Y" phrasing is still caught by the
-  // decided/chose/going-with pattern above, which requires an explicit
-  // decision verb.
+  // "X instead of Y" / "X rather than Y".
+  // Captures the full clause before the connector (preserving verbs like "Left")
+  // and the alternative after the connector (cleanly bounded by punctuation).
+  // Preserves the author's exact connector ("instead of" vs "rather than")
+  // without replacing it with "over" or "instead of" (TRA-1056).
   {
-    pattern: /(\S+(?:\s+\S+){0,3})\s+(?:instead of|rather than)\s+(\S+(?:\s+\S+){0,3})\b/gi,
+    pattern:
+      /([^.\n!?—–;]{2,100}?)\s+\b(instead of|rather than)\b\s+([^.\n!?—–;]{2,80}?)(?=[.!?,;—–\n]|\s+(?:because|since|due to|as it)\b|$)/gi,
     type: 'tech_choice',
     confidence: 0.75,
-    titleExtractor: (m) => truncateTitle(`${m[1].trim()} instead of ${m[2].trim()}`),
+    titleExtractor: (m) => {
+      const prefix = cleanComparisonPrefix(m[1]);
+      const connector = m[2].trim();
+      const suffix = cleanComparisonSuffix(m[3]);
+      if (!prefix || !suffix) return null;
+      return truncateTitle(`${prefix} ${connector} ${suffix}`);
+    },
   },
   // Bug root causes: "the bug was", "root cause", "the issue was", "caused by"
   {
@@ -310,20 +351,45 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
       let match: RegExpExecArray | null;
 
       while ((match = pattern.pattern.exec(turn.text)) !== null) {
-        const title = pattern.titleExtractor(match, contextText);
-        // Title-sanitizer rejects non-English / unbalanced / empty fragments
-        // by returning null. Skip these candidates entirely — falling back
-        // to a worse title would just pollute the decision graph.
-        if (title === null) continue;
-        // Deduplicate by title similarity
-        const titleKey = title.toLowerCase().replace(/\s+/g, ' ').trim();
-        if (seen.has(titleKey)) continue;
-        seen.add(titleKey);
+        let title = pattern.titleExtractor(match, contextText);
 
         // Extract surrounding context (±200 chars around match)
         const start = Math.max(0, match.index - 200);
         const end = Math.min(turn.text.length, match.index + match[0].length + 200);
         const content = turn.text.slice(start, end).trim();
+
+        // Quality gate (TRA-1056 Point 1):
+        // The title of a mined decision must be a complete statement.
+        // If a complete statement does not assemble from the fragment, try
+        // taking the line containing the match or the first line of content.
+        // If neither yields a complete statement: do not create the entry at all.
+        if (title === null || !isCompleteStatement(title)) {
+          const matchLineStart = turn.text.lastIndexOf('\n', match.index) + 1;
+          const matchLineEnd = turn.text.indexOf('\n', match.index);
+          const matchLine = (
+            matchLineEnd === -1
+              ? turn.text.slice(matchLineStart)
+              : turn.text.slice(matchLineStart, matchLineEnd)
+          ).trim();
+          const firstLineContent = content.split('\n')[0].trim();
+
+          const candidateFromMatch = truncateTitle(matchLine);
+          const candidateFromContent = truncateTitle(firstLineContent);
+
+          if (candidateFromMatch && isCompleteStatement(candidateFromMatch)) {
+            title = candidateFromMatch;
+          } else if (candidateFromContent && isCompleteStatement(candidateFromContent)) {
+            title = candidateFromContent;
+          } else {
+            // Do not create the entry at all ("не создавать запись вовсе")
+            continue;
+          }
+        }
+
+        // Deduplicate by title similarity
+        const titleKey = title.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (seen.has(titleKey)) continue;
+        seen.add(titleKey);
 
         // English-only rule applies to the long content field too — drop
         // candidates whose surrounding context is predominantly non-English
@@ -331,14 +397,18 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
         if (isContentNonEnglish(content)) continue;
 
         // Quality gate: reject truncated mid-sentence / mid-word fragments
-        // before they become stored "knowledge". The title is a bounded regex
-        // group that can open on a mid-clause conjunction ("so let's monitor
-        // it over the rest of this"); the content is a raw ±200-char window
-        // that can be a single chopped token ("ming).", "budget |") or carry
-        // a broken UTF-8 decode ("оп."). See decision-quality.ts.
+        // before they become stored "knowledge".
         if (minedDecisionRejectReason(title, content) !== null) continue;
 
-        const confidence = Math.min(pattern.confidence * boosterMultiplier, 0.99);
+        let confidence = Math.min(pattern.confidence * boosterMultiplier, 0.99);
+
+        // Meaningfulness threshold (TRA-1056 Point 3):
+        // A single-line content ending in a colon is not a decision.
+        // Lower confidence below the review threshold (0.75) so it is placed in pending
+        // and not shown in the main list.
+        if (isSingleLineEndingWithColon(content)) {
+          confidence = Math.min(confidence, 0.45);
+        }
 
         // Infer tags from content
         const tags = inferTags(content);

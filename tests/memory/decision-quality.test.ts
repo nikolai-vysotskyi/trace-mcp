@@ -18,9 +18,14 @@ import {
   hasEllipsis,
   hasNarrationMarker,
   hasTableRemnant,
+  hasVerb,
+  isCompleteStatement,
+  isSingleLineEndingWithColon,
   isValidMinedDecision,
   minedDecisionRejectReason,
+  startsAmputatedSubject,
   startsMidClause,
+  startsSeveredPreposition,
 } from '../../src/memory/decision-quality.js';
 
 describe('minedDecisionRejectReason — reporter garbage examples', () => {
@@ -339,5 +344,118 @@ describe('hasTableRemnant', () => {
     'Pipe build output through `tsc | biome` in CI',
   ])('does not flag legit prose: %s', (s) => {
     expect(hasTableRemnant(s)).toBe(false);
+  });
+});
+
+describe('TRA-1056 — complete statements and quality helpers', () => {
+  describe('startsSeveredPreposition', () => {
+    it.each([
+      'from the contentious zone over the first-N-per-class pool',
+      'into the database directly instead of API',
+      'via HTTP proxy rather than direct socket',
+      'through the worker thread instead of main',
+    ])('flags severed preposition opening: %s', (s) => {
+      expect(startsSeveredPreposition(s)).toBe(true);
+    });
+
+    it.each([
+      'Draw samples from the contentious zone',
+      'Migrate into the database directly',
+      'Send via HTTP proxy rather than direct socket',
+    ])('does not flag when verb precedes: %s', (s) => {
+      expect(startsSeveredPreposition(s)).toBe(false);
+    });
+  });
+
+  describe('startsAmputatedSubject', () => {
+    it.each([
+      'the issue in `in_progress` rather than `in_review`',
+      'the parameter in config rather than env',
+      'a table in sqlite instead of postgres',
+    ])('flags amputated subject: %s', (s) => {
+      expect(startsAmputatedSubject(s)).toBe(true);
+    });
+
+    it.each([
+      'Left the issue in `in_progress` rather than `in_review`',
+      'Keep the parameter in config rather than env',
+      'Created a table in sqlite instead of postgres',
+    ])('does not flag complete clause with verb: %s', (s) => {
+      expect(startsAmputatedSubject(s)).toBe(false);
+    });
+  });
+
+  describe('isSingleLineEndingWithColon', () => {
+    it('detects single line ending with colon', () => {
+      expect(
+        isSingleLineEndingWithColon(
+          'Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool:',
+        ),
+      ).toBe(true);
+    });
+
+    it('returns false for multi-line content or lines without colon', () => {
+      expect(
+        isSingleLineEndingWithColon(
+          'Now variant E:\nLine two explanation of the decision.\nLine three details.',
+        ),
+      ).toBe(false);
+      expect(
+        isSingleLineEndingWithColon(
+          'Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool.',
+        ),
+      ).toBe(false);
+    });
+  });
+
+  describe('isCompleteStatement', () => {
+    it.each([
+      'the issue in `in_progress` over `in_review` — no work',
+      'from the contentious zone over the first-N-per-class pool',
+      'the issue in `in_progress` rather than `in_review`',
+      'Ending with colon:',
+      'Ending with dash —',
+      'so let us monitor it over time',
+    ])('rejects incomplete fragment: %s', (s) => {
+      expect(isCompleteStatement(s)).toBe(false);
+    });
+
+    it.each([
+      'Left the issue in `in_progress` rather than `in_review`',
+      'Use PostgreSQL instead of MySQL for JSONB support',
+      'Decision: use Redis for caching',
+      'Root cause: missing null check in auth middleware',
+      '`atomicWriteJson` instead of `fs.writeFileSync`',
+    ])('accepts complete statement: %s', (s) => {
+      expect(isCompleteStatement(s)).toBe(true);
+    });
+  });
+
+  describe('minedDecisionRejectReason with TRA-1056 live examples', () => {
+    it('rejects live #204 broken fragment', () => {
+      const reason = minedDecisionRejectReason(
+        'the issue in `in_progress` over `in_review` — no work',
+        'Left the issue in `in_progress` rather than `in_review` — no work exists to review yet; Builder owns it from here.',
+      );
+      expect(reason).not.toBeNull();
+      expect(['title_incomplete', 'title_truncated']).toContain(reason);
+    });
+
+    it('rejects live #205 broken fragment', () => {
+      const reason = minedDecisionRejectReason(
+        'from the contentious zone over the first-N-per-class pool',
+        'Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool:',
+      );
+      expect(reason).not.toBeNull();
+      expect(['title_mid_clause', 'title_incomplete']).toContain(reason);
+    });
+
+    it('accepts repaired #204 title', () => {
+      const reason = minedDecisionRejectReason(
+        'Left the issue in `in_progress` rather than `in_review`',
+        'Left the issue in `in_progress` rather than `in_review` — no work exists to review yet; Builder owns it from here.',
+      );
+      expect(reason).toBeNull();
+    });
   });
 });

@@ -253,6 +253,56 @@ describe('Conversation Miner — "X over Y" noise (TRA-34)', () => {
     ]);
     expect(decisions.length).toBeGreaterThan(0);
   });
+
+  describe('TRA-1056 — decision title quality and exact wording', () => {
+    it('extracts complete statement for "Left X rather than Y" preserving verb and exact connector', async () => {
+      const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+      const text =
+        'Left the issue in `in_progress` rather than `in_review` — no work exists to review yet; Builder owns it from here.';
+      const decisions = extractDecisions([assistantTurn(text)]);
+      expect(decisions.length).toBe(1);
+      expect(decisions[0].title).toBe('Left the issue in `in_progress` rather than `in_review`');
+      expect(decisions[0].title).not.toContain('over');
+      expect(decisions[0].title).not.toContain('no work');
+    });
+
+    it('preserves exact comparison connector rather than vs instead of without substitution', async () => {
+      const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+      const d1 = extractDecisions([
+        assistantTurn('Use Vitest rather than Jest for unit testing in the repo.'),
+      ]);
+      expect(d1.length).toBe(1);
+      expect(d1[0].title).toContain('rather than');
+      expect(d1[0].title).not.toContain('over');
+      expect(d1[0].title).not.toContain('instead of');
+
+      const d2 = extractDecisions([
+        assistantTurn('Use Vitest instead of Jest for unit testing in the repo.'),
+      ]);
+      expect(d2.length).toBe(1);
+      expect(d2[0].title).toContain('instead of');
+      expect(d2[0].title).not.toContain('over');
+      expect(d2[0].title).not.toContain('rather than');
+    });
+
+    it('clamps confidence <= 0.45 or drops single line ending with colon (#205)', async () => {
+      const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+      const text =
+        'Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool:';
+      const decisions = extractDecisions([assistantTurn(text)]);
+      for (const d of decisions) {
+        expect(d.confidence).toBeLessThanOrEqual(0.45);
+      }
+    });
+
+    it('does not create entry when fragment cannot assemble a complete statement', async () => {
+      const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+      // A fragmentary mention with no complete statement anywhere in line or content
+      const text = 'from the contentious zone instead of the pool:';
+      const decisions = extractDecisions([assistantTurn(text)]);
+      expect(decisions.length).toBe(0);
+    });
+  });
 });
 
 describe('Conversation Miner — privacy filtering', () => {
@@ -402,5 +452,33 @@ describe('Conversation Miner — worktree adoption', () => {
     // Second call must read from cache, not re-stat (we can't easily prove
     // no fs read, but at least result is stable).
     expect(adoptWorktreeRoot(root, cache)).toBe(root);
+  });
+});
+
+describe('Conversation Miner — live session extraction (TRA-1056 Point 4)', () => {
+  it('mines real session and ensures complete statement titles without severed fragments', async () => {
+    const { parseConversationTurns, extractDecisions } = await import(
+      '../../src/memory/conversation-miner.js'
+    );
+    const sessionPath =
+      '/Users/nikolai/.claude/projects/-Users-nikolai-PhpstormProjects-assetfeed/fbb9e724-1055-444b-a51e-351b7687f02c.jsonl';
+    if (!fs.existsSync(sessionPath)) {
+      return;
+    }
+
+    const { turns } = parseConversationTurns(sessionPath);
+    expect(turns.length).toBeGreaterThan(0);
+
+    const decisions = extractDecisions(turns);
+    for (const d of decisions) {
+      // 1. Title must not start with severed preposition
+      expect(d.title).not.toMatch(
+        /^(?:from|into|onto|per|via|above|under|during|against|between|through)\s+/i,
+      );
+      // 2. Title must not end with trailing punctuation or colon
+      expect(d.title).not.toMatch(/[:;—–\-]$/);
+      // 3. Title must not contain 'over' substituted for rather than / instead of
+      expect(d.title).not.toMatch(/over\s+`in_review`/);
+    }
   });
 });

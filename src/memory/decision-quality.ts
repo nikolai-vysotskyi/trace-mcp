@@ -340,6 +340,402 @@ function countWords(s: string): number {
 }
 
 /**
+ * Recognizes common English verbs (modal, auxiliary, decision, action, or inflectional).
+ */
+const COMMON_VERBS = new Set([
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'having',
+  'do',
+  'does',
+  'did',
+  'doing',
+  'can',
+  'could',
+  'will',
+  'would',
+  'shall',
+  'should',
+  'may',
+  'might',
+  'must',
+  'use',
+  'uses',
+  'used',
+  'using',
+  'prefer',
+  'prefers',
+  'preferred',
+  'preferring',
+  'choose',
+  'chooses',
+  'chose',
+  'chosen',
+  'choosing',
+  'select',
+  'selects',
+  'selected',
+  'selecting',
+  'opt',
+  'opts',
+  'opted',
+  'opting',
+  'switch',
+  'switches',
+  'switched',
+  'switching',
+  'migrate',
+  'migrates',
+  'migrated',
+  'migrating',
+  'adopt',
+  'adopts',
+  'adopted',
+  'adopting',
+  'pick',
+  'picks',
+  'picked',
+  'picking',
+  'keep',
+  'keeps',
+  'kept',
+  'keeping',
+  'leave',
+  'leaves',
+  'left',
+  'leaving',
+  'move',
+  'moves',
+  'moved',
+  'moving',
+  'set',
+  'sets',
+  'setting',
+  'make',
+  'makes',
+  'made',
+  'making',
+  'drop',
+  'drops',
+  'dropped',
+  'dropping',
+  'add',
+  'adds',
+  'added',
+  'adding',
+  'remove',
+  'removes',
+  'removed',
+  'removing',
+  'replace',
+  'replaces',
+  'replaced',
+  'replacing',
+  'deploy',
+  'deploys',
+  'deployed',
+  'deploying',
+  'implement',
+  'implements',
+  'implemented',
+  'implementing',
+  'enable',
+  'enables',
+  'enabled',
+  'enabling',
+  'disable',
+  'disables',
+  'disabled',
+  'disabling',
+  'change',
+  'changes',
+  'changed',
+  'changing',
+  'split',
+  'splits',
+  'splitting',
+  'merge',
+  'merges',
+  'merged',
+  'merging',
+  'avoid',
+  'avoids',
+  'avoided',
+  'avoiding',
+  'defer',
+  'defers',
+  'deferred',
+  'deferring',
+  'guard',
+  'guards',
+  'guarded',
+  'guarding',
+  'prevent',
+  'prevents',
+  'prevented',
+  'preventing',
+  'run',
+  'runs',
+  'ran',
+  'running',
+  'build',
+  'builds',
+  'built',
+  'building',
+  'write',
+  'writes',
+  'wrote',
+  'written',
+  'writing',
+  'read',
+  'reads',
+  'reading',
+  'find',
+  'finds',
+  'found',
+  'finding',
+  'fix',
+  'fixes',
+  'fixed',
+  'fixing',
+  'solve',
+  'solves',
+  'solved',
+  'solving',
+  'flip',
+  'flips',
+  'flipped',
+  'flipping',
+  'route',
+  'routes',
+  'routed',
+  'routing',
+  'wrap',
+  'wraps',
+  'wrapped',
+  'wrapping',
+  'handle',
+  'handles',
+  'handled',
+  'handling',
+  'support',
+  'supports',
+  'supported',
+  'supporting',
+  'draw',
+  'draws',
+  'drew',
+  'drawn',
+  'drawing',
+  'stick',
+  'sticks',
+  'stuck',
+  'sticking',
+  'take',
+  'takes',
+  'took',
+  'taken',
+  'taking',
+  'give',
+  'gives',
+  'gave',
+  'given',
+  'giving',
+  'put',
+  'puts',
+  'putting',
+  'cut',
+  'cuts',
+  'cutting',
+  'stop',
+  'stops',
+  'stopped',
+  'stopping',
+  'start',
+  'starts',
+  'started',
+  'starting',
+  'need',
+  'needs',
+  'needed',
+  'needing',
+  'require',
+  'requires',
+  'required',
+  'requiring',
+  'allow',
+  'allows',
+  'allowed',
+  'allowing',
+  'ensure',
+  'ensures',
+  'ensured',
+  'ensuring',
+  'store',
+  'stores',
+  'stored',
+  'storing',
+  'load',
+  'loads',
+  'loaded',
+  'loading',
+  'save',
+  'saves',
+  'saved',
+  'saving',
+  'serve',
+  'serves',
+  'served',
+  'serving',
+  'send',
+  'sends',
+  'sent',
+  'sending',
+  'emit',
+  'emits',
+  'emitted',
+  'emitting',
+  'pass',
+  'passes',
+  'passed',
+  'passing',
+  'fail',
+  'fails',
+  'failed',
+  'failing',
+  'check',
+  'checks',
+  'checked',
+  'checking',
+  'verify',
+  'verifies',
+  'verified',
+  'verifying',
+  'test',
+  'tests',
+  'tested',
+  'testing',
+  'monitor',
+  'monitors',
+  'monitored',
+  'monitoring',
+  'track',
+  'tracks',
+  'tracked',
+  'tracking',
+  'ship',
+  'ships',
+  'shipped',
+  'shipping',
+]);
+
+/** True when text carries at least one recognized verb or verb inflection. */
+export function hasVerb(s: string): boolean {
+  const words = s.match(/[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu);
+  if (!words) return false;
+  for (const w of words) {
+    const lower = w.toLowerCase();
+    if (COMMON_VERBS.has(lower)) return true;
+    // Inflectional verb endings: -ed, -ing, -ize, -ized, -ise, -ised
+    if (lower.length >= 4 && /(?:ed|ing|ize|ized|ise|ised)$/.test(lower)) return true;
+  }
+  return false;
+}
+
+/** Prepositions that indicate a severed phrase when appearing at the start of a title. */
+const SEVERED_PREPOSITIONS = new Set([
+  'from',
+  'into',
+  'onto',
+  'out of',
+  'per',
+  'via',
+  'above',
+  'under',
+  'during',
+  'against',
+  'between',
+  'through',
+]);
+
+/** True when a string opens with a severed preposition like "from the contentious zone...". */
+export function startsSeveredPreposition(s: string): boolean {
+  const trimmed = s.trimStart();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('out of ') || lower === 'out of') return true;
+  const firstWord = trimmed.match(/^[a-zA-Z]+/)?.[0]?.toLowerCase();
+  if (!firstWord) return false;
+  return SEVERED_PREPOSITIONS.has(firstWord);
+}
+
+/**
+ * True when a string begins with an amputated subject lacking a verb,
+ * e.g. "the issue in `in_progress` rather than `in_review`".
+ */
+export function startsAmputatedSubject(s: string): boolean {
+  const trimmed = s.trimStart();
+  if (!trimmed) return false;
+  if (/^(?:the|a|an)\s+[a-zA-Z0-9_-]+\s+(?:in|of|for|with|at|on|from|about)\b/i.test(trimmed)) {
+    const compIdx = trimmed.search(/\b(?:instead of|rather than|over)\b/i);
+    if (compIdx !== -1) {
+      const beforeComp = trimmed.slice(0, compIdx);
+      if (!hasVerb(beforeComp)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when content consists of a single line ending in a colon,
+ * e.g. "Now variant E — few-shot drawn from the contentious zone instead of the first-N-per-class pool:".
+ * Such content is an introductory line, not a standalone decision (TRA-1056 Point 3).
+ */
+export function isSingleLineEndingWithColon(content: string): boolean {
+  if (!content) return false;
+  const trimmed = content.trim();
+  const lines = trimmed.split('\n').filter((l) => l.trim().length > 0);
+  return lines.length === 1 && trimmed.endsWith(':');
+}
+
+/**
+ * True when a title represents a complete, self-contained statement (TRA-1056 Point 1).
+ * Rejects mid-clause continuations, severed prepositions, amputated subjects,
+ * trailing dangling tokens, trailing colons/dashes, unbalanced markers, and verbless fragments.
+ */
+export function isCompleteStatement(title: string): boolean {
+  if (!title) return false;
+  const t = title.trim();
+  if (t.length < MIN_TITLE_CHARS) return false;
+
+  if (startsMidClause(t)) return false;
+  if (startsSeveredPreposition(t)) return false;
+  if (startsAmputatedSubject(t)) return false;
+  if (endsMidClause(t)) return false;
+  if (/[:;—–\-]$/.test(t)) return false;
+  if (hasUnbalancedMarkers(t) || hasTableRemnant(t) || hasNarrationMarker(t)) return false;
+
+  // Must have a verb, or start with Root cause:/Decision:, or be a clean entity comparison
+  const isEntityComparison =
+    /^`?[A-Za-z0-9_.-]+`?\s+(?:instead of|rather than|over)\s+`?[A-Za-z0-9_.-]+`?$/i.test(t);
+  const isSpecialPrefix =
+    /^(?:root cause|decision|the fix|the bug|the issue|the problem)\s*[:—–]/i.test(t);
+  if (!hasVerb(t) && !isEntityComparison && !isSpecialPrefix) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * True when a string BEGINS mid-sentence: it starts with a lowercase word
  * that is a known continuation token (conjunction / pronoun / bare article).
  * A leading capital, a leading code token (backtick / bracket / quote), or a
@@ -495,8 +891,9 @@ export function minedDecisionRejectReason(title: string, content: string): strin
   if (isPredominantlyNonLatin(t)) return 'non_english';
   if (c && isPredominantlyNonLatin(c)) return 'non_english';
 
-  // Title must not be a dangling continuation of an earlier clause.
-  if (startsMidClause(t)) return 'title_mid_clause';
+  // Title must not be a dangling continuation of an earlier clause or severed preposition.
+  if (startsMidClause(t) || startsSeveredPreposition(t)) return 'title_mid_clause';
+  if (startsAmputatedSubject(t)) return 'title_incomplete';
 
   // Title reads as narration lifted from chat prose, not a standalone
   // decision statement (bare result verb, first-person planning, generic
@@ -504,10 +901,14 @@ export function minedDecisionRejectReason(title: string, content: string): strin
   if (hasNarrationMarker(t)) return 'title_narration';
 
   // Title truncation: cut on a dangling tail token, an unbalanced structural
-  // marker (open code span / paren / bold), or an orphan table-row remnant.
-  if (endsMidClause(t) || hasUnbalancedMarkers(t) || hasTableRemnant(t)) {
+  // marker (open code span / paren / bold), an orphan table-row remnant, or
+  // trailing colon/dash/semicolon.
+  if (endsMidClause(t) || hasUnbalancedMarkers(t) || hasTableRemnant(t) || /[:;—–\-]$/.test(t)) {
     return 'title_truncated';
   }
+
+  // Title must be a complete, self-contained statement (TRA-1056).
+  if (!isCompleteStatement(t)) return 'title_incomplete';
 
   // Content must carry enough real words to be a usable summary.
   if (c.length < MIN_CONTENT_CHARS) return 'content_too_short';
