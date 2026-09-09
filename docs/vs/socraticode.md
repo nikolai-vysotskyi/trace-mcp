@@ -56,7 +56,7 @@ updated: 2026-09-08
           "name": "Which server has the smaller MCP tool surface?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "SocratiCode advertises all 25 tools by default (~5.2K tokens). trace-mcp advertises 28 tools on its default minimal preset (~11.6K tokens including server instructions), offers task-tailored presets (review, architecture, dev), and keeps unadvertised tools reachable dynamically via load_tools without requiring server restarts."
+            "text": "SocratiCode advertises all 25 tools by default (~5.2K tokens). trace-mcp advertises 29 tools on its default minimal preset (~11.6K tokens including server instructions), offers task-tailored presets (review, architecture, dev), and keeps unadvertised tools reachable dynamically via load_tools without requiring server restarts."
           }
         },
         {
@@ -100,7 +100,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Framework integrations | **{{ site.data.counts.frameworks }}** integrations | ✗ (syntax AST only) |
 | Framework-aware edges | ✓ route → handler, template, ORM model | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 25 |
-| MCP tools advertised by default | 28 (~11.6K tok) | **25** (~5.2K tok) |
+| MCP tools advertised by default | 29 (~11.6K tok) | **25** (~5.2K tok) |
 | Surface trimming / Presets | ✓ adaptive presets (`minimal`, `review`, etc.) | ✗ (all 25 tools always advertised) |
 | Search mechanism | Structural AST + FTS5 + ONNX embeddings | Hybrid RRF (dense vector + keyword) |
 | Call flow & impact analysis | ✓ bidirectional call graph + blast radius | ✓ `codebase_flow` + `codebase_impact` |
@@ -141,9 +141,9 @@ Every tool advertised by an MCP server consumes prompt tokens on every turn of a
 
 SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
 
-trace-mcp advertises 28 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- For focused workflows, select task-tailored presets: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+trace-mcp advertises 29 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
 - Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines

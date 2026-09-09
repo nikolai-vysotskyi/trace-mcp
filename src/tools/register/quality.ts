@@ -1,9 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { optionalNonEmptyString } from './_zod-helpers.js';
+import { optionalEnum, optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
 import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
+import { getDiagnostics } from '../quality/diagnostics.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from '../analysis/communities.js';
 import { getControlFlow } from '../analysis/control-flow.js';
 import { getSurprises } from '../analysis/surprises.js';
@@ -806,6 +807,42 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
           isError: true,
         };
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Compiler Diagnostics & Symbol Mapping (TRA-1222) ---
+  server.tool(
+    'get_diagnostics',
+    'Execute type-checker (tsc, mypy, pyright) and map errors to enclosing AST symbols. Read-only.',
+    {
+      file_path: optionalNonEmptyString(512).describe('Filter by file path'),
+      checker: optionalEnum(['tsc', 'mypy', 'pyright']).describe('Checker (tsc, mypy, pyright)'),
+      max_per_file: z.number().int().min(1).optional().describe('Max errors per file'),
+      max_files: z.number().int().min(1).optional().describe('Max files reported'),
+      timeout_ms: z.number().int().min(1).optional().describe('Timeout in ms'),
+    },
+    async ({ file_path, checker, max_per_file, max_files, timeout_ms }) => {
+      if (file_path) {
+        const blocked = ctx.guardPath(file_path);
+        if (blocked) return blocked;
+      }
+
+      const result = await getDiagnostics(store, projectRoot, {
+        filePath: file_path,
+        checker,
+        maxPerFile: max_per_file,
+        maxFiles: max_files,
+        timeoutMs: timeout_ms,
+      });
+
+      if (result.isErr()) {
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
+      }
+
       return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
