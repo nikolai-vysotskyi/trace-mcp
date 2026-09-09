@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.15
+# trace-mcp-launcher v0.6.16
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -369,6 +369,45 @@ node_from_nvm_tree() {
   return 1
 }
 
+# Resolve all candidate nodes from an nvm-layout tree ($1 = root).
+# Emits the default alias first, then all installed versions sorted newest-first.
+# This prevents an older default alias (e.g. Node 18) or missing default alias from
+# masking newer supported Node versions installed in the same tree (TRA-1266).
+nodes_from_nvm_tree() {
+  local root="$1" n='' v list
+  [ -d "$root/versions/node" ] || return 0
+  if n=$(node_from_nvm_tree "$root"); then
+    echo "$n"
+  fi
+  list=$(ls -d "$root"/versions/node/* 2>/dev/null | sort -V -r) || return 0
+  while IFS= read -r v; do
+    [ -n "$v" ] || continue
+    [ -x "$v/bin/node" ] || continue
+    [ -n "$n" ] && [ "$v/bin/node" = "$n" ] && continue
+    echo "$v/bin/node"
+  done <<< "$list"
+}
+
+# Resolve all global node_modules roots from an nvm-layout tree ($1 = root).
+# Emits the default alias root first, then all installed versions sorted newest-first.
+# This finds trace-mcp installed under another Node version even when the active alias
+# points to a sibling version (TRA-1266).
+pkg_roots_from_nvm_tree() {
+  local root="$1" n='' v n_root='' list
+  [ -d "$root/versions/node" ] || return 0
+  if n=$(node_from_nvm_tree "$root"); then
+    n_root="$(dirname "$n")/../lib/node_modules"
+    [ -d "$n_root" ] && echo "$n_root"
+  fi
+  list=$(ls -d "$root"/versions/node/* 2>/dev/null | sort -V -r) || return 0
+  while IFS= read -r v; do
+    [ -n "$v" ] || continue
+    [ -d "$v/lib/node_modules" ] || continue
+    [ -n "$n_root" ] && [ "$v/lib/node_modules" = "$n_root" ] && continue
+    echo "$v/lib/node_modules"
+  done <<< "$list"
+}
+
 # Candidate user homes to probe for node managers and global packages.
 # Survives MCP clients spawned with an isolated or modified HOME
 # (e.g. Antigravity setting HOME=~/.agy/4, sandboxed runners, launchd, Claude Code --isolated).
@@ -541,10 +580,10 @@ node_candidates() {
     [ -x "$h/Library/pnpm/node" ] && echo "$h/Library/pnpm/node"
     [ -x "$h/.local/share/pnpm/node" ] && echo "$h/.local/share/pnpm/node"
 
-    # 4c. nvm default alias (dereference chained aliases; handle major-only shortcuts)
+    # 4c. nvm default alias + all installed versions (sorted newest-first)
     # 4d. Herd (same nvm-compatible tree)
-    n=$(node_from_nvm_tree "$h/.nvm") && echo "$n"
-    n=$(node_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm") && echo "$n"
+    nodes_from_nvm_tree "$h/.nvm"
+    nodes_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm"
 
     # 4e. fnm default alias (three possible locations)
     for fnm_dir in \
@@ -639,12 +678,8 @@ pkg_roots() {
   # Herd / fnm / Volta users, which is most of them.
   while IFS= read -r h; do
     [ -n "$h" ] || continue
-    if n=$(node_from_nvm_tree "$h/.nvm"); then
-      echo "$(dirname "$n")/../lib/node_modules"
-    fi
-    if n=$(node_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm"); then
-      echo "$(dirname "$n")/../lib/node_modules"
-    fi
+    pkg_roots_from_nvm_tree "$h/.nvm"
+    pkg_roots_from_nvm_tree "$h/Library/Application Support/Herd/config/nvm"
     for fnm_dir in \
       "$h/.local/share/fnm/aliases/default" \
       "$h/.fnm/aliases/default" \
@@ -654,6 +689,19 @@ pkg_roots() {
     # Volta keeps each global package under its own image directory.
     [ -d "$h/.volta/tools/image/packages/trace-mcp/lib/node_modules" ] &&
       echo "$h/.volta/tools/image/packages/trace-mcp/lib/node_modules"
+
+    # pnpm global roots
+    for pnpm_dir in \
+      "$h/Library/pnpm/global"/*/node_modules \
+      "$h/Library/pnpm/node_modules" \
+      "$h/.local/share/pnpm/global"/*/node_modules \
+      "$h/.local/share/pnpm/node_modules"; do
+      [ -d "$pnpm_dir" ] && echo "$pnpm_dir"
+    done
+
+    # bun and yarn global roots
+    [ -d "$h/.bun/install/global/node_modules" ] && echo "$h/.bun/install/global/node_modules"
+    [ -d "$h/.config/yarn/global/node_modules" ] && echo "$h/.config/yarn/global/node_modules"
 
     # Runtimes that bundle their own node and install us into it. Named here
     # because their prefix is on no standard list and predates the registry

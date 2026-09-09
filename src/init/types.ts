@@ -119,4 +119,5 @@ export const MIRROR_HOOK_VERSION = '0.3.0';
 // 0.6.13 (TRA-1206): candidate homes resolution under isolated HOME, Windows thin proxy daemon fast path
 // 0.6.14 (TRA-1218): support --preset variations in daemon-aware proxy routing
 // 0.6.15 (TRA-1249): prevent app runtime pairing with incompatible external npm CLI (Team ID / ABI mismatch)
-export const LAUNCHER_VERSION = '0.6.15';
+// 0.6.16 (TRA-1266): multi-version node resolution across nvm/Herd trees, pnpm global roots, and unmanaged binary drift detection
+export const LAUNCHER_VERSION = '0.6.16';
