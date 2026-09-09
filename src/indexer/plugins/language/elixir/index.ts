@@ -112,26 +112,56 @@ function extractFunctionName(node: TSNode): string | null {
 }
 
 /**
- * Extract the module name from a `use`, `import`, `alias`, or `require` call.
- * The first argument is usually an `alias` node like `Ecto.Changeset`.
+ * Extract the module name(s) from a `use`, `import`, `alias`, or `require` call.
+ * The first argument is usually an `alias` node like `Ecto.Changeset`, or a
+ * `dot` node with a tuple for multi-aliases like `alias Foo.Bar.{Baz, Qux}`.
  */
-function extractImportTarget(node: TSNode): string | null {
+function extractImportTargets(node: TSNode): string[] {
   const args = getCallArguments(node);
-  if (!args) return null;
+  if (!args) return [];
   for (let i = 0; i < args.namedChildCount; i++) {
     const child = args.namedChild(i);
     if (!child) continue;
-    if (child.type === 'alias') return child.text;
-    // Could also be a dotted access or __MODULE__ etc — grab text
-    if (child.type === 'dot' || child.type === 'identifier') return child.text;
+    if (child.type === 'alias') return [child.text];
+    if (child.type === 'dot') {
+      // Multi-alias: Foo.Bar.{Baz, Qux} where right child is a tuple
+      if (child.namedChildCount >= 2) {
+        const left = child.namedChild(0);
+        const right = child.namedChild(1);
+        if (left && right?.type === 'tuple') {
+          const prefix = left.text;
+          const targets: string[] = [];
+          for (let j = 0; j < right.namedChildCount; j++) {
+            const item = right.namedChild(j);
+            if (item && item.type !== 'comment' && item.text) {
+              const cleaned = item.text.replace(/#.*$/, '').trim();
+              if (cleaned) targets.push(`${prefix}.${cleaned}`);
+            }
+          }
+          if (targets.length > 0) return targets;
+        }
+      }
+      // Text fallback for {A, B} syntax
+      const match = child.text.match(/^(.+?)\.\{([^}]+)\}$/);
+      if (match) {
+        const prefix = match[1].trim();
+        return match[2]
+          .split(',')
+          .map((s) => s.replace(/#.*$/, '').trim())
+          .filter(Boolean)
+          .map((s) => `${prefix}.${s}`);
+      }
+      return [child.text];
+    }
+    if (child.type === 'identifier') return [child.text];
     if (child.type === 'arguments') {
       for (let j = 0; j < child.namedChildCount; j++) {
         const inner = child.namedChild(j);
-        if (inner?.type === 'alias') return inner.text;
+        if (inner?.type === 'alias') return [inner.text];
       }
     }
   }
-  return null;
+  return [];
 }
 
 /**
@@ -334,8 +364,8 @@ export class ElixirLanguagePlugin implements LanguagePlugin {
 
     // --- Import edges ---
     if (IMPORT_TARGETS.has(target)) {
-      const mod = extractImportTarget(node);
-      if (mod) {
+      const mods = extractImportTargets(node);
+      for (const mod of mods) {
         edges.push({ edgeType: 'imports', metadata: { module: mod, kind: target } });
       }
       return;

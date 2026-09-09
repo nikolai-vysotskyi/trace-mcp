@@ -86,6 +86,11 @@ const REPOS: RepoSpec[] = [
     repo: 'colinhacks/zod',
     logMessage: 'ES module import edges resolved',
   },
+  {
+    language: 'elixir',
+    repo: 'elixir-plug/plug',
+    logMessage: 'Elixir import edges resolved',
+  },
 ];
 
 function sh(cmd: string[], cwd?: string): void {
