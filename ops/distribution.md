@@ -39,7 +39,7 @@ Rules for keeping it honest:
   fit in the same minute as the submission. Writing to a maintainer twice is the
   one outreach failure that costs more than not writing at all.
 - Numbers quoted to the outside world come from `docs/_data/counts.yml`
-  (181 tools / 81 languages / 87 frameworks as of 2026-09-06). Never hand-type
+  (181 tools / 81 languages / 88 frameworks as of 2026-09-09). Never hand-type
   them, and re-read the file rather than trusting a number written here: the
   language count moved from 80 to 81 within a day of this ledger being started.
 
@@ -893,10 +893,10 @@ re-read both in every distribution run.
 `hesreallyhim` at 100 and `subinium` at 1,000 — should be re-read against this,
 not against 102.
 
-**Non-file surfaces, re-read 2026-09-06 as this section asks.** The repo
+**Non-file surfaces, re-read 2026-09-09 as this section asks.** The repo
 `description` and the npm, `package.json` and `server.json` descriptions all
 carry the measured PR figure and agree with `docs/_data/counts.yml` (81
-languages, 87 frameworks). No drift this pass — the first clean read since the
+languages, 88 frameworks). No drift this pass — the first clean read since the
 "~42 minutes" string was found here. The 20 repo topics were re-read too and
 make no claim, so nothing to guard there.
 

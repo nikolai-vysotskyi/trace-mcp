@@ -61,6 +61,7 @@ import { N8nPlugin } from './tooling/n8n/index.js';
 import { NeverthrowPlugin } from './tooling/neverthrow/index.js';
 import { NodemailerPlugin } from './tooling/nodemailer/index.js';
 import { OpenAIPythonPlugin } from './tooling/openai-py/index.js';
+import { OpenTelemetryPlugin } from './tooling/opentelemetry/index.js';
 import { PhpEcosystemPlugin } from './tooling/php-ecosystem/index.js';
 import { PinoPlugin } from './tooling/pino/index.js';
 import { PythonAsyncPlugin } from './tooling/python-async/index.js';
@@ -185,6 +186,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new PhpEcosystemPlugin(),
     new PythonHttpClientsPlugin(),
     new OpenAIPythonPlugin(),
+    new OpenTelemetryPlugin(),
     new AnthropicPythonPlugin(),
     new AnthropicSdkPlugin(),
     new PythonMLPlugin(),
