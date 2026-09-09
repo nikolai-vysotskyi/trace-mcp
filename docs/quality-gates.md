@@ -1,7 +1,7 @@
 ---
 title: "Quality Gates — configure trace-mcp's thresholds"
 description: "The eight quality_gates.rules keys trace-mcp checks, which three run by default, and how this project calibrated its own thresholds as a worked example."
-updated: 2026-09-04
+updated: 2026-09-08
 ---
 
 # Quality gates — configuring thresholds
@@ -32,14 +32,19 @@ updated: 2026-09-04
 }
 </script>
 `check_quality_gates` reads the `quality_gates` section of
-[`.trace-mcp.json`](configuration.md). Configure nothing and three rules still
-run; name a rule and your threshold replaces the built-in one for that rule
-only. The second half of this page is this repo's own configuration as a worked
-example of how the numbers get chosen.
+[`.trace-mcp.json`](configuration.md) (or `.trace.json`). By default, with no gates
+configured, the MCP tool returns `NO_GATES_CONFIGURED` with an advisory warning
+pointing to this documentation — never a silent or misleading `PASS` in CI.
+Pass `use_default_gates: true` to explicitly opt into the conservative built-in
+ruleset, or define `quality_gates.rules` in your project config. The second half
+of this page is this repo's own configuration as a worked example of how the
+numbers get chosen.
 
 ## What runs when you configure nothing
 
-Three rules ship on by default:
+With no `quality_gates` config and no inline rules:
+
+- **MCP tool (`check_quality_gates`)**: returns `NO_GATES_CONFIGURED` (summary result `NO_GATES_CONFIGURED` with a `_warnings` advisory). Passing `use_default_gates: true` opts into the three conservative built-in defaults:
 
 | Rule | Threshold | Severity |
 |---|---|---|
@@ -47,7 +52,16 @@ Three rules ship on by default:
 | `max_circular_import_chains` | 0 | error |
 | `max_coupling_instability` | 0.9 | warning |
 
-The other five are only checked once you name them — an absent rule is not a
+- **CLI (`trace check`)**: when no rules are configured in the config file, it notifies `"No quality gate rules configured. Using defaults."` and runs the CLI defaults:
+
+| Rule | Threshold | Severity |
+|---|---|---|
+| `max_cyclomatic_complexity` | 30 | warning |
+| `max_circular_import_chains` | 0 | error |
+| `max_security_critical_findings` | 0 | error |
+| `max_tech_debt_grade` | D | warning |
+
+The remaining rules are only checked once you name them — an absent rule is not a
 zero threshold, it is no check at all. There is no coverage rule: coverage is
 not one of the signals this gate reads.
 

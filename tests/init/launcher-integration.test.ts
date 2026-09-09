@@ -1459,6 +1459,54 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
     expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
   });
 
+  it('reprobes and uses bundled cli when launcher.env pairs app runtime with external npm cli (TRA-1249)', () => {
+    const { home, traceHome, cli: externalCli } = setupFakeHome();
+    const { app, cli: bundledCli } = plantAppBundle(home);
+    const shim = plantRuntimeShim(
+      path.join(traceHome, 'bin'),
+      path.join(app, 'Contents', 'MacOS', 'trace-mcp'),
+    );
+    writeAppLocation(traceHome, app);
+    writeConfig(traceHome, shim, externalCli);
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`APP_NODE:1:${bundledCli} serve`);
+    const log = fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8');
+    expect(log).toMatch(/ERROR: app runtime node=.*cannot load external package cli=.*reprobing/);
+    const config = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+    expect(config).toContain(`TRACE_MCP_CLI="${bundledCli}"`);
+  });
+
+  it('resolves bundled cli directly when node is an app runtime, skipping npm prefixes (TRA-1249)', () => {
+    const { home, traceHome } = setupFakeHome();
+    const { app, cli: bundledCli } = plantAppBundle(home);
+    const shim = plantRuntimeShim(
+      path.join(traceHome, 'bin'),
+      path.join(app, 'Contents', 'MacOS', 'trace-mcp'),
+    );
+    writeAppLocation(traceHome, app);
+
+    const prefix = path.join(home, 'npm-prefix');
+    const prefixCli = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist', 'cli.js');
+    fs.mkdirSync(path.dirname(prefixCli), { recursive: true });
+    fs.writeFileSync(prefixCli, '// external npm cli\n');
+    fs.writeFileSync(
+      path.join(traceHome, 'pkg-roots'),
+      `${path.join(prefix, 'lib', 'node_modules')}\n`,
+    );
+
+    writeConfig(traceHome, shim, '/nonexistent/cli.js');
+
+    const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`APP_NODE:1:${bundledCli} serve`);
+    const config = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+    expect(config).toContain(`TRACE_MCP_CLI="${bundledCli}"`);
+  });
+
   // Review of #1011: `read` reports failure on a final line with no trailing
   // newline, so a plain `while read` loop drops it. The writer happens to emit
   // `appPath` first today, which is key order, not a parser invariant — a

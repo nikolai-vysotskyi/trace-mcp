@@ -121,3 +121,7 @@ HolmesGPT/holmesgpt                 # datasource-catalog.json: dynatrace-mcp (Dy
 # ── Swept 2026-09-09 (TRA-1232) ──
 # Collision on dynatrace-mcp-server in docs/safety-index/targets.json:
 KryptosAI/mcp-observatory
+
+# ── Swept 2026-09-09 (TRA-1244) ──
+# Genuine third-party AX/FDE harness integrating trace for 'blast' (impact analysis):
+su-record/vibe

@@ -1,7 +1,7 @@
 ---
 title: "Session Analytics & Coverage Intelligence — token savings, wasteful patterns"
 description: "trace-mcp's built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage."
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # Session Analytics & Coverage Intelligence
@@ -55,7 +55,7 @@ Session logs (JSONL)                   Project manifests
            ▼                                   ▼
 ┌─────────────────────────┐         ┌──────────────────────────┐
 │  Analytics DB (SQLite)  │         │  Coverage Report         │
-│  ~/.trace-mcp/          │         │  covered / gaps /        │
+│  ~/.trace/              │         │  covered / gaps /        │
 │    analytics.db         │         │  unknown deps            │
 │  Tables:                │         └──────────────────────────┘
 │  - sessions             │
@@ -68,7 +68,7 @@ Session logs (JSONL)                   Project manifests
  Analytics    Optimization    Real Savings       Benchmark
  Report       Report          Analysis           Engine
  (per tool,   (8 rules,       (Read vs           (synthetic,
-  per file,    savings est.)   get_symbol)        5 scenarios)
+  per file,    savings est.)   get_symbol)        11 scenarios)
   per model)
 ```
 
@@ -147,7 +147,7 @@ Synthetic benchmark comparing raw file reads vs trace-mcp compact responses.
 benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown" })
 ```
 
-**5 scenarios:** symbol lookup, file exploration, search, impact analysis, call graph. Uses actual index data with seeded randomness for reproducibility.
+**11 scenarios:** symbol lookup, file exploration, search, find usages, context bundle, batch overhead, impact analysis, call graph, type hierarchy, tests for, task context. Uses actual index data with seeded randomness for reproducibility.
 
 ### `get_startup_context_audit`
 
