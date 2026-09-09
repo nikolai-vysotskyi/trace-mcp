@@ -82,6 +82,21 @@ describe.skipIf(process.platform === 'win32')('checkLauncherFile', () => {
     expect(isBroken(check.status)).toBe(false);
   });
 
+  it('detects a direct trace-mcp npm binary or cli.js as unmanaged_binary and broken', () => {
+    const pkgDir = path.join(dir, 'node_modules', 'trace-mcp', 'dist');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    const cli = path.join(pkgDir, 'cli.js');
+    fs.writeFileSync(cli, '#!/usr/bin/env node\nconsole.log("direct cli");\n', { mode: 0o755 });
+    const symlink = path.join(dir, 'bin', 'trace-mcp');
+    fs.mkdirSync(path.dirname(symlink), { recursive: true });
+    fs.symlinkSync(cli, symlink);
+
+    const check = checkLauncherFile(symlink);
+    expect(check.status).toBe('unmanaged_binary');
+    expect(isBroken(check.status)).toBe(true);
+    expect(check.detail).toContain('bypasses launcher shim');
+  });
+
   it('does not guess at a PATH-resolved command name', () => {
     expect(checkLauncherFile('npx').status).toBe('unchecked');
   });

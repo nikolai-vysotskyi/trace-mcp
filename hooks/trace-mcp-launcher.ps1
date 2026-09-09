@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.6.15 (Windows)
+# trace-mcp-launcher v0.6.16 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -192,6 +192,19 @@ function Test-RuntimeShim {
     return (Test-Path -LiteralPath $target -PathType Leaf)
 }
 
+function Test-AppRuntime {
+    param([string]$Path)
+    if (-not $Path) { return $false }
+    if ($Path -like '*\Contents\MacOS\*' -or $Path -like '*\trace-mcp.app\*') { return $true }
+    if ([System.IO.Path]::GetFileName($Path) -eq 'node-runtime.cmd') {
+        try {
+            $head = Get-Content -LiteralPath $Path -TotalCount 8 -ErrorAction Stop
+            if ($head | Where-Object { $_ -match '^rem Managed by the trace-mcp app' }) { return $true }
+        } catch { return $false }
+    }
+    return $false
+}
+
 # `Length -gt 0`, not merely "the file is there" (TRA-1132). Test-NodeBinary
 # above closed "exists but does not run" for node; this is the same class on
 # the other half of the pair. A zero-byte dist/cli.js - what a disk-full write,
@@ -339,6 +352,16 @@ if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath) -and -not (Test-Run
     $NodePath = ''
 }
 
+# An app runtime (Electron with Hardened Runtime / ABI 145) can only run the
+# server bundled inside the app. Exec-ing an external npm package fails with
+# ABI mismatch.
+if (-not $UsingOverride -and (Test-AppRuntime $NodePath) -and $CliPath) {
+    if ($CliPath -notmatch '[\\/]trace-mcp\.app[\\/]' -and $CliPath -notmatch '[\\/]Contents[\\/]Resources[\\/]server[\\/]dist[\\/]cli\.js') {
+        Write-LauncherLog "ERROR: app runtime node=$NodePath cannot load external package cli=$CliPath (ABI mismatch) - reprobing"
+        $CliPath = ''
+    }
+}
+
 # The version gate is also the liveness gate, and it runs on EVERY start.
 #
 # It used to be skipped whenever the config carried a cached
@@ -366,6 +389,7 @@ if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath)) {
 if ((Test-NodeBinary $NodePath) -and (Test-CliFile $CliPath)) {
     $execTarget = Resolve-ExecTarget $CliPath $args
     Write-LauncherLog "exec(config) node=$NodePath cli=$CliPath target=$execTarget argc=$($args.Count)"
+    if (Test-AppRuntime $NodePath) { $env:ELECTRON_RUN_AS_NODE = '1' }
     & $NodePath $execTarget @args
     exit $LASTEXITCODE
 }
@@ -414,12 +438,14 @@ function Get-NodeCandidates {
     }
     $nvmRoot = Join-Path $env:APPDATA 'nvm'
     if (Test-Path -LiteralPath $nvmRoot -PathType Container) {
-        $latest = Get-ChildItem -LiteralPath $nvmRoot -Directory -ErrorAction SilentlyContinue |
-                  Where-Object { $_.Name -match '^v?\d+\.\d+\.\d+$' } |
-                  Sort-Object -Property Name -Descending |
-                  Select-Object -First 1
-        if ($latest) {
-            $candidate = Join-Path $latest.FullName 'node.exe'
+        $versions = Get-ChildItem -LiteralPath $nvmRoot -Directory -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match '^v?\d+\.\d+\.\d+$' } |
+                    Sort-Object -Property {
+                        $clean = $_.Name.TrimStart('v')
+                        try { [version]$clean } catch { [version]'0.0.0' }
+                    } -Descending
+        foreach ($v in $versions) {
+            $candidate = Join-Path $v.FullName 'node.exe'
             if (Test-NodeBinary $candidate) { $found += $candidate }
         }
     }
@@ -500,6 +526,19 @@ function Get-PkgRoots {
     # Volta keeps each global package under its own image directory.
     if ($env:LOCALAPPDATA) {
         $roots += (Join-Path $env:LOCALAPPDATA 'Volta\tools\image\packages\trace-mcp\lib\node_modules')
+    }
+    # pnpm global roots
+    foreach ($base in @($env:LOCALAPPDATA, $env:APPDATA)) {
+        if (-not $base) { continue }
+        $pnpmGlobal = Join-Path $base 'pnpm\global'
+        if (Test-Path -LiteralPath $pnpmGlobal -PathType Container) {
+            Get-ChildItem -LiteralPath $pnpmGlobal -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $m = Join-Path $_.FullName 'node_modules'
+                if (Test-Path -LiteralPath $m -PathType Container) { $roots += $m }
+            }
+        }
+        $pnpmRoot = Join-Path $base 'pnpm\node_modules'
+        if (Test-Path -LiteralPath $pnpmRoot -PathType Container) { $roots += $pnpmRoot }
     }
     # Custom prefixes (`npm config set prefix`). Read from config files, never
     # by spawning npm: the shim inherits the MCP client's PATH, which in
@@ -592,5 +631,6 @@ if ($Healed -and -not $UsingOverride) { Save-LauncherConfig $NodePath $CliPath }
 
 $execTarget = Resolve-ExecTarget $CliPath $args
 Write-LauncherLog "exec(probe) node=$NodePath cli=$CliPath target=$execTarget argc=$($args.Count)"
+if (Test-AppRuntime $NodePath) { $env:ELECTRON_RUN_AS_NODE = '1' }
 & $NodePath $execTarget @args
 exit $LASTEXITCODE
