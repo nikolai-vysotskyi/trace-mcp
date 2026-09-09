@@ -89,6 +89,11 @@ const FOREIGN_PREFIXES = [
   'src/cmds/', // RTK
   'src/servers/', // claude-mem
   'src/token_savior/', // Token Savior
+  'packages/opencode-plugin/', // AFT
+  'packages/pi-plugin/', // AFT
+  'src/index/', // AFT
+  'src/tools/ast_grep.rs', // AFT — exact file, src/tools/ is ours
+  'src/transport/', // AFT
 ];
 
 /**
