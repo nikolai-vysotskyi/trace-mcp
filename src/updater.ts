@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+import { acquireLock, releaseLock, LockError, type LockHandle } from './utils/pid-lock.js';
 
 /**
  * Run a child process without blocking the event loop.
@@ -403,135 +404,176 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
     'Auto-update: newer version found, installing...',
   );
 
-  // Pre-flight: wipe any `.trace-mcp-<rand>` scratch dirs from prior interrupted
-  // installs. `--force` swaps the package dir wholesale instead of relying on
-  // npm's rename dance, which is the fragile step that fails with ENOTEMPTY.
-  const npmRoot = await resolveNpmRoot();
-  if (npmRoot) {
-    cleanStaleScratchDirs(npmRoot);
-    reconcileStaleBackups(npmRoot);
+  // Cross-process lock: prevents concurrent MCP client sessions (e.g. Claude Code
+  // and Cursor starting at the same time) from racing on `npm install -g`, corrupting
+  // each other's scratch dirs or swap windows (TRA-1259).
+  const lockDir = path.join(TRACE_MCP_HOME, 'locks');
+  let lockHandle: LockHandle | null = null;
+  try {
+    lockHandle = acquireLock({
+      lockDir,
+      name: 'auto-update',
+      op: `npm-install-${latestVersion}`,
+    });
+  } catch (err) {
+    if (err instanceof LockError) {
+      logger.debug(
+        { holder: err.holder },
+        'Auto-update: another update is already in progress, skipping concurrent run',
+      );
+      return false;
+    }
+    logger.debug({ error: err }, 'Auto-update: lock acquisition failed (non-fatal)');
   }
 
-  const runInstall = () =>
-    run('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], 120_000);
-
-  let result = await runInstall();
-
-  // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
-  // corrupt half-extracted state. Atomic-rename it aside, retry once, and
-  // rollback the rename if the retry also fails. NEVER destroy the package dir
-  // outright — a second install failure (network blip, ENOSPC, registry hiccup)
-  // would leave the user with no trace-mcp at all.
-  if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr) && npmRoot) {
-    logger.warn('Auto-update: ENOTEMPTY detected, backing up corrupt install dir and retrying');
-    cleanStaleScratchDirs(npmRoot);
-
-    const mainDir = path.join(npmRoot, 'trace-mcp');
-    const backupDir = path.join(npmRoot, `${BACKUP_DIR_PREFIX}${process.pid}`);
-
-    // Atomic rename within the same filesystem — see rename(2). If mainDir
-    // doesn't exist (already wiped by a previous failed run) we just proceed
-    // to install fresh; there's nothing to back up or restore.
-    let backedUp = false;
-    try {
-      fs.renameSync(mainDir, backupDir);
-      backedUp = true;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') {
-        logger.warn(
-          { error: err, mainDir },
-          'Auto-update: failed to back up corrupt install dir before retry',
-        );
-      }
+  try {
+    // If another process held the lock and finished installing ahead of us, re-check cache
+    const recheckCache = readCache();
+    if (recheckCache?.installedVersion && !semverGt(latestVersion, recheckCache.installedVersion)) {
+      logger.debug(
+        { latest: latestVersion, installed: recheckCache.installedVersion },
+        'Auto-update: target version was already installed by a peer process',
+      );
+      return true;
     }
 
-    result = await runInstall();
+    // Pre-flight: wipe any `.trace-mcp-<rand>` scratch dirs from prior interrupted
+    // installs. `--force` swaps the package dir wholesale instead of relying on
+    // npm's rename dance, which is the fragile step that fails with ENOTEMPTY.
+    const npmRoot = await resolveNpmRoot();
+    if (npmRoot) {
+      cleanStaleScratchDirs(npmRoot);
+      reconcileStaleBackups(npmRoot);
+    }
 
-    if (result.status === 0) {
-      // Install succeeded — drop the backup.
-      if (backedUp) {
-        try {
-          fs.rmSync(backupDir, { recursive: true, force: true });
-          logger.debug({ backupDir }, 'Auto-update: removed backup after successful retry');
-        } catch (err) {
-          logger.debug({ error: err, backupDir }, 'Auto-update: backup cleanup failed (non-fatal)');
-        }
-      }
-    } else if (backedUp) {
-      // Install failed — rollback. If npm partially extracted a new mainDir,
-      // wipe it before renaming the backup back into place.
-      if (fs.existsSync(mainDir)) {
-        try {
-          fs.rmSync(mainDir, { recursive: true, force: true });
-        } catch (err) {
+    const runInstall = () =>
+      run('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], 120_000);
+
+    let result = await runInstall();
+
+    // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
+    // corrupt half-extracted state. Atomic-rename it aside, retry once, and
+    // rollback the rename if the retry also fails. NEVER destroy the package dir
+    // outright — a second install failure (network blip, ENOSPC, registry hiccup)
+    // would leave the user with no trace-mcp at all.
+    if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr) && npmRoot) {
+      logger.warn('Auto-update: ENOTEMPTY detected, backing up corrupt install dir and retrying');
+      cleanStaleScratchDirs(npmRoot);
+
+      const mainDir = path.join(npmRoot, 'trace-mcp');
+      const backupDir = path.join(npmRoot, `${BACKUP_DIR_PREFIX}${process.pid}`);
+
+      // Atomic rename within the same filesystem — see rename(2). If mainDir
+      // doesn't exist (already wiped by a previous failed run) we just proceed
+      // to install fresh; there's nothing to back up or restore.
+      let backedUp = false;
+      try {
+        fs.renameSync(mainDir, backupDir);
+        backedUp = true;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
           logger.warn(
             { error: err, mainDir },
-            'Auto-update: failed to remove partial install before rollback',
+            'Auto-update: failed to back up corrupt install dir before retry',
           );
         }
       }
-      try {
-        fs.renameSync(backupDir, mainDir);
-        logger.warn(
-          { version: latestVersion },
-          'Auto-update: install retry failed, previous install restored from backup',
-        );
-      } catch (restoreErr) {
-        // CATASTROPHIC: rollback itself failed. The user must know the package
-        // is in a broken state and where their backup lives.
-        logger.error(
-          {
-            error: restoreErr,
-            backupDir,
-            mainDir,
-            recovery: `mv ${backupDir} ${mainDir}`,
-          },
-          'Auto-update: FATAL — backup restore failed, manual recovery required',
-        );
+
+      result = await runInstall();
+
+      if (result.status === 0) {
+        // Install succeeded — drop the backup.
+        if (backedUp) {
+          try {
+            fs.rmSync(backupDir, { recursive: true, force: true });
+            logger.debug({ backupDir }, 'Auto-update: removed backup after successful retry');
+          } catch (err) {
+            logger.debug(
+              { error: err, backupDir },
+              'Auto-update: backup cleanup failed (non-fatal)',
+            );
+          }
+        }
+      } else if (backedUp) {
+        // Install failed — rollback. If npm partially extracted a new mainDir,
+        // wipe it before renaming the backup back into place.
+        if (fs.existsSync(mainDir)) {
+          try {
+            fs.rmSync(mainDir, { recursive: true, force: true });
+          } catch (err) {
+            logger.warn(
+              { error: err, mainDir },
+              'Auto-update: failed to remove partial install before rollback',
+            );
+          }
+        }
+        try {
+          fs.renameSync(backupDir, mainDir);
+          logger.warn(
+            { version: latestVersion },
+            'Auto-update: install retry failed, previous install restored from backup',
+          );
+        } catch (restoreErr) {
+          // CATASTROPHIC: rollback itself failed. The user must know the package
+          // is in a broken state and where their backup lives.
+          logger.error(
+            {
+              error: restoreErr,
+              backupDir,
+              mainDir,
+              recovery: `mv ${backupDir} ${mainDir}`,
+            },
+            'Auto-update: FATAL — backup restore failed, manual recovery required',
+          );
+        }
       }
     }
-  }
 
-  if (result.status !== 0) {
-    logger.warn(
-      { stderr: result.stderr.slice(-500), status: result.status },
-      'Auto-update: npm install failed',
-    );
-    // Increment the consecutive-failure counter for this exact target.
-    const sameTarget = cache?.lastFailedVersion === latestVersion;
-    const consecutive = sameTarget ? (cache?.consecutiveFailedInstalls ?? 0) + 1 : 1;
-    if (consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD) {
+    if (result.status !== 0) {
       logger.warn(
-        {
-          version: latestVersion,
-          consecutiveFailedInstalls: consecutive,
-          retryAfterDays: FAILED_INSTALL_LONG_RETRY_MS / (24 * 60 * 60 * 1000),
-        },
-        `Auto-update: disabled for v${latestVersion} until manual intervention (too many failures)`,
+        { stderr: result.stderr.slice(-500), status: result.status },
+        'Auto-update: npm install failed',
       );
+      // Increment the consecutive-failure counter for this exact target.
+      const sameTarget = cache?.lastFailedVersion === latestVersion;
+      const consecutive = sameTarget ? (cache?.consecutiveFailedInstalls ?? 0) + 1 : 1;
+      if (consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD) {
+        logger.warn(
+          {
+            version: latestVersion,
+            consecutiveFailedInstalls: consecutive,
+            retryAfterDays: FAILED_INSTALL_LONG_RETRY_MS / (24 * 60 * 60 * 1000),
+          },
+          `Auto-update: disabled for v${latestVersion} until manual intervention (too many failures)`,
+        );
+      }
+      writeCache({
+        lastChecked: now,
+        latestVersion,
+        installedVersion: cache?.installedVersion,
+        lastFailedInstall: now,
+        lastFailedVersion: latestVersion,
+        consecutiveFailedInstalls: consecutive,
+      });
+      return false;
     }
-    writeCache({
-      lastChecked: now,
-      latestVersion,
-      installedVersion: cache?.installedVersion,
-      lastFailedInstall: now,
-      lastFailedVersion: latestVersion,
-      consecutiveFailedInstalls: consecutive,
-    });
-    return false;
+
+    // Record the version we just installed so the restarted process can detect
+    // the upgrade and run post-update migrations. Clear any prior failure stamp
+    // (including the consecutive-failure counter — success resets the streak).
+    writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
+
+    logger.info(
+      { version: latestVersion },
+      'Auto-update: installed successfully — takes effect on the next start',
+    );
+    return true;
+  } finally {
+    if (lockHandle) {
+      releaseLock(lockHandle);
+    }
   }
-
-  // Record the version we just installed so the restarted process can detect
-  // the upgrade and run post-update migrations. Clear any prior failure stamp
-  // (including the consecutive-failure counter — success resets the streak).
-  writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
-
-  logger.info(
-    { version: latestVersion },
-    'Auto-update: installed successfully — takes effect on the next start',
-  );
-  return true;
 }
 
 /** How long to wait after startup before touching the registry (TRA-703). */

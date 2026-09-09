@@ -27,14 +27,25 @@ import {
   projectHash,
   projectName,
   TOPOLOGY_DB_PATH,
+  TRACE_MCP_HOME,
 } from '../global.js';
 import { logger } from '../logger.js';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
-import { listProjects, pruneStaleProjects } from '../registry.js';
+import {
+  findEphemeralProjects,
+  listProjects,
+  pruneStaleProjects,
+  unregisterProject,
+} from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { DecisionStore } from '../memory/decision-store.js';
 import { sweepSessionFiles } from '../session/sweeper.js';
+import { findPrunableProjectConfigSections, pruneProjectConfigSections } from '../config-jsonc.js';
+import {
+  findOrphanTmpFilesUnderHome,
+  sweepOrphanTmpFilesUnderHome,
+} from '../utils/atomic-write.js';
 
 /** Categories assigned to each DB candidate. */
 export type PruneCategory =
@@ -537,6 +548,25 @@ export function scanOrPruneDecisions(apply = false): DecisionsPruneSummary {
   }
 }
 
+export function scanOrPruneConfig(apply: boolean): {
+  prunableSections: string[];
+  removedSections: string[];
+} {
+  const prunableSections = findPrunableProjectConfigSections();
+  const removedSections = apply && prunableSections.length > 0 ? pruneProjectConfigSections() : [];
+  return { prunableSections, removedSections };
+}
+
+export function scanOrPruneTmpFiles(apply: boolean): {
+  staleTmpFiles: string[];
+  removedTmpFiles: string[];
+} {
+  const staleTmpFiles = findOrphanTmpFilesUnderHome(TRACE_MCP_HOME);
+  const removedTmpFiles =
+    apply && staleTmpFiles.length > 0 ? sweepOrphanTmpFilesUnderHome(TRACE_MCP_HOME) : [];
+  return { staleTmpFiles, removedTmpFiles };
+}
+
 export const pruneCommand = new Command('prune')
   .description(
     'Audit ~/.trace-mcp/index for orphan/expired DBs (dry-run by default; use --apply to delete)',
@@ -568,6 +598,16 @@ export const pruneCommand = new Command('prune')
         .map((e) => e.root);
       const removedRegistryRoots = apply ? pruneStaleProjects() : [];
 
+      // Ephemeral projects left over from past agent runs (>24h old)
+      const staleEphemeralRoots = findEphemeralProjects().map((e) => e.root);
+      const removedEphemeralRoots: string[] = [];
+      if (apply) {
+        for (const root of staleEphemeralRoots) {
+          unregisterProject(root);
+          removedEphemeralRoots.push(root);
+        }
+      }
+
       // Stale topology rows (services/subprojects pointing to deleted folders)
       const topoSummary = scanOrPruneTopology(apply);
 
@@ -577,6 +617,12 @@ export const pruneCommand = new Command('prune')
       // Stale session artifacts (snapshots >24h, end logs >7d, orphan summaries)
       const sessionSummary = sweepSessionFiles({ dryRun: !apply });
 
+      // Dead / overflowing sections in .config.json
+      const configSummary = scanOrPruneConfig(apply);
+
+      // Orphan atomic-write tmp files in state directories
+      const tmpFilesSummary = scanOrPruneTmpFiles(apply);
+
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -584,6 +630,8 @@ export const pruneCommand = new Command('prune')
               ...(toJson(summary, { apply, aggressive, sessionTtlDays }) as object),
               staleRegistryRoots,
               removedRegistryRoots,
+              staleEphemeralRoots,
+              removedEphemeralRoots,
               topology: {
                 staleServices: topoSummary.staleServices,
                 staleSubprojects: topoSummary.staleSubprojects,
@@ -602,6 +650,14 @@ export const pruneCommand = new Command('prune')
                 deletedFiles: sessionSummary.deleted.length,
                 freedBytes: sessionSummary.freedBytes,
               },
+              config: {
+                prunableSections: configSummary.prunableSections,
+                removedSections: configSummary.removedSections,
+              },
+              tmpFiles: {
+                staleTmpFiles: tmpFilesSummary.staleTmpFiles,
+                removedTmpFiles: tmpFilesSummary.removedTmpFiles,
+              },
             },
             null,
             2,
@@ -618,6 +674,15 @@ export const pruneCommand = new Command('prune')
         p.note(
           [heading, ...staleRegistryRoots.map((r) => `  ${shortPath(r)}`)].join('\n'),
           'Registry',
+        );
+      }
+      if (staleEphemeralRoots.length > 0) {
+        const heading = apply
+          ? `Removed ${removedEphemeralRoots.length} stale ephemeral workdir registration(s):`
+          : `${staleEphemeralRoots.length} stale ephemeral workdir registration(s) — would remove:`;
+        p.note(
+          [heading, ...staleEphemeralRoots.map((r) => `  ${shortPath(r)}`)].join('\n'),
+          'Ephemeral Projects',
         );
       }
       if (
@@ -661,6 +726,20 @@ export const pruneCommand = new Command('prune')
           lines.push(`  ... and ${sessionSummary.deleted.length - 10} more`);
         }
         p.note(lines.join('\n'), 'Sessions');
+      }
+      if (configSummary.prunableSections.length > 0 || configSummary.removedSections.length > 0) {
+        const heading = apply
+          ? `Removed ${configSummary.removedSections.length} dead project section(s) from .config.json:`
+          : `${configSummary.prunableSections.length} dead project section(s) in .config.json — would remove:`;
+        const list = apply ? configSummary.removedSections : configSummary.prunableSections;
+        p.note([heading, ...list.map((r) => `  ${shortPath(r)}`)].join('\n'), 'Global Config');
+      }
+      if (tmpFilesSummary.staleTmpFiles.length > 0 || tmpFilesSummary.removedTmpFiles.length > 0) {
+        const heading = apply
+          ? `Removed ${tmpFilesSummary.removedTmpFiles.length} orphaned atomic write .tmp file(s):`
+          : `${tmpFilesSummary.staleTmpFiles.length} orphaned atomic write .tmp file(s) — would remove:`;
+        const list = apply ? tmpFilesSummary.removedTmpFiles : tmpFilesSummary.staleTmpFiles;
+        p.note([heading, ...list.map((f) => `  ${shortPath(f)}`)].join('\n'), 'Orphan Tmp Files');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');

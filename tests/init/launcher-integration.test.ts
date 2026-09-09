@@ -2086,5 +2086,87 @@ describe.skipIf(process.platform === 'win32')('app-only install (no npm prefix)'
       expect(res.status).toBe(0);
       expect(res.stdout).toContain(fs.realpathSync(envCli));
     });
+
+    it('resolves cli.js from pnpm global prefix (TRA-1259)', () => {
+      const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
+      const localBin = path.join(userHome, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      const node = path.join(localBin, 'node');
+      fs.writeFileSync(node, fakeNodeBody('22.22.2', 'CONFIG_NODE'), { mode: 0o755 });
+
+      // pnpm global prefix on macOS: ~/Library/pnpm/global/5/node_modules
+      const pnpmPkgDir = path.join(
+        userHome,
+        'Library',
+        'pnpm',
+        'global',
+        '5',
+        'node_modules',
+        'trace-mcp',
+        'dist',
+      );
+      fs.mkdirSync(pnpmPkgDir, { recursive: true });
+      const pnpmCli = path.join(pnpmPkgDir, 'cli.js');
+      fs.writeFileSync(pnpmCli, '// pnpm cli\n');
+
+      const traceHome = path.join(userHome, '.trace');
+      const shimDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(shimDir, { recursive: true });
+      const shim = path.join(shimDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shim);
+      fs.chmodSync(shim, 0o755);
+
+      writeConfig(traceHome, node, '/dead/cli.js');
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain(fs.realpathSync(pnpmCli));
+    });
+
+    it('resolves cli.js from ~/.local/lib/node_modules (TRA-1259)', () => {
+      const userHome = fs.mkdtempSync(path.join(FIXTURES, 'user-home-'));
+      const localBin = path.join(userHome, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      const node = path.join(localBin, 'node');
+      fs.writeFileSync(node, fakeNodeBody('22.22.2', 'CONFIG_NODE'), { mode: 0o755 });
+
+      const localPkgDir = path.join(userHome, '.local', 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(localPkgDir, { recursive: true });
+      const localCli = path.join(localPkgDir, 'cli.js');
+      fs.writeFileSync(localCli, '// local cli\n');
+
+      const traceHome = path.join(userHome, '.trace');
+      const shimDir = path.join(traceHome, 'bin');
+      fs.mkdirSync(shimDir, { recursive: true });
+      const shim = path.join(shimDir, 'trace');
+      fs.copyFileSync(LAUNCHER_SRC, shim);
+      fs.chmodSync(shim, 0o755);
+
+      writeConfig(traceHome, node, '/dead/cli.js');
+
+      const isolatedHome = fs.mkdtempSync(path.join(FIXTURES, 'isolated-home-'));
+
+      const res = spawnSync(shim, ['serve'], {
+        env: {
+          HOME: isolatedHome,
+          PATH: '/usr/bin:/bin',
+        },
+        encoding: 'utf-8',
+        timeout: LAUNCHER_TIMEOUT_MS,
+      });
+
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain(fs.realpathSync(localCli));
+    });
   });
 });

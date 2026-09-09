@@ -432,6 +432,12 @@ function Get-NodeCandidates {
         if ($nodeExe) { $found += $nodeExe.FullName }
     }
 
+    # 4e. pnpm node
+    if ($env:PNPM_HOME) {
+        $pnpmNode = Join-Path $env:PNPM_HOME 'node.exe'
+        if (Test-NodeBinary $pnpmNode) { $found += $pnpmNode }
+    }
+
     return $found
 }
 
@@ -480,6 +486,18 @@ function Get-PkgRoots {
     $roots = @()
     # npm-global layout on Windows places global modules in %APPDATA%\npm\node_modules\.
     if ($env:APPDATA) { $roots += (Join-Path $env:APPDATA 'npm\node_modules') }
+    # pnpm global layout
+    if ($env:PNPM_HOME) {
+        $roots += (Join-Path $env:PNPM_HOME 'global\5\node_modules')
+        $roots += (Join-Path $env:PNPM_HOME 'node_modules')
+    }
+    if ($env:LOCALAPPDATA) {
+        $roots += (Join-Path $env:LOCALAPPDATA 'pnpm\global\5\node_modules')
+    }
+    if ($env:USERPROFILE) {
+        $roots += (Join-Path $env:USERPROFILE '.local\lib\node_modules')
+        $roots += (Join-Path $env:USERPROFILE '.pnpm-global\5\node_modules')
+    }
     $nodes = @()
     if ($NodeExe) { $nodes += $NodeExe }
     $nodes += (Get-NodeCandidates)

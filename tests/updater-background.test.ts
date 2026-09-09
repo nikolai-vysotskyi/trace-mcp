@@ -160,4 +160,29 @@ describe('scheduleBackgroundUpdate (TRA-703)', () => {
     const timer = spy.mock.results[0]?.value as { hasRef?: () => boolean };
     expect(timer.hasRef?.()).toBe(false);
   });
+
+  it('skips concurrent install when auto-update lock is held by another process (TRA-1259)', async () => {
+    const { execFile } = await import('node:child_process');
+    const os = await import('node:os');
+    const locksDir = path.join(tmpHome, 'locks');
+    fs.mkdirSync(locksDir, { recursive: true });
+    // Write a lock held by current process (alive)
+    fs.writeFileSync(
+      path.join(locksDir, 'auto-update.pid'),
+      JSON.stringify({
+        pid: process.pid,
+        started_at: Date.now(),
+        hostname: os.hostname(),
+        op: 'peer-install',
+      }),
+    );
+
+    scheduleBackgroundUpdate({ checkIntervalHours: 24 });
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    const installCalls = vi
+      .mocked(execFile)
+      .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
+    expect(installCalls.length).toBe(0);
+  });
 });
