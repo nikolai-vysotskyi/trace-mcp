@@ -13,9 +13,10 @@
  *
  * 1. **Measured only.** Reads {@link PersistentSavings.measured}, never
  *    `total_tokens_saved`. The totals include the pre-TRA-880 guess and every
- *    call whose response was never counted; the measured block is only
- *    incremented from a real `o200k_base`-scale count of the bytes that went
- *    over the wire.
+ *    call whose response was never counted; the measured block is incremented
+ *    from measured response wire bytes converted via a zero-overhead chars/4
+ *    estimate (0.250 tokens/char, reflecting the 0.220–0.368 ratio spread
+ *    observed on o200k_base across the busiest tools in harness benchmarks).
  * 2. **A floor, not a headline.** Dollars are priced at the cheapest current
  *    Claude input rate, so the figure understates for anyone on a bigger model
  *    — the same convention `docs/_data/adoption.yml` already publishes under.
@@ -55,7 +56,7 @@ export interface SavingsReport {
   unmeasured_calls: number;
   /** Estimated tokens the same questions would have cost as raw reads. */
   baseline_tokens: number;
-  /** Real tokens trace-mcp's responses cost. */
+  /** Estimated tokens trace-mcp's responses cost (chars/4 heuristic on wire text). */
   response_tokens: number;
   /** `baseline_tokens - response_tokens`, floored per call at zero. */
   tokens_saved: number;
@@ -130,7 +131,7 @@ export function formatSavingsReport(r: SavingsReport): string {
   return [
     `Token savings${since}: at least ${fmt(r.tokens_saved)} input tokens (~$${r.usd_saved_floor.toFixed(2)})`,
     `  ${fmt(r.calls)} measured tool calls: ${fmt(r.response_tokens)} tokens returned against a ${fmt(r.baseline_tokens)}-token file-reading baseline — ${r.reduction_pct}% less.`,
-    `  "At least": dollars priced at ${r.price_model} ($${r.price_per_mtok_usd.toFixed(2)}/Mtok input), the cheapest current rate; the baseline half is an estimate.`,
+    `  "At least": dollars priced at ${r.price_model} ($${r.price_per_mtok_usd.toFixed(2)}/Mtok input), the cheapest current rate; baseline is estimated, responses use chars/4 (~0.25 tokens/char; harness ratio spread 0.220–0.368).`,
     r.unmeasured_calls > 0
       ? `  ${fmt(r.unmeasured_calls)} calls are excluded — recorded before their responses were measured.`
       : null,

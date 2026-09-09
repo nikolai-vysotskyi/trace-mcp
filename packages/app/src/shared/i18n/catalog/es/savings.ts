@@ -13,7 +13,7 @@ export const savings = {
   rowSince: 'Contando desde',
   unknown: 'Desconocido',
   sectionMethod: 'Método',
-  methodBody: 'La mitad devuelta es un recuento real de los tokens que pasaron por el cable. La mitad de base —lo que habrían costado las mismas preguntas leyendo archivos— sigue siendo una estimación, así que esta cifra es un suelo, no un titular.',
+  methodBody: 'La mitad devuelta es una estimación (caracteres/4) de los tokens que pasaron por el cable. La mitad de base —lo que habrían costado las mismas preguntas leyendo archivos— sigue siendo una estimación, así que esta cifra es un suelo, no un titular.',
   methodLink: 'Leer el método',
   notEnoughTitle: 'Todavía no hay suficientes llamadas medidas',
   notEnoughSubtitle: 'Usa trace-mcp desde tu agente un tiempo y vuelve a mirar.',

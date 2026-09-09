@@ -7681,6 +7681,10 @@ Three properties it carries, and why:
   `total_tokens_saved` — which on any store written before this includes the
   `calls x constant` guess — is never read. An install upgrading from an older
   build therefore starts from "not enough data", not from an inflated total.
+  While the harness benchmark table above uses exact `o200k_base` counts, the
+  runtime per-install tracker converts measured response wire characters using
+  a zero-overhead `chars / 4` estimate (~0.250 tokens/char, reflecting the
+  0.220–0.368 empirical spread measured across the 25 busiest tools).
 - **A floor.** Dollars are priced at the cheapest current Claude input rate, so
   the figure understates for everyone on a larger model. The baseline half is
   still `RAW_COST_ESTIMATES`, i.e. an estimate, which is why the wording is
