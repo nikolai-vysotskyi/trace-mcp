@@ -11,6 +11,7 @@
  * leaf `topology-types` and are re-exported below for public-API back-compat.
  */
 
+import fs from 'node:fs';
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
@@ -212,40 +213,64 @@ export class TopologyStore {
   private readonly snapshots: SnapshotOperations;
 
   constructor(dbPath: string, opts?: { readonly?: boolean }) {
-    this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
-    if (opts?.readonly) {
-      this.db.pragma('busy_timeout = 5000');
-      logger.debug({ dbPath, readonly: true }, 'Topology database opened (readonly)');
-    } else {
-      restrictDbPerms(dbPath);
-      this.db.pragma('journal_mode = WAL');
-
-      this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
-      this.db.pragma('foreign_keys = ON');
-      this.db.pragma('busy_timeout = 5000');
-      this.preMigrate();
-      this.db.exec(TOPOLOGY_DDL);
-      this.migrate();
-      logger.debug({ dbPath }, 'Topology database initialized');
+    // If a zero-byte WAL file exists on disk (e.g. from an abrupt truncate,
+    // incomplete checkpoint, or unlinked remnant), SQLite fails on open/pragma
+    // with SQLITE_IOERR_SHORT_READ because it cannot read the 32-byte WAL header.
+    // Clean up empty 0-byte sidecar files before initializing.
+    const walPath = `${dbPath}-wal`;
+    if (!opts?.readonly && fs.existsSync(walPath)) {
+      try {
+        if (fs.statSync(walPath).size === 0) {
+          fs.unlinkSync(walPath);
+        }
+      } catch {
+        /* best-effort */
+      }
     }
 
-    // Per-entity operation modules — each takes the raw DB handle; the two that
-    // read across entities receive a small callback deps object instead of
-    // importing sibling op classes (which would risk an import cycle).
-    this.services = new ServiceOperations(this.db);
-    this.contracts = new ContractOperations(this.db);
-    this.endpoints = new EndpointOperations(this.db);
-    this.events = new EventOperations(this.db);
-    this.edges = new CrossServiceEdgeOperations(this.db);
-    this.subprojects = new SubprojectOperations(this.db, {
-      deleteService: (id) => this.services.deleteService(id),
-    });
-    this.clientCalls = new ClientCallOperations(this.db, {
-      getAllEndpoints: () => this.endpoints.getAllEndpoints(),
-      getAllServices: () => this.services.getAllServices(),
-      getAllSubprojects: () => this.subprojects.getAllSubprojects(),
-    });
-    this.snapshots = new SnapshotOperations(this.db);
+    this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
+    try {
+      if (opts?.readonly) {
+        this.db.pragma('busy_timeout = 5000');
+        logger.debug({ dbPath, readonly: true }, 'Topology database opened (readonly)');
+      } else {
+        restrictDbPerms(dbPath);
+        this.db.pragma('journal_mode = WAL');
+
+        this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
+        this.db.pragma('foreign_keys = ON');
+        this.db.pragma('busy_timeout = 5000');
+        this.preMigrate();
+        this.db.exec(TOPOLOGY_DDL);
+        this.migrate();
+        logger.debug({ dbPath }, 'Topology database initialized');
+      }
+
+      // Per-entity operation modules — each takes the raw DB handle; the two that
+      // read across entities receive a small callback deps object instead of
+      // importing sibling op classes (which would risk an import cycle).
+      this.services = new ServiceOperations(this.db);
+      this.contracts = new ContractOperations(this.db);
+      this.endpoints = new EndpointOperations(this.db);
+      this.events = new EventOperations(this.db);
+      this.edges = new CrossServiceEdgeOperations(this.db);
+      this.subprojects = new SubprojectOperations(this.db, {
+        deleteService: (id) => this.services.deleteService(id),
+      });
+      this.clientCalls = new ClientCallOperations(this.db, {
+        getAllEndpoints: () => this.endpoints.getAllEndpoints(),
+        getAllServices: () => this.services.getAllServices(),
+        getAllSubprojects: () => this.subprojects.getAllSubprojects(),
+      });
+      this.snapshots = new SnapshotOperations(this.db);
+    } catch (err) {
+      try {
+        this.db.close();
+      } catch {
+        /* best-effort */
+      }
+      throw err;
+    }
   }
 
   /**

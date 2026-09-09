@@ -143,3 +143,58 @@ describe('createLightweightProjectRelay (stdio path, TRA-93)', () => {
     relay.dispose();
   });
 });
+
+describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
+  it('deduplicates acquire calls and caches handle across different subpaths of the same root', async () => {
+    const { registerProject } = await import('../../registry.js');
+    const { createDaemonProjectRelay } = await import('../project-relay.js');
+    const { initializeDatabase } = await import('../../db/schema.js');
+    const { Store } = await import('../../db/store.js');
+    const { PluginRegistry } = await import('../../plugin-api/registry.js');
+    const { ProgressState } = await import('../../progress.js');
+    const { loadConfig } = await import('../../config.js');
+
+    registerProject(projectA);
+
+    const db = initializeDatabase(join(tmpHome, 'test.db'));
+    const store = new Store(db);
+    const registry = PluginRegistry.createWithDefaults();
+    const progress = new ProgressState(db);
+    const configResult = await loadConfig(projectA);
+    if (configResult.isErr()) throw new Error('loadConfig failed');
+
+    const mockProjectManager = {
+      getProject: vi.fn().mockReturnValue({
+        root: projectA,
+        store,
+        registry,
+        config: configResult.value,
+        progress,
+      }),
+      addProject: vi.fn(),
+    };
+
+    const mockResourcePool = {
+      acquire: vi.fn().mockReturnValue({}),
+      release: vi.fn(),
+    };
+
+    const relay = createDaemonProjectRelay(mockProjectManager as any, mockResourcePool as any);
+
+    const subpath1 = join(projectA, 'sub1');
+    const subpath2 = join(projectA, 'sub2');
+
+    const handle1 = await relay.openProject(subpath1);
+    const handle2 = await relay.openProject(subpath2);
+
+    expect(handle1).not.toBeNull();
+    expect(handle2).toBe(handle1);
+    expect(mockResourcePool.acquire).toHaveBeenCalledTimes(1);
+    expect(mockResourcePool.acquire).toHaveBeenCalledWith(projectA, configResult.value);
+
+    relay.dispose();
+    expect(mockResourcePool.release).toHaveBeenCalledTimes(1);
+    expect(mockResourcePool.release).toHaveBeenCalledWith(projectA);
+    db.close();
+  });
+});

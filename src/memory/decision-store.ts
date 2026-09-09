@@ -413,46 +413,70 @@ export class DecisionStore {
       memoHistoryLimit?: number;
     },
   ) {
+    // If a zero-byte WAL file exists on disk (e.g. from an abrupt truncate,
+    // incomplete checkpoint, or unlinked remnant), SQLite fails on open/pragma
+    // with SQLITE_IOERR_SHORT_READ because it cannot read the 32-byte WAL header.
+    // Clean up empty 0-byte sidecar files before initializing.
+    const walPath = `${dbPath}-wal`;
+    if (!opts?.readonly && fs.existsSync(walPath)) {
+      try {
+        if (fs.statSync(walPath).size === 0) {
+          fs.unlinkSync(walPath);
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+
     this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
-    this.auditLogger = opts?.auditLogger ?? null;
-    this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
-    this.mutationOps = new MutationOperations(this.db, this.auditLogger);
-    this.memoOps = new MemoOperations(this.db, this.memoHistoryLimit);
-    this.clusterOps = new ClusterOperations(this.db);
-    this.schedulerOps = new SchedulerStateOperations(this.db);
-    this.consolidationOps = new ConsolidationOperations(this.db, {
-      getDecision: (id) => this.getDecision(id),
-      updateDecision: (id, patch) => {
-        this.updateDecision(id, patch);
-      },
-      invalidateDecision: (id) => {
-        this.invalidateDecision(id);
-      },
-    });
-    this.sessionOps = new SessionOperations(this.db);
-    this.queryOps = new QueryOperations(this.db, {
-      getDecision: (id) => this.getDecision(id),
-    });
-    this.reviewOps = new ReviewOperations(this.db, {
-      getDecision: (id) => this.getDecision(id),
-    });
-    if (opts?.readonly) {
-      this.db.pragma('busy_timeout = 5000');
-      logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
-    } else {
-      restrictDbPerms(dbPath);
-      this.db.pragma('journal_mode = WAL');
-      // Bound WAL/journal growth: long-running daemons accumulating decisions
-      // would otherwise grow `*-wal` unbounded between checkpoints. 100 MiB is
-      // enough headroom for normal write bursts but caps worst-case disk use.
-      this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
-      this.db.pragma('foreign_keys = ON');
-      this.db.pragma('busy_timeout = 5000');
-      this.preMigrate();
-      this.db.exec(DECISIONS_DDL);
-      this.migrate();
-      this.scheduleWalCheckpoint();
-      logger.debug({ dbPath }, 'Decision store initialized');
+    try {
+      this.auditLogger = opts?.auditLogger ?? null;
+      this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
+      this.mutationOps = new MutationOperations(this.db, this.auditLogger);
+      this.memoOps = new MemoOperations(this.db, this.memoHistoryLimit);
+      this.clusterOps = new ClusterOperations(this.db);
+      this.schedulerOps = new SchedulerStateOperations(this.db);
+      this.consolidationOps = new ConsolidationOperations(this.db, {
+        getDecision: (id) => this.getDecision(id),
+        updateDecision: (id, patch) => {
+          this.updateDecision(id, patch);
+        },
+        invalidateDecision: (id) => {
+          this.invalidateDecision(id);
+        },
+      });
+      this.sessionOps = new SessionOperations(this.db);
+      this.queryOps = new QueryOperations(this.db, {
+        getDecision: (id) => this.getDecision(id),
+      });
+      this.reviewOps = new ReviewOperations(this.db, {
+        getDecision: (id) => this.getDecision(id),
+      });
+      if (opts?.readonly) {
+        this.db.pragma('busy_timeout = 5000');
+        logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
+      } else {
+        restrictDbPerms(dbPath);
+        this.db.pragma('journal_mode = WAL');
+        // Bound WAL/journal growth: long-running daemons accumulating decisions
+        // would otherwise grow `*-wal` unbounded between checkpoints. 100 MiB is
+        // enough headroom for normal write bursts but caps worst-case disk use.
+        this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
+        this.db.pragma('foreign_keys = ON');
+        this.db.pragma('busy_timeout = 5000');
+        this.preMigrate();
+        this.db.exec(DECISIONS_DDL);
+        this.migrate();
+        this.scheduleWalCheckpoint();
+        logger.debug({ dbPath }, 'Decision store initialized');
+      }
+    } catch (err) {
+      try {
+        this.db.close();
+      } catch {
+        /* best-effort */
+      }
+      throw err;
     }
   }
 

@@ -66,6 +66,12 @@ export function createDaemonProjectRelay(
       const resolved = resolveRegisteredRoot(abs);
       if (!resolved) return null;
 
+      const cachedRoot = cache.get(resolved.root);
+      if (cachedRoot) {
+        cache.set(abs, cachedRoot);
+        return cachedRoot;
+      }
+
       let managed = projectManager.getProject(resolved.root);
       if (!managed) {
         try {
@@ -93,7 +99,10 @@ export function createDaemonProjectRelay(
         // TRA-951: shared server, never a client session's own surface.
         { ...deps, serveFullSurface: true, skipUsagePing: true },
       );
-      cache.set(abs, handle);
+      cache.set(resolved.root, handle);
+      if (abs !== resolved.root) {
+        cache.set(abs, handle);
+      }
       return handle;
     },
     dispose() {
