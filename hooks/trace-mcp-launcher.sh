@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.6.14
+# trace-mcp-launcher v0.6.15
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a probe
 # fallback for when the config is stale (e.g. Node was reinstalled, or the
@@ -307,7 +307,7 @@ node_major() {
 node_runtime_shim_ok() {
   local line target='' marked=0 i=0
   case "$1" in
-    */node-runtime) ;;
+    */node-runtime|node-runtime) ;;
     *) return 0 ;;
   esac
   [ -f "$1" ] && [ -r "$1" ] || return 1
@@ -496,10 +496,30 @@ cli_from_app_bundle() {
   is_usable_script "$cli" && normalise_path "$cli"
 }
 
-# True when $1 is the app's own binary, which only runs as Node with this set.
+# True when $1 is the app's own binary, or a node-runtime shim whose target
+# is inside an .app bundle.
 is_app_runtime() {
   case "$1" in
     *.app/Contents/MacOS/*) return 0 ;;
+    */node-runtime|node-runtime)
+      if [ -f "$1" ] && [ -r "$1" ]; then
+        local line target='' i=0
+        while [ "$i" -lt 8 ] && IFS= read -r line; do
+          i=$((i + 1))
+          line="${line%$'\r'}"
+          case "$line" in
+            'exec "'*'" "$@"')
+              target="${line#exec \"}"
+              target="${target%\" \"\$@\"}"
+              ;;
+          esac
+        done < "$1"
+        case "$target" in
+          *.app/Contents/MacOS/*) return 0 ;;
+        esac
+      fi
+      return 1
+      ;;
     *) return 1 ;;
   esac
 }
@@ -871,6 +891,19 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
   fi
 fi
 
+# An app runtime (Electron with Hardened Runtime / ABI 145) can only run the
+# server bundled inside the app. Exec-ing an external npm package fails with
+# ERR_DLOPEN_FAILED (macOS Team ID mismatch) and NODE_MODULE_VERSION mismatch.
+if [ "$USING_OVERRIDE" = 0 ] && is_app_runtime "$NODE_PATH" && [ -n "$CLI_PATH" ]; then
+  case "$CLI_PATH" in
+    *.app/Contents/Resources/server/dist/cli.js) ;;
+    *)
+      log "ERROR: app runtime node=$NODE_PATH cannot load external package cli=$CLI_PATH (Team ID / ABI mismatch) — reprobing"
+      CLI_PATH=""
+      ;;
+  esac
+fi
+
 # The version gate is also the liveness gate, and it runs on EVERY start.
 #
 # It used to be skipped whenever launcher.env carried a cached
@@ -924,22 +957,44 @@ if [ -z "$NODE_PATH" ] || [ ! -x "$NODE_PATH" ]; then
 fi
 
 if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
-  ROOTS=$(pkg_roots "$NODE_PATH")
-  CLI_PATH=$(probe_cli "$ROOTS") || {
-    # An update (npm install -g or self-update) may be swapping the package
-    # directory right this second. Wait briefly and retry before declaring
-    # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
-    # kills the session permanently.
-    retry=0
-    while [ "$retry" -lt 5 ]; do
-      sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
-      retry=$((retry + 1))
-      CLI_PATH=$(probe_cli "$ROOTS") && break
-    done
-    [ -n "$CLI_PATH" ] || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
-  }
-  log "probe: cli=$CLI_PATH"
-  HEALED=1
+  if is_app_runtime "$NODE_PATH"; then
+    CLI_PATH=$(cli_from_app_bundle) || CLI_PATH=""
+    if [ -n "$CLI_PATH" ]; then
+      log "probe: cli=$CLI_PATH"
+      HEALED=1
+    else
+      # An app runtime cannot run external npm packages (Team ID / ABI mismatch).
+      # If the app bundle has no cli.js, drop the app runtime and reprobe a real node.
+      log "app runtime node=$NODE_PATH has no bundled cli.js — reprobing for a real node"
+      NODE_PATH=""
+      if ! NODE_PATH=$(probe_node); then
+        if [ -n "$(node_candidates)" ]; then
+          die "no Node.js >= $NODE_MIN_MAJOR found — trace-mcp needs it; upgrade Node or set TRACE_MCP_NODE_OVERRIDE"
+        fi
+        die "node binary not found — install Node.js (brew install node / nvm / volta) or set TRACE_MCP_NODE_OVERRIDE"
+      fi
+      log "probe: node=$NODE_PATH"
+      HEALED=1
+    fi
+  fi
+  if [ -z "$CLI_PATH" ] || ! is_usable_script "$CLI_PATH"; then
+    ROOTS=$(pkg_roots "$NODE_PATH")
+    CLI_PATH=$(probe_cli "$ROOTS") || {
+      # An update (npm install -g or self-update) may be swapping the package
+      # directory right this second. Wait briefly and retry before declaring
+      # a fatal error — MCP clients tolerate a 1-2s start delay but exit 127
+      # kills the session permanently.
+      retry=0
+      while [ "$retry" -lt 5 ]; do
+        sleep 0.3 2>/dev/null || sleep 1 2>/dev/null || true
+        retry=$((retry + 1))
+        CLI_PATH=$(probe_cli "$ROOTS") && break
+      done
+      [ -n "$CLI_PATH" ] || die "trace-mcp package not found in any known npm prefix — run: npm i -g trace-mcp && trace-mcp init"
+    }
+    log "probe: cli=$CLI_PATH"
+    HEALED=1
+  fi
 fi
 
 # Overrides are a debugging escape hatch; never bake them into the config.
