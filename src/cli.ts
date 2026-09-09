@@ -46,6 +46,7 @@ import { detectCoverageRecursive } from './analytics/tech-detector.js';
 import { addCommand } from './cli/add.js';
 import { analyticsCommand, benchmarkCommand } from './cli/analytics.js';
 import { askCommand } from './cli/ask.js';
+import { blastCommand } from './cli/blast.js';
 import { bundlesCommand } from './cli/bundles.js';
 import { checkCommand } from './cli/check.js';
 import { clientsCommand } from './cli/clients.js';
@@ -3776,6 +3777,7 @@ program.addCommand(daemonCommand);
 program.addCommand(installAppCommand);
 program.addCommand(askCommand);
 program.addCommand(searchCommand);
+program.addCommand(blastCommand);
 program.addCommand(exportSecurityContextCommand);
 
 // Tiny synchronous subcommand consumed by the shell PreToolUse guard
