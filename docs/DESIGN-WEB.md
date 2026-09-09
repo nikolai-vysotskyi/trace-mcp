@@ -856,10 +856,15 @@ opposite end still reads as a second button when the two sit side by side. Off m
 gains `.is-primary` and is the hero's only action.
 
 **The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
-`max-width: 900px` is the pair that breaks the current wording after
-"intelligence" and nowhere else; at `72px/820px` it ran to three lines and split
-"AI coding agents" across two of them. Change the wording, re-measure the line
-count at 1440px and at 390px.
+`max-width: 900px` breaks the current wording (`trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.`)
+into exactly three balanced lines at 1440px and 1200px:
+- `trace-mcp indexes what your` (27 chars)
+- `agent keeps re-reading, and` (27 chars)
+- `serves the answer instead.` (26 chars)
+At 390px, `clamp(30px, 8vw, 44px)` over `100%` breaks it into four lines
+(131px height): `trace-mcp indexes` / `what your agent keeps` /
+`re-reading, and serves` / `the answer instead.`. Change the wording,
+re-measure the line count at 1440px and at 390px.
 
 **The mono caps row stacks below 700px, and is never a wrapped flex row on a
 phone** (TRA-607, inherited by `.hero-note` in TRA-738). A `flex-wrap` row of
@@ -900,7 +905,7 @@ run reads your numbers as the truth.
 
 ## 9. The landing footer
 
-The counterpart to §2's `See also` block: the same 22 pages, from the same
+The counterpart to §2's `See also` block: the 33 pages (and growing), from the same
 `docs/_data/docs_nav.yml`, on a page that does not use the layout. It used to
 be two hand-written columns naming 12 of them, and it had drifted past the
 whole `/vs/` cluster (TRA-629). **Never hand-write this list.** Which pages
@@ -908,7 +913,7 @@ are in it, what they are called and in what order is the SEO agent's, exactly
 as in §2 — this section governs the layout only.
 
 **`/ Docs` spans two of the four grid tracks, and two rows.** Two tracks
-because 22 links in one track runs 22 rows deep beside a 4-row `/ Product`.
+because 33 links in one track runs 33 rows deep beside a 4-row `/ Product`.
 Two rows because `/ Product` + `/ Docs` + `/ Source` already fill row one, so
 `/ Contact` lands on a row of its own with three empty tracks beside it;
 letting `/ Docs` claim the second row pulls `/ Contact` up under `/ Product`
@@ -937,10 +942,12 @@ sub-columns is the better answer, which is what the floor buys. Re-measure it
 against the longest label whenever `docs_nav.yml` gains one — the intrinsic
 width of a Space Mono 12px label at `0.04em`, not an estimate.
 
-`PR review context benchmark` and `Cut Claude Code token usage` are 212px and
-take two lines in every layout; a sub-column wide enough for them fits two,
-not three. `break-inside: avoid` keeps each one whole so it still reads as a
-single target, the same one-cell-per-link rule as §2.
+`What trace init installs`, `PR review context benchmark`, `Cut Claude Code token usage`,
+and `Tool response token cost` are wide enough to take two lines at the 176px floor;
+a sub-column wide enough for them fits two, not three. `break-inside: avoid` keeps
+each one whole so it still reads as a single target, the same one-cell-per-link rule
+as §2. At 1200px (260px column) and 390px (350px column), all 33 labels fit on a
+single line.
 
 ---
 
