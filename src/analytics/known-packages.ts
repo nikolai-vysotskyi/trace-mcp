@@ -1027,9 +1027,13 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   '@sentry/nextjs': { category: 'infra', priority: 'low', plugin: null },
   '@sentry/browser': { category: 'infra', priority: 'low', plugin: null },
   'sentry/sentry-laravel': { category: 'infra', priority: 'low', plugin: null },
-  '@opentelemetry/api': { category: 'infra', priority: 'medium', plugin: null },
-  '@opentelemetry/sdk-node': { category: 'infra', priority: 'medium', plugin: null },
-  '@opentelemetry/auto-instrumentations-node': { category: 'infra', priority: 'low', plugin: null },
+  '@opentelemetry/api': { category: 'infra', priority: 'medium', plugin: 'opentelemetry' },
+  '@opentelemetry/sdk-node': { category: 'infra', priority: 'medium', plugin: 'opentelemetry' },
+  '@opentelemetry/auto-instrumentations-node': {
+    category: 'infra',
+    priority: 'low',
+    plugin: 'opentelemetry',
+  },
   'dd-trace': { category: 'infra', priority: 'medium', plugin: null },
   newrelic: { category: 'infra', priority: 'medium', plugin: null },
 

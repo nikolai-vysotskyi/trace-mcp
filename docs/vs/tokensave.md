@@ -1,6 +1,6 @@
 ---
 title: "TokenSave Alternative: trace-mcp vs TokenSave for AI agents"
-description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 87 framework integrations, AST refactoring, and OWASP taint analysis."
+description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 88 framework integrations, AST refactoring, and OWASP taint analysis."
 updated: 2026-09-08
 ---
 
@@ -127,7 +127,7 @@ trace-mcp addresses context overhead architecturally through **Adaptive Task Pre
 - **Workflow-tailored presets**: Dedicated presets for `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
-### 2. Pure Syntax Parsing vs. 87 Framework Semantic Integrations
+### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations
 
 Both trace-mcp and TokenSave parse source code using tree-sitter grammars. Where they diverge is how structural syntax is translated into architectural comprehension.
 

@@ -34,7 +34,7 @@ tools: 181
 # keep prose numbers — and since TRA-1086 those numbers must equal the value
 # here exactly, like every other guarded surface. There is no ±tolerance left.
 languages: 81
-frameworks: 87
+frameworks: 88
 
 # TRA-419: `server.resource(...)` registrations under src/tools/register/. Two
 # pages typed "9" while the code registered 10 — the ±2 tolerance the old guard
