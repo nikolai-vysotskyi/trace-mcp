@@ -21,7 +21,7 @@ describe('remote claim surfaces (TRA-1120)', () => {
    */
   const MEASURED = `${anchor.savings[0]}%`;
   const CLEAN =
-    'Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, ' +
+    'Framework-aware code intelligence MCP server — 88 framework integrations, 81 languages, ' +
     `${MEASURED} fewer input tokens to review a pull request`;
 
   it('reads its anchors out of docs/_data/, not out of prose', () => {

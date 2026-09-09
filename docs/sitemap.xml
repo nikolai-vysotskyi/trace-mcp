@@ -110,7 +110,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/configuration.html</loc>
-    <lastmod>2026-09-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -128,13 +128,13 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/supported-frameworks.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://trace-mcp.com/analytics.html</loc>
-    <lastmod>2026-09-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -158,7 +158,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/language-matrix.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -182,7 +182,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/quality-gates.html</loc>
-    <lastmod>2026-09-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
@@ -194,7 +194,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/development.html</loc>
-    <lastmod>2026-09-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
