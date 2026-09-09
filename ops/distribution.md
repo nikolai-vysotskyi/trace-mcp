@@ -84,6 +84,7 @@ Rules for keeping it honest:
 | [Chat2AnyLLM/awesome-claude-plugins](https://github.com/Chat2AnyLLM/awesome-claude-plugins) | **Yes — never submitted** (115★) | README line 1339, in a machine-generated table of scanned Claude plugin repos: our repo, branch `master`, `.claude-plugin` detected, status ✅ ok | Nothing to submit — it scans repos carrying a `.claude-plugin` directory. Found by code search 2026-09-05, not by a directory hunt | 2026-09-05 |
 | [linny006/mcp-servers-live](https://github.com/linny006/mcp-servers-live) + [its Pages site](https://linny006.github.io/mcp-servers-live/r/nikolai-vysotskyi/trace-mcp/) | **Yes — never submitted** | Auto-index of MCP servers refreshed every 15 minutes; we are #49 by stars with a per-repo page. Its whole body is our GitHub description, repeated 5× on that page | Nothing to submit. Links only `github.com`, never `trace-mcp.com`, so it adds nothing to the domain count below. Its value is that it demonstrates the description-propagation above | 2026-09-05 |
 | [linny006/trending-claude-skills](https://github.com/linny006/trending-claude-skills) | **Yes — never submitted** | Trending table, **rank 3**, 133★, same auto-copied description | Same scraper family as the row above; one operator, two indexes. Nothing to submit | 2026-09-05 |
+| [linny006/claude-code-plugin-tracker](https://github.com/linny006/claude-code-plugin-tracker) | **Yes — never submitted** | Auto-scraped Claude Code plugin index, rank 13, 175★ in `README.md` and `data/items.json`. Carries our exact GitHub description | Same scraper family as the two rows above; one operator, three indexes. Nothing to submit | 2026-09-10 |
 | [apiiskan/ai-agent-radar](https://github.com/apiiskan/ai-agent-radar/issues/16) | **Yes — never submitted** | A Chinese-language daily radar of AI-agent repos, published as GitHub issues. We are **#5 of the day** in the 2026-08-03 digest, score 45.69, one line of description plus the full topic list | Nothing to submit, and the scoring formula is the interesting part: it is readable in the entry itself — README present, licence, tests, an MCP entry point, days since last push, days since creation, and **topic matches**. That is the third auto-index in a row whose input is the repo topics row below, and the first one that prints its weights. Found by the issue-index sweep, not by a directory hunt | 2026-09-06 |
 | [GetBindu/awesome-claude-code-and-skills](https://github.com/GetBindu/awesome-claude-code-and-skills) | **Submitted, not merged** — [PR #195](https://github.com/GetBindu/awesome-claude-code-and-skills/pull/195), opened 2026-09-06 | One entry appended to `Productivity Tools → MCP Servers & Integrations`, the section `oraios/serena` opens (188★) | PR to `readme.md`; CONTRIBUTING is four points in the readme itself, no account, no scanner, no payment, and `Contents` is section-level so an entry never touches it. **This one passes the commit-log test the other two lists failed:** eight external PRs merged in August (`aragossa`, `therohitdas`, `aaronjmars`, `musoyangrigor`, `yotta-fish`), the last on 2026-08-31, by a maintainer who merges other people's entries rather than only adding his own. Queue is 38 open. Do not ping before 2026-09-20 | 2026-09-06 |
 | [Arnon-hs/open-source](https://github.com/Arnon-hs/open-source/blob/main/mcp/nikolai-vysotskyi-trace-mcp.md) | **Yes — never submitted** (89★) | A generated page of its own under `mcp/` **and** a second under `aiml/`: badges, a 67/100 score, our topic list, a practical-evaluation block, and an LLM-written summary in English, Russian and Chinese | Nothing to submit — and this is the row that changes how the auto-index channel should be valued, see the note below the table. It is **not** verbatim: the summary expands "MCP" to "Message Control Protocol" and the stars are 67 against a live 146 | 2026-09-06 |
@@ -2007,6 +2008,54 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 - `TheHalfMoon/Golam#25` (0★, internal source qualification issue comparing ripwire).
 - `tyldra-org/falryn#990` (large internal testing qualification spec).
 - `headroomlabs-ai/headroom#3495` (70.9k★, user Cort Fritz already has branch implemented and is awaiting maintainer thumbs-up).
+
+### Fourteenth pass, 2026-09-10 (TRA-1281): Maintainer thread audits, linny006 third tracker, and MobinX queue analysis
+
+**Maintainer responses and open thread verification:**
+- `hashgraph-online/awesome-ai-plugins#182`: Closed and merged 2026-08-31 by `kantorcodes`. The subsequent bot/maintainer comments on 2026-09-03 requested ownership verification via GitHub OAuth on `hol.org/guard/plugins`, which was declined per workspace security policy (third-party OAuth login for a badge). The listing itself is live in the catalog; no response owed.
+- All 5 open catalog PRs re-verified:
+  - `eltociear/awesome-AI-driven-development#119`: Open, 0 comments, submitted 2026-09-06. (Do not ping before 2026-09-20).
+  - `GetBindu/awesome-claude-code-and-skills#195`: Open, 0 comments, submitted 2026-09-06. (Do not ping before 2026-09-20).
+  - `yzfly/awesome-context-engineering#44`: Open, 0 comments, submitted 2026-09-05. (Re-check 2026-09-19).
+  - `ai-boost/awesome-harness-engineering#240`: Open, 0 comments, submitted 2026-09-05. (Re-read 2026-10-05).
+  - `tolkonepiu/best-of-mcp-servers#384`: Open, 0 comments, submitted 2026-08-29. (Do not ping before 2026-09-26).
+  All 5 remain open, 0 unaddressed comments or maintainer reviews, awaiting maintainer triage cycles. Deadlines intact.
+- External issues and prior outreach threads re-verified:
+  - `0xNyk/awesome-hermes-agent#395`: Open, 0 comments. (Awaiting batch triage, no ping before 2026-09-20).
+  - `natsukium/mcp-servers-nix#606`: Open, 0 comments. (No ping before 2026-09-20).
+  - `narumiruna/pi-extensions#1204`: Open, 0 comments.
+  - `mattbutlerengineering/ai-tooling#585`: Open, 0 comments. (No follow-up per TRA-857).
+  - `Dokploy/mcp#81`: 3 comments, discussion on progressive disclosure and 500-tool limit; Nikolai's architectural explanation posted 2026-09-04; no further response owed.
+
+**Mention sweep and code search:**
+- `scripts/mention-sweep.sh` executed across REST and GraphQL search:
+  - Hit 1: `linny006/claude-code-plugin-tracker` (genuine auto-index tracking Claude Code plugins by operator `linny006`, rank 13, 175★ in `README.md` and `data/items.json`). Classified, added row to Surfaces table and recorded in `ops/mentions-seen.txt`.
+  - Hit 2: `Dynatrace/dynatrace-for-ai` (collision on Dynatrace's internal gateway URL `dynatrace-mcp`). Classified and added to `ops/mentions-seen.txt`.
+  - Hit 3: `inai-sandy/inAI-wiki` (collision on unrelated 2025 HuggingFace tool named TraceMCP in `docs/reddit-news/2025/2025-11-26.md`). Classified and added to `ops/mentions-seen.txt`.
+- Standing catalog moratorium holds: 0 attributable installs from directories recorded in `ops/arrivals.md`. Zero directory submissions made.
+
+**Catalog and ecosystem findings:**
+- `MobinX/awesome-mcp-list` (880★): Evaluated for listing viability. Analysis of recent pull requests showed 30+ open external PRs dating back to August with zero merges, and recent closed PRs all show `merged_at: null`. The repository does not merge community submissions. Documented as a closed door to prevent future runs from burning effort on it.
+- `jamesmurdza/awesome-ai-devtools` (3,935★): Actively curated directory covering `Codebase Intelligence` and `Configuration & Context Management`. Verified structure and requirements.
+
+**Competitor tracking & star re-verification:**
+- Re-verified active competitor star counts against live GitHub API:
+  - `oraios/serena`: 29,089★ (29.1K)
+  - `yamadashy/repomix`: 28,268★ (28.3K)
+  - `DeusData/codebase-memory-mcp`: 42,775★ (42.8K)
+  - `mksglu/context-mode`: 21,695★ (21.7K)
+  - `redhat-et/ripwire`: 1,825★ (1.8K)
+  - `cdeust/ai-architect-mcp-codebase`: 4★ (4)
+  - `trace-mcp`: 175★ (175)
+  All figures remain consistent with `docs/_data/competitors.yml` (TRA-1283).
+
+**Checked and skipped, with reasons:**
+- `M9nx/CodexA#22` (34★, semantic code intelligence CLI bug tracker for PHP symbol references, skipped per competitor tracker isolation policy).
+- `vitali87/code-graph-rag#1494` (5,113★, direct competitor tracker, author actively implementing workspace plumbing).
+- `adhityaravi/maki#741` (0★ personal LLM assistant).
+- `dyphn1/Docuvia#192` (0★ personal doc generator).
+- `pluto-atom-4/IntVue#162` (0★ personal local repo).
+
 
 
 
