@@ -1951,5 +1951,62 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 - `DeusData/codebase-memory-mcp#2054` (direct competitor bug tracker).
 - `redhat-et/ripwire#59` (direct competitor bug tracker).
 
+### Thirteenth pass, 2026-09-09: gbrain #5001 (anonymous callbacks & arrow declarations), FM-Agent #229 (Rust receiver dispatch & SCIP tiers), and competitor ai-architect-codebase (4★)
+
+**Maintainer responses and open thread verification:**
+- External PRs and issue tracker re-checked across GitHub API:
+  - `hashgraph-online/awesome-ai-plugins#182`: Merged 2026-08-31 by `kantorcodes`. The follow-up on 2026-09-03 was a bot-templated reminder to authenticate with GitHub OAuth on `hol.org/guard/plugins` for an owner badge, which we declined per workspace security policy. The listing itself is live and merged; no response owed.
+  - All 5 open catalog PRs re-verified:
+    `eltociear/awesome-AI-driven-development#119`,
+    `GetBindu/awesome-claude-code-and-skills#195`,
+    `yzfly/awesome-context-engineering#44`,
+    `ai-boost/awesome-harness-engineering#240`,
+    `tolkonepiu/best-of-mcp-servers#384`.
+    All 5 remain open, 0 unaddressed comments or maintainer reviews, awaiting maintainer triage cycles. Deadlines intact (no pings before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
+  - External issues and prior outreach threads re-verified:
+    `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+    `narumiruna/pi-extensions#1204`, `mattbutlerengineering/ai-tooling#585`,
+    `The-PR-Agent/pr-agent#2499`, `fullsend-ai/fullsend#297`, `macanderson/stella#6461`.
+    Zero pending actions required from us.
+
+**Mention sweep and code search:**
+- `scripts/mention-sweep.sh` executed across REST and GraphQL search:
+  - Hit 1: `drguptavivek/DYNAMIC` (second repository by an existing user with `.trace-mcp/` in `CLAUDE.md` commit conventions alongside `.serena/`). Classified and added to `ops/mentions-seen.txt`.
+  - Hit 2: `Nova-Hunting/nova-tracer` (collision on `.trace-mcp` CSS class in `report_generator.py`). Classified and added to `ops/mentions-seen.txt`.
+- Standing catalog moratorium holds: 0 attributable installs from directories recorded in `ops/arrivals.md`. Zero directory submissions made.
+
+**Two technical outreach contributions posted on GitHub:**
+
+- [`garrytan/gbrain#5001`](https://github.com/garrytan/gbrain/issues/5001#issuecomment-5601272030)
+  (29,753★, OpenClaw/Hermes agent brain by Garry Tan).
+  User `ShahriarLak` filed two tree-sitter call graph defects: anonymous callbacks (`it()`, `.map()`, `useEffect()`) dropping caller edges because of missing named enclosing symbols; and exported arrow functions receiving `symbol_type: "export statement"` / `"lexical declaration"`, causing definition resolution to fail (`resolved:false`). We contributed concrete AST grammar mechanics from our TypeScript plugin:
+  1. Tree-sitter AST declarator unwrapping: `export const foo = () => ...` produces `export_statement` -> `lexical_declaration` -> `variable_declarator`. Inspecting `declarator.childForFieldName('value')` for `arrow_function` or `function_expression` reclassifies the symbol as `kind = "function"`, allowing definition matchers to succeed.
+  2. Anonymous callback caller attribution: walking up AST from `call_expression` without finding a named function/method declaration should not drop the edge; attributing to a synthetic file/module symbol (`__module__:<filename>`) preserves the caller edge and line numbers so agents don't see false-zero blast radius.
+  3. Separating type references from runtime calls: distinguishing `type_identifier` inside `type_annotation` / `type_arguments` from `call_expression` to eliminate type pollution (`Record`, `BoxRow`) in `code-callees`.
+
+- [`fmagent-project/FM-Agent#229`](https://github.com/fmagent-project/FM-Agent/issues/229#issuecomment-5601274875)
+  (469★, foundation model coding agent framework).
+  Maintainer profiled 11 Rust receiver shapes where purely syntactic codegraph drops receiver types and resolves by closest file path directory proximity (e.g. `self.init()` in `impl StaticLinkedList` incorrectly mapping to `ProcessManager::init`), proposing a migration to `rust-analyzer scip`. We shared empirical findings from our Rust indexer and SCIP ingestion pipeline:
+  1. `impl` context scoping: in tree-sitter-rust, `impl_item` carries the target struct in its `type` field (`StaticLinkedList`). Binding calls on `self` to the enclosing `impl` resolves Category 6 and Category 3 without requiring full type inference.
+  2. Operational realities of `rust-analyzer scip`: heavy cold indexing (15–40s, 1–2 GB RAM on 50k+ LoC) and position drift on uncommitted agent edits.
+  3. Tiered resolution architecture: fast tree-sitter indexing for per-turn baseline context, upgraded by batch SCIP occurrences (`scip_resolved` tier) when compiler artifacts are present.
+
+**Competitor discovery — AI Architect Codebase (4★) & star re-verification:**
+- Discovered `cdeust/ai-architect-mcp-codebase` (4★, MIT, Clement), cross-platform code intelligence MCP server for Claude Code, Codex, Cursor, and Zed with tree-sitter AST to LadybugDB graph and hybrid search. Added to `docs/_data/competitors.yml` (4★).
+- Direct posting to `cdeust/ai-architect-mcp-codebase#291` skipped in accordance with our strict competitor tracker isolation policy.
+- Re-verified active competitor star counts in `docs/_data/competitors.yml`:
+  - `ripwire`: 1,745 → **1,795★** (+50, display moved to 1.8K)
+  - `context_mode`: 21,358 → **21,588★** (+230, display moved to 21.6K)
+  - `trace-mcp`: 173 → **175★** (+2)
+
+**Checked and skipped, with reasons:**
+- `cdeust/ai-architect-mcp-codebase#291` (4★, direct competitor bug tracker).
+- `colbymchenry/codegraph#1747` (70.1k★, direct competitor bug tracker).
+- `Graphify-Labs/graphify#3406` (direct competitor bug tracker).
+- `redhat-et/ripwire#67` (1.8k★, direct competitor tracker).
+- `TheHalfMoon/Golam#25` (0★, internal source qualification issue comparing ripwire).
+- `tyldra-org/falryn#990` (large internal testing qualification spec).
+- `headroomlabs-ai/headroom#3495` (70.9k★, user Cort Fritz already has branch implemented and is awaiting maintainer thumbs-up).
+
 
 
