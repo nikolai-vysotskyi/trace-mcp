@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://trace-mcp.com/</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -32,7 +32,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/comparisons.html</loc>
-    <lastmod>2026-09-08</lastmod>
+    <lastmod>2026-09-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -134,7 +134,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/analytics.html</loc>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -182,7 +182,7 @@
   </url>
   <url>
     <loc>https://trace-mcp.com/quality-gates.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-08</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>

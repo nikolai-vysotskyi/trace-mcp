@@ -812,6 +812,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace does not write — configure that manually if you use the CLI |
 | **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
+| **OpenCode** | `~/.config/opencode/opencode.json[c]`, `<project>/opencode.json[c]` | JSON / JSONC | `mcp` (`type: "local"`, `command: ["trace", "serve"]`) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 
 > `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
 
