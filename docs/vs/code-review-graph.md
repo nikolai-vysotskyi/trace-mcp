@@ -56,7 +56,7 @@ updated: 2026-09-08
           "name": "How do their advertised tool surfaces compare in token cost?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 28 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via load_tools without requiring an allowlist restart."
+            "text": "code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 29 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via load_tools without requiring an allowlist restart."
           }
         },
         {
@@ -108,7 +108,7 @@ The split is between code review triage and comprehensive codebase intelligence.
 | Multi-repo support | ✓ cross-repo API linking | ✓ multi-repo daemon |
 | CI / PR blast-radius Action | ✓ quality gates + SARIF | ✓ turnkey blast-radius GitHub Action |
 | Graph visualization | ✓ desktop app (cosmos.gl) | ✗ |
-| MCP tools advertised (default) | 28 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
+| MCP tools advertised (default) | 29 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
 | Tool surface trimming | ✓ dynamic `load_tools` in session; 3 presets | manual allowlist (`serve --tools`, `CRG_TOOLS=`) |
 
 Verified on September 2, 2026 against code-review-graph's source at commit `b58668751ab0` (v2.3.8). Tool registrations, parser dependencies, and graph architecture claims come directly from the source; star count from the GitHub API.
@@ -141,7 +141,7 @@ Cloning the repository at commit `b58668751ab0` and reading `pyproject.toml`, `c
 - **Security scanning and quality gates.** trace-mcp includes OWASP Top-10 rules, type-aware taint analysis, control-flow graphs with loop back-edges, and OASIS SARIF 2.1.0 output for CI quality gates.
 - **Code-linked session memory.** Architectural decisions and rationale persist across agent sessions bound to symbol IDs, verified against code staleness before recall, and surfaced in impact analysis. code-review-graph has no session memory.
 - **Language breadth and compiler-grade precision.** trace-mcp parses {{ site.data.counts.languages }} languages via tree-sitter, and offers an opt-in path for live LSP and offline SCIP index ingestion to raise edge resolution to compiler-grade tiers.
-- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 28 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
+- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 29 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
 
 ## Where we are not being smug
 
@@ -166,7 +166,7 @@ Both projects parse code with tree-sitter into an incremental SQLite knowledge g
 Its uncertainty module treats an empty result as an answer that owes the caller a reason. Under a hard 140-character cap, it explains whether a zero result is genuine or the result of a known parser gap or unindexed dependency. This prevents agents from drawing false conclusions or falling back to costly whole-repository file scans.
 
 **How do their advertised tool surfaces compare in token cost?**
-code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 28 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
+code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 29 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
 
 **Can code-review-graph refactor code or run security scans?**
 No. Reading code-review-graph's source at commit `b58668751ab0` confirmed it is read-only navigation and blast-radius analysis. It provides no rename, move, signature update, or AST codemods, and no OWASP taint analysis or SARIF reporting. trace-mcp ships full refactoring tools and OASIS SARIF 2.1.0 security scanning.

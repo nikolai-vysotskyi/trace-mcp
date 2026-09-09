@@ -16,7 +16,7 @@
     <source media="(max-width: 500px) and (prefers-color-scheme:light)" srcset="docs/images/readme/banner-narrow-light.png" />
     <source media="(max-width: 500px)" srcset="docs/images/readme/banner-narrow-dark.png" />
     <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
-    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,291 with it — 72.7% less, median over 60 merged PRs in 6 open-source repos that are not ours. 181 tools, 81 languages, 88 framework integrations, your code stays local, MIT." />
+    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp indexes what your agent keeps re-reading, and serves the answer instead. Context to review one pull request: 13,595 tokens without trace-mcp, 3,291 with it — 72.7% less, median over 60 merged PRs in 6 open-source repos that are not ours. 182 tools, 81 languages, 88 framework integrations, your code stays local, MIT." />
   </picture>
 </p>
 
@@ -84,7 +84,7 @@ Cheaper is not the same as better, so the same 60 pull requests were reviewed tw
 
 AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 
-trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 88 framework integrations across 81 languages, 181 tools.
+trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 88 framework integrations across 81 languages, 182 tools.
 
 The binding constraint is **recomputation**, not model capability: token bills, latency, and hallucinations all grow with project size instead of with task complexity. trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
 
@@ -570,8 +570,8 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 └────────────────────┬─────────────────────┘
                      │
                      ▼
-         MCP server (stdio or HTTP/SSE)
-         181 tools · 10 resources
+          MCP server (stdio or HTTP/SSE)
+          182 tools · 10 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -589,7 +589,7 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 | Document | Description |
 |---|---|
 | [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 181 MCP tools with descriptions and usage examples |
+| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 182 MCP tools with descriptions and usage examples |
 | [Migrating from 1.x](https://trace-mcp.com/tools-reference.html) | The seven tools retired in 2.0 (`get_dead_exports`, `get_session_resume`, …) and the call that replaces each |
 | [Configuration](https://trace-mcp.com/configuration.html) | Config options, AI setup, environment variables, security settings |
 | [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |

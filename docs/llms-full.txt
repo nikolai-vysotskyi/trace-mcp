@@ -523,6 +523,7 @@ which excludes the framework-specific rows.
 | `get_decision_timeline` | Chronological timeline of decisions for a project, symbol, or file. | always |
 | `get_dependency_diagram` | Render dependency diagram for a file/directory path as Mermaid or DOT. | always |
 | `get_di_tree` | Trace NestJS dependency injection tree (what a service injects + who injects it). | framework |
+| `get_diagnostics` | Execute type-checker (tsc, mypy, pyright) and map errors to enclosing AST symbols. | always |
 | `get_domain_context` | Get all code related to a specific business domain. | always |
 | `get_domain_map` | Get hierarchical map of business domains with key symbols per domain. | always |
 | `get_edge_bottlenecks` | Find architectural bottleneck edges in the import graph: edges on many shortest paths (betweenness), edges whose removal would disconnect the graph (bridges)… | always |
@@ -1086,7 +1087,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
+| MCP tools advertised (default) | 29 `minimal` (~11.6K tok², default); 61 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
 | Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | partial (context artifacts, not code-linked) | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | partial (`query_project`, optional, no cross-repo edges) | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
@@ -1132,7 +1133,7 @@ Both of the biggest projects in this space (by stars) made the same product call
 | `preset: "full"` (explicit opt-in) | 166 | ~49.9K tok | ~2.1K tok |
 | `standard` + `description_verbosity: "none"` | 55 | ~8.4K tok | 0 |
 
-The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (28 tools) hits its ceiling here while `standard` (60 tools) serves 55 of its 60 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
+The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (29 tools) hits its ceiling here while `standard` (61 tools) serves 56 of its 61 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
 
 So the honest default is **~11.6K tokens, not the ~51K this page used to quote** — a 2.5× correction in our own favour, caused by four landed changes (preset honoured on the daemon path, seven deprecated aliases retired, `compact_schemas` extended to the whole surface, and the default preset moved to `minimal` once `load_tools` made everything outside it one call away) that this page had not caught up with. The `minimal` row's ~9.8K is derived, not re-measured: the preset grew 25 → 28 tools and 30,540 → 34,041 serialized chars when it absorbed the always-load set, +11.5% on the ~8.8K that was measured live.
 
@@ -1618,7 +1619,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
 | Multi-repo subprojects | ✓ cross-repo API linking | partial — query another project, no cross-repo edges |
 | Graph visualization | ✓ desktop app | ✗ |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena
@@ -1645,13 +1646,13 @@ First, **the table above used to be built from Serena's README, and reading the 
 - **It is not stateless.** We claimed "no persistent state, per-session". It persists two pickled document-symbol caches per language and loads them at startup (see the bullet above). Warm symbol lookups do survive a restart; only the edges do not exist.
 - **It can reach other repositories.** We claimed a flat ✗. `query_project` and `list_queryable_projects` run any read-only Serena tool against another registered project, through a small Flask project server. Both are optional tools, off unless enabled, and there are still no edges between repositories — but "cannot" was wrong.
 - **Its memories are more than notes.** We called them manual notes. They are markdown files under `.serena/memories` with topic namespacing, a global scope beside the project scope, and `mem:` cross-references with referential-integrity checking and autofix. What they are not is code-linked: nothing ties a memory to a symbol, and nothing rechecks it against the code when it is recalled. That narrower difference is the real one.
-- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 28 is "the same size", not "half".
+- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 29 is "the same size", not "half".
 
 Two rows moved the other way, and we state the evidence rather than the verdict. **Call graph**: `callHierarchy/incomingCalls` and `outgoingCalls` are implemented in the LSP client layer, but no tool class calls them, so an agent cannot ask Serena for a call graph. **Move and inline refactoring**: `JetBrainsMoveTool` and `JetBrainsInlineSymbol` proxy to a running JetBrains IDE; both are optional and beta. Native and always-on are `rename_symbol` and `safe_delete_symbol`.
 
 If you maintain Serena and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 
-Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
+Second, **our default tool surface is expensive.** trace-mcp advertises 29 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
 
 **Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
@@ -1714,7 +1715,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Code-linked decision memory | ✓ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
 | Runtime trace ingestion | ✗ | ✓ `ingest_traces` |
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
 | Published benchmark | ✓ [PR review context](/pr-context-benchmark.html), one task, losses published | ✓ preprint, 31 repos, not independently reproduced |
 | Written in | TypeScript | C |
@@ -1896,7 +1897,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Framework integrations | **{{ site.data.counts.frameworks }}** integrations | ✗ (syntax AST only) |
 | Framework-aware edges | ✓ route → handler, template, ORM model | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 25 |
-| MCP tools advertised by default | 28 (~11.6K tok) | **25** (~5.2K tok) |
+| MCP tools advertised by default | 29 (~11.6K tok) | **25** (~5.2K tok) |
 | Surface trimming / Presets | ✓ adaptive presets (`minimal`, `review`, etc.) | ✗ (all 25 tools always advertised) |
 | Search mechanism | Structural AST + FTS5 + ONNX embeddings | Hybrid RRF (dense vector + keyword) |
 | Call flow & impact analysis | ✓ bidirectional call graph + blast radius | ✓ `codebase_flow` + `codebase_impact` |
@@ -1937,9 +1938,9 @@ Every tool advertised by an MCP server consumes prompt tokens on every turn of a
 
 SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
 
-trace-mcp advertises 28 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- For focused workflows, select task-tailored presets: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+trace-mcp advertises 29 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
 - Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines
@@ -2005,7 +2006,7 @@ Pick jCodeMunch if you are an individual working on personal non-commercial proj
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ~13 context profiles (regex route matching) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ (text regex matches, no graph edges) |
 | MCP tools defined | {{ site.data.counts.tools }} | ~90 tools |
-| Default advertised tools | 28 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
+| Default advertised tools | 29 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
 | Tool dispatch model | Direct MCP tool invocation with presets | Meta-dispatch verb (`order(action, args)`) |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
@@ -2054,8 +2055,8 @@ jCodeMunch introduces **"The Counter"** (`counter.py`): on new installations, th
 While The Counter reduces resident schema tokens, it introduces significant friction into the agent loop. Running an action through `order` requires an extra turn of indirection and passes parameters inside generic unstructured objects, bypassing the client's native tool schema validation and increasing argument hallucination rates.
 
 trace-mcp addresses context cost through **Adaptive Task Presets**:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- Task-specific presets curate tools for the active workflow: `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
 ### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
@@ -2124,7 +2125,7 @@ Source: https://trace-mcp.com/vs/tokensave.html
 
 **TL;DR.** TokenSave is a Rust-based code intelligence MCP server that indexes code into an embedded libSQL (SQLite) database with tree-sitter parsers across 50+ languages. It features 86 specialized MCP tools, subprocess-isolated grammar extraction, multi-branch indexing, git blame integration, and text replacement editing primitives.
 
-The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 28-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
+The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 29-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
 
 Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ languages (including shaders, Basic dialects, and mainframe languages) with multi-branch database isolation. Pick trace-mcp if you develop web applications in modern frameworks, require compiler-calibrated 5-tier call graphs, need safe AST refactoring write tools, and want zero-setup distribution via npm.
 
@@ -2141,7 +2142,7 @@ Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ langua
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 86 tools |
-| Default advertised tools | **28** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
+| Default advertised tools | **29** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
 | Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 5 tools marked `anthropic/alwaysLoad`; 85+ returned on `tools/list` |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal (`callers`, `callees`, `call_chain`) over AST call sites |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | String replacement primitives (`str_replace`, `multi_str_replace`, `insert_at`) |
@@ -2154,7 +2155,7 @@ Verified on September 8, 2026 against TokenSave's repository at `master` (v7.11.
 
 ## Key architectural differences
 
-### 1. Tool Surface Management: 86 Advertised Tools vs. 28-Tool Minimal Preset
+### 1. Tool Surface Management: 86 Advertised Tools vs. 29-Tool Minimal Preset
 
 The number of tools an MCP server exposes directly impacts agent performance. Every tool definition consumes prompt tokens in the initial `tools/list` response, and large tool lists increase parameter hallucination and tool mis-selection rates (dispatch dilution).
 
@@ -2164,8 +2165,8 @@ TokenSave defines 86 MCP tools in `get_tool_definitions()`. In Anthropic-specifi
 To balance this, TokenSave implements session debt accounting (`settle_session_debt`), charging the schema overhead against future token savings over multiple turns.
 
 trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
-- **28-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
-- **Workflow-tailored presets**: Dedicated presets for `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- **29-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
+- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
 ### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations
@@ -2238,7 +2239,7 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 ## When to choose trace-mcp
 
 - **Modern web and backend frameworks**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORM models.
-- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Prompt budget efficiency**: You want a lean 29-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
 - **Safe, automated AST refactoring**: You want your AI agent to perform atomic renames, extractions, and file moves with syntax validation and import graph updates.
 - **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
 - **Integrated CI security & quality gates**: You want OWASP Top-10 taint analysis and SARIF reporting built into your code graph workflow.
@@ -2377,7 +2378,7 @@ If your agent is drowning in tool output, Context Mode is aimed at your problem 
 | Licence | MIT | Elastic License 2.0 (source-available, not OSI) |
 | Written in | TypeScript | TypeScript |
 | MCP tools defined | {{ site.data.counts.tools }} | 11 |
-| MCP tools advertised (default) | 28 (~11.6K tok) | 11 — all of them |
+| MCP tools advertised (default) | 29 (~11.6K tok) | 11 — all of them |
 | Parses source code (AST) | ✓ tree-sitter, {{ site.data.counts.languages }} languages | ✗ no parser in its dependency tree |
 | Symbol index | ✓ | ✗ |
 | Cross-file dependency graph | ✓ directed edge graph | ✗ |
@@ -2426,7 +2427,7 @@ Four things are worth stating precisely, because the marketing word "context" co
 
 ## Where we are not being smug
 
-**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 28 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
+**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 29 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
 
 **Their measurement covers the session; ours covers one task in it.** We now have a benchmark with named fixtures — the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, re-runnable from the repo. It measures assembling code-review context, not a whole working session, so it does not answer the question Context Mode's numbers answer. For general use we quote {{ site.data.response_tokens.reduction_pct }}%, measured on {{ site.data.response_tokens.calls_weighted }} real tool calls from one machine against an estimated baseline — still our own instrumentation, not a benchmark, and it replaced an earlier aggregate we [disproved ourselves](/reduce-claude-code-token-usage.html#the-number-moved-on-5-september-2026-and-here-is-why).
 
@@ -2499,7 +2500,7 @@ The split is between code review triage and comprehensive codebase intelligence.
 | Multi-repo support | ✓ cross-repo API linking | ✓ multi-repo daemon |
 | CI / PR blast-radius Action | ✓ quality gates + SARIF | ✓ turnkey blast-radius GitHub Action |
 | Graph visualization | ✓ desktop app (cosmos.gl) | ✗ |
-| MCP tools advertised (default) | 28 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
+| MCP tools advertised (default) | 29 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
 | Tool surface trimming | ✓ dynamic `load_tools` in session; 3 presets | manual allowlist (`serve --tools`, `CRG_TOOLS=`) |
 
 Verified on September 2, 2026 against code-review-graph's source at commit `b58668751ab0` (v2.3.8). Tool registrations, parser dependencies, and graph architecture claims come directly from the source; star count from the GitHub API.
@@ -2532,7 +2533,7 @@ Cloning the repository at commit `b58668751ab0` and reading `pyproject.toml`, `c
 - **Security scanning and quality gates.** trace-mcp includes OWASP Top-10 rules, type-aware taint analysis, control-flow graphs with loop back-edges, and OASIS SARIF 2.1.0 output for CI quality gates.
 - **Code-linked session memory.** Architectural decisions and rationale persist across agent sessions bound to symbol IDs, verified against code staleness before recall, and surfaced in impact analysis. code-review-graph has no session memory.
 - **Language breadth and compiler-grade precision.** trace-mcp parses {{ site.data.counts.languages }} languages via tree-sitter, and offers an opt-in path for live LSP and offline SCIP index ingestion to raise edge resolution to compiler-grade tiers.
-- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 28 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
+- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 29 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
 
 ## Where we are not being smug
 
@@ -2557,7 +2558,7 @@ Both projects parse code with tree-sitter into an incremental SQLite knowledge g
 Its uncertainty module treats an empty result as an answer that owes the caller a reason. Under a hard 140-character cap, it explains whether a zero result is genuine or the result of a known parser gap or unindexed dependency. This prevents agents from drawing false conclusions or falling back to costly whole-repository file scans.
 
 **How do their advertised tool surfaces compare in token cost?**
-code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 28 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
+code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 29 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
 
 **Can code-review-graph refactor code or run security scans?**
 No. Reading code-review-graph's source at commit `b58668751ab0` confirmed it is read-only navigation and blast-radius analysis. It provides no rename, move, signature update, or AST codemods, and no OWASP taint analysis or SARIF reporting. trace-mcp ships full refactoring tools and OASIS SARIF 2.1.0 security scanning.
@@ -2647,7 +2648,7 @@ We are in codegraph's lane, not Repomix's, and it would be dishonest to pretend 
 
 [trace-mcp](/) is a precomputed graph like codegraph's, with two differences that matter and one that costs us. It ships {{ site.data.counts.frameworks }} framework integrations that model edges beyond routing — controller → template, model → table, component → component — across {{ site.data.counts.languages }} languages. And it has a write path: rename, move, signature change, AST codemod, dead-code removal, plus OWASP taint scanning and SARIF for CI, none of which either tool above has.
 
-What it costs: our default preset advertises 28 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
+What it costs: our default preset advertises 29 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
 
 On measurement we can offer one thing neither of them does: the [PR review context benchmark](/pr-context-benchmark.html) is a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, with the base and head SHAs, the losing cases, and the command that re-runs it all shipped in the repository.
 
@@ -2710,13 +2711,13 @@ This is the tactic most people never check, and it can dominate everything else.
 
 Every MCP server you connect injects its tool schemas into the context **at session start, before you ask anything**. Three servers with large surfaces can cost tens of thousands of tokens on every single session, whether or not you call any of them.
 
-Measured on our own server, August 29, 2026: trace-mcp's shipped default is the `minimal` (28 tools) preset — ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions, **~11.6K in total**, which is the number to budget against because a client pays both. (`full` ({{ site.data.counts.tools }} tools) is ~49.9K + ~2.1K if you opt into it.) That is still not cheap, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
+Measured on our own server, August 29, 2026: trace-mcp's shipped default is the `minimal` (29 tools) preset — ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions, **~11.6K in total**, which is the number to budget against because a client pays both. (`full` ({{ site.data.counts.tools }} tools) is ~49.9K + ~2.1K if you opt into it.) That is still not cheap, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
 
 What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
-- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
+- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (29 tools), `standard` (61 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace/.config.json`. `tools.preset` is honoured from a project-local `.trace/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
@@ -3288,7 +3289,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (42 tools), `dev` (42 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (29 tools, default), `standard` (61 tools — covers >99% of real-world tool calls per session-log mining), `review` (33 tools), `architecture` (42 tools), `dev` (43 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |

@@ -69,6 +69,7 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   taint_analysis: ['scope'],
   export_security_context: ['scope', 'depth'],
   audit_config: [],
+  get_diagnostics: ['file_path', 'checker'],
 
   // Framework
   get_request_flow: ['url', 'method'],

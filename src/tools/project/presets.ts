@@ -93,6 +93,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'query_decisions',
     'invalidate_decision',
     'mine_sessions',
+    'get_diagnostics',
   ],
 
   standard: [
@@ -157,6 +158,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'query_decisions',
     'invalidate_decision',
     'mine_sessions',
+    'get_diagnostics',
   ],
 
   // SKILL.state agent execution state tracking suite (TRA-596, arXiv:2608.26263)
@@ -200,6 +202,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'detect_antipatterns',
     'get_changed_symbols',
     'get_untested_symbols',
+    'get_diagnostics',
     'register_edit',
     'batch',
   ]),
@@ -233,6 +236,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'change_signature',
     'plan_refactoring',
     'check_quality_gates',
+    'get_diagnostics',
     'reindex',
     'register_edit',
     'batch',

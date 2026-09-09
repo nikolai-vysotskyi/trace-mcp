@@ -56,7 +56,7 @@ updated: 2026-09-08
           "name": "Is codebase-memory-mcp cheaper in tokens?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "On advertised surface, yes, and by a wide margin. Its 15 tools cost roughly 7K tokens of schema, and its scout and analysis profiles trim that to 7 and 11 tools. trace-mcp advertises 28 tools at roughly 11.6K tokens on the shipped default path — the `minimal` preset, re-measured August 29, 2026; the preset-bypass bug behind the ~50K figure this page used to quote is fixed and closed. A ~1.7× gap remains, and it is still the clearest place this peer leads."
+            "text": "On advertised surface, yes, and by a wide margin. Its 15 tools cost roughly 7K tokens of schema, and its scout and analysis profiles trim that to 7 and 11 tools. trace-mcp advertises 29 tools at roughly 11.6K tokens on the shipped default path — the `minimal` preset, re-measured August 29, 2026; the preset-bypass bug behind the ~50K figure this page used to quote is fixed and closed. A ~1.7× gap remains, and it is still the clearest place this peer leads."
           }
         },
         {
@@ -106,7 +106,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Code-linked decision memory | ✓ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
 | Runtime trace ingestion | ✗ | ✓ `ingest_traces` |
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
 | Published benchmark | ✓ [PR review context](/pr-context-benchmark.html), one task, losses published | ✓ preprint, 31 repos, not independently reproduced |
 | Written in | TypeScript | C |

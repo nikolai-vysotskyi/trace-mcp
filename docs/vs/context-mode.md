@@ -97,7 +97,7 @@ If your agent is drowning in tool output, Context Mode is aimed at your problem 
 | Licence | MIT | Elastic License 2.0 (source-available, not OSI) |
 | Written in | TypeScript | TypeScript |
 | MCP tools defined | {{ site.data.counts.tools }} | 11 |
-| MCP tools advertised (default) | 28 (~11.6K tok) | 11 — all of them |
+| MCP tools advertised (default) | 29 (~11.6K tok) | 11 — all of them |
 | Parses source code (AST) | ✓ tree-sitter, {{ site.data.counts.languages }} languages | ✗ no parser in its dependency tree |
 | Symbol index | ✓ | ✗ |
 | Cross-file dependency graph | ✓ directed edge graph | ✗ |
@@ -146,7 +146,7 @@ Four things are worth stating precisely, because the marketing word "context" co
 
 ## Where we are not being smug
 
-**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 28 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
+**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 29 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
 
 **Their measurement covers the session; ours covers one task in it.** We now have a benchmark with named fixtures — the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, re-runnable from the repo. It measures assembling code-review context, not a whole working session, so it does not answer the question Context Mode's numbers answer. For general use we quote {{ site.data.response_tokens.reduction_pct }}%, measured on {{ site.data.response_tokens.calls_weighted }} real tool calls from one machine against an estimated baseline — still our own instrumentation, not a benchmark, and it replaced an earlier aggregate we [disproved ourselves](/reduce-claude-code-token-usage.html#the-number-moved-on-5-september-2026-and-here-is-why).
 

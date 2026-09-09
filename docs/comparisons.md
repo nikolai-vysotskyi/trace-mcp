@@ -293,7 +293,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
+| MCP tools advertised (default) | 29 `minimal` (~11.6K tok², default); 61 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
 | Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | partial (context artifacts, not code-linked) | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | partial (`query_project`, optional, no cross-repo edges) | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
@@ -339,7 +339,7 @@ Both of the biggest projects in this space (by stars) made the same product call
 | `preset: "full"` (explicit opt-in) | 166 | ~49.9K tok | ~2.1K tok |
 | `standard` + `description_verbosity: "none"` | 55 | ~8.4K tok | 0 |
 
-The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (28 tools) hits its ceiling here while `standard` (60 tools) serves 55 of its 60 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
+The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (29 tools) hits its ceiling here while `standard` (61 tools) serves 56 of its 61 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
 
 So the honest default is **~11.6K tokens, not the ~51K this page used to quote** — a 2.5× correction in our own favour, caused by four landed changes (preset honoured on the daemon path, seven deprecated aliases retired, `compact_schemas` extended to the whole surface, and the default preset moved to `minimal` once `load_tools` made everything outside it one call away) that this page had not caught up with. The `minimal` row's ~9.8K is derived, not re-measured: the preset grew 25 → 28 tools and 30,540 → 34,041 serialized chars when it absorbed the always-load set, +11.5% on the ~8.8K that was measured live.
 

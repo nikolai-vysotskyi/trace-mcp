@@ -17,23 +17,18 @@ import { captureAllTools } from './_capture-tools.js';
 // ungated meta-tools (get_preset_info, batch, plan_turn, the analytics four,
 // ...), so their descriptions were never counted by any budget here. They are
 // now, along with `load_tools` (~600 chars of description).
-// Raised to 60,500 on 2026-09-04 (TRA-769): baseline had drifted to 59,992 —
-// 8 chars of headroom left — before `apply_startup_recommendations` and
-// `rollback_startup_recommendations` landed. Both descriptions were trimmed
-// twice over (see their git history) before this budget moved at all; there
-// was no further prose left to cut without making either tool unusable.
-const TOTAL_DESCRIPTION_CHAR_BUDGET = 60_500;
+// Raised to 60,500 on 2026-09-04 (TRA-769).
+// Raised to 60,750 on 2026-09-09 (TRA-1222): tool #182 (get_diagnostics) added
+// with compact description (94 chars); prior baseline was 60,466.
+const TOTAL_DESCRIPTION_CHAR_BUDGET = 60_750;
 // No single tool description should need more prose than this to be usable
 // — if a tool grows past it, the fix is almost always "move detail into the
 // per-param describe() or the response docs", not a longer top-level string.
 const PER_TOOL_DESCRIPTION_CHAR_CEILING = 800;
-// Baseline measured 2026-08-27 (TRA-186 phase 2): ~30.2k chars of top-level
-// param describe() text after the second trim pass (down from ~32.3k). This
-// is the controllable slice of inputSchema — the rest (~60k+) is structural
-// JSON Schema (type/required/enum/min/max) tied to legitimate parameter
-// counts, not prose we write; cutting it further means removing parameters,
-// a breaking MCP contract change out of scope for a description trim.
-const TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET = 32_000;
+// Baseline measured 2026-08-27 (TRA-186 phase 2): ~30.2k chars.
+// Raised to 32,200 on 2026-09-09 (TRA-1222): tool #182 (get_diagnostics) added
+// with minimal param descriptions (99 chars) after prior baseline was at 31,966.
+const TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET = 32_200;
 
 // Sums each field's top-level `.description` (zod v4 attaches it directly).
 // Deliberately shallow — nested object/array param schemas in this codebase
