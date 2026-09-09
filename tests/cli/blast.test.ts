@@ -362,6 +362,23 @@ describe('trace blast — diff mode', () => {
       '/proj/test',
     );
   });
+
+  it('handles relative ./ in target for diff mode filtering', async () => {
+    mockGetFile.mockReturnValue({ id: 1, path: 'src/foo.ts' });
+    mockGetChangedSymbols.mockResolvedValue(
+      okChangedSymbols([{ symbolId: 's1', name: 'fooFn', file: 'src/foo.ts' }]),
+    );
+
+    await run(['./src/foo.ts', '--diff']);
+
+    expect(mockGetChangeImpact).toHaveBeenCalledWith(
+      storeInstance,
+      expect.objectContaining({ symbolIds: ['s1'] }),
+      3,
+      200,
+      '/proj/test',
+    );
+  });
 });
 
 describe('trace blast — options, formatting & exit codes', () => {
@@ -375,6 +392,16 @@ describe('trace blast — options, formatting & exit codes', () => {
     expect(parsed.mode).toBe('target');
     expect(parsed.totalAffected).toBe(3);
     expect(parsed.risk.score).toBe(25);
+  });
+
+  it('formats normalized decimal score as percentage out of 100 in text output', async () => {
+    mockGetFile.mockReturnValue({ id: 1, path: 'src/foo.ts' });
+    mockGetChangeImpact.mockReturnValue(okImpact('high', 0.65));
+
+    await run(['src/foo.ts']);
+
+    const output = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(output).toContain('HIGH (score: 65/100)');
   });
 
   it('passes custom --depth and --max-dependents', async () => {
@@ -396,6 +423,24 @@ describe('trace blast — options, formatting & exit codes', () => {
     mockGetChangeImpact.mockReturnValue(okImpact('high', 80));
 
     await expect(run(['src/foo.ts', '--fail-on', 'high'])).rejects.toThrow(ProcessExitSignal);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('supports case-insensitive --fail-on level (e.g. HIGH)', async () => {
+    mockGetFile.mockReturnValue({ id: 1, path: 'src/foo.ts' });
+    mockGetChangeImpact.mockReturnValue(okImpact('high', 80));
+
+    await expect(run(['src/foo.ts', '--fail-on', 'HIGH'])).rejects.toThrow(ProcessExitSignal);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('rejects invalid --fail-on level with error and exits 1', async () => {
+    mockGetFile.mockReturnValue({ id: 1, path: 'src/foo.ts' });
+
+    await expect(run(['src/foo.ts', '--fail-on', 'invalid_level'])).rejects.toThrow(
+      ProcessExitSignal,
+    );
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid --fail-on level'));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

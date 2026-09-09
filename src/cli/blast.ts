@@ -112,7 +112,10 @@ export function formatBlastText(report: BlastReport): string {
   }
 
   const riskLevelUpper = (report.risk?.level ?? 'low').toUpperCase();
-  lines.push(`Risk Level:     ${riskLevelUpper} (score: ${report.risk?.score ?? 0}/100)`);
+  const displayScore = Math.round(
+    (report.risk?.score ?? 0) <= 1 ? (report.risk?.score ?? 0) * 100 : (report.risk?.score ?? 0),
+  );
+  lines.push(`Risk Level:     ${riskLevelUpper} (score: ${displayScore}/100)`);
   lines.push(
     `Total Affected: ${report.totalAffected} dependents across ${report.summary?.totalFiles ?? 0} files (max depth: ${report.summary?.maxDepth ?? 0})`,
   );
@@ -302,9 +305,12 @@ export const blastCommand = new Command('blast')
         let changedSymbols = changedRes.value.changedSymbols;
 
         if (target) {
-          const normTarget = target.replace(/\\/g, '/');
+          const absTarget = path.isAbsolute(target) ? target : path.resolve(startDir, target);
+          const relTarget = path.relative(projectRoot, absTarget).replace(/\\/g, '/');
+          const normTarget = target.replace(/\\/g, '/').replace(/^\.\//, '');
           changedSymbols = changedSymbols.filter(
             (s) =>
+              s.file === relTarget ||
               s.file === normTarget ||
               s.file.endsWith(`/${normTarget}`) ||
               s.name === target ||
@@ -412,7 +418,7 @@ export const blastCommand = new Command('blast')
                 sentence: `${changedSymbols.length} changed symbol(s) detected in git diff.`,
               },
               risk: {
-                score: 10,
+                score: 0.1,
                 level: 'low',
                 publicApiBreaking: false,
                 untestedRatio: 0,
@@ -533,11 +539,18 @@ export const blastCommand = new Command('blast')
       }
 
       // Check fail-on threshold
-      const failLevel = opts.failOn ?? 'none';
+      const failLevel = (opts.failOn ?? 'none').toLowerCase();
       if (failLevel !== 'none') {
-        const failRank = RISK_LEVEL_RANK[failLevel] ?? 0;
+        const failRank = RISK_LEVEL_RANK[failLevel];
+        if (failRank === undefined) {
+          console.error(
+            `Invalid --fail-on level "${opts.failOn}". Expected one of: critical, high, medium, low, none.`,
+          );
+          process.exit(1);
+          return;
+        }
         const currentRank = RISK_LEVEL_RANK[report.risk?.level ?? 'none'] ?? 0;
-        if (failRank > 0 && currentRank >= failRank) {
+        if (currentRank >= failRank) {
           process.exit(1);
         }
       }
