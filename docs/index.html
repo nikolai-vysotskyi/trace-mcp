@@ -643,9 +643,9 @@ updated: 2026-09-07
     }
     .hero-headline {
       font-family: var(--font-body);
-      /* 60/900 is the pair that breaks this headline after "intelligence" and
-         nowhere else. At 72/820 it ran to three lines and split "AI coding
-         agents" across two of them; measure again if the wording changes. */
+      /* 60px/900px is the pair that breaks the headline into 3 balanced lines
+         (27, 27, 26 chars) at desktop (>=1200px) and 4 lines at 390px.
+         Measured in headless Chrome; re-measure if the wording changes. */
       font-size: clamp(36px, 5.2vw, 60px);
       font-weight: 400;
       line-height: 1.05;
@@ -2272,7 +2272,7 @@ updated: 2026-09-07
       <a href="#product">Product</a>
       <a href="#capabilities">Capabilities</a>
       <a href="#install" class="primary">Install</a>
-      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
+      <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="primary">GitHub</a>
       <button type="button" class="theme-toggle" role="switch" aria-label="Toggle color theme" data-theme-toggle>
         <span class="theme-seg" data-mode="dark">
           <span class="seg-dot"></span><span class="label-text">Dark</span>
@@ -3256,14 +3256,14 @@ updated: 2026-09-07
       </div>
       <div class="footer-col">
         <span class="col-label">/ Source</span>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank">Github</a>
-        <a href="https://www.npmjs.com/package/trace-mcp" target="_blank">npm</a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues" target="_blank">Issues</a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases" target="_blank">Releases</a>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://www.npmjs.com/package/trace-mcp" target="_blank" rel="noopener">npm</a>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases" target="_blank" rel="noopener">Releases</a>
       </div>
       <div class="footer-col">
         <span class="col-label">/ Contact</span>
-        <a href="https://github.com/nikolai-vysotskyi" target="_blank">@nikolai-vysotskyi</a>
+        <a href="https://github.com/nikolai-vysotskyi" target="_blank" rel="noopener">@nikolai-vysotskyi</a>
       </div>
     </div>
     <div class="footer-bottom">
