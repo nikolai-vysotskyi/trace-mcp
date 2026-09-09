@@ -10,9 +10,9 @@
 #
 # Dated prose elsewhere on the page ("41.1K -> 41.2K this pass") is a historical
 # record of a verification pass, not a live figure: leave those alone.
-verified: 2026-09-08
+verified: 2026-09-09
 
-# Re-read 2026-09-08 across all tracked competitors.
+# Re-read 2026-09-09 across all tracked competitors.
 trace_mcp:
   repo: nikolai-vysotskyi/trace-mcp
   stars_exact: 173
@@ -43,8 +43,8 @@ codegraph:
   stars: "70.1K"
 context_mode:
   repo: mksglu/context-mode
-  stars_exact: 21323
-  stars: "21.3K"
+  stars_exact: 21358
+  stars: "21.4K"
 codegraph_ai:
   repo: codegraph-ai/CodeGraph
   stars_exact: 82
@@ -63,5 +63,9 @@ tokensave:
   stars: "622"
 ripwire:
   repo: redhat-et/ripwire
-  stars_exact: 1731
+  stars_exact: 1745
   stars: "1.7K"
+aft:
+  repo: cortexkit/aft
+  stars_exact: 278
+  stars: "278"
