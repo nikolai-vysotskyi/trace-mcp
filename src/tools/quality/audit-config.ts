@@ -11,6 +11,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fuzzySearch } from '../../db/fuzzy.js';
 import type { Store } from '../../db/store.js';
+import { ALL_KNOWN_TRACE_TOOLS } from '../project/presets.js';
+
+// TRA-1063: Pattern for identifiers that look like tool names (standard verbs/prefixes).
+const TOOL_PREFIX_PATTERN =
+  /^(?:get_|check_|scan_|apply_|detect_|plan_|trace_state_|find_|suggest_|assess_|predict_|remember_|query_|invalidate_|mine_|remove_|change_|extract_|generate_|repair_|embed_|diff_|reindex|batch|load_tools|benchmark_|compare_|consolidate_|build_)/;
 
 interface AuditOptions {
   configFiles?: string[];
@@ -224,10 +229,27 @@ export function auditConfig(
             const name = m[1];
             // Only flag tokens that look like MCP tool names: snake_case
             // with at least one underscore, OR exact matches against an
-            // existing registered tool (so we don't downgrade a real ref
-            // to "missing" if the cache lacked it).
+            // existing registered tool.
             if (!name.includes('_')) continue;
-            if (options.registeredTools.has(name)) continue;
+            // TRA-1063: check active registeredTools and all known trace-mcp tools
+            if (options.registeredTools.has(name) || ALL_KNOWN_TRACE_TOOLS.has(name)) continue;
+
+            // TRA-1063: narrow rule — only flag tokens that look like MCP tool references
+            // (starting with a known tool verb/prefix) or explicitly named as a tool in context,
+            // while excluding identifiers annotated as fields/parameters/columns.
+            const isToolContext =
+              TOOL_PREFIX_PATTERN.test(name) ||
+              new RegExp(
+                `(?:tool|mcp)\\s*\`[^\`]*\\b${name}\\b[^\`]*\`|\`[^\`]*\\b${name}\\b[^\`]*\`\\s*(?:tool|mcp)`,
+                'i',
+              ).test(line) ||
+              new RegExp(`\\|\\s*\`[^\`]*\\b${name}\\b[^\`]*\`\\s*\\|`).test(line);
+            const isNonToolContext =
+              /\b(?:not a (?:separate )?tool|not standalone tools|parameter|column|property|field|enum|setting)\b/i.test(
+                line,
+              );
+
+            if (!isToolContext || isNonToolContext) continue;
             const key = `${file}:${i + 1}:${name}`;
             if (seen.has(key)) continue;
             seen.add(key);

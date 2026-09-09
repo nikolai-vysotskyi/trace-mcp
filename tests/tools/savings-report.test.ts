@@ -12,9 +12,14 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildSavingsReport,
+  detectActiveModel,
+  FLOOR_PRICE_MODEL,
+  FLOOR_PRICE_PER_MTOK_USD,
   formatSavingsReport,
   MIN_MEASURED_CALLS,
+  resolveModelInputPrice,
 } from '../../src/savings-report.js';
+import Database from 'better-sqlite3';
 import { emptyMeasured, type PersistentSavings } from '../../src/savings.js';
 
 function store(over: Partial<PersistentSavings> = {}): PersistentSavings {
@@ -211,5 +216,115 @@ describe('SavingsTracker.flush is a repeatable delta', () => {
     expect(saved?.total_calls).toBe(2);
     expect(saved?.measured?.calls).toBe(1);
     expect(saved?.measured?.tokens_saved).toBe(500);
+  });
+});
+
+describe('model pricing and detection', () => {
+  it('resolves prices for standard Claude and LLM models', () => {
+    expect(resolveModelInputPrice('claude-opus-5')).toBe(5.0);
+    expect(resolveModelInputPrice('claude-opus-4-6')).toBe(5.0);
+    expect(resolveModelInputPrice('claude-sonnet-5')).toBe(3.0);
+    expect(resolveModelInputPrice('claude-sonnet-4-6')).toBe(3.0);
+    expect(resolveModelInputPrice('claude-fable-5')).toBe(3.0);
+    expect(resolveModelInputPrice('claude-haiku-4-5')).toBe(1.0);
+    expect(resolveModelInputPrice('gpt-4o')).toBe(2.5);
+    expect(resolveModelInputPrice('gpt-4o-mini')).toBe(0.15);
+    expect(resolveModelInputPrice('o3-mini')).toBe(1.1);
+    expect(resolveModelInputPrice('o1')).toBe(15.0);
+    expect(resolveModelInputPrice('deepseek-chat')).toBe(0.27);
+    expect(resolveModelInputPrice('deepseek-r1')).toBe(0.55);
+    expect(resolveModelInputPrice('unknown-custom-model')).toBeNull();
+  });
+
+  it('detects model from env override', () => {
+    const detected = detectActiveModel({ envModel: 'claude-opus-5' });
+    expect(detected.model).toBe('claude-opus-5');
+    expect(detected.price_per_mtok_usd).toBe(5.0);
+    expect(detected.source).toBe('detected');
+  });
+
+  it('detects model from analytics.db sessions', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'analytics-test-'));
+    const dbPath = path.join(tmpDir, 'analytics.db');
+    try {
+      const db = new Database(dbPath);
+      db.exec(`
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          started_at TEXT NOT NULL,
+          model TEXT
+        );
+      `);
+      db.prepare(
+        "INSERT INTO sessions VALUES ('s1', '2026-09-08T10:00:00.000Z', 'claude-sonnet-5')",
+      ).run();
+      db.prepare(
+        "INSERT INTO sessions VALUES ('s2', '2026-09-08T11:00:00.000Z', 'claude-opus-5')",
+      ).run();
+      db.prepare(
+        "INSERT INTO sessions VALUES ('s3', '2026-09-08T12:00:00.000Z', 'claude-opus-5')",
+      ).run();
+      db.close();
+
+      const detected = detectActiveModel({ dbPath });
+      expect(detected.model).toBe('claude-opus-5');
+      expect(detected.price_per_mtok_usd).toBe(5.0);
+      expect(detected.source).toBe('detected');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('detects model from tool_calls when sessions has no model', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'analytics-test-tc-'));
+    const dbPath = path.join(tmpDir, 'analytics.db');
+    try {
+      const db = new Database(dbPath);
+      db.exec(`
+        CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at TEXT NOT NULL, model TEXT);
+        CREATE TABLE tool_calls (id TEXT PRIMARY KEY, model TEXT);
+      `);
+      db.prepare("INSERT INTO tool_calls VALUES ('t1', 'claude-sonnet-5')").run();
+      db.close();
+
+      const detected = detectActiveModel({ dbPath });
+      expect(detected.model).toBe('claude-sonnet-5');
+      expect(detected.price_per_mtok_usd).toBe(3.0);
+      expect(detected.source).toBe('detected');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('buildSavingsReport computes dollars based on detected model', () => {
+    const r = buildSavingsReport(
+      store({
+        total_calls: 100,
+        measured: {
+          ...emptyMeasured(),
+          calls: 100,
+          tokens_saved: 1_000_000,
+          raw_tokens: 2_000_000,
+          actual_tokens: 1_000_000,
+        },
+      }),
+      {
+        modelInfo: {
+          model: 'claude-opus-5',
+          price_per_mtok_usd: 5.0,
+          source: 'detected',
+        },
+      },
+    );
+    expect(r.enough_data).toBe(true);
+    expect(r.price_model).toBe('claude-opus-5');
+    expect(r.price_per_mtok_usd).toBe(5.0);
+    expect(r.model_source).toBe('detected');
+    // 1M tokens saved at $5.00/Mtok = $5.00
+    expect(r.usd_saved_floor).toBe(5.0);
+
+    const text = formatSavingsReport(r);
+    expect(text).toContain('claude-opus-5');
+    expect(text).toContain('$5.00/Mtok input');
   });
 });
