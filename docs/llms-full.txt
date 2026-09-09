@@ -5797,7 +5797,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 20
+- **import edges:** 21
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 68
@@ -5869,6 +5869,7 @@ another — the reusable, reproducible measurement is
 | Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
 | c | curl/curl | 8f6046485e15 | 3138 | 990 | 0 | 76.0% |
+| elixir | elixir-plug/plug | 73404f851852 | 87 | 44 | 0 | 66.4% |
 | php | guzzle/guzzle | 93939470950a | 374 | 247 | 0 | 60.2% |
 | ruby | sinatra/sinatra | cb22afd7902b | 131 | 88 | 0 | 59.8% |
 | rust | BurntSushi/ripgrep | 3fce3b5bb023 | 453 | 447 | 0 | 50.3% |
@@ -5920,7 +5921,7 @@ treating any row as a trend rather than a data point.
 | dockerfile | Dockerfile .dockerfile | regex | yes | — | — | — | yes |
 | ejs | .ejs | regex | yes | — | — | — | yes |
 | elisp | .el .elc | tree-sitter | yes | — | — | — | — |
-| elixir | .ex .exs | tree-sitter | yes | — | — | — | yes |
+| elixir | .ex .exs | tree-sitter | yes | yes | — | — | yes |
 | elm | .elm | tree-sitter | yes | — | — | — | — |
 | erlang | .erl .hrl | regex | yes | — | — | — | yes |
 | form | .frm .prc | regex | yes | — | — | — | — |
