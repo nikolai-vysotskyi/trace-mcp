@@ -77,11 +77,31 @@ export interface GetDiagnosticsOptions {
   ) => Promise<ExecutionResult>;
 }
 
+function stripLeadingSlashAndDot(str: string): string {
+  let s = str;
+  if (s.startsWith('./')) {
+    s = s.slice(2);
+  }
+  while (s.startsWith('/')) {
+    s = s.slice(1);
+  }
+  return s;
+}
+
+function stripTrailingSlashes(str: string): string {
+  let s = str;
+  while (s.endsWith('/')) {
+    s = s.slice(0, -1);
+  }
+  return s;
+}
+
 /** Normalizes a file path to forward slashes, relative to projectRoot, with no leading `./`. */
 export function normalizeFilePath(filePath: string, projectRoot?: string): string {
   let p = filePath.replace(/\\/g, '/');
   if (projectRoot) {
-    const rootNorm = projectRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+    let rootNorm = projectRoot.replace(/\\/g, '/');
+    rootNorm = stripTrailingSlashes(rootNorm);
     if (isAbsolute(p) || p.startsWith(rootNorm)) {
       if (p.startsWith(rootNorm)) {
         p = p.slice(rootNorm.length);
@@ -90,16 +110,14 @@ export function normalizeFilePath(filePath: string, projectRoot?: string): strin
       }
     }
   }
-  return p.replace(/^\.?\/+/, '');
+  return stripLeadingSlashAndDot(p);
 }
 
 /** Checks whether a diagnostic file path matches the user-supplied filter path. */
 export function matchesFilePath(diagnosticFile: string, filterPath: string): boolean {
-  const normDiag = diagnosticFile.replace(/\\/g, '/').replace(/^\.?\/+/, '');
-  const normFilter = filterPath.replace(/\\/g, '/').replace(/^\.?\/+/, '');
-  return (
-    normDiag === normFilter || normDiag.endsWith(`/${normFilter}`) || normDiag.endsWith(normFilter)
-  );
+  const normDiag = stripLeadingSlashAndDot(diagnosticFile.replace(/\\/g, '/'));
+  const normFilter = stripLeadingSlashAndDot(filterPath.replace(/\\/g, '/'));
+  return normDiag === normFilter || normDiag.endsWith(`/${normFilter}`);
 }
 
 /**
@@ -133,9 +151,6 @@ export function detectChecker(projectRoot: string): CheckerType | null {
     existsSync(join(projectRoot, 'mypy.ini')) ||
     /(?:^|\n)\[tool\.mypy(?:\]|\.)/m.test(pyprojectContent);
 
-  if (hasPyright && !hasMypy) {
-    return 'pyright';
-  }
   if (hasMypy) {
     return 'mypy';
   }
@@ -489,6 +504,16 @@ export async function getDiagnostics(
     case 'pyright':
       rawDiagnostics = parsePyrightOutput(execResult.stdout || combinedOutput, projectRoot);
       break;
+  }
+
+  if (execResult.exitCode !== 0 && rawDiagnostics.length === 0) {
+    const errMsg =
+      execResult.stderr.trim() || execResult.stdout.trim() || `exit code ${execResult.exitCode}`;
+    return err(
+      validationError(
+        `Type-checker '${checker}' exited with code ${execResult.exitCode}: ${errMsg}`,
+      ),
+    );
   }
 
   // Restrict checking or reporting to a specific file or path suffix if filePath provided

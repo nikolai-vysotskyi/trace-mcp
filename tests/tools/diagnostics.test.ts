@@ -21,10 +21,13 @@ describe('get_diagnostics: path normalization and matching', () => {
     expect(normalizeFilePath('/project/src/index.ts', '/project')).toBe('src/index.ts');
   });
 
-  it('matches paths accurately with exact and suffix matching', () => {
+  it('matches paths accurately with exact and suffix matching on segment boundaries', () => {
     expect(matchesFilePath('src/app.ts', 'src/app.ts')).toBe(true);
     expect(matchesFilePath('src/app.ts', './src/app.ts')).toBe(true);
     expect(matchesFilePath('src/app.ts', 'app.ts')).toBe(true);
+    expect(matchesFilePath('src/webapp.ts', 'app.ts')).toBe(false);
+    expect(matchesFilePath('src/deep/app.ts', 'deep/app.ts')).toBe(true);
+    expect(matchesFilePath('src/sub_deep/app.ts', 'deep/app.ts')).toBe(false);
     expect(matchesFilePath('tests/app.ts', 'src/app.ts')).toBe(false);
   });
 });
@@ -534,5 +537,23 @@ describe('get_diagnostics: end-to-end integration and bounds', () => {
     expect(result.isErr()).toBe(true);
     const errorMsg = result._unsafeUnwrapErr().message;
     expect(errorMsg).toContain('timed out');
+  });
+
+  it('returns an error when checker exits non-zero without parseable diagnostics', async () => {
+    writeFileSync(join(tmpDir, 'tsconfig.json'), '{}', 'utf-8');
+
+    const mockRunCommand = async () => ({
+      stdout: '',
+      stderr: 'error TS5023: Unknown compiler option "--invalid".\n',
+      exitCode: 1,
+    });
+
+    const result = await getDiagnostics(store, tmpDir, {
+      runCommand: mockRunCommand,
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().message).toContain('exited with code 1');
+    expect(result._unsafeUnwrapErr().message).toContain('Unknown compiler option');
   });
 });

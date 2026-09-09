@@ -814,32 +814,13 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Compiler Diagnostics & Symbol Mapping (TRA-1222) ---
   server.tool(
     'get_diagnostics',
-    'Execute repository type-checker (tsc, mypy, pyright), parse compiler diagnostics into structured findings, and map each error location to its enclosing AST symbol in trace-mcp index. Read-only. Returns JSON: { total_errors, files_with_errors, truncated_errors, files: [{ file, total_file_errors, truncated_in_file, diagnostics: [{ line, column, code, severity, message, enclosing_symbol }] }] }.',
+    'Execute type-checker (tsc, mypy, pyright) and map errors to enclosing AST symbols. Read-only.',
     {
-      file_path: optionalNonEmptyString(512).describe(
-        'Restrict checking or reporting to a specific file or path suffix',
-      ),
-      checker: optionalEnum(['tsc', 'mypy', 'pyright']).describe(
-        'Force a specific checker instead of auto-detection',
-      ),
-      max_per_file: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe('Maximum errors reported per file (default: 10)'),
-      max_files: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe('Maximum files reported in output (default: 15)'),
-      timeout_ms: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .describe('Execution timeout before aborting (default: 180000)'),
+      file_path: optionalNonEmptyString(512).describe('Filter by file path'),
+      checker: optionalEnum(['tsc', 'mypy', 'pyright']).describe('Checker (tsc, mypy, pyright)'),
+      max_per_file: z.number().int().min(1).optional().describe('Max errors per file'),
+      max_files: z.number().int().min(1).optional().describe('Max files reported'),
+      timeout_ms: z.number().int().min(1).optional().describe('Timeout in ms'),
     },
     async ({ file_path, checker, max_per_file, max_files, timeout_ms }) => {
       if (file_path) {
