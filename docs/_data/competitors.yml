@@ -15,8 +15,8 @@ verified: 2026-09-09
 # Re-read 2026-09-09 across all tracked competitors.
 trace_mcp:
   repo: nikolai-vysotskyi/trace-mcp
-  stars_exact: 173
-  stars: "173"
+  stars_exact: 175
+  stars: "175"
 repomix:
   repo: yamadashy/repomix
   stars_exact: 28251
@@ -43,8 +43,8 @@ codegraph:
   stars: "70.1K"
 context_mode:
   repo: mksglu/context-mode
-  stars_exact: 21358
-  stars: "21.4K"
+  stars_exact: 21588
+  stars: "21.6K"
 codegraph_ai:
   repo: codegraph-ai/CodeGraph
   stars_exact: 82
@@ -63,9 +63,13 @@ tokensave:
   stars: "622"
 ripwire:
   repo: redhat-et/ripwire
-  stars_exact: 1745
-  stars: "1.7K"
+  stars_exact: 1795
+  stars: "1.8K"
 aft:
   repo: cortexkit/aft
   stars_exact: 278
   stars: "278"
+ai_architect_codebase:
+  repo: cdeust/ai-architect-mcp-codebase
+  stars_exact: 4
+  stars: "4"

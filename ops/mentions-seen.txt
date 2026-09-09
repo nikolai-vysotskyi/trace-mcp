@@ -125,3 +125,9 @@ KryptosAI/mcp-observatory
 # ── Swept 2026-09-09 (TRA-1244) ──
 # Genuine third-party AX/FDE harness integrating trace for 'blast' (impact analysis):
 su-record/vibe
+
+# ── Swept 2026-09-09 (TRA-1265) ──
+# Genuine user repo with trace-mcp in CLAUDE.md (.trace-mcp/ ignore convention):
+drguptavivek/DYNAMIC
+# Collision: CSS class .trace-mcp in hooks/lib/report_generator.py:
+Nova-Hunting/nova-tracer
