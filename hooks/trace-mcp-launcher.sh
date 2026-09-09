@@ -538,6 +538,8 @@ node_candidates() {
     [ -n "$h" ] || continue
     [ -x "$h/.local/bin/node" ] && echo "$h/.local/bin/node"
     [ -x "$h/.volta/bin/node" ] && echo "$h/.volta/bin/node"
+    [ -x "$h/Library/pnpm/node" ] && echo "$h/Library/pnpm/node"
+    [ -x "$h/.local/share/pnpm/node" ] && echo "$h/.local/share/pnpm/node"
 
     # 4c. nvm default alias (dereference chained aliases; handle major-only shortcuts)
     # 4d. Herd (same nvm-compatible tree)
@@ -627,6 +629,12 @@ pkg_roots() {
     echo "$NPM_CONFIG_PREFIX/lib/node_modules"
   fi
 
+  # Custom prefix from PNPM_HOME env var if set
+  if [ -n "${PNPM_HOME:-}" ]; then
+    [ -d "$PNPM_HOME/global/5/node_modules" ] && echo "$PNPM_HOME/global/5/node_modules"
+    [ -d "$PNPM_HOME/node_modules" ] && echo "$PNPM_HOME/node_modules"
+  fi
+
   # Version-manager prefixes across candidate homes: that is where `npm i -g` lands for nvm /
   # Herd / fnm / Volta users, which is most of them.
   while IFS= read -r h; do
@@ -652,6 +660,14 @@ pkg_roots() {
     # above — an install under one of them now records itself too.
     [ -d "$h/.hermes/node/lib/node_modules" ] &&
       echo "$h/.hermes/node/lib/node_modules"
+
+    # ~/.local prefix (npm/node installed into ~/.local)
+    [ -d "$h/.local/lib/node_modules" ] && echo "$h/.local/lib/node_modules"
+
+    # pnpm global prefixes across macOS and Linux/XDG
+    [ -d "$h/Library/pnpm/global/5/node_modules" ] && echo "$h/Library/pnpm/global/5/node_modules"
+    [ -d "$h/.local/share/pnpm/global/5/node_modules" ] && echo "$h/.local/share/pnpm/global/5/node_modules"
+    [ -d "$h/.pnpm-global/5/node_modules" ] && echo "$h/.pnpm-global/5/node_modules"
 
     # Custom prefixes (`npm config set prefix`) from $h/.npmrc (only when NPM_CONFIG_PREFIX is unset)
     if [ -z "${NPM_CONFIG_PREFIX:-}" ] && [ -r "$h/.npmrc" ]; then

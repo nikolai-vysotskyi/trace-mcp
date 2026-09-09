@@ -271,6 +271,54 @@ function findCommentRanges(text: string): Array<[number, number]> {
  * `removeProjectConfigJsonc` would keep the comments but re-read and rewrite
  * the file once per section; this keeps both properties.
  */
+/**
+ * Find dead, dangerous, or overflowing project sections that would be pruned from global config.
+ * Non-destructive preview for dry-run scans and diagnostics.
+ */
+export function findPrunableProjectConfigSections(
+  maxUnregistered = MAX_UNREGISTERED_SECTIONS,
+  configText?: string,
+): string[] {
+  const text = configText ?? readGlobalConfigText();
+  const parsed = parse(text) as { projects?: Record<string, unknown> } | undefined;
+  const projects = parsed?.projects;
+  if (!projects || typeof projects !== 'object') return [];
+
+  // Parsed once for the whole file, not once per section.
+  const tree = parseTree(text);
+  const commentRanges = findCommentRanges(text);
+
+  const registered = new Set(listProjects().map((p) => p.root));
+  const removed: string[] = [];
+  // Survivors of the two rules above, in file order. `modify` appends a new
+  // key at the end and edits an existing one in place, so this is insertion
+  // order — oldest first, which is what makes the overflow slice below the
+  // right end to cut.
+  const keptUnregistered: string[] = [];
+
+  for (const root of Object.keys(projects)) {
+    const danger = isDangerousProjectRoot(root);
+    const claimed = registered.has(root);
+    const dead = !claimed && !fs.existsSync(root);
+    const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
+    if (danger !== null || dead || orphanWorkdir) removed.push(root);
+    else if (
+      !claimed &&
+      isGeneratedSection(
+        tree ? findNodeAtLocation(tree, ['projects', root]) : undefined,
+        commentRanges,
+        projects[root],
+      )
+    )
+      keptUnregistered.push(root);
+  }
+
+  const overflow = keptUnregistered.length - maxUnregistered;
+  if (overflow > 0) removed.push(...keptUnregistered.slice(0, overflow));
+
+  return removed;
+}
+
 export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SECTIONS): string[] {
   // Held across the whole read-edit-write cycle. Without it, a section written
   // by a concurrent `setupProject()` after our read is erased by our write —
@@ -280,42 +328,7 @@ export function pruneProjectConfigSections(maxUnregistered = MAX_UNREGISTERED_SE
   return (
     withGlobalConfigLockOrSkip(() => {
       let text = readGlobalConfigText();
-      const parsed = parse(text) as { projects?: Record<string, unknown> } | undefined;
-      const projects = parsed?.projects;
-      if (!projects || typeof projects !== 'object') return [];
-
-      // Parsed once for the whole file, not once per section.
-      const tree = parseTree(text);
-      const commentRanges = findCommentRanges(text);
-
-      const registered = new Set(listProjects().map((p) => p.root));
-      const removed: string[] = [];
-      // Survivors of the two rules above, in file order. `modify` appends a new
-      // key at the end and edits an existing one in place, so this is insertion
-      // order — oldest first, which is what makes the overflow slice below the
-      // right end to cut.
-      const keptUnregistered: string[] = [];
-
-      for (const root of Object.keys(projects)) {
-        const danger = isDangerousProjectRoot(root);
-        const claimed = registered.has(root);
-        const dead = !claimed && !fs.existsSync(root);
-        const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
-        if (danger !== null || dead || orphanWorkdir) removed.push(root);
-        else if (
-          !claimed &&
-          isGeneratedSection(
-            tree ? findNodeAtLocation(tree, ['projects', root]) : undefined,
-            commentRanges,
-            projects[root],
-          )
-        )
-          keptUnregistered.push(root);
-      }
-
-      const overflow = keptUnregistered.length - maxUnregistered;
-      if (overflow > 0) removed.push(...keptUnregistered.slice(0, overflow));
-
+      const removed = findPrunableProjectConfigSections(maxUnregistered, text);
       if (removed.length === 0) return []; // don't rewrite a healthy config
 
       for (const root of removed) {

@@ -157,7 +157,7 @@ const ORPHAN_TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
  * healthy write into a spurious failure. Best-effort throughout — a sweep that
  * cannot read the directory is not worth failing a daemon start over.
  */
-export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_MS): string[] {
+export function findOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_MS): string[] {
   let names: string[];
   try {
     names = fs.readdirSync(dir);
@@ -166,7 +166,7 @@ export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_M
   }
 
   const cutoff = Date.now() - maxAgeMs;
-  const removed: string[] = [];
+  const found: string[] = [];
   for (const name of names) {
     if (!ORPHAN_TMP_PATTERN.test(name)) continue;
     const full = path.join(dir, name);
@@ -179,6 +179,19 @@ export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_M
       // already lists. `lstat` does not follow, so this is the link's own mtime
       // and a dangling one is collected too (TRA-1156).
       if ((!st.isFile() && !st.isSymbolicLink()) || st.mtimeMs > cutoff) continue;
+      found.push(full);
+    } catch {
+      // vanished under us, or inaccessible — skip
+    }
+  }
+  return found;
+}
+
+export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_MS): string[] {
+  const candidates = findOrphanTmpFiles(dir, maxAgeMs);
+  const removed: string[] = [];
+  for (const full of candidates) {
+    try {
       fs.unlinkSync(full);
       removed.push(full);
     } catch {
@@ -202,6 +215,16 @@ const SWEPT_STATE_DIRS = [
   'bin', // launcher shim + artifacts (src/init/launcher.ts)
   'index', // per-project DBs are flat files directly under it
 ];
+
+/**
+ * Find every orphan tmp file across all atomically-written state directories without deleting.
+ */
+export function findOrphanTmpFilesUnderHome(
+  home: string,
+  maxAgeMs = ORPHAN_TMP_MAX_AGE_MS,
+): string[] {
+  return SWEPT_STATE_DIRS.flatMap((d) => findOrphanTmpFiles(path.resolve(home, d), maxAgeMs));
+}
 
 /**
  * Sweep every state directory trace-mcp writes atomically (TRA-783).

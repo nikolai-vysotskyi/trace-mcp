@@ -10,9 +10,14 @@ import * as p from '@clack/prompts';
 import Database from 'better-sqlite3';
 import { Command } from 'commander';
 import { buildSavingsReport, formatSavingsReport, type SavingsReport } from '../savings-report.js';
-import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH } from '../global.js';
+import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH, TRACE_MCP_HOME } from '../global.js';
 import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
 import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
+import { findPrunableProjectConfigSections, pruneProjectConfigSections } from '../config-jsonc.js';
+import {
+  findOrphanTmpFilesUnderHome,
+  sweepOrphanTmpFilesUnderHome,
+} from '../utils/atomic-write.js';
 import {
   getLauncherConfigPath,
   getLauncherDir,
@@ -172,6 +177,10 @@ export const doctorCommand = new Command('doctor')
       const decisions = diagnoseDecisions();
       const hasDecisionsIssues = decisions.staleRoots.length > 0;
 
+      // State hygiene (.config.json dead sections + orphan atomic write .tmp files)
+      const stateHygiene = diagnoseStateHygiene();
+      const hasStateHygieneIssues = stateHygiene.staleCount > 0;
+
       // --fix / --dry-run also clean up the registry itself (TRA-18): missing-root
       // entries and overlap containers have one unambiguous remediation each, so
       // (unlike project conflicts) they don't need an interactive per-item prompt.
@@ -188,6 +197,11 @@ export const doctorCommand = new Command('doctor')
       let decisionsFix: DecisionsFixResult | null =
         hasDecisionsIssues && (opts.fix || opts.dryRun)
           ? fixDecisionsIssues(decisions, { dryRun: opts.dryRun })
+          : null;
+
+      let stateHygieneFix: StateHygieneFixResult | null =
+        hasStateHygieneIssues && (opts.fix || opts.dryRun)
+          ? fixStateHygiene(stateHygiene, { dryRun: opts.dryRun })
           : null;
 
       // Detect project root (optional — doctor works without it)
@@ -217,6 +231,8 @@ export const doctorCommand = new Command('doctor')
                 topologyFix,
                 decisions,
                 decisionsFix,
+                stateHygiene,
+                stateHygieneFix,
                 savings,
                 conflicts,
                 fixes: results,
@@ -228,7 +244,7 @@ export const doctorCommand = new Command('doctor')
         } else {
           console.log(
             JSON.stringify(
-              { serveRoot, registry, topology, decisions, savings, ...report },
+              { serveRoot, registry, topology, decisions, stateHygiene, savings, ...report },
               null,
               2,
             ),
@@ -241,6 +257,7 @@ export const doctorCommand = new Command('doctor')
       printRegistryReport(registry);
       printTopologyReport(topology);
       printDecisionsReport(decisions);
+      printStateHygieneReport(stateHygiene);
       printSavingsReport(savings);
 
       if (registryFix) {
@@ -272,6 +289,19 @@ export const doctorCommand = new Command('doctor')
         if (!p.isCancel(answer) && answer) {
           decisionsFix = fixDecisionsIssues(decisions, { dryRun: false });
           printDecisionsFixResult(decisionsFix, { dryRun: false });
+        }
+      }
+
+      if (stateHygieneFix) {
+        printStateHygieneFixResult(stateHygieneFix, { dryRun: !!opts.dryRun });
+      } else if (opts.fixInteractive && hasStateHygieneIssues) {
+        const answer = await p.confirm({
+          message: `Clean up ${stateHygiene.staleCount} state hygiene item(s) (${stateHygiene.prunableConfigSections.length} config sections, ${stateHygiene.staleTmpFiles.length} orphan tmp files)?`,
+          initialValue: true,
+        });
+        if (!p.isCancel(answer) && answer) {
+          stateHygieneFix = fixStateHygiene(stateHygiene, { dryRun: false });
+          printStateHygieneFixResult(stateHygieneFix, { dryRun: false });
         }
       }
 
@@ -660,6 +690,51 @@ export function fixDecisionsIssues(
   }
 }
 
+// ---------------------------------------------------------------------------
+// State hygiene integrity (.config.json unbounded sections & orphan tmp files)
+// ---------------------------------------------------------------------------
+
+export interface StateHygieneReport {
+  prunableConfigSections: string[];
+  staleTmpFiles: string[];
+  staleCount: number;
+}
+
+export interface StateHygieneFixResult {
+  removedConfigSections: string[];
+  removedTmpFiles: string[];
+}
+
+export function diagnoseStateHygiene(): StateHygieneReport {
+  const prunableConfigSections = findPrunableProjectConfigSections();
+  const staleTmpFiles = findOrphanTmpFilesUnderHome(TRACE_MCP_HOME);
+  return {
+    prunableConfigSections,
+    staleTmpFiles,
+    staleCount: prunableConfigSections.length + staleTmpFiles.length,
+  };
+}
+
+export function fixStateHygiene(
+  s: StateHygieneReport,
+  opts: { dryRun?: boolean },
+): StateHygieneFixResult {
+  if (opts.dryRun) {
+    return {
+      removedConfigSections: s.prunableConfigSections,
+      removedTmpFiles: s.staleTmpFiles,
+    };
+  }
+  const removedConfigSections =
+    s.prunableConfigSections.length > 0 ? pruneProjectConfigSections() : [];
+  const removedTmpFiles =
+    s.staleTmpFiles.length > 0 ? sweepOrphanTmpFilesUnderHome(TRACE_MCP_HOME) : [];
+  return {
+    removedConfigSections,
+    removedTmpFiles,
+  };
+}
+
 export interface BlockedOverlapContainer {
   root: string;
   name: string;
@@ -979,6 +1054,32 @@ function printDecisionsFixResult(fix: DecisionsFixResult, opts: { dryRun: boolea
     `${verb} ${fix.removedDecisions} orphaned decision(s) across ${fix.removedRoots.length} deleted project root(s):`,
   ];
   for (const r of fix.removedRoots) lines.push(`  ${shortPath(r)}`);
+  console.log(lines.join('\n'));
+  console.log('');
+}
+
+function printStateHygieneReport(s: StateHygieneReport): void {
+  if (s.staleCount === 0) return;
+  console.log(`State Hygiene: ${s.staleCount} item(s) need cleanup:`);
+  for (const r of s.prunableConfigSections) {
+    console.log(`  [dead config section] ${shortPath(r)}`);
+  }
+  for (const f of s.staleTmpFiles.slice(0, 10)) {
+    console.log(`  [orphan tmp file] ${shortPath(f)}`);
+  }
+  if (s.staleTmpFiles.length > 10) {
+    console.log(`  ... and ${s.staleTmpFiles.length - 10} more`);
+  }
+  console.log("  Clean up with 'trace-mcp doctor --fix' or 'trace-mcp prune --apply'.\n");
+}
+
+function printStateHygieneFixResult(fix: StateHygieneFixResult, opts: { dryRun: boolean }): void {
+  const verb = opts.dryRun ? 'Would remove' : 'Removed';
+  const total = fix.removedConfigSections.length + fix.removedTmpFiles.length;
+  if (total === 0) return;
+  const lines = [`${verb} ${total} state hygiene item(s):`];
+  for (const r of fix.removedConfigSections) lines.push(`  [config section] ${shortPath(r)}`);
+  for (const f of fix.removedTmpFiles) lines.push(`  [orphan tmp file] ${shortPath(f)}`);
   console.log(lines.join('\n'));
   console.log('');
 }

@@ -295,7 +295,7 @@ supply it.
 | `watch.debounceMs` | number (≥ 500, ≤ 30000) | `2000` |
 | `logging` | object | `{}` |
 | `logging.file` | boolean | `false` |
-| `logging.path` | string | `"~/.trace-mcp/run.log"` |
+| `logging.path` | string | `"~/.trace/run.log"` |
 | `logging.level` | `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` | `"info"` |
 | `logging.max_size_mb` | number (> 0, ≤ 500) | `10` |
 | `git` | object | `{}` |
