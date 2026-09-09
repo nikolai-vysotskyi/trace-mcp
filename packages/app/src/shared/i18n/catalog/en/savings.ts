@@ -19,7 +19,7 @@ export const savings = {
   rowSince: 'Counting since',
   unknown: 'Unknown',
   sectionMethod: 'Method',
-  methodBody: 'The returned half is a real count of the tokens that went over the wire. The baseline half — what the same questions would have cost as file reads — is still an estimate, so this figure is a floor, not a headline.',
+  methodBody: 'The returned half is an estimate (chars/4) of the tokens that went over the wire. The baseline half — what the same questions would have cost as file reads — is still an estimate, so this figure is a floor, not a headline.',
   methodLink: 'Read the method',
   notEnoughTitle: 'Not enough measured calls yet',
   notEnoughSubtitle: 'Use trace-mcp from your agent for a while, then check back.',

@@ -13,7 +13,7 @@ export const savings = {
   rowSince: '统计起始',
   unknown: '未知',
   sectionMethod: '方法',
-  methodBody: '返回的一半是对实际传输 token 的真实计数。基线的一半——同样的问题改用读取文件要花多少——仍是估算，所以这个数字是下限，不是标题。',
+  methodBody: '返回的一半是对实际传输 token 的估算（字符数/4）。基线的一半——同样的问题改用读取文件要花多少——仍是估算，所以这个数字是下限，不是标题。',
   methodLink: '查看方法',
   notEnoughTitle: '实测调用还不够',
   notEnoughSubtitle: '先在智能体里用一段时间 trace-mcp，再回来看。',

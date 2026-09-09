@@ -13,7 +13,7 @@ export const savings = {
   rowSince: 'Gezählt seit',
   unknown: 'Unbekannt',
   sectionMethod: 'Methode',
-  methodBody: 'Die zurückgegebene Hälfte ist eine echte Zählung der Tokens, die über die Leitung gingen. Die Basis-Hälfte — was dieselben Fragen als Dateilesen gekostet hätten — ist weiterhin eine Schätzung. Diese Zahl ist also eine Untergrenze, keine Schlagzeile.',
+  methodBody: 'Die zurückgegebene Hälfte ist eine Schätzung (Zeichen/4) der Tokens, die über die Leitung gingen. Die Basis-Hälfte — was dieselben Fragen als Dateilesen gekostet hätten — ist weiterhin eine Schätzung. Diese Zahl ist also eine Untergrenze, keine Schlagzeile.',
   methodLink: 'Methode lesen',
   notEnoughTitle: 'Noch zu wenige gemessene Aufrufe',
   notEnoughSubtitle: 'Nutze trace-mcp eine Weile aus deinem Agenten und schau später wieder vorbei.',

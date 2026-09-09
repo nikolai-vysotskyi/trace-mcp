@@ -13,7 +13,7 @@ export const savings = {
   rowSince: 'Comptage depuis',
   unknown: 'Inconnu',
   sectionMethod: 'Méthode',
-  methodBody: 'La moitié rendue est un décompte réel des jetons passés sur le fil. La moitié de référence — ce que les mêmes questions auraient coûté en lectures de fichiers — reste une estimation : ce chiffre est un plancher, pas un titre.',
+  methodBody: 'La moitié rendue est une estimation (caractères/4) des jetons passés sur le fil. La moitié de référence — ce que les mêmes questions auraient coûté en lectures de fichiers — reste une estimation : ce chiffre est un plancher, pas un titre.',
   methodLink: 'Lire la méthode',
   notEnoughTitle: 'Pas encore assez d\'appels mesurés',
   notEnoughSubtitle: 'Utilisez trace-mcp depuis votre agent un moment, puis revenez.',

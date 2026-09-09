@@ -13,7 +13,7 @@ export const savings = {
   rowSince: '집계 시작',
   unknown: '알 수 없음',
   sectionMethod: '방법',
-  methodBody: '돌려준 쪽은 실제로 전송된 토큰을 센 값입니다. 기준 쪽 — 같은 질문을 파일 읽기로 해결했을 때의 비용 — 은 아직 추정치이므로, 이 숫자는 헤드라인이 아니라 하한선입니다.',
+  methodBody: '돌려준 쪽은 실제로 전송된 토큰의 추정치(글자 수/4)입니다. 기준 쪽 — 같은 질문을 파일 읽기로 해결했을 때의 비용 — 은 아직 추정치이므로, 이 숫자는 헤드라인이 아니라 하한선입니다.',
   methodLink: '방법 읽기',
   notEnoughTitle: '아직 실측된 호출이 부족합니다',
   notEnoughSubtitle: '에이전트에서 trace-mcp를 얼마간 사용한 뒤 다시 확인해 주세요.',
