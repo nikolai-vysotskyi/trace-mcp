@@ -101,7 +101,7 @@ Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
 ## Tests
 
 ```bash
-pnpm run test                       # All tests (1668 tests, ~2s)
+pnpm run test                       # All tests (vitest run; or node scripts/test-quiet.mjs)
 pnpm run test --run <pattern>  # Run specific test files
 pnpm run test:watch             # Watch mode
 ```
