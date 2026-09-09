@@ -133,6 +133,7 @@ which excludes the framework-specific rows.
 | `get_decision_timeline` | Chronological timeline of decisions for a project, symbol, or file. | always |
 | `get_dependency_diagram` | Render dependency diagram for a file/directory path as Mermaid or DOT. | always |
 | `get_di_tree` | Trace NestJS dependency injection tree (what a service injects + who injects it). | framework |
+| `get_diagnostics` | Execute type-checker (tsc, mypy, pyright) and map errors to enclosing AST symbols. | always |
 | `get_domain_context` | Get all code related to a specific business domain. | always |
 | `get_domain_map` | Get hierarchical map of business domains with key symbols per domain. | always |
 | `get_edge_bottlenecks` | Find architectural bottleneck edges in the import graph: edges on many shortest paths (betweenness), edges whose removal would disconnect the graph (bridges)… | always |
