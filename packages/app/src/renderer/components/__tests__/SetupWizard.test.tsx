@@ -146,7 +146,7 @@ it('connects selected clients and advances to project step on confirmation', asy
   });
 
   await screen.findByText('Index your first project');
-  expect(screen.getByText('my-app')).toBeTruthy();
+  await screen.findByText('my-app');
   expect(screen.getByText('/Users/test/Projects/my-app')).toBeTruthy();
 });
 
@@ -157,6 +157,7 @@ it('registers the project with the daemon, then opens it and closes the wizard',
   render(<SetupWizard onClose={onClose} initialStep="project" />);
 
   await screen.findByText('Index your first project');
+  await screen.findByText('my-app');
   const indexButton = screen.getByRole('button', { name: 'Index project' });
   fireEvent.click(indexButton);
 
@@ -182,6 +183,7 @@ it('keeps the wizard open when the daemon refuses the project', async () => {
   render(<SetupWizard onClose={onClose} initialStep="project" />);
 
   await screen.findByText('Index your first project');
+  await screen.findByText('my-app');
   fireEvent.click(screen.getByRole('button', { name: 'Index project' }));
 
   await screen.findByText(/Could not add the project to the background service/);
