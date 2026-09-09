@@ -530,6 +530,31 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         );
       });
 
+      it('finds supported node and package in sibling nvm version when default alias is older node (TRA-1266)', () => {
+        const { home, traceHome } = setupFakeHome();
+        // Default alias points to older Node 18.0.0 (too old)
+        const oldPrefix = path.join(home, '.nvm', 'versions', 'node', 'v18.0.0');
+        fs.mkdirSync(path.join(oldPrefix, 'bin'), { recursive: true });
+        fs.writeFileSync(path.join(oldPrefix, 'bin', 'node'), fakeNodeBody('18.0.0'), {
+          mode: 0o755,
+        });
+        fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v18.0.0\n');
+
+        // Sibling version v99.0.0 is installed with node + trace-mcp package
+        const good = plantNvm(home, '99.0.0');
+
+        const { status, stdout } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, ...ABOVE_ANY_REAL },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        expect(stdout.trim()).toBe(`NODE_ARGS:${good.cli} serve`);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).toContain(`TRACE_MCP_NODE="${good.node}"`);
+      });
+
       it('re-probes when launcher.env already pins an unsupported node', () => {
         const { home, traceHome, cli } = setupFakeHome();
         const old = path.join(home, 'old-node');
@@ -838,6 +863,54 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       fs.writeFileSync(path.join(pkgDir, 'cli.js'), '// custom prefix cli\n');
       const cli = fs.realpathSync(path.join(pkgDir, 'cli.js'));
       fs.writeFileSync(path.join(home, '.npmrc'), `prefix=${prefix}\n`);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('finds package installed in pnpm global root across candidate homes (TRA-1266)', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const pnpmDir = path.join(
+        home,
+        'Library',
+        'pnpm',
+        'global',
+        '5',
+        'node_modules',
+        'trace-mcp',
+        'dist',
+      );
+      fs.mkdirSync(pnpmDir, { recursive: true });
+      fs.writeFileSync(path.join(pnpmDir, 'cli.js'), '// pnpm global cli\n');
+      const cli = fs.realpathSync(path.join(pnpmDir, 'cli.js'));
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('finds package in sibling nvm version when default alias lacks package (TRA-1266)', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      // default alias points to v24.0.0 which has node but no trace-mcp
+      const defPrefix = path.join(home, '.nvm', 'versions', 'node', 'v24.0.0');
+      fs.mkdirSync(path.join(defPrefix, 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(defPrefix, 'bin', 'node'), fakeNodeBody('24.0.0'), {
+        mode: 0o755,
+      });
+      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v24.0.0\n');
+
+      // sibling version v22.22.2 has trace-mcp installed
+      const sibPrefix = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2');
+      const pkgDir = path.join(sibPrefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.writeFileSync(path.join(pkgDir, 'cli.js'), '// sibling nvm cli\n');
+      const cli = fs.realpathSync(path.join(pkgDir, 'cli.js'));
       writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
 
       const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);

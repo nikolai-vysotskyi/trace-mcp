@@ -241,6 +241,7 @@ export type LauncherPathStatus =
   | 'not_executable'
   | 'broken_interpreter'
   | 'broken_delegate'
+  | 'unmanaged_binary'
   | 'foreign'
   | 'unchecked';
 
@@ -305,6 +306,13 @@ export function checkLauncherFile(file: string): LauncherPathCheck {
     }
   }
   if (!isOwnedShim(target)) {
+    if (isDirectTraceMcpBinary(file, target)) {
+      return {
+        path: file,
+        status: 'unmanaged_binary',
+        detail: 'direct trace-mcp binary (bypasses launcher shim) — run: trace clients update',
+      };
+    }
     return { path: file, status: 'foreign', detail: 'not a trace-mcp launcher — left alone' };
   }
   // Mode bits are not the last gate: the kernel still has to find the shim's
@@ -408,6 +416,37 @@ export function isOwnedShim(file: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Detect whether a file or its symlink target is a direct npm binary or cli.js of trace-mcp,
+ * rather than the canonical launcher shim. Direct binaries bypass launcher.env and daemon proxy,
+ * and break when the host Node environment changes (TRA-1266).
+ */
+export function isDirectTraceMcpBinary(file: string, target: string): boolean {
+  if (/[/\\]trace-mcp[/\\]dist[/\\]cli\.[cm]?js$/.test(target)) return true;
+  const base = path.basename(file).toLowerCase();
+  if (
+    base === 'trace' ||
+    base === 'trace-mcp' ||
+    base === 'trace.cmd' ||
+    base === 'trace-mcp.cmd' ||
+    base === 'trace.ps1' ||
+    base === 'trace-mcp.ps1'
+  ) {
+    if (/[/\\]dist[/\\]cli\.[cm]?js$/.test(target)) {
+      const parentPkg = path.resolve(path.dirname(target), '..', 'package.json');
+      try {
+        if (fs.existsSync(parentPkg)) {
+          const pkg = JSON.parse(fs.readFileSync(parentPkg, 'utf-8'));
+          if (pkg.name === 'trace-mcp') return true;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return false;
 }
 
 /**
