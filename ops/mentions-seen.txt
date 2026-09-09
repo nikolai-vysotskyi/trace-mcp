@@ -131,3 +131,11 @@ su-record/vibe
 drguptavivek/DYNAMIC
 # Collision: CSS class .trace-mcp in hooks/lib/report_generator.py:
 Nova-Hunting/nova-tracer
+
+# ── Swept 2026-09-10 (TRA-1281) ──
+# Genuine auto-index tracking Claude Code plugins by linny006:
+linny006/claude-code-plugin-tracker
+# Collision on dynatrace-mcp gateway URL:
+Dynatrace/dynatrace-for-ai
+# Collision: unrelated 2025 HuggingFace tool 'trace-mcp' in docs/reddit-news:
+inai-sandy/inAI-wiki
