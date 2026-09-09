@@ -42,7 +42,7 @@ interface DependentSymbol {
   resolutionTier?: EdgeResolution;
 }
 
-interface EnrichedDependent {
+export interface EnrichedDependent {
   path: string;
   edgeTypes: string[];
   depth: number;
@@ -52,7 +52,7 @@ interface EnrichedDependent {
 
 // ─── Grouped summaries ──────────────────────────────────────────────────────
 
-interface ModuleImpact {
+export interface ModuleImpact {
   module: string;
   count: number;
   files: string[];
@@ -67,7 +67,7 @@ interface CoChangeHidden {
   inGraph: boolean;
 }
 
-interface ImpactSummary {
+export interface ImpactSummary {
   totalFiles: number;
   totalSymbols: number;
   maxDepth: number;
@@ -78,7 +78,7 @@ interface ImpactSummary {
   sentence: string;
 }
 
-interface RiskSignals {
+export interface RiskSignals {
   score: number;
   level: 'low' | 'medium' | 'high' | 'critical';
   publicApiBreaking: boolean;
@@ -89,7 +89,7 @@ interface RiskSignals {
 
 // ─── Breaking changes ────────────────────────────────────────────────────────
 
-interface BreakingChange {
+export interface BreakingChange {
   symbolId: string;
   symbolName: string;
   kind: string;

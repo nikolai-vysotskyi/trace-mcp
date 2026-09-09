@@ -10,9 +10,9 @@ import { err, ok, type TraceMcpResult } from '../../errors.js';
 import { contentHash, initContentHasher } from '../../util/hash.js';
 import { findUnsafeRef, isSafeGitRef, safeGitEnv } from '../../utils/git-env.js';
 
-type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
+export type ChangeKind = 'added' | 'modified' | 'removed' | 'renamed';
 
-interface ChangedSymbolEntry {
+export interface ChangedSymbolEntry {
   symbolId: string;
   name: string;
   kind: string;
@@ -23,7 +23,7 @@ interface ChangedSymbolEntry {
   blastRadius?: number;
 }
 
-interface ChangedSymbolsResult {
+export interface ChangedSymbolsResult {
   since: string;
   until: string;
   changedFiles: number;
