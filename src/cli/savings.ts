@@ -10,7 +10,9 @@ import { Command } from 'commander';
 import { buildSavingsReport, formatSavingsReport } from '../savings-report.js';
 
 export const savingsCommand = new Command('savings')
-  .description('Show the input tokens trace-mcp gave back to this install (measured, local).')
+  .description(
+    'Show the input tokens trace-mcp gave back to this install (measured calls, chars/4 local estimate).',
+  )
   .option('--json', 'Emit the report as JSON')
   .action((opts: { json?: boolean }) => {
     const report = buildSavingsReport();

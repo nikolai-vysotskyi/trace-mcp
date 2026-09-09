@@ -120,6 +120,8 @@ describe('buildSavingsReport', () => {
     expect(text).toContain('at least');
     expect(text).toContain('response-tokens');
     expect(text).toContain('estimate');
+    expect(text).toContain('chars/4');
+    expect(text).toContain('0.220–0.368');
   });
 });
 
