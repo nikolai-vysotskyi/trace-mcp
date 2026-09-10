@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-09T06:41:25.312Z"
+updated: "2026-09-10T06:40:47.012Z"
 active_users:
-  day: 39
-  week: 120
-  month: 178
+  day: 40
+  week: 118
+  month: 189
   first_ping_date: "2026-08-29"
-  days_observed: 12
+  days_observed: 13
   month_window_full: false
-events_28d: 813
+events_28d: 883
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 813
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 26531016
-  tokens_saved_raw: 26531016
-  usd_saved: 26.53
+  tokens_saved: 30702600
+  tokens_saved_raw: 30702600
+  usd_saved: 30.7
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 4
+  days: 5
   capped_days: 0
   raw_ratio: 1
   inflation_suspected: false
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 147
+  new_installs_28d: 158
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -159,30 +159,30 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "(not set)": 275
-  "upgrade": 202
-  "new": 147
-  "active": 135
+  "(not set)": 279
+  "upgrade": 227
+  "active": 163
+  "new": 158
   "unknown": 52
-  "downgrade": 1
+  "downgrade": 2
 by_version:
+  "3.23.2": 51
   "3.22.0": 37
-  "3.23.2": 37
   "(not set)": 36
   "3.10.0": 28
   "3.17.1": 28
   "3.15.0": 26
   "3.11.0": 25
+  "3.24.0": 24
   "3.8.0": 23
   "3.18.0": 19
   "3.14.0": 16
   "3.19.0": 8
   "3.20.0": 8
-  "3.24.0": 4
   "3.21.0": 2
   "3.23.0": 2
   "3.7.0": 2
@@ -208,10 +208,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 190
+  at_or_above: 224
   below: 80
   unknown: 36
-  pct: 70
+  pct: 74
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -254,45 +254,48 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 75
+  "(not set)": 77
   "United States": 17
-  "Russia": 14
-  "United Arab Emirates": 8
+  "Russia": 15
+  "United Arab Emirates": 13
   "Chile": 6
   "Poland": 5
   "South Korea": 5
   "Sweden": 5
+  "Thailand": 5
   "Brazil": 4
   "Denmark": 4
   "Australia": 3
   "Italy": 3
-  "Thailand": 3
   "United Kingdom": 3
   "Austria": 2
   "Bangladesh": 2
+  "China": 2
   "Germany": 2
   "Hong Kong": 2
   "Malta": 2
   "Netherlands": 2
   "New Zealand": 2
   "Argentina": 1
-  "China": 1
   "Indonesia": 1
 by_client:
-  "unknown": 137
+  "unknown": 148
+  "claude-code": 45
   "(not set)": 36
-  "claude-code": 36
-  "codex-mcp-client": 17
+  "codex-mcp-client": 20
   "antigravity-client": 6
-  "mcp": 3
+  "mcp": 4
   "opencode": 3
   "rmcp": 3
   "cursor-vscode": 2
   "grok-shell-trace-mcp": 2
   "Trae": 1
+  "Visual Studio Code": 1
   "count-advertised-tools": 1
   "factory-cli": 1
   "freebuff-desktop": 1
+  "kimi-code": 1
   "pi-mcp-trace-mcp": 1
   "smoke": 1
   "trace-mcp-insights": 1
+  "zcode": 1
