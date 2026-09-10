@@ -7,8 +7,8 @@
  * import patterns" and so claimed 66 of 81 languages. Indexing a fixture where
  * every language performs one real cross-file import originally produced edges
  * for only four: php, python, typescript and vue. Go, Rust, C, C++, Java,
- * Ruby, Astro, Svelte, C#, Kotlin and Elixir have since gained resolvers (in
- * that order); Swift and Lua still extract an import that nothing
+ * Ruby, Astro, Svelte, C#, Kotlin, Elixir and Lua have since gained resolvers (in
+ * that order); Swift still extracts an import that nothing
  * consumes.
  *
  * Astro and Svelte needed no new resolver pass (TRA-451): both extract
@@ -61,6 +61,7 @@ export const IMPORT_EDGE_LANGUAGES: ReadonlySet<string> = new Set([
   'csharp', // resolveCSharpImportEdges
   'kotlin', // resolveKotlinImportEdges
   'elixir', // resolveElixirImportEdges
+  'lua', // resolveLuaImportEdges
   'yaml', // resolveIacImportEdges — kustomize / docker-compose refs
   'hcl', // resolveIacImportEdges — local terraform module sources
   'markdown', // resolveMarkdownWikilinkEdges

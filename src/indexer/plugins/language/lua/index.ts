@@ -434,14 +434,21 @@ export class LuaLanguagePlugin implements LanguagePlugin {
   /**
    * require() import edges.
    * The grammar doesn't reliably parse require() calls, so we use regex.
+   * Strips comments first so commented-out code doesn't emit phantom edges,
+   * handles quotes, Lua long brackets [[...]], whitespace variations,
+   * and pcall(require, "...") patterns.
    */
   private extractRequireEdges(source: string, edges: RawEdge[]): void {
-    const re = /\brequire\s*\(?["']([^"']+)["']\)?/gm;
+    const stripped = source.replace(/--\[(=*)\[[\s\S]*?\]\1\]/g, '').replace(/--[^\n]*/g, '');
+    const re =
+      /\b(?:require\s*(?:\(\s*|\s*)(?:["']([^"']+)["']|\[\[([^\]]+)\]\])|pcall\s*\(\s*require\s*,\s*["']([^"']+)["']\s*\))/gm;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(source)) !== null) {
-      const mod = m[1];
-      if (mod) {
-        edges.push({ edgeType: 'imports', metadata: { module: mod } });
+    const seen = new Set<string>();
+    while ((m = re.exec(stripped)) !== null) {
+      const mod = (m[1] ?? m[2] ?? m[3])?.trim();
+      if (mod && !seen.has(mod)) {
+        seen.add(mod);
+        edges.push({ edgeType: 'imports', metadata: { module: mod, from: mod } });
       }
     }
   }
