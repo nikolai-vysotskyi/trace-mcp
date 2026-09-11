@@ -167,7 +167,7 @@ No. Both index locally into SQLite, need no API key, and survive restarts.
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Comparing codegraph against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — indexing against packing, on their own terms.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
