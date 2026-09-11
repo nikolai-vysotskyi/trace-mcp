@@ -2162,5 +2162,4 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
     `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`, `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`, `The-PR-Agent/pr-agent#2499`, `fullsend-ai/fullsend#297`, `macanderson/stella#6461`, `garrytan/gbrain#5001`, `fmagent-project/FM-Agent#229`.
     All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
 - Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge), plus dedicated comparative page for **Ripwire** (`redhat-et/ripwire`, 1.9K★).
->>>>>>> origin/master
 
