@@ -5,6 +5,7 @@ interface ToolsListResult {
   tools: Array<{
     inputSchema?: { $schema?: unknown };
     outputSchema?: { $schema?: unknown };
+    execution?: { taskSupport?: unknown };
   }>;
 }
 
@@ -24,7 +25,13 @@ function isToolsListResponse(
  * paid on every `tools/list`, and `$schema` is an optional informational
  * keyword no MCP client reads. Strip it as the message leaves the process.
  *
- * Verified against @modelcontextprotocol/sdk@1.29.0, zod@4.3.6 (2026-08-28).
+ * In addition, @modelcontextprotocol/sdk@1.30.0 unconditionally attaches
+ * `execution: { taskSupport: 'forbidden' }` to every registered tool. In the
+ * MCP specification `taskSupport` is optional and defaults to 'forbidden' for
+ * standard tools. Stripping redundant `execution: { taskSupport: 'forbidden' }`
+ * saves another ~6.7k chars (~1.67k tokens) over the wire across all tools.
+ *
+ * Verified against @modelcontextprotocol/sdk@1.30.0, zod@4.3.6 (2026-09-11).
  * The "premise" test in `__tests__/schema-shim.test.ts` asserts the *unpatched*
  * SDK still emits `$schema` — if an SDK/zod bump stops emitting it or changes
  * the response shape, that test fails instead of this shim silently becoming a
@@ -37,6 +44,9 @@ export function stripRedundantSchemaKeyword<T extends Transport>(transport: T): 
       for (const tool of message.result.tools) {
         if (tool.inputSchema) delete tool.inputSchema.$schema;
         if (tool.outputSchema) delete tool.outputSchema.$schema;
+        if (tool.execution && tool.execution.taskSupport === 'forbidden') {
+          delete tool.execution;
+        }
       }
     }
     return originalSend(message, options as never);
