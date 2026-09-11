@@ -619,4 +619,88 @@ Mobile Lighthouse audits executed via PageSpeed Insights API key confirm pristin
 - **`/comparisons.html`**: Perf **98**, SEO **100**, A11y **100**, Best Practices **100** (FCP 1.2s, LCP 1.4s, CLS 0, TBT 20ms).
 - **`/vs/context-mode.html`**: Perf **99**, SEO **100**, A11y **100**, Best Practices **100** (FCP 1.0s, LCP 1.2s, CLS 0, TBT 0ms).
 
+## Reading 2026-09-11 04:00 UTC (TRA-1346): 24 indexed (+2 new /vs/ pages: jcodemunch & repomix-vs-codegraph), jcodemunch captures direct SERP click, codegraph mcp surges to 11 impressions, internal link graph expansion to 6 links for privacy
+
+Full Search Console API pass (URL Inspection across all 34 sitemap URLs, Search Analytics 28d, Sitemaps API), full internal link graph audit, and PageSpeed Insights mobile CWV audit on 2026-09-11 04:00 UTC.
+
+### 1. Google Indexation & Discovery Breakthroughs (CONFIRMED via GSC URL Inspection API)
+
+A full inspection of all 34 URLs in `sitemap.xml` verified accelerated crawl momentum and spoke indexation:
+* **Total Indexed: 24 URLs** (up from 22 on 09-08 12:00 UTC, and 13 on Sept 4):
+  - **`/vs/jcodemunch.html` officially indexed**: Transitioned from "URL is unknown to Google" directly into **Submitted and indexed** (Googlebot crawl: `2026-09-09T14:58:34Z`). Googlebot followed referring links credited from `https://trace-mcp.com/tools-index.html` and `/perf/pr-context-loss-classes/`.
+  - **`/vs/repomix-vs-codegraph.html` officially indexed**: Transitioned from "Discovered - currently not indexed" into **Submitted and indexed** (Googlebot crawl: `2026-09-09T19:17:36Z`). Googlebot followed referring links from `https://trace-mcp.com/vs/jcodemunch.html` and GitHub README.
+  - **5 of 11 `/vs/` comparison spokes are now officially indexed**:
+    1. `/vs/codegraph.html` — **Submitted and indexed** (crawled 09-06T16:25Z)
+    2. `/vs/context-mode.html` — **Submitted and indexed** (crawled 09-06T08:58Z)
+    3. `/vs/codebase-memory-mcp.html` — **Submitted and indexed** (crawled 09-07T00:45Z)
+    4. `/vs/jcodemunch.html` — **Submitted and indexed** (crawled 09-09T14:58Z)
+    5. `/vs/repomix-vs-codegraph.html` — **Submitted and indexed** (crawled 09-09T19:17Z)
+* **"Discovered - currently not indexed" tier holds 7 URLs**:
+  - `/code-graph-mcp.html` (Category landing hub; ref: `/analytics.html`)
+  - `/vs/serena.html` (ref: `/configuration.html`)
+  - `/vs/codegraphcontext.html` (ref: `/analytics.html`)
+  - `/vs/tokensave.html` (ref: `/tools-index.html`)
+  - `/vs/code-review-graph.html` (ref: `/analytics.html`)
+  - `/reduce-claude-code-token-usage.html` (ref: `/configuration.html`)
+  - `/daemon-memory.html` (ref: `/pr-context-benchmark.html`)
+* **URL is unknown to Google down to only 3 URLs**:
+  - `/vs/repomix.html`
+  - `/vs/socraticode.html`
+  - `/privacy.html`
+
+### 2. Search Analytics: Immediate Spoke Monetization & Category Surge (CONFIRMED)
+
+GSC Search Analytics (28d) captured high-impact developments:
+* **Newly indexed `/vs/jcodemunch.html` immediately surfaced organic traffic:**
+  - Query `jcodemunch` captured **1 click / 5 impressions (CTR 20.0%, average position 1.6)**! Initially landed on `/analytics.html` prior to spoke crawl, now directly addressed by the indexed dedicated spoke.
+* **Direct non-branded comparison click:**
+  - `mcp codegraph` generated **1 click / 1 impression (CTR 100.0%, position 3.0)** landing directly on `/vs/codegraph.html`.
+* **Category target keyword `codegraph mcp` surging:**
+  - Impressions on `codegraph mcp` jumped to **11 impressions (average position 8.7)** on `/vs/codegraph.html` (up from 1 impression on 09-08, and 0 on 09-06).
+* **Competitor comparison dominance & high CTR:**
+  - `"codegraphcontext"`: **4 clicks / 5 impressions (CTR 80.0%, avg position 2.2)** across `/comparisons.html` and `/vs/codebase-memory-mcp.html`.
+  - `serena mcp`: **1 click / 1 impression (CTR 100.0%, position 7.0)** on `/vs/codebase-memory-mcp.html`.
+  - `serena alternatives`: **Position 1.0** (1 imp).
+  - `serena mcp vs codegraph`: **Position 1.0** (1 imp).
+  - `codegraph vs serena`: **Position 1.0** (1 click).
+  - `repomix vs graphify`: **Position 4.0** (1 imp).
+  - `codebase-memory-mcp alternatives`: **Position 10.0** (1 imp).
+  - `clawz telemetry schema detection analytics mcp`: **Position 4.0** (1 imp).
+  - `tweakcc`: **Position 7.0** (1 imp).
+  - `toolindex`: **Position 15.0** (1 imp).
+* **Overall domain search performance:**
+  - Total impressions grew to **1,257** and total clicks to **94**, driven by comparison spokes and category queries.
+
+### 3. Internal Link Graph Reinforcement & Isolation Eradication
+
+Programmatic analysis of in-body directed link graph across all 34 documentation pages (`analyze_links.py`) targeted low-link pages and unindexed assets:
+1. **Category hub `/code-graph-mcp.html` expanded as central ecosystem router:**
+   - Added `[Context Mode](/vs/context-mode.html)` (12.8K★) to ecosystem matrix table.
+   - Added `[Repomix vs codegraph](/vs/repomix-vs-codegraph.html)` head-to-head comparison link.
+   - Contextual link to `[reduce-claude-code-token-usage.html](/reduce-claude-code-token-usage.html)` for 7 measured tactics.
+   - Contextual link to `[daemon-memory.html](/daemon-memory.html)` for SQLite mmap and RAM bounds.
+   - Contextual link to `[privacy.html](/privacy.html)` for local storage isolation guarantee.
+   - Outbound in-body connections increased from 18 to **23 links**.
+2. **Eradication of `/privacy.html` discovery gap:**
+   - Previously had only 3 links, leaving it "URL is unknown to Google".
+   - Contextual links added in `docs/architecture.md` (storage boundaries), `docs/what-trace-init-installs.md` (local data & telemetry), and `docs/code-graph-mcp.md`.
+   - Inbound in-body links doubled: 3 -> **6 links** (`architecture.html`, `code-graph-mcp.html`, `comparisons.html`, `telemetry.html`, `what-trace-init-installs.html`, `vs/socraticode.html`).
+3. **`config-index.md` reinforced:**
+   - Linked from `tools-index.md` intro via `scripts/tools-index.ts`. Inbound in-body links increased: 3 -> **4 links**.
+4. **`daemon-memory.md` reinforced:**
+   - Linked from `code-graph-mcp.md` local storage section. Inbound in-body links increased: 3 -> **4 links**.
+
+### 4. PageSpeed Insights & Mobile CWV Lab Validation
+
+Mobile Lighthouse audits executed via PageSpeed Insights API key confirm stellar Core Web Vitals:
+* **`/vs/jcodemunch.html`**: Performance **98**, SEO **100**, Accessibility **100**, Best Practices **100**.
+* **`/vs/repomix-vs-codegraph.html`**: Performance **98**, SEO **100**, Accessibility **100**, Best Practices **100**.
+* **`/code-graph-mcp.html`**: Performance **99**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms).
+* **Homepage (`https://trace-mcp.com/`)**: Performance **98**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 1.1s, LCP 1.7s, CLS 0, TBT 0ms).
+
+### 5. Search Console Sitemap Resubmission
+
+* Updated sitemap containing 34 URLs submitted via Search Console API `sitemaps().submit()` at 2026-09-11 04:10 UTC to prompt immediate Googlebot fetch.
+
+
 

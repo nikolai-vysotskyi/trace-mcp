@@ -107,7 +107,7 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
     api-server-b2c3d4e5.db
 ```
 
-Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md).
+Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md). All databases stay local to your machine; for storage boundaries and telemetry policies, see [privacy](privacy.md).
 
 The **topology database** (`topology.db`) is shared across all projects. It stores:
 - **Subprojects** (= services) — bound to projects, auto-detected or manually added
