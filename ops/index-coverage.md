@@ -702,5 +702,64 @@ Mobile Lighthouse audits executed via PageSpeed Insights API key confirm stellar
 
 * Updated sitemap containing 34 URLs submitted via Search Console API `sitemaps().submit()` at 2026-09-11 04:10 UTC to prompt immediate Googlebot fetch.
 
+## Reading 2026-09-11 16:30 UTC (TRA-1365): Googlebot re-crawls Homepage, 24 indexed, +2 pages transition to Discovered (repomix & privacy), GitNexus link mesh expansion (+11 in-links), Narsil-MCP & Graft profiling, and MCP tracing query optimization
+
+Full Google Search Console API pass (URL Inspection across all 35 sitemap URLs, Search Analytics 28d, Sitemaps API), full internal link mesh audit across all 12 `/vs/` spokes, competitor stars audit, and PageSpeed Insights mobile CWV audit on 2026-09-11 16:30 UTC.
+
+### 1. Google Indexation Momentum & Re-Crawl (CONFIRMED via GSC URL Inspection API)
+
+A full inspection pass of all 35 URLs in `sitemap.xml` verified fresh Googlebot activity and crawl momentum:
+* **Homepage `https://trace-mcp.com/` freshly re-crawled**: Googlebot crawled the homepage on **2026-09-11T02:02:39Z** (`Submitted and indexed`, Page fetch: Successful, Indexing: Allowed, User agent: Googlebot smartphone).
+* **Total Indexed remains strong at 24 URLs**:
+  - All 24 core pages and 5 `/vs/` spokes (`codegraph`, `context-mode`, `codebase-memory-mcp`, `jcodemunch`, `repomix-vs-codegraph`) continue indexed and serving impressions.
+* **"Discovered - currently not indexed" transition (+2 new pages discovered)**:
+  - **`/vs/repomix.html` moved out of "URL is unknown to Google" into Discovered**: Referring page credited by Googlebot: `https://trace-mcp.com/configuration.html`.
+  - **`/privacy.html` moved out of "URL is unknown to Google" into Discovered**: Referring page credited by Googlebot: `https://trace-mcp.com/pr-context-benchmark.html`. This confirms the multi-point link injection in PR #1190 was successfully crawled and followed by Googlebot.
+  - `/reduce-claude-code-token-usage.html` remains in Discovered (referring page: `https://trace-mcp.com/configuration.html`).
+* **"URL is unknown to Google" tier**:
+  - 8 pages: `/code-graph-mcp.html`, `/vs/serena.html`, `/vs/codegraphcontext.html`, `/vs/socraticode.html`, `/vs/tokensave.html`, `/vs/gitnexus.html` (new spoke added in PR #1193), `/vs/code-review-graph.html`, `/daemon-memory.html`.
+
+### 2. Search Query Opportunity: `mcp tracing` (CONFIRMED via GSC Search Analytics 28d)
+
+Search Analytics (28d: 1,257 impressions, 94 clicks) reveals high-intent keyword demand:
+* **Query `mcp tracing` accumulated 52 impressions at average position 13.8**, but 0 clicks because search traffic was landing on generic homepage `#` section anchors rather than a targeted technical resource.
+* **Targeted Optimization**:
+  - Enhanced `docs/telemetry.md` (`/telemetry.html`) with a dedicated "Frequently asked questions" section specifically targeting `mcp tracing` definitions, configuration walkthroughs, and security boundaries.
+  - Added structured `FAQPage` JSON-LD schema alongside `TechArticle` in `@graph` on `/telemetry.html` to capture Google rich results.
+
+### 3. Internal Link Mesh Expansion: `/vs/gitnexus.html`
+
+Programmatic analysis of the `/vs/` comparison spoke link graph revealed a deficit following PR #1193:
+* PR #1193 added `docs/vs/gitnexus.md` (47.2K★ GitNexus comparison) but did not cross-link to it from the existing 11 comparison spokes.
+* **Remediated**:
+  - Added `[vs GitNexus](/vs/gitnexus.html)` into "The other head-to-heads" footer across all 11 other `/vs/` spokes (`serena`, `context-mode`, `codegraph`, `codegraphcontext`, `codebase-memory-mcp`, `socraticode`, `jcodemunch`, `code-review-graph`, `tokensave`, `repomix`, `repomix-vs-codegraph`).
+  - Added `[Repomix vs codegraph](/vs/repomix-vs-codegraph.html)` to `gitnexus.md`.
+  - Added GitNexus, Graft, and Narsil-MCP to the category comparison table in `docs/code-graph-mcp.md`.
+  - Inbound in-body links to `/vs/gitnexus.html` surged from 2 to **13 links**, ensuring immediate discovery and internal PageRank distribution.
+
+### 4. Competitive Intelligence: Live Stars Audit + Narsil-MCP & Graft Profiling
+
+* Re-verified GitHub stars for 18 competitors in `docs/_data/competitors.yml`:
+  - `yamadashy/repomix`: 18,368 -> 18,506 (18.5K★)
+  - Added `trailhq/Graft`: 7,056 (7.1K★)
+  - Added `postrv/narsil-mcp`: 182★
+  - `abhigyanpatwari/GitNexus`: 47,211 (47.2K★)
+* Added architectural deep-dives for **Narsil-MCP** and **Graft** into `docs/comparisons.md` under `## Profiling depth tracker` with clear take-or-pass decisions:
+  - **Narsil-MCP**: Take: 4-layer progressive disclosure (L0 Manifest ~1KB -> L1 Architecture -> L2 Symbol -> L3 Detail) for budget packing. Pass: RDF/N-Quads schema and 90 uncurated tools.
+  - **Graft**: Take: Plain-language concept summaries bridging syntax and intent. Pass: LLM dependency for indexing (trace-mcp remains 100% deterministic, offline, zero API cost) and flat file storage.
+
+### 5. PageSpeed Insights & Mobile CWV Lab Validation
+
+Mobile Lighthouse audits executed via PageSpeed Insights API key confirm pristine Core Web Vitals:
+* **`/vs/gitnexus.html`**: Performance **100**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms).
+* **`/code-graph-mcp.html`**: Performance **99**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms).
+* **`/vs/repomix.html`**: Performance **99**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 0.9s, LCP 1.1s, CLS 0, TBT 0ms).
+* **Homepage (`https://trace-mcp.com/`)**: Performance **98**, SEO **100**, Accessibility **100**, Best Practices **100** (FCP 1.1s, LCP 1.9s, CLS 0, TBT 0ms).
+
+### 6. Search Console Sitemap Resubmission
+
+* Updated sitemap containing 35 URLs submitted via Search Console API `sitemaps().submit()` at 2026-09-11 16:30 UTC.
+
+
 
 

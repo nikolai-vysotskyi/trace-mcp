@@ -1,7 +1,7 @@
 ---
 title: "CodeGraphContext Alternative: trace-mcp vs CodeGraphContext for AI agents"
 description: "CodeGraphContext drives 11 SCIP indexers into a graph database you choose. trace-mcp ships one embedded store, framework edges and a write path."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # CodeGraphContext alternative: trace-mcp vs CodeGraphContext
@@ -170,7 +170,7 @@ Portable `.cgc` graph snapshots, published to a Hugging Face-hosted registry and
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Language matrix](/language-matrix.html) — what resolution tier each language actually reaches.
 - [Get started](/#install) — no configuration required.

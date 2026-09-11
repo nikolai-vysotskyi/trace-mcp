@@ -1,7 +1,7 @@
 ---
 title: "MCP Tracing — OpenTelemetry spans for every MCP tool call"
 description: "How to trace MCP tool calls: trace-mcp emits OpenTelemetry spans for every MCP tool invocation and AI provider call, exported to Jaeger or Langfuse."
-updated: 2026-09-06
+updated: 2026-09-11
 ---
 
 # MCP Tracing & Telemetry
@@ -9,26 +9,59 @@ updated: 2026-09-06
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "TechArticle",
-  "headline": {{ page.title | jsonify }},
-  "description": {{ page.description | jsonify }},
-  "url": "https://trace-mcp.com/telemetry.html",
-  "datePublished": "2026-05-13",
-  "dateModified": {{ page.updated | jsonify }},
-  "author": {
-    "@type": "Person",
-    "name": "Nikolai Vysotskyi",
-    "url": "https://github.com/nikolai-vysotskyi"
-  },
-  "publisher": {
-    "@type": "Person",
-    "name": "Nikolai Vysotskyi",
-    "url": "https://github.com/nikolai-vysotskyi"
-  },
-  "mainEntityOfPage": {
-    "@type": "WebPage",
-    "@id": "https://trace-mcp.com/telemetry.html"
-  }
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "headline": {{ page.title | jsonify }},
+      "description": {{ page.description | jsonify }},
+      "url": "https://trace-mcp.com/telemetry.html",
+      "datePublished": "2026-05-13",
+      "dateModified": {{ page.updated | jsonify }},
+      "author": {
+        "@type": "Person",
+        "name": "Nikolai Vysotskyi",
+        "url": "https://github.com/nikolai-vysotskyi"
+      },
+      "publisher": {
+        "@type": "Person",
+        "name": "Nikolai Vysotskyi",
+        "url": "https://github.com/nikolai-vysotskyi"
+      },
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "https://trace-mcp.com/telemetry.html"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is MCP tracing?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "MCP tracing is the instrumentation of Model Context Protocol server invocations and tool calls with distributed tracing telemetry (such as OpenTelemetry spans). It captures tool names, execution latency, error exceptions, and AI provider token usage, forwarding them to collectors like Jaeger, Honeycomb, or Langfuse."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I trace MCP tool calls with trace-mcp?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Enable the observability bridge in .trace.json under telemetry.observability.enabled: true with sink set to otlp or langfuse. Every tool execution (tool.<name>) and AI model interaction (ai.embed, ai.generate) will emit standard OpenTelemetry spans to your local or hosted collector."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does MCP tracing export private codebase contents or secrets?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Telemetry spans export operational performance metadata only (tool names, duration in milliseconds, error types, and payload sizes). Repository source code, file contents, and API credentials are never transmitted, and sinks default to noop unless explicitly configured."
+          }
+        }
+      ]
+    }
+  ]
 }
 </script>
 Tracing an MCP server means seeing which tool the agent called, how long it
@@ -162,6 +195,34 @@ rm .trace.json   # if you don't want telemetry enabled going forward
 - `sampleRate < 1`: a `SamplingSink` wraps the real sink and rolls a
   `Math.random()` per `startSpan` / `emit`. Kept spans cost the full export
   path; dropped spans are noop.
+
+## Frequently asked questions
+
+### What is MCP tracing?
+
+**MCP tracing** instruments [Model Context Protocol](https://modelcontextprotocol.io/) interactions between AI coding agents (such as Claude Code, Cursor, or Windsurf) and MCP servers. Instead of debugging tool timeouts or failed tool invocations through raw log tails, MCP tracing emits structured OpenTelemetry spans for every tool call (`tool.<name>`) and provider inference (`ai.embed`, `ai.generate`). This surfaces tool execution duration, error stack traces, and token costs in standard APM dashboards like Jaeger, Honeycomb, or Langfuse alongside your backend application traces.
+
+### How do I trace MCP tool calls with trace-mcp?
+
+In your project repository, configure `.trace.json` to enable the observability bridge:
+
+```json
+{
+  "telemetry": {
+    "observability": {
+      "enabled": true,
+      "sink": "otlp",
+      "otlp": { "endpoint": "http://localhost:4318/v1/traces" }
+    }
+  }
+}
+```
+
+Once configured, any command or client session running through trace-mcp flushes traces asynchronously to your configured OTLP endpoint without adding blocking network overhead to tool turns. For detailed configuration parameters, see the [configuration guide](configuration.md).
+
+### Does MCP tracing export private repository code or credentials?
+
+No. trace-mcp telemetry spans export operational metadata only: span names, execution durations (`duration_ms`), error exception types, input/output payload sizes in bytes, and model token counts. Raw source code files, git diffs, and API credentials are never included in OpenTelemetry attributes or events. Furthermore, the sink defaults to `noop` until you explicitly opt in, and all usage ping policies are documented on the [privacy page](privacy.md).
 
 ## Troubleshooting
 
