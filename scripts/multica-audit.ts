@@ -99,7 +99,7 @@ function surface(members: readonly string[] | 'all'): { tools: number; tokens: n
 const fullSurface = surface('all');
 
 console.log('========================================================================');
-console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1356)      ');
+console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1366)      ');
 console.log('========================================================================\n');
 console.log(`Directory: ${sessionsDir}`);
 console.log(
@@ -236,6 +236,94 @@ if (dbPath) {
         `  ${r.tool_short_name.padEnd(25)} ${String(r.cnt).padStart(5)} calls (${pct.padStart(4)}%)`,
       );
     }
+
+    const ROLE_PRESET_MAP: Record<string, string> = {
+      'Implementation Engineer': 'dev',
+      'Lead Engineer': 'dev',
+      'Performance Agent': 'perf',
+      'Design/UX Agent': 'design',
+      'Web Design Agent': 'design',
+      'Growth & Outreach Agent': 'minimal',
+      'SEO Agent': 'minimal',
+      'Security Agent': 'security',
+      'TraceMCP Research Analyst': 'minimal',
+      'Code Reviewer': 'review',
+      'Reviewer B': 'review',
+      'Reviewer C': 'review',
+      'Ops Sweeper': 'minimal',
+    };
+
+    const cachePath = join(import.meta.dirname, '..', 'ops', 'preset-issue-roles.json');
+    const issueRoles: Record<string, string> = existsSync(cachePath)
+      ? JSON.parse(readFileSync(cachePath, 'utf8'))
+      : {};
+
+    const roleRows = db
+      .prepare(
+        `SELECT s.project_path, tc.tool_short_name, count(*) as cnt
+         FROM tool_calls tc
+         JOIN sessions s ON tc.session_id = s.id
+         WHERE s.project_path LIKE ?
+           AND s.started_at >= ?
+           AND tc.tool_server = ?
+         GROUP BY s.project_path, tc.tool_short_name`,
+      )
+      .all('%multica%', ROLLOUT_CUTOFF, 'trace-mcp') as {
+      project_path: string;
+      tool_short_name: string;
+      cnt: number;
+    }[];
+
+    const roleCalls: Record<string, Record<string, number>> = {};
+    for (const r of roleRows) {
+      const m = r.project_path.match(/tra-(\d+)/i);
+      const issueKey = m ? `TRA-${m[1]}` : null;
+      const role =
+        issueKey && issueRoles[issueKey] ? issueRoles[issueKey] : 'Unmapped / Direct Task';
+      roleCalls[role] = roleCalls[role] || {};
+      roleCalls[role][r.tool_short_name] = (roleCalls[role][r.tool_short_name] || 0) + r.cnt;
+    }
+
+    console.log('\n------------------------------------------------------------------------');
+    console.log('   PER-ROLE DIRECT RESOLUTION AUDIT (Role Presets vs Real Usage, TRA-1366)');
+    console.log('------------------------------------------------------------------------\n');
+
+    let totalMappedCalls = 0;
+    let totalDirectCalls = 0;
+
+    for (const [role, tools] of Object.entries(roleCalls)) {
+      if (role === 'Unmapped / Direct Task') continue;
+      const presetName = ROLE_PRESET_MAP[role] || 'minimal';
+      const members = TOOL_PRESETS[presetName];
+      const allowed =
+        members === 'all' ? null : new Set([...(members as string[]), ...UNGATED_META_TOOLS]);
+      const total = Object.values(tools).reduce((a, b) => a + b, 0);
+      let direct = 0;
+      const missing: [string, number][] = [];
+      for (const [tool, count] of Object.entries(tools)) {
+        if (!allowed || allowed.has(tool)) {
+          direct += count;
+        } else {
+          missing.push([tool, count]);
+        }
+      }
+      totalMappedCalls += total;
+      totalDirectCalls += direct;
+      const pct = ((direct / total) * 100).toFixed(1);
+      const missingStr =
+        missing.length > 0
+          ? `missing: ${missing.map(([t, c]) => `${t}(${c})`).join(' ')}`
+          : '✓ 100% covered';
+      console.log(
+        `${role.padEnd(26)} [${presetName.padEnd(8)}] ${String(total).padStart(4)} calls -> ${pct.padStart(5)}% direct (${missingStr})`,
+      );
+    }
+
+    console.log('\n------------------------------------------------------------------------');
+    console.log(
+      `Workspace Fleet Total: ${totalDirectCalls} / ${totalMappedCalls} calls directly resolved (${((100 * totalDirectCalls) / totalMappedCalls).toFixed(1)}%)`,
+    );
+    console.log('------------------------------------------------------------------------');
   } catch (err) {
     console.warn(`Could not read analytics DB: ${(err as Error).message}`);
   }

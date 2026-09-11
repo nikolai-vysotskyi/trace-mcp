@@ -225,6 +225,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_type_hierarchy',
     'get_related_symbols',
     'get_tests_for',
+    'get_untested_symbols',
     'get_changed_symbols',
     'apply_rename',
     'remove_dead_code',
