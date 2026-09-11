@@ -98,6 +98,7 @@ Rules for keeping it honest:
 | [blackwell-systems/gcf](https://github.com/blackwell-systems/gcf) (46★) | **Yes — never submitted, and not a directory** | `outreach/tier1-discovery-2026-06-17.md`, a competitive-discovery sheet somebody else keeps: "\| 88 \| [nikolai-vysotskyi/trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) \| MCP exploration server \| TOON output format option \|" — a scored tier-1 row in someone else's outreach list | Nothing to submit; the point is what put us on it. Their column says **TOON output**, not code intelligence, not token savings. A feature we have never led with is what made us legible to an outside prospector's filter. Worth knowing before the next positioning pass — it is the only observed case of an outsider naming why they picked us | 2026-09-06 |
 | [aitoolrank.io](https://aitoolrank.io) | **No** — checked 2026-09-07 | — | Curated AI tools directory by Dan Kornas (author of the 09-05 viral X post). Free submission available at `/submit/` (tool name, URL, short description, category, free/paid, contact email). No OAuth or payment required. Handed off to GitHub Distribution & Outreach per ledger boundaries | 2026-09-07 |
 | [su-record/vibe](https://github.com/su-record/vibe) | **Yes — third-party, we did not write it and did not submit it** (AX/FDE harness) | `src/core/capabilities.ts` registers `trace` (`trace-mcp`) as an external tool capability serving `blast` (blast-radius and symbol-level impact analysis on `git diff` hunks and callers). Probes `trace --version`, install command: `npm i -g trace-mcp && trace init && trace add`. Proposes installation when repository exceeds 200 files. Fallback is vibe's built-in regex lexer | Nothing to submit; external tool integration. Added native CLI command `trace blast` (alias `trace impact`) in TRA-1252 to fulfill its blast capability directly from the terminal without requiring an active MCP client transport. Found by `scripts/mention-sweep.sh` 2026-09-09 | 2026-09-09 |
+| [xmkqv/money-tree](https://github.com/xmkqv/money-tree) | **Yes — third-party, we did not write it and did not submit it** | `.claude/skills/catalogs/agentic-code-cleanup.md` under `agent-code-quality`: "MIT. MCP and CI surface for change-impact evidence and pull-request risk | deterministic, python, typescript, sql, dead-exports, test-gaps, blast-radius, pr-risk, ci" | Nothing to submit; curated skill catalog for agentic code cleanup. Accurately identifies our blast-radius, pr-risk and test-gap capabilities. Found by `scripts/mention-sweep.sh` 2026-09-11 | 2026-09-11 |
 
 ### The auto-index layer stopped copying us and started paraphrasing us (2026-09-06)
 
@@ -2056,6 +2057,93 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 - `dyphn1/Docuvia#192` (0★ personal doc generator).
 - `pluto-atom-4/IntVue#162` (0★ personal local repo).
 
+### Fifteenth pass, 2026-09-11 (TRA-1361): Comparative page /vs/gitnexus (47.2K★), deep-dive grafel (Go, 22 tools), and telemetry W14
 
+**Telemetry and adoption snapshot (GA4 property, 2026-09-11):**
+- **DAU**: **44** (up from 25 on 09-08, +76%).
+- **WAU**: **126** (up from 104 on 09-08, +21%).
+- **MAU**: **199** (up from 137 on 09-08, +45%).
+- **Observed window**: 14 days active, 976 events recorded in 28d window.
+- **Client breakdown**: claude-code (49), codex-mcp-client (22), antigravity-client (8), mcp (5), opencode (4), cursor-vscode (3), grok-shell-trace-mcp (3), rmcp (3), plus 1 each for Trae, Visual Studio Code, factory-cli, kimi-code, kiro, pi-mcp-trace-mcp, smoke, zcode. 76% of installs report on client-readable versions (>=3.12.0).
 
+**Mention sweep and code search:**
+- `scripts/mention-sweep.sh` executed across REST and GraphQL search:
+  - Hit 1: `andrehora/file-history` (file tracker tracking `davila7/claude-code-templates` component files including `trace-mcp.json`). Classified and added to `ops/mentions-seen.txt`.
+  - Hit 2: `artemrudenko/code-graph-benchmark-v2` (independent benchmark protocol evaluating Serena, codebase-memory-mcp, CRG, repomix, and noting trace-mcp ecosystem articles and candidates). Classified and added to `ops/mentions-seen.txt`.
+  - Hit 3: `xmkqv/money-tree` (curated agentic code cleanup skill catalog in `.claude/skills/catalogs/agentic-code-cleanup.md` listing trace-mcp under agent-code-quality for deterministic blast-radius, pr-risk, and test gaps). Classified, added row to Surfaces table and recorded in `ops/mentions-seen.txt`.
+- Post-classification re-sweep confirmed 100% clean: «No repos outside the seen list. Nothing to read.»
+
+**Competitor intelligence & content delivery:**
+- **Added dedicated comparative page `docs/vs/gitnexus.md`**:
+  Full head-to-head analysis against GitNexus (`abhigyanpatwari/GitNexus`, 47.2K★). Highlights permissive MIT vs PolyForm Noncommercial 1.0.0, prompt-efficient typed MCP tools vs raw Cypher query hallucinations, 88 framework integrations vs generic syntax, portable WASM sandboxes vs native C++ toolchain requirements (`node-gyp-build`), and AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and OWASP taint analysis. Structured with TechArticle and FAQPage schema.org JSON-LD, 150-char meta description, and cross-links.
+- **First source read of grafel (`cajasmota/grafel`, 15★, Go, 22 tools)**:
+  Corrected language: written in Go (Go 1.23+ with cgo Tree-sitter), not Rust. Multi-repo code knowledge graph daemon for AI agents exposing 22 MCP tools (`grafel_whoami`, `grafel_find`, `grafel_inspect`, `grafel_expand`, `grafel_trace`, `grafel_traces`, `grafel_clusters`, `grafel_orient`, `grafel_effects`, `grafel_control_flow`, `grafel_endpoint_posture`, `grafel_payload_drift`, `grafel_literal_parity`, `grafel_auth_posture_diff`, `grafel_stub_detector`, `grafel_response_shape_diff`, `grafel_security_findings`, etc.) on an in-memory/mmap graph substrate (`mmapview.go`).
+  - *Take*: Static stub and tautology detection (`grafel_stub_detector`, `grafel_tautology_detector`) into quality gates.
+  - *Take*: Cross-repo HTTP payload drift concept (`response_shape_diff`) for multi-package monorepos.
+  - *Take*: Multi-repo workspace topology (`internal/repowalk/`, `internal/repolock/`) into monorepo roadmap.
+  - *Pass*: cgo Tree-sitter native daemon (WASM sandbox is safer and portable).
+- **Competitor star counts verified against live GitHub API (18 tracked competitors)**:
+  - `codegraph`: 70,255 → **70,454★** (70.5K)
+  - `gitnexus`: 47,177 → **47,217★** (47.2K)
+  - `codebase_memory_mcp`: 42,776 → **42,922★** (42.9K)
+  - `code_review_graph`: 31,287 → **31,320★** (31.3K)
+  - `serena`: 29,088 → **29,165★** (29.2K)
+  - `repomix`: 28,268 → **28,288★** (28.3K)
+  - `context_mode`: 21,682 → **22,064★** (22.1K)
+  - `CodeGraphContext`: 4,179 → **4,180★** (4.2K)
+  - `socraticode`: 3,292 → **3,294★** (3.3K)
+  - `jcodemunch`: 2,676 → **2,680★** (2.7K)
+  - `ripwire`: 1,823 → **1,885★** (1.9K)
+  - `tokensave`: 623 → **624★** (624)
+  - `aft`: 278 → **279★** (279)
+  - `code_pathfinder`: 140 → **140★** (140)
+  - `codegraph_ai`: 83 → **85★** (85)
+  - `grafel`: added to tracked data, **15★** (15)
+  - `ai_architect_codebase`: 4 → **4★** (4)
+  - `trace-mcp`: 175 → **175★** (175)
+- Priority for next deep-dive: **Narsil-MCP** (`postrv/narsil-mcp`, Rust, 182★, CCG 4-layer progressive disclosure) and a re-read of **Graft** (`trailhq/Graft`, 7.0K★, fastest-growing peer).
+
+### Sixteenth pass, 2026-09-11 (TRA-1371): Dedicated comparative page /vs/graft (7.1K★), competitor star refresh (43K CBM), and telemetry audit
+
+**Telemetry and adoption snapshot (GA4 property, 2026-09-11 W14 audit):**
+- **DAU**: **44** (up from 25 on 09-08, +76%).
+- **WAU**: **126** (up from 104 on 09-08, +21%).
+- **MAU**: **199** (up from 137 on 09-08, +45%).
+- **Events (28d window)**: **976 events**.
+- **Client breakdown**: claude-code (49), codex-mcp-client (22), antigravity-client (8), mcp (5), opencode (4), cursor-vscode (3), grok-shell-trace-mcp (3), rmcp (3), Trae (1), Visual Studio Code (1), factory-cli (1), kimi-code (1), kiro (1), pi-mcp-trace-mcp (1), smoke (1), zcode (1).
+- **Client reporting**: 76% of reporting installs run client-readable versions (>=3.12.0).
+
+**Mention sweep and code search:**
+- `scripts/mention-sweep.sh` executed across REST and GraphQL queries. Output: «No repos outside the seen list. Nothing to read.»
+- Standing catalog moratorium holds: 0 attributable installs from directories in `ops/arrivals.md`. Zero directory submissions made.
+
+**Competitor intelligence & content delivery:**
+- **Added dedicated comparative landing page `docs/vs/graft.md`**:
+  Full head-to-head analysis against Graft (`trailhq/Graft`, 7,094★, #8 largest peer in ecosystem). Highlights 100% deterministic local WASM parsing + SQLite vs paid external LLM API keys (@anthropic-ai/sdk, openai) & token bills per file, relational embedded SQLite graph (WAL + FTS5) vs loose markdown files with YAML front matter in `graft/`, 6 read-only MCP tools vs {{ site.data.counts.tools }} tools with verified AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`), OWASP Top-10 taint analysis, 88 framework semantic integrations, and zero-setup WASM portability vs native C++ node-gyp builds. Structured with TechArticle and FAQPage schema.org JSON-LD, 153-char meta description, and cross-links.
+- **Competitor star counts verified against live GitHub API (20 tracked competitors)**:
+  - `codegraph`: 70,483 → **70,502★** (70.5K)
+  - `gitnexus`: 47,226 → **47,245★** (47.2K)
+  - `codebase_memory_mcp`: 42,940 → **42,957★** (**43K**, passed rounding threshold to 43K)
+  - `code_review_graph`: 31,329 → **31,333★** (31.3K)
+  - `serena`: 29,173 → **29,186★** (29.2K)
+  - `repomix`: 28,288 → **28,290★** (28.3K)
+  - `context_mode`: 22,089 → **22,146★** (22.1K)
+  - `graft`: 7,056 → **7,094★** (7.1K)
+  - `codegraphcontext`: 4,183 → **4,183★** (4.2K)
+  - `socraticode`: 3,294 → **3,294★** (3.3K)
+  - `jcodemunch`: 2,680 → **2,681★** (2.7K)
+  - `ripwire`: 1,889 → **1,892★** (1.9K)
+  - `tokensave`: 625 → **625★** (625)
+  - `aft`: 280 → **280★** (280)
+  - `narsil_mcp`: 182 → **183★** (183)
+  - `trace-mcp`: 175 → **175★** (175)
+  - `code_pathfinder`: 140 → **140★** (140)
+  - `codegraph_ai`: 85 → **85★** (85)
+  - `grafel`: 15 → **15★** (15)
+  - `ai_architect_codebase`: 4 → **4★** (4)
+- **Maintainer threads and open outreach queue audit**:
+  - All 28 previous threads and PRs re-checked across GitHub API:
+    `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`, `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`, `The-PR-Agent/pr-agent#2499`, `fullsend-ai/fullsend#297`, `macanderson/stella#6461`, `garrytan/gbrain#5001`, `fmagent-project/FM-Agent#229`.
+    All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
+- Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge), plus dedicated comparative page for **Ripwire** (`redhat-et/ripwire`, 1.9K★).
 

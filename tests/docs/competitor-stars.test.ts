@@ -72,6 +72,8 @@ describe('docs/_data/competitors.yml', () => {
       'vs/repomix-vs-codegraph.md',
       'vs/jcodemunch.md',
       'vs/tokensave.md',
+      'vs/gitnexus.md',
+      'vs/graft.md',
     ];
     // Only the shortened "NN.NK" strings: a three-digit count matches too much
     // unrelated prose to search for literally.
