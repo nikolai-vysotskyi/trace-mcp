@@ -124,7 +124,7 @@ To balance this, TokenSave implements session debt accounting (`settle_session_d
 
 trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
 - **29-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
-- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
+- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
 ### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations

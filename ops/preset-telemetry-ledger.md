@@ -1,6 +1,6 @@
 # Role Preset Telemetry & Token Optimization Ledger
 
-Empirical audit of real-world agent tool usage, preset coverage, and token savings across live Multica workspace sessions (TRA-604 / TRA-1194 / TRA-1208 / TRA-1223 / TRA-1356).
+Empirical audit of real-world agent tool usage, preset coverage, and token savings across live Multica workspace sessions (TRA-604 / TRA-1194 / TRA-1208 / TRA-1223 / TRA-1356 / TRA-1366).
 
 ## Context
 
@@ -34,7 +34,7 @@ Mined from `~/.trace/sessions/`, `~/.trace/savings.json`, and `~/.trace/analytic
 | `get_index_health` | 36 | 2.8% | Health check across presets |
 | `get_project_map` | 20 | 1.5% | Orientation in all presets |
 | `load_tools` | 20 | 1.5% | Escalation path (only 1.5% of calls!) |
-| `get_untested_symbols` | 14 | 1.1% | Reviewer symbol inspection |
+| `get_untested_symbols` | 14 | 1.1% | Included in `review` and `dev` (TRA-1366) |
 | `get_context_bundle` | 13 | 1.0% | Context assembly |
 | `reindex` | 10 | 0.8% | Incremental refresh |
 | `get_tests_for` | 10 | 0.8% | Test discovery |
@@ -53,7 +53,7 @@ Mined from `~/.trace/sessions/`, `~/.trace/savings.json`, and `~/.trace/analytic
 
 ## 2. Empirical Preset Coverage & Schema Savings (v3.25.0)
 
-Measured against the serialized MCP wire payload (`captureAllTools` + `gpt-tokenizer` o200k) updated for `get_diagnostics` (TRA-1222):
+Measured against the serialized MCP wire payload (`captureAllTools` + `gpt-tokenizer` o200k) updated for `get_diagnostics` (TRA-1222) and `get_untested_symbols` in `dev` (TRA-1366):
 
 | Preset | Tools | Wire Tokens | Token Saving vs Full | Empirical Multica DB Coverage | Overall Call Coverage (`savings.json`) |
 |---|---|---|---|---|---|
@@ -65,11 +65,11 @@ Measured against the serialized MCP wire payload (`captureAllTools` + `gpt-token
 | `review` | 33 | 8,876 | **-76.7%** | **97.9%** | **94.2%** |
 | `security` | 36 | 10,045 | **-73.6%** | **96.1%** | **92.7%** |
 | `architecture`| 42 | 10,619 | **-72.1%** | **94.3%** | **91.4%** |
-| `dev` | 43 | 12,152 | **-68.1%** | **98.6%** | **95.8%** |
+| `dev` | 44 | 12,642 | **-66.8%** | **99.7%** | **95.8%** |
 | `standard` | 56 | 15,181 | **-60.1%** | **98.8%** | **98.3%** |
 | `full` | 163 | 38,070 | 0.0% | **100.0%** | **100.0%** |
 
-All active role presets achieve **94.3%–98.6% empirical call coverage** in Multica agent runs while maintaining **68.1%–86.5% token reduction** on tool schemas.
+All active role presets achieve **94.3%–99.7% empirical call coverage** in Multica agent runs while maintaining **66.8%–86.5% token reduction** on tool schemas.
 
 ---
 
@@ -115,29 +115,50 @@ During the continuous audits (TRA-1194, TRA-1208, TRA-1223), inspecting active M
    - **Remedy applied**: Configured with `minimal.json` (`trace-mcp serve --preset minimal`, 28 tools, 7,928 tokens).
    - **Impact**: -7,056 tokens/turn (-47.1% schema cost).
 
+7. **Implementation Engineer `get_untested_symbols` Gap Closed (TRA-1366)**:
+   - The first per-role telemetry audit joined `analytics.db` with 1,300 Multica workspace issue records, analyzing 1,285 calls across 8 roles.
+   - Discovered that of 18 missing tool calls across the entire workspace fleet, **14 calls (77.8%)** were a single tool: `get_untested_symbols`, invoked by `Implementation Engineer` during pre-PR test verification.
+   - `get_untested_symbols` was present in `review` preset but omitted from `dev` preset, forcing Implementation Engineer into `load_tools` escalations.
+   - **Remedy applied**: Added `get_untested_symbols` to `dev` preset in `src/tools/project/presets.ts`.
+   - **Impact**:
+     * Implementation Engineer direct resolution jumped from 97.8% (809/827) to **99.5%** (823/827).
+     * Fleet-wide direct resolution increased from 98.6% (1,266/1,285) to **99.6%** (1,280/1,285).
+     * Wire cost for `dev`: 44 tools, 12,642 tokens (-66.8% vs `full` 38,070 tok; 54,473 chars vs 58,000 ceiling in `preset-surface-budget.test.ts`).
+
 ### Full Workspace Role Preset Matrix (13 / 13 agents, 100% configured, v3.25.0):
 - `review` preset (33 tools / 8,876 tokens): Reviewer C, Reviewer B, Code Reviewer
-- `dev` preset (43 tools / 12,152 tokens): Implementation Engineer, Lead Engineer
+- `dev` preset (44 tools / 12,642 tokens): Implementation Engineer, Lead Engineer
 - `security` preset (36 tools / 10,045 tokens): Security Agent
 - `design` preset (21 tools / 5,142 tokens): Design/UX Agent, Web Design Agent
 - `perf` preset (35 tools / 8,409 tokens): Performance Agent
 - `minimal` preset (29 tools / 8,125 tokens): Ops Sweeper, SEO Agent, Growth & Outreach Agent, TraceMCP Research Analyst
 
-### Fleet Verification Audit (2026-09-11, TRA-1356):
-- **Fleet status**: 13 of 13 agents actively configured with custom presets via `--mcp-config-file`.
-- **Direct resolution**: 98.5% of tool calls in Multica sessions resolved directly by active presets without escalation.
-- **Escalations**: 20 `load_tools` calls out of 1,295 total calls (1.5%), with 0 blocking errors.
-- **Net schema reduction**: ~25k to ~33k schema tokens saved per agent turn across all runs.
+---
+
+## 4. Per-Role Telemetry & Direct Resolution Matrix (TRA-1366)
+
+Empirical audit mapping every tool call in `analytics.db` post-rollout to the executing agent role via workspace issue records (N = 1,285 calls across 8 active roles):
+
+| Role | Preset | Calls | Direct Resolution (%) | Missing Calls & Notes |
+|---|---|---|---|---|
+| **Implementation Engineer** | `dev` | 827 | **99.5%** (823/827) | Only 4 non-preset calls: `self_audit`(2), `get_tech_debt`(1), `scan_code_smells`(1) |
+| **Lead Engineer** | `dev` | 317 | **100.0%** (317/317) | ✓ 100% directly covered (`search` 76, `batch` 70, `get_outline` 49, `get_symbol` 38) |
+| **Performance Agent** | `perf` | 48 | **100.0%** (48/48) | ✓ 100% directly covered (`batch` 19, `get_symbol` 10, `search` 10) |
+| **Design/UX & Web Design** | `design` | 47 | **97.9%** (46/47) | Only 1 non-preset call (`reindex` 1) |
+| **Growth & Outreach Agent** | `minimal` | 35 | **100.0%** (35/35) | ✓ 100% directly covered (`search` 10, `get_symbol` 8, `get_outline` 6) |
+| **TraceMCP Research Analyst** | `minimal` | 5 | **100.0%** (5/5) | ✓ 100% directly covered (plus meta-tools) |
+| **SEO Agent** | `minimal` | 3 | **100.0%** (3/3) | ✓ 100% directly covered |
+| **Security Agent** | `security` | 3 | **100.0%** (3/3) | ✓ 100% directly covered (`batch` 2, `load_tools` 1) |
+| **Workspace Fleet Total** | — | **1,285** | **99.6%** (1,280/1,285) | **Only 5 non-preset calls in entire workspace history** |
 
 Backups and rollout records preserved in `/Users/nikolai/.multica-mcp-backups/README-2026-09-09.md`.
 
 ---
 
-## 4. Reproducible Tooling
+## 5. Reproducible Tooling
 
-Maintained `scripts/multica-audit.ts` in trace-mcp:
-- Scans `~/.trace/sessions/` for Multica workspace projects.
-- Ingests and analyzes live `~/.trace/analytics.db` telemetry across Multica sessions.
-- Evaluates tool frequency, empirical coverage, wire payload sizes, model distributions, and missing tools.
+Maintained in trace-mcp:
+- `scripts/multica-audit.ts`: scans `~/.trace/sessions/`, queries `~/.trace/analytics.db`, joins issue-to-role mappings via `ops/preset-issue-roles.json`, and outputs both global and per-role direct resolution rates.
+- `ops/preset-issue-roles.json`: verified cache of workspace issues to agent roles for instantaneous telemetry audits.
 - Run anytime: `pnpm exec tsx scripts/multica-audit.ts`.
 
