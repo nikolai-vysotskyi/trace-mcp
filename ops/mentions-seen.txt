@@ -139,3 +139,11 @@ linny006/claude-code-plugin-tracker
 Dynatrace/dynatrace-for-ai
 # Collision: unrelated 2025 HuggingFace tool 'trace-mcp' in docs/reddit-news:
 inai-sandy/inAI-wiki
+
+# ── Swept 2026-09-11 (TRA-1361) ──
+# File history tracker of davila7/claude-code-templates tracking trace-mcp.json:
+andrehora/file-history
+# Genuine independent code-graph benchmark protocol evaluating Serena/CBM/CRG and noting trace-mcp:
+artemrudenko/code-graph-benchmark-v2
+# Genuine skill catalog for agentic code cleanup listing trace-mcp under agent-code-quality:
+xmkqv/money-tree
