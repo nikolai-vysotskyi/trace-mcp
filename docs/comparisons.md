@@ -1,7 +1,7 @@
 ---
 title: "Serena, Repomix & 20+ Code Graph MCP Servers Compared"
 description: "trace-mcp vs Repomix, Serena, codebase-memory-mcp and 20+ MCP code-graph tools: capabilities, language support, GitHub stars. Last verified September 2026."
-updated: 2026-09-09
+updated: 2026-09-11
 ---
 
 # Serena, Repomix and 20+ code graph MCP servers compared
@@ -740,6 +740,25 @@ Four mechanisms were read at source and each got a decision:
 - **cgo Tree-sitter daemon with in-memory/mmap storage vs. portable SQLite WASM: passing.** grafel runs a Go daemon compiling C Tree-sitter grammars with cgo (`grammars.lock`), introducing native compiler dependencies and build fragility across platforms. trace-mcp's WASM sandbox guarantees memory safety and crash isolation with zero native compilation. Additionally, trace-mcp provides full AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and code-anchored decision memory, neither of which exists in grafel.
 
 Priority for next deep-dive: **Narsil-MCP** (`postrv/narsil-mcp`, Rust, 182★, CCG 4-layer progressive disclosure) and a re-read of **Graft** (`trailhq/Graft`, 7.0K★, fastest-growing peer).
+
+**Narsil-MCP profiled this pass** (September 11, 2026 — read through the GitHub API at `main`, no clone and nothing executed: `Cargo.toml`, `src/ccg/mod.rs`, `src/ccg/layers.rs`, `src/callgraph.rs`, `src/cfg.rs`, `src/taint/`, `src/mcp.rs`, `docs/CODE_CONTEXT_GRAPH_SIZING_ARCH.md`). {{ site.data.competitors.narsil_mcp.stars }} stars (GitHub API, this pass), Apache-2.0, Rust, v0.x. High-performance code intelligence MCP server written in Rust with 32 Tree-sitter parsers, hybrid BM25/neural embeddings, and a multi-layer Code Context Graph (CCG) generation pipeline.
+
+Four mechanisms were read at source and each got a decision:
+
+- **Hierarchical progressive disclosure (CCG L0–L3 layers: Manifest, Architecture, Symbol Index, Full Detail): taking concept into `pack_context` and architecture summaries.** Narsil-MCP sizes codebase knowledge into 4 discrete layers: L0 Manifest (~1–2 KB JSON-LD with repository identity, counts, top-level stacks), L1 Architecture (~10–50 KB module hierarchy and public API), L2 Symbol Index (call graph and definitions), and L3 Full Detail. Adopting a strict L0 budget (~1–2 KB) in `pack_context` and `describe_architecture` gives agents an immediate overview of repository topology on turn zero without blowing prompt budgets.
+- **RDF / N-Quads triple stores and semantic web ontologies: passing.** Narsil-MCP exports graphs in RDF/N-Quads format (`<subject> <predicate> <object> <graph> .`). LLMs require significant prompt overhead to parse or reason over N-Quads compared to clean, typed JSON tool responses. trace-mcp's flat, strongly-typed JSON schema and embedded SQLite engine minimize token deserialization cost while providing relational indexing.
+- **90-tool uncurated schema vs. adaptive role presets: passing, validating our preset architecture.** Narsil-MCP advertises ~90 tools on startup (generating over 15K tokens of schema definitions). trace-mcp curates tools into task-specific presets (`minimal`, `review`, `architecture`, `dev`) keeping initial schema load under 2K tokens while providing dynamic tool access via `load_tools`.
+- **Read-only SAST vs. AST refactoring write path and code-anchored memory: passing.** Like most SAST-rooted peers, Narsil-MCP provides zero AST modification tools and no decision memory. trace-mcp provides atomic AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and symbol-bound decision memory.
+
+**Graft profiled this pass** (September 11, 2026 — read through GitHub repository at `main`: `package.json`, `README.md`, `src/cli/`, `src/graph/`, `src/mcp/`). 7,056 stars ({{ site.data.competitors.graft.stars }}, GitHub API, this pass), MIT, TypeScript, v0.x (`@nanonets/graft` / `trailhq/Graft`). Rapidly growing context layer for AI coding agents (Claude Code, Cursor) that generates plain-language subsystem and concept explanation nodes in markdown files.
+
+Three mechanisms were read at source and each got a decision:
+
+- **Plain-language concept nodes as navigable markdown docs: taking concept for documentation generation.** Graft generates curated markdown files in `graft/` describing subsystems and architectural boundaries in plain English rather than raw AST dumps. Bringing concept-level summaries into trace-mcp's `describe_architecture` and decision memory bridges syntax graphs with high-level developer intent.
+- **Offline LLM dependency for graph generation: passing, affirming local-first deterministic parsing.** Graft requires an external LLM (OpenAI, Anthropic, OpenRouter) and paid API keys to read and summarize every source file before the graph exists. trace-mcp indexes polyglot codebases in seconds using 100% deterministic local Tree-sitter WASM and SQLite with zero external API calls, zero token bills, and complete offline privacy.
+- **Loose file-based markdown store vs. relational embedded SQLite: passing.** Graft stores graph nodes as loose files on disk. For large codebases with tens of thousands of symbols and deep call hierarchies, traversing file trees is slow and lacks relational join capabilities. trace-mcp's embedded SQLite with FTS5 and indexed edge tables provides sub-millisecond graph queries (`find_symbol`, `find_usages`, `get_change_impact`, `find_path`).
+
+Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge).
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 

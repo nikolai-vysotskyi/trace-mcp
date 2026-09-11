@@ -85,7 +85,12 @@ const FOREIGN_PREFIXES = [
   'src/config/preset.rs', // Narsil-MCP
   'src/taint/', // Narsil-MCP
   'src/persistence/sparql.rs', // Narsil-MCP
+  'src/ccg/', // Narsil-MCP
+  'src/callgraph.rs', // Narsil-MCP
+  'src/cfg.rs', // Narsil-MCP
+  'src/mcp.rs', // Narsil-MCP
   'docs/ccg-spec.md', // Narsil-MCP
+  'docs/CODE_CONTEXT_GRAPH_SIZING_ARCH.md', // Narsil-MCP
   'src/cmds/', // RTK
   'src/servers/', // claude-mem
   'src/token_savior/', // Token Savior

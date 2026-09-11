@@ -1,7 +1,7 @@
 ---
 title: "Repomix Alternative: trace-mcp vs Repomix for AI code context"
 description: "Repomix packs your repository into one prompt; trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, refactoring."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Repomix alternative: trace-mcp vs Repomix
@@ -153,7 +153,7 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Comparing Repomix against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — packing against indexing, on their own terms.
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.
