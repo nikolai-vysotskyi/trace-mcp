@@ -208,6 +208,7 @@ registrations themselves, so a tool cannot ship without appearing here.
 
 For the tools grouped by what you are trying to do — plus resources, usage
 examples and the migration notes — see the [tools reference](tools-reference.md).
+For configuration keys, flags, and environment variables that control these tools, see the [config index](config-index.md).
 The AI-backed tools (\`explain_symbol\`, \`suggest_tests\`, \`review_change\`,
 \`find_similar\`, \`explain_architecture\`) register from a different module and
 need \`ai.enabled: true\`; they are described

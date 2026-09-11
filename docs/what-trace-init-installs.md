@@ -244,5 +244,6 @@ above, and the `tweakcc` prompt files come out through `tweakcc` itself.
 
 Nothing here deletes a config key it did not write. An entry you configured
 yourself on the MCP server object survives a rename or a re-init. For the
-complete reference of configuration settings, paths, and environment variables,
-see [configuration](configuration.md) and the [config index](config-index.md).
+complete reference of configuration settings, paths, environment variables,
+and local storage policies, see [configuration](configuration.md), the
+[config index](config-index.md), and [privacy](privacy.md).
