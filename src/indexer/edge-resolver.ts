@@ -21,6 +21,7 @@ import { resolveGoImportEdges as _resolveGoImports } from './edge-resolvers/go-i
 import { resolveJavaImportEdges as _resolveJavaImports } from './edge-resolvers/java-imports.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
 import { resolveKotlinImportEdges as _resolveKotlinImports } from './edge-resolvers/kotlin-imports.js';
+import { resolveLuaImportEdges as _resolveLuaImports } from './edge-resolvers/lua-imports.js';
 import { resolveMarkdownTagEdges as _resolveMarkdownTags } from './edge-resolvers/markdown-tags.js';
 import { resolveMarkdownWikilinkEdges as _resolveMarkdownLinks } from './edge-resolvers/markdown-wikilinks.js';
 import { resolveMemberOfEdges as _resolveMemberOf } from './edge-resolvers/member-of.js';
@@ -182,6 +183,11 @@ export class EdgeResolver {
   /** Pass 2e10: Elixir import edges (`alias`/`import`/`use`/`require` → module file). */
   resolveElixirImportEdges(scope?: ChangeScope): void {
     timed('elixir-imports', () => _resolveElixirImports(this.state, scope));
+  }
+
+  /** Pass 2e11: Lua import edges (`require` → module file). */
+  resolveLuaImportEdges(scope?: ChangeScope): void {
+    timed('lua-imports', () => _resolveLuaImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */

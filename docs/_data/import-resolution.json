@@ -108,6 +108,15 @@
       "external": 44,
       "ambiguous": 0,
       "resolvedShare": "66.4%"
+    },
+    {
+      "language": "lua",
+      "repo": "mpeterv/luacheck",
+      "commit": "7360cfb4cf2c",
+      "created": 130,
+      "external": 16,
+      "ambiguous": 0,
+      "resolvedShare": "89.0%"
     }
   ]
 }

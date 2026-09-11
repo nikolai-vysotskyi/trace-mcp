@@ -91,6 +91,11 @@ const REPOS: RepoSpec[] = [
     repo: 'elixir-plug/plug',
     logMessage: 'Elixir import edges resolved',
   },
+  {
+    language: 'lua',
+    repo: 'mpeterv/luacheck',
+    logMessage: 'Lua import edges resolved',
+  },
 ];
 
 function sh(cmd: string[], cwd?: string): void {
