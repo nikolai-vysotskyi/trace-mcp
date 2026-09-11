@@ -67,6 +67,18 @@ describe('rules / analyzeOptimizations', () => {
       const hit = report.optimizations.find((o) => o.rule === 'repeated-file-read');
       expect(hit).toBeUndefined();
     });
+
+    it('does not trigger for binary files read repeatedly', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({ target_file: 'assets/screenshot.png', output_tokens_estimate: 2000 }),
+        makeToolCall({ target_file: 'assets/screenshot.png', output_tokens_estimate: 2000 }),
+        makeToolCall({ target_file: 'assets/screenshot.png', output_tokens_estimate: 2000 }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'repeated-file-read');
+      expect(hit).toBeUndefined();
+    });
   });
 
   describe('bash-grep rule', () => {
@@ -111,6 +123,105 @@ describe('rules / analyzeOptimizations', () => {
       const hit = report.optimizations.find((o) => o.rule === 'bash-grep');
       expect(hit).toBeUndefined();
     });
+
+    it('does not trigger for stream pipe filters (e.g. ps aux | grep node)', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'ps aux | grep node',
+        }),
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'git status | grep modified',
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-grep');
+      expect(hit).toBeUndefined();
+    });
+  });
+
+  describe('bash-cat rule', () => {
+    it('detects Bash calls with cat/head/tail on real files', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'cat src/server.ts',
+          target_file: 'src/server.ts',
+          output_tokens_estimate: 800,
+        }),
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'head -n 50 package.json',
+          target_file: 'package.json',
+          output_tokens_estimate: 400,
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-cat');
+      expect(hit).toBeDefined();
+      expect(hit!.severity).toBe('medium');
+      expect(hit!.occurrences).toBe(2);
+      expect(hit!.currentTokens).toBe(1200);
+      expect(hit!.potentialTokens).toBe(480); // 40% of 1200
+    });
+
+    it('does not trigger for pipeline output filters or truncations (e.g. git log | head)', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'git log --oneline | head -n 20',
+          target_file: null,
+        }),
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'multica issue list | head -n 5',
+          target_file: null,
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-cat');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not trigger for heredocs (cat << "EOF")', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'cat << \'EOF\' > config.json\n{"foo": "bar"}\nEOF',
+          target_file: null,
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-cat');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not trigger for binary files (e.g. cat image.png)', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'cat assets/logo.png',
+          target_file: 'assets/logo.png',
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'bash-cat');
+      expect(hit).toBeUndefined();
+    });
   });
 
   describe('large-file-read rule', () => {
@@ -139,6 +250,20 @@ describe('rules / analyzeOptimizations', () => {
 
     it('does not trigger for small file reads', () => {
       const calls: ToolCallRow[] = [makeToolCall({ output_size_chars: 2000 })];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'large-file-read');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not trigger for large binary files', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          output_size_chars: 12000,
+          output_tokens_estimate: 3428,
+          target_file: 'assets/screenshot.png',
+        }),
+      ];
 
       const report = analyzeOptimizations(calls, 'all');
       const hit = report.optimizations.find((o) => o.rule === 'large-file-read');

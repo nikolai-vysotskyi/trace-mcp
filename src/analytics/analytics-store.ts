@@ -144,6 +144,15 @@ export class AnalyticsStore {
         'ALTER TABLE tool_calls ADD COLUMN semantic_degraded INTEGER NOT NULL DEFAULT 0',
       );
     }
+    // Clean up historical poisoned target_file entries recorded before TRA-1188
+    // where bash arguments, heredocs, numbers, or shell operators were mistaken for files.
+    this.db.exec(`
+      UPDATE tool_calls
+      SET target_file = NULL
+      WHERE target_file IN ('&&', '||', ';', '|', 'echo', 'git', '<<', '>>')
+         OR target_file GLOB '[0-9]*'
+         OR target_file GLOB '-*'
+    `);
   }
 
   /** Check if a session file needs re-parsing (by mtime) */
