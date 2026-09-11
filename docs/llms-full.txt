@@ -1988,7 +1988,7 @@ SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens 
 
 trace-mcp advertises 29 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
 - Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
+- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines
@@ -2104,7 +2104,7 @@ While The Counter reduces resident schema tokens, it introduces significant fric
 
 trace-mcp addresses context cost through **Adaptive Task Presets**:
 - Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- Task-specific presets curate tools for the active workflow: `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
+- Task-specific presets curate tools for the active workflow: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
 ### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
@@ -2214,7 +2214,7 @@ To balance this, TokenSave implements session debt accounting (`settle_session_d
 
 trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
 - **29-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
-- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (43 tools).
+- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
 ### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations
@@ -3482,7 +3482,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (29 tools, default), `standard` (61 tools — covers >99% of real-world tool calls per session-log mining), `review` (33 tools), `architecture` (42 tools), `dev` (43 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (29 tools, default), `standard` (61 tools — covers >99% of real-world tool calls per session-log mining), `review` (33 tools), `architecture` (42 tools), `dev` (44 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -3546,7 +3546,7 @@ Measured `tools/list` cost of each preset on this repo (serialized chars, then
 o200k tokens, 2026-09-01; `router` added 2026-09-02): `router` 7.1k / 1.6k,
 `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
-44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
+44.3k / 10.2k, `dev` 54.5k / 12.6k, `standard` 64.6k / 14.9k, `full` 157.7k /
 36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
 86% on the narrowest (`design`) — framework-gated tools are excluded, so a
 project that detects the matching framework pays more.
