@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: '돌려받은 입력 토큰',
   heroValue: '최소 {{tokens}}',
   heroUsd: '약 {{usd}}. {{model}} 요금(입력 100만 토큰당 {{rate}}) 기준으로, 현재 가장 저렴한 요율입니다.',
+  heroUsdDetected: '최근 활동 기준 {{model}}(입력 백만 토큰당 {{rate}}) 적용 시 약 {{usd}}.',
   sectionBreakdown: '계산 방식',
   rowBaseline: '기준: 파일 읽기(추정)',
   rowReturned: '돌려준 토큰(실측)',

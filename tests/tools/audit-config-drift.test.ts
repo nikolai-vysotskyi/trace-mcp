@@ -196,4 +196,62 @@ describe('Audit Config — E14 drift detection', () => {
     );
     expect(nonDrift).toHaveLength(0);
   });
+
+  it('does not flag deferred or framework-gated trace-mcp tools as dead (TRA-1063)', () => {
+    const configPath = path.join(tmpDir, 'CLAUDE-trace-tools.md');
+    fs.writeFileSync(
+      configPath,
+      [
+        '## Tool Routing Table',
+        '| Task | trace tool | Instead of |',
+        '|------|------------|------------|',
+        '| Implementations | `get_implementations` | manual |',
+        '| Audit | `self_audit` | manual |',
+        '| Dead code | `get_dead_code` | Grep |',
+        '| Tests | `get_tests_for` | Glob |',
+        '| Untested | `get_untested_symbols` | manual |',
+        '| Request flow | `get_request_flow` | route files |',
+        '| Model context | `get_model_context` | model files |',
+        '| Component tree | `get_component_tree` | component files |',
+        '| Circular imports | `get_circular_imports` | manual |',
+        '| State | `trace_state_init`, `trace_state_patch`, `trace_state_add_dead_end`, `trace_state_get` | transcript |',
+        '| Normal code variables | `user_id`, `max_retries`, `status_code` | variables |',
+      ].join('\n'),
+    );
+
+    // Minimal preset registeredTools (only basic search tools):
+    const result = auditConfig(store, tmpDir, {
+      configFiles: [configPath],
+      driftOnly: true,
+      registeredTools: new Set(['search', 'get_outline', 'get_symbol']),
+      fixSuggestions: false,
+    });
+
+    const deadTools = result.issues.filter((i) => i.category === 'dead_tool_ref');
+    expect(deadTools).toHaveLength(0);
+  });
+
+  it('flags genuine nonexistent tool references that have tool-like prefixes (TRA-1063)', () => {
+    const configPath = path.join(tmpDir, 'CLAUDE-bogus-tool.md');
+    fs.writeFileSync(
+      configPath,
+      [
+        '## Tool Routing',
+        'Use `get_completely_bogus_tool` to inspect things.',
+        'Use `check_nonexistent_logic` for checks.',
+      ].join('\n'),
+    );
+
+    const result = auditConfig(store, tmpDir, {
+      configFiles: [configPath],
+      driftOnly: true,
+      registeredTools: new Set(['search', 'get_outline']),
+      fixSuggestions: false,
+    });
+
+    const deadTools = result.issues.filter((i) => i.category === 'dead_tool_ref');
+    expect(deadTools).toHaveLength(2);
+    expect(deadTools.some((i) => i.issue.includes('get_completely_bogus_tool'))).toBe(true);
+    expect(deadTools.some((i) => i.issue.includes('check_nonexistent_logic'))).toBe(true);
+  });
 });
