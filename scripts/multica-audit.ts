@@ -13,6 +13,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { encode } from 'gpt-tokenizer';
 import { z } from 'zod';
 import { UNGATED_META_TOOLS } from '../src/server/tool-filter.js';
@@ -30,6 +31,18 @@ function resolveSessionsDir(): string {
     if (p && existsSync(p)) return p;
   }
   return join(homedir(), '.trace', 'sessions');
+}
+
+function resolveAnalyticsDb(): string | null {
+  const candidates = [
+    join(homedir(), '.trace', 'analytics.db'),
+    join(homedir(), '.trace-mcp', 'analytics.db'),
+    '/Users/nikolai/.trace/analytics.db',
+  ];
+  for (const p of candidates) {
+    if (p && existsSync(p)) return p;
+  }
+  return null;
 }
 
 const sessionsDir = resolveSessionsDir();
@@ -51,7 +64,7 @@ for (const file of files) {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) continue;
     for (const s of arr) {
-      if (!s.project_root || !s.project_root.includes('multica_workspaces')) continue;
+      if (!s.project_root || !s.project_root.includes('multica')) continue;
       const calls = (s.total_calls as number) || 0;
       if (s.started_at < ROLLOUT_CUTOFF) {
         preRolloutSessions++;
@@ -86,7 +99,7 @@ function surface(members: readonly string[] | 'all'): { tools: number; tokens: n
 const fullSurface = surface('all');
 
 console.log('========================================================================');
-console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1223)      ');
+console.log('   MULTICA WORKSPACE LIVE TELEMETRY AUDIT: ROLE PRESETS (TRA-1356)      ');
 console.log('========================================================================\n');
 console.log(`Directory: ${sessionsDir}`);
 console.log(
@@ -159,6 +172,73 @@ const sorted = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]);
 for (const [tool, count] of sorted.slice(0, 15)) {
   const pct = ((count / postRolloutCalls) * 100).toFixed(1);
   console.log(`  ${tool.padEnd(25)} ${String(count).padStart(5)} calls (${pct.padStart(4)}%)`);
+}
+
+const dbPath = resolveAnalyticsDb();
+if (dbPath) {
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    const dbRows = db
+      .prepare(
+        `SELECT tc.tool_short_name, count(*) as cnt
+         FROM tool_calls tc
+         JOIN sessions s ON tc.session_id = s.id
+         WHERE s.project_path LIKE ?
+           AND s.started_at >= ?
+           AND tc.tool_server = ?
+         GROUP BY tc.tool_short_name
+         ORDER BY cnt DESC`,
+      )
+      .all('%multica%', ROLLOUT_CUTOFF, 'trace-mcp') as { tool_short_name: string; cnt: number }[];
+
+    const sessionStats = db
+      .prepare(
+        `SELECT count(distinct s.id) as sessions, count(tc.id) as total_calls
+         FROM sessions s
+         LEFT JOIN tool_calls tc ON tc.session_id = s.id
+         WHERE s.project_path LIKE ?
+           AND s.started_at >= ?`,
+      )
+      .get('%multica%', ROLLOUT_CUTOFF) as { sessions: number; total_calls: number };
+
+    const tracemcpCalls = dbRows.reduce((a, b) => a + b.cnt, 0);
+
+    console.log('\n------------------------------------------------------------------------');
+    console.log(`   ANALYTICS DB MULTICA TELEMETRY (${dbPath})`);
+    console.log('------------------------------------------------------------------------\n');
+    console.log(
+      `Multica Sessions: ${sessionStats.sessions} | Total System Tool Calls: ${sessionStats.total_calls} | trace-mcp Calls: ${tracemcpCalls}\n`,
+    );
+    console.log(
+      ['preset', 'tools', 'tokens', 'saving vs full', 'empirical DB coverage'].join('\t'),
+    );
+
+    for (const [name, members] of Object.entries(TOOL_PRESETS)) {
+      const { tools, tokens } = surface(members);
+      const tokenSaving = (((fullSurface.tokens - tokens) / fullSurface.tokens) * 100).toFixed(1);
+      if (members === 'all') {
+        console.log([name.padEnd(12), tools, tokens, '0.0%', '100.0%'].join('\t'));
+        continue;
+      }
+      const allowed = new Set([...members, ...UNGATED_META_TOOLS]);
+      let covered = 0;
+      for (const r of dbRows) {
+        if (allowed.has(r.tool_short_name)) covered += r.cnt;
+      }
+      const pct = tracemcpCalls > 0 ? ((100 * covered) / tracemcpCalls).toFixed(1) : '0.0';
+      console.log([name.padEnd(12), tools, tokens, `-${tokenSaving}%`, `${pct}%`].join('\t'));
+    }
+
+    console.log('\nTop trace-mcp Tools in Analytics DB:');
+    for (const r of dbRows.slice(0, 10)) {
+      const pct = ((r.cnt / tracemcpCalls) * 100).toFixed(1);
+      console.log(
+        `  ${r.tool_short_name.padEnd(25)} ${String(r.cnt).padStart(5)} calls (${pct.padStart(4)}%)`,
+      );
+    }
+  } catch (err) {
+    console.warn(`Could not read analytics DB: ${(err as Error).message}`);
+  }
 }
 
 console.log('\n========================================================================');

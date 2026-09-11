@@ -1,7 +1,7 @@
 ---
 title: "Code Graph MCP Server for AI Coding Agents"
 description: "How a code graph MCP server gives AI coding agents persistent symbol, call, and framework relationships without re-reading whole repositories."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Code graph MCP server for AI coding agents
