@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.25.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.25.0...v3.25.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* detect active model for savings and resolve CLAUDE.md drift false positives (TRA-1063) ([#1183](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1183)) ([1cca06d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1cca06d8e7460cf0638b311fe134b2755602a063))
+* **presets:** add get_untested_symbols to dev preset and audit per-role telemetry (TRA-1366) ([#1194](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1194)) ([a33dfcd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a33dfcd37040b12fd76dda9783ff5ea2a9f1982d))
+
+
+### Documentation
+
+* **ops:** update preset telemetry audit for v3.25.0 and integrate analytics DB (TRA-1356) ([#1192](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1192)) ([ca66be9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca66be9fef478e546f587893ebac4fa0a5f6adc6))
+* **seo:** GSC crawl record (homepage recrawled, 24 indexed, +2 discovered), GitNexus link mesh, and Narsil-MCP/Graft deep-dives (TRA-1365) ([#1195](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1195)) ([33b57af](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33b57af207d2cb50ca8cc92954564183e7581356))
+* **seo:** GSC crawl record 24 indexed (+2 /vs/ pages), privacy discovery links, and code-graph-mcp ecosystem expansion (TRA-1346) ([#1190](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1190)) ([cab2b68](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cab2b68a62eabc137d00914252765f7c2c3e5218))
+* **vs:** add /vs/gitnexus comparison, deep-dive grafel, and update competitor stars (TRA-1361) ([#1193](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1193)) ([031ad4e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/031ad4e9b8b16543bbcf22c30c03b13ae45655b3))
+* **vs:** add /vs/graft comparison, refresh competitor stars, and distribution ledger (TRA-1371) ([#1196](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1196)) ([71b0dca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/71b0dca5ba6c34faeaf5b9446a2c6de573a24db7))
+
+
+### Tests
+
+* **db:** add comprehensive unit tests for GraphRepository (TRA-1334) ([#1187](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1187)) ([b6a5d46](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b6a5d467fc44cb4fe1b95d620fe5b6b6c941952a))
+
 ## [3.25.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.24.0...v3.25.0) (2026-09-09)
 
 
