@@ -108,7 +108,7 @@
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
     "tree-sitter-wasm": "^1.1.6",
-    "web-tree-sitter": "^0.26.13",
+    "web-tree-sitter": "^0.27.0",
     "xxhash-wasm": "^1.1.0",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
