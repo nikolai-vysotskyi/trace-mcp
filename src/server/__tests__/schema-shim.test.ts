@@ -44,10 +44,11 @@ function fakeTransport() {
 describe('stripRedundantSchemaKeyword', () => {
   // Premise guard: if a future SDK/zod bump stops stamping $schema, the shim
   // becomes a silent no-op — this test fails loudly instead.
-  it('the unpatched SDK still emits $schema on inputSchema', async () => {
+  it('the unpatched SDK still emits $schema on inputSchema and default execution', async () => {
     const tools = await listToolsOverWire(false);
     expect(tools).toHaveLength(1);
     expect(tools[0].inputSchema).toHaveProperty('$schema');
+    expect(tools[0].execution).toEqual({ taskSupport: 'forbidden' });
   });
 
   it('strips $schema and default execution from tools/list end-to-end while keeping the tool usable', async () => {
