@@ -10,6 +10,7 @@ export const savings = {
   heroLabel: 'Input tokens given back',
   heroValue: 'At least {{tokens}}',
   heroUsd: 'About {{usd}}, priced at {{model}} ({{rate}} per million input tokens) — the cheapest current rate.',
+  heroUsdDetected: 'About {{usd}}, priced at {{model}} ({{rate}} per million input tokens) based on your recent activity.',
   sectionBreakdown: 'How it was counted',
   rowBaseline: 'File-reading baseline (estimated)',
   rowReturned: 'Tokens returned (measured)',

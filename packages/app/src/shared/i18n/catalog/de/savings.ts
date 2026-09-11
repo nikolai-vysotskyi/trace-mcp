@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: 'Zurückgegebene Eingabe-Tokens',
   heroValue: 'Mindestens {{tokens}}',
   heroUsd: 'Etwa {{usd}}, berechnet mit {{model}} ({{rate}} pro Million Eingabe-Tokens) — der günstigste aktuelle Tarif.',
+  heroUsdDetected: 'Etwa {{usd}}, berechnet mit {{model}} ({{rate}} pro Million Eingabe-Tokens) basierend auf Ihren letzten Aktivitäten.',
   sectionBreakdown: 'So wurde gezählt',
   rowBaseline: 'Basis: Dateien lesen (geschätzt)',
   rowReturned: 'Zurückgegebene Tokens (gemessen)',

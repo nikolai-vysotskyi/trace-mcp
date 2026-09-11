@@ -38,6 +38,7 @@ interface SavingsReport {
   usd_saved_floor: number;
   price_model: string;
   price_per_mtok_usd: number;
+  model_source?: 'detected' | 'fallback';
   since: string | null;
   methodology_url: string;
   reason?: string;
@@ -142,11 +143,17 @@ function SavingsFigure({ report: r }: { report: SavingsReport }) {
             {t('heroValue', { tokens: compact(r.tokens_saved) })}
           </span>
           <span className="text-[13px] leading-4" style={{ color: 'var(--label-secondary)' }}>
-            {t('heroUsd', {
-              usd: `$${r.usd_saved_floor.toFixed(2)}`,
-              model: r.price_model,
-              rate: `$${r.price_per_mtok_usd.toFixed(2)}`,
-            })}
+            {r.model_source === 'detected'
+              ? t('heroUsdDetected', {
+                  usd: `$${r.usd_saved_floor.toFixed(2)}`,
+                  model: r.price_model,
+                  rate: `$${r.price_per_mtok_usd.toFixed(2)}`,
+                })
+              : t('heroUsd', {
+                  usd: `$${r.usd_saved_floor.toFixed(2)}`,
+                  model: r.price_model,
+                  rate: `$${r.price_per_mtok_usd.toFixed(2)}`,
+                })}
           </span>
         </div>
       </Card>

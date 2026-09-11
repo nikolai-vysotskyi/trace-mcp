@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: 'Возвращено входных токенов',
   heroValue: 'Не меньше {{tokens}}',
   heroUsd: 'Примерно {{usd}} по цене {{model}} ({{rate}} за миллион входных токенов) — самый дешёвый текущий тариф.',
+  heroUsdDetected: 'Примерно {{usd}} по цене {{model}} ({{rate}} за миллион входных токенов) на основе вашей активности.',
   sectionBreakdown: 'Как посчитано',
   rowBaseline: 'База: чтение файлов (оценка)',
   rowReturned: 'Возвращено токенов (замер)',

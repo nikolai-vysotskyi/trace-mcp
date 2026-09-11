@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: '已归还的输入 token',
   heroValue: '至少 {{tokens}}',
   heroUsd: '约 {{usd}}，按 {{model}} 计价（每百万输入 token {{rate}}），这是目前最便宜的费率。',
+  heroUsdDetected: '根据您近期的使用情况，按 {{model}}（每百万输入 token {{rate}}）计算约为 {{usd}}。',
   sectionBreakdown: '如何统计',
   rowBaseline: '基线：读取文件（估算）',
   rowReturned: '实际返回的 token（实测）',

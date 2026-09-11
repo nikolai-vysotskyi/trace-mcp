@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: 'लौटाए गए इनपुट टोकन',
   heroValue: 'कम से कम {{tokens}}',
   heroUsd: 'लगभग {{usd}}, {{model}} की दर पर ({{rate}} प्रति दस लाख इनपुट टोकन) — फ़िलहाल की सबसे सस्ती दर।',
+  heroUsdDetected: 'हाल की गतिविधि के आधार पर {{model}} ({{rate}} प्रति दस लाख इनपुट टोकन) की दर से लगभग {{usd}}।',
   sectionBreakdown: 'गिनती कैसे हुई',
   rowBaseline: 'आधार: फ़ाइल पढ़ना (अनुमानित)',
   rowReturned: 'लौटाए गए टोकन (मापे गए)',

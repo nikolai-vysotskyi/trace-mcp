@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: 'Tokens de entrada devolvidos',
   heroValue: 'Pelo menos {{tokens}}',
   heroUsd: 'Cerca de {{usd}}, ao preço do {{model}} ({{rate}} por milhão de tokens de entrada) — a tarifa atual mais barata.',
+  heroUsdDetected: 'Cerca de {{usd}}, precificado em {{model}} ({{rate}} por milhão de tokens de entrada) com base na sua atividade recente.',
   sectionBreakdown: 'Como foi contado',
   rowBaseline: 'Base: leitura de arquivos (estimada)',
   rowReturned: 'Tokens devolvidos (medidos)',

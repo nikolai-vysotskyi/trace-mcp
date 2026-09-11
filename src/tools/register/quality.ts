@@ -28,26 +28,34 @@ import {
 import { qualityGateReportToSarif } from '../quality/sarif.js';
 import { exportSecurityContext } from '../quality/security-context-export.js';
 import { packContext } from '../refactoring/pack-context.js';
+import { ALL_PRESET_TOOLS } from '../project/presets.js';
+import { UNGATED_META_TOOLS } from '../../server/tool-filter.js';
 
-// E14 — Introspect the MCP server's registered tools so audit_config can
-// emit dead_tool_ref findings against the live tool surface. We reach into
-// the SDK's private field; the runtime shape is { [name]: { enabled, ... } }
-// per @modelcontextprotocol/sdk/dist/esm/server/mcp.js. Returns an empty set
-// if the SDK ever changes shape, so the audit silently degrades instead of
-// throwing.
+// TRA-1063: Collect all registered and available tools so audit_config /
+// check_claudemd_drift checks against the full tool surface (active preset,
+// deferred tools, and framework-gated tools). A deferred tool is one load_tools
+// call away, and a framework tool is valid in projects using that framework —
+// neither is a "dead MCP tool reference".
 function collectRegisteredToolNames(server: McpServer): Set<string> {
+  const names = new Set<string>();
   try {
     const reg = (server as unknown as { _registeredTools?: Record<string, { enabled?: boolean }> })
       ._registeredTools;
-    if (!reg || typeof reg !== 'object') return new Set();
-    const names = new Set<string>();
-    for (const [name, tool] of Object.entries(reg)) {
-      if (tool && tool.enabled !== false) names.add(name);
+    if (reg && typeof reg === 'object') {
+      for (const name of Object.keys(reg)) {
+        names.add(name);
+      }
     }
-    return names;
   } catch {
-    return new Set();
+    // Ignore reflection failure
   }
+  for (const name of ALL_PRESET_TOOLS) {
+    names.add(name);
+  }
+  for (const name of UNGATED_META_TOOLS) {
+    names.add(name);
+  }
+  return names;
 }
 
 export function registerQualityTools(server: McpServer, ctx: ServerContext): void {

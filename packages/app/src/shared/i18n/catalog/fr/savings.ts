@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: 'Jetons d\'entrée rendus',
   heroValue: 'Au moins {{tokens}}',
   heroUsd: 'Environ {{usd}}, au tarif {{model}} ({{rate}} par million de jetons d\'entrée) — le tarif actuel le moins cher.',
+  heroUsdDetected: 'Environ {{usd}}, calculé au tarif de {{model}} ({{rate}} par million de jetons d\'entrée) selon votre activité récente.',
   sectionBreakdown: 'Comment c\'est compté',
   rowBaseline: 'Référence : lecture de fichiers (estimée)',
   rowReturned: 'Jetons rendus (mesurés)',

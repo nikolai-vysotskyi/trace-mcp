@@ -4,6 +4,7 @@ export const savings = {
   heroLabel: '取り戻した入力トークン',
   heroValue: '少なくとも {{tokens}}',
   heroUsd: '約 {{usd}}（{{model}} の料金：入力100万トークンあたり {{rate}} で換算）。現在いちばん安いレートです。',
+  heroUsdDetected: '最近のアクティビティに基づく {{model}}（入力100万トークンあたり {{rate}}）の換算で約 {{usd}}。',
   sectionBreakdown: '数え方',
   rowBaseline: '基準：ファイル読み込み（推定）',
   rowReturned: '返したトークン（実測）',
