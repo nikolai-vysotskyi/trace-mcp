@@ -2102,3 +2102,48 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
   - `ai_architect_codebase`: 4 → **4★** (4)
   - `trace-mcp`: 175 → **175★** (175)
 - Priority for next deep-dive: **Narsil-MCP** (`postrv/narsil-mcp`, Rust, 182★, CCG 4-layer progressive disclosure) and a re-read of **Graft** (`trailhq/Graft`, 7.0K★, fastest-growing peer).
+
+### Sixteenth pass, 2026-09-11 (TRA-1371): Dedicated comparative page /vs/graft (7.1K★), competitor star refresh (43K CBM), and telemetry audit
+
+**Telemetry and adoption snapshot (GA4 property, 2026-09-11 W14 audit):**
+- **DAU**: **44** (up from 25 on 09-08, +76%).
+- **WAU**: **126** (up from 104 on 09-08, +21%).
+- **MAU**: **199** (up from 137 on 09-08, +45%).
+- **Events (28d window)**: **976 events**.
+- **Client breakdown**: claude-code (49), codex-mcp-client (22), antigravity-client (8), mcp (5), opencode (4), cursor-vscode (3), grok-shell-trace-mcp (3), rmcp (3), Trae (1), Visual Studio Code (1), factory-cli (1), kimi-code (1), kiro (1), pi-mcp-trace-mcp (1), smoke (1), zcode (1).
+- **Client reporting**: 76% of reporting installs run client-readable versions (>=3.12.0).
+
+**Mention sweep and code search:**
+- `scripts/mention-sweep.sh` executed across REST and GraphQL queries. Output: «No repos outside the seen list. Nothing to read.»
+- Standing catalog moratorium holds: 0 attributable installs from directories in `ops/arrivals.md`. Zero directory submissions made.
+
+**Competitor intelligence & content delivery:**
+- **Added dedicated comparative landing page `docs/vs/graft.md`**:
+  Full head-to-head analysis against Graft (`trailhq/Graft`, 7,094★, #8 largest peer in ecosystem). Highlights 100% deterministic local WASM parsing + SQLite vs paid external LLM API keys (@anthropic-ai/sdk, openai) & token bills per file, relational embedded SQLite graph (WAL + FTS5) vs loose markdown files with YAML front matter in `graft/`, 6 read-only MCP tools vs {{ site.data.counts.tools }} tools with verified AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`), OWASP Top-10 taint analysis, 88 framework semantic integrations, and zero-setup WASM portability vs native C++ node-gyp builds. Structured with TechArticle and FAQPage schema.org JSON-LD, 153-char meta description, and cross-links.
+- **Competitor star counts verified against live GitHub API (20 tracked competitors)**:
+  - `codegraph`: 70,483 → **70,502★** (70.5K)
+  - `gitnexus`: 47,226 → **47,245★** (47.2K)
+  - `codebase_memory_mcp`: 42,940 → **42,957★** (**43K**, passed rounding threshold to 43K)
+  - `code_review_graph`: 31,329 → **31,333★** (31.3K)
+  - `serena`: 29,173 → **29,186★** (29.2K)
+  - `repomix`: 28,288 → **28,290★** (28.3K)
+  - `context_mode`: 22,089 → **22,146★** (22.1K)
+  - `graft`: 7,056 → **7,094★** (7.1K)
+  - `codegraphcontext`: 4,183 → **4,183★** (4.2K)
+  - `socraticode`: 3,294 → **3,294★** (3.3K)
+  - `jcodemunch`: 2,680 → **2,681★** (2.7K)
+  - `ripwire`: 1,889 → **1,892★** (1.9K)
+  - `tokensave`: 625 → **625★** (625)
+  - `aft`: 280 → **280★** (280)
+  - `narsil_mcp`: 182 → **183★** (183)
+  - `trace-mcp`: 175 → **175★** (175)
+  - `code_pathfinder`: 140 → **140★** (140)
+  - `codegraph_ai`: 85 → **85★** (85)
+  - `grafel`: 15 → **15★** (15)
+  - `ai_architect_codebase`: 4 → **4★** (4)
+- **Maintainer threads and open outreach queue audit**:
+  - All 28 previous threads and PRs re-checked across GitHub API:
+    `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`, `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`, `The-PR-Agent/pr-agent#2499`, `fullsend-ai/fullsend#297`, `macanderson/stella#6461`, `garrytan/gbrain#5001`, `fmagent-project/FM-Agent#229`.
+    All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
+- Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge), plus dedicated comparative page for **Ripwire** (`redhat-et/ripwire`, 1.9K★).
+

@@ -19,19 +19,19 @@ trace_mcp:
   stars: "175"
 repomix:
   repo: yamadashy/repomix
-  stars_exact: 28288
+  stars_exact: 28290
   stars: "28.3K"
 serena:
   repo: oraios/serena
-  stars_exact: 29173
+  stars_exact: 29186
   stars: "29.2K"
 codebase_memory_mcp:
   repo: DeusData/codebase-memory-mcp
-  stars_exact: 42940
-  stars: "42.9K"
+  stars_exact: 42957
+  stars: "43K"
 code_review_graph:
   repo: tirth8205/code-review-graph
-  stars_exact: 31329
+  stars_exact: 31333
   stars: "31.3K"
 codegraphcontext:
   repo: CodeGraphContext/CodeGraphContext
@@ -39,11 +39,11 @@ codegraphcontext:
   stars: "4.2K"
 codegraph:
   repo: colbymchenry/codegraph
-  stars_exact: 70483
+  stars_exact: 70502
   stars: "70.5K"
 context_mode:
   repo: mksglu/context-mode
-  stars_exact: 22089
+  stars_exact: 22146
   stars: "22.1K"
 codegraph_ai:
   repo: codegraph-ai/CodeGraph
@@ -55,7 +55,7 @@ socraticode:
   stars: "3.3K"
 jcodemunch:
   repo: jgravelle/jcodemunch-mcp
-  stars_exact: 2680
+  stars_exact: 2681
   stars: "2.7K"
 tokensave:
   repo: aovestdipaperino/tokensave
@@ -63,7 +63,7 @@ tokensave:
   stars: "625"
 ripwire:
   repo: redhat-et/ripwire
-  stars_exact: 1889
+  stars_exact: 1892
   stars: "1.9K"
 aft:
   repo: cortexkit/aft
@@ -75,7 +75,7 @@ ai_architect_codebase:
   stars: "4"
 gitnexus:
   repo: abhigyanpatwari/GitNexus
-  stars_exact: 47226
+  stars_exact: 47245
   stars: "47.2K"
 code_pathfinder:
   repo: shivasurya/code-pathfinder
@@ -87,9 +87,9 @@ grafel:
   stars: "15"
 graft:
   repo: trailhq/Graft
-  stars_exact: 7056
+  stars_exact: 7094
   stars: "7.1K"
 narsil_mcp:
   repo: postrv/narsil-mcp
-  stars_exact: 182
-  stars: "182"
+  stars_exact: 183
+  stars: "183"
