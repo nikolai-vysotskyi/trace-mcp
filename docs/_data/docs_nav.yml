@@ -27,6 +27,8 @@
   url: /vs/jcodemunch.html
 - title: vs TokenSave
   url: /vs/tokensave.html
+- title: vs GitNexus
+  url: /vs/gitnexus.html
 - title: vs Context Mode
   url: /vs/context-mode.html
 - title: vs code-review-graph
