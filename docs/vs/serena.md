@@ -1,7 +1,7 @@
 ---
 title: "Serena MCP Alternative: trace-mcp vs Serena for agent code navigation"
 description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, memory."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Serena MCP alternative: trace-mcp vs Serena
@@ -107,7 +107,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
 | Multi-repo subprojects | ✓ cross-repo API linking | partial — query another project, no cross-repo edges |
 | Graph visualization | ✓ desktop app | ✗ |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena
@@ -134,13 +134,13 @@ First, **the table above used to be built from Serena's README, and reading the 
 - **It is not stateless.** We claimed "no persistent state, per-session". It persists two pickled document-symbol caches per language and loads them at startup (see the bullet above). Warm symbol lookups do survive a restart; only the edges do not exist.
 - **It can reach other repositories.** We claimed a flat ✗. `query_project` and `list_queryable_projects` run any read-only Serena tool against another registered project, through a small Flask project server. Both are optional tools, off unless enabled, and there are still no edges between repositories — but "cannot" was wrong.
 - **Its memories are more than notes.** We called them manual notes. They are markdown files under `.serena/memories` with topic namespacing, a global scope beside the project scope, and `mem:` cross-references with referential-integrity checking and autofix. What they are not is code-linked: nothing ties a memory to a symbol, and nothing rechecks it against the code when it is recalled. That narrower difference is the real one.
-- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 28 is "the same size", not "half".
+- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 29 is "the same size", not "half".
 
 Two rows moved the other way, and we state the evidence rather than the verdict. **Call graph**: `callHierarchy/incomingCalls` and `outgoingCalls` are implemented in the LSP client layer, but no tool class calls them, so an agent cannot ask Serena for a call graph. **Move and inline refactoring**: `JetBrainsMoveTool` and `JetBrainsInlineSymbol` proxy to a running JetBrains IDE; both are optional and beta. Native and always-on are `rename_symbol` and `safe_delete_symbol`.
 
 If you maintain Serena and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 
-Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
+Second, **our default tool surface is expensive.** trace-mcp advertises 29 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
 
 **Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
@@ -165,7 +165,7 @@ Serena on a cold repo — no index build, though the language server still has t
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.

@@ -1,7 +1,7 @@
 ---
 title: "What trace init installs — guard hooks, Read/Bash mirrors and client config"
 description: "What trace init writes to your machine and how to audit it: guard hooks, opt-in Read/Bash mirrors, the routing block, client config, tweakcc tiers."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # What `trace init` installs
@@ -244,5 +244,6 @@ above, and the `tweakcc` prompt files come out through `tweakcc` itself.
 
 Nothing here deletes a config key it did not write. An entry you configured
 yourself on the MCP server object survives a rename or a re-init. For the
-complete reference of configuration settings, paths, and environment variables,
-see [configuration](configuration.md) and the [config index](config-index.md).
+complete reference of configuration settings, paths, environment variables,
+and local storage policies, see [configuration](configuration.md), the
+[config index](config-index.md), and [privacy](privacy.md).

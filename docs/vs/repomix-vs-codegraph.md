@@ -1,7 +1,7 @@
 ---
 title: "Repomix vs codegraph: packing a repo vs indexing it for AI agents"
 description: "Repomix packs a repo into one file an agent reads; codegraph indexes it into a graph an agent queries. Head-to-head on cost, freshness and benchmarks."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Repomix vs codegraph
@@ -48,7 +48,7 @@ updated: 2026-09-08
           "name": "Is Repomix or codegraph cheaper in tokens?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "It depends on how many turns the agent spends in the repository. A Repomix pack is a fixed up-front cost paid on every prompt that carries it, and re-paid on every repack; --compress cuts roughly 70% of it by keeping signatures and dropping bodies. codegraph advertises one tool for about 1.9K tokens and then charges per query, and its own August 2026 benchmark across seven repositories reports 62% fewer tokens and 44% lower cost than a file-reading agent. For a single question about a small repository, Repomix usually wins. Across a long session on a repository too large for the context window, the graph wins."
+            "text": "It depends on how many turns the agent spends in the repository. A Repomix pack is a fixed up-front cost paid on every prompt that carries it, and re-paid on every repack; --compress cuts roughly 70% of it by keeping signatures and dropping bodies. codegraph advertises one tool for about 1,900 tokens and then charges per query, and its own August 2026 benchmark across seven repositories reports 62% fewer tokens and 44% lower cost than a file-reading agent. For a single question about a small repository, Repomix usually wins. Across a long session on a repository too large for the context window, the graph wins."
           }
         },
         {
@@ -127,7 +127,7 @@ Sources: Repomix's README and CLI reference; codegraph's README at the `main` he
 - **The repository does not fit, and re-packing is the cost you are trying to avoid.** codegraph's own benchmark is exactly this shape: on questions where a file-reading agent needed 28–43 tool calls and up to 19 file reads, the agent with the graph answered from one to four `codegraph_explore` calls and read zero files.
 - **The question is structural.** "What breaks if I change this", "who calls this", "how does the request reach this handler". A pack contains the bytes that would answer it, but nothing that computes the answer — and `grep_repomix_output` finds the string, not the edge.
 - **Your stack has boundaries a parser normally stops at.** Route to handler across 15 framework families, `navigates` edges across 7 routers, and Swift ↔ Objective-C and React Native bridge hops.
-- **You care about the advertised tool surface.** codegraph defines eight MCP tools and lists **one**. Its stated reasoning is that the other seven are narrower slices of `explore` and that presence itself steers agents into mis-picking. The whole surface costs roughly 1.9K tokens. Repomix's MCP server lists five.
+- **You care about the advertised tool surface.** codegraph defines eight MCP tools and lists **one**. Its stated reasoning is that the other seven are narrower slices of `explore` and that presence itself steers agents into mis-picking. The whole surface costs roughly 1,900 tokens. Repomix's MCP server lists five.
 - **Staleness has to be visible, not assumed.** During the debounce window, codegraph prepends a banner naming pending files and tells the agent to read them directly. A pack has no equivalent: it is silently stale from the first edit after it was written.
 
 ## Where each of them is honestly weak
@@ -146,7 +146,7 @@ We are in codegraph's lane, not Repomix's, and it would be dishonest to pretend 
 
 [trace-mcp](/) is a precomputed graph like codegraph's, with two differences that matter and one that costs us. It ships {{ site.data.counts.frameworks }} framework integrations that model edges beyond routing — controller → template, model → table, component → component — across {{ site.data.counts.languages }} languages. And it has a write path: rename, move, signature change, AST codemod, dead-code removal, plus OWASP taint scanning and SARIF for CI, none of which either tool above has.
 
-What it costs: our default preset advertises 28 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
+What it costs: our default preset advertises 29 tools at roughly 11.6K tokens, against codegraph's one tool at ~1,900 tokens. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
 
 On measurement we can offer one thing neither of them does: the [PR review context benchmark](/pr-context-benchmark.html) is a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, with the base and head SHAs, the losing cases, and the command that re-runs it all shipped in the repository.
 
@@ -158,7 +158,7 @@ Head-to-head, one at a time: [trace-mcp vs Repomix](/vs/repomix.html) · [trace-
 Repomix packs a repository into one file a model reads. codegraph parses it into a symbol and call graph an agent queries. Content versus computed structure — that one difference explains almost every other row above.
 
 **Is Repomix or codegraph cheaper in tokens?**
-It depends on session length. A pack is a fixed up-front cost, re-paid on every repack; `--compress` cuts roughly 70% of it. codegraph advertises one tool at ~1.9K tokens and charges per query, and reports 62% fewer tokens and 44% lower cost than a file-reading agent across seven repositories. One question, small repo: Repomix. Long session, large repo: codegraph.
+It depends on session length. A pack is a fixed up-front cost, re-paid on every repack; `--compress` cuts roughly 70% of it. codegraph advertises one tool at ~1,900 tokens and charges per query, and reports 62% fewer tokens and 44% lower cost than a file-reading agent across seven repositories. One question, small repo: Repomix. Long session, large repo: codegraph.
 
 **Do they both stay up to date as I edit?**
 Both watch, but refresh different things. Repomix's `--watch` re-packs the whole output after a 300 ms debounce and works on local directories only. codegraph syncs the graph per changed file and flags pending files in the response so the agent reads them directly.
@@ -173,5 +173,5 @@ Yes. Repomix for a remote repository you want to look at once; codegraph for the
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers, with the same sourcing discipline.
-- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with any of these tools.

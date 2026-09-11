@@ -1,6 +1,6 @@
 ---
 title: "Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents"
-description: "Narsil-MCP offers 90 tools and SPARQL RDF in Rust. trace-mcp adds 87 framework integrations, AST refactoring write tools, and OWASP taint analysis."
+description: "Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 88 framework integrations, AST refactoring write tools, and OWASP taint analysis."
 updated: 2026-09-09
 ---
 
@@ -56,7 +56,7 @@ updated: 2026-09-09
           "name": "How do their MCP tool surfaces and prompt overhead compare?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Narsil-MCP defines 90 tools across 11 categories and exposes four presets (minimal with 20-30 tools, balanced with 40-50, full with 70+, security-focused with ~30). trace-mcp ships a default minimal preset of 28 tools (~11.6K tokens total session start), provides task-tailored presets (review, architecture, dev), and escalates dynamically via load_tools without prompt bloat."
+            "text": "Narsil-MCP defines 90 tools across 11 categories and exposes four presets (minimal with 20-30 tools, balanced with 40-50, full with 70+, security-focused with ~30). trace-mcp ships a default minimal preset of 29 tools (~11.6K tokens total session start), provides task-tailored presets (review, architecture, dev), and escalates dynamically via load_tools without prompt bloat."
           }
         },
         {
@@ -101,7 +101,7 @@ Pick Narsil-MCP if you need formal RDF/SPARQL knowledge graph querying, want a s
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} tools | 90 tools (11 categories) |
-| Default advertised tools | **28** (~11.6K tok, task presets) | 20-30 (`minimal`) up to 70+ (`full`) |
+| Default advertised tools | **29** (~11.6K tok, task presets) | 20-30 (`minimal`) up to 70+ (`full`) |
 | Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 4 presets (`minimal`, `balanced`, `full`, `security-focused`) |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal over AST call sites (`--call-graph` flag) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | ✗ (analysis-only, zero refactoring write tools) |
@@ -129,7 +129,7 @@ trace-mcp is designed around **Deterministic, Strongly Typed MCP Primitives**:
 - Deterministic structured output formatted for model comprehension without RDF triple deserialization.
 - When flexible graph exploration is needed, `graph_query` provides a safe, domain-specific traversal interface without requiring SPARQL query generation.
 
-### 2. Context Delivery: 4-Layer CCG Disclosure vs. 28-Tool Minimal Preset with Dynamic Escalation
+### 2. Context Delivery: 4-Layer CCG Disclosure vs. 29-Tool Minimal Preset with Dynamic Escalation
 
 Managing model context window budgets is critical to prevent prompt dilution and excessive token costs. The two servers approach context efficiency from different angles.
 
@@ -142,11 +142,11 @@ Narsil-MCP structures repository data into four progressive CCG tiers:
 While Layer 0 provides an ultra-compact start, accessing granular symbols in Layers 2 and 3 requires fetching large chunks of serialized graph data. Furthermore, in tool discovery, Narsil-MCP's 90 tools across 11 categories must be managed via static presets (`minimal`, `balanced`, `full`, `security-focused`). If an agent on the `minimal` preset needs a specialized tool from `full`, it cannot load it without server re-configuration.
 
 trace-mcp addresses context overhead on both tool and data surfaces:
-- **Lean 28-tool `minimal` default**: Consumes ~11.6K tokens total (schema plus server instructions) at session start, preserving prompt capacity.
+- **Lean 29-tool `minimal` default**: Consumes ~11.6K tokens total (schema plus server instructions) at session start, preserving prompt capacity.
 - **Dynamic runtime escalation**: Any of the {{ site.data.counts.tools }} tools outside the active preset can be activated on demand in the live session via `load_tools`.
 - **Targeted context slices**: Tools like `get_outline`, `get_symbol`, and `get_change_impact` return exact AST slices and blast-radius summaries rather than requiring the agent to parse megabytes of raw RDF triples.
 
-### 3. Language Breadth vs. 87 Framework Semantic Integrations
+### 3. Language Breadth vs. 88 Framework Semantic Integrations
 
 Both engines parse source code using tree-sitter grammars. Where they diverge is how syntax trees are elevated into software architecture.
 
@@ -203,7 +203,7 @@ trace-mcp implements **True AST Dataflow Taint Analysis**:
 - **Modern web application development**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORMs.
 - **Deterministic agent tooling**: You want strongly typed, zero-hallucination MCP tools (`get_callers`, `get_change_impact`, `find_usages`) rather than generating complex SPARQL queries.
 - **Safe, automated AST refactoring**: You want your AI agent to perform atomic symbol renames, extractions, and file moves with syntax validation and cross-file import rewrites.
-- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Prompt budget efficiency**: You want a lean 29-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
 - **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
 - **Integrated CI security & quality gates**: You want AST-grounded OWASP Top-10 taint analysis and OASIS SARIF 2.1.0 reporting built into your code graph workflow.
 - **Zero-setup npm distribution**: You want instant execution via `npx -y trace-mcp@latest` with embedded SQLite and bundled ONNX embeddings.
@@ -212,7 +212,7 @@ trace-mcp implements **True AST Dataflow Taint Analysis**:
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.

@@ -1,7 +1,7 @@
 ---
 title: "jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents"
 description: "jCodeMunch offers Python AST exploration under non-commercial license. trace-mcp is permissive MIT with 81 languages, framework edges, and refactoring."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # jCodeMunch alternative: trace-mcp vs jCodeMunch
@@ -56,7 +56,7 @@ updated: 2026-09-08
           "name": "How do their MCP tool surfaces compare?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "jCodeMunch defines roughly 90 tools and fronts them on fresh installs through The Counter (3 meta-tools: order, menu, route), requiring an extra dispatch step to run commands. trace-mcp advertises 28 tools on its default minimal preset (~11.6K tokens), provides task-tailored presets (review, architecture, dev), and allows dynamic escalation via load_tools without meta-tool indirection."
+            "text": "jCodeMunch defines roughly 90 tools and fronts them on fresh installs through The Counter (3 meta-tools: order, menu, route), requiring an extra dispatch step to run commands. trace-mcp advertises 29 tools on its default minimal preset (~11.6K tokens), provides task-tailored presets (review, architecture, dev), and allows dynamic escalation via load_tools without meta-tool indirection."
           }
         },
         {
@@ -100,7 +100,7 @@ Pick jCodeMunch if you are an individual working on personal non-commercial proj
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ~13 context profiles (regex route matching) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ (text regex matches, no graph edges) |
 | MCP tools defined | {{ site.data.counts.tools }} | ~90 tools |
-| Default advertised tools | 28 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
+| Default advertised tools | 29 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
 | Tool dispatch model | Direct MCP tool invocation with presets | Meta-dispatch verb (`order(action, args)`) |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
@@ -149,8 +149,8 @@ jCodeMunch introduces **"The Counter"** (`counter.py`): on new installations, th
 While The Counter reduces resident schema tokens, it introduces significant friction into the agent loop. Running an action through `order` requires an extra turn of indirection and passes parameters inside generic unstructured objects, bypassing the client's native tool schema validation and increasing argument hallucination rates.
 
 trace-mcp addresses context cost through **Adaptive Task Presets**:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- Task-specific presets curate tools for the active workflow: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
 ### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
@@ -203,7 +203,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.

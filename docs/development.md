@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # Development
@@ -101,7 +101,7 @@ Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
 ## Tests
 
 ```bash
-pnpm run test                       # All tests (1668 tests, ~2s)
+pnpm run test                       # All tests (vitest run; or node scripts/test-quiet.mjs)
 pnpm run test --run <pattern>  # Run specific test files
 pnpm run test:watch             # Watch mode
 ```

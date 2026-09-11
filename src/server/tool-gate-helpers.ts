@@ -357,9 +357,10 @@ async function handleDuplicate(
 }
 
 /**
- * Token cost of a response's text, or undefined when it has none. Deliberately
- * `typeof`, not truthiness: an empty string is a real, measured zero-token
- * response, not a missing one.
+ * Token cost estimate of a response's text (using a zero-overhead chars/4
+ * heuristic, ~0.25 tokens/char; harness measured 0.220–0.368 on o200k_base),
+ * or undefined when it has none. Deliberately `typeof`, not truthiness: an
+ * empty string is a real zero-token response, not a missing one.
  */
 export function responseTokens(result: WrappedToolResponse | undefined): number | undefined {
   const text = result?.content?.[0]?.text;

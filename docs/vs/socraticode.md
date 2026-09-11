@@ -1,7 +1,7 @@
 ---
 title: "SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents"
 description: "SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # SocratiCode alternative: trace-mcp vs SocratiCode
@@ -56,7 +56,7 @@ updated: 2026-09-08
           "name": "Which server has the smaller MCP tool surface?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "SocratiCode advertises all 25 tools by default (~5.2K tokens). trace-mcp advertises 28 tools on its default minimal preset (~11.6K tokens including server instructions), offers task-tailored presets (review, architecture, dev), and keeps unadvertised tools reachable dynamically via load_tools without requiring server restarts."
+            "text": "SocratiCode advertises all 25 tools by default (~5.2K tokens). trace-mcp advertises 29 tools on its default minimal preset (~11.6K tokens including server instructions), offers task-tailored presets (review, architecture, dev), and keeps unadvertised tools reachable dynamically via load_tools without requiring server restarts."
           }
         },
         {
@@ -100,7 +100,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Framework integrations | **{{ site.data.counts.frameworks }}** integrations | ✗ (syntax AST only) |
 | Framework-aware edges | ✓ route → handler, template, ORM model | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 25 |
-| MCP tools advertised by default | 28 (~11.6K tok) | **25** (~5.2K tok) |
+| MCP tools advertised by default | 29 (~11.6K tok) | **25** (~5.2K tok) |
 | Surface trimming / Presets | ✓ adaptive presets (`minimal`, `review`, etc.) | ✗ (all 25 tools always advertised) |
 | Search mechanism | Structural AST + FTS5 + ONNX embeddings | Hybrid RRF (dense vector + keyword) |
 | Call flow & impact analysis | ✓ bidirectional call graph + blast radius | ✓ `codebase_flow` + `codebase_impact` |
@@ -141,9 +141,9 @@ Every tool advertised by an MCP server consumes prompt tokens on every turn of a
 
 SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
 
-trace-mcp advertises 28 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- For focused workflows, select task-tailored presets: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+trace-mcp advertises 29 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines
@@ -176,7 +176,7 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.

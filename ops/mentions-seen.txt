@@ -117,4 +117,33 @@ atlaslattice/aluminum-os             # their own golden-trace-mcp
 dawsonblock/Stack0Bot                # vendored awesome-mcp-servers, matches korwabs/playwright-trace-mcp
 Josh-S-N2M/feature-pipeline          # doc id PIPELINE-TRACE-mcp-provisioning-postmortem
 HolmesGPT/holmesgpt                 # datasource-catalog.json: dynatrace-mcp (Dynatrace)
-KryptosAI/mcp-observatory           # safety-index: dynatrace-mcp-server collision (Dynatrace)
+
+# ── Swept 2026-09-09 (TRA-1232) ──
+# Collision on dynatrace-mcp-server in docs/safety-index/targets.json:
+KryptosAI/mcp-observatory
+
+# ── Swept 2026-09-09 (TRA-1244) ──
+# Genuine third-party AX/FDE harness integrating trace for 'blast' (impact analysis):
+su-record/vibe
+
+# ── Swept 2026-09-09 (TRA-1265) ──
+# Genuine user repo with trace-mcp in CLAUDE.md (.trace-mcp/ ignore convention):
+drguptavivek/DYNAMIC
+# Collision: CSS class .trace-mcp in hooks/lib/report_generator.py:
+Nova-Hunting/nova-tracer
+
+# ── Swept 2026-09-10 (TRA-1281) ──
+# Genuine auto-index tracking Claude Code plugins by linny006:
+linny006/claude-code-plugin-tracker
+# Collision on dynatrace-mcp gateway URL:
+Dynatrace/dynatrace-for-ai
+# Collision: unrelated 2025 HuggingFace tool 'trace-mcp' in docs/reddit-news:
+inai-sandy/inAI-wiki
+
+# ── Swept 2026-09-11 (TRA-1361) ──
+# File history tracker of davila7/claude-code-templates tracking trace-mcp.json:
+andrehora/file-history
+# Genuine independent code-graph benchmark protocol evaluating Serena/CBM/CRG and noting trace-mcp:
+artemrudenko/code-graph-benchmark-v2
+# Genuine skill catalog for agentic code cleanup listing trace-mcp under agent-code-quality:
+xmkqv/money-tree

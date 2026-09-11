@@ -269,7 +269,7 @@ phrase on a door-1 channel, the same carve-out this section already makes.
 Languages and frameworks stay: they measure coverage a registry reader is
 actually shopping for, not surface they will pay for. The description reads:
 
-> Code graph MCP server for AI agents: 81 languages, 87 frameworks, 72.7% fewer PR-review tokens
+> Code graph MCP server for AI agents: 81 languages, 88 frameworks, 72.7% fewer PR-review tokens
 
 The registry caps `description` at 100 characters (`manifest-sync.test.ts`), so
 anything added here costs something already in the line.

@@ -1,7 +1,7 @@
 ---
 title: "Configuration Reference — all config options (works with none)"
 description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-08
+updated: 2026-09-11
 ---
 
 # Configuration
@@ -513,7 +513,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (42 tools), `dev` (42 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (29 tools, default), `standard` (61 tools — covers >99% of real-world tool calls per session-log mining), `review` (33 tools), `architecture` (42 tools), `dev` (44 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -577,7 +577,7 @@ Measured `tools/list` cost of each preset on this repo (serialized chars, then
 o200k tokens, 2026-09-01; `router` added 2026-09-02): `router` 7.1k / 1.6k,
 `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
-44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
+44.3k / 10.2k, `dev` 54.5k / 12.6k, `standard` 64.6k / 14.9k, `full` 157.7k /
 36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
 86% on the narrowest (`design`) — framework-gated tools are excluded, so a
 project that detects the matching framework pays more.
@@ -812,6 +812,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace does not write — configure that manually if you use the CLI |
 | **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
+| **OpenCode** | `~/.config/opencode/opencode.json[c]`, `<project>/opencode.json[c]` | JSON / JSONC | `mcp` (`type: "local"`, `command: ["trace", "serve"]`) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 
 > `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
 

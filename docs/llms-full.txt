@@ -34,7 +34,7 @@ Every turn in an agentic coding session pays for the entire preceding conversati
 A persistent code graph replaces file scans with graph queries:
 
 1. **Cost scales with the answer, not the repository.** Reading files scales with the size of the repository. Graph queries (`find_symbol`, `find_usages`, `get_change_impact`) scale with the size of the returned subgraph.
-2. **Measured context reduction.** In real benchmarks, graph-assembled context reduces input token usage by a median **{{ site.data.pr_context_bench.median_savings_pct }}%** to assemble pull-request review context across {{ site.data.pr_context_bench.pr_count }} open-source pull requests in {{ site.data.pr_context_bench.repo_count }} repositories ([read the PR context benchmark](/pr-context-benchmark.html)). Blind evaluation confirms comprehension at parity: {{ site.data.pr_context_quality.trace_understood }} understood rate against naive file loading's {{ site.data.pr_context_quality.baseline_understood }} (at {{ site.data.pr_context_quality.trace_false_positives }} vs {{ site.data.pr_context_quality.baseline_false_positives }} false positives per PR; see [quality preregistration](/perf/prereg-pr-quality/)).
+2. **Measured context reduction.** In real benchmarks, graph-assembled context reduces input token usage by a median **{{ site.data.pr_context_bench.median_savings_pct }}%** to assemble pull-request review context across {{ site.data.pr_context_bench.pr_count }} open-source pull requests in {{ site.data.pr_context_bench.repo_count }} repositories ([read the PR context benchmark](/pr-context-benchmark.html), or explore [7 tactics to cut Claude Code token usage](/reduce-claude-code-token-usage.html)). Blind evaluation confirms comprehension at parity: {{ site.data.pr_context_quality.trace_understood }} understood rate against naive file loading's {{ site.data.pr_context_quality.baseline_understood }} (at {{ site.data.pr_context_quality.trace_false_positives }} vs {{ site.data.pr_context_quality.baseline_false_positives }} false positives per PR; see [quality preregistration](/perf/prereg-pr-quality/)).
 3. **Freshness without rebuilds.** File watchers detect edits with a 300 ms debounce, re-parsing only changed files and updating edge tables in an embedded SQLite database.
 
 ## How trace-mcp implements the code graph
@@ -43,7 +43,7 @@ trace-mcp is a local-first code graph MCP server built around four architectural
 
 * **Polyglot tree-sitter parsing:** Parsers for {{ site.data.counts.languages }} programming languages compile into the binary, resolving symbols, classes, functions, and import chains without requiring language servers or build toolchains ([view language matrix](/language-matrix.html)).
 * **Framework-aware semantic edges:** Web applications do not live in isolated ASTs. trace-mcp resolves route-to-controller, controller-to-template, and model-to-table relationships across {{ site.data.counts.frameworks }} frameworks, including Laravel, Next.js, Django, Rails, Spring, and FastAPI ([supported frameworks](/supported-frameworks.html)).
-* **Zero-overhead local storage:** All graph nodes, edges, and FTS5 search indices live in an embedded SQLite database on your machine. No hosted services, no background daemons requiring cloud accounts, and no API keys.
+* **Zero-overhead local storage:** All graph nodes, edges, and FTS5 search indices live in an embedded SQLite database on your machine. For how resident memory and caches are capped, see [daemon memory](/daemon-memory.html). No hosted services, no background daemons requiring cloud accounts, and your source code never leaves your machine ([local privacy guarantee](/privacy.html)).
 * **Controlled schema footprint:** An MCP server that advertises dozens of tools consumes thousands of tokens before the agent asks its first question. trace-mcp uses role presets to expose roughly 2K tokens of tool schemas on session start, while keeping extended tools accessible dynamically via `load_tools` ([tools reference](/tools-reference.html), [tool index](/tools-index.html)).
 
 ## The code graph MCP ecosystem
@@ -61,6 +61,11 @@ Different tools approach codebase context from distinct angles:
 | **Hybrid vector-AST graph** | [SocratiCode](https://github.com/giancarloerra/SocratiCode) | Combines Qdrant vector embeddings with ast-grep in Docker. | Semantic vector search, but requires Docker runtime and lacks framework routing. [trace-mcp vs SocratiCode](/vs/socraticode.html) |
 | **Meta-dispatch graph** | [jCodeMunch](https://github.com/johann-petrak/jCodeMunch) | Fronts 90+ Python tools through "The Counter" meta-dispatch (`order`, `menu`, `route`). | Dual-Use license (non-commercial only) and regex route detection. [trace-mcp vs jCodeMunch](/vs/jcodemunch.html) |
 | **Native Rust libSQL graph** | [TokenSave](https://github.com/aovestdipaperino/tokensave) | Native Rust binary with libSQL storage, multi-branch indexing, and subprocess isolation. | Advertises 85+ tools by default (~12-15K schema tokens) with no framework routing. [trace-mcp vs TokenSave](/vs/tokensave.html) |
+| **Runtime buffer truncation** | [Context Mode](https://github.com/pashpashpash/context-mode) | Intercepts and truncates CLI execution buffers before prompt injection. | Focuses on runtime stdout/stderr pruning; maintains no persistent semantic code graph. [trace-mcp vs Context Mode](/vs/context-mode.html) |
+| **Knowledge graph Cypher** | [GitNexus](https://github.com/abhigyanpatwari/GitNexus) | Constructs code knowledge graph in embedded Kuzu graph DB querying via raw Cypher strings. | Non-commercial PolyForm license, requires local C++ toolchain build, and exposes unvalidated Cypher queries. [trace-mcp vs GitNexus](/vs/gitnexus.html) |
+| **LLM concept summaries** | [Graft](https://github.com/trailhq/Graft) | Generates plain-language subsystem and concept explanations in markdown files via LLM. | Requires external LLM API keys and model calls for all node generation; no relational graph traversal. |
+| **RDF multi-layer CCG** | [Narsil-MCP](https://github.com/postrv/narsil-mcp) | Emits 4-layer progressive disclosure Code Context Graph (CCG) datasets in RDF/N-Quads. | Advertises ~90 tools without role presets; complex semantic web RDF formats rather than lightweight JSON. |
+| **Packing vs indexing** | [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) | Side-by-side comparison of full-file prompt packing against single-tool graph exploration. | Evaluates static context serialization against interactive graph queries. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) |
 
 For a comprehensive feature-by-feature breakdown across 20+ tools, see the [code graph comparisons hub](/comparisons.html).
 
@@ -431,6 +436,7 @@ registrations themselves, so a tool cannot ship without appearing here.
 
 For the tools grouped by what you are trying to do — plus resources, usage
 examples and the migration notes — see the [tools reference](tools-reference.md).
+For configuration keys, flags, and environment variables that control these tools, see the [config index](config-index.md).
 The AI-backed tools (`explain_symbol`, `suggest_tests`, `review_change`,
 `find_similar`, `explain_architecture`) register from a different module and
 need `ai.enabled: true`; they are described
@@ -523,6 +529,7 @@ which excludes the framework-specific rows.
 | `get_decision_timeline` | Chronological timeline of decisions for a project, symbol, or file. | always |
 | `get_dependency_diagram` | Render dependency diagram for a file/directory path as Mermaid or DOT. | always |
 | `get_di_tree` | Trace NestJS dependency injection tree (what a service injects + who injects it). | framework |
+| `get_diagnostics` | Execute type-checker (tsc, mypy, pyright) and map errors to enclosing AST symbols. | always |
 | `get_domain_context` | Get all code related to a specific business domain. | always |
 | `get_domain_map` | Get hierarchical map of business domains with key symbols per domain. | always |
 | `get_edge_bottlenecks` | Find architectural bottleneck edges in the import graph: edges on many shortest paths (betweenness), edges whose removal would disconnect the graph (bridges)… | always |
@@ -863,8 +870,9 @@ above, and the `tweakcc` prompt files come out through `tweakcc` itself.
 
 Nothing here deletes a config key it did not write. An entry you configured
 yourself on the MCP server object survives a rename or a re-init. For the
-complete reference of configuration settings, paths, and environment variables,
-see [configuration](configuration.md) and the [config index](config-index.md).
+complete reference of configuration settings, paths, environment variables,
+and local storage policies, see [configuration](configuration.md), the
+[config index](config-index.md), and [privacy](privacy.md).
 
 ---
 
@@ -903,7 +911,7 @@ Where it stops is depth and writes. A language-agnostic parser produces no frame
 
 ### trace-mcp vs codegraph — one advertised tool, tuned for orientation
 
-[codegraph](https://github.com/colbymchenry/codegraph) (colbymchenry/codegraph, {{ site.data.competitors.codegraph.stars }} stars, MIT, v1.6.0 — TypeScript over a native Rust extraction kernel with vendored C grammars) is the largest peer by stars and the sharpest single idea in this field. It defines eight MCP tools — search, callers, callees, impact, node, explore, status, files — and by default **advertises exactly one**. Re-verified in its source at the current commit: `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`, the other seven stay fully implemented and re-enablable through a `CODEGRAPH_MCP_TOOLS` allowlist, and the stated reason in their own comment is that every other tool is a narrower slice of `explore` and *presence itself steers mis-picks*. The whole advertised surface costs roughly **1.9K tokens** against our ~11.6K — about 6× cheaper, real money paid on every session. Its self-run August 2026 benchmark reports 88% fewer tool calls, 62% fewer tokens, 44% lower cost and 53% faster across seven repositories, disclosing the model, the queries, four runs per arm, and a correction to an earlier version of its own harness. It is not third-party reproduced, and it is still the most transparent self-benchmark here.
+[codegraph](https://github.com/colbymchenry/codegraph) (colbymchenry/codegraph, {{ site.data.competitors.codegraph.stars }} stars, MIT, v1.6.0 — TypeScript over a native Rust extraction kernel with vendored C grammars) is the largest peer by stars and the sharpest single idea in this field. It defines eight MCP tools — search, callers, callees, impact, node, explore, status, files — and by default **advertises exactly one**. Re-verified in its source at the current commit: `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`, the other seven stay fully implemented and re-enablable through a `CODEGRAPH_MCP_TOOLS` allowlist, and the stated reason in their own comment is that every other tool is a narrower slice of `explore` and *presence itself steers mis-picks*. The whole advertised surface costs roughly **1,900 tokens** against our ~11.6K — about 6× cheaper, real money paid on every session. Its self-run August 2026 benchmark reports 88% fewer tool calls, 62% fewer tokens, 44% lower cost and 53% faster across seven repositories, disclosing the model, the queries, four runs per arm, and a correction to an earlier version of its own harness. It is not third-party reproduced, and it is still the most transparent self-benchmark here.
 
 Two things it is honest about, which we repeat rather than quietly exploit: its README reports that its answers leave roughly 80% *more* retrieval context resident at the end of a multi-turn session than a file-reading agent's do (67K tokens against 18K on VS Code) — fewer tokens processed and a larger persistent footprint are both true at once. And its scope stops at navigation by its own README's account: no rename, no move, no codemod, no taint analysis, no SARIF, no dead-code removal, and no session memory of any kind. Its framework work links URL patterns to handlers across 17 frameworks and does it well, but does not model controller → template or model → table; it parses 34 languages against our {{ site.data.counts.languages }}. Pick codegraph when orientation in an unfamiliar codebase is the whole job and the advertised-surface budget is tight. Pick trace-mcp when the job continues past reading. → [trace-mcp vs codegraph](/vs/codegraph.html)
 
@@ -943,6 +951,13 @@ Where it differs is prompt overhead, framework depth, and refactoring semantics.
 
 Where it differs is query ergonomics, framework depth, and code modification. Narsil-MCP exposes raw SPARQL querying over RDF triples, which introduces substantial prompt and URI hallucination overhead for AI models; trace-mcp exposes deterministic typed MCP primitives (`get_callers`, `get_change_impact`, `find_usages`). Narsil-MCP extracts syntax for 32 languages without framework route/controller/model awareness; trace-mcp constructs semantic edges across {{ site.data.counts.frameworks }} frameworks. Crucially, Narsil-MCP is strictly read-only with zero refactoring write tools and zero session memory; trace-mcp executes atomic AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and maintains code-linked decision memory with staleness verification. Full head-to-head: [trace-mcp vs Narsil-MCP](/vs/narsil-mcp.html).
 
+### trace-mcp vs GitNexus — permissive graph intelligence vs proprietary PolyForm clustering
+{: #vs-gitnexus}
+
+[GitNexus](https://github.com/abhigyanpatwari/GitNexus) (abhigyanpatwari/GitNexus, {{ site.data.competitors.gitnexus.stars }} stars, TypeScript / Node.js, PolyForm-Noncommercial-1.0.0, v1.6.11) is one of the largest code knowledge graph tools by stars. It pairs native C++ Tree-sitter grammars across 10 languages with embedded LadybugDB (a Kùzu fork) and in-memory Leiden community detection (`graphology-communities-leiden`) computing modularity cohesion scores (`calculateCohesion`). It exposes 17 MCP tools, including Program Dependence Graph analysis (`analyze --pdg`) with control dependence (CDG) and reaching definitions (REACHING_DEF), and an escape hatch for raw Cypher queries (`cypher`).
+
+Where it differs is licensing, prompt efficiency, framework semantics, and write capabilities. GitNexus is distributed under PolyForm Noncommercial 1.0.0, which strictly forbids commercial and enterprise usage without a proprietary commercial license, whereas trace-mcp is 100% permissive open-source under MIT. Its raw Cypher querying tool shifts query formulation onto the LLM, inviting prompt overhead and syntax hallucinations, while trace-mcp serves typed, schema-validated MCP tools. GitNexus requires native C++ Tree-sitter builds via `node-gyp-build`, whereas trace-mcp runs anywhere via WASM-sandboxed `web-tree-sitter`. GitNexus extracts syntax without deep framework semantics, whereas trace-mcp maps {{ site.data.counts.frameworks }} frameworks (route-to-handler, controller-to-template, ORM-to-table) and provides atomic AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and OWASP Top-10 taint analysis. Full head-to-head: [trace-mcp vs GitNexus](/vs/gitnexus.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -955,7 +970,22 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 8, 2026 — current
+### Pass of September 11, 2026 — current
+
+- **Dedicated comparison page for GitNexus ({{ site.data.competitors.gitnexus.stars }} stars)**: added [trace-mcp vs GitNexus](/vs/gitnexus.html) comparing trace-mcp's permissive MIT license, {{ site.data.counts.frameworks }} framework semantic integrations, typed MCP tools, and AST refactoring write tools against GitNexus's LadybugDB, Leiden community clustering, and raw Cypher queries under PolyForm Noncommercial 1.0.0.
+- **First source read of grafel** (cajasmota/grafel, Go, MIT, v0.x, 15 stars), the top priority from the previous pass's queue. Read through the GitHub API at `main`: `go.mod`, `cmd/grafel/`, `internal/mcp/`, `internal/substrate/`, `internal/responseshapediff/`, `internal/tautology/`, `internal/stubdetector/`, `internal/mmapview.go`. Corrected language: written in **Go** (Go 1.23+ with cgo Tree-sitter), not Rust as assumed prior to source reading. It implements a multi-repo code knowledge graph daemon for AI agents with 22 MCP tools, in-memory/mmap graph substrate (`mmapview.go`), cross-repo HTTP payload drift (`response_shape_diff_tool`, `payload_drift_tool`), and static code quality canaries (`tautology_detector_tool`, `stub_detector_tool`). No AST refactoring, no framework route-to-handler mappings, no session decision memory. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
+- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp **175**, codegraph 70.3K → **70.5K** (70,454), codebase-memory-mcp 42.8K → **42.9K** (42,922), code-review-graph 31.3K (31,320), Serena 29.1K → **29.2K** (29,165), Repomix 28.3K (28,288), context_mode 21.7K → **22.1K** (22,064), CodeGraphContext 4.2K (4,180), SocratiCode 3.3K (3,294), jCodeMunch 2.7K (2,680), ripwire 1.8K → **1.9K** (1,885), TokenSave 623 → **624**, AFT 278 → **279**, CodeGraph (codegraph-ai) 83 → **85**, ai-architect-codebase **4**, GitNexus 47.1K → **47.2K** (47,217), Code Pathfinder **140**, grafel **15**.
+- Rows for other projects were not re-checked in this pass and carry the September 9 figures.
+
+### Pass of September 9, 2026
+
+- **First source read of GitNexus** (abhigyanpatwari/GitNexus, TypeScript / Node.js, PolyForm-Noncommercial-1.0.0, 47,177 stars), the top priority from the previous pass's queue. Read through the GitHub API at `main`: `package.json`, `gitnexus/package.json`, `gitnexus/src/mcp/tools.ts`, `gitnexus/src/core/ingestion/community-processor.ts`, `gitnexus/src/core/ingestion/pipeline.ts`, `gitnexus/src/core/lbug/`. Monorepo containing CLI, web UI, and MCP server. Native C++ Tree-sitter bindings across 10 languages (TS, JS, Python, Go, Rust, C#, C++, Java, PHP, Ruby). Storage pairs embedded LadybugDB graph database (`@ladybugdb/core` / Kùzu fork) with Cypher query execution, `graphology`, and in-memory Leiden community detection (`graphology-communities-leiden`) computing cohesion scores (`calculateCohesion` = internal calls / total edges). Features Program Dependence Graph (`analyze --pdg`) recording control dependence (CDG) and reaching definitions (REACHING_DEF). Defines 17 MCP tools (`list_repos`, `query`, `cypher`, `context`, `detect_changes`, `check`, `rename`, `impact`, `explain`, `pdg_query`, `route_map`, `tool_map`, `shape_check`, `api_impact`, `group_list`, `group_sync`, `trace`). Commercial use prohibited under PolyForm Noncommercial 1.0.0. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
+- **First source read of Code Pathfinder** (shivasurya/code-pathfinder, Go + Python, Apache-2.0, v2.1.1, 140 stars), also from the previous pass's queue. Read through the GitHub API at `main`: `server.json`, `sast-engine/mcp/tools.go`, `sast-engine/graph/initialize.go`, `sast-engine/graph/callgraph/builder/builder.go`, `sast-engine/graph/callgraph/doc.go`. Static code analysis engine with 13 MCP tools (`get_index_info`, `find_symbol`, `find_module`, `list_modules`, `get_callers`, `get_callees`, `get_call_details`, `resolve_import`, `find_dockerfile_instructions`, `find_compose_services`, `get_dockerfile_details`, `status`, `get_docker_dependencies`) for Python, Go, Java, Dockerfiles, and Docker Compose. Uses 5-pass iterative indexing: module registry mapping (Pass 1), return type & variable assignment extraction (Pass 2), class attribute resolution (Pass 3), type-inferred call site resolution (Pass 4), and taint summaries (Pass 5). Dedicated IaC parsers index Dockerfile multi-stage builds and docker-compose services. No AST refactoring, no session memory, and no framework route mapping. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
+- **First source read of AFT** (cortexkit/aft, Rust + TypeScript, MIT, 278 stars), the sensorimotor cortex for coding agents (OpenCode + Pi), part of CortexKit. Read through the GitHub API at `main`: `Cargo.toml`, `crates/aft/src/commands/`, `packages/opencode-plugin/src/tools/`, `packages/pi-plugin/src/tools/`. It implements a shared persistent Rust daemon (`BridgePool`) per project root speaking JSON-over-stdio, 30 tree-sitter grammars for symbol outline and zoom, structural `ast_grep_search` / `ast_grep_replace`, trigram-indexed grep, semantic chunk embeddings, and an in-process LSP client. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
+- **Star re-check against the GitHub API** for all tracked competitors: trace-mcp **175**, codegraph 70.1K → **70.3K** (70,255), codebase-memory-mcp 42.7K → **42.8K** (42,776), code-review-graph 31.3K (31,287), Serena 29.0K → **29.1K** (29,088), Repomix 28.3K (28,268), context_mode 21.6K → **21.7K** (21,682), CodeGraphContext 4.2K (4,179), SocratiCode 3.3K (3,292), jCodeMunch 2.7K (2,676), ripwire 1.8K (1,823), TokenSave **623**, AFT **278**, CodeGraph (codegraph-ai) 82 → **83**, ai-architect-codebase **4**, GitNexus **47.2K** (47,177), Code Pathfinder **140**.
+- Rows for other projects were not re-checked in this pass and carry the September 8 figures.
+
+### Pass of September 8, 2026
 
 - **First source read of Narsil-MCP** (postrv/narsil-mcp, Rust, MIT OR Apache-2.0, v1.7.0, 182 stars), the top priority from the previous pass's queue. Read through the GitHub API at `main`: `Cargo.toml`, `src/tool_metadata.rs`, `src/config/preset.rs`, `src/taint/`, `src/persistence/sparql.rs`, `docs/architecture.md`, and `docs/ccg-spec.md`. It corrected the table: written in **Rust** (edition 2021), **90 MCP tools across 4 presets** (`minimal` 20-30 tools, `balanced` 40-50, `full` 70+, `security-focused` ~30), 32 tree-sitter languages, Code Context Graph (CCG) 4-layer progressive disclosure (Layer 0 manifest ~1-2KB JSON-LD, Layer 1 architecture ~10-50KB, Layer 2 symbol index ~100-500KB N-Quads, Layer 3 full RDF ~1-20MB), WebACL triple-heart access control model, `oxigraph` SPARQL triple store, `tantivy` LZ4 search, and Axum HTTP + embedded React visualization. No AST refactoring, no session memory, no framework edges. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
 - **First source read of RTK** (rtk-ai/rtk, Rust, Apache-2.0, 79,509 stars), the viral CLI token-killer proxy. Read through the GitHub API at `master`: `Cargo.toml`, `README.md`, `src/cmds/system/read.rs`, `src/core/filter.rs`, `src/cmds/git/`, `src/cmds/js/vitest_cmd.rs`. It clarifies positioning: RTK is a high-performance shell execution proxy intercepting dev commands (`ls`, `git`, `grep`, `cargo test`, `npm test`, `pytest`, `docker ps`) and compressing stdout by 60–90% before it enters context. It contains no tree-sitter, no AST parsing, no symbol resolution, and no code graph. It sits in the adjacent shell proxy lane alongside Context Mode and Headroom, complementing rather than competing with code-graph tools. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
@@ -1087,7 +1117,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 60 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
+| MCP tools advertised (default) | 29 `minimal` (~11.6K tok², default); 61 `standard` (~20.5k tok); {{ site.data.counts.tools }} `full` (~52K) | 28 default (50 defined) | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 25 (~5.2K tok) | 90 | 246 defined / 17 default `core` (8 presets) |
 | Session memory | ✓ | ✓ (notes, not code-linked) | ✗ | ✓ | partial (context artifacts, not code-linked) | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | partial (`query_project`, optional, no cross-repo edges) | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
@@ -1118,7 +1148,7 @@ _**depgraph.ai** (archview-ai, closed source, hosted) is the one peer on this SE
 
 Both of the biggest projects in this space (by stars) made the same product call, independently, and it is the one place they are clearly ahead of trace-mcp today. Verified by reading their source on August 28, 2026, not their READMEs.
 
-**The {{ site.data.competitors.codegraph.stars }}-star entrant (colbymchenry/codegraph, v1.6.0, TypeScript with a Rust kernel)** defines eight MCP tools — search, callers, callees, impact, node, explore, status, files — and by default **advertises exactly one of them**. `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`; the rest stay fully implemented and re-enablable through a `CODEGRAPH_MCP_TOOLS` allowlist env var, but are not listed to agents. The stated reason, in a source comment: every other tool is a narrower slice of what `explore` already does, and *presence itself steers mis-picks*. Their whole advertised surface costs roughly **1.9K tokens** (~390 tokens of schema plus a ~5.8K-character server-instructions block). Two further mechanisms are worth noting: (1) `explore` carries a per-project **adaptive output budget** — total output cap, default file count, per-file cap and clustering threshold all tier on indexed file count, explicitly kept under the host's ~25K-char inline tool-result cap so the result is never externalised to a file the agent has to read back; (2) their file-reading tool deliberately mirrors the host's native Read contract byte-for-byte (`offset`/`limit`, `<n>\t<line>` output, "safe to Edit from") so it can be substituted for Read rather than competing with it.
+**The {{ site.data.competitors.codegraph.stars }}-star entrant (colbymchenry/codegraph, v1.6.0, TypeScript with a Rust kernel)** defines eight MCP tools — search, callers, callees, impact, node, explore, status, files — and by default **advertises exactly one of them**. `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`; the rest stay fully implemented and re-enablable through a `CODEGRAPH_MCP_TOOLS` allowlist env var, but are not listed to agents. The stated reason, in a source comment: every other tool is a narrower slice of what `explore` already does, and *presence itself steers mis-picks*. Their whole advertised surface costs roughly **1,900 tokens** (~390 tokens of schema plus a ~5.8K-character server-instructions block). Two further mechanisms are worth noting: (1) `explore` carries a per-project **adaptive output budget** — total output cap, default file count, per-file cap and clustering threshold all tier on indexed file count, explicitly kept under the host's ~25K-char inline tool-result cap so the result is never externalised to a file the agent has to read back; (2) their file-reading tool deliberately mirrors the host's native Read contract byte-for-byte (`offset`/`limit`, `<n>\t<line>` output, "safe to Edit from") so it can be substituted for Read rather than competing with it.
 
 **The {{ site.data.competitors.codebase_memory_mcp.stars }}-star entrant (DeusData/codebase-memory-mcp, pure C)** ships 15 MCP tools (~7K tokens of schema) and adds **tool profiles**: `--tool-profile=scout` exposes 7, `--tool-profile=analysis` exposes 11, default exposes all 15. Re-verified September 3, 2026: 162 languages (up from 161), Hybrid LSP semantic type resolution across 12 languages, and two tools we had not catalogued — `manage_adr` (create/replace an Architecture Decision Record document) and `ingest_traces` (ingest runtime caller/callee counts to enrich the graph). Supply-chain posture is a deliberate selling point: SLSA Level 3, VirusTotal scanning of three behaviourally identical release candidates, OpenSSF Scorecard.
 
@@ -1133,7 +1163,7 @@ Both of the biggest projects in this space (by stars) made the same product call
 | `preset: "full"` (explicit opt-in) | 166 | ~49.9K tok | ~2.1K tok |
 | `standard` + `description_verbosity: "none"` | 55 | ~8.4K tok | 0 |
 
-The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (28 tools) hits its ceiling here while `standard` (60 tools) serves 55 of its 60 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
+The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (29 tools) hits its ceiling here while `standard` (61 tools) serves 56 of its 61 and `full` ({{ site.data.counts.tools }} tools) serves 166. Quote the ceilings when comparing on paper and the live numbers when comparing session cost — the comparison table above quotes ceilings, so it stays checkable in CI. Measure the live surface on a cold index and you will read low: framework-gated registration only settles once the first index pass completes (a cold run measured 24 / 54 / 165).
 
 So the honest default is **~11.6K tokens, not the ~51K this page used to quote** — a 2.5× correction in our own favour, caused by four landed changes (preset honoured on the daemon path, seven deprecated aliases retired, `compact_schemas` extended to the whole surface, and the default preset moved to `minimal` once `load_tools` made everything outside it one call away) that this page had not caught up with. The `minimal` row's ~9.8K is derived, not re-measured: the preset grew 25 → 28 tools and 30,540 → 34,041 serialized chars when it absorbed the always-load set, +11.5% on the ~8.8K that was measured live.
 
@@ -1298,7 +1328,7 @@ No tool is uniformly ahead. trace-mcp is the only one combining framework-aware 
 
 **Still genuinely open (honest, not closed by the validation pass):**
 
-- **Advertised tool-surface cost — narrowed ~4.4×, still behind.** Re-measured August 30, 2026: the shipped default is the `minimal` preset at 28 tools / ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions — ~11.6K in total, down from the ~51K this page quoted in August. (`standard`, an explicit opt-in, has a 60-tool ceiling and serves 55 of them here, for ~18.8K.) The preset-bypass bug behind that number is fixed and closed. The remaining gap is real but no longer embarrassing: the two largest peers advertise ~1.9K and ~7K tokens, i.e. ~6× and ~1.7× cheaper than our default. Both buy that with a smaller *capability* surface (one peer advertises a single tool); we buy ours by deferring 141 tools out of the default and keeping them one `load_tools` call away. What is still ours to fix is that ~54% of the wire is *descriptions* — measured on the 55-tool `standard` surface, 37.1 KB of the 67.2 KB payload, of which 22.4 KB is tool descriptions and 14.7 KB parameter descriptions. (The earlier "~57% / 22.5 KB of 67.7 KB" reading on this page mixed the two: the KB figure was tool descriptions alone, the percentage was both.) `description_verbosity: "none"` cuts that same surface to 29.4 KB — roughly halving whichever preset you run — but at a cost to tool-selection accuracy nobody has measured. A middle setting that keeps the first sentence and drops the rest is the obvious unexplored win.
+- **Advertised tool-surface cost — narrowed ~4.4×, still behind.** Re-measured August 30, 2026: the shipped default is the `minimal` preset at 28 tools / ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions — ~11.6K in total, down from the ~51K this page quoted in August. (`standard`, an explicit opt-in, has a 60-tool ceiling and serves 55 of them here, for ~18.8K.) The preset-bypass bug behind that number is fixed and closed. The remaining gap is real but no longer embarrassing: the two largest peers advertise ~1,900 and ~7K tokens, i.e. ~6× and ~1.7× cheaper than our default. Both buy that with a smaller *capability* surface (one peer advertises a single tool); we buy ours by deferring 141 tools out of the default and keeping them one `load_tools` call away. What is still ours to fix is that ~54% of the wire is *descriptions* — measured on the 55-tool `standard` surface, 37.1 KB of the 67.2 KB payload, of which 22.4 KB is tool descriptions and 14.7 KB parameter descriptions. (The earlier "~57% / 22.5 KB of 67.7 KB" reading on this page mixed the two: the KB figure was tool descriptions alone, the percentage was both.) `description_verbosity: "none"` cuts that same surface to 29.4 KB — roughly halving whichever preset you run — but at a cost to tool-selection accuracy nobody has measured. A middle setting that keeps the first sentence and drops the rest is the obvious unexplored win.
 
 
 
@@ -1324,7 +1354,7 @@ Serena does by design — it is a language-server proxy, so its coverage is what
 
 ### How many tools does each server advertise, and why does it matter?
 
-Every tool a server advertises costs tokens in `tools/list` before the agent asks anything. On the shipped default preset trace-mcp advertises 28 tools at roughly 11.6K tokens; codegraph advertises one, at roughly 1.9K; codebase-memory-mcp ships 15 at roughly 7K. We are behind the cheapest peers on that axis and say so in the deep dive above rather than leaving it to the tables.
+Every tool a server advertises costs tokens in `tools/list` before the agent asks anything. On the shipped default preset trace-mcp advertises 28 tools at roughly 11.6K tokens; codegraph advertises one, at roughly 1,900 tokens; codebase-memory-mcp ships 15 at roughly 7K. We are behind the cheapest peers on that axis and say so in the deep dive above rather than leaving it to the tables.
 
 ### How current is this comparison?
 
@@ -1334,9 +1364,9 @@ Each figure carries the date of the pass that checked it. Star counts render fro
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode, jCodeMunch, TokenSave, Graft, Narsil-MCP, RTK, claude-mem, Token Savior.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph, SDL-MCP, Serena, code-review-graph, CodeGraphContext, LeanKG, Roam-Code, Repomix, marm-memory, CodeGraph (codegraph-ai), SocratiCode, jCodeMunch, TokenSave, Graft, Narsil-MCP, RTK, claude-mem, Token Savior, AFT, GitNexus, Code Pathfinder, grafel.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, repo-context-mcp, grafel, GitNexus, Code Pathfinder.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, repo-context-mcp.
 
 **SDL-MCP profiled this pass** (August 29, 2026 — repo cloned and read: `src/gateway/`, `src/mcp/response-projection/`, `docs/architecture.md`, `docs/tool-output-contract.md`, `docs/tool-enforcement.md`). Findings and the take-or-pass on each are in the tool-surface deep dive above. Three things beyond the budget layer are worth recording here rather than re-discovering: it runs on an embedded **graph** database (LadybugDB / Kuzu engine) rather than SQLite+FTS5; it ships **client-side enforcement generation** (`sdl-mcp init --client claude-code --enforce-agent-tools` writes `.claude/settings.json` hooks, a subagent, and repo-local instruction files whose job is to stop the agent falling back to native Read/Bash) — a distribution idea, not a code idea, and the one place a peer is doing something we are not; and it treats native-tool substitution as a design goal, mirroring the host's Read contract byte-for-byte, which is the same move the largest peer makes.
 
@@ -1481,7 +1511,62 @@ Three mechanisms were read and evaluated:
 - **Sub-property schema description pruning (`_thin_input_schema`): already covered.** trace-mcp's `description_verbosity: "minimal"` already addresses schema verbosity.
 - **MCP tool annotations (`readOnlyHint`, `destructiveHint`): already implemented.** trace-mcp already provides protocol-level tool annotations in `src/server/tool-annotations.ts`.
 
-Priority for next deep-dive: **GitNexus** and **Code Pathfinder**, the remaining direct code intelligence / knowledge graph tools in the registry. Second priority is a re-read of **Graft** rather than a new name — it is two months old, pushed daily, and the fastest-moving thing in the table.
+**AFT profiled this pass** (September 9, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `Cargo.toml`, `package.json`, `README.md`, `src/index/graph.rs`, `src/index/trigram.rs`, `src/tools/ast_grep.rs`, `src/transport/`). 278 stars (GitHub API, this pass), MIT, Rust + TypeScript, v0.7.2. Designed as a sensorimotor cortex / code intelligence sidecar for OpenCode and Pi agents, integrating a 30-language tree-sitter symbol graph, trigram search, and an embedded `ast-grep` engine.
+
+Four mechanisms were read and evaluated:
+- **Embedded `ast-grep` structural search (`src/tools/ast_grep.rs`): taking the concept for structural query evaluation.** AFT embeds `ast-grep` pattern matching, allowing agents to search AST structures using natural code pattern templates (e.g. `fn $NAME($$$ARGS) -> Result<$$$T>`) without writing raw tree-sitter SCM queries. trace-mcp excels at relational graph queries (`get_callers`, `get_change_impact`), but exposing an ergonomic AST template search mode would give agents flexible structural matching without query overhead.
+- **Dual transport (MCP stdio + Unix Domain Socket): passing on socket transport.** AFT runs a local Unix domain socket alongside stdio MCP to minimize IPC overhead in dedicated agent environments. Standard stdio MCP is universally supported across all major host clients (Claude Code, Cursor, Zed, Windsurf) with imperceptible latency; maintaining an extra socket protocol adds daemon lifecycle complexity without meaningful benefit.
+- **In-memory trigram symbol index: passing, SQLite FTS5 WAL is cleaner.** AFT maintains an in-memory trigram index alongside its AST graph. trace-mcp stores symbols and search indices in SQLite WAL mode using FTS5/trigram indexing, avoiding redundant memory consumption and cache synchronization drift.
+- **Refactoring and session memory: absent in AFT.** AFT is purely an AST-assisted reader and search engine; it provides zero verified refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_codemod`), zero framework awareness, and zero symbol-anchored decision memory.
+
+**GitNexus profiled this pass** (September 9, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `package.json`, `gitnexus/package.json`, `gitnexus/src/mcp/tools.ts`, `gitnexus/src/core/ingestion/community-processor.ts`, `gitnexus/src/core/ingestion/pipeline.ts`, `gitnexus/src/core/lbug/`). 47,177 stars (GitHub API, this pass), PolyForm-Noncommercial-1.0.0 (non-commercial only; commercial use prohibited without license), TypeScript / Node.js monorepo (`gitnexus`, `gitnexus-web`, `gitnexus-shared`), v1.6.11. It compiles native C++ Tree-sitter grammars (`node-gyp-build`, `node-addon-api`) across 10 languages (TS, JS, Python, Go, Rust, C#, C++, Java, PHP, Ruby). Storage pairs embedded LadybugDB graph database (`@ladybugdb/core` / Kùzu fork) with Cypher query execution, `graphology`, and in-memory Leiden community detection (`graphology-communities-leiden`). It defines 17 MCP tools (`list_repos`, `query`, `cypher`, `context`, `detect_changes`, `check`, `rename`, `impact`, `explain`, `pdg_query`, `route_map`, `tool_map`, `shape_check`, `api_impact`, `group_list`, `group_sync`, `trace`) and features Program Dependence Graph analysis (`analyze --pdg`) recording control dependence (CDG) and reaching definitions (REACHING_DEF).
+
+Five mechanisms were read at source and each got a decision:
+
+- **Leiden community detection with cohesion score (`calculateCohesion`): taking the cohesion score into subsystem metrics.** GitNexus uses Leiden graph clustering over `CALLS` edges to partition symbols into communities, calculating `cohesion = internalEdges / totalEdges` (sampling up to 50 nodes). In trace-mcp, rather than requiring an external native clustering engine or non-deterministic partition drift, calculating the intra-subsystem cohesion score for folders and modules gives agents an objective, deterministic modularity and coupling metric (0.0–1.0) directly from our symbol graph.
+- **API response shape drift detection (`shape_check` and `api_impact`): taking the concept for framework edges.** GitNexus parses `.json({...})` return shapes from route handlers to extract top-level keys, compares them with client property accesses, and flags `MISMATCH` when consumers access properties not present in the route handler's shape. trace-mcp maps route-to-handler relationships across 88 frameworks; extending our AST extractor to compare route response object keys against frontend client usages is a high-value static contract check.
+- **Shortest directed call tracing (`trace`): passing, we already do better.** GitNexus exposes a standalone `trace(from, to)` tool to find shortest call chains between two symbols. trace-mcp's `get_change_impact` and graph exploration already traverse transitive reachability across multi-tier resolution edges and framework boundaries; adding a dedicated single-pair path tool adds redundant surface.
+- **Raw Cypher graph querying (`cypher`): passing, typed tools are safer for LLMs.** Allowing LLMs to write raw Cypher queries leads to severe prompt overhead, syntax errors, and hallucinations. Typed, schema-validated tools (`get_callers`, `get_change_impact`, `get_symbol`) provide deterministic context at a fraction of the token cost.
+- **Proprietary PolyForm license and native build fragility: noting positioning.** PolyForm Noncommercial 1.0.0 forbids commercial deployment and enterprise adoption, whereas trace-mcp is 100% permissive MIT. Native C++ Tree-sitter bindings risk build failures across platforms, whereas trace-mcp uses WASM-sandboxed `web-tree-sitter` for universal portability.
+
+**Code Pathfinder profiled this pass** (September 9, 2026 — read through the GitHub API at `main`, no clone and nothing executed: repository metadata, `server.json`, `sast-engine/mcp/tools.go`, `sast-engine/graph/initialize.go`, `sast-engine/graph/callgraph/builder/builder.go`, `sast-engine/graph/callgraph/doc.go`). 140 stars (GitHub API, this pass), Apache-2.0, Go core (`sast-engine` using `smacker/go-tree-sitter`) + Python SDK (`python-sdk`) for security rules, MCP server v2.1.1. Static code analysis engine exposing 13 MCP tools (`get_index_info`, `find_symbol`, `find_module`, `list_modules`, `get_callers`, `get_callees`, `get_call_details`, `resolve_import`, `find_dockerfile_instructions`, `find_compose_services`, `get_dockerfile_details`, `status`, `get_docker_dependencies`) across Python, Go, Java, Dockerfiles, and Docker Compose.
+
+Four mechanisms were read at source and each got a decision:
+
+- **Docker & Compose Infrastructure-as-Code (IaC) indexing (`find_dockerfile_instructions`, `find_compose_services`, `get_docker_dependencies`): taking the insight for cross-tier service topology.** Code Pathfinder parses Dockerfiles (extracting base images, stages, EXPOSE ports, USER, digests) and `docker-compose.yml` (service dependencies, volumes, ports, security flags like `privileged`). In full-stack and microservice repos, mapping Docker compose service links to backend ports bridges the gap between infrastructure and HTTP route handlers.
+- **5-pass iterative type and call resolution pipeline: passing on Go pipeline architecture, validating our AST pipeline.** Code Pathfinder separates AST ingestion into 5 explicit sequential passes (module registry mapping, return type & variable extraction, attribute resolution, type-inferred call resolution, taint summaries). trace-mcp's incremental SQLite graph store achieves equivalent resolution stages with per-file invalidation and SCIP compiler enrichment, avoiding multi-pass re-indexing of unchanged files.
+- **Programmatic security rules SDK (`python-sdk`): passing, we already do better.** Code Pathfinder provides a Python SDK (`dataflow.py`, `matchers.py`) to author custom taint rules. trace-mcp implements built-in OWASP Top-10 dataflow taint analysis with type-aware pruning, configurable quality gates, and standard OASIS SARIF 2.1.0 reporting.
+- **Zero refactoring write tools and zero session memory.** Code Pathfinder is strictly a read-only SAST tool; it provides no AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`), zero framework awareness, and zero symbol-anchored decision memory.
+
+**grafel profiled this pass** (September 11, 2026 — read through the GitHub API at `main`, no clone and nothing executed: `go.mod`, `cmd/grafel/`, `internal/mcp/`, `internal/substrate/`, `internal/responseshapediff/`, `internal/tautology/`, `internal/stubdetector/`, `internal/mmapview.go`). 15 stars (GitHub API, this pass), MIT, Go (Go 1.23+ with cgo Tree-sitter), v0.x. Multi-repo code knowledge graph daemon for AI agents exposing 22 MCP tools (`grafel_whoami`, `grafel_find`, `grafel_inspect`, `grafel_expand`, `grafel_trace`, `grafel_traces`, `grafel_clusters`, `grafel_orient`, `grafel_effects`, `grafel_control_flow`, `grafel_endpoint_posture`, `grafel_payload_drift`, `grafel_literal_parity`, `grafel_auth_posture_diff`, `grafel_stub_detector`, `grafel_response_shape_diff`, `grafel_security_findings`, `grafel_pure_functions`, `grafel_import_cycles`, `grafel_def_use`, `grafel_data_flows`, `grafel_stats`). Storage uses an in-memory/mmap graph substrate (`mmapview.go`) with file-watcher driven incremental cache updates.
+
+Four mechanisms were read at source and each got a decision:
+
+- **Static quality canaries: Stub and tautology detection (`grafel_stub_detector`, `grafel_tautology_detector`): taking into quality gates.** grafel includes dedicated AST canaries to detect unimplemented stub functions (TODOs, empty blocks, panic/throw stubs) and tautological logic (`x == x`, redundant self-assignments, useless boolean branches). Adding static stub and tautology checks to trace-mcp's `check_quality_gates` and `detect_antipatterns` gives coding agents an immediate automated sanity check to catch placeholder code before committing.
+- **Cross-repo payload drift (`grafel_response_shape_diff`, `grafel_payload_drift`): taking concept for multi-package monorepos.** grafel compares route handler return dictionaries/structs against API client field accesses across multiple repositories, flagging breaking contract drift. trace-mcp already tracks 88 frameworks; extending our AST extractor to compare route response shape keys against consumer fetch/axios/RPC callers across workspaces bridges frontend and backend contracts.
+- **Multi-repo workspace topology (`internal/repowalk/`, `internal/repolock/`, `internal/routing/`): taking into monorepo and workspace roadmap.** grafel links multiple git repositories into a unified knowledge graph, tracking endpoints in backend services to API client callers in frontend/mobile repos. Adding multi-workspace graph linking enables agents in distributed microservice architectures to trace API callers across repo boundaries.
+- **cgo Tree-sitter daemon with in-memory/mmap storage vs. portable SQLite WASM: passing.** grafel runs a Go daemon compiling C Tree-sitter grammars with cgo (`grammars.lock`), introducing native compiler dependencies and build fragility across platforms. trace-mcp's WASM sandbox guarantees memory safety and crash isolation with zero native compilation. Additionally, trace-mcp provides full AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and code-anchored decision memory, neither of which exists in grafel.
+
+Priority for next deep-dive: **Narsil-MCP** (`postrv/narsil-mcp`, Rust, 182★, CCG 4-layer progressive disclosure) and a re-read of **Graft** (`trailhq/Graft`, 7.0K★, fastest-growing peer).
+
+**Narsil-MCP profiled this pass** (September 11, 2026 — read through the GitHub API at `main`, no clone and nothing executed: `Cargo.toml`, `src/ccg/mod.rs`, `src/ccg/layers.rs`, `src/callgraph.rs`, `src/cfg.rs`, `src/taint/`, `src/mcp.rs`, `docs/CODE_CONTEXT_GRAPH_SIZING_ARCH.md`). {{ site.data.competitors.narsil_mcp.stars }} stars (GitHub API, this pass), Apache-2.0, Rust, v0.x. High-performance code intelligence MCP server written in Rust with 32 Tree-sitter parsers, hybrid BM25/neural embeddings, and a multi-layer Code Context Graph (CCG) generation pipeline.
+
+Four mechanisms were read at source and each got a decision:
+
+- **Hierarchical progressive disclosure (CCG L0–L3 layers: Manifest, Architecture, Symbol Index, Full Detail): taking concept into `pack_context` and architecture summaries.** Narsil-MCP sizes codebase knowledge into 4 discrete layers: L0 Manifest (~1–2 KB JSON-LD with repository identity, counts, top-level stacks), L1 Architecture (~10–50 KB module hierarchy and public API), L2 Symbol Index (call graph and definitions), and L3 Full Detail. Adopting a strict L0 budget (~1–2 KB) in `pack_context` and `describe_architecture` gives agents an immediate overview of repository topology on turn zero without blowing prompt budgets.
+- **RDF / N-Quads triple stores and semantic web ontologies: passing.** Narsil-MCP exports graphs in RDF/N-Quads format (`<subject> <predicate> <object> <graph> .`). LLMs require significant prompt overhead to parse or reason over N-Quads compared to clean, typed JSON tool responses. trace-mcp's flat, strongly-typed JSON schema and embedded SQLite engine minimize token deserialization cost while providing relational indexing.
+- **90-tool uncurated schema vs. adaptive role presets: passing, validating our preset architecture.** Narsil-MCP advertises ~90 tools on startup (generating over 15K tokens of schema definitions). trace-mcp curates tools into task-specific presets (`minimal`, `review`, `architecture`, `dev`) keeping initial schema load under 2K tokens while providing dynamic tool access via `load_tools`.
+- **Read-only SAST vs. AST refactoring write path and code-anchored memory: passing.** Like most SAST-rooted peers, Narsil-MCP provides zero AST modification tools and no decision memory. trace-mcp provides atomic AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and symbol-bound decision memory.
+
+**Graft profiled this pass** (September 11, 2026 — read through GitHub repository at `main`: `package.json`, `README.md`, `src/cli/`, `src/graph/`, `src/mcp/`). 7,056 stars ({{ site.data.competitors.graft.stars }}, GitHub API, this pass), MIT, TypeScript, v0.x (`@nanonets/graft` / `trailhq/Graft`). Rapidly growing context layer for AI coding agents (Claude Code, Cursor) that generates plain-language subsystem and concept explanation nodes in markdown files.
+
+Three mechanisms were read at source and each got a decision:
+
+- **Plain-language concept nodes as navigable markdown docs: taking concept for documentation generation.** Graft generates curated markdown files in `graft/` describing subsystems and architectural boundaries in plain English rather than raw AST dumps. Bringing concept-level summaries into trace-mcp's `describe_architecture` and decision memory bridges syntax graphs with high-level developer intent.
+- **Offline LLM dependency for graph generation: passing, affirming local-first deterministic parsing.** Graft requires an external LLM (OpenAI, Anthropic, OpenRouter) and paid API keys to read and summarize every source file before the graph exists. trace-mcp indexes polyglot codebases in seconds using 100% deterministic local Tree-sitter WASM and SQLite with zero external API calls, zero token bills, and complete offline privacy.
+- **Loose file-based markdown store vs. relational embedded SQLite: passing.** Graft stores graph nodes as loose files on disk. For large codebases with tens of thousands of symbols and deep call hierarchies, traversing file trees is slow and lacks relational join capabilities. trace-mcp's embedded SQLite with FTS5 and indexed edge tables provides sub-millisecond graph queries (`find_symbol`, `find_usages`, `get_change_impact`, `find_path`). → [trace-mcp vs Graft](/vs/graft.html)
+
+Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge).
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
@@ -1572,7 +1657,7 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Comparing Repomix against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — packing against indexing, on their own terms.
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.
@@ -1611,7 +1696,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
 | Multi-repo subprojects | ✓ cross-repo API linking | partial — query another project, no cross-repo edges |
 | Graph visualization | ✓ desktop app | ✗ |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena
@@ -1638,13 +1723,13 @@ First, **the table above used to be built from Serena's README, and reading the 
 - **It is not stateless.** We claimed "no persistent state, per-session". It persists two pickled document-symbol caches per language and loads them at startup (see the bullet above). Warm symbol lookups do survive a restart; only the edges do not exist.
 - **It can reach other repositories.** We claimed a flat ✗. `query_project` and `list_queryable_projects` run any read-only Serena tool against another registered project, through a small Flask project server. Both are optional tools, off unless enabled, and there are still no edges between repositories — but "cannot" was wrong.
 - **Its memories are more than notes.** We called them manual notes. They are markdown files under `.serena/memories` with topic namespacing, a global scope beside the project scope, and `mem:` cross-references with referential-integrity checking and autofix. What they are not is code-linked: nothing ties a memory to a symbol, and nothing rechecks it against the code when it is recalled. That narrower difference is the real one.
-- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 28 is "the same size", not "half".
+- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 29 is "the same size", not "half".
 
 Two rows moved the other way, and we state the evidence rather than the verdict. **Call graph**: `callHierarchy/incomingCalls` and `outgoingCalls` are implemented in the LSP client layer, but no tool class calls them, so an agent cannot ask Serena for a call graph. **Move and inline refactoring**: `JetBrainsMoveTool` and `JetBrainsInlineSymbol` proxy to a running JetBrains IDE; both are optional and beta. Native and always-on are `rename_symbol` and `safe_delete_symbol`.
 
 If you maintain Serena and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 
-Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
+Second, **our default tool surface is expensive.** trace-mcp advertises 29 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
 
 **Our security scanning has a ceiling, and it is stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser. A full AST/dataflow rewrite is out of scope for now.
 
@@ -1669,7 +1754,7 @@ Serena on a cold repo — no index build, though the language server still has t
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
@@ -1707,7 +1792,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Code-linked decision memory | ✓ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
 | Runtime trace ingestion | ✗ | ✓ `ingest_traces` |
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
 | Published benchmark | ✓ [PR review context](/pr-context-benchmark.html), one task, losses published | ✓ preprint, 31 repos, not independently reproduced |
 | Written in | TypeScript | C |
@@ -1755,7 +1840,7 @@ Only trace-mcp. codebase-memory-mcp is read-only analysis.
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Decision memory](/decision-memory.html) — how code-linked decisions differ from a notes file.
 - [Get started](/#install) — no configuration required.
@@ -1857,7 +1942,7 @@ Portable `.cgc` graph snapshots, published to a Hugging Face-hosted registry and
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Language matrix](/language-matrix.html) — what resolution tier each language actually reaches.
 - [Get started](/#install) — no configuration required.
@@ -1889,7 +1974,7 @@ Pick SocratiCode if you already run Qdrant and want hybrid vector-AST search wit
 | Framework integrations | **{{ site.data.counts.frameworks }}** integrations | ✗ (syntax AST only) |
 | Framework-aware edges | ✓ route → handler, template, ORM model | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 25 |
-| MCP tools advertised by default | 28 (~11.6K tok) | **25** (~5.2K tok) |
+| MCP tools advertised by default | 29 (~11.6K tok) | **25** (~5.2K tok) |
 | Surface trimming / Presets | ✓ adaptive presets (`minimal`, `review`, etc.) | ✗ (all 25 tools always advertised) |
 | Search mechanism | Structural AST + FTS5 + ONNX embeddings | Hybrid RRF (dense vector + keyword) |
 | Call flow & impact analysis | ✓ bidirectional call graph + blast radius | ✓ `codebase_flow` + `codebase_impact` |
@@ -1930,9 +2015,9 @@ Every tool advertised by an MCP server consumes prompt tokens on every turn of a
 
 SocratiCode registers and advertises all 25 tools unconditionally (~5.2K tokens of schema). There is no preset system or selective tool activation.
 
-trace-mcp advertises 28 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- For focused workflows, select task-tailored presets: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+trace-mcp advertises 29 tools on its default `minimal` preset (~11.6K tokens including comprehensive agent instructions). However, trace-mcp gives you active control over your context window:
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- For focused workflows, select task-tailored presets: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the active preset remains accessible dynamically via `load_tools` without restarting the server.
 
 ### 4. Interactive Browser Visualization: where SocratiCode shines
@@ -1965,7 +2050,7 @@ trace-mcp is 100% open-source under the **MIT License**. It is freely usable in 
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
@@ -1998,7 +2083,7 @@ Pick jCodeMunch if you are an individual working on personal non-commercial proj
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ~13 context profiles (regex route matching) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ (text regex matches, no graph edges) |
 | MCP tools defined | {{ site.data.counts.tools }} | ~90 tools |
-| Default advertised tools | 28 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
+| Default advertised tools | 29 (~11.6K tok, task presets) | **3** via Counter (`order`, `menu`, `route`) or ~90 full |
 | Tool dispatch model | Direct MCP tool invocation with presets | Meta-dispatch verb (`order(action, args)`) |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Multi-tier ladder (`dispatch` → `lsp` → `ast` → text heuristic fallback) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Candidate text blocks (`plan_refactoring`) |
@@ -2047,8 +2132,8 @@ jCodeMunch introduces **"The Counter"** (`counter.py`): on new installations, th
 While The Counter reduces resident schema tokens, it introduces significant friction into the agent loop. Running an action through `order` requires an extra turn of indirection and passes parameters inside generic unstructured objects, bypassing the client's native tool schema validation and increasing argument hallucination rates.
 
 trace-mcp addresses context cost through **Adaptive Task Presets**:
-- Shipped default preset `minimal` advertises 28 tools (~11.6K tokens), keeping the rest of the surface deferred.
-- Task-specific presets curate tools for the active workflow: `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- Shipped default preset `minimal` advertises 29 tools (~11.6K tokens), keeping the rest of the surface deferred.
+- Task-specific presets curate tools for the active workflow: `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - Any tool not in the current preset remains immediately accessible dynamically via `load_tools` without restarting the server or adding meta-dispatch indirection.
 
 ### 4. Call Graph Architecture: Precomputed Graph Edges vs. Query-Time Resolution Ladders
@@ -2101,7 +2186,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
@@ -2117,7 +2202,7 @@ Source: https://trace-mcp.com/vs/tokensave.html
 
 **TL;DR.** TokenSave is a Rust-based code intelligence MCP server that indexes code into an embedded libSQL (SQLite) database with tree-sitter parsers across 50+ languages. It features 86 specialized MCP tools, subprocess-isolated grammar extraction, multi-branch indexing, git blame integration, and text replacement editing primitives.
 
-The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 28-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
+The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 29-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
 
 Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ languages (including shaders, Basic dialects, and mainframe languages) with multi-branch database isolation. Pick trace-mcp if you develop web applications in modern frameworks, require compiler-calibrated 5-tier call graphs, need safe AST refactoring write tools, and want zero-setup distribution via npm.
 
@@ -2134,7 +2219,7 @@ Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ langua
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 86 tools |
-| Default advertised tools | **28** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
+| Default advertised tools | **29** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
 | Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 5 tools marked `anthropic/alwaysLoad`; 85+ returned on `tools/list` |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal (`callers`, `callees`, `call_chain`) over AST call sites |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | String replacement primitives (`str_replace`, `multi_str_replace`, `insert_at`) |
@@ -2147,7 +2232,7 @@ Verified on September 8, 2026 against TokenSave's repository at `master` (v7.11.
 
 ## Key architectural differences
 
-### 1. Tool Surface Management: 86 Advertised Tools vs. 28-Tool Minimal Preset
+### 1. Tool Surface Management: 86 Advertised Tools vs. 29-Tool Minimal Preset
 
 The number of tools an MCP server exposes directly impacts agent performance. Every tool definition consumes prompt tokens in the initial `tools/list` response, and large tool lists increase parameter hallucination and tool mis-selection rates (dispatch dilution).
 
@@ -2157,11 +2242,11 @@ TokenSave defines 86 MCP tools in `get_tool_definitions()`. In Anthropic-specifi
 To balance this, TokenSave implements session debt accounting (`settle_session_debt`), charging the schema overhead against future token savings over multiple turns.
 
 trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
-- **28-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
-- **Workflow-tailored presets**: Dedicated presets for `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- **29-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
+- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
-### 2. Pure Syntax Parsing vs. 87 Framework Semantic Integrations
+### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations
 
 Both trace-mcp and TokenSave parse source code using tree-sitter grammars. Where they diverge is how structural syntax is translated into architectural comprehension.
 
@@ -2231,7 +2316,7 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 ## When to choose trace-mcp
 
 - **Modern web and backend frameworks**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORM models.
-- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Prompt budget efficiency**: You want a lean 29-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
 - **Safe, automated AST refactoring**: You want your AI agent to perform atomic renames, extractions, and file moves with syntax validation and import graph updates.
 - **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
 - **Integrated CI security & quality gates**: You want OWASP Top-10 taint analysis and SARIF reporting built into your code graph workflow.
@@ -2241,7 +2326,289 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
+- Explore all MCP tools in the [tools reference](/tools-reference.html).
+- Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+
+---
+
+# GitNexus alternative: trace-mcp vs GitNexus
+
+Source: https://trace-mcp.com/vs/gitnexus.html
+
+
+
+**TL;DR.** GitNexus is a popular code intelligence engine ({{ site.data.competitors.gitnexus.stars }} stars) pairing an embedded LadybugDB graph database (a Kùzu fork) with in-memory Leiden community clustering and raw Cypher query execution. It features Program Dependence Graph (PDG) analysis, cross-file impact tracking, and an interactive web visualization UI.
+
+The core architectural differences center on licensing, query reliability, framework awareness, build portability, and write capabilities. GitNexus is distributed under PolyForm Noncommercial 1.0.0, which prohibits commercial and enterprise deployment, whereas trace-mcp is 100% permissive open-source under MIT. GitNexus provides a raw `cypher` query tool that forces models to compose graph queries from scratch, risking hallucinations and token waste; trace-mcp exposes deterministic, typed MCP tools. GitNexus requires native C++ build tools (`node-gyp-build`) across 10 languages; trace-mcp runs anywhere via WASM-sandboxed `web-tree-sitter` across {{ site.data.counts.languages }} languages. Finally, trace-mcp models {{ site.data.counts.frameworks }} frameworks and provides AST refactoring write tools and OWASP Top-10 taint analysis.
+
+Pick GitNexus if you need an interactive visual web graph UI, want in-memory Leiden community detection with modularity cohesion scores, or require Program Dependence Graph (PDG) reachability in non-commercial personal projects. Pick trace-mcp if you build commercial or enterprise software, require semantic edges across web frameworks, need prompt-efficient typed MCP tools, and want safe AST refactoring write capabilities with zero native compilation.
+
+## Head-to-head
+
+| Capability | trace-mcp | GitNexus |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.gitnexus.stars }} |
+| License | **MIT** (permissive open-source, commercial use permitted) | **PolyForm Noncommercial 1.0.0** (commercial use strictly prohibited) |
+| Written in | TypeScript (Node.js) | TypeScript / Node.js monorepo (`gitnexus`, `gitnexus-web`) |
+| Installation / Distribution | `npx -y trace-mcp@latest` (npm registry) | `npx gitnexus` / git clone (npm registry) |
+| Underlying storage | Embedded SQLite WAL + FTS5 + local ONNX | Embedded LadybugDB graph database (Kùzu fork) + `graphology` |
+| Languages (AST parsing) | **{{ site.data.counts.languages }}** (tree-sitter WASM) | 10 (native C++ tree-sitter grammars) |
+| Build dependencies | **Zero native builds** (precompiled WASM sandboxes) | Native C++ compiler toolchain required (`node-gyp-build`, Python) |
+| Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | Basic HTTP route pattern detection |
+| Framework-aware edges | ✓ route → handler, controller → template, ORM → table | ✗ (syntax AST only, route strings to functions) |
+| MCP tools defined | {{ site.data.counts.tools }} tools | 17 tools |
+| Default advertised tools | **29** (~11.6K tok, task presets `minimal`, `review`, `dev`) | 17 tools advertised unconditionally |
+| Query paradigm | **Typed, schema-validated tools** (`get_callers`, `get_symbol`, `get_change_impact`) | Hybrid: typed tools + raw Cypher queries (`cypher`) |
+| Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) | Graph traversal over LadybugDB AST edges |
+| Community detection | Subsystem folder modularity cohesion | In-memory Leiden clustering (`calculateCohesion`) |
+| Program Dependence Graph | Call & data flow reachability | CDG (control dependence) + REACHING_DEF (`analyze --pdg`) |
+| API drift detection | Planned static route contract verification | Static response key check (`shape_check`, `api_impact`) |
+| Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | Basic symbol rename (`rename`) |
+| Security scanning | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ |
+| Session memory | ✓ Symbol-bound decision knowledge graph with staleness checks | ✗ |
+| Web UI visualization | ✗ (terminal & agent-focused) | ✓ Interactive Cytoscape/graphology web UI (`gitnexus-web`) |
+
+Verified on September 11, 2026 against GitNexus repository at `main` (v1.6.11, {{ site.data.competitors.gitnexus.stars }} stars). Monorepo structure from `package.json`, tool definitions from `gitnexus/src/mcp/tools.ts`, ingestion pipeline from `gitnexus/src/core/ingestion/pipeline.ts`, Leiden community clustering from `gitnexus/src/core/ingestion/community-processor.ts`, and storage bindings from `gitnexus/src/core/lbug/`.
+
+## Key architectural differences
+
+### 1. Licensing & Commercial Adoption: Permissive MIT vs. PolyForm Noncommercial 1.0.0
+
+The single most consequential difference between trace-mcp and GitNexus is the legal license governing their code.
+
+GitNexus is published under the **PolyForm Noncommercial 1.0.0** license. The core condition of PolyForm Noncommercial states:
+> *"You may use the software for noncommercial purposes only. Commercial purposes include any use by a commercial entity or for any commercial purpose, whether or not for profit."*
+
+This license strictly prohibits:
+- Using GitNexus in any commercial company, enterprise, or startup.
+- Using GitNexus on codebases that produce commercial products or generate revenue.
+- Integrating GitNexus into commercial developer tooling or CI pipelines.
+- Deploying GitNexus on company-owned developer workstations without negotiating a custom commercial license.
+
+trace-mcp is licensed under the **MIT License**. You are free to use it for personal projects, commercial software, enterprise monorepos, and proprietary agentic workflows without licensing fees, legal friction, or enterprise procurement roadblocks.
+
+### 2. Query Reliability: Typed MCP Tools vs. Raw Cypher Query Hallucinations
+
+GitNexus exposes 17 MCP tools (`list_repos`, `query`, `cypher`, `context`, `detect_changes`, `check`, `rename`, `impact`, `explain`, `pdg_query`, `route_map`, `tool_map`, `shape_check`, `api_impact`, `group_list`, `group_sync`, `trace`).
+
+Among these, `cypher` allows the LLM to write raw graph query strings against LadybugDB:
+```cypher
+MATCH (fn:Function)-[:CALLS]->(target:Function {name: "processPayment"})
+RETURN fn.name, fn.file_path
+```
+
+While raw Cypher querying appears flexible in theory, in practice it introduces severe operational issues for LLM coding agents:
+- **Syntax and Schema Hallucinations**: LLMs frequently hallucinate edge types, property names, or Cypher syntax constructs not supported by embedded graph engines, leading to runtime query failures and wasted agent turns.
+- **Context Window Bloat**: Prompting an agent to write Cypher requires injecting the entire database schema, node labels, relationship types, and query examples into the agent prompt on every turn.
+- **Non-Deterministic Retrieval**: Different model families formulate graph traversals inconsistently, resulting in uneven context retrieval.
+
+trace-mcp intentionally avoids raw graph query languages in favor of **typed, schema-validated MCP tools**:
+- `get_callers`, `get_callees`, `get_symbol`, and `get_change_impact` provide deterministic inputs with strict Zod validation.
+- Output shapes are calibrated for minimal token consumption (TOON format or compact JSON).
+- The agent simply requests "who calls `processPayment`", and trace-mcp traverses multi-tier edges in SQLite without the agent ever needing to know the database query language.
+
+### 3. Framework Awareness: 88 Web Framework Integrations vs. Generic Syntax
+
+Both tools parse source code using Tree-sitter. However, parsing raw syntax into AST nodes is only the first step of codebase comprehension.
+
+GitNexus parses language syntax across 10 languages (TypeScript, JavaScript, Python, Go, Rust, C#, C++, Java, PHP, Ruby) and maps function calls, class inheritance, and imports. It includes a basic `route_map` tool that identifies URL pattern strings in route definitions, but does not resolve deep framework semantics:
+- It cannot trace from a frontend API client (e.g. `apiClient.get('/invoices')`) through authentication middleware to a controller action.
+- It does not connect backend controllers to view templates (JSX, Vue, Blade, Jinja) or API response serializers.
+- It does not link ORM models (Prisma, Drizzle, TypeORM, SQLAlchemy) to database tables and migrations.
+
+trace-mcp constructs semantic graph edges across **{{ site.data.counts.frameworks }} frameworks**:
+- **HTTP Routing & Middleware**: Full resolution of route definitions, HTTP verbs, parameter schemas, and middleware chains across Express, NestJS, Next.js, Fastify, Django, Flask, FastAPI, Spring Boot, Rails, Gin, and Axum.
+- **Component & View Hierarchies**: Maps data flow from backend handlers into frontend client components.
+- **Data Layer & ORMs**: Connects database entities to repositories, migrations, and queries.
+
+When an agent refactors an API endpoint, trace-mcp traverses these framework edges to warn the agent about broken frontend callers and affected database queries.
+
+### 4. Build Portability: Sandboxed WASM vs. Fragile Native C++ Compilations
+
+GitNexus relies on native Node.js addons:
+- Native C++ Tree-sitter bindings compiled via `node-gyp-build` and `node-addon-api`.
+- Native C++ bindings for the LadybugDB graph database engine (`@ladybugdb/core`).
+
+Native addons require a host-level C/C++ compiler toolchain (`gcc`, `clang`, `make`, `python3`) and frequently fail to install across different operating systems, Node.js versions, and architectures (such as Apple Silicon vs. x86_64 or Windows environments). If a developer lacks local build tools or runs a locked-down enterprise workstation, `npm install` fails immediately.
+
+trace-mcp is engineered for **zero-setup, universal portability**:
+- Code parsing runs inside WASM sandboxes via `web-tree-sitter` and precompiled WASM grammars.
+- Graph storage runs in embedded `better-sqlite3` with prebuilt platform binaries.
+- Running `npx -y trace-mcp@latest` requires only Node.js—no C++ compilers, no Python build scripts, and no native compilation steps.
+
+### 5. Community Detection vs. AST Refactoring Write Tools
+
+GitNexus incorporates in-memory Leiden community detection (`graphology-communities-leiden`). It clusters functions and modules into cohesive communities based on `CALLS` edges and calculates a modularity cohesion score (internal edges divided by total edges). This provides agents with an architectural overview of how tightly coupled modules are. However, GitNexus is almost entirely a read-only exploration tool; its only code-modification tool is a basic `rename` command.
+
+trace-mcp pairs architectural read analysis with **production-grade write tools**:
+- `refactor_rename`: Performs scope-aware symbol renames across the entire codebase, updating call sites and cross-file imports while validating syntax integrity.
+- `refactor_extract`: Extracts selected statements into new functions with inferred arguments and return types.
+- `refactor_move`: Moves functions or classes across file boundaries and automatically rewrites dependent imports.
+- `refactor_codemod`: Executes structural AST transformations with compiler validation.
+- **Security Taint Analysis**: Analyzes data flows from untrusted inputs to sensitive sinks (SQL, command execution, DOM) and exports standardized OASIS SARIF 2.1.0 reports for CI integration.
+
+## When to choose GitNexus
+
+- **Interactive visual graph exploration**: You want a local web UI (`gitnexus-web`) with Cytoscape/graphology rendering to visually explore your repository node relationships.
+- **In-memory Leiden community detection**: You want graph clustering algorithms to partition your code into functional communities and compute cohesion scores.
+- **Program Dependence Graph (PDG) analysis**: You need control dependence (CDG) and reaching definition (REACHING_DEF) graphs for advanced program slicing.
+- **Non-commercial personal projects**: You are a student, researcher, or hobbyist working exclusively on personal, non-commercial open-source code.
+
+## When to choose trace-mcp
+
+- **Commercial software and enterprise codebases**: You work at a commercial company, agency, or startup requiring a permissive **MIT** license without commercial restrictions.
+- **Modern web framework depth**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic connections between routes, controllers, middleware, and ORM models.
+- **Prompt budget efficiency**: You want a lean, 29-tool `minimal` preset (~11.6K tokens) that protects agent context windows, with dynamic escalation via `load_tools`.
+- **Deterministic typed tools**: You want reliable, schema-validated tools (`get_callers`, `get_change_impact`, `get_symbol`) rather than fragile raw Cypher queries.
+- **Safe AST refactoring**: You want your AI agent to perform verified symbol renames, code extractions, and file moves with automatic import graph updates.
+- **Built-in CI security & quality gates**: You need OWASP Top-10 taint analysis and SARIF 2.1.0 reporting integrated into your development pipeline.
+- **Instant zero-setup installation**: You want a tool that runs immediately via `npx -y trace-mcp@latest` without native C++ compilation or build tool dependencies.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [Repomix vs codegraph](/vs/repomix-vs-codegraph.html)
+- Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
+- Explore all MCP tools in the [tools reference](/tools-reference.html).
+- Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
+
+---
+
+# Graft alternative: trace-mcp vs Graft
+
+Source: https://trace-mcp.com/vs/graft.html
+
+
+
+**TL;DR.** Graft (`trailhq/Graft` / `@nanonets/graft`, {{ site.data.competitors.graft.stars }} stars, MIT) is a context layer for AI coding agents (Claude Code, Cursor, Codex) that generates a repository knowledge graph as a folder of linked markdown files. It uses an external LLM (Anthropic Claude or OpenAI) to summarize subsystems, architectural boundaries, and concepts in plain English.
+
+The fundamental differences between the two projects lie in indexing cost, privacy, graph storage, framework depth, and write capabilities. Graft relies on external LLM API calls to generate and update its markdown files, meaning indexing costs tokens, requires external API keys, and uploads proprietary source code to cloud models. trace-mcp is 100% local, deterministic, and private: it parses code in seconds using local Tree-sitter WASM and stores edges in an embedded SQLite database with zero external network requests and zero token bills. Graft stores concept nodes as loose markdown files on disk; trace-mcp stores relational symbol graphs that enable sub-millisecond multi-hop graph queries (`get_callers`, `get_callees`, `get_change_impact`). Furthermore, trace-mcp models deep semantic edges across {{ site.data.counts.frameworks }} web frameworks and provides verified AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and OWASP taint analysis, neither of which exists in Graft.
+
+Pick Graft if you want human-readable markdown documentation files committed directly to your repository that developers can browse in standard markdown viewers. Pick trace-mcp if you require instant local indexing with zero API bills, complete source privacy, relational graph traversal across {{ site.data.counts.frameworks }} frameworks, and safe AST refactoring write capabilities.
+
+## Head-to-head
+
+| Capability | trace-mcp | Graft |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.graft.stars }} |
+| License | **MIT** (permissive open-source) | **MIT** (permissive open-source) |
+| Written in | TypeScript (Node.js) | TypeScript (Node.js) |
+| Installation / Distribution | `npx -y trace-mcp@latest` (npm registry) | `npx @nanonets/graft` / `npm i -g @nanonets/graft` |
+| Indexing engine | **100% deterministic local WASM** (Tree-sitter) | Hybrid: Tree-sitter + external LLM calls (Claude / OpenAI) |
+| Indexing cost | **$0.00** (zero API tokens, zero keys) | Requires external API keys, bills tokens per file |
+| Code privacy | **100% local** (code never leaves the machine) | Sends code chunks to external LLM APIs for summarization |
+| Underlying storage | Embedded SQLite WAL + FTS5 full-text index | Folder of loose markdown files (`graft/*.md`) + front matter |
+| Query speed | **Sub-millisecond** indexed SQL queries | File system traversal and front matter text parsing |
+| Languages (AST parsing) | **{{ site.data.counts.languages }}** (precompiled WASM) | 9 (native C++ tree-sitter grammars) |
+| Build dependencies | **Zero native builds** (WASM sandboxes) | Native C++ compiler toolchain required (`node-gyp`, Python) |
+| Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | 0 (generic syntax AST only) |
+| Framework-aware edges | ✓ route → handler, controller → template, ORM → table | ✗ (syntax AST only) |
+| MCP tools defined | {{ site.data.counts.tools }} tools (adaptive task presets) | 6 tools (`graft_find_code`, `graft_trace_calls`, etc.) |
+| Default advertised tools | **29** (~11.6K tok, task presets `minimal`, `review`, `dev`) | 6 tools advertised unconditionally |
+| Refactoring write tools | ✓ AST-native transforms (rename, extract, move, codemods) | ✗ (read-only context retrieval) |
+| Security analysis | ✓ OWASP Top-10 taint analysis, SARIF 2.1.0 | ✗ |
+| Session & decision memory | ✓ Symbol-bound decision knowledge graph with staleness checks | ✗ (file freshness check only) |
+| Human-browsable markdown docs | ✗ (structured query context via MCP) | ✓ Generates readable markdown files in `graft/` |
+
+Verified on September 11, 2026 against Graft repository at `main` (v0.18.0, {{ site.data.competitors.graft.stars }} stars, `trailhq/Graft`). Tool definitions from `src/mcp/tool-names.ts` and `src/mcp/tools.ts`, package dependencies from `package.json`, graph representation from `src/graph/`, and CLI configuration from `src/cli/`.
+
+## Key architectural differences
+
+### 1. Indexing Cost & Privacy: Local Deterministic Parsing vs. External Paid LLMs
+
+The most fundamental architectural difference between trace-mcp and Graft is how the codebase graph is constructed.
+
+Graft relies on external generative LLMs (`@anthropic-ai/sdk`, `openai`) to synthesize concept nodes and describe subsystems:
+- Before Graft can build a graph, developers must supply an Anthropic or OpenAI API key.
+- Source code is partitioned and sent over the network to commercial LLM providers, raising data privacy, compliance, and NDA concerns on proprietary codebases.
+- Indexing incurs continuous token costs on every initial build and subsequent update, scaling with the size and churn of the codebase.
+
+trace-mcp is **100% local, offline, and private**:
+- Code is parsed entirely on your workstation using sandboxed `web-tree-sitter` WebAssembly binaries.
+- Your code, ASTs, and indices never leave your local environment.
+- Indexing an entire enterprise monorepo of 50,000+ files completes in seconds with zero API tokens consumed and zero dollars spent.
+
+### 2. Storage Architecture: Relational SQLite WAL vs. File-Based Markdown Cache
+
+Graft stores its knowledge graph as a directory of loose markdown files (`graft/*.md`) using YAML front matter (`gray-matter`):
+- Subsystems and concept nodes are saved as individual `.md` files in the repository.
+- While markdown files are easy for humans to open and read, traversing multi-hop symbol relationships (e.g., finding all indirect callers of an authentication helper across 20 modules) requires walking directories and parsing text files off disk.
+- Maintaining graph integrity across thousands of loose files is vulnerable to disk fragmentation, file lock contention, and drift.
+
+trace-mcp stores symbols, calls, and relationships in an **embedded SQLite database** with WAL (Write-Ahead Logging) mode and FTS5 (Full-Text Search):
+- Relational tables and B-tree indices support instant sub-millisecond graph traversals (`find_symbol`, `get_callers`, `get_callees`, `find_path`, `get_change_impact`).
+- Multi-tier resolution (from compiler-verified to heuristic AST matching) executes within structured SQL queries.
+- SQLite WAL mode ensures concurrent read access and instantaneous updates when files change.
+
+### 3. Tool Surface & Write Path: AST Refactoring vs. Read-Only Retrieval
+
+Graft exposes 6 read-only MCP tools:
+- `graft_find_code`: Natural language code search across generated markdown concepts.
+- `graft_find_all`: Symbol and pattern grep.
+- `graft_trace_calls`: Upstream and downstream call tracing.
+- `graft_file_api`: File outline / skeleton extraction.
+- `graft_repo_map`: Top-level subsystem map.
+- `graft_check_freshness`: Checks if markdown documentation is out of date relative to source files.
+
+Graft offers zero tools to modify code. If an agent needs to refactor a function, rename a symbol across 50 files, or extract duplicate logic, it must fall back to blind string replacement or manual file rewrites.
+
+trace-mcp pairs comprehensive graph navigation with **production-grade AST refactoring write tools**:
+- `refactor_rename`: Performs scope-aware symbol renames across the entire codebase, updating call sites and cross-file imports while validating syntax integrity.
+- `refactor_extract`: Extracts selected statements into new functions with inferred arguments and return types.
+- `refactor_move`: Moves functions or classes across file boundaries and automatically rewrites dependent imports.
+- `refactor_codemod`: Executes structural AST transformations with compiler validation.
+- `taint_analysis`: Tracks untrusted user input to security-sensitive sinks across the call graph and exports SARIF 2.1.0 reports.
+
+### 4. Framework Awareness: 88 Web Framework Integrations vs. Generic Syntax
+
+Graft extracts syntactic symbols (classes, functions, calls) from raw language grammars. It does not model web application frameworks or cross-tier abstractions:
+- It cannot link an HTTP route declared in a router file to its controller action and underlying database model.
+- It does not resolve dependency injection bindings (e.g. NestJS, Spring Boot, Angular).
+- It does not track ORM models (Prisma, Drizzle, TypeORM, SQLAlchemy) to database tables and migrations.
+
+trace-mcp constructs semantic graph edges across **{{ site.data.counts.frameworks }} frameworks**:
+- Connects frontend API calls to backend endpoints.
+- Maps ORM models to database schemas and migrations.
+- Resolves framework-specific lifecycle hooks, middleware pipelines, and controller routes.
+
+When an AI agent modifies a backend controller, trace-mcp warns the agent about affected frontend callers and impacted database queries.
+
+### 5. Build Portability: Sandboxed WASM vs. Native C++ Compilations
+
+Graft relies on native Node.js addons:
+- Native C++ Tree-sitter bindings compiled via `node-gyp` across multiple language packages (`tree-sitter-go`, `tree-sitter-java`, `tree-sitter-python`, `tree-sitter-swift`, etc.).
+- Installing Graft requires a host C++ compiler toolchain (`gcc`, `clang`, `make`, `python3`). On minimal CI containers, Alpine Linux, or locked-down developer laptops, `npm install` frequently fails due to missing compilation tools.
+
+trace-mcp is engineered for **zero-setup, universal portability**:
+- Code parsing runs inside isolated WASM sandboxes via `web-tree-sitter` and precompiled WASM grammars.
+- Storage runs in embedded `better-sqlite3` with prebuilt platform binaries.
+- Running `npx -y trace-mcp@latest` requires only Node.js—no C++ compilers, no Python build scripts, and no native compilation steps.
+
+## When to choose Graft
+
+- **Human-browsable documentation**: You want plain-English markdown files committed to `graft/` in your repository so team members can read architectural overviews in GitHub or markdown viewers.
+- **Natural language concept indexing**: You prefer an external LLM synthesizing English descriptions of what each subsystem does rather than querying AST relationships.
+- **Small to medium codebases with cloud LLM access**: Your organization allows sending source code to Anthropic or OpenAI, and you don't mind paying API token bills for graph generation.
+
+## When to choose trace-mcp
+
+- **Zero token cost & complete code privacy**: You need local-first code intelligence that runs 100% offline, requires no API keys, incurs no token bills, and never sends source code to external servers.
+- **Fast, relational graph traversal**: You need sub-millisecond graph queries (`get_callers`, `get_callees`, `get_change_impact`) backed by an embedded SQLite database.
+- **Web framework depth**: You build with modern stacks (React, Next.js, Express, NestJS, Django, FastAPI, Spring Boot, Rails, etc.) and require semantic edges across routes, controllers, and ORM models.
+- **Safe AST refactoring**: You want your AI agent to safely rename symbols across files, extract functions, move modules, and run codemods with syntax verification.
+- **Security & quality gates**: You want automated OWASP Top-10 taint analysis and CI-ready SARIF 2.1.0 vulnerability reporting.
+- **Instant zero-setup portability**: You want a tool that runs immediately via `npx -y trace-mcp@latest` with zero native C++ compiler toolchains.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs GitNexus](/vs/gitnexus.html) · [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [Repomix vs codegraph](/vs/repomix-vs-codegraph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
@@ -2275,7 +2642,7 @@ Pick Narsil-MCP if you need formal RDF/SPARQL knowledge graph querying, want a s
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} tools | 90 tools (11 categories) |
-| Default advertised tools | **28** (~11.6K tok, task presets) | 20-30 (`minimal`) up to 70+ (`full`) |
+| Default advertised tools | **29** (~11.6K tok, task presets) | 20-30 (`minimal`) up to 70+ (`full`) |
 | Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 4 presets (`minimal`, `balanced`, `full`, `security-focused`) |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal over AST call sites (`--call-graph` flag) |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | ✗ (analysis-only, zero refactoring write tools) |
@@ -2303,7 +2670,7 @@ trace-mcp is designed around **Deterministic, Strongly Typed MCP Primitives**:
 - Deterministic structured output formatted for model comprehension without RDF triple deserialization.
 - When flexible graph exploration is needed, `graph_query` provides a safe, domain-specific traversal interface without requiring SPARQL query generation.
 
-### 2. Context Delivery: 4-Layer CCG Disclosure vs. 28-Tool Minimal Preset with Dynamic Escalation
+### 2. Context Delivery: 4-Layer CCG Disclosure vs. 29-Tool Minimal Preset with Dynamic Escalation
 
 Managing model context window budgets is critical to prevent prompt dilution and excessive token costs. The two servers approach context efficiency from different angles.
 
@@ -2316,11 +2683,11 @@ Narsil-MCP structures repository data into four progressive CCG tiers:
 While Layer 0 provides an ultra-compact start, accessing granular symbols in Layers 2 and 3 requires fetching large chunks of serialized graph data. Furthermore, in tool discovery, Narsil-MCP's 90 tools across 11 categories must be managed via static presets (`minimal`, `balanced`, `full`, `security-focused`). If an agent on the `minimal` preset needs a specialized tool from `full`, it cannot load it without server re-configuration.
 
 trace-mcp addresses context overhead on both tool and data surfaces:
-- **Lean 28-tool `minimal` default**: Consumes ~11.6K tokens total (schema plus server instructions) at session start, preserving prompt capacity.
+- **Lean 29-tool `minimal` default**: Consumes ~11.6K tokens total (schema plus server instructions) at session start, preserving prompt capacity.
 - **Dynamic runtime escalation**: Any of the {{ site.data.counts.tools }} tools outside the active preset can be activated on demand in the live session via `load_tools`.
 - **Targeted context slices**: Tools like `get_outline`, `get_symbol`, and `get_change_impact` return exact AST slices and blast-radius summaries rather than requiring the agent to parse megabytes of raw RDF triples.
 
-### 3. Language Breadth vs. 87 Framework Semantic Integrations
+### 3. Language Breadth vs. 88 Framework Semantic Integrations
 
 Both engines parse source code using tree-sitter grammars. Where they diverge is how syntax trees are elevated into software architecture.
 
@@ -2377,7 +2744,7 @@ trace-mcp implements **True AST Dataflow Taint Analysis**:
 - **Modern web application development**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORMs.
 - **Deterministic agent tooling**: You want strongly typed, zero-hallucination MCP tools (`get_callers`, `get_change_impact`, `find_usages`) rather than generating complex SPARQL queries.
 - **Safe, automated AST refactoring**: You want your AI agent to perform atomic symbol renames, extractions, and file moves with syntax validation and cross-file import rewrites.
-- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Prompt budget efficiency**: You want a lean 29-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
 - **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
 - **Integrated CI security & quality gates**: You want AST-grounded OWASP Top-10 taint analysis and OASIS SARIF 2.1.0 reporting built into your code graph workflow.
 - **Zero-setup npm distribution**: You want instant execution via `npx -y trace-mcp@latest` with embedded SQLite and bundled ONNX embeddings.
@@ -2386,7 +2753,7 @@ trace-mcp implements **True AST Dataflow Taint Analysis**:
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
@@ -2486,7 +2853,7 @@ No. Both index locally into SQLite, need no API key, and survive restarts.
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Comparing codegraph against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — indexing against packing, on their own terms.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
@@ -2515,7 +2882,7 @@ If your agent is drowning in tool output, Context Mode is aimed at your problem 
 | Licence | MIT | Elastic License 2.0 (source-available, not OSI) |
 | Written in | TypeScript | TypeScript |
 | MCP tools defined | {{ site.data.counts.tools }} | 11 |
-| MCP tools advertised (default) | 28 (~11.6K tok) | 11 — all of them |
+| MCP tools advertised (default) | 29 (~11.6K tok) | 11 — all of them |
 | Parses source code (AST) | ✓ tree-sitter, {{ site.data.counts.languages }} languages | ✗ no parser in its dependency tree |
 | Symbol index | ✓ | ✗ |
 | Cross-file dependency graph | ✓ directed edge graph | ✗ |
@@ -2564,7 +2931,7 @@ Four things are worth stating precisely, because the marketing word "context" co
 
 ## Where we are not being smug
 
-**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 28 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
+**Their advertised surface is smaller than ours and always fully loaded.** Eleven tools against our 29 at roughly 11.6K tokens at session start. If you run both servers, you pay both — that is a real cost of the "run them together" recommendation on this page, and you should weigh it rather than take the recommendation on faith.
 
 **Their measurement covers the session; ours covers one task in it.** We now have a benchmark with named fixtures — the [PR review context benchmark](/pr-context-benchmark.html), a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, re-runnable from the repo. It measures assembling code-review context, not a whole working session, so it does not answer the question Context Mode's numbers answer. For general use we quote {{ site.data.response_tokens.reduction_pct }}%, measured on {{ site.data.response_tokens.calls_weighted }} real tool calls from one machine against an estimated baseline — still our own instrumentation, not a benchmark, and it replaced an earlier aggregate we [disproved ourselves](/reduce-claude-code-token-usage.html#the-number-moved-on-5-september-2026-and-here-is-why).
 
@@ -2598,7 +2965,7 @@ Yes, and for a codebase-heavy agent that also drives browsers or CI, that is pro
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — seven tactics, ordered by measured impact.
 - [Get started](/#install) — no configuration required.
 
@@ -2637,7 +3004,7 @@ The split is between code review triage and comprehensive codebase intelligence.
 | Multi-repo support | ✓ cross-repo API linking | ✓ multi-repo daemon |
 | CI / PR blast-radius Action | ✓ quality gates + SARIF | ✓ turnkey blast-radius GitHub Action |
 | Graph visualization | ✓ desktop app (cosmos.gl) | ✗ |
-| MCP tools advertised (default) | 28 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
+| MCP tools advertised (default) | 29 (`minimal`, ~11.6K tok); {{ site.data.counts.tools }} on `full` | 29 advertised (~8K description tokens) |
 | Tool surface trimming | ✓ dynamic `load_tools` in session; 3 presets | manual allowlist (`serve --tools`, `CRG_TOOLS=`) |
 
 Verified on September 2, 2026 against code-review-graph's source at commit `b58668751ab0` (v2.3.8). Tool registrations, parser dependencies, and graph architecture claims come directly from the source; star count from the GitHub API.
@@ -2670,7 +3037,7 @@ Cloning the repository at commit `b58668751ab0` and reading `pyproject.toml`, `c
 - **Security scanning and quality gates.** trace-mcp includes OWASP Top-10 rules, type-aware taint analysis, control-flow graphs with loop back-edges, and OASIS SARIF 2.1.0 output for CI quality gates.
 - **Code-linked session memory.** Architectural decisions and rationale persist across agent sessions bound to symbol IDs, verified against code staleness before recall, and surfaced in impact analysis. code-review-graph has no session memory.
 - **Language breadth and compiler-grade precision.** trace-mcp parses {{ site.data.counts.languages }} languages via tree-sitter, and offers an opt-in path for live LSP and offline SCIP index ingestion to raise edge resolution to compiler-grade tiers.
-- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 28 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
+- **Dynamic tool surface.** trace-mcp's default `minimal` preset advertises 29 tools (~11.6K tokens total), keeping ~140 additional tools one `load_tools` call away in-session without server restarts.
 
 ## Where we are not being smug
 
@@ -2695,7 +3062,7 @@ Both projects parse code with tree-sitter into an incremental SQLite knowledge g
 Its uncertainty module treats an empty result as an answer that owes the caller a reason. Under a hard 140-character cap, it explains whether a zero result is genuine or the result of a known parser gap or unindexed dependency. This prevents agents from drawing false conclusions or falling back to costly whole-repository file scans.
 
 **How do their advertised tool surfaces compare in token cost?**
-code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 28 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
+code-review-graph registers 29 MCP tools and advertises all 29 by default, costing roughly 8K tokens of descriptions alone every turn, trimmable only via manual allowlists. trace-mcp advertises 29 tools on its minimal preset costing roughly 11.6K tokens including instructions, and keeps ~140 additional tools reachable dynamically via `load_tools` without requiring an allowlist restart.
 
 **Can code-review-graph refactor code or run security scans?**
 No. Reading code-review-graph's source at commit `b58668751ab0` confirmed it is read-only navigation and blast-radius analysis. It provides no rename, move, signature update, or AST codemods, and no OWASP taint analysis or SARIF reporting. trace-mcp ships full refactoring tools and OASIS SARIF 2.1.0 security scanning.
@@ -2707,7 +3074,7 @@ code-review-graph supports 23 languages plus Jupyter notebooks via tree-sitter-l
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
@@ -2766,7 +3133,7 @@ Sources: Repomix's README and CLI reference; codegraph's README at the `main` he
 - **The repository does not fit, and re-packing is the cost you are trying to avoid.** codegraph's own benchmark is exactly this shape: on questions where a file-reading agent needed 28–43 tool calls and up to 19 file reads, the agent with the graph answered from one to four `codegraph_explore` calls and read zero files.
 - **The question is structural.** "What breaks if I change this", "who calls this", "how does the request reach this handler". A pack contains the bytes that would answer it, but nothing that computes the answer — and `grep_repomix_output` finds the string, not the edge.
 - **Your stack has boundaries a parser normally stops at.** Route to handler across 15 framework families, `navigates` edges across 7 routers, and Swift ↔ Objective-C and React Native bridge hops.
-- **You care about the advertised tool surface.** codegraph defines eight MCP tools and lists **one**. Its stated reasoning is that the other seven are narrower slices of `explore` and that presence itself steers agents into mis-picking. The whole surface costs roughly 1.9K tokens. Repomix's MCP server lists five.
+- **You care about the advertised tool surface.** codegraph defines eight MCP tools and lists **one**. Its stated reasoning is that the other seven are narrower slices of `explore` and that presence itself steers agents into mis-picking. The whole surface costs roughly 1,900 tokens. Repomix's MCP server lists five.
 - **Staleness has to be visible, not assumed.** During the debounce window, codegraph prepends a banner naming pending files and tells the agent to read them directly. A pack has no equivalent: it is silently stale from the first edit after it was written.
 
 ## Where each of them is honestly weak
@@ -2785,7 +3152,7 @@ We are in codegraph's lane, not Repomix's, and it would be dishonest to pretend 
 
 [trace-mcp](/) is a precomputed graph like codegraph's, with two differences that matter and one that costs us. It ships {{ site.data.counts.frameworks }} framework integrations that model edges beyond routing — controller → template, model → table, component → component — across {{ site.data.counts.languages }} languages. And it has a write path: rename, move, signature change, AST codemod, dead-code removal, plus OWASP taint scanning and SARIF for CI, none of which either tool above has.
 
-What it costs: our default preset advertises 28 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
+What it costs: our default preset advertises 29 tools at roughly 11.6K tokens, against codegraph's one tool at ~1,900 tokens. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
 
 On measurement we can offer one thing neither of them does: the [PR review context benchmark](/pr-context-benchmark.html) is a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, with the base and head SHAs, the losing cases, and the command that re-runs it all shipped in the repository.
 
@@ -2797,7 +3164,7 @@ Head-to-head, one at a time: [trace-mcp vs Repomix](/vs/repomix.html) · [trace-
 Repomix packs a repository into one file a model reads. codegraph parses it into a symbol and call graph an agent queries. Content versus computed structure — that one difference explains almost every other row above.
 
 **Is Repomix or codegraph cheaper in tokens?**
-It depends on session length. A pack is a fixed up-front cost, re-paid on every repack; `--compress` cuts roughly 70% of it. codegraph advertises one tool at ~1.9K tokens and charges per query, and reports 62% fewer tokens and 44% lower cost than a file-reading agent across seven repositories. One question, small repo: Repomix. Long session, large repo: codegraph.
+It depends on session length. A pack is a fixed up-front cost, re-paid on every repack; `--compress` cuts roughly 70% of it. codegraph advertises one tool at ~1,900 tokens and charges per query, and reports 62% fewer tokens and 44% lower cost than a file-reading agent across seven repositories. One question, small repo: Repomix. Long session, large repo: codegraph.
 
 **Do they both stay up to date as I edit?**
 Both watch, but refresh different things. Repomix's `--watch` re-packs the whole output after a 300 ms debounce and works on local directories only. codegraph syncs the graph per changed file and flags pending files in the response so the agent reads them directly.
@@ -2812,7 +3179,7 @@ Yes. Repomix for a remote repository you want to look at once; codegraph for the
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers, with the same sourcing discipline.
-- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with any of these tools.
 
 ---
@@ -2848,13 +3215,13 @@ This is the tactic most people never check, and it can dominate everything else.
 
 Every MCP server you connect injects its tool schemas into the context **at session start, before you ask anything**. Three servers with large surfaces can cost tens of thousands of tokens on every single session, whether or not you call any of them.
 
-Measured on our own server, August 29, 2026: trace-mcp's shipped default is the `minimal` (28 tools) preset — ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions, **~11.6K in total**, which is the number to budget against because a client pays both. (`full` ({{ site.data.counts.tools }} tools) is ~49.9K + ~2.1K if you opt into it.) That is still not cheap, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
+Measured on our own server, August 29, 2026: trace-mcp's shipped default is the `minimal` (29 tools) preset — ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions, **~11.6K in total**, which is the number to budget against because a client pays both. (`full` ({{ site.data.counts.tools }} tools) is ~49.9K + ~2.1K if you opt into it.) That is still not cheap, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
 
 What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
-- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
+- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (29 tools), `standard` (61 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config (see the full [tool index](/tools-index.html)).
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace/.config.json`. `tools.preset` is honoured from a project-local `.trace/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
@@ -3426,7 +3793,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (42 tools), `dev` (42 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (29 tools, default), `standard` (61 tools — covers >99% of real-world tool calls per session-log mining), `review` (33 tools), `architecture` (42 tools), `dev` (44 tools), `security` (36 tools), `design` (26 tools), `perf` (35 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -3490,7 +3857,7 @@ Measured `tools/list` cost of each preset on this repo (serialized chars, then
 o200k tokens, 2026-09-01; `router` added 2026-09-02): `router` 7.1k / 1.6k,
 `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
-44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
+44.3k / 10.2k, `dev` 54.5k / 12.6k, `standard` 64.6k / 14.9k, `full` 157.7k /
 36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
 86% on the narrowest (`design`) — framework-gated tools are excluded, so a
 project that detects the matching framework pays more.
@@ -3725,6 +4092,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace does not write — configure that manually if you use the CLI |
 | **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
+| **OpenCode** | `~/.config/opencode/opencode.json[c]`, `<project>/opencode.json[c]` | JSON / JSONC | `mcp` (`type: "local"`, `command: ["trace", "serve"]`) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 
 > `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
 
@@ -4251,7 +4619,7 @@ supply it.
 | `watch.debounceMs` | number (≥ 500, ≤ 30000) | `2000` |
 | `logging` | object | `{}` |
 | `logging.file` | boolean | `false` |
-| `logging.path` | string | `"~/.trace-mcp/run.log"` |
+| `logging.path` | string | `"~/.trace/run.log"` |
 | `logging.level` | `trace` \| `debug` \| `info` \| `warn` \| `error` \| `fatal` | `"info"` |
 | `logging.max_size_mb` | number (> 0, ≤ 500) | `10` |
 | `git` | object | `{}` |
@@ -4359,7 +4727,7 @@ All state is centralized in `~/.trace/`, and what goes in it is set by
     api-server-b2c3d4e5.db
 ```
 
-Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md).
+Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself. For how background memory usage, cache limits, and daemon footprint are bounded across SQLite databases, see [daemon memory](daemon-memory.md). All databases stay local to your machine; for storage boundaries and telemetry policies, see [privacy](privacy.md).
 
 The **topology database** (`topology.db`) is shared across all projects. It stores:
 - **Subprojects** (= services) — bound to projects, auto-detected or manually added
@@ -4754,6 +5122,7 @@ reference](tools-reference.md).
 | **n8n** | Workflow nodes, connections, parameters, credentials |
 | **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
 | **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |
+| **OpenTelemetry** | Tracers, meters, metric instruments, active and manual spans, events, attributes, span execution hierarchy |
 
 ---
 
@@ -4786,7 +5155,7 @@ Session logs (JSONL)                   Project manifests
            ▼                                   ▼
 ┌─────────────────────────┐         ┌──────────────────────────┐
 │  Analytics DB (SQLite)  │         │  Coverage Report         │
-│  ~/.trace-mcp/          │         │  covered / gaps /        │
+│  ~/.trace/              │         │  covered / gaps /        │
 │    analytics.db         │         │  unknown deps            │
 │  Tables:                │         └──────────────────────────┘
 │  - sessions             │
@@ -4799,7 +5168,7 @@ Session logs (JSONL)                   Project manifests
  Analytics    Optimization    Real Savings       Benchmark
  Report       Report          Analysis           Engine
  (per tool,   (8 rules,       (Read vs           (synthetic,
-  per file,    savings est.)   get_symbol)        5 scenarios)
+  per file,    savings est.)   get_symbol)        11 scenarios)
   per model)
 ```
 
@@ -4878,7 +5247,7 @@ Synthetic benchmark comparing raw file reads vs trace-mcp compact responses.
 benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown" })
 ```
 
-**5 scenarios:** symbol lookup, file exploration, search, impact analysis, call graph. Uses actual index data with seeded randomness for reproducibility.
+**11 scenarios:** symbol lookup, file exploration, search, find usages, context bundle, batch overhead, impact analysis, call graph, type hierarchy, tests for, task context. Uses actual index data with seeded randomness for reproducibility.
 
 ### `get_startup_context_audit`
 
@@ -5934,7 +6303,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 20
+- **import edges:** 21
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 68
@@ -6006,6 +6375,7 @@ another — the reusable, reproducible measurement is
 | Language | Repo | Commit | Edges created | Left external | Left ambiguous | Share resolved |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
 | c | curl/curl | 8f6046485e15 | 3138 | 990 | 0 | 76.0% |
+| elixir | elixir-plug/plug | 73404f851852 | 87 | 44 | 0 | 66.4% |
 | php | guzzle/guzzle | 93939470950a | 374 | 247 | 0 | 60.2% |
 | ruby | sinatra/sinatra | cb22afd7902b | 131 | 88 | 0 | 59.8% |
 | rust | BurntSushi/ripgrep | 3fce3b5bb023 | 453 | 447 | 0 | 50.3% |
@@ -6057,7 +6427,7 @@ treating any row as a trend rather than a data point.
 | dockerfile | Dockerfile .dockerfile | regex | yes | — | — | — | yes |
 | ejs | .ejs | regex | yes | — | — | — | yes |
 | elisp | .el .elc | tree-sitter | yes | — | — | — | — |
-| elixir | .ex .exs | tree-sitter | yes | — | — | — | yes |
+| elixir | .ex .exs | tree-sitter | yes | yes | — | — | yes |
 | elm | .elm | tree-sitter | yes | — | — | — | — |
 | erlang | .erl .hrl | regex | yes | — | — | — | yes |
 | form | .frm .prc | regex | yes | — | — | — | — |
@@ -6365,6 +6735,34 @@ rm .trace.json   # if you don't want telemetry enabled going forward
   `Math.random()` per `startSpan` / `emit`. Kept spans cost the full export
   path; dropped spans are noop.
 
+## Frequently asked questions
+
+### What is MCP tracing?
+
+**MCP tracing** instruments [Model Context Protocol](https://modelcontextprotocol.io/) interactions between AI coding agents (such as Claude Code, Cursor, or Windsurf) and MCP servers. Instead of debugging tool timeouts or failed tool invocations through raw log tails, MCP tracing emits structured OpenTelemetry spans for every tool call (`tool.<name>`) and provider inference (`ai.embed`, `ai.generate`). This surfaces tool execution duration, error stack traces, and token costs in standard APM dashboards like Jaeger, Honeycomb, or Langfuse alongside your backend application traces.
+
+### How do I trace MCP tool calls with trace-mcp?
+
+In your project repository, configure `.trace.json` to enable the observability bridge:
+
+```json
+{
+  "telemetry": {
+    "observability": {
+      "enabled": true,
+      "sink": "otlp",
+      "otlp": { "endpoint": "http://localhost:4318/v1/traces" }
+    }
+  }
+}
+```
+
+Once configured, any command or client session running through trace-mcp flushes traces asynchronously to your configured OTLP endpoint without adding blocking network overhead to tool turns. For detailed configuration parameters, see the [configuration guide](configuration.md).
+
+### Does MCP tracing export private repository code or credentials?
+
+No. trace-mcp telemetry spans export operational metadata only: span names, execution durations (`duration_ms`), error exception types, input/output payload sizes in bytes, and model token counts. Raw source code files, git diffs, and API credentials are never included in OpenTelemetry attributes or events. Furthermore, the sink defaults to `noop` until you explicitly opt in, and all usage ping policies are documented on the [privacy page](privacy.md).
+
 ## Troubleshooting
 
 - **No spans in Jaeger.** Confirm `telemetry.observability.enabled` resolves
@@ -6466,14 +6864,19 @@ Source: https://trace-mcp.com/quality-gates.html
 
 
 `check_quality_gates` reads the `quality_gates` section of
-[`.trace-mcp.json`](configuration.md). Configure nothing and three rules still
-run; name a rule and your threshold replaces the built-in one for that rule
-only. The second half of this page is this repo's own configuration as a worked
-example of how the numbers get chosen.
+[`.trace-mcp.json`](configuration.md) (or `.trace.json`). By default, with no gates
+configured, the MCP tool returns `NO_GATES_CONFIGURED` with an advisory warning
+pointing to this documentation — never a silent or misleading `PASS` in CI.
+Pass `use_default_gates: true` to explicitly opt into the conservative built-in
+ruleset, or define `quality_gates.rules` in your project config. The second half
+of this page is this repo's own configuration as a worked example of how the
+numbers get chosen.
 
 ## What runs when you configure nothing
 
-Three rules ship on by default:
+With no `quality_gates` config and no inline rules:
+
+- **MCP tool (`check_quality_gates`)**: returns `NO_GATES_CONFIGURED` (summary result `NO_GATES_CONFIGURED` with a `_warnings` advisory). Passing `use_default_gates: true` opts into the three conservative built-in defaults:
 
 | Rule | Threshold | Severity |
 |---|---|---|
@@ -6481,7 +6884,16 @@ Three rules ship on by default:
 | `max_circular_import_chains` | 0 | error |
 | `max_coupling_instability` | 0.9 | warning |
 
-The other five are only checked once you name them — an absent rule is not a
+- **CLI (`trace check`)**: when no rules are configured in the config file, it notifies `"No quality gate rules configured. Using defaults."` and runs the CLI defaults:
+
+| Rule | Threshold | Severity |
+|---|---|---|
+| `max_cyclomatic_complexity` | 30 | warning |
+| `max_circular_import_chains` | 0 | error |
+| `max_security_critical_findings` | 0 | error |
+| `max_tech_debt_grade` | D | warning |
+
+The remaining rules are only checked once you name them — an absent rule is not a
 zero threshold, it is no check at all. There is no coverage rule: coverage is
 not one of the signals this gate reads.
 
@@ -6861,7 +7273,7 @@ Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
 ## Tests
 
 ```bash
-pnpm run test                       # All tests (1668 tests, ~2s)
+pnpm run test                       # All tests (vitest run; or node scripts/test-quiet.mjs)
 pnpm run test --run <pattern>  # Run specific test files
 pnpm run test:watch             # Watch mode
 ```
@@ -7803,6 +8215,10 @@ Three properties it carries, and why:
   `total_tokens_saved` — which on any store written before this includes the
   `calls x constant` guess — is never read. An install upgrading from an older
   build therefore starts from "not enough data", not from an inflated total.
+  While the harness benchmark table above uses exact `o200k_base` counts, the
+  runtime per-install tracker converts measured response wire characters using
+  a zero-overhead `chars / 4` estimate (~0.250 tokens/char, reflecting the
+  0.220–0.368 empirical spread measured across the 25 busiest tools).
 - **A floor.** Dollars are priced at the cheapest current Claude input rate, so
   the figure understates for everyone on a larger model. The baseline half is
   still `RAW_COST_ESTIMATES`, i.e. an estimate, which is why the wording is

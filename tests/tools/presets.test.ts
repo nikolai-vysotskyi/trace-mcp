@@ -45,6 +45,7 @@ describe('Tool Presets', () => {
       expect(dev.has('extract_function')).toBe(true);
       expect(dev.has('plan_refactoring')).toBe(true);
       expect(dev.has('reindex')).toBe(true);
+      expect(dev.has('get_untested_symbols')).toBe(true);
     });
 
     it('security preset contains security scanning and audit tools', () => {

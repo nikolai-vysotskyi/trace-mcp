@@ -238,7 +238,8 @@ describe('proxied tools/list token budget (TRA-250)', () => {
   // full 187,790 / ~52.2k. This suite's stub descriptions are far smaller, so
   // it asserts on tool *counts* — the ratio that produced those numbers —
   // rather than re-deriving char totals from fake prose.
-  const PRESET_MAX_TOOLS: Record<string, number> = { minimal: 30, standard: 60 };
+  // standard grew from 60 to 61 when get_diagnostics was added to minimal (TRA-1222).
+  const PRESET_MAX_TOOLS: Record<string, number> = { minimal: 30, standard: 61 };
 
   for (const [preset, max] of Object.entries(PRESET_MAX_TOOLS)) {
     it(`keeps the proxied "${preset}" surface at or under ${max} tools`, async () => {

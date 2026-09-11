@@ -14,6 +14,7 @@ import {
 } from './edge-resolvers/file-projection.js';
 import { resolveCImportEdges as _resolveCImports } from './edge-resolvers/c-imports.js';
 import { resolveCSharpImportEdges as _resolveCSharpImports } from './edge-resolvers/csharp-imports.js';
+import { resolveElixirImportEdges as _resolveElixirImports } from './edge-resolvers/elixir-imports.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/iac-imports.js';
 import { resolveGoImportEdges as _resolveGoImports } from './edge-resolvers/go-imports.js';
@@ -176,6 +177,11 @@ export class EdgeResolver {
   /** Pass 2e8: C# import edges (`using` directive → namespace-declaring file). */
   resolveCSharpImportEdges(scope?: ChangeScope): void {
     timed('csharp-imports', () => _resolveCSharpImports(this.state, scope));
+  }
+
+  /** Pass 2e10: Elixir import edges (`alias`/`import`/`use`/`require` → module file). */
+  resolveElixirImportEdges(scope?: ChangeScope): void {
+    timed('elixir-imports', () => _resolveElixirImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */

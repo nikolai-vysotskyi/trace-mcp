@@ -170,5 +170,16 @@ describe('isDangerousProjectRoot', () => {
         }
       }
     });
+
+    test('rejects POSIX .trace and .trace-mcp paths even under isolated HOME (TRA-1233)', () => {
+      expect(isDangerousProjectRoot('/Users/nikolai/.trace')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/Users/nikolai/.trace/index')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/Users/alice/.trace-mcp')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/home/bob/.trace')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/home/bob/.trace/sessions')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/root/.trace-mcp')).toBe('trace state directory');
+      expect(isDangerousProjectRoot('/Users/nikolai/projects/trace-mcp')).toBeNull();
+      expect(isDangerousProjectRoot('/home/bob/workspace/my-app')).toBeNull();
+    });
   });
 });

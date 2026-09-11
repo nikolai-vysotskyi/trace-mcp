@@ -1,5 +1,5 @@
 {
-  "measuredAt": "2026-09-07",
+  "measuredAt": "2026-09-08",
   "languages": [
     {
       "language": "go",
@@ -99,6 +99,15 @@
       "external": 660,
       "ambiguous": 0,
       "resolvedShare": "50.0%"
+    },
+    {
+      "language": "elixir",
+      "repo": "elixir-plug/plug",
+      "commit": "73404f851852",
+      "created": 87,
+      "external": 44,
+      "ambiguous": 0,
+      "resolvedShare": "66.4%"
     }
   ]
 }

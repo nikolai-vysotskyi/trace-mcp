@@ -1,7 +1,7 @@
 ---
 title: "TokenSave Alternative: trace-mcp vs TokenSave for AI agents"
-description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 87 framework integrations, AST refactoring, and OWASP taint analysis."
-updated: 2026-09-08
+description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 88 framework integrations, AST refactoring, and OWASP taint analysis."
+updated: 2026-09-11
 ---
 
 # TokenSave alternative: trace-mcp vs TokenSave
@@ -48,7 +48,7 @@ updated: 2026-09-08
           "name": "How do their MCP tool surfaces compare?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "TokenSave defines 86 tools and advertises all 85+ tools by default on standard MCP hosts, consuming ~12-15K tokens of schema listing on tools/list before the agent begins work (only 5 tools carry anthropic/alwaysLoad). trace-mcp ships a default minimal preset of 28 tools (~11.6K tokens), provides task-tailored presets (review, architecture, dev), and escalates dynamically via load_tools without bloating the prompt."
+            "text": "TokenSave defines 86 tools and advertises all 85+ tools by default on standard MCP hosts, consuming ~12-15K tokens of schema listing on tools/list before the agent begins work (only 5 tools carry anthropic/alwaysLoad). trace-mcp ships a default minimal preset of 29 tools (~11.6K tokens), provides task-tailored presets (review, architecture, dev), and escalates dynamically via load_tools without bloating the prompt."
           }
         },
         {
@@ -83,7 +83,7 @@ updated: 2026-09-08
 
 **TL;DR.** TokenSave is a Rust-based code intelligence MCP server that indexes code into an embedded libSQL (SQLite) database with tree-sitter parsers across 50+ languages. It features 86 specialized MCP tools, subprocess-isolated grammar extraction, multi-branch indexing, git blame integration, and text replacement editing primitives.
 
-The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 28-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
+The core architectural differences center on advertised prompt overhead, framework awareness, refactoring safety, and security. TokenSave advertises all 85+ tools by default on standard MCP hosts, consuming significant schema tokens on every session start, whereas trace-mcp ships a 29-tool `minimal` preset and dynamically escalates via `load_tools`. TokenSave extracts language syntax without resolving framework connections; trace-mcp builds semantic graph edges across {{ site.data.counts.frameworks }} frameworks (routes, controllers, templates, ORM models). TokenSave edits code via string-replacement primitives; trace-mcp executes scope-aware AST refactorings with cross-file import rewrites and includes OWASP Top-10 taint analysis with SARIF output.
 
 Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ languages (including shaders, Basic dialects, and mainframe languages) with multi-branch database isolation. Pick trace-mcp if you develop web applications in modern frameworks, require compiler-calibrated 5-tier call graphs, need safe AST refactoring write tools, and want zero-setup distribution via npm.
 
@@ -100,7 +100,7 @@ Pick TokenSave if you want a Rust binary indexing broad syntax across 50+ langua
 | Framework integrations | **{{ site.data.counts.frameworks }}** semantic integrations | ✗ (syntax AST only, no framework semantics) |
 | Framework-aware edges | ✓ route → handler, middleware, template, ORM | ✗ |
 | MCP tools defined | {{ site.data.counts.tools }} | 86 tools |
-| Default advertised tools | **28** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
+| Default advertised tools | **29** (~11.6K tok, task presets) | **85+** advertised on standard hosts (~12-15K tok schema) |
 | Tool surface management | Task presets (`minimal`, `review`, `architecture`, `dev`) + `load_tools` | 5 tools marked `anthropic/alwaysLoad`; 85+ returned on `tools/list` |
 | Call graph resolution | 5-tier resolution (`compiler_verified` to `fuzzy`) with calibrated confidence | Graph traversal (`callers`, `callees`, `call_chain`) over AST call sites |
 | Refactoring capability | ✓ AST-native safe transforms (rename, extract, move, codemods) | String replacement primitives (`str_replace`, `multi_str_replace`, `insert_at`) |
@@ -113,7 +113,7 @@ Verified on September 8, 2026 against TokenSave's repository at `master` (v7.11.
 
 ## Key architectural differences
 
-### 1. Tool Surface Management: 86 Advertised Tools vs. 28-Tool Minimal Preset
+### 1. Tool Surface Management: 86 Advertised Tools vs. 29-Tool Minimal Preset
 
 The number of tools an MCP server exposes directly impacts agent performance. Every tool definition consumes prompt tokens in the initial `tools/list` response, and large tool lists increase parameter hallucination and tool mis-selection rates (dispatch dilution).
 
@@ -123,11 +123,11 @@ TokenSave defines 86 MCP tools in `get_tool_definitions()`. In Anthropic-specifi
 To balance this, TokenSave implements session debt accounting (`settle_session_debt`), charging the schema overhead against future token savings over multiple turns.
 
 trace-mcp addresses context overhead architecturally through **Adaptive Task Presets**:
-- **28-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
-- **Workflow-tailored presets**: Dedicated presets for `review` (32 tools), `architecture` (42 tools), or `dev` (42 tools).
+- **29-tool `minimal` default**: Advertised by default (~11.6K tokens), providing search, navigation, outlines, and change impact without prompt bloat.
+- **Workflow-tailored presets**: Dedicated presets for `review` (33 tools), `architecture` (42 tools), or `dev` (44 tools).
 - **Dynamic runtime escalation**: Any deferred tool can be loaded on demand in the live session via `load_tools` without server restarts or meta-tool indirection.
 
-### 2. Pure Syntax Parsing vs. 87 Framework Semantic Integrations
+### 2. Pure Syntax Parsing vs. 88 Framework Semantic Integrations
 
 Both trace-mcp and TokenSave parse source code using tree-sitter grammars. Where they diverge is how structural syntax is translated into architectural comprehension.
 
@@ -197,7 +197,7 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 ## When to choose trace-mcp
 
 - **Modern web and backend frameworks**: You build with Next.js, React, Vue, Express, Fastify, Django, FastAPI, Rails, Spring Boot, or Laravel, and need semantic edges between routes, middleware, templates, and ORM models.
-- **Prompt budget efficiency**: You want a lean 28-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
+- **Prompt budget efficiency**: You want a lean 29-tool `minimal` preset (~11.6K tokens) that protects the model's context window on every turn, with dynamic escalation via `load_tools`.
 - **Safe, automated AST refactoring**: You want your AI agent to perform atomic renames, extractions, and file moves with syntax validation and import graph updates.
 - **High-confidence impact analysis**: You need a 5-tier call graph that explicitly distinguishes compiler-verified relationships from heuristic inferences.
 - **Integrated CI security & quality gates**: You want OWASP Top-10 taint analysis and SARIF reporting built into your code graph workflow.
@@ -207,7 +207,7 @@ TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
