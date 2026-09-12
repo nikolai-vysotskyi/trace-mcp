@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-11T06:40:05.509Z"
+updated: "2026-09-12T06:36:56.871Z"
 active_users:
-  day: 44
-  week: 126
-  month: 199
+  day: 39
+  week: 130
+  month: 207
   first_ping_date: "2026-08-29"
-  days_observed: 14
+  days_observed: 15
   month_window_full: false
-events_28d: 976
+events_28d: 1033
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 976
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 35400113
-  tokens_saved_raw: 35400113
-  usd_saved: 35.4
+  tokens_saved: 36528997
+  tokens_saved_raw: 36528997
+  usd_saved: 36.53
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 6
+  days: 7
   capped_days: 0
   raw_ratio: 1
   inflation_suspected: false
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 168
+  new_installs_28d: 176
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -163,17 +163,18 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "(not set)": 283
-  "upgrade": 256
-  "active": 213
-  "new": 168
+  "(not set)": 290
+  "upgrade": 279
+  "active": 230
+  "new": 176
   "unknown": 53
-  "downgrade": 2
+  "downgrade": 4
 by_version:
-  "3.23.2": 52
-  "3.24.0": 45
+  "3.23.2": 53
+  "3.24.0": 47
   "3.22.0": 38
   "(not set)": 36
+  "3.25.0": 30
   "3.10.0": 28
   "3.17.1": 28
   "3.15.0": 26
@@ -183,9 +184,8 @@ by_version:
   "3.14.0": 16
   "3.19.0": 8
   "3.20.0": 8
-  "3.25.0": 4
+  "3.23.0": 3
   "3.21.0": 2
-  "3.23.0": 2
   "3.7.0": 2
   "3.12.0": 1
   "3.13.0": 1
@@ -209,10 +209,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 251
+  at_or_above: 281
   below: 80
   unknown: 36
-  pct: 76
+  pct: 78
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -255,46 +255,49 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 78
+  "(not set)": 80
   "United States": 18
+  "United Arab Emirates": 17
   "Russia": 16
-  "United Arab Emirates": 14
   "Chile": 7
+  "Italy": 5
   "Poland": 5
   "South Korea": 5
   "Sweden": 5
   "Thailand": 5
   "Brazil": 4
   "Denmark": 4
-  "Italy": 4
   "Australia": 3
+  "Germany": 3
+  "Netherlands": 3
   "United Kingdom": 3
   "Austria": 2
   "Bangladesh": 2
   "China": 2
-  "Germany": 2
   "Hong Kong": 2
   "Indonesia": 2
   "Malta": 2
-  "Netherlands": 2
   "New Zealand": 2
-  "Afghanistan": 1
+  "Türkiye": 2
 by_client:
-  "unknown": 157
-  "claude-code": 49
+  "unknown": 164
+  "claude-code": 51
   "(not set)": 36
-  "codex-mcp-client": 22
-  "antigravity-client": 8
-  "mcp": 5
+  "codex-mcp-client": 24
+  "antigravity-client": 9
+  "mcp": 6
   "opencode": 4
   "cursor-vscode": 3
   "grok-shell-trace-mcp": 3
   "rmcp": 3
   "Trae": 1
   "Visual Studio Code": 1
+  "b7-measure": 1
+  "boaz": 1
   "count-advertised-tools": 1
   "factory-cli": 1
   "freebuff-desktop": 1
+  "grok-shell-trace": 1
   "kimi-code": 1
   "kiro": 1
   "pi-mcp-trace-mcp": 1
