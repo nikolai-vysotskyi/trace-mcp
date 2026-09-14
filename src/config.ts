@@ -1000,6 +1000,17 @@ export const TraceMcpConfigSchema = z.object({
    * When the stdio CLI can't find a running daemon, try to spawn one instead
    * of immediately starting in local mode. Set to false for CI / sandboxed
    * environments where spawning detached processes is undesirable.
+   *
+   * Default true (decided, TRA-941 follow-through): the daemon stays the
+   * default because all three of TRA-941's conditions for keeping it are now
+   * met — proxied sessions are thin (~94 MB fresh via the dist/proxy.js
+   * entry, TRA-970), the first answer no longer waits for the daemon
+   * (~340 ms spawn-to-map via the snapshot fast path, TRA-948), and the
+   * settled idle daemon holds ~300 MB for one project against a
+   * 250 + 75×projects ceiling (TRA-1125). At one session the two modes are
+   * roughly at parity; at N≥2 the daemon wins because write work stays flat
+   * while daemonless sessions each reindex. Revisit only with new
+   * measurements, not by re-reading the old ones.
    */
   auto_spawn_daemon: z.boolean().default(true),
   /**
