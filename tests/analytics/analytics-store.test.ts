@@ -237,6 +237,83 @@ describe('AnalyticsStore', () => {
     expect(searchCall!.input_snippet).toContain('authenticate user');
     expect(searchCall!.input_snippet).toContain('"semantic":"on"');
   });
+
+  it('preMigrate preserves filenames with digits/hyphens and gates via user_version', () => {
+    const rawDbPath = path.join(tmpDir, 'migration-test.db');
+    const Database = (store as unknown as { db: { constructor: new (p: string) => any } }).db
+      .constructor;
+    const rawDb = new Database(rawDbPath);
+    rawDb.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY, project_path TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT,
+        model TEXT, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0,
+        cache_read_tokens INTEGER DEFAULT 0, cache_create_tokens INTEGER DEFAULT 0,
+        tool_call_count INTEGER DEFAULT 0, parsed_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS tool_calls (
+        id TEXT NOT NULL, session_id TEXT NOT NULL REFERENCES sessions(id), timestamp TEXT NOT NULL,
+        tool_name TEXT NOT NULL, tool_server TEXT NOT NULL, tool_short_name TEXT NOT NULL,
+        input_size_chars INTEGER DEFAULT 0, output_size_chars INTEGER DEFAULT 0,
+        output_tokens_estimate INTEGER DEFAULT 0, is_error INTEGER DEFAULT 0,
+        target_file TEXT, model TEXT, input_snippet TEXT
+      );
+      INSERT INTO sessions (id, project_path, started_at, parsed_at) VALUES ('s1', '/proj', '2026-04-01T00:00:00Z', '2026-04-01T00:00:00Z');
+      INSERT INTO tool_calls (id, session_id, timestamp, tool_name, tool_server, tool_short_name, target_file)
+      VALUES
+        ('1', 's1', 't', 'Read', 'builtin', 'Read', '404.html'),
+        ('2', 's1', 't', 'Read', 'builtin', 'Read', '01-intro.md'),
+        ('3', 's1', 't', 'Read', 'builtin', 'Read', '2fa.ts'),
+        ('4', 's1', 't', 'Read', 'builtin', 'Read', '2024-report.csv'),
+        ('5', 's1', 't', 'Read', 'builtin', 'Read', '-file.txt'),
+        ('6', 's1', 't', 'Read', 'builtin', 'Read', '30'),
+        ('7', 's1', 't', 'Read', 'builtin', 'Read', '&&'),
+        ('8', 's1', 't', 'Read', 'builtin', 'Read', '-n'),
+        ('9', 's1', 't', 'Read', 'builtin', 'Read', 'echo');
+    `);
+    expect(rawDb.pragma('user_version', { simple: true })).toBe(0);
+    rawDb.close();
+
+    const migratedStore = new AnalyticsStore(rawDbPath);
+    const db = (migratedStore as unknown as { db: any }).db;
+    expect(db.pragma('user_version', { simple: true })).toBe(1);
+
+    const rows = db
+      .prepare('SELECT id, target_file FROM tool_calls ORDER BY id ASC')
+      .all() as Array<{ id: string; target_file: string | null }>;
+    const fileById = Object.fromEntries(rows.map((r) => [r.id, r.target_file]));
+
+    // Valid filenames preserved
+    expect(fileById['1']).toBe('404.html');
+    expect(fileById['2']).toBe('01-intro.md');
+    expect(fileById['3']).toBe('2fa.ts');
+    expect(fileById['4']).toBe('2024-report.csv');
+    expect(fileById['5']).toBe('-file.txt');
+
+    // Poisoned entries cleared
+    expect(fileById['6']).toBeNull();
+    expect(fileById['7']).toBeNull();
+    expect(fileById['8']).toBeNull();
+    expect(fileById['9']).toBeNull();
+
+    // Now insert a row that would match if migration ran on every instantiation
+    db.prepare(`
+      INSERT INTO tool_calls (id, session_id, timestamp, tool_name, tool_server, tool_short_name, target_file)
+      VALUES ('10', 's1', 't', 'Read', 'builtin', 'Read', '30')
+    `).run();
+
+    migratedStore.close();
+
+    // Reopen store: user_version is 1, so preMigrate must NOT re-wipe tool_calls
+    const reopenedStore = new AnalyticsStore(rawDbPath);
+    const reopenedDb = (reopenedStore as unknown as { db: any }).db;
+    const row10 = reopenedDb
+      .prepare('SELECT target_file FROM tool_calls WHERE id = ?')
+      .get('10') as {
+      target_file: string | null;
+    };
+    expect(row10.target_file).toBe('30');
+    reopenedStore.close();
+  });
 });
 
 // TRA-641: the trace-mcp -> trace rename (TRA-611/614) means a migrated

@@ -3,7 +3,9 @@
  * and recommends trace-mcp alternatives.
  */
 
+import { BINARY_EXTENSIONS, isBinaryFile } from '../shared/binary-extensions.js';
 import { isTraceToolServer, type ToolCallRow } from './analytics-store.js';
+import { extractTargetFile } from './log-parser.js';
 import type { IngestionStatus } from './sync.js';
 
 interface OptimizationHit {
@@ -39,7 +41,9 @@ interface Rule {
   detect(calls: ToolCallRow[]): OptimizationHit | null;
 }
 
-const BASH_GREP_RE = /\b(grep|rg|ack|ag)\b/;
+// Search command pattern: grep/rg/ack/ag/git grep invoked at start of command, or after ;, &&, ||, $(
+// but NOT stream pipes (| grep) which filter command output rather than search codebase files.
+const SEARCH_CMD_RE = /(?:^|[;&\n]\s*|\$\()\s*(?:git\s+)?(?:grep|rg|ack|ag)\b/;
 const BASH_CAT_RE = /\b(cat|head|tail)\b/;
 const COST_PER_MTOK = 5; // Opus default
 
@@ -59,7 +63,7 @@ const repeatedFileRead: Rule = {
         c.tool_name !== 'mcp__phpstorm__get_file_text_by_path'
       )
         continue;
-      if (!c.target_file) continue;
+      if (!c.target_file || isBinaryFile(c.target_file)) continue;
       const key = `${c.session_id}::${c.target_file}`;
       const rec = fileCounts.get(key) ?? { count: 0, tokens: 0 };
       rec.count++;
@@ -98,7 +102,8 @@ const bashGrep: Rule = {
 
     for (const c of calls) {
       if (c.tool_short_name !== 'Bash' && c.tool_short_name !== 'bash') continue;
-      if (!c.input_snippet || !BASH_GREP_RE.test(c.input_snippet)) continue;
+      // Must be an actual search command targeting files/code rather than a stream pipe filter (| grep)
+      if (!c.input_snippet || !SEARCH_CMD_RE.test(c.input_snippet)) continue;
       hits.push(c.input_snippet.slice(0, 120));
       currentTokens += c.output_tokens_estimate;
     }
@@ -128,6 +133,10 @@ const bashCat: Rule = {
     for (const c of calls) {
       if (c.tool_short_name !== 'Bash' && c.tool_short_name !== 'bash') continue;
       if (!c.input_snippet || !BASH_CAT_RE.test(c.input_snippet)) continue;
+      // Must be an actual file inspection rather than a pipeline truncation (| head) or heredoc (cat << 'EOF')
+      const target = c.target_file ?? extractTargetFile('Bash', { command: c.input_snippet });
+      if (!target || isBinaryFile(target)) continue;
+
       hits.push(c.input_snippet.slice(0, 120));
       currentTokens += c.output_tokens_estimate;
     }
@@ -157,7 +166,8 @@ const largeFileRead: Rule = {
           c.tool_name === 'mcp__phpstorm__read_file' ||
           c.tool_name === 'mcp__phpstorm__get_file_text_by_path') &&
         c.output_size_chars > 5000 &&
-        c.target_file,
+        c.target_file &&
+        !isBinaryFile(c.target_file),
     );
     if (large.length === 0) return null;
 
@@ -252,7 +262,7 @@ const unusedTraceTools: Rule = {
         sn === 'Read' ||
         sn === 'Grep' ||
         sn === 'Glob' ||
-        ((sn === 'Bash' || sn === 'bash') && c.input_snippet && BASH_GREP_RE.test(c.input_snippet))
+        ((sn === 'Bash' || sn === 'bash') && c.input_snippet && SEARCH_CMD_RE.test(c.input_snippet))
       ) {
         entry.hasNav = true;
         entry.navTokens += c.output_tokens_estimate;

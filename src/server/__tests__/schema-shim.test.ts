@@ -44,22 +44,24 @@ function fakeTransport() {
 describe('stripRedundantSchemaKeyword', () => {
   // Premise guard: if a future SDK/zod bump stops stamping $schema, the shim
   // becomes a silent no-op — this test fails loudly instead.
-  it('the unpatched SDK still emits $schema on inputSchema', async () => {
+  it('the unpatched SDK still emits $schema on inputSchema and default execution', async () => {
     const tools = await listToolsOverWire(false);
     expect(tools).toHaveLength(1);
     expect(tools[0].inputSchema).toHaveProperty('$schema');
+    expect(tools[0].execution).toEqual({ taskSupport: 'forbidden' });
   });
 
-  it('strips $schema from tools/list end-to-end while keeping the tool usable', async () => {
+  it('strips $schema and default execution from tools/list end-to-end while keeping the tool usable', async () => {
     const tools = await listToolsOverWire(true);
     expect(tools).toHaveLength(1);
     expect(tools[0].inputSchema).not.toHaveProperty('$schema');
+    expect(tools[0]).not.toHaveProperty('execution');
     expect(tools[0].inputSchema.type).toBe('object');
     expect(tools[0].inputSchema.properties).toHaveProperty('text');
     expect(tools[0].description).toBe('Echo a string back.');
   });
 
-  it('strips inputSchema and outputSchema in place, leaving everything else intact', async () => {
+  it('strips inputSchema $schema, outputSchema $schema, and default execution in place, leaving everything else intact', async () => {
     const { transport, sent } = fakeTransport();
     const message = {
       jsonrpc: '2.0',
@@ -76,6 +78,16 @@ describe('stripRedundantSchemaKeyword', () => {
               $schema: 'https://json-schema.org/draft/2020-12/schema',
               type: 'object',
             },
+            execution: {
+              taskSupport: 'forbidden',
+            },
+          },
+          {
+            name: 'task-tool',
+            inputSchema: { type: 'object' },
+            execution: {
+              taskSupport: 'required',
+            },
           },
         ],
       },
@@ -90,7 +102,14 @@ describe('stripRedundantSchemaKeyword', () => {
       jsonrpc: '2.0',
       id: 1,
       result: {
-        tools: [{ name: 'x', inputSchema: { type: 'object' }, outputSchema: { type: 'object' } }],
+        tools: [
+          { name: 'x', inputSchema: { type: 'object' }, outputSchema: { type: 'object' } },
+          {
+            name: 'task-tool',
+            inputSchema: { type: 'object' },
+            execution: { taskSupport: 'required' },
+          },
+        ],
       },
     });
   });
