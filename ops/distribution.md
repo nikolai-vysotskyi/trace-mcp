@@ -2147,3 +2147,53 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
     All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
 - Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge), plus dedicated comparative page for **Ripwire** (`redhat-et/ripwire`, 1.9K★).
 
+### Seventeenth pass, 2026-09-14 (TRA-1496): nine threads re-verified, deslop fix shipped, four sweep hits, new rival names us
+
+**Open-thread audit (all via GitHub API, 2026-09-14):**
+- All 5 catalog PRs still OPEN, 0 comments each, deadlines intact — no ping due:
+  `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+  `yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+  (re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+- `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`,
+  `mattbutlerengineering/ai-tooling#585`: all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3 comments,
+  unchanged since 2026-09-05 — nothing owed.
+- `Ivy-Apps/deslop#173`: **CLOSED 2026-09-08** — the maintainer shipped the `export … from` fix built on
+  the analysis posted from this lane. Second shipped fix from the read-code-first pattern after atlas.
+- `Kilo-Org/kilocode#13843`: OPEN, 1 comment (ours), no maintainer reply since 2026-09-07. It is a gift
+  bug report, not a thread awaiting our answer — no follow-up.
+- `hesreallyhim/awesome-claude-code` (TRA-633): still `blocked` on the one human-only web-form click.
+  Per the 2026-09-07 focus rule the consolidated ask already stands — no new ping from this lane.
+
+**Mention sweep (`scripts/mention-sweep.sh`, 2026-09-14) — 4 new repos, all classified:**
+- `Cranot/roam-code` (517★, Python, created 2026-02-09, pushed 2026-09-14): **a direct rival that names us.**
+  "Local codebase intelligence CLI + MCP server for AI coding agents: SQLite code graph, 28 languages,
+  287 commands, 246 MCP tools." Their landing-page template `templates/distribution/landing-page/compare.html`
+  (section `local-code-graphs`) says "trace-mcp describes a local graph and agent tools" next to CodeGraph's
+  blast-radius tool — fair, non-hostile, no benchmark against us. Not in `docs/_data/competitors.yml`;
+  pointer for the Competitor Intelligence lane, not a door for this one. Do not write to their tracker.
+- `Mesteriis/Engineering-Bible-AI` (0★): personal standards repo whose `2026-09-09-shared-code-indexing.md`
+  spec standardises on Serena + Graphify + Repomix and says "Remove the stale local `trace-mcp` client entry
+  whose command no longer exists; do not install or initialize trace-mcp." One user dropped us over a stale
+  command — pointer for the MCP Reliability / User Feedback lanes on what that command was, not outreach.
+- `seongyeon1/seongyeon1.github.io` (0★, Korean blog): `docs/editorial-plan.md` carries a planned tutorial
+  row, "trace-mcp — framework-aware MCP code intelligence" for coding-agent context layers. A plan, not a
+  post; 0★ personal blog — nothing to write, recorded so the next sweep stays quiet.
+- `rxmna8502/vybe-intelligence-vault` (22★): same generative vault family as the recorded
+  `SAIRAMANALADI/vybe-intelligence-vault` — same front-matter shape (`quality_score: 9`, GPU Acceleration
+  in `tech_stack`, `evaluated_by: mistral-small-latest`), same stale figures. No contact path, no action.
+
+**Competitor star snapshot (live GitHub API, 2026-09-14; prior from the 2026-09-11 pass):**
+- `codegraph`: 70,502 → **70,792★** (+290)
+- `serena`: 29,186 → **29,309★** (+123)
+- `repomix`: 28,290 → **28,337★** (+47)
+- `codebase_memory_mcp`: 42,957 → **43,203★** (+246)
+- `context_mode`: 22,146 → **22,783★** (+637, fastest mover this window)
+- `ripwire`: 1,892 → **2,023★** (+131)
+- `graft`: 7,094 → **7,637★** (+543)
+- `roam-code`: **517★** (newly observed, untracked)
+- `trace-mcp`: 175 → **175★** (+0)
+
+**Nothing submitted, nothing opened.** Catalog moratorium holds (0 attributable installs in `ops/arrivals.md`);
+no deadline falls due before 2026-09-19; no repo met the message bar, so the 5-touch allowance went unused —
+a ceiling, not a quota.
+
