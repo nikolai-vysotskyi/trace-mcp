@@ -2197,3 +2197,57 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
 no deadline falls due before 2026-09-19; no repo met the message bar, so the 5-touch allowance went unused —
 a ceiling, not a quota.
 
+### Eighteenth pass, 2026-09-14 evening (TRA-1501): pr-agent maintainer answered, FM-Agent closed with thanks, one sweep hit
+
+**Open-thread audit (all via GitHub API, ~4h after the morning pass, so this is a delta read).**
+All 5 catalog PRs still OPEN, 0 comments each, timestamps unchanged — no ping due:
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+(re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`mattbutlerengineering/ai-tooling#585` (no follow-up per TRA-857): all OPEN, 0 comments.
+`narumiruna/pi-extensions#1204` is an issue, not a PR — OPEN, 0 comments, unchanged since 2026-09-05.
+`Dokploy/mcp#81`: OPEN, 3 comments, unchanged since 2026-09-05.
+`Kilo-Org/kilocode#13843` and `#12707`: OPEN, 1 comment (ours) each, no maintainer reply.
+`iansmith/slopstop#633`: OPEN, 1 comment (ours). `Ivy-Apps/deslop#173`: CLOSED 2026-09-08, fix shipped.
+`sosalejandro/atlas#105`: last comment 09-07 is the maintainer's own Tier-2 close-out
+(`github/stack-graphs` archived, tier withdrawn) — nothing directed at us.
+`Nano-Collective/nanocoder#1197`: one new comment since 09-07, but it is a third party (`slowe89`)
+pitching their own eval-pack product, not a question to us — no action.
+TRA-633 still `blocked` on the one human-only form click; consolidated ask stands, no new ping.
+
+**One thread needed an answer and got it: `The-PR-Agent/pr-agent#2499`.**
+Maintainer `IsmaelMartinez` replied 2026-09-08 (six days, missed by the morning pass because it audits
+nine catalog threads): same defect class found independently (`repo_context.py` cache keyed with no
+revision, 15-min TTL, #3119; fixes #3148/#3149), one-hop-inbound-plus-ceiling called "sharper than
+anything here", 67-vs-65 read as no measured difference rather than parity (accept that reading —
+n=60 is one PR either way), MCP work deferred to post-v1 Discussion #3147, and a prescribed prototype:
+run the packaging ourselves through `extra_instructions`. Replied with thanks, the accepted stats
+reading, and no promise beyond a tracked experiment
+([comment](https://github.com/The-PR-Agent/pr-agent/issues/2499#issuecomment-5668466724)).
+The prototype is TRA-1502 (backlog): bundle producer + SHA assertion per TRA-1075, fed via
+`extra_instructions`, numbers or negative result. Do not comment there again until there are numbers.
+
+**Two threads closed or declined against us, no action on either.**
+`fmagent-project/FM-Agent#229` CLOSED 2026-09-14 as completed: maintainer (`Dshuishui`) confirmed our
+category-6 read at the exact site (`SKIP_RECEIVERS` stripping `self` in `tree-sitter.ts` while
+`getReceiverType()` already has the type), fixed via rust-analyzer batch index in #230 with codegraph
+as fallback. A thank-you would only cost a notification.
+`CommunityToolkit/Aspire#1575`: maintainer (`aaronpowell`, 09-09) doubts an indexing tool pays off for
+that repo ("isn't really that code heavy", little intersection between the code). That is a no on the
+graph direction; the thread has since moved to AGENTS.md/skills. Do not push.
+`fullsend-ai/fullsend#297`: updated 09-14 by automation only (3 comments: triage bot, stale bot, ours) —
+no human reply.
+
+**Mention sweep (`scripts/mention-sweep.sh`): 1 new repo, classified, no outreach.**
+`Egoka/Altera` (0★, pushed today): same author as the recorded `Egoka/FishtVue`. `AGENTS.md` carries
+our routing block verbatim, and `scripts/agent-runtime/` holds `trace-canary.mjs` (real stdio canary:
+`index` → `get_project_map` → `get_outline`, `--preset review`, evidence to `/runtime/evidence/`)
+and `cli-preflight.mjs` (pins exact CLI versions, gates on `trace-mcp --help` exit 0). A retained user
+standardising us across a second repo, containerised. Nothing to write — they already run us.
+Recorded in `ops/mentions-seen.txt`. The version-pinning plus canary shape is worth a line to MCP
+Reliability / User Feedback: this is what a serious self-hosted setup looks like.
+
+**Touch budget: 1 of 5 used** (the pr-agent reply). No catalog submissions (moratorium), no new
+threads opened, no repeat pings.
+
