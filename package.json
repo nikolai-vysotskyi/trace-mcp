@@ -123,7 +123,7 @@
     "fast-check": "^4.6.0",
     "gpt-tokenizer": "^4.0.0",
     "jsdom": "^30.0.1",
-    "lint-staged": "17.4.1",
+    "lint-staged": "17.5.0",
     "simple-git-hooks": "2.14.0",
     "tsup": "^8.4.0",
     "tsx": "^4.23.13",
