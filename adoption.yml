@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-13T06:42:12.901Z"
+updated: "2026-09-14T06:52:24.221Z"
 active_users:
-  day: 28
-  week: 121
-  month: 209
+  day: 34
+  week: 120
+  month: 216
   first_ping_date: "2026-08-29"
-  days_observed: 16
+  days_observed: 17
   month_window_full: false
-events_28d: 1092
+events_28d: 1151
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 1092
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 37515720
-  tokens_saved_raw: 38783518
-  usd_saved: 37.52
+  tokens_saved: 37590724
+  tokens_saved_raw: 40671437
+  usd_saved: 37.59
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 8
+  days: 9
   capped_days: 1
-  raw_ratio: 1.03
+  raw_ratio: 1.08
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 178
+  new_installs_28d: 185
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -163,16 +163,16 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "upgrade": 298
-  "(not set)": 291
-  "active": 264
-  "new": 178
+  "upgrade": 307
+  "active": 305
+  "(not set)": 293
+  "new": 185
   "unknown": 53
   "downgrade": 6
 by_version:
+  "3.25.0": 60
   "3.23.2": 53
   "3.24.0": 48
-  "3.25.0": 44
   "3.22.0": 38
   "(not set)": 36
   "3.10.0": 28
@@ -209,10 +209,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 296
+  at_or_above: 312
   below: 80
   unknown: 36
-  pct: 79
+  pct: 80
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -255,8 +255,8 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 82
-  "United States": 18
+  "(not set)": 84
+  "United States": 21
   "United Arab Emirates": 17
   "Russia": 16
   "Chile": 7
@@ -280,18 +280,19 @@ by_country:
   "New Zealand": 2
   "Spain": 2
 by_client:
-  "unknown": 167
-  "claude-code": 52
+  "unknown": 174
+  "claude-code": 53
   "(not set)": 36
-  "codex-mcp-client": 27
+  "codex-mcp-client": 30
   "antigravity-client": 9
-  "mcp": 6
+  "mcp": 7
   "opencode": 4
   "cursor-vscode": 3
   "grok-shell-trace-mcp": 3
   "rmcp": 3
   "Visual Studio Code": 2
   "trace-mcp-insights": 2
+  "Cursor": 1
   "Trae": 1
   "b7-measure": 1
   "boaz": 1
@@ -303,4 +304,3 @@ by_client:
   "kiro": 1
   "pi-mcp-trace-mcp": 1
   "smoke": 1
-  "zcode": 1
