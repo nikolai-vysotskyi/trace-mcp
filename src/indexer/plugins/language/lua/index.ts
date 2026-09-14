@@ -433,23 +433,168 @@ export class LuaLanguagePlugin implements LanguagePlugin {
 
   /**
    * require() import edges.
-   * The grammar doesn't reliably parse require() calls, so we use regex.
-   * Strips comments first so commented-out code doesn't emit phantom edges,
-   * handles quotes, Lua long brackets [[...]], whitespace variations,
+   * The grammar doesn't reliably parse require() calls, so we scan manually
+   * with a Lua-aware scanner: it skips short (`--`) and long (`--[[ ]]`)
+   * comments, quoted strings and long-bracket strings, and only recognizes
+   * `require`/`pcall(require, ...)` in code position. A naive regex strip
+   * both kills a real require after `--` inside a quoted string and invents
+   * phantom imports from require-like text inside long strings (TRA-1332).
+   * Handles quotes, Lua long brackets [[...]], whitespace variations,
    * and pcall(require, "...") patterns.
    */
   private extractRequireEdges(source: string, edges: RawEdge[]): void {
-    const stripped = source.replace(/--\[(=*)\[[\s\S]*?\]\1\]/g, '').replace(/--[^\n]*/g, '');
-    const re =
-      /\b(?:require\s*(?:\(\s*|\s*)(?:["']([^"']+)["']|\[\[([^\]]+)\]\])|pcall\s*\(\s*require\s*,\s*["']([^"']+)["']\s*\))/gm;
-    let m: RegExpExecArray | null;
     const seen = new Set<string>();
-    while ((m = re.exec(stripped)) !== null) {
-      const mod = (m[1] ?? m[2] ?? m[3])?.trim();
-      if (mod && !seen.has(mod)) {
-        seen.add(mod);
-        edges.push({ edgeType: 'imports', metadata: { module: mod, from: mod } });
+    const push = (mod: string | undefined): void => {
+      const m = mod?.trim();
+      if (m && !seen.has(m)) {
+        seen.add(m);
+        edges.push({ edgeType: 'imports', metadata: { module: m, from: m } });
       }
+    };
+
+    const n = source.length;
+    let i = 0;
+
+    const isIdentChar = (c: string): boolean => /[A-Za-z0-9_]/.test(c);
+    const isSpace = (c: string): boolean => c === ' ' || c === '\t' || c === '\r' || c === '\n';
+
+    /** Long-bracket opener `[`, `[=[`, ... at pos, or null. */
+    const matchLongOpen = (pos: number): { equals: string; length: number } | null => {
+      if (source[pos] !== '[') return null;
+      let j = pos + 1;
+      while (source[j] === '=') j++;
+      if (source[j] !== '[') return null;
+      return { equals: source.slice(pos + 1, j), length: j - pos + 1 };
+    };
+
+    /** Closer index for a long construct opened at pos, or -1 when unterminated. */
+    const findLongClose = (openEnd: number, equals: string): number =>
+      source.indexOf(`]${equals}]`, openEnd);
+
+    /** Parse a quoted string literal at pos; null when unterminated. */
+    const parseQuoted = (pos: number): [string, number] | null => {
+      const q = source[pos];
+      let j = pos + 1;
+      while (j < n) {
+        const c = source[j];
+        if (c === '\\' && j + 1 < n) {
+          j += 2;
+          continue;
+        }
+        if (c === q) return [source.slice(pos + 1, j), j + 1];
+        if (c === '\n' || c === '\r') return null;
+        j++;
+      }
+      return null;
+    };
+
+    /** Parse a long-bracket string literal at pos; null when not a literal. */
+    const parseLongLiteral = (pos: number): [string, number] | null => {
+      const open = matchLongOpen(pos);
+      if (!open) return null;
+      const idx = findLongClose(pos + open.length, open.equals);
+      if (idx === -1) return null;
+      return [source.slice(pos + open.length, idx), idx + open.equals.length + 2];
+    };
+
+    const skipSpaces = (pos: number): number => {
+      while (pos < n && isSpace(source[pos])) pos++;
+      return pos;
+    };
+
+    /** Parse `require "mod"`, `require("mod")`, `require [[mod]]` after the word. */
+    const parseRequireCall = (pos: number): number | null => {
+      let j = skipSpaces(pos);
+      if (source[j] === '(') j = skipSpaces(j + 1);
+      const c = source[j];
+      const lit = c === '"' || c === "'" ? parseQuoted(j) : c === '[' ? parseLongLiteral(j) : null;
+      if (!lit) return null;
+      push(lit[0]);
+      return lit[1];
+    };
+
+    /** Parse `pcall(require, "mod")` after the word `pcall`. */
+    const parsePcallRequire = (pos: number): number | null => {
+      let j = skipSpaces(pos);
+      if (source[j] !== '(') return null;
+      j = skipSpaces(j + 1);
+      if (source.slice(j, j + 7) !== 'require') return null;
+      if (j + 7 < n && isIdentChar(source[j + 7])) return null;
+      j = skipSpaces(j + 7);
+      if (source[j] !== ',') return null;
+      j = skipSpaces(j + 1);
+      const c = source[j];
+      const lit = c === '"' || c === "'" ? parseQuoted(j) : c === '[' ? parseLongLiteral(j) : null;
+      if (!lit) return null;
+      push(lit[0]);
+      return lit[1];
+    };
+
+    while (i < n) {
+      const c = source[i];
+      // Comments: long `--[[ ]]` / `--[=[ ]=]` first, else short `--` to EOL.
+      if (c === '-' && source[i + 1] === '-') {
+        if (source[i + 2] === '[') {
+          const open = matchLongOpen(i + 2);
+          if (open) {
+            const idx = findLongClose(i + 2 + open.length, open.equals);
+            if (idx !== -1) {
+              i = idx + open.equals.length + 2;
+              continue;
+            }
+            // Unterminated long comment: fall back to short-comment skip.
+          }
+        }
+        const nl = source.indexOf('\n', i + 2);
+        i = nl === -1 ? n : nl + 1;
+        continue;
+      }
+      // Quoted strings are never code.
+      if (c === '"' || c === "'") {
+        let j = i + 1;
+        while (j < n) {
+          const d = source[j];
+          if (d === '\\' && j + 1 < n) {
+            j += 2;
+            continue;
+          }
+          if (d === source[i]) {
+            j++;
+            break;
+          }
+          if (d === '\n' || d === '\r') break;
+          j++;
+        }
+        i = j;
+        continue;
+      }
+      // Long-bracket strings are never code (unless a require argument,
+      // which is only parsed from code position via parseRequireCall).
+      if (c === '[') {
+        const open = matchLongOpen(i);
+        if (open) {
+          const idx = findLongClose(i + open.length, open.equals);
+          i = idx === -1 ? i + open.length : idx + open.equals.length + 2;
+          continue;
+        }
+      }
+      // Words in code position.
+      if (isIdentChar(c) && (i === 0 || !isIdentChar(source[i - 1]))) {
+        let j = i;
+        while (j < n && isIdentChar(source[j])) j++;
+        const word = source.slice(i, j);
+        if (word === 'require') {
+          i = parseRequireCall(j) ?? j;
+          continue;
+        }
+        if (word === 'pcall') {
+          i = parsePcallRequire(j) ?? j;
+          continue;
+        }
+        i = j;
+        continue;
+      }
+      i++;
     }
   }
 }

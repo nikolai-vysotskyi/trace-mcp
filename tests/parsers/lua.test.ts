@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LuaLanguagePlugin } from '../../src/indexer/plugins/language/lua/index.js';
 import {
+  isTestPath,
   moduleToPathSegments,
   luaCandidatePaths,
 } from '../../src/indexer/edge-resolvers/lua-imports.js';
@@ -86,6 +87,41 @@ local ignored2 = require "ignored.two"
     expect(requiredModules).not.toContain('ignored.one');
     expect(requiredModules).not.toContain('ignored.two');
   });
+
+  it('keeps requires after -- inside quoted strings, ignores long-string phantoms', async () => {
+    const code = `
+local marker = "--not a comment"; local real = require("real.mod")
+local text = [[
+require("phantom.mod")
+]]
+`;
+    const res = await parse(code);
+    const requiredModules = res.edges
+      ?.filter((e) => e.edgeType === 'imports')
+      .map((e) => (e.metadata as any)?.module);
+
+    expect(requiredModules).toContain('real.mod');
+    expect(requiredModules).not.toContain('phantom.mod');
+  });
+
+  it('still strips short and long comments without touching real requires', async () => {
+    const code = `
+local ok = require("kept.mod") -- trailing require("trailing.phantom")
+-- full line require("line.phantom")
+--[=[ long comment with require("long.phantom") ]=]
+local after = require('after.mod')
+`;
+    const res = await parse(code);
+    const requiredModules = res.edges
+      ?.filter((e) => e.edgeType === 'imports')
+      .map((e) => (e.metadata as any)?.module);
+
+    expect(requiredModules).toContain('kept.mod');
+    expect(requiredModules).toContain('after.mod');
+    expect(requiredModules).not.toContain('trailing.phantom');
+    expect(requiredModules).not.toContain('line.phantom');
+    expect(requiredModules).not.toContain('long.phantom');
+  });
 });
 
 describe('moduleToPathSegments & luaCandidatePaths', () => {
@@ -100,6 +136,19 @@ describe('moduleToPathSegments & luaCandidatePaths', () => {
     expect(moduleToPathSegments('../parent.helper')).toBe('../parent/helper');
     expect(moduleToPathSegments('.local')).toBe('./local');
     expect(moduleToPathSegments('..sibling')).toBe('../sibling');
+    // Multi-level slash-prefixed relative requires keep every ../ segment.
+    expect(moduleToPathSegments('../../foo')).toBe('../../foo');
+    expect(moduleToPathSegments('../../../foo')).toBe('../../../foo');
+    expect(moduleToPathSegments('../../foo.bar')).toBe('../../foo/bar');
+    expect(moduleToPathSegments('./../foo')).toBe('./../foo');
+  });
+
+  it('detects test paths including Luau suffixes', () => {
+    expect(isTestPath('spec/helper.lua')).toBe(true);
+    expect(isTestPath('src/app.lua')).toBe(false);
+    expect(isTestPath('src/foo_spec.luau')).toBe(true);
+    expect(isTestPath('src/foo_test.luau')).toBe(true);
+    expect(isTestPath('src/foo.luau')).toBe(false);
   });
 
   it('generates candidate filenames for Lua modules', () => {

@@ -79,10 +79,14 @@ export function moduleToPathSegments(specifier: string): string {
     cleaned = cleaned.slice(0, -5);
   }
 
-  // Handle relative dots: e.g. "./foo", "../bar", ".sub", "..sibling"
-  if (cleaned.startsWith('./') || cleaned.startsWith('../')) {
-    const prefix = cleaned.startsWith('./') ? './' : '../';
-    const rest = cleaned.slice(prefix.length).replace(/\./g, '/');
+  // Handle slash-prefixed relative requires: "./foo", "../bar", "../../baz".
+  // Match the full run of leading ./ and ../ segments so dot-to-slash
+  // conversion applies only to the module part (TRA-1332: "../../foo"
+  // previously became "..////foo" and resolved one level too shallow).
+  const relSlashMatch = cleaned.match(/^((?:\.\.?\/)+)(.*)$/);
+  if (relSlashMatch) {
+    const prefix = relSlashMatch[1];
+    const rest = (relSlashMatch[2] ?? '').replace(/\./g, '/');
     return prefix + rest;
   }
   if (cleaned.startsWith('.')) {
@@ -103,7 +107,7 @@ export function luaCandidatePaths(rel: string): string[] {
   return [`${rel}.lua`, `${rel}/init.lua`, `${rel}.luau`, `${rel}/init.luau`];
 }
 
-function isTestPath(p: string): boolean {
+export function isTestPath(p: string): boolean {
   return (
     p.includes('/spec/') ||
     p.startsWith('spec/') ||
@@ -112,7 +116,9 @@ function isTestPath(p: string): boolean {
     p.includes('/tests/') ||
     p.startsWith('tests/') ||
     p.endsWith('_spec.lua') ||
-    p.endsWith('_test.lua')
+    p.endsWith('_test.lua') ||
+    p.endsWith('_spec.luau') ||
+    p.endsWith('_test.luau')
   );
 }
 
@@ -208,7 +214,9 @@ export function resolveLuaImportEdges(state: PipelineState, _scope?: ChangeScope
       }
     }
 
-    // 5. Suffix search across all indexed Lua files
+    // 5. Suffix search across all indexed Lua files.
+    // Test candidates are filtered for production sources BEFORE counting, so
+    // a lone test file never captures a production import (TRA-1332).
     const matchingIds = new Set<number>();
     for (const cand of candidates) {
       const ids = bySuffix.get(cand);
@@ -217,20 +225,17 @@ export function resolveLuaImportEdges(state: PipelineState, _scope?: ChangeScope
       }
     }
 
-    if (matchingIds.size === 1) {
-      return Array.from(matchingIds)[0];
+    let candidateIds = Array.from(matchingIds);
+    if (!isTestPath(fromPath)) {
+      candidateIds = candidateIds.filter((id) => !isTestPath(filePathMap.get(id) ?? ''));
     }
 
-    if (matchingIds.size > 1) {
-      if (!isTestPath(fromPath)) {
-        const nonTest = Array.from(matchingIds).filter(
-          (id) => !isTestPath(filePathMap.get(id) ?? ''),
-        );
-        if (nonTest.length === 1) return nonTest[0];
-        if (nonTest.length > 1) return 'ambiguous';
-      } else {
-        return 'ambiguous';
-      }
+    if (candidateIds.length === 1) {
+      return candidateIds[0];
+    }
+
+    if (candidateIds.length > 1) {
+      return 'ambiguous';
     }
 
     return undefined;

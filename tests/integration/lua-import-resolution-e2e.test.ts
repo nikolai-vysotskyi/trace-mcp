@@ -71,6 +71,25 @@ local busted = require("busted")
 local M = {}
 return M
 `,
+  'src/deepfoo.lua': `
+local M = {}
+return M
+`,
+  'src/routes/deep/endpoint.lua': `
+local deepfoo = require("../../deepfoo")
+local M = {}
+return M
+`,
+  'src/lonely.lua': `
+local lone = require("lonehelper")
+local M = {}
+return M
+`,
+  'spec/lonehelper.lua': `
+-- only candidate for "lonehelper": a production import must NOT link here
+local M = {}
+return M
+`,
 };
 
 function importTargets(store: Store, sourcePath: string): Set<string> {
@@ -146,6 +165,17 @@ describe('Lua import resolution E2E', () => {
     const targets = importTargets(store, 'src/app.lua');
     expect(targets).toContain('src/config.lua');
     expect(targets).not.toContain('spec/config.lua');
+  });
+
+  it('resolves multi-level relative ../.. imports', () => {
+    const targets = importTargets(store, 'src/routes/deep/endpoint.lua');
+    expect(targets).toContain('src/deepfoo.lua');
+  });
+
+  it('never links production code to a lone test-only suffix candidate', () => {
+    const targets = importTargets(store, 'src/lonely.lua');
+    expect(targets).not.toContain('spec/lonehelper.lua');
+    expect(targets.size).toBe(0);
   });
 
   it('resolves imports in spec files to production code', () => {
