@@ -4482,6 +4482,7 @@ supply it.
 | `daemon_eager_load_projects` | number (≥ 0, ≤ 1000) | `8` |
 | `index_cache_mb` | number (≥ 1, ≤ 1024) | `16` |
 | `index_mmap_mb` | number (≥ 0, ≤ 4096) | `64` |
+| `index_memory_profile` | `auto` \| `full` \| `low-power` | `"auto"` |
 | `hermes` | object | `{}` |
 | `hermes.enabled` | `auto` \| boolean | `"auto"` |
 | `hermes.home_override` | string | _unset_ |

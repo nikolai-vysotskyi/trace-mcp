@@ -306,7 +306,8 @@ describe('search() — fuzzy auto-fallback', () => {
     const f = seedFile(store, 'src/utils.ts');
     const id1 = seedSymbol(store, f, 'calculateTotal', { kind: 'function', fqn: 'calculateTotal' });
     const id2 = seedSymbol(store, f, 'validateInput', { kind: 'function', fqn: 'validateInput' });
-    // Fuzzy search uses symbol_trigrams table (populated by pipeline, not triggers)
+    // TRA-1541: fuzzy candidates come from the trigger-maintained
+    // symbols_name_tri FTS table; indexTrigramsBatch is a compat shim.
     indexTrigramsBatch(store.db, [
       { id: id1, name: 'calculateTotal', fqn: 'calculateTotal' },
       { id: id2, name: 'validateInput', fqn: 'validateInput' },

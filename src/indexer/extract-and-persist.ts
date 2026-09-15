@@ -54,6 +54,13 @@ export interface ExtractAndPersistParams {
 export interface ExtractAndPersistOutcome {
   newSymbolNames: Map<string, Set<number>>;
   deletedSymbolNames: Map<string, Set<number>>;
+  /**
+   * Whether this run took the trigger-drop + FTS rebuild path (TRA-1541).
+   * That path rebuilds both FTS families without running ANALYZE, so the
+   * caller uses this to decide a statistics refresh — gating on indexed
+   * counts alone would miss rebuild runs where many candidates skipped.
+   */
+  usedFtsRebuild: boolean;
 }
 
 /**
@@ -317,5 +324,6 @@ export async function extractAndPersist(
   return {
     newSymbolNames: persister.newSymbolNames,
     deletedSymbolNames: persister.deletedSymbolNames,
+    usedFtsRebuild: useFtsRebuild,
   };
 }
