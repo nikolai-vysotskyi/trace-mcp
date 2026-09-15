@@ -8,6 +8,7 @@ import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
+import { selectChangedFiles } from './change-prefilter.js';
 import { findPackageJsonEntries } from './package-entries.js';
 import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
@@ -100,6 +101,27 @@ export async function extractAndPersist(
     logger.info({ renamed }, 'Detected renames — reused existing symbols');
   }
 
+  // TRA-1536: mtime+size prefilter BEFORE any extract() dispatch. The old
+  // code called extract() once per file in the whole corpus so the
+  // content-hash gate could decide what changed — 1903 dispatches (worker
+  // IPC round-trips or in-process extract overhead each) for a 1-file
+  // change. One lstatSync per file against the preloaded map answers the
+  // same question for every file whose mtime floor and byte size both
+  // match; only the remainder reaches the extract loop below (which keeps
+  // its own read+hash gate for mtime-drifted-but-identical content).
+  const { candidates, skipped: prefiltered } = selectChangedFiles(
+    rootPath,
+    relPaths,
+    existingFiles,
+    force,
+  );
+  result.skipped += prefiltered;
+  if (prefiltered > 0) {
+    logger.debug(
+      { total: relPaths.length, skipped: prefiltered, candidates: candidates.length },
+      'Change prefilter skipped unchanged files before extraction',
+    );
+  }
   // Force-include set: package.json#main/module/bin/exports must always be
   // indexed regardless of file-size cap. Without this, lodash-class
   // monolithic libraries (single-file UMD/IIFE declared as `main`) drop
@@ -120,12 +142,16 @@ export async function extractAndPersist(
 
   // Cluster same-language files so each worker hits its parser cache instead
   // of paying ~50-100 ms WASM Language.load on every extension switch.
-  sortByExtension(relPaths);
+  // Sorted over the prefilter candidates (not the full walk): unchanged
+  // files never reach extraction, so clustering them is wasted work.
+  sortByExtension(candidates);
 
   // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
   // For small (incremental) batches the per-row trigger fire is cheaper than
   // rebuilding the entire FTS index from all symbols at the end.
-  const useFtsRebuild = relPaths.length > ftsRebuildThreshold;
+  // Sized by extract candidates, not the walk: a 1903-file walk with 1
+  // changed file must take the incremental path, not the bulk one (TRA-1536).
+  const useFtsRebuild = candidates.length > ftsRebuildThreshold;
   if (useFtsRebuild) {
     disableFts5Triggers(store.db);
   } else {
@@ -139,12 +165,15 @@ export async function extractAndPersist(
     ensureFts5Triggers(store.db);
   }
 
-  const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
+  const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(candidates.length / 20)));
 
   // Worker pool: only worth the spawn cost (~150-300 ms × N) for bigger
   // batches. Below the threshold or when unavailable (env disable, dev mode,
   // tests), we fall through to in-process extraction.
-  const pool = maybeGetExtractPool(relPaths.length);
+  // Sized by extract candidates (TRA-1536): the prefilter above shrinks a
+  // 1903-file walk with 1 change to a 1-file batch, which must NOT pay the
+  // pool spawn cost — in-process extraction wins for exactly these runs.
+  const pool = maybeGetExtractPool(candidates.length);
   const CONCURRENCY = pool ? pool.size : Math.min(8, cpus().length);
 
   // Single shared persister/resolver — no need to recreate per batch.
@@ -159,8 +188,8 @@ export async function extractAndPersist(
   // against. enableFts5Triggers rebuilds from the current symbols table, so
   // running it on the error path also re-syncs FTS to the partial state.
   try {
-    for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
-      const batch = relPaths.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+      const batch = candidates.slice(i, i + BATCH_SIZE);
       const extractions: FileExtraction[] = [];
 
       if (pool) {
