@@ -14,7 +14,7 @@ import { withLock } from '../../../utils/pid-lock.js';
 import { getChangeImpact } from '../../analysis/impact.js';
 import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
 import { getRelatedSymbols } from '../../navigation/related.js';
-import { fallbackOutline } from '../../navigation/zero-index.js';
+import { emptyIndexHint, fallbackOutline } from '../../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
 import { buildEmptyResultNote } from '../../shared/empty-note.js';
 import { compactOutlineSymbols, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
@@ -182,7 +182,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                 type: 'text',
                 text: encode({
                   ...fbResult,
-                  _hint: 'Index is empty. Run reindex to enable full symbol extraction.',
+                  _hint: emptyIndexHint(projectRoot, 'full symbol extraction'),
                 }),
               },
             ],

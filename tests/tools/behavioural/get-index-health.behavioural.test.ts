@@ -172,4 +172,31 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(result.config.includePatterns).toEqual(['src/**/*.ts', 'lib/**/*.ts']);
     expect(result.config.excludePatterns).toEqual(['dist/**', 'tmp/**']);
   });
+
+  // TRA-1534: an empty index must name the session root and point at the
+  // relay, otherwise the agent improvises a vague "empty session DB" story.
+  it('empty index with projectRoot → names the root and points at list_projects + call_project_tool', () => {
+    const result = getIndexHealth(ctx.store, ctx.config, '/Users/nikolai/workdir');
+    expect(result.status).toBe('empty');
+    expect(result.projectRoot).toBe('/Users/nikolai/workdir');
+    expect(result.next_steps).toContain('/Users/nikolai/workdir');
+    expect(result.next_steps).toContain('list_projects');
+    expect(result.next_steps).toContain('call_project_tool');
+  });
+
+  it('empty index without projectRoot → generic next_steps, no root field', () => {
+    const result = getIndexHealth(ctx.store, ctx.config);
+    expect(result.status).toBe('empty');
+    expect(result.projectRoot).toBeUndefined();
+    expect(result.next_steps).toContain('list_projects');
+    expect(result.next_steps).toContain('call_project_tool');
+  });
+
+  it('non-empty index with projectRoot → root present, no next_steps', () => {
+    ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+    const result = getIndexHealth(ctx.store, ctx.config, '/Users/nikolai/workdir');
+    expect(result.status).toBe('ok');
+    expect(result.projectRoot).toBe('/Users/nikolai/workdir');
+    expect(result.next_steps).toBeUndefined();
+  });
 });

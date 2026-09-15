@@ -21,7 +21,7 @@ import { reachableSubprojects } from '../../../subproject/subproject-search.js';
 import { type SearchResultItemProjected } from '../../navigation/navigation.js';
 import { searchText } from '../../navigation/search-text.js';
 import { suggestQueries } from '../../navigation/suggest.js';
-import { fallbackSearch } from '../../navigation/zero-index.js';
+import { emptyIndexHint, fallbackSearch } from '../../navigation/zero-index.js';
 import { buildNegativeEvidence } from '../../shared/evidence.js';
 import {
   compactSearchItems,
@@ -212,7 +212,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
               text: encode({
                 ...fbResult,
                 search_mode: 'zero_index_fallback',
-                _hint: 'Index is empty. Run reindex to enable full symbol search.',
+                _hint: emptyIndexHint(projectRoot, 'full symbol search'),
               }),
             },
           ],
