@@ -95,6 +95,12 @@ export async function executeLanguagePlugin(
  * emptyHits keyed by manifest name. Overhead is one `performance.now()` pair
  * per call; read via `getFrameworkExtractStats()` or dump with
  * `TRACE_MCP_PROFILE_PLUGINS=1` at the end of indexing.
+ *
+ * Scope note (review TRA-1537): the map is per-process. Worker threads run
+ * their own `FileExtractor` and accumulate their own copy — the end-of-run
+ * dump in `extract-and-persist.ts` reports main-thread (in-process) extracts
+ * only. With an active worker pool the dump is partial by design; use it for
+ * weak-machine triage of the in-process path, not as a global census.
  */
 export interface FrameworkExtractStat {
   calls: number;

@@ -8,7 +8,7 @@ import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
-import { logFrameworkExtractStats } from '../plugin-api/executor.js';
+import { logFrameworkExtractStats, resetFrameworkExtractStats } from '../plugin-api/executor.js';
 import { selectChangedFiles } from './change-prefilter.js';
 import { findPackageJsonEntries } from './package-entries.js';
 import { FileExtractor } from './file-extractor.js';
@@ -85,6 +85,11 @@ export async function extractAndPersist(
     progress,
     sortByExtension,
   } = params;
+
+  // TRA-1537 §3 (review fix): reset the per-plugin timing map at run start
+  // when profiling is on — otherwise a long-lived daemon dumps totals since
+  // process start instead of per-run numbers.
+  if (process.env.TRACE_MCP_PROFILE_PLUGINS === '1') resetFrameworkExtractStats();
 
   // Preload all existing file rows in one IN-query so per-file extract()
   // calls hit a Map instead of issuing a SELECT each.
