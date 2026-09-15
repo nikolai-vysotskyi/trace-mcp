@@ -216,7 +216,9 @@ describe('Fuzzy search', () => {
 
   describe('deleteTrigramsByFile()', () => {
     it('removes trigrams for a specific file', () => {
-      // Insert a new file with symbols
+      // Insert a new file with symbols — the symbols_tri_ai trigger indexes
+      // the name automatically (TRA-1541: no explicit trigram write needed,
+      // indexTrigramsBatch is a compat shim).
       const fileId = store.insertFile('src/temp.ts', 'typescript', 'temphash', 100);
       const symId = store.insertSymbol(fileId, {
         symbolId: 'temp-1',
@@ -233,8 +235,11 @@ describe('Fuzzy search', () => {
       const before = fuzzySearch(db, 'temporaryFunction');
       expect(before.some((r) => r.name === 'temporaryFunction')).toBe(true);
 
-      // Delete and verify gone
+      // Delete the file's symbols (the file-persister path) — the
+      // symbols_tri_ad trigger removes the trigram rows. The legacy
+      // deleteTrigramsByFile shim stays callable but is trigger-redundant.
       deleteTrigramsByFile(db, fileId);
+      store.deleteSymbolsByFile(fileId);
       const after = fuzzySearch(db, 'temporaryFunction');
       expect(after.some((r) => r.name === 'temporaryFunction')).toBe(false);
     });

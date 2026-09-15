@@ -17,7 +17,11 @@
  * intent at the MCP / CLI surface.
  */
 import type Database from 'better-sqlite3';
-import { createSymbolsFtsTable } from './schema.js';
+import {
+  createSymbolsFtsTable,
+  createSymbolsNameTriTable,
+  ensureNameTriTriggers,
+} from './schema.js';
 
 export type RepairMode = 'drop-orphans' | 'drop-vec' | 'rebuild-fts';
 
@@ -107,12 +111,21 @@ function rebuildFts(db: Database.Database): RepairResult {
       )
       .run();
     affected = info.changes;
+    // TRA-1541: the trigram family desyncs exactly the way symbols_fts does,
+    // so rebuild-fts restores both. External-content: 'rebuild' pulls from
+    // `symbols`; triggers are re-armed for subsequent writes.
+    if (tableExists(db, 'symbols_name_tri')) {
+      db.exec('DROP TABLE symbols_name_tri');
+    }
+    createSymbolsNameTriTable(db);
+    db.exec(`INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')`);
+    ensureNameTriTriggers(db);
   });
   tx();
   return {
     mode: 'rebuild-fts',
     ok: true,
-    detail: `Rebuilt symbols_fts (${affected} rows reloaded)`,
+    detail: `Rebuilt symbols_fts + symbols_name_tri (${affected} rows reloaded)`,
     affected,
   };
 }

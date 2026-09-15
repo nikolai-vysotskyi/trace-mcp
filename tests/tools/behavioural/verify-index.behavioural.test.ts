@@ -32,6 +32,9 @@ function bootstrapMinimalIndex(db: Database.Database): void {
     CREATE VIRTUAL TABLE symbols_fts USING fts5(
       name, fqn, signature, summary, content='symbols', content_rowid='id'
     );
+    CREATE VIRTUAL TABLE symbols_name_tri USING fts5(
+      name, content='symbols', content_rowid='id', tokenize='trigram'
+    );
     CREATE TABLE embedding_meta (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
