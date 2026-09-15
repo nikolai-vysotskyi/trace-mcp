@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.26.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.0...v3.26.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ux:** name empty root + relay hint in health/empty-hints (TRA-1534) ([#1219](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1219)) ([03498ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03498ea5f311d984d837f91cac042c513da6ec4b))
+
+
+### Performance
+
+* **app:** startup-only baseline pass at 3.25.1, no regression (TRA-1347) ([#1215](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1215)) ([58433a3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/58433a3528a54ea499686e7e2bb1af78753fce3c))
+* **indexer:** skip unchanged files before extract dispatch (TRA-1536) ([#1221](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1221)) ([22203b2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/22203b25e692bf9903d53aa87f30a9dd5fb9da9f))
+
+
+### Chores
+
+* **deps:** pin tree-sitter-wasm to 1.1.6, take web-tree-sitter 0.27.0 (TRA-1513) ([#1210](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1210)) ([1716525](https://github.com/nikolai-vysotskyi/trace-mcp/commit/171652521982fef67856ab46b00d56f0fb26c9bc))
+
 ## [3.26.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.25.1...v3.26.0) (2026-09-15)
 
 
