@@ -265,7 +265,11 @@ export class FileExtractor {
 
     // Collect framework extract results (no DB writes). Awaits async
     // plugins (e.g. ReactPlugin uses tree-sitter via async getParser).
-    const frameworkExtracts = await this.collectFrameworkExtracts(relPath, content, language);
+    // TRA-1537: pass the already-decoded `contentStr` — one utf-8 decode per
+    // file shared across all framework plugins instead of N per-plugin
+    // decodes. The executor forwards it as-is; plugins calling
+    // `content.toString('utf-8')` get the same string back with no work.
+    const frameworkExtracts = await this.collectFrameworkExtracts(relPath, contentStr, language);
 
     const extraction: FileExtraction = {
       relPath,
@@ -328,9 +332,20 @@ export class FileExtractor {
   /** Cache: root-level active framework plugins (computed once per extractor). */
   private rootPluginCache: FrameworkPlugin[] | undefined;
 
+  /**
+   * TRA-1537 §1 — per-file detect overhead is already zero by construction:
+   * workspace detection runs once per workspace path (`wsPluginCache`) and
+   * root detection once per extractor (`rootPluginCache`); the per-file path
+   * is two `Map.get` lookups, no `buildProjectContext()` / `detect()` calls.
+   * Only plugins whose `detect()` fired for this workspace/root are invoked
+   * below — there is no per-file scan over all 87 registered integrations.
+   *
+   * `content` is the file already decoded to string by `extract()` and shared
+   * across every plugin invocation for this file (one utf-8 decode total).
+   */
   private async collectFrameworkExtracts(
     relPath: string,
-    content: Buffer,
+    content: Buffer | string,
     language: string,
   ): Promise<FileParseResult[]> {
     // Determine which plugins to run and what path to pass.
