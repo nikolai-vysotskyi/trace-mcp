@@ -2299,3 +2299,59 @@ does not re-read them.
 **Touch budget: 0 of 5 used** — a ceiling, not a quota; nothing met the message bar. No catalog
 submissions (moratorium holds), no new threads opened, no repeat pings.
 
+### Twentieth pass, 2026-09-16 (TRA-1551): outline maintainer asked how we found the PR, all catalog threads silent, sweep clean
+
+**Open-thread audit (all via GitHub API, 2026-09-16).**
+All 5 catalog PRs still OPEN, 0 comments each, `mergeable: true`, heads byte-identical to
+yesterday's rebases — no maintainer activity, no rebase needed, no ping due:
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+(re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`mattbutlerengineering/ai-tooling#585` (no follow-up per TRA-857),
+`narumiruna/pi-extensions#1204`: all OPEN, 0 comments.
+`Dokploy/mcp#81`: OPEN, 3 comments, unchanged since 2026-09-05.
+`Kilo-Org/kilocode#13843` and `#12707`: OPEN, 1 comment (ours) each, no maintainer reply.
+`iansmith/slopstop#633`: OPEN, 1 comment (ours), unchanged since 2026-09-06.
+`The-PR-Agent/pr-agent#2499`: 11 comments, newest is still our own 09-14 reply — no maintainer
+answer yet, prototype TRA-1502 stays the next move; do not comment again until there are numbers.
+`sosalejandro/atlas#105`: 9 comments, last 09-07 is the maintainer's own Tier-2 close-out.
+`Nano-Collective/nanocoder#1197`: 4 comments, newest is still the third-party `slowe89` eval-pack
+pitch from 09-11 — the issue `updated_at` moved to 09-15T19:22Z with no new comment (edit or
+label activity), nothing directed at us.
+`fmagent-project/FM-Agent#229`: CLOSED 2026-09-14 as completed, fix shipped in #230.
+`CommunityToolkit/Aspire#1575`: newest comment (09-12) is `aaronpowell` replying to `Odonno`
+about his own old chat-modes — a maintainer-to-participant aside, not directed at us; the graph
+direction stays declined since 09-09, do not push.
+`abhigyanpatwari/GitNexus#3068` / `#3127` / `#3291` (`#3291` still 0 comments),
+`nearform/lastlight#372`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
+`headroomlabs-ai/headroom#1009`, `Intense-Visions/harness-engineering#1284`,
+`schalermthai/redproof#50`, `Barnett-Studios/cxpak#103`, `macanderson/stella#6461`,
+`garrytan/gbrain#5001`, `fullsend-ai/fullsend#297`: all unchanged, nothing owed.
+TRA-633 (human-only web form): last verified `blocked` 2026-09-15 (TRA-1521); consolidated ask
+stands, no new ping from this lane today.
+
+**One thread needed an answer and got it: `git-pkgs/outline#34`.**
+Maintainer `andrew` replied 2026-09-13 (missed by the 09-15 pass, which audited the thread as
+quiet): "Thanks @nikolai-vysotskyi, out of interest how did you find this pr?"
+Answered 2026-09-16 with the honest provenance — the repo never mentions trace-mcp (verified:
+code search for `trace-mcp repo:git-pkgs/outline` returns nothing), the PR surfaced while
+searching GitHub for open work on cross-file import/call resolution, and Go-plus-Python
+resolvers with a real test surface are rare enough to read end to end
+([comment](https://github.com/git-pkgs/outline/pull/34#issuecomment-5689280240)).
+No claims, no numbers, no promises in the reply. Do not comment there again unless he follows up.
+
+**Mention sweep (`scripts/mention-sweep.sh`): clean.** Zero repos outside `ops/mentions-seen.txt`.
+
+**Competitor star snapshot (live GitHub API, 2026-09-16; prior 2026-09-15):**
+codegraph 70,883 → **71,008** (+125); serena 29,342 → **29,407** (+65); repomix 28,351 →
+**28,364** (+13); CBM 43,275 → **43,410** (+135); context-mode 22,906 → **23,069** (+163);
+ripwire 2,118 → **2,183** (+65); graft 7,844 → **8,053** (+209, fastest mover two windows in
+a row); code-review-graph 31,439 → **31,466** (+27); roam-code 517 → **518** (+1, flat since
+discovery); trace-mcp 174 → **174** (+0, flat second day — single unstar 09-15, not a trend
+until it repeats). `docs/_data/competitors.yml` left untouched — that file is the Competitor
+Intelligence lane's to update.
+
+**Touch budget: 1 of 5 used** (the outline provenance answer — a direct question, not a pitch).
+No catalog submissions (moratorium holds), no new threads opened, no repeat pings.
+
