@@ -316,6 +316,8 @@ export class IndexingPipeline {
   // and unbind edges pointing at deleted symbols. Empty for full reindexes.
   private _lastNewSymbolNames: Map<string, Set<number>> = new Map();
   private _lastDeletedSymbolNames: Map<string, Set<number>> = new Map();
+  /** TRA-1541: whether the last Pass 1 took the FTS rebuild path (no ANALYZE). Read by indexFiles. */
+  private _lastUsedFtsRebuild = false;
   private _isIncremental = false;
   /** Set by dispose(); pending deferred work must bail instead of touching a closed DB. */
   private _disposed = false;
@@ -665,13 +667,14 @@ export class IndexingPipeline {
       // drastically converges without an explicit forced reindex (TRA-231).
       if (r.indexed > 0) this.scheduleCoverageReconcile();
       // TRA-1541 ANALYZE discipline: indexAll refreshes planner statistics at
-      // the end of every run, but this incremental path never did. Batches at
-      // or above FTS_REBUILD_THRESHOLD took the trigger-drop + rebuild path
-      // (which, unlike disableBulkMode, runs no ANALYZE), so sqlite_stat1
-      // describes the pre-burst graph until the next full reindex. Refresh
-      // here for exactly those batches; smaller ones move the statistics too
-      // little to matter. Non-fatal by contract.
-      if (r.indexed >= IndexingPipeline.FTS_REBUILD_THRESHOLD) {
+      // the end of every run, but this incremental path never did. Runs that
+      // took the trigger-drop + rebuild path (no ANALYZE there, unlike
+      // disableBulkMode) leave sqlite_stat1 describing the pre-burst graph
+      // until the next full reindex — refresh here for exactly those runs.
+      // Gated on the rebuild flag itself, not on indexed counts: a run with
+      // many skipped/errored candidates still rebuilds. Non-fatal by contract.
+      if (this._lastUsedFtsRebuild) {
+        this._lastUsedFtsRebuild = false;
         try {
           this.store.db.exec('ANALYZE');
         } catch (err) {
@@ -889,6 +892,9 @@ export class IndexingPipeline {
     // buildChangeScope() via the pipeline fields.
     this._lastNewSymbolNames = outcome.newSymbolNames;
     this._lastDeletedSymbolNames = outcome.deletedSymbolNames;
+    // TRA-1541: remember whether Pass 1 rebuilt FTS (no ANALYZE on that path)
+    // so indexFiles can refresh planner statistics below.
+    this._lastUsedFtsRebuild = outcome.usedFtsRebuild;
   }
 
   /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */

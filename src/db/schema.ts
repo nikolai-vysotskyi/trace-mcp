@@ -1856,6 +1856,8 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // external-content FTS5 trigram table (1 row per symbol, trigger-synced).
     // The DDL block above already carries the new table + triggers for fresh
     // DBs; this migrates upgraded DBs to the same shape.
+    const symbolCount = (db.prepare('SELECT COUNT(*) AS c FROM symbols').get() as { c: number }).c;
+    logger.info({ symbols: symbolCount }, 'Migration 33: rebuilding trigram index (one-time)');
     createSymbolsNameTriTable(db, { ifNotExists: true });
     // External-content table starts empty — 'rebuild' pulls every row from
     // `symbols` without a manual INSERT ... SELECT.
@@ -1993,15 +1995,15 @@ export function initializeDatabase(
   if (isFreshDb) {
     // TRA-1541: pin page_size explicitly (4096 = SQLite default, but an
     // explicit pin keeps future SQLite upgrades from silently changing our
-    // I/O unit) and use incremental auto-vacuum so deleted/index-churn
-    // pages return to the freelist instead of bloating the file forever.
-    // Both are no-ops on existing files — hence fresh-only.
+    // I/O unit) and use incremental auto-vacuum so freed pages land on the
+    // freelist for reuse by later index churn. Note this alone does not
+    // shrink the file — that needs an explicit incremental_vacuum, which
+    // nothing schedules today; INCREMENTAL just keeps the option open and
+    // the freelist reusable. Both pragmas are no-ops on existing files —
+    // hence fresh-only.
     db.pragma('page_size = 4096');
     db.pragma('auto_vacuum = INCREMENTAL');
   }
-
-  // WAL mode for concurrent reads + write performance
-  db.pragma('journal_mode = WAL');
 
   // WAL mode for concurrent reads + write performance
   db.pragma('journal_mode = WAL');
@@ -2189,7 +2191,14 @@ export function enableFts5Triggers(db: Database.Database): void {
   // Rebuild FTS5 index from current symbols table content
   db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
   // Same for the trigram family (external-content: pulls from `symbols`).
-  db.exec("INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')");
+  // Guarded: reachable in tests without a full initializeDatabase, where a
+  // pre-33-shaped DB legitimately has no tri table yet.
+  const hasTri = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_name_tri'")
+    .get();
+  if (hasTri) {
+    db.exec("INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')");
+  }
 
   // Restore triggers for subsequent single-row operations
   ensureFts5Triggers(db);

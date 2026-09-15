@@ -103,8 +103,12 @@ export function fuzzySearch(
 ): FuzzyMatch[] {
   const { threshold = 0.3, maxEditDistance = 3, limit = 20, kind, language, filePattern } = options;
 
+  // Empty query: generateTrigrams never returns [] so without this the LIKE
+  // fallback below would run `LIKE '%%'` — a full scan capped at 200 rows
+  // that the gates then filter back to []. Correct result, wasted work.
+  if (query.length === 0) return [];
+
   const queryTrigrams = generateTrigrams(query);
-  if (queryTrigrams.length === 0) return [];
 
   const queryTrigramSet = new Set(queryTrigrams);
 
@@ -149,6 +153,7 @@ export function fuzzySearch(
     ${filterJoins.join(' ')}
     WHERE s.name LIKE ? ESCAPE '\\'
     ${whereExtra}
+    ORDER BY s.id
     LIMIT 200
   `
     : `

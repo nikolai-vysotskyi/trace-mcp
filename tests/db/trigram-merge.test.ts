@@ -212,4 +212,45 @@ describe('TRA-1541 trigram-merge', () => {
       .all('"UserService"') as Array<{ name: string; rank: number }>;
     expect(rows[0].name).toBe('UserService');
   });
+
+  it('true match survives the 200-candidate cap when a common trigram overflows', () => {
+    const store = createTestStore();
+    seedCorpus(store);
+    // 250 decoys sharing pro/roc/oce with the query — far past LIMIT 200.
+    // The bm25 pre-order must keep the exact-ish match (which owns the rare
+    // mutated trigrams cep/epp) inside the capped candidate set.
+    const fileId = store.insertFile('src/noise.ts', 'typescript', 'noise', 100000);
+    for (let i = 0; i < 250; i++) {
+      store.insertSymbol(fileId, {
+        symbolId: `noise-${i}`,
+        name: `process_${i}`,
+        kind: 'function',
+        fqn: `Noise.process_${i}`,
+        byteStart: i,
+        byteEnd: i + 1,
+      });
+    }
+    const r = fuzzySearch(store.db, 'procesPayment');
+    expect(r.some((x) => x.name === 'processPayment')).toBe(true);
+  });
+
+  it('pins the deliberate narrowing: fuzzy matches names, not FQN segments', () => {
+    // The old side table also indexed the FQN last segment, so at
+    // threshold=0 an FQN-only match could surface. The tri table indexes
+    // names; at every shipped threshold (0.2–0.3) the old gates already
+    // filtered FQN-only candidates (Jaccard is name-based), so this only
+    // pins the degenerate threshold=0 corner.
+    const store = createTestStore();
+    const fileId = store.insertFile('src/w.ts', 'typescript', 'hw', 100);
+    store.insertSymbol(fileId, {
+      symbolId: 'w-1',
+      name: 'xyz',
+      kind: 'function',
+      fqn: 'Widget.buildWidget',
+      byteStart: 0,
+      byteEnd: 10,
+    });
+    const r = fuzzySearch(store.db, 'buildWidget', { threshold: 0, maxEditDistance: 50 });
+    expect(r.some((x) => x.name === 'xyz')).toBe(false);
+  });
 });
