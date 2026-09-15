@@ -23,6 +23,14 @@
  * rewrite that also keeps the byte size is undetectable without reading and
  * is documented as such; a same-floor rewrite that changes the size IS
  * caught here (and in `extract()`'s hardened fast-path).
+ *
+ * Mid-run edit race (widens the pre-existing window, does not invent it):
+ * the prefilter's lstat happens up-front while `extract()` used to stat each
+ * file microseconds before reading it, so a file edited after its prefilter
+ * lstat but before the run ends is skipped until the next run. Self-healing —
+ * the next incremental sees the drifted mtime — and the daemon's watcher
+ * re-fires for the edit anyway; single-shot CLI runs under concurrent writes
+ * may lag by one cycle.
  */
 import fs from 'node:fs';
 import path from 'node:path';
