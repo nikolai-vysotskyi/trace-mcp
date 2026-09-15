@@ -3132,6 +3132,63 @@
         }
       ],
       "notes": "TRA-1185: code-split GraphExplorerGPU behind React.lazy and remove cosmos from manualChunks in vite.config.ts so Vite preload helper is not hoisted into cosmos chunk. renderer_eager_kb drops from 2084 to 1358 KB (-34.8% vs last baseline, -35.7% vs 2112 pre-fix) while total bundle size remains flat at 2379 KB (was 2346 KB baseline, 2378 KB pre-fix). renderer_first_content_ms improves 93 -> 89 ms. Appends Savings tab to perf-marks and perf-screens harnesses, with regression assertions in lazy-tabs.test.ts."
+    },
+    {
+      "date": "2026-09-15T01:10:17.664Z",
+      "app_version": "3.25.1",
+      "commit": "299ec2b1",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 358,
+        "window_interactive_ms": 115,
+        "renderer_first_content_ms": 82,
+        "renderer_fcp_ms": null,
+        "ui_p95_ms": null,
+        "renderer_cpu_idle_pct": null,
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
+        "tree_rss_peak_mb": null,
+        "tree_rss_idle_mb": null,
+        "tree_cpu_peak_pct": null,
+        "rss_after_index_settle_mb": null,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 2392,
+        "renderer_eager_kb": 1370,
+        "artifact_mb": {
+          "mac_app_unpacked": null,
+          "mac_asar": null
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 2813,
+          "window_interactive_ms": 147,
+          "renderer_first_content_ms": 95,
+          "renderer_fcp_ms": null
+        },
+        {
+          "cold_start_ms": 358,
+          "window_interactive_ms": 115,
+          "renderer_first_content_ms": 81,
+          "renderer_fcp_ms": null
+        },
+        {
+          "cold_start_ms": 356,
+          "window_interactive_ms": 115,
+          "renderer_first_content_ms": 82,
+          "renderer_fcp_ms": null,
+          "heap_idle_mb": 9.5,
+          "main_cpu_idle_pct": 0
+        }
+      ],
+      "scope": "startup-only (no workload; resumed run after 2026-09-11 idle_watchdog kill)",
+      "notes": "Resumed run: the 2026-09-11 pass was killed by idle_watchdog after 2h with an empty message queue — it left no partial entry and no harness output, so the stall was almost certainly a long silent step (the 55-min workload pass) rather than a measurable state. This pass deliberately does startup-only (~7 min, 3 samples) to re-establish the series without repeating that shape; the 30-min workload (ui_p95/heap_growth/tree_rss) stays open for a follow-up run chunked into bounded steps. No regression: renderer_first_content_ms 82 vs 89 (metric of record), cold_start 358 vs 415 (load-sensitive sanity check only), renderer_eager_kb 1370 vs 1358 (+0.9%), renderer_bundle_kb 2392 vs 2379 (+0.5%). GraphExplorerGPU still lazy (648 KB chunk, not preloaded — TRA-1185 holds). Sample-1 cold_start 2813 is first-launch warm-up (Electron code cache), same shape as the 439-vs-349 warm-up noted in run 1; median unaffected. Renderer-affecting delta since d3ce7fb1 (2026-09-08 entry): 9883b196 json-editor/theme control, 1def36d0 opencode client profile, 9b282a7e de/ja i18n fixes — none moved the eager path. heap_idle_mb 9.5 taken with no daemon serving (startup-only has no fixture), so compare only within daemon-less idle samples."
     }
   ]
 }
