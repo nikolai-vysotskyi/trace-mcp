@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.26.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.25.1...v3.26.0) (2026-09-15)
+
+
+### Features
+
+* **indexer:** Lua cross-file require import edge resolver (TRA-1332) ([#1185](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1185)) ([8d33242](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8d33242cbe9134682ff8e4c4dab72b9913149d02))
+
+
+### Bug Fixes
+
+* **analytics:** book measured tokens in agent-for-indexed, cap savings pct at 100 (TRA-1514) ([#1213](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1213)) ([299ec2b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/299ec2b1734b4e88c00535927797f773ce43db14))
+
+
+### Documentation
+
+* **outreach:** evening pass — pr-agent reply + TRA-1502, FM-Agent close, Aspire no, Egoka/Altera sweep hit (TRA-1501) ([#1206](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1206)) ([cb15be1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cb15be186da07c23cb8e44320bd3869ca2d05d90))
+* **outreach:** rebase dirty catalog PRs eltociear[#119](https://github.com/nikolai-vysotskyi/trace-mcp/issues/119), ai-boost[#240](https://github.com/nikolai-vysotskyi/trace-mcp/issues/240) back to mergeable (TRA-1508) ([#1207](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1207)) ([e52ab61](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e52ab61ee5aff77db3887f28382d667d1a8b4248))
+
 ## [3.25.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.25.0...v3.25.1) (2026-09-14)
 
 
