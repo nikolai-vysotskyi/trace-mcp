@@ -53,6 +53,23 @@ interface FallbackSymbol {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Empty-index hint naming the session root explicitly (TRA-1534).
+ *
+ * A bare "Index is empty" leaves the agent guessing which root is empty —
+ * its own session root or the project holding the code it wants (often
+ * different roots, e.g. an ephemeral workdir vs an indexed project). Naming
+ * the root plus the relay path keeps the agent from narrating a vague
+ * "empty session DB" on every call. Emitted on the empty path only, so the
+ * extra tokens are never paid on hot paths.
+ */
+export function emptyIndexHint(projectRoot: string, capability: string): string {
+  return (
+    `Empty index for ${projectRoot} (0 files). Run reindex to enable ${capability}, ` +
+    'or list_projects + call_project_tool when the code lives in another registered project.'
+  );
+}
+
 /** Check if the index is usable: has files and was updated recently */
 export function isIndexStale(store: Store, maxAgeMinutes = 60): { stale: boolean; reason: string } {
   try {

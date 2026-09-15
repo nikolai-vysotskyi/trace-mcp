@@ -10,6 +10,19 @@ interface IndexHealthResult {
   status: 'ok' | 'degraded' | 'empty';
   stats: IndexStats;
   schemaVersion: number;
+  /**
+   * Session root this health report belongs to. Without it an agent that sees
+   * `status: "empty"` cannot tell whether its own root is unindexed or it is
+   * simply attached to the wrong root (TRA-1534: session in a Multica workdir
+   * narrating "empty session DB" while the target project is indexed elsewhere).
+   */
+  projectRoot?: string;
+  /**
+   * Present only when `status` is `"empty"`. Tells the agent exactly which
+   * root is empty and where to go next (reindex here vs relay to another
+   * registered project) so it doesn't improvise its own explanation.
+   */
+  next_steps?: string;
   config: {
     dbPath: string;
     includePatterns: string[];
@@ -35,7 +48,11 @@ interface IndexHealthResult {
   };
 }
 
-export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealthResult {
+export function getIndexHealth(
+  store: Store,
+  config: TraceMcpConfig,
+  projectRoot?: string,
+): IndexHealthResult {
   const stats = store.getStats();
   const warnings: string[] = [];
 
@@ -113,6 +130,19 @@ export function getIndexHealth(store: Store, config: TraceMcpConfig): IndexHealt
     status,
     stats,
     embedding,
+    ...(projectRoot ? { projectRoot } : {}),
+    // Empty-index disambiguation (TRA-1534). The agent's session root and the
+    // project holding the code it wants are often different roots (e.g. an
+    // ephemeral Multica workdir vs an indexed project like top100) — name the
+    // empty root explicitly and point at the relay instead of letting the
+    // agent narrate a vague "empty session DB".
+    ...(status === 'empty'
+      ? {
+          next_steps: projectRoot
+            ? `Session root ${projectRoot} holds 0 indexed files. Run reindex to index it, or list_projects + call_project_tool when the code lives in another registered project.`
+            : 'Index holds 0 files. Run reindex to index this root, or list_projects + call_project_tool when the code lives in another registered project.',
+        }
+      : {}),
     schemaVersion: versionRow ? Number(versionRow.value) : 0,
     config: {
       // The path this store was actually opened at, not a config default —

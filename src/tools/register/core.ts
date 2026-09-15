@@ -44,10 +44,10 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_index_health',
-    'Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). Read-only, no side effects. Use to verify the index is ready before running queries. Returns JSON: { totalFiles, totalSymbols, languages, frameworks, pipelineProgress, embedding }.',
+    'Get index status, statistics, health, and pipeline progress (indexing, summarization, embedding). Includes the session projectRoot; when the index is empty, next_steps names the empty root and points at list_projects + call_project_tool for other registered projects. Read-only, no side effects. Use to verify the index is ready before running queries. Returns JSON: { status, stats, projectRoot, next_steps?, config, warnings, pipelineProgress, embedding }.',
     {},
     async () => {
-      const result = getIndexHealth(store, config);
+      const result = getIndexHealth(store, config, projectRoot);
       if (ctx.progress) {
         result.progress = ctx.progress.snapshot();
       }
