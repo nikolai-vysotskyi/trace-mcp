@@ -372,6 +372,15 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 
 ## Changes worth remembering
 
+**2026-09-15 — startup-only pass at 3.25.1 (`299ec2b1`), no regression.** Resumed run after
+the 2026-09-11 pass died to `idle_watchdog` with an empty queue (no partial entry — the stall
+was a long silent step, almost certainly the 55-min workload, so this pass is startup-only,
+~7 min). `renderer_first_content_ms` 82 vs 89, `cold_start_ms` 358 vs 415, `renderer_eager_kb`
+1370 vs 1358 (+0.9%), `renderer_bundle_kb` 2392 vs 2379 (+0.5%). Sample-1 `cold_start_ms` 2813
+is first-launch warm-up, median unaffected. The 30-min workload (`ui_p95_ms`,
+`heap_growth_mb_per_hour`, tree RSS) was deliberately not run — open for a follow-up in
+bounded steps, not one silent 55-minute call.
+
 **2026-09-04 — the harness was not timing the synchronous half of every action (TRA-835).**
 See the detector bullet above: observer armed after the action, 42.5% of searches recorded
 as exactly 0 ms, `ui_p95_ms` roughly 20% low. Found by noticing that the 30-minute run
