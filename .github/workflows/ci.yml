@@ -865,7 +865,15 @@ jobs:
       - name: Test
         # Per-test timeout so a single hung test cannot stall the whole job.
         # Excludes tests/perf/** for the same reasons as the ubuntu shards.
-        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        # 60s, not 30s: two Windows runs (Sep 2026, TRA-1513) timed out 8
+        # SQLite/FS-heavy tests across 6 files at 30s — disjoint sets each
+        # run, everything else green, so runner slowness, not a code
+        # regression. File-level bumps can't cover a moving target; the job
+        # budget can. A real hang still fails in a minute against a 15-min cap.
+        # Hooks get 30s too: 2 of those 8 failures were `Hook timed out in
+        # 15000ms` (beforeAll temp-DB setup on the same loaded runners).
+        # Teardown stays 15s — never observed timing out.
+        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=60000 --hookTimeout=30000 --teardownTimeout=15000
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
