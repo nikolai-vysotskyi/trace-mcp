@@ -311,6 +311,55 @@ describe('rules / analyzeOptimizations', () => {
     });
   });
 
+  // TRA-1514: agent-for-indexed used to book 50K unmeasured tokens per Agent
+  // call as currentTokens, so 56 real calls (14,210 measured tokens) claimed
+  // 2.8M current tokens and pushed the whole report past 100% savings.
+  describe('agent-for-indexed rule', () => {
+    it('books measured output tokens, not an estimated constant', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Agent',
+          tool_server: 'builtin',
+          tool_short_name: 'Agent',
+          target_file: null,
+          output_tokens_estimate: 254,
+        }),
+        makeToolCall({
+          tool_name: 'Agent',
+          tool_server: 'builtin',
+          tool_short_name: 'Agent',
+          target_file: null,
+          output_tokens_estimate: 254,
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'agent-for-indexed');
+      expect(hit).toBeDefined();
+      expect(hit!.occurrences).toBe(2);
+      expect(hit!.currentTokens).toBe(508);
+      expect(hit!.currentTokens).toBeLessThan(2 * 50000);
+    });
+
+    it('never reports more than 100% total savings', () => {
+      const calls: ToolCallRow[] = [];
+      for (let i = 0; i < 56; i++) {
+        calls.push(
+          makeToolCall({
+            tool_name: 'Agent',
+            tool_server: 'builtin',
+            tool_short_name: 'Agent',
+            target_file: null,
+            output_tokens_estimate: 254,
+          }),
+        );
+      }
+
+      const report = analyzeOptimizations(calls, 'week');
+      expect(report.totalPotentialSavings.pct).toBeLessThanOrEqual(100);
+    });
+  });
+
   // TRA-641: unused-trace-tools decides "did this session use trace-mcp?"
   // by matching tool_server. After the trace-mcp -> trace rename (TRA-611/
   // 614), a migrated client logs tool_server: "trace" instead of
