@@ -870,7 +870,10 @@ jobs:
         # run, everything else green, so runner slowness, not a code
         # regression. File-level bumps can't cover a moving target; the job
         # budget can. A real hang still fails in a minute against a 15-min cap.
-        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=60000 --hookTimeout=15000 --teardownTimeout=15000
+        # Hooks get 30s too: 2 of those 8 failures were `Hook timed out in
+        # 15000ms` (beforeAll temp-DB setup on the same loaded runners).
+        # Teardown stays 15s — never observed timing out.
+        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=60000 --hookTimeout=30000 --teardownTimeout=15000
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
