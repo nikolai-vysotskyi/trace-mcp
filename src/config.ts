@@ -1069,6 +1069,16 @@ export const TraceMcpConfigSchema = z.object({
    */
   index_mmap_mb: z.number().min(0).max(4096).default(64),
   /**
+   * Memory profile for the per-connection SQLite knobs (`index_cache_mb` /
+   * `index_mmap_mb`). TRA-1541: both knobs multiply by the number of loaded
+   * projects, so static defaults over-commit on small machines.
+   * - `auto` (default): `low-power` below 6 GiB total RAM, else `full`.
+   * - `low-power`: clamps to 8 MB cache / 32 MB mmap per connection — 8
+   *   loaded projects then cost ≤ 320 MB combined, inside a 4 GB budget.
+   * - `full`: always use `index_cache_mb` / `index_mmap_mb` as given.
+   */
+  index_memory_profile: z.enum(['auto', 'full', 'low-power']).default('auto'),
+  /**
    * Hermes Agent (NousResearch) session provider.
    *
    * - `enabled: 'auto'` (default) registers the provider; discovery is a no-op

@@ -29,43 +29,30 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 // ─── Schema ────────────────────────────────────────────────
 
 // ─── Indexing ──────────────────────────────────────────────
+// TRA-1541: trigram writes are owned by the `symbols_tri_*` sync triggers on
+// `symbols` (schema.ts DDL + `ensureNameTriTriggers`), backed by the
+// `symbols_name_tri` external-content FTS5 table (1 row per symbol). The two
+// functions below are kept as no-op-compatible shims so existing callers
+// (and tests driving `insertSymbol` + `fuzzySearch` directly) keep working:
+// rows already land in the FTS index via the triggers, and deletes cascade
+// through them. The persist path (file-persister.ts) no longer calls either
+// — that was the second write per symbol this issue eliminates.
 
-/** Insert trigrams for a batch of symbols. Wraps in transaction for performance. */
+/**
+ * No-op shim (TRA-1541). Trigram indexing happens automatically via the
+ * `symbols_tri_ai` trigger when symbols are inserted. Kept for API
+ * compatibility — callers can simply stop calling it.
+ */
 export function indexTrigramsBatch(
-  db: Database.Database,
-  symbols: Array<{ id: number; name: string; fqn: string | null }>,
+  _db: Database.Database,
+  _symbols: Array<{ id: number; name: string; fqn: string | null }>,
 ): void {
-  if (symbols.length === 0) return;
-
-  const insert = db.prepare('INSERT INTO symbol_trigrams (symbol_id, trigram) VALUES (?, ?)');
-
-  db.transaction(() => {
-    for (const sym of symbols) {
-      // Generate trigrams from both name and last segment of FQN
-      const names = [sym.name];
-      if (sym.fqn && sym.fqn !== sym.name) {
-        const lastPart = sym.fqn.split(/[\\/.:]/).pop();
-        if (lastPart && lastPart !== sym.name) names.push(lastPart);
-      }
-
-      const seen = new Set<string>();
-      for (const name of names) {
-        for (const tri of generateTrigrams(name)) {
-          if (!seen.has(tri)) {
-            seen.add(tri);
-            insert.run(sym.id, tri);
-          }
-        }
-      }
-    }
-  })();
+  // Intentionally empty: trigger-maintained.
 }
 
-/** Delete trigrams for symbols belonging to a file. */
-export function deleteTrigramsByFile(db: Database.Database, fileId: number): void {
-  db.prepare(
-    'DELETE FROM symbol_trigrams WHERE symbol_id IN (SELECT id FROM symbols WHERE file_id = ?)',
-  ).run(fileId);
+/** No-op shim (TRA-1541). Deletes cascade via the `symbols_tri_ad` trigger. */
+export function deleteTrigramsByFile(_db: Database.Database, _fileId: number): void {
+  // Intentionally empty: trigger-maintained.
 }
 
 // ─── Fuzzy search ──────────────────────────────────────────
@@ -82,11 +69,25 @@ export interface FuzzyMatch {
 }
 
 /**
- * Fuzzy search using trigram Jaccard similarity + Levenshtein re-ranking.
- * 1. Generate query trigrams
- * 2. Find symbols sharing trigrams (SQL GROUP BY + HAVING)
- * 3. Compute Jaccard similarity, filter by threshold
- * 4. Re-rank top candidates by Levenshtein distance
+ * Quote one trigram as an FTS5 phrase, doubling embedded quotes. Trigrams
+ * are raw 3-char slices of user input, so they can contain FTS5 syntax
+ * (`"`, `*`, spaces, unicode) — never interpolate them bare.
+ */
+function quoteTrigramForMatch(trigram: string): string {
+  return `"${trigram.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Fuzzy search using trigram candidates + Levenshtein re-ranking.
+ * 1. Generate query trigrams, OR them into a `symbols_name_tri` MATCH
+ *    (TRA-1541; mirrors the old `shared_count >= 1` candidate semantics —
+ *    a bare MATCH would AND all trigrams and drop typo'd queries).
+ * 2. Compute Jaccard similarity, filter by threshold
+ * 3. Re-rank top candidates by Levenshtein distance
+ *
+ * Queries shorter than 3 chars produce no FTS5 trigram tokens, so they use
+ * a LIKE-substring candidate probe instead; the Jaccard + edit-distance
+ * gates below are unchanged, so final results match the old behavior.
  */
 export function fuzzySearch(
   db: Database.Database,
@@ -108,8 +109,13 @@ export function fuzzySearch(
   const queryTrigramSet = new Set(queryTrigrams);
 
   // Step 1: Find candidate symbols that share at least one trigram with the query.
-  // Use a single efficient query that counts shared trigrams per symbol.
-  const placeholders = queryTrigrams.map(() => '?').join(',');
+  // TRA-1541: candidates come from the trigger-maintained symbols_name_tri
+  // FTS5 table. The OR-of-trigrams preserves the old `shared_count >= 1`
+  // union semantics (a single MATCH phrase would require ALL trigrams and
+  // silently drop typo queries like 'getUsrProfile'). Ordering by bm25 rank
+  // approximates the old shared_count DESC before the LIMIT 200 cap; the
+  // Jaccard + edit-distance gates below make the final cut either way.
+  const useLikeFallback = query.length < 3;
 
   // Build filter conditions
   const filterJoins: string[] = [];
@@ -134,23 +140,32 @@ export function fuzzySearch(
 
   const whereExtra = filterConditions.length > 0 ? `AND ${filterConditions.join(' AND ')}` : '';
 
-  // Fetch candidates with shared trigram count — limits to top 200 by shared count
-  const candidateSql = `
+  // Fetch candidates — limits to top 200 by rank
+  const candidateSql = useLikeFallback
+    ? `
     SELECT
-      s.id, s.symbol_id, s.name, s.fqn, s.kind, s.file_id,
-      COUNT(DISTINCT st.trigram) AS shared_count
-    FROM symbol_trigrams st
-    JOIN symbols s ON s.id = st.symbol_id
+      s.id, s.symbol_id, s.name, s.fqn, s.kind, s.file_id
+    FROM symbols s
     ${filterJoins.join(' ')}
-    WHERE st.trigram IN (${placeholders})
+    WHERE s.name LIKE ? ESCAPE '\\'
     ${whereExtra}
-    GROUP BY s.id
-    HAVING shared_count >= 1
-    ORDER BY shared_count DESC
+    LIMIT 200
+  `
+    : `
+    SELECT
+      s.id, s.symbol_id, s.name, s.fqn, s.kind, s.file_id
+    FROM symbols_name_tri tri
+    JOIN symbols s ON s.id = tri.rowid
+    ${filterJoins.join(' ')}
+    WHERE symbols_name_tri MATCH ?
+    ${whereExtra}
+    ORDER BY rank
     LIMIT 200
   `;
 
-  const params = [...queryTrigrams, ...filterParams];
+  const params = useLikeFallback
+    ? [`%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, ...filterParams]
+    : [[...queryTrigramSet].map(quoteTrigramForMatch).join(' OR '), ...filterParams];
   const candidates = db.prepare(candidateSql).all(...params) as Array<{
     id: number;
     symbol_id: string;
@@ -158,7 +173,6 @@ export function fuzzySearch(
     fqn: string | null;
     kind: string;
     file_id: number;
-    shared_count: number;
   }>;
 
   if (candidates.length === 0) return [];

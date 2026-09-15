@@ -49,6 +49,9 @@ const REQUIRED_TABLES = [
   'edges',
   'edge_types',
   'symbols_fts',
+  // TRA-1541: fuzzy candidate index — a missing tri table means every fuzzy
+  // query silently returns nothing.
+  'symbols_name_tri',
 ] as const;
 
 interface IntegrityRow {
@@ -196,6 +199,27 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
         name: 'fts_integrity',
         status: 'warn',
         detail: `symbols_fts integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
+        suggested_repair: 'rebuild-fts',
+      });
+    }
+  }
+
+  // ── 4b. Trigram FTS integrity probe (TRA-1541) ──────────────────────────
+  // Same external-content reasoning as above; same repair mode (rebuild-fts
+  // restores both index families).
+  if (tableExists(db, 'symbols_name_tri')) {
+    try {
+      db.prepare(`INSERT INTO symbols_name_tri(symbols_name_tri) VALUES ('integrity-check')`).run();
+      checks.push({
+        name: 'trigram_fts_integrity',
+        status: 'ok',
+        detail: 'symbols_name_tri integrity-check passed',
+      });
+    } catch (e) {
+      checks.push({
+        name: 'trigram_fts_integrity',
+        status: 'warn',
+        detail: `symbols_name_tri integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
         suggested_repair: 'rebuild-fts',
       });
     }

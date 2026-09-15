@@ -3,7 +3,6 @@
  * Handles writing FileExtraction results to the database.
  */
 
-import { deleteTrigramsByFile, indexTrigramsBatch } from '../db/fuzzy.js';
 import type { RawEdge } from '../plugin-api/types.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 
@@ -137,7 +136,8 @@ export class FilePersister {
       // for phantom-rebind/unbind.
       const oldNames = store.getSymbolsByFile(fileId).map((s) => ({ name: s.name, id: s.id }));
       this.state.changedFileIds.add(fileId);
-      deleteTrigramsByFile(store.db, fileId);
+      // TRA-1541: trigram cleanup is trigger-owned (symbols_tri_ad fires on
+      // the delete below) — no explicit trigram write on this path.
       store.deleteSymbolsByFile(fileId);
       // Stash for post-insert diffing — applied after persistSymbolsAndEntities
       // populates the new symbol rows.
@@ -240,18 +240,9 @@ export class FilePersister {
       },
     );
     if (validSymbols.length > 0) {
-      const insertedIds = store.insertSymbols(fileId, validSymbols);
-      // Deduplicate by symbolId: INSERT OR REPLACE invalidates earlier IDs when
-      // duplicate symbol_ids appear in the same batch — only the last ID survives.
-      const trigramBySymbolId = new Map<string, { id: number; name: string; fqn: string | null }>();
-      for (let i = 0; i < validSymbols.length; i++) {
-        trigramBySymbolId.set(validSymbols[i].symbolId, {
-          id: insertedIds[i],
-          name: validSymbols[i].name,
-          fqn: validSymbols[i].fqn ?? null,
-        });
-      }
-      indexTrigramsBatch(store.db, [...trigramBySymbolId.values()]);
+      store.insertSymbols(fileId, validSymbols);
+      // TRA-1541: trigram indexing is trigger-owned (symbols_tri_ai fires per
+      // symbol insert) — one FTS row per symbol, no second write batch here.
     }
 
     if (edges.length > 0) this.storeRawEdges(edges);

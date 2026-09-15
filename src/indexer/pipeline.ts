@@ -664,6 +664,20 @@ export class IndexingPipeline {
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
       if (r.indexed > 0) this.scheduleCoverageReconcile();
+      // TRA-1541 ANALYZE discipline: indexAll refreshes planner statistics at
+      // the end of every run, but this incremental path never did. Batches at
+      // or above FTS_REBUILD_THRESHOLD took the trigger-drop + rebuild path
+      // (which, unlike disableBulkMode, runs no ANALYZE), so sqlite_stat1
+      // describes the pre-burst graph until the next full reindex. Refresh
+      // here for exactly those batches; smaller ones move the statistics too
+      // little to matter. Non-fatal by contract.
+      if (r.indexed >= IndexingPipeline.FTS_REBUILD_THRESHOLD) {
+        try {
+          this.store.db.exec('ANALYZE');
+        } catch (err) {
+          logger.debug({ err }, 'ANALYZE failed after indexFiles (non-fatal)');
+        }
+      }
       return r;
     });
     this._lock = result.catch(() => {});

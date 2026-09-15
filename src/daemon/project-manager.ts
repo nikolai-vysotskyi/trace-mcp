@@ -268,6 +268,9 @@ export class ProjectManager {
     const db = initializeDatabase(dbPath, {
       cacheMb: config.index_cache_mb,
       mmapMb: config.index_mmap_mb,
+      // TRA-1541: adaptive per-connection memory — steps down on < 6 GiB
+      // machines unless the operator pinned `full`.
+      memoryProfile: config.index_memory_profile ?? 'auto',
     });
     writeServerPid(db);
     const store = new Store(db);

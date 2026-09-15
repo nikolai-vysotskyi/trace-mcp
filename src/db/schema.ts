@@ -1,8 +1,10 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 32;
+const SCHEMA_VERSION = 33;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -29,6 +31,44 @@ export function createSymbolsFtsTable(
   db.exec(
     `CREATE VIRTUAL TABLE${guard} symbols_fts USING fts5(${SYMBOLS_FTS_COLUMNS}, ${SYMBOLS_FTS_OPTIONS})`,
   );
+}
+
+/**
+ * Create the `symbols_name_tri` trigram FTS5 table (TRA-1541). Single `name`
+ * column, external-content on `symbols`, trigram tokenizer. Used by the main
+ * schema bootstrap, migration 33, and `repair.ts::rebuildFts` so the table
+ * shape can never drift between the three paths.
+ */
+export function createSymbolsNameTriTable(
+  db: Database.Database,
+  opts: { ifNotExists?: boolean } = {},
+): void {
+  const guard = opts.ifNotExists ? ' IF NOT EXISTS' : '';
+  db.exec(
+    `CREATE VIRTUAL TABLE${guard} symbols_name_tri USING fts5(name, content=symbols, content_rowid=id, tokenize='trigram')`,
+  );
+}
+
+/**
+ * (Re)create the trigram sync triggers only — no rebuild. Idempotent,
+ * mirrors {@link ensureFts5Triggers}. Called wherever the symbols_fts
+ * triggers are armed so the two index families can never desync.
+ */
+export function ensureNameTriTriggers(db: Database.Database): void {
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_tri_ai AFTER INSERT ON symbols BEGIN
+    INSERT INTO symbols_name_tri(rowid, name)
+    VALUES (new.id, new.name);
+  END`);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_tri_ad AFTER DELETE ON symbols BEGIN
+    INSERT INTO symbols_name_tri(symbols_name_tri, rowid, name)
+    VALUES ('delete', old.id, old.name);
+  END`);
+  db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_tri_au AFTER UPDATE ON symbols BEGIN
+    INSERT INTO symbols_name_tri(symbols_name_tri, rowid, name)
+    VALUES ('delete', old.id, old.name);
+    INSERT INTO symbols_name_tri(rowid, name)
+    VALUES (new.id, new.name);
+  END`);
 }
 
 const DDL = `
@@ -353,15 +393,38 @@ CREATE INDEX IF NOT EXISTS idx_gs_file ON graph_snapshots(file_path);
 CREATE INDEX IF NOT EXISTS idx_gs_created ON graph_snapshots(created_at);
 
 -- ============================================================
--- TRIGRAM INDEX (fuzzy search)
+-- TRIGRAM INDEX (fuzzy search) — TRA-1541
 -- ============================================================
+-- Single-column external-content FTS5 table with the trigram tokenizer.
+-- Replaces the hand-rolled symbol_trigrams side table (dropped in
+-- migration 33): one FTS row per symbol instead of ~len(name) rows plus two
+-- index entries each. Measured on 11 134 symbols: persist 173 ms -> 15 ms,
+-- 8.0 MB -> 1.0 MB. Sync triggers mirror the symbols_fts trio below so
+-- writes stay automatic — no explicit trigram write calls on the persist
+-- path. Rerank (Jaccard + Levenshtein in fuzzy.ts) is unchanged, and the
+-- bm25-weighted symbols_fts read contract is untouched.
 
-CREATE TABLE IF NOT EXISTS symbol_trigrams (
-    symbol_id INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
-    trigram   TEXT NOT NULL
+CREATE VIRTUAL TABLE IF NOT EXISTS symbols_name_tri USING fts5(
+    name,
+    content=symbols, content_rowid=id, tokenize='trigram'
 );
-CREATE INDEX IF NOT EXISTS idx_trigrams_tri ON symbol_trigrams(trigram);
-CREATE INDEX IF NOT EXISTS idx_trigrams_sym ON symbol_trigrams(symbol_id);
+
+CREATE TRIGGER IF NOT EXISTS symbols_tri_ai AFTER INSERT ON symbols BEGIN
+    INSERT INTO symbols_name_tri(rowid, name)
+    VALUES (new.id, new.name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS symbols_tri_ad AFTER DELETE ON symbols BEGIN
+    INSERT INTO symbols_name_tri(symbols_name_tri, rowid, name)
+    VALUES ('delete', old.id, old.name);
+END;
+
+CREATE TRIGGER IF NOT EXISTS symbols_tri_au AFTER UPDATE ON symbols BEGIN
+    INSERT INTO symbols_name_tri(symbols_name_tri, rowid, name)
+    VALUES ('delete', old.id, old.name);
+    INSERT INTO symbols_name_tri(rowid, name)
+    VALUES (new.id, new.name);
+END;
 
 -- ============================================================
 -- CO-CHANGE ANALYSIS (git temporal coupling)
@@ -1776,8 +1839,8 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
   32: (db) => {
     // Partial indexes for the metadata-existence checks in the edge
     // resolvers (typescript-calls, python-calls, typescript-types,
-    // python-types, python-heritage). Mirrored in the top-of-file DDL block
-    // for fresh-DB parity (byte-identical definitions).
+    // python-types, python-heritage). Mirrored in the
+    // top-of-file DDL block for fresh-DB parity (byte-identical definitions).
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_symbols_call_sites ON symbols(file_id)
         WHERE json_extract(metadata, '$.callSites') IS NOT NULL;
@@ -1786,6 +1849,19 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE INDEX IF NOT EXISTS idx_symbols_bases ON symbols(file_id)
         WHERE json_extract(metadata, '$.bases') IS NOT NULL;
     `);
+  },
+  33: (db) => {
+    // TRA-1541 trigram-merge: replace the hand-rolled `symbol_trigrams` side
+    // table (~len(name) rows + 2 indexes per symbol) with a single-column
+    // external-content FTS5 trigram table (1 row per symbol, trigger-synced).
+    // The DDL block above already carries the new table + triggers for fresh
+    // DBs; this migrates upgraded DBs to the same shape.
+    createSymbolsNameTriTable(db, { ifNotExists: true });
+    // External-content table starts empty — 'rebuild' pulls every row from
+    // `symbols` without a manual INSERT ... SELECT.
+    db.exec(`INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')`);
+    ensureNameTriTriggers(db);
+    db.exec('DROP TABLE IF EXISTS symbol_trigrams');
   },
 };
 
@@ -1829,17 +1905,103 @@ export interface InitializeDatabaseOptions {
    * (64 MB).
    */
   mmapMb?: number;
+  /**
+   * Memory profile for the per-connection SQLite knobs. `'low-power'`
+   * clamps cache/mmap to their floor (see {@link resolveIndexMemory});
+   * `'auto'` (default) steps down only on machines with < 6 GiB RAM.
+   */
+  memoryProfile?: IndexMemoryProfile | 'auto';
 }
 
 const DEFAULT_INDEX_CACHE_MB = 16;
 const DEFAULT_INDEX_MMAP_MB = 64;
 
+/**
+ * Memory profile for the per-connection SQLite knobs (`cache_size` /
+ * `mmap_size`). TRA-1541: both knobs multiply by the number of loaded
+ * projects, so a static default that is fine for 2 projects starves a 4 GB
+ * machine at 8. `low-power` clamps both to their floor (8 MB cache, 32 MB
+ * mmap — 8 loaded projects then cost ≤ 320 MB combined).
+ */
+export type IndexMemoryProfile = 'full' | 'low-power';
+
+export const LOW_POWER_INDEX_CACHE_MB = 8;
+export const LOW_POWER_INDEX_MMAP_MB = 32;
+
+/** Total-RAM threshold below which `auto` resolves to `low-power` (6 GiB). */
+export const LOW_POWER_TOTAL_MEM_BYTES = 6 * 1024 * 1024 * 1024;
+
+export function resolveIndexMemoryProfile(
+  profile: IndexMemoryProfile | 'auto' | undefined,
+  totalMemBytes?: number,
+): IndexMemoryProfile {
+  if (profile === 'low-power') return 'low-power';
+  if (profile === 'full') return 'full';
+  // 'auto' (default): only low-RAM machines step down. The import is lazy so
+  // this stays dependency-free for test doubles passing totalMemBytes.
+  const total = totalMemBytes ?? os.totalmem();
+  return total < LOW_POWER_TOTAL_MEM_BYTES ? 'low-power' : 'full';
+}
+
+export interface ResolvedIndexMemory {
+  cacheMb: number;
+  mmapMb: number;
+  profile: IndexMemoryProfile;
+}
+
+/** Apply the low-power clamp to requested per-connection knob values. */
+export function resolveIndexMemory(
+  requested: { cacheMb?: number; mmapMb?: number },
+  profile: IndexMemoryProfile | 'auto' = 'auto',
+  totalMemBytes?: number,
+): ResolvedIndexMemory {
+  const resolved = resolveIndexMemoryProfile(profile, totalMemBytes);
+  if (resolved === 'low-power') {
+    return {
+      cacheMb: Math.min(requested.cacheMb ?? DEFAULT_INDEX_CACHE_MB, LOW_POWER_INDEX_CACHE_MB),
+      mmapMb: Math.min(requested.mmapMb ?? DEFAULT_INDEX_MMAP_MB, LOW_POWER_INDEX_MMAP_MB),
+      profile: resolved,
+    };
+  }
+  return {
+    cacheMb: requested.cacheMb ?? DEFAULT_INDEX_CACHE_MB,
+    mmapMb: requested.mmapMb ?? DEFAULT_INDEX_MMAP_MB,
+    profile: resolved,
+  };
+}
+
 export function initializeDatabase(
   dbPath: string,
   options?: InitializeDatabaseOptions,
 ): Database.Database {
+  // page_size / auto_vacuum only take effect before the first table exists,
+  // so they must be decided pre-open. A zero-byte (or missing) file means
+  // this open creates the database.
+  let isFreshDb = true;
+  try {
+    const st = fs.statSync(dbPath);
+    isFreshDb = st.size === 0;
+  } catch {
+    isFreshDb = true;
+  }
+  // :memory: databases are always fresh.
+  if (dbPath === ':memory:') isFreshDb = true;
+
   const db = new Database(dbPath);
   restrictDbPerms(dbPath);
+
+  if (isFreshDb) {
+    // TRA-1541: pin page_size explicitly (4096 = SQLite default, but an
+    // explicit pin keeps future SQLite upgrades from silently changing our
+    // I/O unit) and use incremental auto-vacuum so deleted/index-churn
+    // pages return to the freelist instead of bloating the file forever.
+    // Both are no-ops on existing files — hence fresh-only.
+    db.pragma('page_size = 4096');
+    db.pragma('auto_vacuum = INCREMENTAL');
+  }
+
+  // WAL mode for concurrent reads + write performance
+  db.pragma('journal_mode = WAL');
 
   // WAL mode for concurrent reads + write performance
   db.pragma('journal_mode = WAL');
@@ -1854,12 +2016,16 @@ export function initializeDatabase(
   // Configurable because this is a PER-CONNECTION cost: a daemon with many
   // registered projects opens one connection each, so this multiplies by
   // project count. See config keys `index_cache_mb` / `index_mmap_mb`.
-  const cacheMb = options?.cacheMb ?? DEFAULT_INDEX_CACHE_MB;
-  db.pragma(`cache_size = ${-Math.max(1, Math.round(cacheMb * 1024))}`);
+  // TRA-1541: `memoryProfile` clamps both on low-RAM machines so
+  // (cache+mmap) × N loaded projects stays inside a 4 GB budget.
+  const mem = resolveIndexMemory(
+    { cacheMb: options?.cacheMb, mmapMb: options?.mmapMb },
+    options?.memoryProfile ?? 'auto',
+  );
+  db.pragma(`cache_size = ${-Math.max(1, Math.round(mem.cacheMb * 1024))}`);
   // mmap — lets SQLite access pages via mmap instead of read() syscalls.
   // Same per-connection multiplication concern as cache_size above.
-  const mmapMb = options?.mmapMb ?? DEFAULT_INDEX_MMAP_MB;
-  db.pragma(`mmap_size = ${Math.max(0, Math.round(mmapMb * 1024 * 1024))}`);
+  db.pragma(`mmap_size = ${Math.max(0, Math.round(mem.mmapMb * 1024 * 1024))}`);
   // Keep temp tables / temp indices (ORDER BY, GROUP BY, DISTINCT) in RAM
   // instead of spilling to disk. Cheap win for read-heavy aggregations.
   db.pragma('temp_store = MEMORY');
@@ -1964,12 +2130,17 @@ function seedDatabase(db: Database.Database): void {
 
 /**
  * Disable FTS5 triggers on symbols table during batch inserts.
- * Call rebuildFts5 after all inserts are done.
+ * Call rebuildFts5 after all inserts are done. Covers both the bm25
+ * `symbols_fts` trio and the trigram `symbols_tri_*` trio (TRA-1541) so a
+ * bulk run can never leave the two index families desynced.
  */
 export function disableFts5Triggers(db: Database.Database): void {
   db.exec('DROP TRIGGER IF EXISTS symbols_ai');
   db.exec('DROP TRIGGER IF EXISTS symbols_ad');
   db.exec('DROP TRIGGER IF EXISTS symbols_au');
+  db.exec('DROP TRIGGER IF EXISTS symbols_tri_ai');
+  db.exec('DROP TRIGGER IF EXISTS symbols_tri_ad');
+  db.exec('DROP TRIGGER IF EXISTS symbols_tri_au');
 }
 
 /**
@@ -1999,6 +2170,9 @@ export function ensureFts5Triggers(db: Database.Database): void {
     INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)
     VALUES (new.id, new.name, new.fqn, new.signature, new.summary);
   END`);
+  // Keep the trigram family armed wherever the bm25 family is — a bulk crash
+  // between disable and re-enable must not desync one index and not the other.
+  ensureNameTriTriggers(db);
 }
 
 /**
@@ -2014,6 +2188,8 @@ export function ensureFts5Triggers(db: Database.Database): void {
 export function enableFts5Triggers(db: Database.Database): void {
   // Rebuild FTS5 index from current symbols table content
   db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
+  // Same for the trigram family (external-content: pulls from `symbols`).
+  db.exec("INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')");
 
   // Restore triggers for subsequent single-row operations
   ensureFts5Triggers(db);
