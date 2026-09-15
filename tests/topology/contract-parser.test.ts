@@ -200,11 +200,6 @@ service UserService {
   });
 });
 
-// Every case opens a fresh temp SQLite DB (mkdtemp + schema + seed) in
-// beforeEach — disk-heavy and slow on loaded Windows runners. One case timed
-// out at the 10s default on Windows in Sep 2026 (TRA-1513); all cases share
-// the same cost profile, so the budget is block-level. Still ~100x local
-// runtime, so real hangs are caught.
 describe('extractRoutesFromDb', () => {
   let dbPath: string;
 
@@ -332,4 +327,4 @@ describe('extractRoutesFromDb', () => {
     // File 1 matches 'app/routes/web.php', file 2 doesn't
     expect(contract!.endpoints).toHaveLength(3);
   });
-}, 30000);
+});

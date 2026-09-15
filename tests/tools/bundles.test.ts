@@ -271,12 +271,6 @@ describe('loadAllBundles', () => {
 
 // ── searchBundles ─────────────────────────────────────────────────────────────
 
-// Every case here runs the full bundle round-trip (makeSourceDb + export +
-// load + search) with a per-test module re-import — disk-heavy and slow on
-// loaded Windows runners. Block-level 30s budget: one case got it in May 2026
-// ("respects limit"), two more timed out on Windows in Sep 2026 (TRA-1513),
-// and all cases share the same cost profile. Still ~100x local runtime, so
-// real hangs are caught.
 describe('searchBundles', () => {
   it('finds symbols by name substring', () => {
     const src = makeSourceDb([
@@ -310,6 +304,10 @@ describe('searchBundles', () => {
     for (const b of bundles) b.db.close();
   });
 
+  // Windows runners on cold SSDs can spend >10s on the bundle round-trip
+  // (export + load + search). Bump just this case so transient runner
+  // slowness doesn't get blamed on the assertion. Same pattern as the
+  // cli-smoke timeout bump earlier.
   it('respects limit', () => {
     const src = makeSourceDb(
       Array.from({ length: 10 }, (_, i) => ({ name: `func${i}`, kind: 'function' })),
@@ -321,7 +319,7 @@ describe('searchBundles', () => {
     expect(results.length).toBeLessThanOrEqual(3);
 
     for (const b of bundles) b.db.close();
-  });
+  }, 30000);
 
   it('returns empty for no match', () => {
     const src = makeSourceDb([{ name: 'foo', kind: 'function' }]);
@@ -347,4 +345,4 @@ describe('searchBundles', () => {
 
     for (const b of bundles) b.db.close();
   });
-}, 30000);
+});
