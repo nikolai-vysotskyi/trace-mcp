@@ -89,6 +89,69 @@ const DEFAULT_WORKER_COUNT = Math.max(1, Math.min(8, os.cpus().length - 1));
  *  daemon shares one pool across N projects — see plan-indexer-perf §2.1. */
 const DEFAULT_KEEPALIVE_WORKER_COUNT = Math.max(1, Math.min(4, Math.floor(os.cpus().length / 2)));
 
+/**
+ * TRA-1537 §2 — adaptive pool sizing for weak machines. Each live worker
+ * costs ~50-60 MB RSS (own V8 isolate + tree-sitter WASM + grammars), so the
+ * static 8-worker default (1168 MB peak vs 694 MB single-thread) chokes
+ * 2-core / 4 GB hosts. Facts are injectable so unit tests don't depend on
+ * the host they run on.
+ */
+export interface MachineFacts {
+  totalMemBytes: number;
+  cpuCount: number;
+}
+
+function readMachineFacts(): MachineFacts {
+  return { totalMemBytes: os.totalmem(), cpuCount: os.cpus().length };
+}
+
+/** Weak profile: <4 GB RAM or ≤2 CPUs. Manual override via TRACE_MCP_LOW_POWER=1/0. */
+export function isLowPowerMachine(facts: MachineFacts = readMachineFacts()): boolean {
+  const override = process.env.TRACE_MCP_LOW_POWER;
+  if (override === '1' || override?.toLowerCase() === 'true') return true;
+  if (override === '0' || override?.toLowerCase() === 'false') return false;
+  return facts.totalMemBytes < 4 * 1024 ** 3 || facts.cpuCount <= 2;
+}
+
+/** Worker count: explicit `size` / TRACE_MCP_WORKERS wins; weak profile caps at 2. */
+export function resolveAdaptivePoolSize(
+  keepAlive: boolean,
+  facts: MachineFacts = readMachineFacts(),
+): number {
+  const env = process.env.TRACE_MCP_WORKERS;
+  if (env !== undefined) {
+    const n = Number.parseInt(env, 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  const base = keepAlive ? DEFAULT_KEEPALIVE_WORKER_COUNT : DEFAULT_WORKER_COUNT;
+  if (isLowPowerMachine(facts)) return Math.max(1, Math.min(2, base));
+  return base;
+}
+
+/** Spawn-gate threshold: weak profile raises 100 → 200 (spawn costs more than it saves there). */
+export function resolveWorkerThreshold(facts: MachineFacts = readMachineFacts()): number {
+  const env = process.env.TRACE_MCP_WORKER_THRESHOLD;
+  if (env !== undefined) {
+    const n = Number.parseInt(env, 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return isLowPowerMachine(facts) ? 200 : 100;
+}
+
+/** Daemon idle window: weak profile shrinks 45s → 10s so memory returns faster. */
+export function resolveKeepAliveIdleMs(
+  keepAlive: boolean,
+  facts: MachineFacts = readMachineFacts(),
+): number {
+  const env = process.env.TRACE_MCP_KEEPALIVE_IDLE_MS;
+  if (env !== undefined) {
+    const n = Number.parseInt(env, 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  if (keepAlive && isLowPowerMachine(facts)) return 10_000;
+  return KEEPALIVE_IDLE_TERMINATE_MS;
+}
+
 export interface ExtractPoolOptions {
   size?: number;
   /** Override the bundled worker entry. Only measurement harnesses and tests
@@ -192,9 +255,12 @@ export class ExtractPool {
     // raw size still work — collapse into the options shape internally.
     const o: ExtractPoolOptions = typeof opts === 'number' ? { size: opts } : opts;
     this.keepAlive = o.keepAlive ?? false;
-    this.size = o.size ?? (this.keepAlive ? DEFAULT_KEEPALIVE_WORKER_COUNT : DEFAULT_WORKER_COUNT);
+    // TRA-1537: default size is adaptive (weak profile caps at 2 workers);
+    // explicit `size` / TRACE_MCP_WORKERS always wins (incl. daemon-injected).
+    this.size = o.size ?? resolveAdaptivePoolSize(this.keepAlive);
     this.workerEntry = o.workerEntry ?? resolveWorkerEntry();
-    this.keepAliveIdleMs = o.keepAliveIdleMs ?? KEEPALIVE_IDLE_TERMINATE_MS;
+    // TRA-1537: weak-profile daemon pools release after 10s, not 45s.
+    this.keepAliveIdleMs = o.keepAliveIdleMs ?? resolveKeepAliveIdleMs(this.keepAlive);
   }
 
   /** True when workers are usable in the current runtime (bundled build). */

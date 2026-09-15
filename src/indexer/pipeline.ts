@@ -25,7 +25,7 @@ import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
-import { ExtractPool } from './extract-pool.js';
+import { ExtractPool, resolveWorkerThreshold } from './extract-pool.js';
 import { collectFiles as collectFilesImpl } from './file-collector.js';
 import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
 import { detectRenames as detectRenamesImpl } from './rename-detector.js';
@@ -1278,6 +1278,10 @@ export class IndexingPipeline {
   /**
    * Spawn a worker pool only when extracting at least this many files —
    * below it, in-process is cheaper than spawn cost (~150-300 ms per worker).
+   * TRA-1537: adaptive via `resolveWorkerThreshold()` — 100 normally,
+   * 200 on weak machines (<4 GB / ≤2 CPU), overridable via
+   * TRACE_MCP_WORKER_THRESHOLD. Kept as a static for call sites that need a
+   * compile-time constant; the live gate is `maybeGetExtractPool`.
    */
   private static readonly WORKER_THRESHOLD = 100;
 
@@ -1297,7 +1301,9 @@ export class IndexingPipeline {
    * fall back to in-process extraction.
    */
   private maybeGetExtractPool(batchSize: number): ExtractPool | null {
-    if (batchSize < IndexingPipeline.WORKER_THRESHOLD) return null;
+    // TRA-1537: adaptive gate — weak machines need a bigger batch to justify
+    // worker spawn (each worker ~50-60 MB RSS). TRACE_MCP_WORKERS=0 opts out.
+    if (batchSize < resolveWorkerThreshold()) return null;
     if (process.env.TRACE_MCP_WORKERS === '0') return null;
     // Pool was injected by the daemon — reuse without reconstructing.
     if (this._extractPool && !this._poolIsOwned) {
