@@ -48,6 +48,15 @@ updates:
         update-types:
           - minor
           - patch
+        # tree-sitter-wasm ships its grammar SET as the release payload, and
+        # our build types LANG_GRAMMARS against it (SupportedLanguage) — so a
+        # dropped grammar is a red build, not a routine bump. Precedent: 1.1.7
+        # silently dropped elm/markdown/scheme (build failure upstream, fixed
+        # by their "halt on error" + rebuild in 2.0.1; TRA-1513). Solo PRs for
+        # this package still get proposed and reviewed; they just never ride
+        # along in an auto-merged group.
+        exclude-patterns:
+          - tree-sitter-wasm
       development-minor-patch:
         dependency-type: development
         update-types:
