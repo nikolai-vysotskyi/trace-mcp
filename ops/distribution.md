@@ -76,8 +76,8 @@ Rules for keeping it honest:
 | `trace-mcp.vi.softonic.com/mcp` | **Yes — scraped, not submitted** | Unknown — all of `*.softonic.com` answers HTTP 412 to a scripted fetch (four UA/header variants, 2026-09-04) | **Nothing to do, and do not open this door.** Found because Search Console names it as one of exactly two external URLs linking `trace-mcp.com` (TRA-792). A download portal that wraps third-party installers in its own; we control nothing on that page. Do not submit, do not link, do not chase the other locales | 2026-09-04 |
 | [tolkonepiu/best-of-mcp-servers](https://github.com/tolkonepiu/best-of-mcp-servers) | **Submitted, not merged** — [PR #384](https://github.com/tolkonepiu/best-of-mcp-servers/pull/384), opened 2026-08-29 | One entry in `projects.yaml`; a scheduled bot commits the rendered README ("Best-of update", last one 2026-09-02) | PR adding a `projects.yaml` block; `yamllint` is the only check and it passed on ours. **The door is slow, not closed, and the numbers say don't push:** 12 other `Add project:` PRs are open, the oldest from 2026-08-27, and across all of 2026 only four external project-add PRs were merged at all (#52, #120, #161, #299) — #299 took 39 days. Zero maintainer activity on ours since it opened. Do not ping before 2026-09-26; a reminder at day 7 in a queue this shape is noise. **This row was missing until 2026-09-05** — the submission was made on 2026-08-29 and never recorded, which is exactly the failure the rules at the top of this file describe | 2026-09-05 |
 | [axisrow/trace-mcp-plugin](https://github.com/axisrow/trace-mcp-plugin) via [etopro/plugin-marketplace](https://github.com/etopro/plugin-marketplace) | **Yes — third-party, we did not submit it** | A Claude Code plugin (MIT, 0★, created 2026-08-01) that wraps our CLI: `/trace-mcp-install`, `/trace-mcp-measure`, `/trace-mcp-uninstall`, plus a saved benchmark baseline for a re-measure a week later. Listed in the `etopro-plugins` marketplace (2★) as `trace-mcp`. README is in Russian and links our repo | Nothing to submit, and **the value here is not the listing**. The author read `dist/cli.js` at 1.46.2 and filed two issues about our behaviour in his own tracker — [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (the daemon auto-registers every project root an MCP client connects from; he watched 9 projects appear in the registry within a day of one install) and [#5](https://github.com/axisrow/trace-mcp-plugin/issues/5) (installation places hooks without asking). #4 re-verified against 3.17.1 and filed upstream as [#936](https://github.com/nikolai-vysotskyi/trace-mcp/issues/936), credited to him; answered once in his thread with the current gate list and the `remove --keep-db` cleanup. **Found by GitHub issue search for our own name, not by any directory** — the same channel that found `mattbutlerengineering/ai-tooling` | 2026-09-05 |
-| [eltociear/awesome-AI-driven-development](https://github.com/eltociear/awesome-AI-driven-development) | **Submitted, not merged** — [PR #119](https://github.com/eltociear/awesome-AI-driven-development/pull/119), opened 2026-09-06 | One line each in `README.md` and `README_JA.md`, section `MCP Servers & Integrations`, appended after `codebase-memory-mcp`; plus the tool count in both headers, 594 → 595 | PR to both READMEs, format in `CONTRIBUTING.md`, PR template filled in EN+JA. 531★, no account, no scanner, no payment, no ownership badge. **Unlike the other two awesome-lists we are queued in, this maintainer actually merges external PRs**: of the last 15 closed PRs, 14 were merged, all from outside contributors, turnaround 1–16 days — that is the only list on this table where a self-submission is the normal way in rather than a lottery ticket. Placed in the MCP section, not `Code Analysis & Search`: Serena, `codebase-memory-mcp`, SymDex and CogniLayer are all in the MCP section, while Code Analysis is mostly context-packing CLIs. The entry claims 81 languages and cross-language framework edges and no savings number, per the TRA-880 rule. Do not ping before 2026-09-20. Tracked in TRA-1030 | 2026-09-06 |
-| [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Do not ping. Re-read 2026-10-05 | 2026-09-05 |
+| [eltociear/awesome-AI-driven-development](https://github.com/eltociear/awesome-AI-driven-development) | **Submitted, not merged** — [PR #119](https://github.com/eltociear/awesome-AI-driven-development/pull/119), opened 2026-09-06 | One line each in `README.md` and `README_JA.md`, section `MCP Servers & Integrations`, appended after `codebase-memory-mcp`; plus the tool count in both headers, 594 → 595 at submission, rebased 2026-09-15 to 596 → 597 after the maintainer's Sillage sync (#115, #117) made the PR unmergeable | PR to both READMEs, format in `CONTRIBUTING.md`, PR template filled in EN+JA. 531★, no account, no scanner, no payment, no ownership badge. **Unlike the other two awesome-lists we are queued in, this maintainer actually merges external PRs**: of the last 15 closed PRs, 14 were merged, all from outside contributors, turnaround 1–16 days — that is the only list on this table where a self-submission is the normal way in rather than a lottery ticket. Placed in the MCP section, not `Code Analysis & Search`: Serena, `codebase-memory-mcp`, SymDex and CogniLayer are all in the MCP section, while Code Analysis is mostly context-packing CLIs. The entry claims 81 languages and cross-language framework edges and no savings number, per the TRA-880 rule. Do not ping before 2026-09-20. Tracked in TRA-1030 | 2026-09-15 |
+| [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Rebased 2026-09-15 after the maintainer's daily self-add (LangChain context-modes entry) made the PR unmergeable — one-line conflict, ours kept last in section. Expect this to recur while the PR sits open; rebase again only if it goes dirty a second time close to a merge signal, not daily. Do not ping. Re-read 2026-10-05 | 2026-09-15 |
 | [yzfly/awesome-context-engineering](https://github.com/yzfly/awesome-context-engineering) | **Submitted, not merged** — [PR #44](https://github.com/yzfly/awesome-context-engineering/pull/44), opened 2026-09-05 | One line each in `README.md` and `README_CN.md`, section `Memory & Compression` / `记忆与压缩`, next to `lean-ctx`, `headroom` and `skillreaper` (140★) | PR to both READMEs — `CONTRIBUTING.md` requires the English and Chinese versions to stay in sync, so an entry that touches one file only is incomplete. **This is the door with a real merge rate in this class:** five external PRs merged in the two weeks to 2026-08-30, three of them in one batch, authors unaffiliated with the maintainer. Re-check 2026-09-19 | 2026-09-05 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
 | GitHub repo description | **Yes** — always on, the surface is ours, and it is **the string the auto-indexes copy verbatim** | Was "MCP server for Claude Code and Codex. One tool call replaces ~42 minutes of agent exploration" until 2026-09-05, then carried "100% local" until 2026-09-07. Now: "Framework-aware code intelligence MCP server for Claude Code and Codex — 70.5% fewer input tokens to review a pull request, median over 60 merged PRs in repos we don't own, comprehension at parity. 81 languages, 87 frameworks. Your code and index never leave the machine; an anonymous usage ping is on by default and opt-out." (327 of the 350 characters GitHub allows) | `gh api -X PATCH repos/:r -f description=...`, instant, reversible, no review — same class as topics. Keep it in step with `package.json` `description` and `server.json` `description`; all three now quote the PR-benchmark figure and none may quote a number that is not in `docs/_data/`. **No longer on trust: `scripts/check-remote-claims.mjs` fetches this string nightly and compares it to `docs/_data/`** (TRA-1120). **Lags again since TRA-1141 re-measured the median to 72.7%** — the live GitHub and npm strings still say 70.5% and the nightly check will report them as not-in-`docs/_data/` until the description is patched and the next release republishes npm. | 2026-09-07 |
@@ -2146,4 +2146,108 @@ and `#12707`, `facebook/pyrefly#4583`, `watt-mind/factory#1078`,
     `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`, `yzfly/awesome-context-engineering#44`, `ai-boost/awesome-harness-engineering#240`, `tolkonepiu/best-of-mcp-servers#384`, `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`, `The-PR-Agent/pr-agent#2499`, `fullsend-ai/fullsend#297`, `macanderson/stella#6461`, `garrytan/gbrain#5001`, `fmagent-project/FM-Agent#229`.
     All open, zero unaddressed comments, follow-up deadlines intact (nothing due before 2026-09-19 / 2026-09-20 / 2026-09-26 / 2026-10-05).
 - Priority for next deep-dive: **SDL-MCP** client-side hook generation and **RTK** (Real-Time Knowledge), plus dedicated comparative page for **Ripwire** (`redhat-et/ripwire`, 1.9K★).
+
+### Seventeenth pass, 2026-09-14 (TRA-1496): nine threads re-verified, deslop fix shipped, four sweep hits, new rival names us
+
+**Open-thread audit (all via GitHub API, 2026-09-14):**
+- All 5 catalog PRs still OPEN, 0 comments each, deadlines intact — no ping due:
+  `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+  `yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+  (re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+- `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`, `narumiruna/pi-extensions#1204`,
+  `mattbutlerengineering/ai-tooling#585`: all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3 comments,
+  unchanged since 2026-09-05 — nothing owed.
+- `Ivy-Apps/deslop#173`: **CLOSED 2026-09-08** — the maintainer shipped the `export … from` fix built on
+  the analysis posted from this lane. Second shipped fix from the read-code-first pattern after atlas.
+- `Kilo-Org/kilocode#13843`: OPEN, 1 comment (ours), no maintainer reply since 2026-09-07. It is a gift
+  bug report, not a thread awaiting our answer — no follow-up.
+- `hesreallyhim/awesome-claude-code` (TRA-633): still `blocked` on the one human-only web-form click.
+  Per the 2026-09-07 focus rule the consolidated ask already stands — no new ping from this lane.
+
+**Mention sweep (`scripts/mention-sweep.sh`, 2026-09-14) — 4 new repos, all classified:**
+- `Cranot/roam-code` (517★, Python, created 2026-02-09, pushed 2026-09-14): **a direct rival that names us.**
+  "Local codebase intelligence CLI + MCP server for AI coding agents: SQLite code graph, 28 languages,
+  287 commands, 246 MCP tools." Their landing-page template `templates/distribution/landing-page/compare.html`
+  (section `local-code-graphs`) says "trace-mcp describes a local graph and agent tools" next to CodeGraph's
+  blast-radius tool — fair, non-hostile, no benchmark against us. Not in `docs/_data/competitors.yml`;
+  pointer for the Competitor Intelligence lane, not a door for this one. Do not write to their tracker.
+- `Mesteriis/Engineering-Bible-AI` (0★): personal standards repo whose `2026-09-09-shared-code-indexing.md`
+  spec standardises on Serena + Graphify + Repomix and says "Remove the stale local `trace-mcp` client entry
+  whose command no longer exists; do not install or initialize trace-mcp." One user dropped us over a stale
+  command — pointer for the MCP Reliability / User Feedback lanes on what that command was, not outreach.
+- `seongyeon1/seongyeon1.github.io` (0★, Korean blog): `docs/editorial-plan.md` carries a planned tutorial
+  row, "trace-mcp — framework-aware MCP code intelligence" for coding-agent context layers. A plan, not a
+  post; 0★ personal blog — nothing to write, recorded so the next sweep stays quiet.
+- `rxmna8502/vybe-intelligence-vault` (22★): same generative vault family as the recorded
+  `SAIRAMANALADI/vybe-intelligence-vault` — same front-matter shape (`quality_score: 9`, GPU Acceleration
+  in `tech_stack`, `evaluated_by: mistral-small-latest`), same stale figures. No contact path, no action.
+
+**Competitor star snapshot (live GitHub API, 2026-09-14; prior from the 2026-09-11 pass):**
+- `codegraph`: 70,502 → **70,792★** (+290)
+- `serena`: 29,186 → **29,309★** (+123)
+- `repomix`: 28,290 → **28,337★** (+47)
+- `codebase_memory_mcp`: 42,957 → **43,203★** (+246)
+- `context_mode`: 22,146 → **22,783★** (+637, fastest mover this window)
+- `ripwire`: 1,892 → **2,023★** (+131)
+- `graft`: 7,094 → **7,637★** (+543)
+- `roam-code`: **517★** (newly observed, untracked)
+- `trace-mcp`: 175 → **175★** (+0)
+
+**Nothing submitted, nothing opened.** Catalog moratorium holds (0 attributable installs in `ops/arrivals.md`);
+no deadline falls due before 2026-09-19; no repo met the message bar, so the 5-touch allowance went unused —
+a ceiling, not a quota.
+
+### Eighteenth pass, 2026-09-14 evening (TRA-1501): pr-agent maintainer answered, FM-Agent closed with thanks, one sweep hit
+
+**Open-thread audit (all via GitHub API, ~4h after the morning pass, so this is a delta read).**
+All 5 catalog PRs still OPEN, 0 comments each, timestamps unchanged — no ping due:
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+(re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+`0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`mattbutlerengineering/ai-tooling#585` (no follow-up per TRA-857): all OPEN, 0 comments.
+`narumiruna/pi-extensions#1204` is an issue, not a PR — OPEN, 0 comments, unchanged since 2026-09-05.
+`Dokploy/mcp#81`: OPEN, 3 comments, unchanged since 2026-09-05.
+`Kilo-Org/kilocode#13843` and `#12707`: OPEN, 1 comment (ours) each, no maintainer reply.
+`iansmith/slopstop#633`: OPEN, 1 comment (ours). `Ivy-Apps/deslop#173`: CLOSED 2026-09-08, fix shipped.
+`sosalejandro/atlas#105`: last comment 09-07 is the maintainer's own Tier-2 close-out
+(`github/stack-graphs` archived, tier withdrawn) — nothing directed at us.
+`Nano-Collective/nanocoder#1197`: one new comment since 09-07, but it is a third party (`slowe89`)
+pitching their own eval-pack product, not a question to us — no action.
+TRA-633 still `blocked` on the one human-only form click; consolidated ask stands, no new ping.
+
+**One thread needed an answer and got it: `The-PR-Agent/pr-agent#2499`.**
+Maintainer `IsmaelMartinez` replied 2026-09-08 (six days, missed by the morning pass because it audits
+nine catalog threads): same defect class found independently (`repo_context.py` cache keyed with no
+revision, 15-min TTL, #3119; fixes #3148/#3149), one-hop-inbound-plus-ceiling called "sharper than
+anything here", 67-vs-65 read as no measured difference rather than parity (accept that reading —
+n=60 is one PR either way), MCP work deferred to post-v1 Discussion #3147, and a prescribed prototype:
+run the packaging ourselves through `extra_instructions`. Replied with thanks, the accepted stats
+reading, and no promise beyond a tracked experiment
+([comment](https://github.com/The-PR-Agent/pr-agent/issues/2499#issuecomment-5668466724)).
+The prototype is TRA-1502 (backlog): bundle producer + SHA assertion per TRA-1075, fed via
+`extra_instructions`, numbers or negative result. Do not comment there again until there are numbers.
+
+**Two threads closed or declined against us, no action on either.**
+`fmagent-project/FM-Agent#229` CLOSED 2026-09-14 as completed: maintainer (`Dshuishui`) confirmed our
+category-6 read at the exact site (`SKIP_RECEIVERS` stripping `self` in `tree-sitter.ts` while
+`getReceiverType()` already has the type), fixed via rust-analyzer batch index in #230 with codegraph
+as fallback. A thank-you would only cost a notification.
+`CommunityToolkit/Aspire#1575`: maintainer (`aaronpowell`, 09-09) doubts an indexing tool pays off for
+that repo ("isn't really that code heavy", little intersection between the code). That is a no on the
+graph direction; the thread has since moved to AGENTS.md/skills. Do not push.
+`fullsend-ai/fullsend#297`: updated 09-14 by automation only (3 comments: triage bot, stale bot, ours) —
+no human reply.
+
+**Mention sweep (`scripts/mention-sweep.sh`): 1 new repo, classified, no outreach.**
+`Egoka/Altera` (0★, pushed today): same author as the recorded `Egoka/FishtVue`. `AGENTS.md` carries
+our routing block verbatim, and `scripts/agent-runtime/` holds `trace-canary.mjs` (real stdio canary:
+`index` → `get_project_map` → `get_outline`, `--preset review`, evidence to `/runtime/evidence/`)
+and `cli-preflight.mjs` (pins exact CLI versions, gates on `trace-mcp --help` exit 0). A retained user
+standardising us across a second repo, containerised. Nothing to write — they already run us.
+Recorded in `ops/mentions-seen.txt`. The version-pinning plus canary shape is worth a line to MCP
+Reliability / User Feedback: this is what a serious self-hosted setup looks like.
+
+**Touch budget: 1 of 5 used** (the pr-agent reply). No catalog submissions (moratorium), no new
+threads opened, no repeat pings.
 

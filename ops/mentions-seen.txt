@@ -147,3 +147,17 @@ andrehora/file-history
 artemrudenko/code-graph-benchmark-v2
 # Genuine skill catalog for agentic code cleanup listing trace-mcp under agent-code-quality:
 xmkqv/money-tree
+
+# ── Swept 2026-09-14 (TRA-1496) ──
+# Direct rival (517★) whose landing compare page names trace-mcp next to CodeGraph; pointer for Competitor Intel, not a door:
+Cranot/roam-code
+# Personal standards repo (0★) that dropped trace-mcp over a stale client command; pointer for MCP Reliability / User Feedback:
+Mesteriis/Engineering-Bible-AI
+# Personal blog (0★) with a planned trace-mcp tutorial row in docs/editorial-plan.md; a plan, not a post:
+seongyeon1/seongyeon1.github.io
+# Same generative vault family as SAIRAMANALADI/vybe-intelligence-vault (mistral-small front matter, GPU hallucination):
+rxmna8502/vybe-intelligence-vault
+
+# ── Swept 2026-09-14 evening (TRA-1501) ──
+# Same author's second repo (0★, pushed 2026-09-14): AGENTS.md carries our routing block verbatim plus container canary scripts (trace-canary.mjs: index → project map → outline over real stdio; cli-preflight.mjs pins CLI versions). Retained user, no outreach — they already run us:
+Egoka/Altera

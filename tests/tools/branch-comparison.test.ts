@@ -122,11 +122,11 @@ describe('compareBranches', () => {
       lineStart: 10,
       lineEnd: 12,
     });
-  });
+  }, 60_000);
 
   afterEach(() => {
     removeTmpDir(repoDir);
-  });
+  }, 30_000);
 
   it('resolves merge-base and returns branch comparison', async () => {
     const result = await compareBranches(store, repoDir, {
