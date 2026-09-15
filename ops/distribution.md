@@ -2251,3 +2251,51 @@ Reliability / User Feedback: this is what a serious self-hosted setup looks like
 **Touch budget: 1 of 5 used** (the pr-agent reply). No catalog submissions (moratorium), no new
 threads opened, no repeat pings.
 
+### Nineteenth pass, 2026-09-15 (TRA-1521): all threads silent, sweep clean, four fresh issues triaged
+
+**Open-thread audit (all via GitHub API, 2026-09-15).**
+All 5 catalog PRs still OPEN, 0 comments each, no ping due:
+`eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`,
+`yzfly/awesome-context-engineering#44` (re-check 2026-09-19), `ai-boost/awesome-harness-engineering#240`
+(re-read 2026-10-05), `tolkonepiu/best-of-mcp-servers#384` (no ping before 2026-09-26).
+`eltociear#119` and `ai-boost#240` show committer-dated 2026-09-14T22:05/22:06Z heads authored by
+nikolai-vysotskyi — our own rebases already recorded in the table rows above, both `mergeable_state:
+clean` now. `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`,
+`narumiruna/pi-extensions#1204`, `mattbutlerengineering/ai-tooling#585` (no follow-up per TRA-857):
+all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3 comments, unchanged since 2026-09-05.
+`Kilo-Org/kilocode#13843` and `#12707`: OPEN, 1 comment (ours) each, no maintainer reply.
+`iansmith/slopstop#633`: OPEN, 1 comment (ours), unchanged since 2026-09-06.
+`sosalejandro/atlas#105`: 9 comments, last 09-07 is the maintainer's own Tier-2 close-out — nothing
+directed at us. `Nano-Collective/nanocoder#1197`: 4 comments, newest is still the third-party
+`slowe89` eval-pack pitch from 09-11 — no question to us. `The-PR-Agent/pr-agent#2499`: 11 comments,
+newest is our own 09-14 reply — no maintainer answer yet, prototype TRA-1502 stays the next move.
+TRA-633 still `blocked` on the one human-only form click; consolidated ask stands, no new ping.
+
+**Mention sweep (`scripts/mention-sweep.sh`): clean.** Zero repos outside `ops/mentions-seen.txt`.
+
+**Competitor star snapshot (live GitHub API, 2026-09-15; prior 2026-09-14):**
+codegraph 70,792 → **70,883** (+91); serena 29,309 → **29,342** (+33); repomix 28,337 → **28,351**
+(+14); CBM 43,203 → **43,275** (+72); context-mode 22,783 → **22,906** (+123); ripwire 2,023 →
+**2,118** (+95); graft 7,637 → **7,844** (+207, fastest); code-review-graph → **31,439**;
+trace-mcp 175 → **174** (−1, first down-tick since tracking began — single unstar or count
+fluctuation, not a trend until it repeats).
+
+**Trial-plan / import-graph issue sweeps: four fresh issues read, all four correctly left alone.**
+- `abhigyanpatwari/GitNexus#3291` (opened today, 0 comments): feature-branch index reports
+`status: current` with no indexed ref — the TRA-1075/TRA-1161 "no-op that looks like success" class,
+and the author already specifies the fix (carry `branch`/`lastCommit`/`indexedAt`, emit even when
+current, file refs included). Both halves of what we could add — SHA-equality freshness and
+per-file mtime states — were already sent to this same repo in #3127. A comment would restate a
+complete issue to its own author. Skipped, not a door.
+- `frsvffcy/llm-wiki-km#439` (0★): agent-written evaluation-planning ticket for GitNexus sidecar use
+in somebody's private wiki repo. The trial-plan class rule holds: somebody's private configuration
+ticket, do not comment.
+- `tirth8205/code-review-graph#981` and `Graphify-Labs/graphify#3565` (both opened today, 0
+comments): genuine import-resolution defects (Python relative-import misattach; Elixir alias edges
+dropped on id-prefix mismatch) — both in direct competitors' trackers, where the standing rule
+(zilliz, codebase-memory-mcp precedents) is we do not comment. Skipped, recorded so the next pass
+does not re-read them.
+
+**Touch budget: 0 of 5 used** — a ceiling, not a quota; nothing met the message bar. No catalog
+submissions (moratorium holds), no new threads opened, no repeat pings.
+
