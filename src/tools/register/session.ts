@@ -84,7 +84,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     'project://health',
     { mimeType: 'application/json', description: 'Index health status' },
     async () => {
-      const result = getIndexHealth(store, config);
+      const result = getIndexHealth(store, config, projectRoot);
       return {
         contents: [{ uri: 'project://health', mimeType: 'application/json', text: j(result) }],
       };

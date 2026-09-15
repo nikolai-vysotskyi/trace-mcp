@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "3.25.1",
+  "version": "3.26.0",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 88 framework integrations, 81 languages, 72.7% fewer input tokens to review a pull request, comprehension at parity",
   "type": "module",
@@ -107,8 +107,8 @@
     "oxc-resolver": "^11.19.1",
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
-    "tree-sitter-wasm": "^1.1.6",
-    "web-tree-sitter": "^0.26.13",
+    "tree-sitter-wasm": "1.1.6",
+    "web-tree-sitter": "^0.27.0",
     "xxhash-wasm": "^1.1.0",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
@@ -123,7 +123,7 @@
     "fast-check": "^4.6.0",
     "gpt-tokenizer": "^4.0.0",
     "jsdom": "^30.0.1",
-    "lint-staged": "17.4.1",
+    "lint-staged": "17.5.0",
     "simple-git-hooks": "2.14.0",
     "tsup": "^8.4.0",
     "tsx": "^4.23.13",

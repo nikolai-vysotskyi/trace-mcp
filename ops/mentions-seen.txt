@@ -157,3 +157,7 @@ Mesteriis/Engineering-Bible-AI
 seongyeon1/seongyeon1.github.io
 # Same generative vault family as SAIRAMANALADI/vybe-intelligence-vault (mistral-small front matter, GPU hallucination):
 rxmna8502/vybe-intelligence-vault
+
+# ── Swept 2026-09-14 evening (TRA-1501) ──
+# Same author's second repo (0★, pushed 2026-09-14): AGENTS.md carries our routing block verbatim plus container canary scripts (trace-canary.mjs: index → project map → outline over real stdio; cli-preflight.mjs pins CLI versions). Retained user, no outreach — they already run us:
+Egoka/Altera

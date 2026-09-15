@@ -304,16 +304,24 @@ const agentForIndexed: Rule = {
     );
     if (agentCalls.length === 0) return null;
 
-    // Agents consume ~50K tokens internally per call (not visible in output)
-    const estimatedInternalTokens = agentCalls.length * 50000;
-    const potentialTokens = Math.round(estimatedInternalTokens * 0.15);
+    // TRA-1514: subagents do burn large internal token budgets invisible in
+    // output, but that ~50K/call figure is an unmeasured estimate — the week
+    // of 2026-09-08 logged 56 Agent calls at 14,210 measured output tokens
+    // while the old constant claimed 2,800,000 current tokens (197x), pushing
+    // the whole report's savings past 100% of measured usage. currentTokens
+    // must stay measured-only so totals and pct remain falsifiable; the
+    // internal-cost caveat stays in the details string as qualitative context.
+    const currentTokens = agentCalls.reduce((s, c) => s + c.output_tokens_estimate, 0);
+    const potentialTokens = Math.round(currentTokens * 0.15);
 
     return {
       rule: 'agent-for-indexed',
       severity: 'medium',
       occurrences: agentCalls.length,
-      details: [`${agentCalls.length} Agent subagent calls (~50K internal tokens each)`],
-      currentTokens: estimatedInternalTokens,
+      details: [
+        `${agentCalls.length} Agent subagent calls (${currentTokens.toLocaleString()} measured output tokens; subagents additionally burn internal tokens invisible here, roughly tens of K per call)`,
+      ],
+      currentTokens,
       potentialTokens,
       recommendation:
         'Use get_feature_context or get_task_context instead of Agent subagents for code exploration. They return focused context within a token budget.',
@@ -521,7 +529,11 @@ export function analyzeOptimizations(toolCalls: ToolCallRow[], period: string): 
     totalPotentialSavings: {
       tokens: savingsTokens,
       costUsd: costUsd(savingsTokens),
-      pct: totalTokens > 0 ? Math.round((savingsTokens / totalTokens) * 100) : 0,
+      // TRA-1514: overlapping rules may claim savings on the same measured
+      // tokens twice (e.g. repeated-file-read + large-file-read on one file),
+      // so the ratio is capped — a report promising >100% savings is an
+      // accounting bug, not a bargain. The week of 2026-09-08 printed 124%.
+      pct: totalTokens > 0 ? Math.min(100, Math.round((savingsTokens / totalTokens) * 100)) : 0,
     },
   };
 }

@@ -88,6 +88,7 @@ export class FileExtractor {
 
     // Reject symlinks to prevent escaping the project root
     let fileMtimeMs: number | null = null;
+    let fileSize: number | null = null;
     try {
       const stat = fs.lstatSync(absPath);
       if (stat.isSymbolicLink()) {
@@ -95,6 +96,10 @@ export class FileExtractor {
         return { kind: 'error' };
       }
       fileMtimeMs = stat.mtimeMs;
+      // TRA-1536: captured here so the size gates below need no second stat —
+      // the pre-read size precheck and the hardened mtime fast-path both read
+      // it for free.
+      fileSize = stat.size;
     } catch {
       // lstat failed — file may not exist; readFileSync below will catch it
     }
@@ -114,14 +119,34 @@ export class FileExtractor {
 
     // mtime fast-path: if mtime hasn't changed, the file content is identical —
     // skip the expensive read + hash computation entirely.
+    // TRA-1536: size-hardened. A rewrite inside the same mtime-ms floor with
+    // a different byte length must NOT skip — the old mtime-only check
+    // missed exactly that (fast append + immediate reindex). Legacy rows
+    // without a stored byte_length keep the mtime-only verdict.
     if (
       !force &&
       fileMtimeMs != null &&
       existing &&
       existing.mtime_ms != null &&
-      existing.mtime_ms === Math.floor(fileMtimeMs)
+      existing.mtime_ms === Math.floor(fileMtimeMs) &&
+      (fileSize == null || existing.byte_length == null || existing.byte_length === fileSize)
     ) {
       return { kind: 'skipped' };
+    }
+
+    // TRA-1536: stat-size precheck BEFORE readFileSync. The old code read the
+    // whole file into memory and only then asked validateFileSize — every
+    // >1 MB binary/artifact paid a full read + Buffer alloc just to be
+    // rejected. The lstat above already told us the size for free. The
+    // post-read check stays as a TOCTOU guard (file grown between stat and
+    // read); package entry points keep their 5 MB ceiling either way.
+    const isForceIncluded = this.ctx.forceIncludePaths?.has(relPath) ?? false;
+    if (fileSize != null) {
+      const preCheck = validateFileSize(fileSize, isForceIncluded ? 5 * 1024 * 1024 : undefined);
+      if (preCheck.isErr()) {
+        logger.warn({ file: relPath, size: fileSize }, 'File too large, skipping');
+        return { kind: 'error' };
+      }
     }
 
     let content: Buffer;
@@ -138,12 +163,12 @@ export class FileExtractor {
       return { kind: 'skipped' };
     }
 
-    // Reject oversized files (default 1 MB) to prevent OOM — UNLESS the
+    // Post-read size gate (TOCTOU companion of the stat precheck above):
+    // reject oversized files (default 1 MB) to prevent OOM — UNLESS the
     // file is declared as a package entry point (main/module/bin/exports).
     // Public API surface must be indexed regardless of monolithic size,
     // otherwise dead-code/call-graph results are systematically wrong for
     // single-file libraries (lodash-class).
-    const isForceIncluded = this.ctx.forceIncludePaths?.has(relPath) ?? false;
     if (!isForceIncluded) {
       const sizeCheck = validateFileSize(content.length);
       if (sizeCheck.isErr()) {
