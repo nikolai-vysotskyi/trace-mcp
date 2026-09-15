@@ -242,10 +242,19 @@ export interface FrameworkPlugin {
    * May return either a synchronous `TraceMcpResult` or a `Promise` of one —
    * tree-sitter-based plugins (e.g. React) need async parser init on first
    * use, while regex-only plugins stay sync. The executor `await`s either.
+   *
+   * `content` accepts `Buffer | string`: `FileExtractor` decodes once per
+   * file and shares the string across all framework plugins (TRA-1537), so
+   * the hot path passes a `string`. Existing plugins keep declaring
+   * `content: Buffer` — a narrower param stays assignable to this wider one
+   * (method bivariance), and at runtime `String.prototype.toString()`
+   * returns the same string, so `content.toString('utf-8')` keeps working
+   * with zero per-plugin re-decodes. New plugins may declare
+   * `Buffer | string` and branch explicitly.
    */
   extractNodes?(
     filePath: string,
-    content: Buffer,
+    content: Buffer | string,
     language: string,
   ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
   resolveEdges?(ctx: ResolveContext): TraceMcpResult<RawEdge[]>;

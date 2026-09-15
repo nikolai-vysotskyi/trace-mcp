@@ -8,6 +8,7 @@ import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
+import { logFrameworkExtractStats } from '../plugin-api/executor.js';
 import { selectChangedFiles } from './change-prefilter.js';
 import { findPackageJsonEntries } from './package-entries.js';
 import { FileExtractor } from './file-extractor.js';
@@ -306,6 +307,8 @@ export async function extractAndPersist(
   // Phase 4 phantom-rebind: expose the persister's diff maps so the caller can
   // refresh its own _lastNewSymbolNames / _lastDeletedSymbolNames snapshot,
   // read later by buildChangeScope().
+  // TRA-1537 §3: opt-in per-plugin timing dump for weak-machine triage.
+  if (process.env.TRACE_MCP_PROFILE_PLUGINS === '1') logFrameworkExtractStats();
   return {
     newSymbolNames: persister.newSymbolNames,
     deletedSymbolNames: persister.deletedSymbolNames,

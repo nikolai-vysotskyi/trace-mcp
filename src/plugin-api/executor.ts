@@ -85,20 +85,81 @@ export async function executeLanguagePlugin(
  * the few that need async parser init (e.g. tree-sitter via getParser) hit
  * the await branch. The outer extract() is already async so adding this
  * here costs nothing for sync plugins.
+ *
+ * `content` is forwarded as-is: `FileExtractor` (TRA-1537) decodes once per
+ * file and passes the shared `string`, so per-plugin `content.toString()`
+ * re-decodes drop to zero. Plugins still declaring `content: Buffer` keep
+ * working — `String.prototype.toString()` returns the same string.
+ *
+ * Lightweight per-plugin timing (§3 of TRA-1537): accumulates calls/totalMs/
+ * emptyHits keyed by manifest name. Overhead is one `performance.now()` pair
+ * per call; read via `getFrameworkExtractStats()` or dump with
+ * `TRACE_MCP_PROFILE_PLUGINS=1` at the end of indexing.
  */
+export interface FrameworkExtractStat {
+  calls: number;
+  totalMs: number;
+  emptyHits: number;
+}
+
+const frameworkExtractStats = new Map<string, FrameworkExtractStat>();
+
+export function getFrameworkExtractStats(): ReadonlyMap<string, FrameworkExtractStat> {
+  return frameworkExtractStats;
+}
+
+export function resetFrameworkExtractStats(): void {
+  frameworkExtractStats.clear();
+}
+
+export function logFrameworkExtractStats(): void {
+  if (frameworkExtractStats.size === 0) return;
+  const rows = [...frameworkExtractStats.entries()]
+    .map(([name, s]) => ({ name, ...s, avgMs: s.calls > 0 ? s.totalMs / s.calls : 0 }))
+    .sort((a, b) => b.totalMs - a.totalMs);
+  const lines = rows.map(
+    (r) =>
+      `  ${r.name}: calls=${r.calls} totalMs=${r.totalMs.toFixed(1)} avgMs=${r.avgMs.toFixed(3)} empty=${r.emptyHits}`,
+  );
+  logger.info({ count: rows.length }, `Framework extract profile:\n${lines.join('\n')}`);
+}
+
 export async function executeFrameworkExtractNodes(
   plugin: FrameworkPlugin,
   filePath: string,
-  content: Buffer,
+  content: Buffer | string,
   language: string,
 ): Promise<TraceMcpResult<FileParseResult | null>> {
   if (!plugin.extractNodes) return ok(null);
 
+  const name = plugin.manifest.name;
+  const start = performance.now();
   try {
-    const maybe = plugin.extractNodes(filePath, content, language);
+    // Plugins declare `content: Buffer`; the shared-string fast path passes a
+    // real `string` cast to Buffer. Runtime-identical (`toString()` is a
+    // no-op on strings), zero re-decodes, zero per-plugin edits.
+    const maybe = plugin.extractNodes(filePath, content as Buffer, language);
     const result = maybe instanceof Promise ? await maybe : maybe;
-    return result.map((r) => r as FileParseResult | null);
+    const mapped = result.map((r) => r as FileParseResult | null);
+    const elapsed = performance.now() - start;
+    let stat = frameworkExtractStats.get(name);
+    if (!stat) {
+      stat = { calls: 0, totalMs: 0, emptyHits: 0 };
+      frameworkExtractStats.set(name, stat);
+    }
+    stat.calls++;
+    stat.totalMs += elapsed;
+    if (mapped.isOk() && !mapped.value) stat.emptyHits++;
+    return mapped;
   } catch (e) {
+    const elapsed = performance.now() - start;
+    let stat = frameworkExtractStats.get(name);
+    if (!stat) {
+      stat = { calls: 0, totalMs: 0, emptyHits: 0 };
+      frameworkExtractStats.set(name, stat);
+    }
+    stat.calls++;
+    stat.totalMs += elapsed;
     const msg = e instanceof Error ? e.message : String(e);
     logger.error(
       { plugin: plugin.manifest.name, file: filePath, error: msg },
