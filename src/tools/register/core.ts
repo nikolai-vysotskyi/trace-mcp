@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { redactEnvFile } from '../../utils/env-parser.js';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
-import { beginReindex } from '../../daemon/reindex-file-handler.js';
+import { beginReindex, isProjectStopping } from '../../daemon/reindex-file-handler.js';
 import { getReindexStats } from '../../daemon/reindex-stats.js';
 import { repairIndex, type RepairMode } from '../../db/repair.js';
 import { verifyIndex } from '../../db/verify.js';
@@ -77,6 +77,25 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         const blocked = guardPath(indexPath);
         if (blocked) return blocked;
       }
+      // TRA-1553: the daemon closes this project's DB in stopProject() without
+      // awaiting this handler — a run started mid-teardown ends in "The
+      // database connection is not open". Answer busy so the caller retries
+      // after the respawn instead of crashing the run.
+      if (isProjectStopping(projectRoot)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'busy',
+                error: 'project_stopping',
+                message: 'daemon is stopping this project; retry after reconnect',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
       logger.info({ path: indexPath, force, postprocess }, 'Reindex requested');
       // Pass `progress` so this run updates the same ProgressState that
       // `get_index_health` reports. Without it, `progress.indexing` kept
@@ -89,7 +108,11 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         projectRoot,
         progress ?? undefined,
       );
-
+      // TRA-1553: register the run as in-flight so stopProject()'s bounded
+      // drain sees it — without this the drain closes the DB under a running
+      // indexAll/indexFiles exactly like the reported deleteFiles crash.
+      // (Also feeds the TRA-1125 projects_indexing vitals for this path.)
+      const endReindex = beginReindex(projectRoot);
       try {
         const result = await withLock(
           { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-reindex`, op: 'reindex' },
@@ -117,6 +140,8 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           };
         }
         throw e;
+      } finally {
+        endReindex();
       }
     },
   );
@@ -489,6 +514,27 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // `get_index_health` reports. Without it, `progress.indexing` kept
       // showing whatever the last watcher batch did — "completed 276/276"
       // right after a 2069-file forced reindex (TRA-231).
+      //
+      // TRA-1553: same teardown race as the `reindex` tool above — the daemon
+      // never awaits this handler, so starting a pipeline run while the
+      // project is stopping ends in "The database connection is not open".
+      // This is the hottest of the three entry points (every agent calls it
+      // after every edit), so it is the most likely to collide with a respawn.
+      if (isProjectStopping(projectRoot)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'busy',
+                error: 'project_stopping',
+                message: 'daemon is stopping this project; retry after reconnect',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
       const pipeline = new IndexingPipeline(
         store,
         registry,

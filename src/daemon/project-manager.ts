@@ -27,6 +27,12 @@ import { FileWatcher } from '../indexer/watcher.js';
 import { logger } from '../logger.js';
 import { BackgroundLspEnricher } from '../lsp/background-enricher.js';
 import { getReindexStats } from './reindex-stats.js';
+import {
+  clearProjectStopping,
+  markProjectStopping,
+  REINDEX_DRAIN_TIMEOUT_MS,
+  waitForReindexDrain,
+} from './reindex-file-handler.js';
 import { SqliteTaskCache } from '../pipeline/index.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
@@ -460,6 +466,9 @@ export class ProjectManager {
     };
 
     this.projects.set(projectRoot, managed);
+    // TRA-1553: a previous stop may have thrown midway and left a stale
+    // stopping mark behind — the project is servable again from here.
+    clearProjectStopping(projectRoot);
 
     // Start indexing in background, gated by the shared semaphore so adding
     // N projects at once doesn't fan out to N concurrent indexAll runs.
@@ -904,6 +913,10 @@ export class ProjectManager {
   private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
     if (!managed) return;
+    // TRA-1553: refuse new single-file reindex work from this point on. This
+    // runs synchronously before the first await, so no interleaving can slip
+    // a fresh handleReindexFile/register_edit pipeline run in after the mark.
+    markProjectStopping(root);
     // Signal every background producer synchronously, before the first await:
     // abort in-flight AI fetches so a long-running summarize batch cannot
     // return after the DB has closed and write into stale references, and
@@ -943,6 +956,22 @@ export class ProjectManager {
         'lspEnricher.cancel() failed during stopProject (non-fatal)',
       );
     }
+    // TRA-1553: single-file reindexes (HTTP handleReindexFile, MCP
+    // register_edit) are not part of initialIndexPromise and nothing below
+    // awaits them, yet they run transactions against this project's DB across
+    // awaits. Drain what started before the mark above — bounded, so a hung
+    // reindex still cannot wedge shutdown past its deadline — before the DB
+    // closes. Without this, the next synchronous transaction after the close
+    // throws "The database connection is not open" from inside an async
+    // continuation as an unhandled rejection (seen on overlapping postinstall
+    // respawns, where a ~20 s old instance was SIGTERM'd mid-index).
+    const drained = await waitForReindexDrain(root, REINDEX_DRAIN_TIMEOUT_MS);
+    if (!drained) {
+      logger.warn(
+        { projectRoot: root, drainTimeoutMs: REINDEX_DRAIN_TIMEOUT_MS },
+        'stopProject: reindex drain timed out — closing DB with work still in flight',
+      );
+    }
     // Wait for the background initial-index chain (indexAll → summarize/embed →
     // subproject auto-sync) to finish so its topology.db handle is closed
     // before we tear down this project — see initialIndexPromise's doc comment.
@@ -974,6 +1003,7 @@ export class ProjectManager {
     // git remote is free to share it again on its next registration.
     releaseDbHoldersForRoot(root);
     this.projects.delete(root);
+    clearProjectStopping(root);
     clearProjectReindexCache(root);
     // Evict per-project caches living inside the shared worker pool
     // (FileExtractor + parsed ProjectContext keyed by rootPath). The pool

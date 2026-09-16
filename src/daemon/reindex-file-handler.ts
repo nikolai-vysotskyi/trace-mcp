@@ -30,9 +30,62 @@ export type ReindexFileResult =
  */
 const inFlight = new Map<string, number>();
 
+/** How long `stopProject()` waits for in-flight single-file reindexes before
+ *  closing the project DB anyway (TRA-1553). Single-file runs are typically
+ *  tens of ms, so this binds only pathological cases; the daemon-wide
+ *  `DAEMON_SHUTDOWN_DEADLINE_MS` still caps the whole shutdown. */
+export const REINDEX_DRAIN_TIMEOUT_MS = 5_000;
+
+/** Normalize the in-flight/stopping key: the HTTP path keys by the raw client
+ *  string while `stopProject()` keys by the registration string, and the two
+ *  can differ in trailing slashes or relative segments for the same project. */
+function keyOf(project: string): string {
+  return path.resolve(project);
+}
+
 /** Distinct projects with reindex work in flight. Feeds the vitals line. */
 export function countReindexingProjects(): number {
   return inFlight.size;
+}
+
+/**
+ * Projects currently being torn down by `stopProject()` (TRA-1553). Set
+ * synchronously before the first teardown await so no interleaving can start
+ * new pipeline work against a closing DB; cleared when the project leaves the
+ * map (and defensively on re-add, in case a stop threw midway). A stale mark
+ * can only cause 503-with-retry, never data loss.
+ */
+const stopping = new Set<string>();
+
+/** Mark a project as tearing down. Idempotent. */
+export function markProjectStopping(project: string): void {
+  stopping.add(keyOf(project));
+}
+
+/** Clear the teardown mark. Idempotent. */
+export function clearProjectStopping(project: string): void {
+  stopping.delete(keyOf(project));
+}
+
+/** Whether new reindex work must be refused for this project. */
+export function isProjectStopping(project: string): boolean {
+  return stopping.has(keyOf(project));
+}
+
+/**
+ * Wait until no reindex is in flight for `project`, or `timeoutMs` elapses.
+ * Returns true when drained, false on timeout (the caller must proceed to
+ * close anyway — a hung reindex must not wedge shutdown past its deadline).
+ */
+export async function waitForReindexDrain(project: string, timeoutMs: number): Promise<boolean> {
+  const key = keyOf(project);
+  if (!inFlight.has(key)) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (inFlight.has(key)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return true;
 }
 
 /**
@@ -44,14 +97,15 @@ export function countReindexingProjects(): number {
  * the HTTP one would still report most of a busy daemon's work as idle.
  */
 export function beginReindex(project: string): () => void {
-  inFlight.set(project, (inFlight.get(project) ?? 0) + 1);
+  const key = keyOf(project);
+  inFlight.set(key, (inFlight.get(key) ?? 0) + 1);
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    const n = (inFlight.get(project) ?? 1) - 1;
-    if (n > 0) inFlight.set(project, n);
-    else inFlight.delete(project);
+    const n = (inFlight.get(key) ?? 1) - 1;
+    if (n > 0) inFlight.set(key, n);
+    else inFlight.delete(key);
   };
 }
 
@@ -100,6 +154,19 @@ export async function handleReindexFile(
       ok: false,
       status: 503,
       error: `project not ready: ${managed.status}`,
+      retryAfterSec: 5,
+    };
+  }
+
+  // TRA-1553: the project is being torn down — its DB is about to close (or
+  // already closing) while this handler would still start pipeline work
+  // against it. Same 503 contract as a warming project: hook clients honour
+  // Retry-After and fall back to the local CLI path transparently.
+  if (isProjectStopping(project)) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'project is stopping',
       retryAfterSec: 5,
     };
   }
