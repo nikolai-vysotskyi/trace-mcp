@@ -42,19 +42,27 @@ The two above are labelled retrospective because they were written after their
 runs. An honest "this was not preregistered" is worth more than a backdated file
 pretending otherwise.
 
-## Current numbers (3.17.0, `121e3e9b`, darwin 25.5.0 / arm64, median of 3)
+## Current numbers (3.25.1, `299ec2b1`, darwin 25.5.0 / arm64, median of 3)
 
-Taken 2026-09-04, 30 minutes / 574 cycles / 0 cycle errors, offscreen. First pass since the
+Taken 2026-09-15, startup+size pass (TRA-1392, `baseline.json` run 11; run 10 is TRA-1347's
+independent pass at the same commit). **No regression
+on any measured metric.** Startup/size rows below are this pass; workload and artifact rows
+are carried over from the 2026-09-04 full pass — the workload has not run since (three
+startup-only passes in a row: 09-08, this one, plus the 09-12 pass that died by
+idle_watchdog with zero output), so a full 30-minute workload pass is still owed.
+
+Taken 2026-09-04 (workload/artifact rows) and 2026-09-15 (startup/size/heap-idle rows),
+30 minutes / 574 cycles / 0 cycle errors, offscreen. First pass since the
 3.11.0 series and six app-visible releases later. **No regression on any metric** against the
 median of the last five runs; four improved. The `artifact_mb` rows come from
 `pnpm -C packages/app run pack` on this same commit; sizes are deterministic and need no median.
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_first_content_ms` | 89 | — | **the startup metric of record** — 93 last time |
+| `renderer_first_content_ms` | 82 | — | **the startup metric of record** — 89 last run, 93 median of last three (−11.8%, recorded improvement, cause not attributed) |
 | `renderer_fcp_ms` | null | — | structurally unavailable offscreen — see below |
-| `cold_start_ms` | 415 | 3000 | ok, load-sensitive |
-| `window_interactive_ms` | 141 | — | load-sensitive, do not trend it |
+| `cold_start_ms` | 359 | 3000 | ok, load-sensitive |
+| `window_interactive_ms` | 116 | — | load-sensitive, do not trend it |
 | `ui_p95_ms` | 667 | — | **old detector — see the correction below**; search p95 667, open 73, switch 189 |
 | `renderer_cpu_idle_pct.overview` | 0.1 | — | was 2.9 |
 | `renderer_cpu_idle_pct.graph` | **6.8** | — | **was 29.3 — TRA-683 landed and this is its field number** |
@@ -65,9 +73,9 @@ median of the last five runs; four improved. The `artifact_mb` rows come from
 | `tree_rss_peak_mb` (app + daemon) | 1512 | 2000 | ok |
 | `tree_cpu_peak_pct` (combined, sums cores) | 133 | — | ok vs 180 |
 | `rss_after_index_settle_mb` (daemon only) | 196 | 500 | ok — was 316 |
-| `main_cpu_idle_pct` | 0.1 | 2 | ok |
-| `renderer_eager_kb` | **1358** | — | **the size metric of record** — -34.8% vs 2084 KB (TRA-1185) |
-| `renderer_bundle_kb` | 2379 | — | flat vs 2346 KB (+1.4%), code-split behind lazy chunks |
+| `main_cpu_idle_pct` | 0 | 2 | ok |
+| `renderer_eager_kb` | **1370** | — | **the size metric of record** — flat vs 1358 (+0.9%) |
+| `renderer_bundle_kb` | 2392 | — | flat vs 2379 (+0.5%) |
 | `artifact_mb.mac_app_unpacked` | 350 | x1.5 growth | +1.1% vs the 346.2 re-anchor |
 | `artifact_mb.mac_server_payload` | 80 | **100 MB, absolute** | ok, watch it |
 | `artifact_mb.mac_asar` | 7 | x1.5 growth | ok |
@@ -380,6 +388,17 @@ was a long silent step, almost certainly the 55-min workload, so this pass is st
 is first-launch warm-up, median unaffected. The 30-min workload (`ui_p95_ms`,
 `heap_growth_mb_per_hour`, tree RSS) was deliberately not run — open for a follow-up in
 bounded steps, not one silent 55-minute call.
+
+**2026-09-15 — duplicate pass at the same commit (TRA-1392).**
+Two agents measured `299ec2b1` independently within seconds of each other (TRA-1347 at
+01:10:17Z, this one at 01:10:09Z) and got identical medians — first_content 82, bundle
+2392, eager 1370. Both entries stay in `baseline.json` per the never-rewrite rule; the
+replication is a finding, not a clerical error. Harness lesson from the dead 2026-09-12
+pass (2 h silent, killed by idle_watchdog): a full workload pass must either emit
+progress or be split across runs — silence plus length reads as a stuck run. Sample 1's
+`cold_start_ms` 2935 vs 357/359 in samples 2–3 is first-launch warm-up, not signal; the
+median absorbs it, and the renderer-clock `first_content` (94/82/81) is steady across all
+three, which is the arrangement the metric-of-record choice assumes.
 
 **2026-09-04 — the harness was not timing the synchronous half of every action (TRA-835).**
 See the detector bullet above: observer armed after the action, 42.5% of searches recorded

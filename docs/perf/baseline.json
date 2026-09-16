@@ -3189,6 +3189,63 @@
       ],
       "scope": "startup-only (no workload; resumed run after 2026-09-11 idle_watchdog kill)",
       "notes": "Resumed run: the 2026-09-11 pass was killed by idle_watchdog after 2h with an empty message queue — it left no partial entry and no harness output, so the stall was almost certainly a long silent step (the 55-min workload pass) rather than a measurable state. This pass deliberately does startup-only (~7 min, 3 samples) to re-establish the series without repeating that shape; the 30-min workload (ui_p95/heap_growth/tree_rss) stays open for a follow-up run chunked into bounded steps. No regression: renderer_first_content_ms 82 vs 89 (metric of record), cold_start 358 vs 415 (load-sensitive sanity check only), renderer_eager_kb 1370 vs 1358 (+0.9%), renderer_bundle_kb 2392 vs 2379 (+0.5%). GraphExplorerGPU still lazy (648 KB chunk, not preloaded — TRA-1185 holds). Sample-1 cold_start 2813 is first-launch warm-up (Electron code cache), same shape as the 439-vs-349 warm-up noted in run 1; median unaffected. Renderer-affecting delta since d3ce7fb1 (2026-09-08 entry): 9883b196 json-editor/theme control, 1def36d0 opencode client profile, 9b282a7e de/ja i18n fixes — none moved the eager path. heap_idle_mb 9.5 taken with no daemon serving (startup-only has no fixture), so compare only within daemon-less idle samples."
+    },
+    {
+      "date": "2026-09-15T01:10:09.933Z",
+      "app_version": "3.25.1",
+      "commit": "299ec2b1",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "scope": "startup+size (TRA-1392)",
+      "metrics": {
+        "cold_start_ms": 359,
+        "window_interactive_ms": 116,
+        "renderer_first_content_ms": 82,
+        "renderer_fcp_ms": null,
+        "ui_p95_ms": null,
+        "renderer_cpu_idle_pct": null,
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
+        "tree_rss_peak_mb": null,
+        "tree_rss_idle_mb": null,
+        "tree_cpu_peak_pct": null,
+        "rss_after_index_settle_mb": null,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 2392,
+        "renderer_eager_kb": 1370,
+        "artifact_mb": {
+          "mac_app_unpacked": null,
+          "mac_asar": null
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 2935,
+          "window_interactive_ms": 151,
+          "renderer_first_content_ms": 94,
+          "renderer_fcp_ms": 148
+        },
+        {
+          "cold_start_ms": 357,
+          "window_interactive_ms": 116,
+          "renderer_first_content_ms": 82,
+          "renderer_fcp_ms": null
+        },
+        {
+          "cold_start_ms": 359,
+          "window_interactive_ms": 116,
+          "renderer_first_content_ms": 81,
+          "renderer_fcp_ms": null,
+          "heap_idle_mb": 9.5,
+          "main_cpu_idle_pct": 0
+        }
+      ],
+      "notes": "Restarted run: the 2026-09-12 pass died by idle_watchdog with zero output, so this pass is deliberately bounded (startup-only, ~10 min wall) instead of repeating a 55-minute workload blind. No regression on any measured metric. renderer_first_content_ms 82 vs 89 last run (-7.9%) and vs 93 median of the last three daemon-series runs (-11.8%): recorded as an improvement, cause not attributed - suspect range since d3ce7fb1 is 72 commits incl. #1141 (theme control, JSON editor), #1150 (opencode client profile), #1157 (i18n de/ja), #1161, plus i18next/vitest bumps. cold_start_ms 359 vs 436 and window_interactive_ms 116 vs 134 are load-sensitive sanity checks against the 3 s ceiling only, not trend signals. Sample 1 cold_start 2935 is first-launch warm-up (Electron code cache), correctly excluded by the median; renderer-clock metrics in the same sample (94/151) are unaffected, which is why first_content is the metric of record. heap_idle_mb 9.5 and main_cpu_idle_pct 0 flat. renderer_bundle_kb 2392 vs 2379 (+0.5%), renderer_eager_kb 1370 vs 1358 (+0.9%): flat. ui_p95_ms / heap growth / tree set null - third consecutive pass without a full workload (last full workload 2026-09-04); a full 30-minute workload pass is still owed. artifact_mb null (pack not run); i18next was bumped in 6e395312 so mac_asar may have moved - next full run should re-pack. Duplicate note: TRA-1347 landed an independent startup-only pass at the same commit (2026-09-15T01:10:17Z, 8 s later) with identical medians (first_content 82, bundle 2392, eager 1370) - two harnesses, same numbers, kept as separate entries per the never-rewrite rule."
     }
   ]
 }
