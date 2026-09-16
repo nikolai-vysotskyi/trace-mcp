@@ -1,0 +1,125 @@
+{
+  "$comment": "Labeled description-to-code queries for the TRA-1539 embedding eval. Each query is a natural-language description an agent might issue; targets are corpus doc ids (file#symbol). The runner fails loudly if a target id is missing from the built corpus.",
+  "queries": [
+    {
+      "id": "q01",
+      "query": "combine multiple abort signals with a timeout fallback",
+      "targets": ["src/ai/abort.ts#combineAbortSignals"]
+    },
+    {
+      "id": "q02",
+      "query": "warn once before sending code to a cloud embedding provider",
+      "targets": ["src/ai/cloud-warning.ts#warnIfCloudEmbeddingProvider"]
+    },
+    {
+      "id": "q03",
+      "query": "persist user consent for an AI provider",
+      "targets": ["src/ai/consent.ts#grantConsent"]
+    },
+    {
+      "id": "q04",
+      "query": "embedding task hint distinguishing indexed documents from search queries",
+      "targets": ["src/ai/interfaces.ts#EmbeddingTask"]
+    },
+    {
+      "id": "q05",
+      "query": "check whether the local ONNX transformers package is importable",
+      "targets": ["src/ai/onnx.ts#isOnnxAvailable"]
+    },
+    {
+      "id": "q06",
+      "query": "resolve the ONNX quantization dtype with q8 default and env override",
+      "targets": ["src/ai/onnx.ts#resolveOnnxDtype"]
+    },
+    {
+      "id": "q07",
+      "query": "strip docstrings and clean generated code summaries",
+      "targets": ["src/ai/prompts.ts#sanitizeGeneratedSummary"]
+    },
+    {
+      "id": "q08",
+      "query": "route inference to the fast or smart tier by complexity hint",
+      "targets": ["src/ai/tier-router.ts#pickInferenceTierName"]
+    },
+    {
+      "id": "q09",
+      "query": "sqlite blob vector store with brute force cosine similarity search",
+      "targets": ["src/ai/vector-store.ts#BlobVectorStore"]
+    },
+    {
+      "id": "q10",
+      "query": "error raised when the index was built with a different embedding provider model",
+      "targets": ["src/ai/vector-store.ts#ProviderMismatchError"]
+    },
+    {
+      "id": "q11",
+      "query": "vector dimension mismatch between expected and actual embedding length",
+      "targets": ["src/ai/vector-store.ts#DimensionMismatchError"]
+    },
+    {
+      "id": "q12",
+      "query": "hybrid search fusing full text and vector results with reciprocal rank fusion",
+      "targets": ["src/ai/search.ts#hybridSearch"]
+    },
+    {
+      "id": "q13",
+      "query": "classify provider failures into quota network and auth errors",
+      "targets": ["src/ai/errors.ts#classifyProviderError"]
+    },
+    {
+      "id": "q14",
+      "query": "embedding pipeline circuit breaker pausing background indexing after failures",
+      "targets": ["src/ai/embedding-pipeline.ts#EmbeddingPipeline"]
+    },
+    {
+      "id": "q15",
+      "query": "per-run diagnostics counting failed embedding batches and breaker trips",
+      "targets": ["src/ai/embedding-pipeline.ts#EmbeddingRunDiagnostics"]
+    },
+    {
+      "id": "q16",
+      "query": "sqlite-vec ANN accelerator backfilling the blob embedding table",
+      "targets": ["src/ai/vec-extension.ts#Vec0Index"]
+    },
+    {
+      "id": "q17",
+      "query": "detect whether a search query looks like a file path",
+      "targets": ["src/ai/retrieval-modes.ts#selectRetrievalMode"]
+    },
+    {
+      "id": "q18",
+      "query": "create the feeling lucky retriever that classifies the query first",
+      "targets": ["src/retrieval/retrievers/feeling-lucky-retriever.ts#createFeelingLuckyRetriever"]
+    },
+    {
+      "id": "q19",
+      "query": "lexical retriever factory over the full text index",
+      "targets": ["src/retrieval/retrievers/lexical-retriever.ts#createLexicalRetriever"]
+    },
+    {
+      "id": "q20",
+      "query": "semantic retriever embedding the query text for vector search",
+      "targets": ["src/retrieval/retrievers/semantic-retriever.ts#createSemanticRetriever"]
+    },
+    {
+      "id": "q21",
+      "query": "run a retriever through the standard three step pipeline",
+      "targets": ["src/retrieval/types.ts#runRetriever"]
+    },
+    {
+      "id": "q22",
+      "query": "convert a file pattern filter into a SQL LIKE expression",
+      "targets": ["src/db/fts.ts#filePatternToLike"]
+    },
+    {
+      "id": "q23",
+      "query": "repair modes dropping orphan rows or rebuilding the full text index",
+      "targets": ["src/db/repair.ts#RepairMode"]
+    },
+    {
+      "id": "q24",
+      "query": "low power memory profile clamping sqlite cache and mmap per connection",
+      "targets": ["src/db/schema.ts#IndexMemoryProfile"]
+    }
+  ]
+}
