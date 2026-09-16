@@ -220,8 +220,12 @@ export class FileExtractor {
       return { kind: 'skipped' };
     }
 
-    // Execute language plugin
-    const parseResult = await executeLanguagePlugin(plugin, relPath, content);
+    // Execute language plugin. The tree-cache scope (this run's project root)
+    // namespaces per-file tree-sitter entries so co-hosted projects sharing
+    // a relPath don't alias into one cache slot (see ExtractSymbolsOptions).
+    const parseResult = await executeLanguagePlugin(plugin, relPath, content, undefined, {
+      treeCacheScope: rootPath,
+    });
     if (parseResult.isErr()) {
       logger.error({ file: relPath, error: parseResult.error }, 'Language plugin failed');
       return { kind: 'error' };

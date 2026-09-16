@@ -12,6 +12,19 @@ export interface RenameDetectorStore {
   updateFilePath(fileId: number, newPath: string): void;
 }
 
+export interface DetectedRename {
+  /** DB row path that no longer exists on disk. */
+  from: string;
+  /** Current on-disk path the row was carried over to. */
+  to: string;
+}
+
+export interface DetectRenamesResult {
+  renamed: number;
+  /** Old → new path pairs, in detection order (TRA-1577: tree-cache moves). */
+  pairs: DetectedRename[];
+}
+
 /**
  * Pre-pass: detect file renames by content hash. When a path on disk has no
  * matching DB row but its content hash matches a DB row whose old path no
@@ -19,19 +32,23 @@ export interface RenameDetectorStore {
  * row's path and skip extraction. Inspired by graphify v0.7.0's move to
  * content-only cache keys.
  *
- * Returns the count of detected renames. Mutates the DB (via `store`) and
- * the `existingFiles` lookup so the caller can re-load it.
+ * Returns the count of detected renames plus the old → new pairs. Mutates
+ * the DB (via `store`) and the `existingFiles` lookup so the caller can
+ * re-load it.
  *
  * Moved out of `IndexingPipeline.detectRenames` verbatim (2026-07 complexity
  * reduction pass) — behavior must stay byte-identical to the original
  * private method; only `this.*` field reads became explicit parameters.
+ * TRA-1577 widened the return from a bare count to `{ renamed, pairs }` so
+ * callers can move per-file caches along the rename; the detection itself is
+ * untouched.
  */
 export function detectRenames(
   store: RenameDetectorStore,
   rootPath: string,
   relPaths: string[],
   existingFiles: Map<string, FileRow>,
-): number {
+): DetectRenamesResult {
   // Files in DB whose path is not in the current scan list — candidates
   // for "old name of a renamed file".
   const onDiskSet = new Set(relPaths);
@@ -44,7 +61,7 @@ export function detectRenames(
     const abs = path.resolve(rootPath, f.path);
     return !fs.existsSync(abs);
   });
-  if (orphans.length === 0) return 0;
+  if (orphans.length === 0) return { renamed: 0, pairs: [] };
 
   // Index orphans by hash for O(1) lookup. A given hash may appear under
   // multiple orphans (legitimate identical files that were all moved); we
@@ -57,6 +74,7 @@ export function detectRenames(
   }
 
   let renamed = 0;
+  const pairs: DetectedRename[] = [];
   for (const relPath of relPaths) {
     if (existingFiles.has(relPath)) continue; // already known under this path
     const abs = path.resolve(rootPath, relPath);
@@ -77,10 +95,11 @@ export function detectRenames(
     store.updateFilePath(orphan.id, relPath);
     existingFiles.set(relPath, { ...orphan, path: relPath });
     renamed++;
+    pairs.push({ from: orphan.path, to: relPath });
     logger.debug(
       { from: orphan.path, to: relPath, hash: hash.slice(0, 8) },
       'Detected rename — reused existing symbols',
     );
   }
-  return renamed;
+  return { renamed, pairs };
 }

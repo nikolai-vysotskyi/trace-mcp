@@ -7,8 +7,9 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -58,6 +59,7 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const ext = filePath.substring(filePath.lastIndexOf('.'));
@@ -68,8 +70,9 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       const isJsExt = ext === '.js' || ext === '.mjs' || ext === '.cjs';
       const hasJsx = isJsExt && /(?:^|[\s(=,;>])<(?:[A-Z][A-Za-z0-9]*|>|\/>)/.test(sourceCode);
       const useTsx = TSX_EXTENSIONS.has(ext) || hasJsx;
-      const parser = await getParser(useTsx ? 'tsx' : 'typescript');
-      const tree = parser.parse(sourceCode);
+      const tree = await parseWithTreeCache(useTsx ? 'tsx' : 'typescript', filePath, sourceCode, {
+        scope: opts?.treeCacheScope,
+      });
       try {
         const root: TSNode = tree.rootNode;
 

@@ -222,6 +222,22 @@ export interface ProjectContext {
 
 // --- Language Plugin ---
 
+/**
+ * Optional per-call inputs for `LanguagePlugin.extractSymbols`.
+ *
+ * `treeCacheScope` namespaces the per-file tree-sitter Tree cache
+ * (`src/parser/tree-cache.ts`): the project root the file belongs to. Two
+ * projects sharing one process (daemon) routinely contain the same relPath —
+ * without the scope their entries would alias into one slot and every
+ * cross-project alternation would incrementally reparse from a useless base
+ * (correct output, wasted work, dishonest hit stats). `FileExtractor` fills
+ * it from its own rootPath; direct/test callers leave it undefined and get
+ * unscoped keys.
+ */
+export interface ExtractSymbolsOptions {
+  treeCacheScope?: string;
+}
+
 export interface LanguagePlugin {
   manifest: PluginManifest;
   supportedExtensions: string[];
@@ -229,6 +245,7 @@ export interface LanguagePlugin {
   extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
 }
 

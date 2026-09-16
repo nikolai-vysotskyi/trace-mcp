@@ -10,8 +10,9 @@ import { parse as parseSFC } from '@vue/compiler-sfc';
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -37,6 +38,18 @@ import {
   extractTemplateComponents,
 } from './helpers.js';
 
+/**
+ * Names one SFC block's tree-sitter cache slot (TRA-1577). `<script setup>`
+ * and `<script>` parse different texts, so they need different tags; the
+ * repeated parses within one block share a tag and collapse into one seed +
+ * identical hits.
+ */
+interface BlockCacheKey {
+  scope?: string;
+  filePath: string;
+  tag: string;
+}
+
 export class VueLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'vue-language',
@@ -49,6 +62,7 @@ export class VueLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const sourceCode = content.toString('utf-8');
@@ -96,9 +110,12 @@ export class VueLanguagePlugin implements LanguagePlugin {
         emits = extractEmits(setupContent);
         exposed = extractExposed(setupContent);
         composables = extractComposables(setupContent);
+        // One cache slot per SFC block: the two parses below see identical
+        // text, so the first seeds and the second is an identical hit.
+        const setupCache = { scope: opts?.treeCacheScope, filePath, tag: 'setup' };
 
         // Extract import edges from script setup via tree-sitter
-        const setupEdges = await this.parseScriptEdges(setupContent);
+        const setupEdges = await this.parseScriptEdges(setupContent, setupCache);
         edges.push(...setupEdges);
 
         // The whole <script setup> body is effectively module-level. Emit a
@@ -106,20 +123,31 @@ export class VueLanguagePlugin implements LanguagePlugin {
         // do NOT extract individual function/variable declarations from here
         // — they're implementation details of the component setup block and
         // would bloat symbol counts with private locals.
-        const setupModuleSym = await this.buildModuleSymbol(setupContent, filePath, '_setup');
+        const setupModuleSym = await this.buildModuleSymbol(
+          setupContent,
+          filePath,
+          '_setup',
+          setupCache,
+        );
         if (setupModuleSym) symbols.push(setupModuleSym);
       }
 
       // Extract from <script> (Options API or regular)
       if (descriptor.script) {
         const scriptContent = descriptor.script.content;
-        const scriptSymbols = await this.parseScriptSymbols(scriptContent, filePath);
+        const scriptCache = { scope: opts?.treeCacheScope, filePath, tag: 'script' };
+        const scriptSymbols = await this.parseScriptSymbols(scriptContent, filePath, scriptCache);
         symbols.push(...scriptSymbols);
 
-        const scriptEdges = await this.parseScriptEdges(scriptContent);
+        const scriptEdges = await this.parseScriptEdges(scriptContent, scriptCache);
         edges.push(...scriptEdges);
 
-        const scriptModuleSym = await this.buildModuleSymbol(scriptContent, filePath, '_script');
+        const scriptModuleSym = await this.buildModuleSymbol(
+          scriptContent,
+          filePath,
+          '_script',
+          scriptCache,
+        );
         if (scriptModuleSym) symbols.push(scriptModuleSym);
       }
 
@@ -168,10 +196,12 @@ export class VueLanguagePlugin implements LanguagePlugin {
   /**
    * Parse a script block with tree-sitter to extract import edges.
    */
-  private async parseScriptEdges(scriptContent: string): Promise<RawEdge[]> {
+  private async parseScriptEdges(scriptContent: string, cache: BlockCacheKey): Promise<RawEdge[]> {
     try {
-      const parser = await getParser('typescript');
-      const tree = parser.parse(scriptContent);
+      const tree = await parseWithTreeCache('typescript', cache.filePath, scriptContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         return extractImportEdges(tree.rootNode as TSNode);
       } finally {
@@ -186,10 +216,16 @@ export class VueLanguagePlugin implements LanguagePlugin {
    * Parse a <script> block with tree-sitter to extract top-level symbols.
    * Used for Options API / non-setup scripts.
    */
-  private async parseScriptSymbols(scriptContent: string, filePath: string): Promise<RawSymbol[]> {
+  private async parseScriptSymbols(
+    scriptContent: string,
+    filePath: string,
+    cache: BlockCacheKey,
+  ): Promise<RawSymbol[]> {
     try {
-      const parser = await getParser('typescript');
-      const tree = parser.parse(scriptContent);
+      const tree = await parseWithTreeCache('typescript', cache.filePath, scriptContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         const root: TSNode = tree.rootNode;
         const symbols: RawSymbol[] = [];
@@ -279,10 +315,13 @@ export class VueLanguagePlugin implements LanguagePlugin {
     scriptContent: string,
     filePath: string,
     suffix: string = '',
+    cache: BlockCacheKey,
   ): Promise<RawSymbol | null> {
     try {
-      const parser = await getParser('typescript');
-      const tree = parser.parse(scriptContent);
+      const tree = await parseWithTreeCache('typescript', cache.filePath, scriptContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         const root: TSNode = tree.rootNode;
         // For Vue SFCs we pass skipLexicalFunctionBodies:false because local

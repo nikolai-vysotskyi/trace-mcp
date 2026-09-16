@@ -1,6 +1,7 @@
 import { ok, type TraceMcpResult } from '../errors.js';
 import { logger } from '../logger.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   FrameworkPlugin,
   LanguagePlugin,
@@ -21,6 +22,7 @@ export async function executeLanguagePlugin(
   filePath: string,
   content: Buffer,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  opts?: ExtractSymbolsOptions,
 ): Promise<TraceMcpResult<FileParseResult>> {
   // Guard: reject oversized input before handing to plugin
   if (content.length > MAX_PLUGIN_INPUT_BYTES) {
@@ -40,7 +42,7 @@ export async function executeLanguagePlugin(
 
   try {
     const result = await withTimeout(
-      () => plugin.extractSymbols(filePath, content),
+      () => plugin.extractSymbols(filePath, content, opts),
       timeoutMs,
       `${plugin.manifest.name}.extractSymbols`,
     );

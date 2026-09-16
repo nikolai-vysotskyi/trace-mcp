@@ -15,6 +15,7 @@ import type {
 } from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
+import { invalidateTreeCacheFile } from '../parser/tree-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 import { safeGitEnv } from '../utils/git-env.js';
@@ -40,7 +41,6 @@ import {
   writeWatcherSnapshot,
 } from './incremental-discovery.js';
 import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
-import { detectRenames as detectRenamesImpl } from './rename-detector.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
@@ -801,6 +801,13 @@ export class IndexingPipeline {
 
   deleteFiles(filePaths: string[]): void {
     if (filePaths.length === 0) return;
+    // TRA-1577: drop per-file tree-sitter cache entries alongside the DB rows
+    // so a deleted path can't serve a stale incremental base on re-creation,
+    // and its WASM trees are freed instead of lingering to LRU eviction.
+    for (const fp of filePaths) {
+      const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+      invalidateTreeCacheFile(this.rootPath, rel.split(path.sep).join('/'));
+    }
     this.store.db.transaction(() => {
       for (const fp of filePaths) {
         const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
@@ -1091,23 +1098,6 @@ export class IndexingPipeline {
 
     logger.info(result, 'Indexing pipeline completed');
     return result;
-  }
-
-  /**
-   * Pre-pass: detect file renames by content hash. When a path on disk has
-   * no matching DB row but its content hash matches a DB row whose old path
-   * no longer exists on disk, treat it as a rename — atomically update the
-   * file row's path and skip extraction. Inspired by graphify v0.7.0's move
-   * to content-only cache keys.
-   *
-   * Returns the count of detected renames. Mutates the DB and the
-   * `existingFiles` lookup so the caller can re-load it.
-   */
-  private detectRenames(
-    relPaths: string[],
-    existingFiles: Map<string, import('../db/types.js').FileRow>,
-  ): number {
-    return detectRenamesImpl(this.store, this.rootPath, relPaths, existingFiles);
   }
 
   /** Pass 1: extract symbols from files and persist in batched transactions. */

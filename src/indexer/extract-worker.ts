@@ -7,6 +7,7 @@
  * resolved on the main thread and shipped in the request.
  */
 import { parentPort } from 'node:worker_threads';
+import { dropTreeCacheScope } from '../parser/tree-cache.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { initContentHasher } from '../util/hash.js';
 import type { DropProjectMessage, ExtractRequest, ExtractResponse } from './extract-pool.js';
@@ -71,6 +72,9 @@ parentPort.on('message', async (msg: InboundMessage) => {
   if ('kind' in msg && msg.kind === 'drop_project') {
     extractorByRoot.delete(msg.rootPath);
     projectContextByRoot.delete(msg.rootPath);
+    // TRA-1577: the worker's own per-file tree-sitter cache is scoped by the
+    // same rootPath — drop it so removed projects free their WASM trees.
+    dropTreeCacheScope(msg.rootPath);
     return;
   }
 
