@@ -8,8 +8,10 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -228,13 +230,14 @@ export class DartLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     const sourceCode = content.toString('utf-8');
 
     // Try tree-sitter first
     if (this.treeSitterAvailable !== false) {
       try {
-        const result = await this.extractWithTreeSitter(filePath, sourceCode);
+        const result = await this.extractWithTreeSitter(filePath, sourceCode, opts);
         this.treeSitterAvailable = true;
         return result;
       } catch {
@@ -258,9 +261,11 @@ export class DartLanguagePlugin implements LanguagePlugin {
   private async extractWithTreeSitter(
     filePath: string,
     sourceCode: string,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
-    const parser = await getParser('dart');
-    const tree = parser.parse(sourceCode);
+    const tree = await parseWithTreeCache('dart', filePath, sourceCode, {
+      scope: opts?.treeCacheScope,
+    });
     try {
       const root: TSNode = tree.rootNode;
 

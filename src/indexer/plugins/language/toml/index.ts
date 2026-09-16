@@ -12,8 +12,10 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -86,11 +88,13 @@ export class TomlLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = await getParser('toml');
       const source = content.toString('utf-8');
-      const tree = parser.parse(source);
+      const tree = await parseWithTreeCache('toml', filePath, source, {
+        scope: opts?.treeCacheScope,
+      });
       try {
         const root: TSNode = tree.rootNode;
 

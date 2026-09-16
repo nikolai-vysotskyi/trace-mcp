@@ -46,6 +46,8 @@ export type TSParser = Omit<Parser, 'parse'> & {
 let initPromise: Promise<void> | null = null;
 const languageCache = new Map<string, Language>();
 const parserCache = new Map<string, TSParser>();
+/** In-flight per-language loads coalesced by getParser (TRA-1577). */
+const parserInitPromises = new Map<string, Promise<TSParser>>();
 
 /**
  * This codebase's language name → the tree-sitter grammar that parses it.
@@ -126,8 +128,31 @@ export async function warmUpGrammars(languages: readonly string[]): Promise<void
 export async function getParser(language: string): Promise<TSParser> {
   await ensureInit();
 
-  if (parserCache.has(language)) return parserCache.get(language)!;
+  const hit = parserCache.get(language);
+  if (hit) return hit;
 
+  // TRA-1577: coalesce concurrent first-loads. Without this, N files
+  // extracting in one `Promise.all` chunk (the standard in-process path)
+  // each miss the cache, each `Language.load()` the same grammar, and the
+  // last writer wins — leaving duplicate WASM Language instances alive and,
+  // worse, trees pinned to a Language instance no cached parser uses. This
+  // build returns null when an old tree's Language address differs from the
+  // parsing parser's, so cross-instance reuse silently poisoned the per-file
+  // incremental cache. Sharing one in-flight promise per language keeps a
+  // single Language + Parser per grammar however the calls interleave.
+  let inflight = parserInitPromises.get(language);
+  if (!inflight) {
+    inflight = loadParser(language);
+    parserInitPromises.set(language, inflight);
+  }
+  try {
+    return await inflight;
+  } finally {
+    if (parserInitPromises.get(language) === inflight) parserInitPromises.delete(language);
+  }
+}
+
+async function loadParser(language: string): Promise<TSParser> {
   const grammar = LANG_GRAMMARS[language];
   if (!grammar) throw new Error(`Unsupported tree-sitter language: ${language}`);
 
@@ -145,10 +170,14 @@ export async function getParser(language: string): Promise<TSParser> {
 }
 
 /**
- * Byte offset → tree-sitter Point (row + byte column).
- * tree-sitter works in UTF-8 bytes, not UTF-16 code units, so both the row
- * scan and the column use byte lengths. ASCII-only inputs take the same path —
- * no separate fast path to keep the two from drifting apart.
+ * UTF-16 offset → tree-sitter Point (row + column).
+ *
+ * web-tree-sitter 0.27 feeds the parser through `stringToUTF16`, so indices
+ * AND columns are UTF-16 code units — not the UTF-8 bytes classic tree-sitter
+ * uses. Verified empirically: `const x = 関数;` reports the identifier as
+ * [10,12] (2 UTF-16 units), not [10,16] (6 UTF-8 bytes). ASCII-only inputs
+ * take the same path — no separate fast path to keep the two from drifting
+ * apart.
  */
 function offsetToPoint(text: string, utf16Offset: number): Point {
   let row = 0;
@@ -159,7 +188,7 @@ function offsetToPoint(text: string, utf16Offset: number): Point {
       lineStart = i + 1;
     }
   }
-  return { row, column: Buffer.byteLength(text.slice(lineStart, utf16Offset)) };
+  return { row, column: utf16Offset - lineStart };
 }
 
 /**
@@ -189,10 +218,12 @@ export function computeSingleEdit(oldText: string, newText: string): Edit | null
     oldEnd--;
     newEnd--;
   }
+  // All indices/columns are UTF-16 code units (see offsetToPoint): the scan
+  // above already works in those units, so no byte conversion here.
   return new Edit({
-    startIndex: Buffer.byteLength(oldText.slice(0, start)),
-    oldEndIndex: Buffer.byteLength(oldText.slice(0, oldEnd)),
-    newEndIndex: Buffer.byteLength(newText.slice(0, newEnd)),
+    startIndex: start,
+    oldEndIndex: oldEnd,
+    newEndIndex: newEnd,
     startPosition: offsetToPoint(oldText, start),
     oldEndPosition: offsetToPoint(oldText, oldEnd),
     newEndPosition: offsetToPoint(newText, newEnd),

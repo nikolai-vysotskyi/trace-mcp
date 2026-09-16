@@ -15,6 +15,7 @@ import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import { detectRenames } from './rename-detector.js';
+import { renameTreeCacheFile } from '../parser/tree-cache.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 
 /** Mirrors `IndexingResult` in pipeline.ts (kept as a structural subset here,
@@ -106,12 +107,18 @@ export async function extractAndPersist(
   // moves N files to new paths re-extracts every byte, even though the
   // content is identical to known DB rows. graphify v0.7.0 fixed the same
   // wasted work by keying its cache on content alone.
-  const renamed = detectRenames(store, rootPath, relPaths, existingFiles);
+  const { renamed, pairs: renamePairs } = detectRenames(store, rootPath, relPaths, existingFiles);
   if (renamed > 0) {
     // Renamed paths are now keyed under their new path in the DB; refresh
     // the lookup map so the extractor sees them as "existing".
     existingFiles = store.getFilesByPaths(relPaths);
     logger.info({ renamed }, 'Detected renames — reused existing symbols');
+    // TRA-1577: move the per-file tree-sitter entries along the rename.
+    // Content is identical, so the moved entry parses the new path as an
+    // identical hit instead of a cold miss (and the old key can't leak).
+    for (const { from, to } of renamePairs) {
+      renameTreeCacheFile(rootPath, from, to);
+    }
   }
 
   // TRA-1536: mtime+size prefilter BEFORE any extract() dispatch. The old
