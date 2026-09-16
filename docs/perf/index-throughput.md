@@ -174,6 +174,30 @@ tool calls before embeddings run. This answers the question the issue asked
 embedding throughput itself is a separate, narrower measurement if it becomes
 an optimization target on its own.
 
+## Run 2026-09-16 — TRA-1576 incremental discovery (F1 follow-up to TRA-1536)
+
+Same harness, same fixture (`fc47c10f`, 1903 files), M-series Mac. `indexAll`
+on a live index now tries watcher since-query → git status before the
+`collectFiles()` walk (`src/indexer/incremental-discovery.ts`); the walk
+remains the fallback and re-verifies every 10th run / 24 h. Cold runs always
+walk (unchanged — 2912 ms pooled vs 3051 ms baseline, noise).
+
+| | walk (#1221 behavior) | fast path | Δ |
+|---|---|---|---|
+| Incremental 1 file, wall (same-session A/B, unique touch, indexed=1 both) | 666 ms mean (669/664) | 468 ms mean (523/414, watcher-since) | **−30%** |
+| Incremental 1 file, wall (full harness) | 727 ms (#1221) | 396 ms (collect 0 ms, extractCalls 1) | −46% |
+| Incremental 100 files, wall (full harness) | 1166 ms (#1221) | 940 ms (100/100 indexed, collect 0 ms) | −19% |
+| Zero-change `indexAll`, wall (same-session A/B) | 223 ms mean | **42 ms** (early return, no pipeline/cache invalidation) | −81% |
+| Git-status path, 1 file (snapshot removed) | — | 446 ms, 1/1 indexed | ≈ watcher-since |
+
+Residual: edge resolution ~270–300 ms dominates the 1-file fast run
+(TRA-923 scope, out of scope here — same honest gap #1221 reported).
+Measurement artifact worth knowing: the first bench attempt showed the
+100-file run indexing 0 files — a fire-and-forget snapshot write landing
+*after* the touches made the next since-query report empty. Fixed by
+awaiting the write plus a git second-opinion on empty watcher answers
+(`runDiscovered`), with a regression test pinning it.
+
 ## Caveats
 
 - **One sample per configuration for the headline tables**, not a median of

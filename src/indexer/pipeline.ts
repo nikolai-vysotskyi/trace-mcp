@@ -27,6 +27,18 @@ import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
 import { ExtractPool, resolveWorkerThreshold } from './extract-pool.js';
 import { collectFiles as collectFilesImpl } from './file-collector.js';
+import {
+  type DiscoverIncrementalArgs,
+  type DiscoveryResult,
+  META_LAST_FULL_MS,
+  META_RUNS_SINCE_FULL,
+  type QueryGitStatusFn,
+  discoverIncrementalFiles,
+  queryGitStatus,
+  shouldForceFullWalk,
+  snapshotPathForDb,
+  writeWatcherSnapshot,
+} from './incremental-discovery.js';
 import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
 import { detectRenames as detectRenamesImpl } from './rename-detector.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
@@ -262,6 +274,22 @@ export interface IndexingPipelineDeps {
    * tests inject a huge value and flush explicitly.
    */
   coverageReconcileDebounceMs?: number;
+  /**
+   * TRA-1576: seam for incremental discovery in `indexAll`. Production
+   * callers leave this undefined (real watcher-since → git-status → walk).
+   * Tests inject a fake `discover` and/or a `snapshotPath` override
+   * (including explicit null to disable the watcher source).
+   */
+  incrementalDiscovery?: {
+    discover?: (args: DiscoverIncrementalArgs) => Promise<DiscoveryResult>;
+    snapshotPath?: string | null;
+    /**
+     * Second opinion when the watcher source reports zero changes (see
+     * `tryIncrementalDiscovery`). Defaults to the real git-status query;
+     * tests inject fakes or null to disable.
+     */
+    queryGit?: QueryGitStatusFn | null;
+  } | null;
 }
 
 export class IndexingPipeline {
@@ -282,6 +310,9 @@ export class IndexingPipeline {
     }
     if (deps?.coverageReconcileDebounceMs !== undefined) {
       this._coverageDebounceMs = deps.coverageReconcileDebounceMs;
+    }
+    if (deps?.incrementalDiscovery !== undefined) {
+      this._incrementalDiscovery = deps.incrementalDiscovery;
     }
     // P02 Task DAG: register the migrated passes once per pipeline instance.
     // Each Task is a thin adapter — the actual work still happens in the
@@ -383,7 +414,7 @@ export class IndexingPipeline {
 
   async indexAll(
     force?: boolean,
-    opts: { postprocess?: PostprocessLevel } = {},
+    opts: { postprocess?: PostprocessLevel; discovery?: 'auto' | 'full-walk' } = {},
   ): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       this._isIncremental = false;
@@ -407,14 +438,6 @@ export class IndexingPipeline {
           logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
         }
       }
-      const filePaths = await this.collectFiles();
-      // Engage bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for
-      // genuine from-scratch indexes. We never enter bulk mode on a live
-      // daemon with an existing graph because other connections may still
-      // read the DB and a crash with synchronous=OFF would corrupt the file.
-      // The "from-scratch" signal is `totalSymbols === 0` — this works even
-      // when `force=true` is passed (which would otherwise skip the shrink
-      // check signal).
       // Read BEFORE reconcileScope: an index whose every row went out of scope
       // is still a live DB other connections may be reading, not a fresh one.
       const isFromScratch = (() => {
@@ -424,12 +447,25 @@ export class IndexingPipeline {
           return false;
         }
       })();
+      // TRA-1576: non-force reindex of a live index tries the incremental
+      // discovery fast paths (watcher since-query → git status) BEFORE the
+      // full walk below. From-scratch, force, and dropped-events reconcile
+      // (`discovery: 'full-walk'`) always walk: only a full walk reconciles
+      // scope and (for scratch) engages bulk-load mode.
+      if (!force && opts.discovery !== 'full-walk' && !isFromScratch) {
+        const fast = await this.tryIncrementalDiscovery(start);
+        if (fast) return fast;
+      }
+      const filePaths = await this.collectFiles();
       // Reconcile before snapshotting: dropping rows the walk no longer owns is
       // the intended outcome here, not the parser regression `checkShrink`
       // hunts for. Repairing an index that was 93% stale would otherwise raise
       // a shrink warning on the very run that fixed it.
       this.reconcileScope(filePaths);
       const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
+      // Bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for genuine
+      // from-scratch indexes — never on a live daemon whose DB other
+      // connections may still read (a crash with synchronous=OFF corrupts).
       if (isFromScratch) {
         logger.info('Engaging bulk-load mode for from-scratch index');
         enableBulkMode(this.store.db);
@@ -463,10 +499,227 @@ export class IndexingPipeline {
           logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
         }
       }
+      // TRA-1576: a full walk re-verified the whole tree — reset the
+      // periodic-verification counters and refresh the watcher snapshot so
+      // the next since-query window starts here. Awaited: the snapshot
+      // timestamp MUST predate any change the next run must see — a
+      // fire-and-forget write can land after a subsequent touch, making the
+      // next since-query report empty (a silent zero-change miss).
+      await this.markFullWalkComplete();
       return r;
     });
     this._lock = result.catch(() => {});
     return result as Promise<IndexingResult>;
+  }
+
+  /**
+   * TRA-1576 — incremental discovery for `indexAll` on a live index.
+   *
+   * Returns a completed `IndexingResult` when a fast path (watcher
+   * since-query, git status) supplied the changed set, or null when the
+   * caller must do the full `collectFiles()` walk (no source answered, or
+   * the periodic-verification policy demands a re-verifying walk).
+   *
+   * Fast-path runs never reconcile scope — they know nothing about the
+   * rest of the tree — and never shrink-check: `totalFiles` covers only
+   * the changed set, so a whole-tree size comparison is meaningless.
+   * Deletions reported by the source are applied via `deleteFiles()`
+   * before extraction. The zero-change case returns before `runPipeline`
+   * (no PageRank/search-cache invalidation — the TRA-935 early-return
+   * philosophy applied to `indexAll`).
+   */
+  private async tryIncrementalDiscovery(startMs: number): Promise<IndexingResult | null> {
+    const { runsSinceFull, lastFullMs } = this.readDiscoveryCounters();
+    if (shouldForceFullWalk({ runsSinceFull, lastFullMs })) {
+      logger.debug({ runsSinceFull, lastFullMs }, 'Incremental discovery: periodic full walk due');
+      return null;
+    }
+    const injected = this._incrementalDiscovery;
+    const snapshotPath =
+      injected?.snapshotPath !== undefined ? injected.snapshotPath : this.defaultSnapshotPath();
+    let discovery: DiscoveryResult;
+    try {
+      const discover = injected?.discover ?? discoverIncrementalFiles;
+      discovery = await discover({
+        rootPath: this.rootPath,
+        snapshotPath,
+        include: this.config.include,
+        watcherIgnore: this.nativeWatcherIgnore(),
+      });
+    } catch (err) {
+      logger.debug({ err }, 'Incremental discovery threw — full walk');
+      return null;
+    }
+    if (discovery.source === 'full-walk') return null;
+    return this.runDiscovered(discovery, startMs, snapshotPath);
+  }
+
+  /**
+   * Apply one discovery answer: gate its paths, run the pipeline over the
+   * survivors, or take the zero-change early return. Split out of
+   * `tryIncrementalDiscovery` so the git second-opinion (below) reuses the
+   * same path instead of duplicating it.
+   */
+  private async runDiscovered(
+    discovery: DiscoveryResult,
+    startMs: number,
+    snapshotPath: string | null,
+  ): Promise<IndexingResult> {
+    const injected = this._incrementalDiscovery;
+    // The source speaks in tree paths; the pipeline speaks in
+    // include-matched, exclude-filtered rel-posix paths. `discover` already
+    // intersected with `include`; re-apply the exclude/gitignore/descendant
+    // gates (they can change between runs) and drop entries that resolve
+    // outside the root or no longer exist (mis-rooted git output under a
+    // non-default `status.relativePaths`, or a file deleted after listing).
+    const changed = this.filterIndexablePaths(discovery.changed).filter((rel) => {
+      try {
+        return fs.statSync(path.resolve(this.rootPath, rel)).isFile();
+      } catch {
+        return false;
+      }
+    });
+    // Deletes are passed through un-gated (the file is gone — include
+    // matching is meaningless); `deleteFiles` no-ops rows it never owned.
+    // Keep only in-root paths so a mis-rooted source can't traverse.
+    const deleted = discovery.deleted.filter((rel) => {
+      const check = validatePath(rel, this.rootPath);
+      return check.isOk();
+    });
+    if (changed.length === 0 && deleted.length === 0) {
+      // Trust-but-verify: an empty watcher answer is only as fresh as the
+      // snapshot write that bounds it. A snapshot that raced ahead of a
+      // touch (unawaited write, cross-process interleave) reports empty
+      // while the tree is dirty — a silent miss. When this is a git repo,
+      // one `git status` (~10-30 ms, cheap exactly when clean) is the
+      // second opinion; a disagreement re-enters below with git's lists.
+      if (discovery.source === 'watcher-since') {
+        const queryGit = injected?.queryGit !== undefined ? injected.queryGit : queryGitStatus;
+        let second: { changed: string[]; deleted: string[] } | null = null;
+        try {
+          second = queryGit?.(this.rootPath) ?? null;
+        } catch {
+          second = null;
+        }
+        if (second && (second.changed.length > 0 || second.deleted.length > 0)) {
+          logger.warn(
+            { changed: second.changed.length, deleted: second.deleted.length },
+            'Incremental discovery: watcher reported zero changes but git disagrees — using git lists',
+          );
+          return this.runDiscovered(
+            { source: 'git-status', changed: second.changed, deleted: second.deleted },
+            startMs,
+            snapshotPath,
+          );
+        }
+      }
+      await this.afterDiscoveryRun(snapshotPath);
+      logger.debug(
+        { source: discovery.source },
+        'Incremental discovery: zero changes — skipping pipeline',
+      );
+      // runPipeline's finally block is skipped on this path, but its global
+      // cache invalidation is a contract callers rely on ("reindex ⇒ fresh
+      // reads" — e.g. rows written outside the pipeline become visible).
+      // The per-run maps are already empty; only the shared caches need it.
+      invalidatePageRankCache();
+      invalidateSearchCache(this.store.db);
+      return {
+        totalFiles: 0,
+        indexed: 0,
+        skipped: 0,
+        errors: 0,
+        durationMs: Date.now() - startMs,
+        incremental: true,
+        postprocess: this._postprocessLevel,
+      };
+    }
+
+    this._isIncremental = true;
+    // A prior indexAll left this set; fast runs never reconcile scope, so a
+    // stale count would wrongly force edge resolution in runPipeline.
+    this._scopeRowsRemoved = 0;
+    if (deleted.length > 0) this.deleteFiles(deleted);
+    const r = await this.runPipeline(changed, false, startMs);
+    await this.afterDiscoveryRun(snapshotPath);
+    logger.info(
+      { source: discovery.source, changed: changed.length, deleted: deleted.length },
+      'Incremental discovery fast path used instead of full walk',
+    );
+    return r;
+  }
+
+  /** Snapshot path for the watcher since-query, or null for `:memory:` DBs. */
+  private defaultSnapshotPath(): string | null {
+    try {
+      const name = (this.store.db as unknown as { name?: unknown }).name;
+      if (typeof name !== 'string' || name === '' || name === ':memory:') return null;
+      return snapshotPathForDb(name);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Native-layer ignore list, mirroring `watcher.subscribe`'s. */
+  private nativeWatcherIgnore(): string[] {
+    const traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
+    const skipDirs = [...traceignore.getSkipDirs()];
+    return [
+      ...skipDirs.map((d) => path.join(this.rootPath, d)),
+      ...skipDirs.map((d) => `**/${d}/**`),
+      ...(this.config.exclude ?? []),
+      ...descendantExcludeGlobs(this.rootPath),
+    ];
+  }
+
+  private readDiscoveryCounters(): { runsSinceFull: number; lastFullMs: number | null } {
+    let runsSinceFull = 0;
+    let lastFullMs: number | null = null;
+    try {
+      const runsRaw = this.store.getRepoMetadata(META_RUNS_SINCE_FULL);
+      if (runsRaw != null) {
+        const n = Number.parseInt(runsRaw, 10);
+        if (Number.isFinite(n) && n >= 0) runsSinceFull = n;
+      }
+      const lastRaw = this.store.getRepoMetadata(META_LAST_FULL_MS);
+      if (lastRaw != null) {
+        const t = Number.parseInt(lastRaw, 10);
+        if (Number.isFinite(t) && t > 0) lastFullMs = t;
+      }
+    } catch {
+      /* best-effort — a metadata miss just means "verify soon" */
+    }
+    return { runsSinceFull, lastFullMs };
+  }
+
+  /** TRA-1576: bookkeeping after a verifying full walk. */
+  private async markFullWalkComplete(): Promise<void> {
+    try {
+      this.store.setRepoMetadata(META_RUNS_SINCE_FULL, '0');
+      this.store.setRepoMetadata(META_LAST_FULL_MS, String(Date.now()));
+    } catch {
+      /* best-effort */
+    }
+    const snapshotPath =
+      this._incrementalDiscovery?.snapshotPath !== undefined
+        ? this._incrementalDiscovery.snapshotPath
+        : this.defaultSnapshotPath();
+    if (snapshotPath) {
+      await writeWatcherSnapshot(this.rootPath, snapshotPath, this.nativeWatcherIgnore());
+    }
+  }
+
+  /** TRA-1576: bookkeeping after a fast-path run (snapshot refresh + verify countdown). */
+  private async afterDiscoveryRun(snapshotPath: string | null): Promise<void> {
+    const { runsSinceFull } = this.readDiscoveryCounters();
+    try {
+      this.store.setRepoMetadata(META_RUNS_SINCE_FULL, String(runsSinceFull + 1));
+    } catch {
+      /* best-effort */
+    }
+    if (snapshotPath) {
+      await writeWatcherSnapshot(this.rootPath, snapshotPath, this.nativeWatcherIgnore());
+    }
   }
 
   /** Snapshot the current symbol / edge count to compare against after a
@@ -1028,6 +1281,8 @@ export class IndexingPipeline {
   /** Debounce window before the deferred full edge-resolution reconcile. */
   private static readonly EDGE_RECONCILE_DEBOUNCE_MS = 10_000;
   private _reconcileDebounceMs: number = IndexingPipeline.EDGE_RECONCILE_DEBOUNCE_MS;
+  /** TRA-1576: injected incremental-discovery seam (real one by default). */
+  private _incrementalDiscovery: IndexingPipelineDeps['incrementalDiscovery'] = undefined;
   private _reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   /** Date.now() at the most recent scheduleEdgeReconcile() call. */
   private _reconcileScheduledAt = 0;

@@ -761,8 +761,12 @@ export class ProjectManager {
           // regression in that ordering degrades to an ungated re-walk
           // instead of a TypeError inside a watcher callback.
           onRescan: async () => {
+            // TRA-1576: force the full walk. The watcher since-query shares
+            // the FSEvents backend that just reported dropped events, so its
+            // historical answer is suspect for exactly this window.
+            const run = () => pipeline.indexAll(false, { discovery: 'full-walk' });
             const limit = this.indexAllLimit;
-            await (limit ? limit(() => pipeline.indexAll()) : pipeline.indexAll());
+            await (limit ? limit(run) : run());
           },
         },
       );
