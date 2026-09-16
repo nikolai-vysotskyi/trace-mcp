@@ -255,7 +255,12 @@ export const initCommand = new Command('init')
             message: 'Register and index current project?',
             initialValue: false,
           });
-          if (p.isCancel(indexResult)) {
+          // `typeof ... === 'symbol'` alongside isCancel: @clack/core 1.5
+          // narrowed isCancel to `value is typeof CANCEL_SYMBOL` while
+          // confirm() still returns `boolean | symbol`, so isCancel alone no
+          // longer narrows the symbol out (TS2322 under @clack/prompts 1.8).
+          // Any symbol means "cancelled" here regardless of version.
+          if (p.isCancel(indexResult) || typeof indexResult === 'symbol') {
             p.cancel('Cancelled.');
             process.exit(0);
           }
@@ -293,7 +298,7 @@ export const initCommand = new Command('init')
               message: label,
               initialValue: true,
             });
-            if (p.isCancel(fixResult)) {
+            if (p.isCancel(fixResult) || typeof fixResult === 'symbol') {
               p.cancel('Cancelled.');
               process.exit(0);
             }
@@ -314,7 +319,7 @@ export const initCommand = new Command('init')
               message,
               initialValue: true,
             });
-            if (p.isCancel(appResult)) {
+            if (p.isCancel(appResult) || typeof appResult === 'symbol') {
               p.cancel('Cancelled.');
               process.exit(0);
             }
@@ -457,7 +462,7 @@ export const initCommand = new Command('init')
             message: `Found ${existingProjects.length} registered project${existingProjects.length > 1 ? 's' : ''} from a previous installation. Run upgrade (migrations + reindex)?`,
             initialValue: true,
           });
-          if (p.isCancel(upgradeResult)) {
+          if (p.isCancel(upgradeResult) || typeof upgradeResult === 'symbol') {
             p.cancel('Cancelled.');
             process.exit(0);
           }
