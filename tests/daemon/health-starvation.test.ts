@@ -166,11 +166,29 @@ describe('real indexing load: many projects at once', () => {
     // grew with the project count, which is how a busy daemon stopped
     // answering /health for seconds at a time with 21 projects loaded.
     const sequential = await delayIndexing('seq.db', 'sequential');
-    const concurrent = await delayIndexing('conc.db', 'concurrent');
+    // TRA-1571: quarantined retry around the CONCURRENT arm only. The 2026-09-16
+    // scheduled run failed at 3.7x (concurrent p99 236.6 ms vs sequential 63.7 ms)
+    // on a shared runner where even the sequential arm's max hit 345.8 ms — box
+    // noise, not the fairness chain: locally the same code sits at or below 1x.
+    // Raising the bound is the wrong fix (pre-fix measures 4x, so 5x would pass
+    // a real regression); re-measuring is the right one, because noise that
+    // inflates one arm rarely inflates three in a row while a regressed chain
+    // fails every attempt. Each attempt uses a fresh DB name so the second run
+    // does not measure incremental-skipped indexing, which would pass trivially.
+    // The sequential baseline is measured once: noise there only LOOSENS the
+    // bound, so it cannot cause this failure.
+    let concurrent = await delayIndexing('conc.db', 'concurrent');
     console.log(
       `loop delay p99: sequential=${sequential.p99.toFixed(1)}ms concurrent=${concurrent.p99.toFixed(1)}ms ` +
         `(max: ${sequential.max.toFixed(1)}ms / ${concurrent.max.toFixed(1)}ms)`,
     );
+    for (let attempt = 1; attempt <= 2 && concurrent.p99 >= sequential.p99 * 3; attempt++) {
+      concurrent = await delayIndexing(`conc-retry${attempt}.db`, 'concurrent');
+      console.log(
+        `loop delay p99 (retry ${attempt}): concurrent=${concurrent.p99.toFixed(1)}ms ` +
+          `(max: ${concurrent.max.toFixed(1)}ms) vs sequential=${sequential.p99.toFixed(1)}ms`,
+      );
+    }
     // 3x, not 2x, and on p99 rather than max. Measured with the fairness chain
     // disabled, concurrent p99 is 4x sequential (107 ms vs 27 ms) and max is
     // 5-7x; with it, concurrent p99 sits at or below sequential (24 ms vs

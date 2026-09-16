@@ -40,6 +40,10 @@ set "PROJECT_ROOT=%CD%"
 
 REM PowerShell reads stdin (the Claude Code hook envelope), extracts the prompt,
 REM runs the decisions search, and emits the additionalContext envelope.
+REM Job 2 (the decisions search) runs bounded at 10s, same as the POSIX hook's
+REM run_with_timeout: a stalled CLI degrades to no-context and never hangs the
+REM hook. TRA-1571 saw the unbounded run block the hook for 60s on a loaded
+REM Windows runner, leaving .nav-streak uncleared and failing guard-windows.
 powershell -NoProfile -Command ^
   "$ErrorActionPreference='SilentlyContinue';" ^
   "$stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), [System.Text.Encoding]::UTF8);" ^
@@ -58,7 +62,10 @@ powershell -NoProfile -Command ^
   "if (-not $prompt) { exit 0 };" ^
   "if (-not '%TRACE_MCP_BIN%') { exit 0 };" ^
   "$query = ($prompt -replace \"`n\",' ').Substring(0, [Math]::Min(200, $prompt.Length));" ^
-  "$json = & '%TRACE_MCP_BIN%' memory decisions --project '%PROJECT_ROOT%' --search $query --limit 3 --json 2>$null;" ^
+  "$job = Start-Job -ScriptBlock { param($b,$r,$q) & $b memory decisions --project $r --search $q --limit 3 --json 2>$null } -ArgumentList '%TRACE_MCP_BIN%','%PROJECT_ROOT%',$query;" ^
+  "$json = $null;" ^
+  "if (Wait-Job $job -Timeout 10) { $json = Receive-Job $job } else { Stop-Job $job | Out-Null };" ^
+  "Remove-Job $job -Force | Out-Null;" ^
   "if (-not $json) { exit 0 };" ^
   "try { $list = $json | ConvertFrom-Json } catch { exit 0 };" ^
   "if (-not $list -or $list.Count -eq 0) { exit 0 };" ^
