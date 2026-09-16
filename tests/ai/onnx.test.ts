@@ -213,6 +213,68 @@ describe('OnnxProvider', () => {
     });
   });
 
+  describe('E5 prefixes — query:/passage: plumbing (TRA-1539)', () => {
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
+    function mockEchoPipeline() {
+      let seenInput: unknown = null;
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => {
+          return async (texts: string | string[]) => {
+            seenInput = texts;
+            const arr = Array.isArray(texts) ? texts : [texts];
+            return {
+              data: Float32Array.from(arr.map((t) => t.length)),
+              dims: [arr.length, 1],
+            };
+          };
+        }),
+      }));
+      return () => seenInput as string[];
+    }
+
+    it('applyE5Prefix: query task → "query: ", document/undefined → "passage: " for E5 models', async () => {
+      const { applyE5Prefix, isE5Model } = await import('../../src/ai/onnx.js');
+      expect(isE5Model('Xenova/multilingual-e5-small')).toBe(true);
+      expect(isE5Model('intfloat/multilingual-e5-small')).toBe(true);
+      expect(isE5Model('Xenova/all-MiniLM-L6-v2')).toBe(false);
+      expect(applyE5Prefix('Xenova/multilingual-e5-small', 'hello', 'query')).toBe('query: hello');
+      expect(applyE5Prefix('Xenova/multilingual-e5-small', 'hello', 'document')).toBe(
+        'passage: hello',
+      );
+      expect(applyE5Prefix('Xenova/multilingual-e5-small', 'hello')).toBe('passage: hello');
+      expect(applyE5Prefix('Xenova/all-MiniLM-L6-v2', 'hello', 'query')).toBe('hello');
+    });
+
+    it('embedBatch(E5, task=query) prefixes the query; indexing path gets passage:', async () => {
+      const getSeen = mockEchoPipeline();
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const svc = new OnnxProvider({
+        model: 'Xenova/multilingual-e5-small',
+        dimensions: 1,
+      }).embedding();
+      await svc.embedBatch(['find auth code'], 'query');
+      expect(getSeen()).toEqual(['query: find auth code']);
+      await svc.embedBatch(['class AuthService'], 'document');
+      expect(getSeen()).toEqual(['passage: class AuthService']);
+      // embed() forwards its task too (previously it silently dropped it)
+      await svc.embed('who handles login', 'query');
+      expect(getSeen()).toEqual(['query: who handles login']);
+    });
+
+    it('embedBatch(MiniLM, task=query) leaves text untouched — no behavior change', async () => {
+      const getSeen = mockEchoPipeline();
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const svc = new OnnxProvider().embedding();
+      await svc.embedBatch(['find auth code'], 'query');
+      expect(getSeen()).toEqual(['find auth code']);
+      await svc.embed('who handles login', 'query');
+      expect(getSeen()).toEqual(['who handles login']);
+    });
+  });
+
   describe('inference() — embedding-only provider, documented FallbackProvider delegation', () => {
     it('inference() returns a FallbackProvider inference service (not a real ONNX call)', async () => {
       const { OnnxProvider } = await import('../../src/ai/onnx.js');

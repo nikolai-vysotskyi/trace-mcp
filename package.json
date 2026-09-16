@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:recall": "vitest run tests/recall-harness/recall.test.ts",
     "test:recall:report": "tsx tests/recall-harness/runner.ts",
+    "eval:embeddings": "node scripts/embedding-eval/run.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "format": "biome format --write",
