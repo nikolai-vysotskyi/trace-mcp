@@ -1,8 +1,16 @@
 /**
  * Local ONNX embedding provider — zero-config, no API keys, offline-capable.
- * Uses @huggingface/transformers (optional dep) with all-MiniLM-L6-v2 quantized
- * to int8 (~23 MB download vs ~90 MB fp32; min cosine(q8, fp32) = 0.995 measured
- * on code docs, 2026-09-15). Falls back gracefully if the package is not installed.
+ * Default model is all-MiniLM-L6-v2 quantized to int8 (~23 MB download vs
+ * ~90 MB fp32; min cosine(q8, fp32) = 0.995 measured on code docs, 2026-09-15).
+ * Falls back gracefully if the package is not installed.
+ *
+ * E5-family models (e.g. `Xenova/multilingual-e5-small`, the recommended
+ * opt-in — see docs/perf/embedding-models.md) were contrastively trained with
+ * `query:` / `passage:` prefixes. Without them retrieval quality silently
+ * degrades (TRA-1539 measured R@1 0.583 bare vs 0.625 prefixed on a code
+ * corpus), so the provider applies them automatically based on the
+ * {@link EmbeddingTask}: `query:` for search queries, `passage:` for indexed
+ * documents. Non-E5 models are unaffected — the task parameter is ignored.
  */
 
 import { logger } from '../logger.js';
@@ -29,6 +37,24 @@ const KNOWN_DTYPES = new Set(['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'q4f1
 /** Quantization levels accepted by transformers.js `pipeline(..., { dtype })`. */
 export type OnnxDtype = 'fp32' | 'fp16' | 'q8' | 'int8' | 'uint8' | 'q4' | 'q4f16' | 'bnb4';
 
+/**
+ * True for E5-family embedding models, which require `query:` / `passage:`
+ * prefixes (matched case-insensitively against the model id so both
+ * `intfloat/multilingual-e5-small` and `Xenova/multilingual-e5-small` hit).
+ */
+export function isE5Model(model: string): boolean {
+  return /e5/i.test(model);
+}
+
+/**
+ * Apply the E5 prefix for an embedding task. Non-E5 models return the text
+ * unchanged — callers can route every model through this unconditionally.
+ */
+export function applyE5Prefix(model: string, text: string, task?: EmbeddingTask): string {
+  if (!isE5Model(model)) return text;
+  return task === 'query' ? `query: ${text}` : `passage: ${text}`;
+}
+
 type Transformers = typeof import('@huggingface/transformers');
 /**
  * Raw pipeline output: transformers.js returns ONE Tensor for both single and
@@ -41,6 +67,12 @@ type FeatureExtractionPipeline = (
   text: string | string[],
   options?: { pooling?: 'mean' | 'cls' | 'none'; normalize?: boolean },
 ) => Promise<PipeOutput | PipeOutput[]>;
+
+/** Factory seam for tests — production code always uses {@link getPipeline}. */
+export type OnnxPipelineFactory = (
+  model: string,
+  dtype: OnnxDtype,
+) => Promise<FeatureExtractionPipeline>;
 
 // Lazy singletons — loaded once per model+dtype on first embed call
 let pipelineInstance: FeatureExtractionPipeline | null = null;
@@ -107,10 +139,11 @@ class OnnxEmbeddingService implements EmbeddingService {
     private readonly model: string,
     private readonly dims: number,
     private readonly dtype: OnnxDtype,
+    private readonly pipelineFactory: OnnxPipelineFactory = getPipeline,
   ) {}
 
-  async embed(text: string, _task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
-    const results = await this.embedBatch([text], undefined, signal);
+  async embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], task, signal);
     return results[0] ?? [];
   }
 
@@ -119,18 +152,21 @@ class OnnxEmbeddingService implements EmbeddingService {
   // and the per-text fallback is the best we can do for the local ONNX path.
   async embedBatch(
     texts: string[],
-    _task?: EmbeddingTask,
+    task?: EmbeddingTask,
     signal?: AbortSignal,
   ): Promise<number[][]> {
     if (texts.length === 0 || signal?.aborted) return [];
-    const pipe = await getPipeline(this.model, this.dtype);
+    const pipe = await this.pipelineFactory(this.model, this.dtype);
+    // E5-family models need query:/passage: prefixes (see applyE5Prefix);
+    // every other model embeds the raw text exactly as before.
+    const prefixed = texts.map((t) => applyE5Prefix(this.model, t, task));
 
     // One tokenizer+model pass for the whole batch (padding is internal):
     // ~N model invocations collapse into one. Falls back to per-text calls
     // below if a backend can't do batches.
     try {
-      const output = await pipe(texts, { pooling: 'mean', normalize: true });
-      const rows = splitPipeOutput(output, texts.length);
+      const output = await pipe(prefixed, { pooling: 'mean', normalize: true });
+      const rows = splitPipeOutput(output, prefixed.length);
       if (rows) return rows.map((r) => r.slice(0, this.dims));
       logger.warn('ONNX pipeline returned an unexpected shape — retrying per-text');
     } catch (err) {
@@ -138,7 +174,7 @@ class OnnxEmbeddingService implements EmbeddingService {
     }
 
     const results: number[][] = [];
-    for (const text of texts) {
+    for (const text of prefixed) {
       if (signal?.aborted) break;
       const output = await pipe(text, { pooling: 'mean', normalize: true });
       const rows = splitPipeOutput(output, 1);
