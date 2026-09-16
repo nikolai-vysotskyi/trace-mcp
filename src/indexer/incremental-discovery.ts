@@ -194,32 +194,57 @@ export type ExecGitStatusFn = (
 ) => string;
 
 /**
- * Parse `git status --porcelain=v1 -z` output. NUL-separated entries;
- * rename entries carry the new path after ` -> `. Pure — unit tested with
- * canned outputs including spaces-in-names (only safe because of `-z`).
+ * Parse `git status --porcelain=v1 -z` output. NUL-separated entries of
+ * shape `XY<space>path`; rename/copy entries carry the orig path as a
+ * second, bare NUL-separated record (`R  new\0old\0` — no ` -> ` arrow in
+ * -z output). Pure — unit tested with canned outputs including
+ * spaces-in-names (only safe because of `-z`).
  */
 export function parseGitStatusPorcelainZ(output: string): { changed: string[]; deleted: string[] } {
   const changed: string[] = [];
   const deleted: string[] = [];
   if (!output) return { changed, deleted };
-  for (const entry of output.split('\0')) {
+  const entries = output.split('\0');
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
     if (!entry) continue;
-    // Format: XY<space>path   (XY = staged/worktree status, 2 cols + space)
-    if (entry.length < 4) continue;
+    // Format: XY<space>path   (XY = staged/worktree status, 2 cols + space).
+    // The space check rejects bare rename-orig records that lost their
+    // parent entry (desync) instead of mangling them into paths.
+    if (entry.length < 4 || entry[2] !== ' ') continue;
     const x = entry[0];
     const y = entry[1];
-    let filePath = entry.slice(3);
-    // Rename/copy: "R  old -> new" — the new path is what exists on disk.
-    const arrow = filePath.indexOf(' -> ');
-    if ((x === 'R' || y === 'R' || x === 'C' || y === 'C') && arrow >= 0) {
-      filePath = filePath.slice(arrow + 4);
+    const filePath = entry.slice(3);
+    // Rename/copy: the new path exists on disk (changed), the orig path is
+    // gone (deleted). With -z the orig path follows as a bare record;
+    // without -z it is glued with " -> " (defensive fallback only).
+    if (x === 'R' || y === 'R' || x === 'C' || y === 'C') {
+      const arrow = filePath.indexOf(' -> ');
+      if (arrow >= 0) {
+        changed.push(unquotePorcelain(filePath.slice(arrow + 4)));
+        deleted.push(unquotePorcelain(filePath.slice(0, arrow)));
+        continue;
+      }
+      changed.push(unquotePorcelain(filePath));
+      const from = entries[i + 1];
+      if (from) {
+        i++;
+        deleted.push(unquotePorcelain(from));
+      }
+      continue;
     }
     // Surrounding quotes appear only without -z; strip defensively.
-    if (filePath.startsWith('"') && filePath.endsWith('"')) filePath = filePath.slice(1, -1);
-    if (x === 'D' || y === 'D') deleted.push(filePath);
-    else changed.push(filePath);
+    const p = unquotePorcelain(filePath);
+    if (x === 'D' || y === 'D') deleted.push(p);
+    else changed.push(p);
   }
   return { changed, deleted };
+}
+
+/** Strip the C-style quoting git uses without -z (no-op on -z output). */
+function unquotePorcelain(p: string): string {
+  if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) return p.slice(1, -1);
+  return p;
 }
 
 const defaultExecGitStatus: ExecGitStatusFn = (args, opts) =>

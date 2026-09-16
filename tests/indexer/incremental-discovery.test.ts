@@ -72,11 +72,35 @@ function rng(seed: number): () => number {
 
 describe('parseGitStatusPorcelainZ', () => {
   it('parses modifies, renames, deletes and untracked', () => {
-    const out =
-      'M  src/a.ts\0 M src/b.ts\0R  src/old.ts -> src/new.ts\0D  src/gone.ts\0 D src/gone2.ts\0?? src/fresh.ts\0';
+    const out = 'M  src/a.ts\0 M src/b.ts\0D  src/gone.ts\0 D src/gone2.ts\0?? src/fresh.ts\0';
     const { changed, deleted } = parseGitStatusPorcelainZ(out);
-    expect(changed.sort()).toEqual(['src/a.ts', 'src/b.ts', 'src/fresh.ts', 'src/new.ts'].sort());
+    expect(changed.sort()).toEqual(['src/a.ts', 'src/b.ts', 'src/fresh.ts'].sort());
     expect(deleted.sort()).toEqual(['src/gone.ts', 'src/gone2.ts'].sort());
+  });
+
+  it('parses real -z rename records (R new NUL old, no arrow)', () => {
+    // Byte-exact shape of `git status --porcelain=v1 -z` after `git mv`:
+    // the orig path follows as a bare NUL-separated record. Verified
+    // against a live repo (TRA-1576 review): the arrow form below never
+    // appears in -z output.
+    const out = 'R  src/new.ts\0src/old.ts\0';
+    const { changed, deleted } = parseGitStatusPorcelainZ(out);
+    expect(changed).toEqual(['src/new.ts']);
+    expect(deleted).toEqual(['src/old.ts']);
+  });
+
+  it('keeps the arrow form as a defensive fallback (both sides recorded)', () => {
+    const out = 'R  src/old.ts -> src/new.ts\0';
+    const { changed, deleted } = parseGitStatusPorcelainZ(out);
+    expect(changed).toEqual(['src/new.ts']);
+    expect(deleted).toEqual(['src/old.ts']);
+  });
+
+  it('drops bare records that lost their rename parent instead of mangling them', () => {
+    const out = 'M  src/a.ts\0src/orphan.ts\0';
+    const { changed, deleted } = parseGitStatusPorcelainZ(out);
+    expect(changed).toEqual(['src/a.ts']);
+    expect(deleted).toEqual([]);
   });
 
   it('handles spaces in names (NUL-separated, no quoting)', () => {
