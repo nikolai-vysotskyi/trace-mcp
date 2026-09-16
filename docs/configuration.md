@@ -1,7 +1,7 @@
 ---
 title: "Configuration Reference — all config options (works with none)"
 description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-11
+updated: 2026-09-15
 ---
 
 # Configuration
@@ -938,6 +938,8 @@ The daemon multiplexes projects — one process serves all of them — but each 
 | Config | command, no URL | URL with absolute path |
 | Warm-index reuse | per session (shared if a daemon is running) | always shared |
 | Best for | per-repo agent sessions, committed team config | desktop app, many projects, one shared index |
+
+> **Why daemon-backed is the default.** stdio sessions prefer a running daemon (`auto_spawn_daemon`, on by default) because the trade that once argued against it no longer holds: proxied sessions stay thin, the first answer is served from the on-disk index snapshot without waiting for the daemon, and write work (reindexing) happens once in the daemon instead of once per session. A session on its own is fine for one-shot or sandboxed use (`TRACE_MCP_NO_DAEMON=1`); past a couple of concurrent sessions the shared daemon is cheaper on both memory and CPU. The resident-set breakdown behind this is in [daemon memory](daemon-memory.md).
 
 ---
 
