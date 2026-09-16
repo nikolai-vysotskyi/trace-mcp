@@ -2434,3 +2434,55 @@ Nothing to read." No `mentions-seen.txt` change this run.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Twenty-third pass, 2026-09-16 late evening (TRA-1584): light recheck four hours after the twenty-second pass, one sweep collision, trace-mcp 174 → 175
+
+The twenty-second pass re-verified everything at ~14:07 UTC; this run re-read
+the threads that could have moved in the four hours since, ran the sweep, and
+took a star snapshot (four hours is enough for signal — the twenty-first and
+twenty-second passes skipped it at two).
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments, `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN` on the first
+read, heads byte-identical to the 09-14 rebases (`eltociear#119` head
+`a49344d`, `ai-boost#240` head `da8f3d7`): `eltociear#119`,
+`GetBindu#195`, `yzfly#44`, `tolkonepiu#384`, `ai-boost#240`. No ping due
+anywhere — nearest deadlines (yzfly re-check 19.09,
+eltociear/GetBindu/slopstop/hermes/nix 20.09) have not arrived.
+`hermes#395`, `nix#606`, `ai-tooling#585` (no follow-up per TRA-857),
+`pi-extensions#1204`: all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3
+comments, newest still `mjsarfatti` 09-05. `kilocode#13843` / `#12707`:
+OPEN, newest still ours 09-07. `slopstop#633`: OPEN, newest still ours
+09-06 — do not ping before 20.09. `atlas#105`: OPEN, 9 comments, newest
+still the maintainer's own 09-07 Tier-2 close-out. `pr-agent#2499`: OPEN,
+11 comments, newest still our own 09-14 reply — wait. `nanocoder#1197`:
+OPEN, 4 comments, newest still the third-party `slowe89` pitch 09-11.
+`outline#34`: OPEN, 3 comments, newest still our 09-15 provenance answer —
+`updated_at` moved to 09-16T08:04Z with no new comment (same edit-or-label
+pattern as nanocoder#1197), do not comment again unless the maintainer
+replies. TRA-633 consolidated request to Nikolai stands; still `blocked`,
+no new ping.
+
+**Mention sweep (`scripts/mention-sweep.sh`): one new hit, classified as a
+collision, not a surface.** `HomenShum/agent-workspace-template` (1★,
+personal Convex+Next template, pushed 09-13) matched on
+`mcp-server/scripts/verify-trace-mcp.ts` and `mcp-server/README.md` — but
+their "TRACE MCP" is their own change-trace catalog tooling ("change-trace
+(Pillar 2) tools of attrition-mcp", scenarios like `search_change_traces`
+→ `get_trace` → `get_row`), nothing to do with us. Recorded in the name
+collisions block of `ops/mentions-seen.txt`. No `distribution.md` row —
+there is no reader there and nothing to submit to.
+
+**Catalogs:** moratorium holds (acquisition still unreadable), no submissions.
+**Competitors (live GitHub API, 2026-09-16 ~18:00Z; prior the twentieth
+pass ~08:00Z):** graft 8,053 → **8,237** (+184, fastest mover three windows
+in a row); codegraph 71,008 → **71,151** (+143); context-mode 23,069 →
+**23,203** (+134); CBM 43,410 → **43,526** (+116); serena 29,407 →
+**29,468** (+61); CRG 31,466 → **31,502** (+36); ripwire 2,183 → **2,207**
+(+24); repomix 28,364 → **28,376** (+12); roam-code 518 → **518** (flat
+since discovery); trace-mcp 174 → **175** (+1 — first movement after three
+days flat; a single star is not a trend until it repeats).
+`docs/_data/competitors.yml` left untouched — that file is the Competitor
+Intelligence lane's to update.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
