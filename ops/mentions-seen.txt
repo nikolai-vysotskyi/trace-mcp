@@ -31,6 +31,7 @@ korwabs/playwright-trace-mcp
 imj01y/trace-ui
 aleutian-ai/AleutianFOSS
 g-shevchenko/mcp-token-savers
+HomenShum/agent-workspace-template
 
 # --- Swept and classified 2026-09-06 ---
 # Genuine, rows added to ops/distribution.md:
