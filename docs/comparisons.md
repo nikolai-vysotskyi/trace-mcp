@@ -86,7 +86,7 @@ Most MCP servers in this space do one of three things: pack a repository into a 
 
 ## trace-mcp vs the main alternatives
 
-The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. The first five each also have a dedicated page with a focused table, an honest "when to pick theirs" section, and an FAQ; the sixth, CodeGraphContext, is covered here only.
+The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ.
 
 _Every star count, licence and tool-surface figure in this section was re-read from the GitHub API and from each project's own source on **September 3, 2026** (CodeGraphContext on **September 4, 2026**), not carried over from the head-to-head pages. These summaries are written for the hub and rewritten on each pass — never pasted from a spoke, so the hub and its deep-dive pages stay distinct documents rather than drifting into near-duplicates._
 
@@ -142,6 +142,13 @@ Where it differs is infrastructure and semantics. SocratiCode requires Docker ru
 [TokenSave](https://github.com/aovestdipaperino/tokensave) (aovestdipaperino/tokensave, {{ site.data.competitors.tokensave.stars }} stars, Rust, MIT, v7.11.1) builds a code knowledge graph stored in embedded libSQL (a SQLite fork) with tree-sitter AST parsing across 50+ languages. It defines 86 specialized MCP tools, isolates grammar parsing in subprocess worker pools to guard against tree-sitter crashes, supports opt-in multi-branch indexing, and provides string replacement edit primitives (`tokensave_str_replace`, `tokensave_insert_at`).
 
 Where it differs is prompt overhead, framework depth, and refactoring semantics. TokenSave advertises all 85+ tools by default on standard MCP hosts (only 5 carry `anthropic/alwaysLoad`), consuming ~12-15K tokens in schema listing before the agent begins work, and its extractors capture language syntax with zero framework route/controller/model awareness. Its code modification tools operate on text replacement slices rather than semantic AST nodes. trace-mcp ships a lean 28-tool `minimal` default (~11.6K tokens), constructs typed semantic edges across {{ site.data.counts.frameworks }} frameworks, provides verified AST refactoring tools (`refactor_rename`, `refactor_extract`, `refactor_move`), and runs OWASP Top-10 taint analysis. Full head-to-head: [trace-mcp vs TokenSave](/vs/tokensave.html).
+
+### trace-mcp vs Narsil-MCP — 4-layer RDF graph vs framework-aware code intelligence
+{: #vs-narsil-mcp}
+
+[Narsil-MCP](https://github.com/postrv/narsil-mcp) (postrv/narsil-mcp, {{ site.data.competitors.narsil_mcp.stars }} stars, Rust, MIT OR Apache-2.0, v1.7.0) models repositories according to the Code Context Graph (CCG) v0.2 specification, storing symbols and dependencies as RDF triples in an `oxigraph` SPARQL triple store with `tantivy` LZ4 search. It exposes 90 MCP tools across four presets (`minimal`, `balanced`, `full`, `security-focused`), an embedded Axum HTTP server with a React visualization SPA, and 147 syntactic security rules.
+
+Where it differs is query ergonomics, framework depth, and code modification. Narsil-MCP exposes raw SPARQL querying over RDF triples, which introduces substantial prompt and URI hallucination overhead for AI models; trace-mcp exposes deterministic typed MCP primitives (`get_callers`, `get_change_impact`, `find_usages`). Narsil-MCP extracts syntax for 32 languages without framework route/controller/model awareness; trace-mcp constructs semantic edges across {{ site.data.counts.frameworks }} frameworks. Crucially, Narsil-MCP is strictly read-only with zero refactoring write tools and zero session memory; trace-mcp executes atomic AST refactorings (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and maintains code-linked decision memory with staleness verification. Full head-to-head: [trace-mcp vs Narsil-MCP](/vs/narsil-mcp.html).
 
 ### trace-mcp vs GitNexus — permissive graph intelligence vs proprietary PolyForm clustering
 {: #vs-gitnexus}
@@ -305,7 +312,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 | Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.serena.stars }} | {{ site.data.competitors.code_review_graph.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} | {{ site.data.competitors.socraticode.stars }} | ~100 | ~510 |
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.serena.stars }} | {{ site.data.competitors.code_review_graph.stars }} | {{ site.data.competitors.codebase_memory_mcp.stars }} | {{ site.data.competitors.socraticode.stars }} | {{ site.data.competitors.narsil_mcp.stars }} | ~510 |
 | Languages | {{ site.data.counts.languages }} | 40+ (73 LSP backends) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
