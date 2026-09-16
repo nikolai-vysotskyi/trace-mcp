@@ -21,16 +21,22 @@
  *   old tree is only a reuse hint. A stale/wrong-base entry costs speed, not
  *   correctness. Cross-scope aliasing (same relPath in two projects sharing
  *   one process) is still avoided by scoping keys on the project root.
+ * - The cached tree itself is never mutated: the incremental path edits a
+ *   throwaway copy, so a failed reparse leaves a warm entry behind (and two
+ *   same-key parses could never share mutable state through `tree.edit()`).
  * - Every cache operation is defensive: any failure (copy throws, incremental
- *   throws, entry oversized) falls back to a plain full parse. The cache must
- *   never break extraction.
+ *   throws, entry oversized, WASM refuses the old tree with a null return)
+ *   falls back to a plain full parse. The cache must never break extraction.
  * - Evicted / invalidated / cleared entries are always `tree.delete()`d —
  *   otherwise the WASM-side nodes leak silently (the issue's explicit worry).
  *
  * Workers: each worker thread imports this module separately, so the cache is
- * automatically per-worker. `drop_project` control messages drop the scope
- * (see `extract-worker.ts`); the daemon drops the main-thread scope in
- * `project-manager.ts` on project removal.
+ * automatically per-worker — and each copy is independent. `deleteFiles()`
+ * invalidates only the calling thread's scope; worker copies of a deleted
+ * path go stale until LRU eviction or the next `drop_project`. That is safe
+ * (a stale base still parses the new text correctly, just without reuse) and
+ * bounded by the caps — cross-thread invalidation traffic would cost more
+ * than the staleness it prevents.
  *
  * No native dependencies — pure web-tree-sitter (WASM), same as the parser
  * factory this builds on.
@@ -377,32 +383,33 @@ export async function parseWithTreeCache(
     }
     // Copy failed — fall through to a full parse (entry stays for next time).
   } else {
-    try {
-      // parseIncremental narrows null away, but the WASM binding returns
-      // null at runtime when it refuses the old tree — handle it.
-      const newTree: Tree | null = await parseIncremental(language, entry.tree, entry.text, text);
-      if (newTree === entry.tree) {
-        // Unreachable in practice (texts differ, so parseIncremental always
-        // reparses) — but if it ever happens, hand out a copy, keep entry.
-        const copy = safeCopy(entry.tree);
-        if (copy) {
-          cache.recordIdenticalHit();
-          return copy;
+    // Copy-before-edit: the cached tree stays pristine until the reparse
+    // succeeds, so a failure leaves a warm entry for the next attempt
+    // instead of a dropped one — and two same-key parses can never share
+    // mutable state through `tree.edit()`.
+    const base = safeCopy(entry.tree);
+    if (!base) {
+      // Copy failed — fall through to a full parse below; the entry stays
+      // intact for the next lookup.
+    } else {
+      try {
+        // parseIncremental narrows null away, but the WASM binding returns
+        // null at runtime when it refuses the old tree — handle it.
+        const newTree: Tree | null = await parseIncremental(language, base, entry.text, text);
+        if (newTree !== null && newTree !== base) {
+          safeDelete(base);
+          cache.replace(key, { ...meta, text }, newTree);
+          cache.recordIncrementalParse();
+          return newTree;
         }
-      } else if (newTree !== null) {
-        cache.replace(key, { ...meta, text }, newTree);
-        cache.recordIncrementalParse();
-        return newTree;
-      } else {
-        // The WASM parse refused the edited old tree (returns null at
-        // runtime despite the narrowed type) — drop the spent entry and fall
-        // through to a full parse below. Extraction must degrade, not crash.
-        cache.remove(key);
+        // Null (refused old tree) or same-tree return: drop the spent copy
+        // and fall through to a full parse. The entry stays warm.
+        safeDelete(base);
+      } catch {
+        // The copy may have been mutated by tree.edit() before the failure —
+        // it was ours alone, so just free it; the entry is untouched.
+        safeDelete(base);
       }
-    } catch {
-      // The cached tree may have been mutated by tree.edit() before the
-      // failure — drop it rather than poison the next lookup.
-      cache.remove(key);
     }
   }
 

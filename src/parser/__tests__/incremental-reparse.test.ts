@@ -141,9 +141,11 @@ describe('parseIncremental', () => {
     await expectIncrementalParity('typescript', code, '');
   });
 
-  it('non-ascii edits match full parse (byte vs UTF-16 offsets)', async () => {
-    // computeSingleEdit scans UTF-16 code units but reports UTF-8 bytes —
-    // emoji (surrogate pair) and CJK (3-byte) literal coverage for both.
+  it('non-ascii edits match full parse (UTF-16 units throughout)', async () => {
+    // computeSingleEdit scans UTF-16 code units and reports UTF-16 offsets —
+    // web-tree-sitter 0.27 feeds the parser UTF-16, so byte offsets here
+    // would silently mis-reuse subtrees. Emoji (surrogate pair) and CJK
+    // (3-byte) literals cover the conversion.
     const before = 'const greeting = "hello";\nfunction foo() {\n  return 1;\n}\n';
     const afterEmoji = 'const greeting = "hello 👋";\nfunction foo() {\n  return 1;\n}\n';
     await expectIncrementalParity('typescript', before, afterEmoji);
