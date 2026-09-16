@@ -801,6 +801,18 @@ export class IndexingPipeline {
 
   deleteFiles(filePaths: string[]): void {
     if (filePaths.length === 0) return;
+    // TRA-1553, last resort: stopProject() closes the DB on a bounded drain,
+    // so a delete landing after the close must not throw "The database
+    // connection is not open" from inside an async continuation as an
+    // unhandled rejection. Skipping is safe — the next full indexAll
+    // reconciles scope and drops the rows then.
+    if (!this.store.db.open) {
+      logger.warn(
+        { root: this.rootPath, files: filePaths.length },
+        'deleteFiles skipped — database already closed',
+      );
+      return;
+    }
     // TRA-1577: drop per-file tree-sitter cache entries alongside the DB rows
     // so a deleted path can't serve a stale incremental base on re-creation,
     // and its WASM trees are freed instead of lingering to LRU eviction.
