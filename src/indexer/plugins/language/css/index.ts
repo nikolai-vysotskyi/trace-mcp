@@ -12,8 +12,10 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -33,10 +35,11 @@ export class CssLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     const ext = filePath.substring(filePath.lastIndexOf('.'));
     if (ext === '.css') {
-      return this.extractWithTreeSitter(filePath, content);
+      return this.extractWithTreeSitter(filePath, content, opts);
     }
     return this.extractWithRegex(filePath, content, ext);
   }
@@ -48,11 +51,13 @@ export class CssLanguagePlugin implements LanguagePlugin {
   private async extractWithTreeSitter(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
-      const parser = await getParser('css');
       const sourceCode = content.toString('utf-8');
-      const tree = parser.parse(sourceCode);
+      const tree = await parseWithTreeCache('css', filePath, sourceCode, {
+        scope: opts?.treeCacheScope,
+      });
       try {
         const root: TSNode = tree.rootNode;
 

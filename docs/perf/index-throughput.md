@@ -198,6 +198,52 @@ Measurement artifact worth knowing: the first bench attempt showed the
 awaiting the write plus a git second-opinion on empty watcher answers
 (`runDiscovered`), with a regression test pinning it.
 
+## Run 2026-09-16 — TRA-1577 edit-session incremental reparse (F2)
+
+Same machine (darwin 25.5.0/arm64, 18 logical CPUs, Node v22.22.3).
+Scenario: a synthetic 40-file TypeScript project (30 small + 8 medium +
+2 × ~900-function large files) driven through a deterministic 60-edit
+session — append function, rename identifier, tweak literal, prepend
+comment — with one watcher-shaped `indexFiles([file])` per edit, all
+in-process (single-file batches sit below the worker-pool threshold, so this
+is the production watcher path). Both arms replay the identical edit script;
+the run aborts unless both arms index the same symbol graph. Harness:
+`runEditSessionComparison` in `scripts/bench-index-throughput.ts`
+(`--edit-session-only` for the standalone run).
+
+| | Cache on | Cache off (`TRACE_MCP_NO_TREE_CACHE=1`) |
+|---|---|---|
+| Session wall (60 edits) | 1084 ms | 1109 ms |
+| tree-sitter `Parser.parse()` cumulative | 2.9 ms (60 calls) | 24.3 ms (60 calls) |
+| Edited files via incremental reparse | **60/60 (100%)** | 0/60 |
+| Final symbol graph | 3136 symbols | 3136 symbols (identical) |
+
+Parse-level microbench on a ~900-function file (median of 15): full parse
+5.89 ms vs incremental step 0.58 ms — **10.1×**.
+
+**Reading.** The §3 bucket (tree-sitter parse inside extract) drops **8.4×**
+(24.3 → 2.9 ms) at a 100% incremental share — the mechanism works exactly as
+specified. Session wall drops ~2% (1084 vs 1109 ms) because parsing was
+already ~2% of a single-file watcher reindex; plugin extraction, persist,
+and edge resolution dominate that path (§3 predicted this ratio). Optimizing
+further wall time means going after those stages, not the parser.
+
+**Two correctness findings baked into the implementation, kept here so the
+numbers read honestly:**
+
+- web-tree-sitter 0.27 operates in **UTF-16 code units**, not the UTF-8 bytes
+  classic tree-sitter documents (`const x = 関数;` reports the identifier as
+  [10,12], not [10,16]). The TRA-1540 prototype computed edits in bytes, so
+  every non-ASCII edit silently mis-reused subtrees. `computeSingleEdit` now
+  works in UTF-16 throughout; the parity suite pins emoji/CJK/empty/large/
+  chained/tsx/go fixtures.
+- Concurrent first-loads of `getParser` raced (one `Language.load` per file
+  in a `Promise.all` chunk), leaving duplicate WASM Language instances; this
+  build returns null when an old tree's Language address differs from the
+  parsing parser's. `getParser` now coalesces in-flight loads (one Language +
+  Parser per grammar), and a refused incremental parse degrades to a full
+  parse instead of erroring the file.
+
 ## Caveats
 
 - **One sample per configuration for the headline tables**, not a median of

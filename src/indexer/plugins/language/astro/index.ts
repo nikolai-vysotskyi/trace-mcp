@@ -23,8 +23,9 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -49,6 +50,18 @@ import {
   splitAstroSections,
 } from './helpers.js';
 
+/**
+ * Names one .astro block's tree-sitter cache slot (TRA-1577). Frontmatter and
+ * each <script> block parse different texts, so they need different tags; the
+ * repeated parses within one block share a tag and collapse into one seed +
+ * identical hits.
+ */
+interface BlockCacheKey {
+  scope?: string;
+  filePath: string;
+  tag: string;
+}
+
 export class AstroLanguagePlugin implements LanguagePlugin {
   manifest: PluginManifest = {
     name: 'astro-language',
@@ -63,6 +76,7 @@ export class AstroLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const rawSource = content.toString('utf-8');
@@ -100,9 +114,14 @@ export class AstroLanguagePlugin implements LanguagePlugin {
         const fmContent = sections.frontmatter;
         const fmLineOffset = sections.frontmatterLineStart - 1;
         const fmByteOffset = sections.frontmatterOffset;
+        const fmCache: BlockCacheKey = {
+          scope: opts?.treeCacheScope,
+          filePath,
+          tag: 'frontmatter',
+        };
 
         // Extract import edges from the frontmatter.
-        const fmEdges = await this.parseScriptEdges(fmContent, 'typescript');
+        const fmEdges = await this.parseScriptEdges(fmContent, 'typescript', fmCache);
         // Adjust edge metadata — edges themselves have no byte offsets so no adjustment needed.
         edges.push(...fmEdges);
 
@@ -112,6 +131,7 @@ export class AstroLanguagePlugin implements LanguagePlugin {
           filePath,
           fmLineOffset,
           fmByteOffset,
+          fmCache,
         );
         symbols.push(...fmSymbols);
 
@@ -123,6 +143,7 @@ export class AstroLanguagePlugin implements LanguagePlugin {
           fmLineOffset,
           fmByteOffset,
           '_frontmatter',
+          fmCache,
         );
         if (fmModuleSym) symbols.push(fmModuleSym);
       }
@@ -154,10 +175,16 @@ export class AstroLanguagePlugin implements LanguagePlugin {
 
       // ── <script> blocks inside the template ─────────────────────────────
       const scriptBlocks = extractScriptBlocks(templateContent);
-      for (const block of scriptBlocks) {
+      for (let i = 0; i < scriptBlocks.length; i++) {
+        const block = scriptBlocks[i];
         if (block.isInline) continue; // is:inline blocks are not processed by Astro
 
-        const scriptEdges = await this.parseScriptEdges(block.content, block.lang);
+        const blockCache: BlockCacheKey = {
+          scope: opts?.treeCacheScope,
+          filePath,
+          tag: `script-${i}`,
+        };
+        const scriptEdges = await this.parseScriptEdges(block.content, block.lang, blockCache);
         edges.push(...scriptEdges);
 
         const scriptModuleSym = await this.buildModuleSymbol(
@@ -166,6 +193,7 @@ export class AstroLanguagePlugin implements LanguagePlugin {
           templateLineOffset + countLinesUpTo(templateContent, block.contentOffset),
           templateByteOffset + block.contentOffset,
           `_script`,
+          blockCache,
         );
         if (scriptModuleSym) symbols.push(scriptModuleSym);
       }
@@ -207,10 +235,13 @@ export class AstroLanguagePlugin implements LanguagePlugin {
   private async parseScriptEdges(
     scriptContent: string,
     lang: 'typescript' | 'javascript',
+    cache: BlockCacheKey,
   ): Promise<RawEdge[]> {
     try {
-      const parser = await getParser(lang);
-      const tree = parser.parse(scriptContent);
+      const tree = await parseWithTreeCache(lang, cache.filePath, scriptContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         return extractImportEdges(tree.rootNode as TSNode);
       } finally {
@@ -230,10 +261,13 @@ export class AstroLanguagePlugin implements LanguagePlugin {
     filePath: string,
     lineOffset: number,
     byteOffset: number,
+    cache: BlockCacheKey,
   ): Promise<RawSymbol[]> {
     try {
-      const parser = await getParser('typescript');
-      const tree = parser.parse(fmContent);
+      const tree = await parseWithTreeCache('typescript', cache.filePath, fmContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         const root = tree.rootNode as TSNode;
         const symbols: RawSymbol[] = [];
@@ -333,10 +367,13 @@ export class AstroLanguagePlugin implements LanguagePlugin {
     lineOffset: number,
     byteOffset: number,
     suffix: string,
+    cache: BlockCacheKey,
   ): Promise<RawSymbol | null> {
     try {
-      const parser = await getParser('typescript');
-      const tree = parser.parse(scriptContent);
+      const tree = await parseWithTreeCache('typescript', cache.filePath, scriptContent, {
+        scope: cache.scope,
+        tag: cache.tag,
+      });
       try {
         const root = tree.rootNode as TSNode;
         const callSites = extractModuleCallSites(root, { skipLexicalFunctionBodies: false });

@@ -19,8 +19,10 @@
 import { err, ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import { getParser, type TSNode } from '../../../../parser/tree-sitter.js';
+import { parseWithTreeCache } from '../../../../parser/tree-cache.js';
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type {
+  ExtractSymbolsOptions,
   FileParseResult,
   LanguagePlugin,
   PluginManifest,
@@ -650,6 +652,7 @@ export class JsonLanguagePlugin implements LanguagePlugin {
   async extractSymbols(
     filePath: string,
     content: Buffer,
+    opts?: ExtractSymbolsOptions,
   ): Promise<TraceMcpResult<FileParseResult>> {
     try {
       const source = content.toString('utf-8');
@@ -660,8 +663,9 @@ export class JsonLanguagePlugin implements LanguagePlugin {
       // tree-sitter-json does not handle JSONC comments, so strip them first
       const cleanSource = stripJsonComments(source);
 
-      const parser = await getParser('json');
-      const tree = parser.parse(cleanSource);
+      const tree = await parseWithTreeCache('json', filePath, cleanSource, {
+        scope: opts?.treeCacheScope,
+      });
       try {
         const rootNode = tree.rootNode;
 

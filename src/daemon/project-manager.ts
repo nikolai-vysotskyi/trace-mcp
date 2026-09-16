@@ -18,6 +18,7 @@ import { announceDbHolder, releaseDbHoldersForRoot } from '../db-holders.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
 import { ExtractPool } from '../indexer/extract-pool.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
+import { dropTreeCacheScope } from '../parser/tree-cache.js';
 import {
   clearProjectReindexCache,
   shouldSkipRecentReindex,
@@ -983,6 +984,14 @@ export class ProjectManager {
       this.sharedPool?.dropProject(root);
     } catch (err) {
       logger.warn({ error: err, projectRoot: root }, 'sharedPool.dropProject failed (non-fatal)');
+    }
+    // TRA-1577: same for the main-thread per-file tree-sitter cache (keyed by
+    // the same rootPath scope) — otherwise a removed project's trees linger
+    // to LRU eviction. Workers drop their own copy via drop_project.
+    try {
+      dropTreeCacheScope(root);
+    } catch (err) {
+      logger.warn({ error: err, projectRoot: root }, 'dropTreeCacheScope failed (non-fatal)');
     }
     // Forget this project's own refcount bookkeeping in the resource pool.
     // TRA-938: the pool's TopologyStore/DecisionStore/StateEngine are
