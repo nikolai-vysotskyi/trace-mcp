@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ensureInitialized, getParser, warmUpGrammars } from '../../src/parser/tree-sitter.js';
+import {
+  ensureInitialized,
+  getParser,
+  LANG_GRAMMARS,
+  warmUpGrammars,
+} from '../../src/parser/tree-sitter.js';
 
 /**
  * Phase 5.2 — Pre-emptive grammar warm-up.
@@ -55,5 +62,34 @@ describe('warmUpGrammars', () => {
 
   it('handles an empty languages list', async () => {
     await expect(warmUpGrammars([])).resolves.toBeUndefined();
+  });
+
+  it('warms every advertised language (full project set, not a subset)', async () => {
+    // TRA-1540: daemon boot must pre-warm all project languages. Warming two
+    // and calling it done hides lazy-load stalls for the rest.
+    await expect(warmUpGrammars(Object.keys(LANG_GRAMMARS))).resolves.toBeUndefined();
+    for (const language of Object.keys(LANG_GRAMMARS)) {
+      const parser = await getParser(language);
+      expect(parser).toBeDefined();
+    }
+  });
+
+  it('WARMUP_EXT_TO_LANG covers every LANG_GRAMMARS grammar', () => {
+    // Same source-text technique as the PAYLOAD_GRAMMARS drift test:
+    // importing cli.ts would drag the whole daemon into this test, so parse
+    // the map out of the source instead. An extension missing here means its
+    // grammar skips boot warm-up and loads lazily on first parse.
+    const cli = readFileSync(path.resolve(__dirname, '../../src/cli.ts'), 'utf-8');
+    const block =
+      cli.match(/WARMUP_EXT_TO_LANG: Record<string, string> = \{([\s\S]*?)\n\};/)?.[1] ?? '';
+    expect(block.trim().length).toBeGreaterThan(0);
+    const mapped = new Set([...block.matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]));
+    // Values are language IDs (LANG_GRAMMARS keys: 'csharp', 'typescript'),
+    // not grammar file names ('c_sharp') — warmUpGrammars looks keys up.
+    for (const language of Object.keys(LANG_GRAMMARS)) {
+      expect(mapped, `WARMUP_EXT_TO_LANG has no extension for language '${language}'`).toContain(
+        language,
+      );
+    }
   });
 });

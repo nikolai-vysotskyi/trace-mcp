@@ -15,7 +15,15 @@
  */
 
 import { getWasmPath, type SupportedLanguage } from 'tree-sitter-wasm';
-import { Language, type Node, type ParseCallback, Parser, type Tree } from 'web-tree-sitter';
+import {
+  Edit,
+  Language,
+  type Node,
+  type ParseCallback,
+  Parser,
+  type Point,
+  type Tree,
+} from 'web-tree-sitter';
 
 /**
  * A `Parser` whose `parse()` is narrowed to non-nullable.
@@ -134,6 +142,87 @@ export async function getParser(language: string): Promise<TSParser> {
   parser.setLanguage(lang);
   parserCache.set(language, parser);
   return parser;
+}
+
+/**
+ * Byte offset → tree-sitter Point (row + byte column).
+ * tree-sitter works in UTF-8 bytes, not UTF-16 code units, so both the row
+ * scan and the column use byte lengths. ASCII-only inputs take the same path —
+ * no separate fast path to keep the two from drifting apart.
+ */
+function offsetToPoint(text: string, utf16Offset: number): Point {
+  let row = 0;
+  let lineStart = 0;
+  for (let i = 0; i < utf16Offset; i++) {
+    if (text.charCodeAt(i) === 10 /* \n */) {
+      row++;
+      lineStart = i + 1;
+    }
+  }
+  return { row, column: Buffer.byteLength(text.slice(lineStart, utf16Offset)) };
+}
+
+/**
+ * Describe the change from `oldText` to `newText` as a single tree-sitter
+ * Edit (common prefix + common suffix). Returns null when the texts are
+ * identical — there is nothing to apply to the old tree.
+ *
+ * Single-edit only: a watcher coalesces one file write into one call, so one
+ * contiguous span covers the prototype. Callers with several disjoint edits
+ * should apply one Edit per span (oldest span first) instead of forcing them
+ * through here.
+ */
+export function computeSingleEdit(oldText: string, newText: string): Edit | null {
+  if (oldText === newText) return null;
+  let start = 0;
+  const minLen = Math.min(oldText.length, newText.length);
+  while (start < minLen && oldText.charCodeAt(start) === newText.charCodeAt(start)) {
+    start++;
+  }
+  let oldEnd = oldText.length;
+  let newEnd = newText.length;
+  while (
+    oldEnd > start &&
+    newEnd > start &&
+    oldText.charCodeAt(oldEnd - 1) === newText.charCodeAt(newEnd - 1)
+  ) {
+    oldEnd--;
+    newEnd--;
+  }
+  return new Edit({
+    startIndex: Buffer.byteLength(oldText.slice(0, start)),
+    oldEndIndex: Buffer.byteLength(oldText.slice(0, oldEnd)),
+    newEndIndex: Buffer.byteLength(newText.slice(0, newEnd)),
+    startPosition: offsetToPoint(oldText, start),
+    oldEndPosition: offsetToPoint(oldText, oldEnd),
+    newEndPosition: offsetToPoint(newText, newEnd),
+  });
+}
+
+/**
+ * Prototype incremental reparse for single-file watcher edits (TRA-1540).
+ *
+ * Applies `tree.edit()` for the oldText → newText change, then reuses the
+ * cached parser with the edited old tree so unchanged subtrees are recycled
+ * instead of reparsed. Returns a tree whose S-expression is identical to a
+ * full `parse(newText)` — see `incremental-reparse.test.ts`.
+ *
+ * Ownership: mirrors `Parser.parse` — the old tree is NOT freed (the caller
+ * deletes it when done; tests need it alive for `getChangedRanges`). When the
+ * texts are identical no reparse happens and `oldTree` itself is returned.
+ */
+export async function parseIncremental(
+  language: string,
+  oldTree: Tree,
+  oldText: string,
+  newText: string,
+): Promise<Tree> {
+  if (oldText === newText) return oldTree;
+  const edit = computeSingleEdit(oldText, newText);
+  if (!edit) return oldTree;
+  oldTree.edit(edit);
+  const parser = await getParser(language);
+  return parser.parse(newText, oldTree);
 }
 
 export type TSNode = Node;
