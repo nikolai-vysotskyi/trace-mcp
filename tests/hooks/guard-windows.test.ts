@@ -110,7 +110,15 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
     expect(nav('three', { TRACE_MCP_GUARD_NAV_WINDOW: '300' })).toBe('');
   });
 
-  it('a new user prompt clears the streak, so a light question is left alone', () => {
+  // TRA-1571: quarantined retry. Release 3.26.2's windows-latest run hung one
+  // prompt hook for ~60s on a loaded runner (the decisions search had no
+  // timeout then), so the streak was never cleared and this assertion failed
+  // while every sibling passed in 1-7s. The hook is now bounded at 10s like
+  // POSIX, but each call still spawns several PowerShell processes, so one
+  // slow box can stall any single attempt. beforeEach mints a fresh session
+  // per attempt, so a retry never sees the previous attempt's state; a real
+  // gate regression fails every attempt and still goes red.
+  it('a new user prompt clears the streak, so a light question is left alone', { retry: 2 }, () => {
     expect(nav('one')).toBe('');
     expect(nav('two')).toBe('');
     prompt('rename the config loader');
