@@ -2402,3 +2402,35 @@ skipped — two hours since the twentieth pass's snapshot is noise, not signal.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Twenty-second pass, 2026-09-16 evening (TRA-1580): light recheck, sweep clean
+
+The twenty-first pass re-verified everything at ~12:02 UTC; this run re-read
+the threads that could have moved in the two hours since, and ran the sweep.
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments, `mergeable: MERGEABLE` on the first read (no transient UNKNOWN
+this time, no rebase needed): `eltociear#119`, `GetBindu#195`, `yzfly#44`,
+`tolkonepiu#384`, `ai-boost#240`. No ping due anywhere — nearest deadlines
+(yzfly re-check 19.09, eltociear/GetBindu/slopstop/hermes/nix 20.09) have not
+arrived. `hermes#395`, `nix#606`, `ai-tooling#585` (no follow-up per TRA-857),
+`pi-extensions#1204`: all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3
+comments, newest still `mjsarfatti` 09-05 (a brush-off, not a question).
+`kilocode#13843` / `#12707`: OPEN, newest still ours 09-07 (gift reports, not
+touched). `slopstop#633`: OPEN, newest still ours 09-06 — do not ping before
+20.09. `atlas#105`: OPEN, 9 comments, newest still the maintainer's own 09-07
+Tier-2 close-out — nothing directed at us. `pr-agent#2499`: OPEN, 11 comments,
+newest still our own 09-14 reply — wait. `nanocoder#1197`: OPEN, 4 comments,
+newest still the third-party `slowe89` pitch 09-11 — no question to us.
+`outline#34`: OPEN, 3 comments, newest still our 09-15 provenance answer — do
+not comment again unless the maintainer replies. TRA-633 consolidated request
+to Nikolai stands; no new ping.
+
+**Mention sweep (`scripts/mention-sweep.sh`): clean.** All four pass-1 queries
+plus all five pass-2 paired terms report "No repos outside the seen list.
+Nothing to read." No `mentions-seen.txt` change this run.
+
+**Catalogs:** moratorium holds (acquisition still unreadable), no submissions.
+**Competitors:** star snapshot skipped — same reason as the twenty-first pass.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
