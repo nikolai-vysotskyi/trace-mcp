@@ -26,6 +26,7 @@ axisrow/trace-mcp-plugin
 btraceio/btrace
 oisee/odata_mcp
 oisee/odata_mcp_go
+oisee/odata_mcp_net
 korwabs/playwright-trace-mcp
 imj01y/trace-ui
 aleutian-ai/AleutianFOSS
