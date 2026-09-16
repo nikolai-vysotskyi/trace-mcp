@@ -44,8 +44,9 @@ describe('OnnxProvider', () => {
     function mockPipeline(vector: number[]) {
       vi.doMock('@huggingface/transformers', () => ({
         pipeline: vi.fn(async () => {
-          return async (_text: string, _opts: unknown) => ({
+          return async (_text: string | string[], _opts: unknown) => ({
             data: Float32Array.from(vector),
+            dims: [1, vector.length],
           });
         }),
       }));
@@ -63,13 +64,19 @@ describe('OnnxProvider', () => {
       expect(result).toEqual([1, 2, 3]);
     });
 
-    it('embedBatch() calls the pipeline once per text and preserves order', async () => {
+    it('embedBatch() issues ONE pipeline call for N texts (true batching)', async () => {
       let callCount = 0;
+      let seenInput: unknown = null;
       vi.doMock('@huggingface/transformers', () => ({
         pipeline: vi.fn(async () => {
-          return async (text: string) => {
+          return async (texts: string | string[]) => {
             callCount += 1;
-            return { data: Float32Array.from([text.length]) };
+            seenInput = texts;
+            const arr = Array.isArray(texts) ? texts : [texts];
+            return {
+              data: Float32Array.from(arr.map((t) => t.length)),
+              dims: [arr.length, 1],
+            };
           };
         }),
       }));
@@ -77,7 +84,41 @@ describe('OnnxProvider', () => {
       const provider = new OnnxProvider({ dimensions: 10 });
       const result = await provider.embedding().embedBatch(['a', 'bb', 'ccc']);
       expect(result).toEqual([[1], [2], [3]]);
-      expect(callCount).toBe(3);
+      expect(callCount).toBe(1);
+      expect(seenInput).toEqual(['a', 'bb', 'ccc']);
+    });
+
+    it('embedBatch() falls back to per-text calls when the batched call throws', async () => {
+      let batchCalls = 0;
+      let singleCalls = 0;
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => {
+          return async (texts: string | string[]) => {
+            if (Array.isArray(texts) && texts.length > 1) {
+              batchCalls += 1;
+              throw new Error('backend rejects batches');
+            }
+            singleCalls += 1;
+            const t = Array.isArray(texts) ? texts[0]! : texts;
+            return { data: Float32Array.from([t.length]), dims: [1, 1] };
+          };
+        }),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const provider = new OnnxProvider({ dimensions: 10 });
+      const result = await provider.embedding().embedBatch(['a', 'bb']);
+      expect(result).toEqual([[1], [2]]);
+      expect(batchCalls).toBe(1);
+      expect(singleCalls).toBe(2);
+    });
+
+    it('embedBatch([]) returns [] without touching the pipeline', async () => {
+      const pipelineSpy = vi.fn();
+      vi.doMock('@huggingface/transformers', () => ({ pipeline: pipelineSpy }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const provider = new OnnxProvider();
+      expect(await provider.embedding().embedBatch([])).toEqual([]);
+      expect(pipelineSpy).not.toHaveBeenCalled();
     });
 
     it('embedBatch() stops early when the abort signal is already aborted', async () => {
@@ -116,6 +157,59 @@ describe('OnnxProvider', () => {
       expect(svc.dimensions()).toBe(42);
       expect(svc.modelName()).toBe('custom/model');
       expect(svc.providerName()).toBe('onnx');
+    });
+  });
+
+  describe('quantization dtype — q8 default, fp32 rollback', () => {
+    const OLD_ENV = process.env.TRACE_MCP_ONNX_DTYPE;
+
+    afterEach(() => {
+      if (OLD_ENV === undefined) delete process.env.TRACE_MCP_ONNX_DTYPE;
+      else process.env.TRACE_MCP_ONNX_DTYPE = OLD_ENV;
+    });
+
+    it("passes dtype 'q8' to the pipeline factory by default", async () => {
+      delete process.env.TRACE_MCP_ONNX_DTYPE;
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider().embedding().embed('hello');
+      expect(vi.mocked(pipeline).mock.calls[0]?.[2]).toMatchObject({ dtype: 'q8' });
+    });
+
+    it('TRACE_MCP_ONNX_DTYPE=fp32 rolls back to full precision', async () => {
+      process.env.TRACE_MCP_ONNX_DTYPE = 'fp32';
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider().embedding().embed('hello');
+      expect(vi.mocked(pipeline).mock.calls[0]?.[2]).toMatchObject({ dtype: 'fp32' });
+    });
+
+    it('explicit constructor dtype wins over the env var', async () => {
+      process.env.TRACE_MCP_ONNX_DTYPE = 'fp32';
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider({ dtype: 'q4' }).embedding().embed('hello');
+      expect(vi.mocked(pipeline).mock.calls[0]?.[2]).toMatchObject({ dtype: 'q4' });
+    });
+
+    it('unknown env dtype falls back to q8 instead of crashing model load', async () => {
+      process.env.TRACE_MCP_ONNX_DTYPE = 'bf16-plz';
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider().embedding().embed('hello');
+      expect(vi.mocked(pipeline).mock.calls[0]?.[2]).toMatchObject({ dtype: 'q8' });
     });
   });
 
