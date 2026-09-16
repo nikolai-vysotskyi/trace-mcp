@@ -36,7 +36,10 @@ What the flag drives (all measured below unless noted):
 What the stand does **not** simulate (read the ratios, not the absolutes):
 real 2-core scheduling contention, 4 GB memory pressure / OOM behavior, and
 slower disks. Absolute milliseconds below do not transfer to weak hardware;
-the full-vs-low **ratios** are the signal.
+the full-vs-low **ratios** are the signal. Note: the auto-detect thresholds
+diverge historically — the pool goes weak below 4 GB RAM, the SQLite profile
+below 6 GiB — so a 4–6 GB host without the flag may run the two halves in
+different modes; the env flag forces both and is the stand for that reason.
 
 Run it:
 
@@ -80,7 +83,7 @@ per cell — order-of-magnitude, not a regression gate.
 | Incremental, 1 file | 1347 / 1151 | 1311 / 1243 | ≈0% (noise) | 825 / 783 | 665 / 642 | **−19%** |
 | Incremental, 100 files | 4597 / 3987 | 3154 / 3268 | **−25% (faster)** | 1483 / 1404 | 723 / 775 | **−48%** |
 
-Raw JSON of the four runs is not committed (load-skewed absolutes would
+Raw JSON of the 20 runs (5 configs × 2 modes × 2 each) is not committed (load-skewed absolutes would
 mislead); the table above is the record.
 
 ### Verdict on the epic's claims (−30% wall / −40% RSS in weak profile)

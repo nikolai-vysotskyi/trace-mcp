@@ -194,6 +194,7 @@ describe('TRA-1541 trigram-merge', () => {
       expect(resolveIndexMemoryProfile('full', sixteenGB)).toBe('full');
       process.env.TRACE_MCP_LOW_POWER = '0';
       expect(resolveIndexMemoryProfile('auto', 2 * 1024 * 1024 * 1024)).toBe('full');
+      expect(resolveIndexMemoryProfile('low-power', sixteenGB)).toBe('low-power');
     } finally {
       if (prev === undefined) delete process.env.TRACE_MCP_LOW_POWER;
       else process.env.TRACE_MCP_LOW_POWER = prev;
