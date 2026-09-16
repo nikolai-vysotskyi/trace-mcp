@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.26.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.1...v3.26.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ci:** bound Windows prompt-hook decisions search at 10s, quarantined retries for wall-clock flakes (TRA-1571) ([#1230](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1230)) ([1e4c5bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e4c5bff8a7862f839e092769e97ee59a9bc17e3))
+* **ci:** Windows timeout budget for SQLite-heavy suites, refresh stale sitemap (TRA-1513) ([#1211](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1211)) ([12634f1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/12634f1dc06f04bce6138436fc7f28137878ff16))
+* **cli:** handle clack cancel symbol for @clack/prompts 1.8 compat (TRA-1558) ([#1227](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1227)) ([2214f6f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2214f6f3e20b68f2033ded7013be635d3279f281))
+
+
+### Performance
+
+* **ai:** ONNX q8 default + true batching for embedBatch (TRA-1538) ([#1220](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1220)) ([4ead7e3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4ead7e3e8784fbc47858e5c745aa7793eba5905a))
+* **db:** FTS trigram-merge + SQLite pragmas audit (TRA-1541) ([#1224](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1224)) ([a9f9405](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9f94058affc96dadede6f44ddf47c12f810627d))
+* **embeddings:** eval MiniLM vs e5-small vs bge-m3, E5 prefix plumbing (TRA-1539) ([#1231](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1231)) ([9b924ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9b924ab82db3d25972fa10ec0978e80b5498d4d4))
+* **indexer:** shared decode + adaptive worker pool (TRA-1537) ([#1222](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1222)) ([5c4f658](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c4f6586f854e17cd8b9d4c24433d6d6f4191371))
+* **indexer:** watcher since-query + git fast-path for incremental discovery (TRA-1576) ([#1234](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1234)) ([0d71cf3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0d71cf32c54c6d50b5abf72f7a3b5bcec1c5ecb0))
+* **parser:** tree-sitter-wasm 2.0.1, full warmup coverage, tree.edit() prototype (TRA-1540) ([#1233](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1233)) ([8db7118](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8db7118e6338b97785ca22d9e11f470422d198a2))
+
+
+### Documentation
+
+* **config:** record the daemon-default decision at auto_spawn_daemon (TRA-1509) ([#1208](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1208)) ([f5b86c9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f5b86c97d4312b742391154950983062353dabb2))
+* **outreach:** 2026-09-16 delta — aloth/awesome-ai-agents fits (moratorium-held), crazy54 rejected as link-farm (TRA-1567) ([#1229](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1229)) ([1246218](https://github.com/nikolai-vysotskyi/trace-mcp/commit/124621856c7910a65a12e29ee2d636b3414430c3))
+* **outreach:** twentieth pass 2026-09-16 — outline[#34](https://github.com/nikolai-vysotskyi/trace-mcp/issues/34) answered, threads silent, sweep clean ([#1225](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1225)) ([3ac5fab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ac5fab97b7468e76c73626120594df466f29fcb))
+* **outreach:** twenty-first pass 2026-09-16 — light recheck, one sweep collision (TRA-1572) ([#1232](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1232)) ([c94f745](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c94f7455f9312de11960676a444a98c8f0de4706))
+* **outreach:** twenty-second pass 2026-09-16 evening — light recheck, sweep clean (TRA-1580) ([#1235](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1235)) ([761713f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/761713f635f12c2998364b06f3594fc73c358dd2))
+* **perf:** TRA-1392 startup+size pass at 3.25.1 — no regressions, first_content 89 -&gt; 82ms ([#1214](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1214)) ([b274805](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b27480569809f6a697969474fda63011bf3aacfa))
+* **sitemap:** refresh lastmod to 2026-09-16 for 14 pages (TRA-1569) ([#1228](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1228)) ([25ffecf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25ffecf9902bfa75afab6cab5e8cbf744e6ae906))
+* **vs:** add /vs/narsil-mcp comparison page and profile CCG competitor (TRA-1234) ([#1163](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1163)) ([68d21cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68d21cf84fdd591588759d55695c9496ec5b428e))
+
+
+### Chores
+
+* **deps:** fix 2 open Dependabot alerts via pnpm overrides (TRA-1559) ([#1226](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1226)) ([82836a0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/82836a087a2799a2cb2e1341354d535ac0691eb8))
+
 ## [3.26.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.0...v3.26.1) (2026-09-15)
 
 
