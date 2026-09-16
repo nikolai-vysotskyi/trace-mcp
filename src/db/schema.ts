@@ -1939,6 +1939,13 @@ export function resolveIndexMemoryProfile(
 ): IndexMemoryProfile {
   if (profile === 'low-power') return 'low-power';
   if (profile === 'full') return 'full';
+  // TRA-1578: same TRACE_MCP_LOW_POWER=1/0 override as the worker pool
+  // (isLowPowerMachine) so one flag drives the whole weak stand — pool caps,
+  // spawn gate, keepalive window AND these SQLite knobs. Explicit 'full' /
+  // 'low-power' above still wins over the env flag.
+  const override = process.env.TRACE_MCP_LOW_POWER;
+  if (override === '1' || override?.toLowerCase() === 'true') return 'low-power';
+  if (override === '0' || override?.toLowerCase() === 'false') return 'full';
   // 'auto' (default): only low-RAM machines step down. The import is lazy so
   // this stays dependency-free for test doubles passing totalMemBytes.
   const total = totalMemBytes ?? os.totalmem();

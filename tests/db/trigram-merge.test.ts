@@ -184,6 +184,23 @@ describe('TRA-1541 trigram-merge', () => {
     expect((clamped.cacheMb + clamped.mmapMb) * 8).toBeLessThanOrEqual(1024);
   });
 
+  it('TRA-1578: TRACE_MCP_LOW_POWER overrides auto but not explicit profiles', () => {
+    const sixteenGB = 16 * 1024 * 1024 * 1024;
+    const prev = process.env.TRACE_MCP_LOW_POWER;
+    try {
+      process.env.TRACE_MCP_LOW_POWER = '1';
+      expect(resolveIndexMemoryProfile('auto', sixteenGB)).toBe('low-power');
+      // Explicit config still wins over the env flag (same rule as the pool).
+      expect(resolveIndexMemoryProfile('full', sixteenGB)).toBe('full');
+      process.env.TRACE_MCP_LOW_POWER = '0';
+      expect(resolveIndexMemoryProfile('auto', 2 * 1024 * 1024 * 1024)).toBe('full');
+      expect(resolveIndexMemoryProfile('low-power', sixteenGB)).toBe('low-power');
+    } finally {
+      if (prev === undefined) delete process.env.TRACE_MCP_LOW_POWER;
+      else process.env.TRACE_MCP_LOW_POWER = prev;
+    }
+  });
+
   it('rebuild-fts restores the trigram index and verify covers it', () => {
     const store = createTestStore();
     seedCorpus(store);

@@ -244,6 +244,18 @@ numbers read honestly:**
   Parser per grammar), and a refused incremental parse degrades to a full
   parse instead of erroring the file.
 
+## Run 2026-09-16 — TRA-1578 weak-profile stand (F3 follow-up to TRA-1535)
+
+Same harness, same fixture (`fc47c10f`, 1903 files), M-series Mac under
+`TRACE_MCP_LOW_POWER=1`. Full stand definition, A/B table (full vs
+low-power), and the embedding idle-unload decision:
+[`weak-profile.md`](./weak-profile.md). Headline, back-to-back A/B (n=2,
+load-skewed host — deltas, not absolutes): cold wall +15–22% / peak RSS
+−33–49%; incremental-100 files −25% wall AND −48% RSS (the adaptive spawn
+gate routes the batch in-process); incremental-1 file RSS-only (−19%).
+The epic's −30% wall claim does not hold for cold index; the −40% RSS claim
+holds and is exceeded.
+
 ## Caveats
 
 - **One sample per configuration for the headline tables**, not a median of
