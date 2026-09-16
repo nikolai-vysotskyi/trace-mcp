@@ -2373,3 +2373,32 @@ Intelligence lane's to update.
 **Touch budget: 1 of 5 used** (the outline provenance answer — a direct question, not a pitch).
 No catalog submissions (moratorium holds), no new threads opened, no repeat pings.
 
+### Twenty-first pass, 2026-09-16 (TRA-1572): light recheck two hours after the twentieth pass
+
+The twentieth pass audited everything at 08:06 UTC; this run re-verified the
+threads that could have moved in the two hours since, and ran the sweep.
+
+**Open threads — all unchanged.** All 5 catalog PRs still OPEN, 0 comments,
+mergeable: `eltociear#119` (head `a49344d`, unchanged since the 09-14 rebase),
+`GetBindu#195`, `yzfly#44`, `tolkonepiu#384`, `ai-boost#240` (first read
+`mergeable: UNKNOWN`, re-read 20s later `MERGEABLE` / `mergeStateStatus: CLEAN`
+— transient GitHub state, not a conflict; no rebase needed). No ping due
+anywhere. `hermes#395`, `nix#606`, `ai-tooling#585`, `pi-extensions#1204`,
+`Dokploy/mcp#81` (3 comments, last 09-05), `kilocode#13843` / `#12707`,
+`slopstop#633`, `atlas#105`, `pr-agent#2499` (newest is still our own 09-14
+reply), `nanocoder#1197` (newest still the third-party `slowe89` pitch 09-11):
+all unchanged, nothing owed. `outline#34`: no follow-up after our 09-15
+provenance answer — do not comment again unless the maintainer replies.
+
+**Mention sweep: one new hit, classified as a collision, not a surface.**
+`oisee/odata_mcp_net` (C#, 4★, last push 2025-08-15) matched on `TESTING.md`,
+which documents that repo's own `--trace-mcp` CLI flag ("MCP trace logging").
+Same author's `odata_mcp` and `odata_mcp_go` are already recorded as collisions;
+recorded alongside them in `ops/mentions-seen.txt`. No `distribution.md` row —
+there is no reader there and nothing to submit to.
+
+**Catalogs:** moratorium holds, no submissions. **Competitors:** star snapshot
+skipped — two hours since the twentieth pass's snapshot is noise, not signal.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
