@@ -281,3 +281,70 @@ describe('IndexingPipeline.deleteFiles on a closed DB (TRA-1553)', () => {
     await pipeline.dispose?.();
   });
 });
+
+describe('reindex tool in-flight registration (TRA-1553 review)', () => {
+  let workDir: string;
+
+  afterEach(() => {
+    if (workDir) rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it('registers the run as in-flight so the stop drain sees it', async () => {
+    const { TraceMcpConfigSchema } = await import('../../config.js');
+    const { initializeDatabase } = await import('../../db/schema.js');
+    const { Store } = await import('../../db/store.js');
+    const { PluginRegistry } = await import('../../plugin-api/registry.js');
+    const { registerCoreTools } = await import('../../tools/register/core.js');
+    const { countReindexingProjects } = await import('../reindex-file-handler.js');
+
+    workDir = mkdtempSync(join(tmpdir(), 'reindex-tool-inflight-'));
+    mkdirSync(join(workDir, 'src'), { recursive: true });
+    writeFileSync(join(workDir, 'src/a.ts'), 'export const a = 1;\n');
+    const db = initializeDatabase(join(workDir, 'index.db'));
+    try {
+      const handlers = new Map<string, (args: unknown) => Promise<CoreToolResult>>();
+      const server = {
+        // biome-ignore lint/suspicious/noExplicitAny: capturing harness, like toon-drift.test.ts
+        tool: (name: string, _desc: unknown, _shape: unknown, handler: any) => {
+          handlers.set(name, handler);
+        },
+        resource: () => undefined,
+        prompt: () => undefined,
+      };
+      registerCoreTools(
+        // biome-ignore lint/suspicious/noExplicitAny: capturing harness, like toon-drift.test.ts
+        server as any,
+        {
+          store: new Store(db),
+          registry: PluginRegistry.createWithDefaults(),
+          config: TraceMcpConfigSchema.parse({ root: workDir }),
+          projectRoot: workDir,
+          guardPath: () => null,
+          j: (v: unknown) => JSON.stringify(v),
+          progress: null,
+          // biome-ignore lint/suspicious/noExplicitAny: reindex path never touches these
+        } as any,
+      );
+      const handler = handlers.get('reindex');
+      expect(handler).toBeDefined();
+      // Everything up to `await withLock(...)` runs synchronously on call,
+      // so the run is already registered before the first await yields.
+      const pending = handler!({});
+      expect(countReindexingProjects()).toBe(1);
+      const res = await pending;
+      expect(countReindexingProjects()).toBe(0);
+      expect(JSON.parse(res.content[0].text).status).toBe('completed');
+    } finally {
+      try {
+        db.close();
+      } catch {
+        /* best-effort */
+      }
+    }
+  });
+});
+
+interface CoreToolResult {
+  content: Array<{ text: string }>;
+  isError?: boolean;
+}

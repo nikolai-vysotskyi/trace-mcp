@@ -108,7 +108,11 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         projectRoot,
         progress ?? undefined,
       );
-
+      // TRA-1553: register the run as in-flight so stopProject()'s bounded
+      // drain sees it — without this the drain closes the DB under a running
+      // indexAll/indexFiles exactly like the reported deleteFiles crash.
+      // (Also feeds the TRA-1125 projects_indexing vitals for this path.)
+      const endReindex = beginReindex(projectRoot);
       try {
         const result = await withLock(
           { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-reindex`, op: 'reindex' },
@@ -136,6 +140,8 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           };
         }
         throw e;
+      } finally {
+        endReindex();
       }
     },
   );
