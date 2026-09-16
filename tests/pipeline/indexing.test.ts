@@ -100,8 +100,10 @@ describe('IndexingPipeline', () => {
     const first = await pipeline.indexAll();
     expect(first.indexed).toBeGreaterThan(0);
 
-    // Re-run without force
-    const second = await pipeline.indexAll(false);
+    // Re-run without force. Pinned to the full walk (TRA-1576 fast paths
+    // short-circuit zero-change runs before the walk, so `skipped` stays 0
+    // there — covered in tests/indexer/incremental-discovery.test.ts).
+    const second = await pipeline.indexAll(false, { discovery: 'full-walk' });
     expect(second.skipped).toBe(first.indexed);
     expect(second.indexed).toBe(0);
   });
