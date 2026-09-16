@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.26.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.2...v3.26.3) (2026-09-16)
+
+
+### Performance
+
+* **parser:** per-file tree-sitter cache + incremental reparse in watcher (TRA-1577) ([#1237](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1237)) ([bbeee02](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bbeee02bf8750590d6253ba8f42096128d505024))
+* **weak:** weak-profile stand + full vs low-power numbers (TRA-1578) ([#1236](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1236)) ([8cec277](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8cec277c0c1769e022456d30240f754c1ee81e3f))
+
+
+### Documentation
+
+* **outreach:** twenty-third pass 2026-09-16 late evening — light recheck, one sweep collision (TRA-1584) ([#1238](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1238)) ([98ded90](https://github.com/nikolai-vysotskyi/trace-mcp/commit/98ded9021d8fccb47041fac97a68f21f9c160340))
+
 ## [3.26.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.1...v3.26.2) (2026-09-16)
 
 
