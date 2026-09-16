@@ -1,7 +1,7 @@
 ---
 title: "Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents"
 description: "Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 88 framework integrations, AST refactoring write tools, and OWASP taint analysis."
-updated: 2026-09-09
+updated: 2026-09-16
 ---
 
 # Narsil-MCP alternative: trace-mcp vs Narsil-MCP
