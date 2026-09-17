@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DecisionStore } from '../../src/memory/decision-store.js';
 
@@ -94,19 +95,23 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
       const repoRoot = path.join(__dirname, '..', '..');
       // Cross-platform: run the in-repo node with the tsx ESM loader rather
       // than the node_modules/.bin/tsx shim (not directly executable on
-      // Windows). `--input-type=module` pairs with `-e` like elsewhere.
+      // Windows). `--input-type=module` pairs with `-e` like elsewhere. The
+      // loader path must be a file:// URL — bare absolute paths are rejected
+      // by the ESM loader on Windows (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+      const tsxLoader = pathToFileURL(
+        path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+      ).href;
       const res = execFileSync(
         process.execPath,
-        [
-          '--import',
-          path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
-          '--input-type=module',
-          '-e',
-          script,
-        ],
+        ['--import', tsxLoader, '--input-type=module', '-e', script],
         {
           cwd: repoRoot,
-          env: { ...process.env, TRACE_MCP_DATA_DIR: tmpHome, PROJ_DIR: projDir, NODE_OPTIONS: '' },
+          env: {
+            ...process.env,
+            TRACE_MCP_DATA_DIR: tmpHome,
+            PROJ_DIR: projDir,
+            NODE_OPTIONS: '',
+          },
           encoding: 'utf-8',
         },
       );
