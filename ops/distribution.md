@@ -101,6 +101,7 @@ Rules for keeping it honest:
 | [xmkqv/money-tree](https://github.com/xmkqv/money-tree) | **Yes — third-party, we did not write it and did not submit it** | `.claude/skills/catalogs/agentic-code-cleanup.md` under `agent-code-quality`: "MIT. MCP and CI surface for change-impact evidence and pull-request risk | deterministic, python, typescript, sql, dead-exports, test-gaps, blast-radius, pr-risk, ci" | Nothing to submit; curated skill catalog for agentic code cleanup. Accurately identifies our blast-radius, pr-risk and test-gap capabilities. Found by `scripts/mention-sweep.sh` 2026-09-11 | 2026-09-11 |
 | [aloth/awesome-ai-agents](https://github.com/aloth/awesome-ai-agents) | **No — evaluated 2026-09-16, fits, held by the catalog moratorium** | 49 stars, 60 forks, CC0-1.0, pushed daily, 20+ contributors — passes the authenticity check (live history, independent maintainers, no payment, no badge). `Agent Skills & Tools` already lists code-review-graph, codegraph and Graft with measured-claim descriptions; we are absent from exactly our category. Their gate is >100 stars OR a major org — we clear it at 174. Entry format is name + link + one line under 15 words, alphabetical within section; route is a PR, with an `add-project.yml` suggestion issue for fit questions. **Do not submit until the catalog moratorium lifts** (acquisition must read first); when it does, this is the first door | 2026-09-16 |
 | [crazy54/awesome-agentic-atlas](https://github.com/crazy54/awesome-agentic-atlas) | **No — rejected 2026-09-16, link-farm shape** | Created 2026-09-03, 0 stars / 0 forks, one contributor, recent commits are CNAME edits and self-merges. An aggregator of aggregators ("guide to all the top Awesome repos") with no audience and no track record — the dofollow-link shape the rules at the top of this file warn about. Do not re-evaluate before it has independent contributors or a measurable audience | 2026-09-16 |
+| [TensorBlock/awesome-mcp-servers](https://github.com/TensorBlock/awesome-mcp-servers) | **No — evaluated 2026-09-16, fits, held by the catalog moratorium** | 854 stars, 874 forks, MIT, 30+ contributors, merges daily (PR #2444 on 09-16), open-issue queue 6 — passes the authenticity check. Code search for `trace-mcp` returns 2 hits, both `korwabs-playwright-trace-mcp` (a Playwright trace viewer — name collision, not us); we are absent. Route is the `add-mcp-server.yml` issue form or a direct PR ("a pull request is still the fastest path"); no payment, no badge, the only required checkbox is a dedup attestation. Likely category `Developer Productivity & Utilities`. **Do not submit until the catalog moratorium lifts** (acquisition must read first); when it does, this is the second door after aloth | 2026-09-16 |
 
 ### The auto-index layer stopped copying us and started paraphrasing us (2026-09-06)
 
@@ -2483,6 +2484,45 @@ since discovery); trace-mcp 174 → **175** (+1 — first movement after three
 days flat; a single star is not a trend until it repeats).
 `docs/_data/competitors.yml` left untouched — that file is the Competitor
 Intelligence lane's to update.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Twenty-fourth pass, 2026-09-16 night (TRA-1590): light recheck four hours after the twenty-third pass, sweep clean, one new door evaluated and held
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments, `mergeable_state: clean`: `eltociear#119` (head 09-14),
+`GetBindu#195`, `yzfly#44`, `tolkonepiu#384`, `ai-boost#240` (head 09-14).
+No ping due anywhere — nearest deadlines (yzfly re-check 19.09,
+eltociear/GetBindu/slopstop/hermes/nix 20.09, tolkonepiu 26.09) have not
+arrived. `hermes#395`, `nix#606`, `ai-tooling#585` (no follow-up per
+TRA-857), `pi-extensions#1204` (issue, not PR): all OPEN, 0 comments.
+`Dokploy/mcp#81`: OPEN, 3 comments, newest still 09-05. `kilocode#13843` /
+`#12707`: OPEN, 1 comment each, newest still ours 09-07. `slopstop#633`:
+OPEN, 1 comment, newest still ours 09-06. `atlas#105`: OPEN, 9 comments,
+newest still the maintainer's own 09-07 Tier-2 close-out. `pr-agent#2499`:
+OPEN, 11 comments, newest still our own 09-14 reply — wait.
+`nanocoder#1197`: OPEN, 4 comments — comment dates re-read, newest is still
+the third-party pitch of 09-11; `updated_at` 09-15 is edit/label noise, same
+pattern as before. `outline#34`: OPEN, `mergeable_state: clean`,
+`updated_at` still 09-16T08:04Z (no movement since the twenty-third pass);
+issue comments newest still our 09-15 provenance answer, review comments all
+09-02. Do not comment unless a maintainer replies. TRA-633 consolidated
+request to Nikolai stands; still `blocked`, no new ping. trace-mcp itself
+flat at 175 stars / 21 forks.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** All nine
+queries report "No repos outside the seen list. Nothing to read." No
+`mentions-seen.txt` change this run.
+
+**Catalogs:** moratorium holds (acquisition still unreadable), no
+submissions. One new door evaluated to keep the pass moving: see the
+TensorBlock row in the table above (854★, live, we are absent — the only
+`trace-mcp` code hits are a Playwright project with a colliding name).
+Held by the moratorium like aloth; when it lifts, aloth first, TensorBlock
+second.
+**Competitors:** star snapshot skipped — four hours after a full sync is
+noise, not signal; `docs/_data/competitors.yml` untouched (Competitor
+Intelligence lane).
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
