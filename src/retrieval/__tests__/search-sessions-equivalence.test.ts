@@ -114,9 +114,10 @@ describe('SearchSessionsRetriever ↔ direct-call equivalence', () => {
   });
 
   it('case 3: limit caps the result set', async () => {
-    const direct = fixture.store.searchSessions('GraphQL OR migration OR auth', { limit: 1 });
+    // `query` is plain user text (TRA-1619A), not raw FTS5 syntax.
+    const direct = fixture.store.searchSessions('GraphQL', { limit: 1 });
     const via = await runViaRetriever(fixture, {
-      query: 'GraphQL OR migration OR auth',
+      query: 'GraphQL',
       limit: 1,
     });
     expect(via).toEqual(direct);
@@ -131,8 +132,9 @@ describe('SearchSessionsRetriever ↔ direct-call equivalence', () => {
   });
 
   it('case 5: no project_root sees every project', async () => {
-    const direct = fixture.store.searchSessions('GraphQL OR auth');
-    const via = await runViaRetriever(fixture, { query: 'GraphQL OR auth' });
+    // Plain-text query matching chunks in several projects (sess-a + sess-b).
+    const direct = fixture.store.searchSessions('the');
+    const via = await runViaRetriever(fixture, { query: 'the' });
     expect(via).toEqual(direct);
     const projects = new Set(direct.map((row) => row.session_id));
     expect(projects.size).toBeGreaterThanOrEqual(2);

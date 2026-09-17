@@ -741,6 +741,19 @@ export class DecisionStore {
     return this.mutationOps.deleteDecision(id);
   }
 
+  /**
+   * One-shot low-quality sweep over stored MINED rows (TRA-1619B). See
+   * `MutationOperations.purgeLowQualityDecisions` for scope guarantees
+   * (mined-only, skips human-approved, invalidate-never-delete, dry-run).
+   */
+  purgeLowQualityDecisions(opts?: { project_root?: string; dry_run?: boolean; limit?: number }): {
+    scanned: number;
+    invalidated: number;
+    rows: Array<{ id: number; title: string; reason: string }>;
+  } {
+    return this.mutationOps.purgeLowQualityDecisions(opts);
+  }
+
   // ── QUERY ──────────────────────────────────────────────────────────
 
   queryDecisions(query: DecisionQuery): DecisionRow[] {

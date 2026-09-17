@@ -150,23 +150,30 @@ export function decisionsForTask(
   const results: CompactDecision[] = [];
   const verifyCtx = store ? { store, projectRoot } : undefined;
 
-  // 1. FTS search on task description (top keywords)
-  const keywords = extractKeywords(taskDescription);
-  if (keywords) {
+  // 1. FTS search on task description (top keywords). One escaped query per
+  // keyword, merged with dedup — the union preserves the old OR-query recall
+  // now that `queryDecisions({ search })` treats its input as plain text
+  // (TRA-1619A) instead of raw FTS5 syntax.
+  const keywords = extractKeywordList(taskDescription);
+  for (const keyword of keywords) {
+    if (results.length >= limit) break;
+    let ftsResults: DecisionRow[];
     try {
-      const ftsResults = decisionStore.queryDecisions({
+      ftsResults = decisionStore.queryDecisions({
         project_root: projectRoot,
-        search: keywords,
+        search: keyword,
         limit: limit,
       });
-      for (const d of ftsResults) {
-        if (!seen.has(d.id)) {
-          seen.add(d.id);
-          results.push(compact(d, verifyCtx));
-        }
-      }
     } catch {
       // FTS match syntax errors are non-fatal
+      continue;
+    }
+    for (const d of ftsResults) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        results.push(compact(d, verifyCtx));
+      }
+      if (results.length >= limit) break;
     }
   }
 
@@ -203,10 +210,11 @@ export function decisionsForResume(
 }
 
 /**
- * Extract FTS5-safe keywords from a natural language description.
- * Returns OR-joined terms for broad matching.
+ * Extract significant keywords from a natural language description.
+ * Returns up to 5 plain-text terms for broad (OR-union) matching — callers
+ * issue one escaped `queryDecisions({ search })` per term and merge.
  */
-function extractKeywords(text: string): string | null {
+function extractKeywordList(text: string): string[] {
   const stopWords = new Set([
     'a',
     'an',
@@ -303,8 +311,8 @@ function extractKeywords(text: string): string | null {
     .split(/\s+/)
     .filter((w) => w.length > 2 && !stopWords.has(w));
 
-  if (words.length === 0) return null;
+  if (words.length === 0) return [];
 
-  // Take top-5 most significant words, join with OR for broad matching
-  return words.slice(0, 5).join(' OR ');
+  // Take top-5 most significant words.
+  return words.slice(0, 5);
 }
