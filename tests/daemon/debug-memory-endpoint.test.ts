@@ -23,6 +23,7 @@ function stubDeps(overrides: Partial<Parameters<typeof buildMemoryReport>[0]> = 
     sessionTransports: new Map<string, unknown>(),
     sessionHandles: new Map<string, unknown>(),
     sessionClients: new Map<string, string>(),
+    sessionLastSeen: new Map<string, number>(),
     registeredProjects: 0,
     ...overrides,
   };
@@ -68,6 +69,7 @@ describe('GET /debug/memory endpoint surface', () => {
       ['s2', {}],
     ]);
     const sessionClients = new Map<string, string>([['s1', 'c1']]);
+    const sessionLastSeen = new Map<string, number>([['s1', 1]]);
 
     const report = buildMemoryReport(
       stubDeps({
@@ -80,6 +82,7 @@ describe('GET /debug/memory endpoint surface', () => {
         sessionTransports,
         sessionHandles,
         sessionClients,
+        sessionLastSeen,
         registeredProjects: 7,
       }),
     );
@@ -93,6 +96,7 @@ describe('GET /debug/memory endpoint surface', () => {
     expect(report.caches.sessionTransports).toBe(1);
     expect(report.caches.sessionHandles).toBe(2);
     expect(report.caches.sessionClients).toBe(1);
+    expect(report.caches.sessionLastSeen).toBe(1);
     expect(report.caches.registered_projects).toBe(7);
   });
 
