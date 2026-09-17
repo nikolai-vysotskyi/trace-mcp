@@ -1505,15 +1505,33 @@ export class IndexingPipeline {
 
   private buildResolveContext(scope?: ChangeScope): ResolveContext {
     const store = this.store;
+    // TRA-1602: Pass 2 (framework plugins) re-scans the whole corpus on every
+    // incremental run — plugins ignore ChangeScope, so a 1-file change still
+    // costs N-file getAllFiles mappings plus one disk read per file per
+    // plugin (~6k reads on the perf fixture). Neither the file list nor file
+    // contents change mid-pass, so memoize per context (one context = one
+    // pass). Same bytes, same order, same per-caller array semantics:
+    // - file list: one SELECT + map; each caller gets a fresh array copy
+    //   (plugins may sort/filter in place — elements are only ever read).
+    // - contents: first read pays disk, repeats hit memory. Bounded by
+    //   RESOLVE_CONTENT_CACHE_CHARS so huge repos can't balloon transient
+    //   RSS; over budget the cache stops filling and reads pass through
+    //   (correctness is identical either way — only speed differs).
+    //   `_fileContentCache` (extraction-fresh) still wins on every lookup.
+    let allFiles: Array<{ id: number; path: string; language: string | null }> | undefined;
+    const contentCache = new Map<string, string>();
+    let contentCacheChars = 0;
     return {
       rootPath: this.rootPath,
       changeScope: scope,
-      getAllFiles: () =>
-        store.getAllFiles().map((f) => ({
+      getAllFiles: () => {
+        allFiles ??= store.getAllFiles().map((f) => ({
           id: f.id,
           path: f.path,
           language: f.language,
-        })),
+        }));
+        return allFiles.slice();
+      },
       getSymbolsByFile: (fileId: number) =>
         store.getSymbolsByFile(fileId).map((s) => ({
           id: s.id,
@@ -1534,11 +1552,19 @@ export class IndexingPipeline {
       readFile: (relPath: string) => {
         const cached = this._fileContentCache.get(relPath);
         if (cached !== undefined) return cached;
+        const memo = contentCache.get(relPath);
+        if (memo !== undefined) return memo;
+        let content: string | undefined;
         try {
-          return fs.readFileSync(path.resolve(this.rootPath, relPath), 'utf-8');
+          content = fs.readFileSync(path.resolve(this.rootPath, relPath), 'utf-8');
         } catch {
           return undefined;
         }
+        if (contentCacheChars + content.length <= IndexingPipeline.RESOLVE_CONTENT_CACHE_CHARS) {
+          contentCache.set(relPath, content);
+          contentCacheChars += content.length;
+        }
+        return content;
       },
     };
   }
@@ -1570,6 +1596,14 @@ export class IndexingPipeline {
    * less work than it costs in extra branching.
    */
   private static readonly MAX_INCREMENTAL_FILES = 200;
+
+  /**
+   * TRA-1602: bound for the per-pass readFile memo in buildResolveContext
+   * (string chars ≈ half the transient UTF-16 bytes, so 32M chars ≈ 64MB).
+   * The perf fixture holds ~15M chars — fully memoizable; a repo past this
+   * budget still resolves correctly, it just re-reads past the cap.
+   */
+  private static readonly RESOLVE_CONTENT_CACHE_CHARS = 32_000_000;
 
   /**
    * Lazy-init the extract worker pool, gated by batch size and the

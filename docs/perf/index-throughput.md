@@ -256,6 +256,52 @@ gate routes the batch in-process); incremental-1 file RSS-only (−19%).
 The epic's −30% wall claim does not hold for cold index; the −40% RSS claim
 holds and is exceeded.
 
+## Run 2026-09-17 — TRA-1602 incremental edge resolution (F5)
+
+Same harness, same fixture (`fc47c10f`, 1903 files), M-series Mac (darwin,
+18 logical CPUs, Node v22.22.3) under normal desktop load (load avg ~3-4) —
+so headline walls are pooled medians of interleaved before/after A/B runs
+(n=8-11 per arm), not single samples; the edge-stage column is tighter
+(±5 ms within arm) and carries the claim.
+
+Step 1 re-measurement on fresh master: incremental-1 wall 458 ms, of which
+`resolveAllEdges` 283 ms (**62%** — the baseline moved since §5's 38%,
+exactly as the issue predicted: discovery + extract got faster, resolution
+did not). Per-resolver split of the 283 ms: framework Pass 2
+(`EdgeResolver.resolveEdges`, whose `_scope` param is accepted but ignored)
+~205-254 ms, `resolveTypeScriptCallEdges` ~19 ms, `resolveFileProjectionEdges`
+~18 ms, `resolveTypeScriptTypeEdges` ~9 ms, `storeRawEdges` ~5 ms. Inside
+Pass 2: `ctx.readFile` 6029 disk reads of unchanged content (~94-114 ms),
+`ctx.getAllFiles` 52 full-corpus SELECT + mappings (~37 ms), electron
+regexes ~80-95 ms, tailwind ~35-43 ms (it read all 1903 files to find a
+handful of CSS files). PageRank/search-cache invalidation measured O(1)
+(WeakMap drop) with recompute lazy at query time — no incremental-
+invalidation work to do there; edge inserts were already single-transaction
+batched. The biggest share is Pass 2 re-scanning unchanged files.
+
+Fix (zero semantic change — same bytes, same order, same edges):
+`buildResolveContext` memoizes the file list (one SELECT + map per pass,
+fresh array copy per caller) and file contents (first read pays disk,
+repeats hit memory, bounded at 32M chars ≈ 64 MB transient so huge repos
+can't balloon RSS; over budget reads pass through, correctness identical);
+tailwind gates `readFile` on its CSS/template language check (pure function
+of already-known language + path — skipped files always `continue`d).
+
+| | before (master) | after | Δ |
+|---|---|---|---|
+| Incremental-1 wall (pooled median) | 458 ms | 377 ms | **−18%** |
+| Incremental-1 edge stage | 283 ms | 189 ms | **−33%** |
+| Incremental-100 wall (pooled median) | 1075 ms | 895 ms | **−17%** |
+| Incremental-100 edge stage | 287 ms | 197 ms | **−31%** |
+| Zero-change `indexAll` | ~39 ms | ~37 ms | untouched (noise) |
+| `replay:check` | — | Δ=0.0000 on all metrics | no drift |
+
+Residual: Pass 2 still runs the full scan — electron's regex CPU (~45-65 ms)
+and the scope-aware ts-calls/file-projection/ts-types (~50 ms combined)
+remain. True per-file scoping (re-resolve only changed files) needs
+per-plugin cross-file map handling (electron's channel→file maps are built
+from the scan being skipped) and is a follow-up, not this PR.
+
 ## Caveats
 
 - **One sample per configuration for the headline tables**, not a median of
