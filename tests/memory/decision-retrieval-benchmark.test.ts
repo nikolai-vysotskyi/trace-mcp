@@ -105,23 +105,27 @@ describe('decision retrieval benchmark', () => {
     fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
   });
 
-  /** FTS5-only ranker: feed the query through queryDecisions search. */
+  /** FTS5-only ranker: feed the query through queryDecisions search verbatim,
+   *  exactly like the `query_decisions` tool does. `search` is plain user
+   *  text (TRA-1619A), not raw FTS5 syntax — no hand-built OR. */
   function ftsRank(q: BenchQuery): number[] {
-    // OR the terms so FTS5 matches on any token (mirrors how the tool builds
-    // its MATCH when the caller passes a free-text query).
-    const orQuery = q.query.split(/\s+/).filter(Boolean).join(' OR ');
     return store
-      .queryDecisions({ project_root: PROJECT_ROOT, search: orQuery, limit: 50 })
+      .queryDecisions({ project_root: PROJECT_ROOT, search: q.query, limit: 50 })
       .map((d) => d.id);
   }
 
   it('FTS5-only clears the recall floor', () => {
     const summary = evaluate(ftsRank);
-    // Conservative floors — catch regressions, not overfit. Measured baseline
-    // on this corpus: recall@3≈0.97, recall@5≈0.97, MRR≈0.78.
-    expect(summary.recallAt5).toBeGreaterThanOrEqual(0.85);
-    expect(summary.recallAt3).toBeGreaterThanOrEqual(0.7);
-    expect(summary.mrr).toBeGreaterThanOrEqual(0.6);
+    // Conservative floors — catch regressions, not overfit. Re-baselined in
+    // TRA-1619A: the harness used to hand-build `t1 OR t2` MATCH syntax, but
+    // `search` is plain user text (escaped AND) — the tool never built OR.
+    // Measured verbatim baseline on this corpus: recall@{1,3,5}≈0.66, MRR≈0.75.
+    // The misses are AND-brittleness on queries with absent words (e.g.
+    // "password hashing algorithm" — no row contains "algorithm"), a
+    // pre-existing recall gap tracked separately, not a ranking regression.
+    expect(summary.recallAt5).toBeGreaterThanOrEqual(0.6);
+    expect(summary.recallAt3).toBeGreaterThanOrEqual(0.6);
+    expect(summary.mrr).toBeGreaterThanOrEqual(0.7);
     // Sanity: full query set evaluated.
     expect(summary.queries).toBe(16);
   });
@@ -134,7 +138,7 @@ describe('decision retrieval benchmark', () => {
     for (const q of QUERIES) {
       const pool = store.queryDecisions({
         project_root: PROJECT_ROOT,
-        search: q.query.split(/\s+/).filter(Boolean).join(' OR '),
+        search: q.query,
         limit: 50,
       });
       const ranked = await hybridRankDecisions({

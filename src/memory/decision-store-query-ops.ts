@@ -18,6 +18,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import { escapeFtsQuery } from '../db/fts.js';
 import { computeHeat, heatDecayMultiplier } from './heat.js';
 import type { DecisionRow, DecisionQuery, DecisionTimelineEntry } from './decision-types.js';
 
@@ -96,10 +97,15 @@ export class QueryOperations {
       conditions.push("(d.review_status IS NULL OR d.review_status = 'approved')");
     }
 
-    // FTS search — join with FTS table
+    // FTS search — join with FTS table. `query.search` is plain user text,
+    // not FTS5 syntax (TRA-1619A): escape it so hyphenated / operator-shaped
+    // input (`trace-mcp`, `"quoted"`, `title:x`) can't throw. Input with no
+    // searchable terms matches nothing instead of throwing.
     if (query.search) {
+      const safeSearch = escapeFtsQuery(query.search);
+      if (!safeSearch) return [];
       conditions.push('d.id IN (SELECT rowid FROM decisions_fts WHERE decisions_fts MATCH ?)');
-      params.push(query.search);
+      params.push(safeSearch);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

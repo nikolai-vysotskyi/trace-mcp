@@ -18,6 +18,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import { escapeFtsQuery } from '../db/fts.js';
 import type { SessionChunkInput, SessionSearchResult } from './decision-types.js';
 
 export class SessionOperations {
@@ -333,6 +334,12 @@ export class SessionOperations {
     } = {},
   ): SessionSearchResult[] {
     const limit = opts.limit ?? 20;
+    // TRA-1619A: `query` is plain user text, not FTS5 syntax. A raw
+    // hyphenated query (`trace-mcp`, `well-known`) parses as a column
+    // filter and throws `SqliteError: no such column`. Escape first; an
+    // input with no searchable terms matches nothing instead of throwing.
+    const safeQuery = escapeFtsQuery(query);
+    if (!safeQuery) return [];
     if (opts.project_root) {
       return this.db
         .prepare(`
@@ -345,7 +352,7 @@ export class SessionOperations {
         ORDER BY rank
         LIMIT ?
       `)
-        .all(query, opts.project_root, limit) as SessionSearchResult[];
+        .all(safeQuery, opts.project_root, limit) as SessionSearchResult[];
     }
     return this.db
       .prepare(`
@@ -357,7 +364,7 @@ export class SessionOperations {
       ORDER BY rank
       LIMIT ?
     `)
-      .all(query, limit) as SessionSearchResult[];
+      .all(safeQuery, limit) as SessionSearchResult[];
   }
 
   getSessionChunkCount(projectRoot?: string): number {

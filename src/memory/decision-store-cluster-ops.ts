@@ -11,6 +11,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import { escapeFtsQuery } from '../db/fts.js';
 import type {
   DecisionType,
   DecisionRow,
@@ -140,10 +141,14 @@ export class ClusterOperations {
       params.push(query.service_name);
     }
     if (query.search) {
+      // TRA-1619A: plain user text, not FTS5 syntax — escape so hyphenated /
+      // operator-shaped input can't throw. Nothing searchable → no matches.
+      const safeSearch = escapeFtsQuery(query.search);
+      if (!safeSearch) return [];
       conditions.push(
         'id IN (SELECT rowid FROM decision_clusters_fts WHERE decision_clusters_fts MATCH ?)',
       );
-      params.push(query.search);
+      params.push(safeSearch);
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

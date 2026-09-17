@@ -22,6 +22,7 @@ import type Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
 import type { AuditLogger } from './decision-audit-log.js';
+import { minedDecisionRejectReason } from './decision-quality.js';
 import type { DecisionRow, DecisionInput } from './decision-types.js';
 
 export class MutationOperations {
@@ -261,5 +262,65 @@ export class MutationOperations {
   deleteDecision(id: number): boolean {
     const info = this.db.prepare('DELETE FROM decisions WHERE id = ?').run(id);
     return info.changes > 0;
+  }
+
+  /**
+   * One-shot sweep over stored MINED rows (TRA-1619B): re-apply today's
+   * `minedDecisionRejectReason` gate to active `source='mined'` decisions and
+   * invalidate the ones that fail it. Rows mined before the narration /
+   * truncation gates existed (#17, TRA-1056, TRA-1619B) otherwise stay
+   * `active` forever and pollute retrieval.
+   *
+   * Conservative by design:
+   *   - `manual` / `auto` rows are never touched (human/agent-authored — the
+   *     mined gate does not apply to them).
+   *   - human-approved rows (`review_status='approved'`) are never touched.
+   *   - invalidate, never delete — rows stay recoverable via review tooling.
+   *   - `dry_run` reports candidates without writing.
+   */
+  purgeLowQualityDecisions(opts?: {
+    project_root?: string;
+    dry_run?: boolean;
+    /** Max rows to scan. Defaults to 5000 — stores are small. */
+    limit?: number;
+  }): {
+    scanned: number;
+    invalidated: number;
+    rows: Array<{ id: number; title: string; reason: string }>;
+  } {
+    const conditions = [
+      "source = 'mined'",
+      'valid_until IS NULL',
+      "(review_status IS NULL OR review_status != 'approved')",
+    ];
+    const params: unknown[] = [];
+    if (opts?.project_root) {
+      conditions.push('project_root = ?');
+      params.push(opts.project_root);
+    }
+    const limit = Math.max(1, Math.min(opts?.limit ?? 5000, 100_000));
+    params.push(limit);
+    const candidates = this.db
+      .prepare(
+        `SELECT id, title, content FROM decisions WHERE ${conditions.join(' AND ')} ORDER BY id LIMIT ?`,
+      )
+      .all(...params) as Array<{ id: number; title: string; content: string }>;
+
+    const flagged: Array<{ id: number; title: string; reason: string }> = [];
+    for (const row of candidates) {
+      const reason = minedDecisionRejectReason(row.title ?? '', row.content ?? '');
+      if (reason !== null) flagged.push({ id: row.id, title: row.title, reason });
+    }
+
+    let invalidated = 0;
+    if (!opts?.dry_run && flagged.length > 0) {
+      const tx = this.db.transaction((ids: number[]) => {
+        for (const id of ids) {
+          if (this.invalidateDecision(id)) invalidated++;
+        }
+      });
+      tx(flagged.map((f) => f.id));
+    }
+    return { scanned: candidates.length, invalidated, rows: flagged };
   }
 }
