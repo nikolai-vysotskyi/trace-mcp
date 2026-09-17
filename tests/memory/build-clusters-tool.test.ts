@@ -261,7 +261,8 @@ describe('build_decision_clusters / get_decision_clusters / get_cluster_decision
       registerMemoryTools(server as never, ctx);
       await tools.get('build_decision_clusters')!.handler({});
 
-      const res = await tools.get('get_decision_clusters')!.handler({ search: 'auth*' });
+      // `search` is plain user text (TRA-1619A), not raw FTS5 syntax.
+      const res = await tools.get('get_decision_clusters')!.handler({ search: 'authentication' });
       const body = parseToolJson(res);
       expect(body.total).toBe(1);
       const clusters = body.clusters as Array<Record<string, unknown>>;

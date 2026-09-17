@@ -279,6 +279,63 @@ describe('minedDecisionRejectReason — #17 narration-noise survivors', () => {
   });
 });
 
+describe('minedDecisionRejectReason — TRA-1619B fragment shapes', () => {
+  const GOOD_SUMMARY = 'A real English summary long enough to pass the content-length floor here.';
+
+  it.each(['I change this function', 'my changes', 'our changes'])(
+    'rejects ungrounded first-person fragment: %s',
+    (title) => {
+      expect(minedDecisionRejectReason(title, GOOD_SUMMARY)).toBe('title_narration');
+    },
+  );
+
+  it('rejects the sanitized "now passes…" test-status narration as mid-clause', () => {
+    // sanitizeTitle cuts "now passes (4 failures over 5). Let me debug" at
+    // the first period; the surviving lead is a temporal narration opener.
+    expect(minedDecisionRejectReason('now passes (4 failures over 5)', GOOD_SUMMARY)).toBe(
+      'title_mid_clause',
+    );
+  });
+
+  it('rejects the full legacy "now passes … Let me debug" title either way', () => {
+    expect(
+      minedDecisionRejectReason('now passes (4 failures over 5). Let me debug', GOOD_SUMMARY),
+    ).not.toBeNull();
+  });
+
+  it.each([
+    'commits and near-daily releases...',
+    'a single batch_generate-style forward...',
+    'exposes ~150 MCP tools…',
+  ])('rejects short titles carrying a source-text ellipsis: %s', (title) => {
+    expect(minedDecisionRejectReason(title, GOOD_SUMMARY)).toBe('title_truncated');
+  });
+
+  it('keeps a grounded first-person title naming real entities', () => {
+    expect(
+      minedDecisionRejectReason(
+        'We are using PostgreSQL instead of MySQL for JSONB support',
+        GOOD_SUMMARY,
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps a first-person title grounded by a code span', () => {
+    expect(hasNarrationMarker('We should route all writes through `atomicWriteJson`')).toBe(false);
+  });
+
+  it('keeps a first-person title grounded by a version digit', () => {
+    expect(hasNarrationMarker('We pinned the runtime to Node 20 LTS')).toBe(false);
+  });
+
+  it('does not mistake a long clamp-suffixed title for a truncation ellipsis', () => {
+    // ≥84 chars: the trailing "..." can only be the sanitizeTitle clamp.
+    const title = `Use PostgreSQL over MySQL for JSONB support across every stateful service ${'x'.repeat(20)}...`;
+    expect(title.length).toBeGreaterThan(83);
+    expect(minedDecisionRejectReason(title, GOOD_SUMMARY)).toBeNull();
+  });
+});
+
 describe('startsMidClause', () => {
   it.each([
     'so let it be',

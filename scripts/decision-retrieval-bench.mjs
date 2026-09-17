@@ -35,10 +35,11 @@ const store = new DecisionStore(path.join(tmp, 'decisions.db'));
 try {
   seedCorpus(store);
 
+  // `search` is plain user text (TRA-1619A) — pass the query verbatim,
+  // exactly like the `query_decisions` tool does.
   function ftsRank(q) {
-    const orQuery = q.query.split(/\s+/).filter(Boolean).join(' OR ');
     return store
-      .queryDecisions({ project_root: PROJECT_ROOT, search: orQuery, limit: 50 })
+      .queryDecisions({ project_root: PROJECT_ROOT, search: q.query, limit: 50 })
       .map((d) => d.id);
   }
 

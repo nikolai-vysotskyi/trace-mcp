@@ -176,10 +176,10 @@ describe('DecisionStore — decision clusters (P1.1)', () => {
     it('FTS search matches against title and summary', () => {
       seedCluster('Authentication strategy', 2);
       seedCluster('Deployment pipeline', 2);
-      // Porter stemmer matches morphological variants of the same root, but
-      // 'auth' is not a stem-related prefix of 'authentication'. Use the
-      // FTS5 prefix-match operator for substring-style hits.
-      const list = store.listClusters({ project_root: projectRoot, search: 'auth*' });
+      // `search` is plain user text (TRA-1619A), not raw FTS5 syntax — no
+      // prefix-match operator. Porter stemming still matches morphological
+      // variants of the same root.
+      const list = store.listClusters({ project_root: projectRoot, search: 'authentication' });
       expect(list).toHaveLength(1);
       expect(list[0].title).toBe('Authentication strategy');
     });

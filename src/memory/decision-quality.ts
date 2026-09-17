@@ -16,9 +16,10 @@
  * sentences. Manual (`source: 'manual'`) decisions are user-authored and are
  * NOT subject to this gate.
  *
- * The same predicate powers the offline cleanup path (`consolidate_decisions`
- * with `purge_low_quality: true`), so a legacy row that would be rejected on
- * insert today can be retro-invalidated with identical logic.
+ * The same predicate powers the offline cleanup path
+ * (`DecisionStore.purgeLowQualityDecisions`, surfaced as
+ * `trace-mcp memory prune --low-quality`), so a legacy row that would be
+ * rejected on insert today can be retro-invalidated with identical logic.
  *
  * Leaf module: depends only on `language-filter.ts`. No cross-module value deps.
  */
@@ -256,6 +257,37 @@ const NARRATION_VERB_WITH_FILLER =
 const NARRATION_PHRASES = /\b(let me|let's|i'll|i will|we'll|going to)\b/i;
 
 /**
+ * Leading first-person marker — the title opens with the agent narrating
+ * itself ("I change this function", "my changes", "our changes") rather
+ * than stating a subject-free decision (TRA-1619B). Fatal only when the
+ * title carries no grounding signal (see {@link hasGroundingSignal}): a
+ * specific, entity-naming title like "We are using PostgreSQL instead of
+ * MySQL for JSONB support" is a real decision and passes.
+ */
+const FIRST_PERSON_LEAD = /^(i|me|my|mine|we|us|our|ours|you|your|yours)\b/i;
+
+/**
+ * True when a first-person-led title names at least one specific entity —
+ * a code span, a capitalized technical term, a digit (version / count), or
+ * a code/path-shaped identifier. Checked against the title with the leading
+ * pronoun stripped, so the pronoun's own capital can't self-ground
+ * ("We did stuff" must fail; "We are using PostgreSQL…" must pass).
+ */
+function hasGroundingSignal(s: string): boolean {
+  const rest = s.replace(FIRST_PERSON_LEAD, '');
+  if (/`[^`]+`/.test(rest)) return true; // code span: `atomicWriteJson`
+  if (/\b[A-Z]{2,}\b/.test(rest)) return true; // acronym: SSR, API, JSONB
+  if (/\b[A-Z][a-zA-Z0-9]{2,}\b/.test(rest)) return true; // capitalized term: PostgreSQL, Redis
+  if (/\d/.test(rest)) return true; // version / count: v2, P0, 3 replicas
+  if (/[a-z]+_[a-z_]+/i.test(rest)) return true; // snake_case identifier
+  if (/[a-z]+\/[a-z]+/i.test(rest)) return true; // path: src/auth
+  // Dotted/kebab identifier: trace-mcp, config.json. Both sides need 2+
+  // chars so abbreviations (`e.g.`, `i.e.`) don't self-ground.
+  if (/[a-z0-9]{2,}[._-][a-z0-9]{2,}/i.test(rest)) return true;
+  return false;
+}
+
+/**
  * Exact-match (case-insensitive, trimmed) generic titles: single vague nouns
  * a regex/LLM extractor can lift from a heading or a stray sentence without
  * capturing any of the specifics that would make it a usable decision (#17).
@@ -317,6 +349,10 @@ const MID_CLAUSE_OPENERS = new Set([
   'also',
   'however',
   'therefore',
+  // Temporal narration openers — a status update mid-task ("now passes…",
+  // TRA-1619B), not a durable decision statement. Only lowercase: a
+  // capitalised "Now variant E…" heading-style start stays legitimate.
+  'now',
   // Bare pronouns / demonstratives implying a dropped subject.
   'it',
   'its',
@@ -721,6 +757,7 @@ export function isCompleteStatement(title: string): boolean {
   if (startsAmputatedSubject(t)) return false;
   if (endsMidClause(t)) return false;
   if (/[:;—–\-]$/.test(t)) return false;
+  if (hasShortEllipsis(t)) return false;
   if (hasUnbalancedMarkers(t) || hasTableRemnant(t) || hasNarrationMarker(t)) return false;
 
   // Must have a verb, or start with Root cause:/Decision:, or be a clean entity comparison
@@ -849,13 +886,16 @@ export function hasTableRemnant(s: string): boolean {
  *   - `title_mid_clause` — title opens on a mid-sentence continuation token.
  *   - `title_narration`  — title reads as chat narration, not a standalone
  *                          decision statement (bare result verb with dropped
- *                          object, first-person planning language, or an
- *                          exact generic placeholder like "investigation").
- *   - `title_truncated`  — title ends mid-clause on a dangling token (a trailing
- *                          "..." is stripped first, since a soft length-clamp
- *                          appends one to otherwise-complete titles), carries an
- *                          unbalanced code/paren/bold marker, or shows table-row
- *                          remnants ("| |", "| P1").
+ *                          object, first-person planning language, an
+ *                          ungrounded first-person lead like "my changes", or
+ *                          an exact generic placeholder like "investigation").
+ *   - `title_truncated`  — title ends mid-clause on a dangling token, carries
+ *                          a source-text ellipsis while too short to be a
+ *                          `sanitizeTitle` clamp artifact (a trailing "..." on
+ *                          a long title is still stripped first, since the
+ *                          clamp appends one to otherwise-complete titles),
+ *                          carries an unbalanced code/paren/bold marker, or
+ *                          shows table-row remnants ("| |", "| P1").
  *   - `content_truncated`— content ends mid-clause, carries an unbalanced marker,
  *                          or contains an ellipsis (the content window is never
  *                          ellipsis-suffixed on purpose, unlike the title).
@@ -900,10 +940,18 @@ export function minedDecisionRejectReason(title: string, content: string): strin
   // placeholder). See #17.
   if (hasNarrationMarker(t)) return 'title_narration';
 
-  // Title truncation: cut on a dangling tail token, an unbalanced structural
+  // Title truncation: cut on a dangling tail token, a source-text ellipsis
+  // in a short title (TRA-1619B; long `...`-suffixed titles are
+  // `sanitizeTitle` clamp artifacts), an unbalanced structural
   // marker (open code span / paren / bold), an orphan table-row remnant, or
   // trailing colon/dash/semicolon.
-  if (endsMidClause(t) || hasUnbalancedMarkers(t) || hasTableRemnant(t) || /[:;—–\-]$/.test(t)) {
+  if (
+    endsMidClause(t) ||
+    hasShortEllipsis(t) ||
+    hasUnbalancedMarkers(t) ||
+    hasTableRemnant(t) ||
+    /[:;—–\-]$/.test(t)
+  ) {
     return 'title_truncated';
   }
 
@@ -935,10 +983,30 @@ export function hasEllipsis(s: string): boolean {
 }
 
 /**
+ * Highest title length that can still carry a genuine truncation ellipsis.
+ * `sanitizeTitle` appends `...` purely as a soft length-clamp indicator when
+ * the title exceeds 80 chars, so a clamped title is at least 84 chars long —
+ * anything at or below 83 chars with an ellipsis got it from the source text
+ * ("commits and near-daily releases...", TRA-1619B), not from clamping.
+ */
+const SHORT_ELLIPSIS_MAX_LEN = 83;
+
+/**
+ * True when a title carries a source-text ellipsis while short enough to
+ * rule out the `sanitizeTitle` length clamp — the extractor ran out of
+ * thought mid-phrase. Clamped (long) titles are exempt.
+ */
+export function hasShortEllipsis(s: string): boolean {
+  return s.length <= SHORT_ELLIPSIS_MAX_LEN && hasEllipsis(s);
+}
+
+/**
  * True when a title reads as narration lifted from chat prose rather than a
  * standalone decision statement: a bare result-announcement verb with its
  * object dropped ("Nailed — ..."), first-person planning language ("Let me
- * verify..."), or an exact generic placeholder ("investigation"). See #17.
+ * verify..."), an ungrounded first-person lead ("my changes", "I change
+ * this function" — TRA-1619B), or an exact generic placeholder
+ * ("investigation"). See #17.
  */
 export function hasNarrationMarker(s: string): boolean {
   const trimmed = s.trim();
@@ -947,6 +1015,7 @@ export function hasNarrationMarker(s: string): boolean {
   if (NARRATION_LEAD_VERBS.test(trimmed)) return true;
   if (NARRATION_VERB_WITH_FILLER.test(trimmed)) return true;
   if (NARRATION_PHRASES.test(trimmed)) return true;
+  if (FIRST_PERSON_LEAD.test(trimmed) && !hasGroundingSignal(trimmed)) return true;
   return false;
 }
 

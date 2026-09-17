@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type http from 'node:http';
 import Database from 'better-sqlite3';
+import { escapeFtsQuery } from '../db/fts.js';
 import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
@@ -506,8 +507,15 @@ export function handleListDecisions(res: http.ServerResponse, url: URL): void {
       params.push(filePath);
     }
     if (q) {
+      // TRA-1619A: `q` is plain user text, not FTS5 syntax — escape it so
+      // hyphenated input (`trace-mcp`) can't throw `no such column`.
+      const safeQ = escapeFtsQuery(q);
+      if (!safeQ) {
+        sendJson(res, 200, { decisions: [], total: 0, limit, offset });
+        return;
+      }
       conditions.push('id IN (SELECT rowid FROM decisions_fts WHERE decisions_fts MATCH ?)');
-      params.push(q);
+      params.push(safeQ);
     }
     // Three-mode branch filter, mirroring the MCP/CLI semantics.
     if (branchParam !== 'all') {

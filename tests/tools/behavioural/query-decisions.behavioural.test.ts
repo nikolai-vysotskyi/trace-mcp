@@ -83,8 +83,9 @@ describe('DecisionStore.queryDecisions() — behavioural contract', () => {
   });
 
   it('full-text results are sorted by valid_from DESC (documented order)', () => {
-    // Hit a broader query so we get >=2 matches.
-    const results = store.queryDecisions({ project_root: PROJECT, search: 'cache OR Redis' });
+    // Hit a broader query so we get >=2 matches. `search` is plain user
+    // text (TRA-1619A), not raw FTS5 syntax — no OR operators.
+    const results = store.queryDecisions({ project_root: PROJECT, search: 'cache' });
     expect(results.length).toBeGreaterThan(1);
     for (let i = 1; i < results.length; i++) {
       expect(results[i - 1].valid_from >= results[i].valid_from).toBe(true);
