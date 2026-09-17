@@ -137,13 +137,15 @@ describe('GET /api/dashboard/projects', () => {
     expect(parsed.computing).toBe(true);
     // 20.5 s before the fix. 500 ms leaves room for a cold CI filesystem and
     // still fails loudly if the analyses move back into the request.
-    expect(elapsed).toBeLessThan(500);
+    // TRA-1579: Windows runners are slower at FS work, so the budget scales
+    // with the platform — 20.5 s still blows either budget.
+    expect(elapsed).toBeLessThan(process.platform === 'win32' ? 1500 : 500);
   });
 
   it('stays fast on the second call', async () => {
     const t0 = performance.now();
     const res = await get('/api/dashboard/projects');
-    expect(performance.now() - t0).toBeLessThan(200);
+    expect(performance.now() - t0).toBeLessThan(process.platform === 'win32' ? 500 : 200);
     expect(res.status).toBe(200);
   });
 

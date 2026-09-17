@@ -103,7 +103,10 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     expect(rescanCallbacks).toHaveLength(5);
 
     // Initial indexing has settled; measure the rescan burst on its own.
-    await vi.waitFor(() => expect(activeIndexAll).toBe(0));
+    // TRA-1579: explicit waitFor budget — the default 1s timeout flakes on
+    // loaded Windows runners where 5 projects' initial indexing plus event
+    // loop lag exceeds it. The test itself still caps at 30s.
+    await vi.waitFor(() => expect(activeIndexAll).toBe(0), { timeout: 10_000, interval: 50 });
     peakIndexAll = 0;
 
     // Wake from sleep: every watcher fires onRescan at the same moment.

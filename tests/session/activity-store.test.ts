@@ -147,6 +147,10 @@ describe('ActivityStore', () => {
     expect(rows.length).toBeGreaterThan(0);
     // Measured ~2 ms locally. The ceiling is generous on purpose — it is here
     // to catch a dropped index or a full-table scan, not to police jitter.
-    expect(elapsed).toBeLessThan(150);
+    // TRA-1579: GitHub's Windows runners are heavily loaded and SQLite there
+    // is an order of magnitude slower, so the budget is OS-scaled — a dropped
+    // index still blows either budget by 10x+.
+    const PERF_BUDGET_MS = process.platform === 'win32' ? 1000 : 150;
+    expect(elapsed).toBeLessThan(PERF_BUDGET_MS);
   });
 });

@@ -85,24 +85,36 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
     }
   });
 
-  it('records the navigation streak under the session reads dir', () => {
+  // TRA-1579: every test in this file spawns several cmd.exe/PowerShell
+  // processes per hook call, so any single attempt can stall on a loaded
+  // runner (see TRA-1571 below for the observed 60s hang). beforeEach mints
+  // a fresh session per attempt, so a retry never sees the previous
+  // attempt's state; a real gate regression fails every attempt and still
+  // goes red.
+  const WIN_RETRY = 2;
+
+  it('records the navigation streak under the session reads dir', { retry: WIN_RETRY }, () => {
     nav('one');
     expect(navState()).toContain('.nav-streak');
   });
 
-  it('stays silent on the first two navigation calls, intervenes on the third', () => {
+  it('stays silent on the first two navigation calls, intervenes on the third', {
+    retry: WIN_RETRY,
+  }, () => {
     expect(nav('one')).toBe('');
     expect(nav('two')).toBe('');
     expect(nav('three')).toContain(DENY);
   });
 
-  it('routes from the FIRST call when a relationship question is flagged', () => {
+  it('routes from the FIRST call when a relationship question is flagged', {
+    retry: WIN_RETRY,
+  }, () => {
     fs.mkdirSync(readsDir(), { recursive: true });
     fs.writeFileSync(path.join(readsDir(), '.nav-force'), '');
     expect(nav('handleRequest')).toContain(DENY);
   });
 
-  it('resets the streak after a quiet window', () => {
+  it('resets the streak after a quiet window', { retry: WIN_RETRY }, () => {
     expect(nav('one')).toBe('');
     expect(nav('two')).toBe('');
     const stale = Math.floor(Date.now() / 1000) - 600;
@@ -118,7 +130,9 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
   // slow box can stall any single attempt. beforeEach mints a fresh session
   // per attempt, so a retry never sees the previous attempt's state; a real
   // gate regression fails every attempt and still goes red.
-  it('a new user prompt clears the streak, so a light question is left alone', { retry: 2 }, () => {
+  it('a new user prompt clears the streak, so a light question is left alone', {
+    retry: WIN_RETRY,
+  }, () => {
     expect(nav('one')).toBe('');
     expect(nav('two')).toBe('');
     prompt('rename the config loader');
@@ -126,13 +140,15 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
     expect(nav('three')).toBe('');
   });
 
-  it('a relationship question makes the next navigation call route immediately', () => {
+  it('a relationship question makes the next navigation call route immediately', {
+    retry: WIN_RETRY,
+  }, () => {
     prompt('who calls handleRequest?');
     expect(navState()).toContain('.nav-force');
     expect(nav('handleRequest')).toContain(DENY);
   });
 
-  it('matches the Russian relationship shapes too', () => {
+  it('matches the Russian relationship shapes too', { retry: WIN_RETRY }, () => {
     // The .cmd carries these as \uXXXX escapes and decodes stdin as UTF-8, so a
     // non-ASCII prompt has to survive both hops to reach the regex.
     prompt('кто вызывает handleRequest?');
@@ -140,7 +156,7 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
     expect(nav('handleRequest')).toContain(DENY);
   });
 
-  it('a plain question clears the relationship flag', () => {
+  it('a plain question clears the relationship flag', { retry: WIN_RETRY }, () => {
     prompt('who calls handleRequest?');
     prompt('rename the config loader');
     expect(navState()).not.toContain('.nav-force');
