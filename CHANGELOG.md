@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.27.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.27.0...v3.27.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **memory:** FTS5-escape memory search; gate mined fragments + low-quality sweep (TRA-1619) ([#1247](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1247)) ([3d5187e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3d5187ee7fcf134633d7813e7ec7dddae71a4854))
+
 ## [3.27.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.3...v3.27.0) (2026-09-17)
 
 
