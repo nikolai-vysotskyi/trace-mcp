@@ -16,7 +16,13 @@ import type { TraceMcpConfig } from '../../config.js';
 import { isDangerousProjectRoot } from '../../dangerous-root.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
-import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
+import {
+  DECISIONS_DB_PATH,
+  ensureGlobalDirs,
+  LOCKS_DIR,
+  projectHash,
+  TOPOLOGY_DB_PATH,
+} from '../../global.js';
 import { ExtractPool } from '../../indexer/extract-pool.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { shouldSkipRecentReindex } from '../../indexer/recent-reindex-cache.js';
@@ -34,8 +40,13 @@ import { BackgroundLspEnricher } from '../../lsp/background-enricher.js';
 import { serializeError } from '../log-error.js';
 import { createLightweightProjectRelay } from '../project-relay.js';
 import { getReindexStats } from '../reindex-stats.js';
+import { acquireLock, releaseLock, LockError, type LockHandle } from '../../utils/pid-lock.js';
 import type { ProjectRelay } from '../../server/types.js';
-import { seedSessionDbFromShared, sweepOrphanedSessionDbs } from './session-db.js';
+import {
+  publishSessionDbToShared,
+  seedSessionDbFromShared,
+  sweepOrphanedSessionDbs,
+} from './session-db.js';
 import type { Backend } from './types.js';
 
 /** Extract workers a fallback session runs — see the pool construction below. */
@@ -50,6 +61,137 @@ export interface LocalBackendOptions {
   /** Shared DB path resolved by the caller (e.g. ~/.trace-mcp/index/project.db).
    *  LocalBackend will derive a unique session temp DB from this. */
   sharedDbPath: string;
+  /**
+   * How long a session that lost the full-index lock waits for the winner to
+   * publish before running its own index (TRA-1605). Defaults to
+   * env TRACE_MCP_LOCAL_INDEX_WAIT_MS or 30_000. Bounds the handshake delay
+   * a daemonless storm can add; 0 disables the wait (last-resort immediately).
+   */
+  localIndexWaitMs?: number;
+}
+
+/**
+ * Default loser wait: covers a small/medium repo's full index (measured
+ * 4–6 s for ~2k files, TRA-925) with margin, while bounding the handshake
+ * delay when the winner is grinding a huge repo.
+ */
+export const DEFAULT_LOCAL_INDEX_WAIT_MS = 30_000;
+
+/** Poll cadence while waiting on the winner's lock. */
+const LOCAL_INDEX_LOCK_POLL_MS = 250;
+
+export function resolveLocalIndexWaitMs(
+  optsValue: number | undefined,
+  envValue: string | undefined,
+  fallback: number = DEFAULT_LOCAL_INDEX_WAIT_MS,
+): number {
+  if (typeof optsValue === 'number' && Number.isFinite(optsValue) && optsValue >= 0) {
+    return Math.floor(optsValue);
+  }
+  if (envValue !== undefined && envValue !== null && envValue !== '') {
+    const n = Number(envValue);
+    if (Number.isFinite(n) && n >= 0 && Number.isInteger(n)) return n;
+  }
+  return fallback;
+}
+
+/** Outcome of the cross-process full-index coordination (TRA-1605). */
+type IndexCoordination =
+  /** Run the full index. `lock` is held while indexing (null = fail-open: the lock was unusable or the wait expired, index anyway). */
+  | { outcome: 'index'; lock: LockHandle | null }
+  /** Another session published its index and we seeded from it — stay read-only. */
+  | { outcome: 'seeded' };
+
+/** One attempt at the per-project full-index lock. Never throws. */
+function tryClaimIndexLock(lockName: string): { lock: LockHandle | null; heldByOther: boolean } {
+  try {
+    return {
+      lock: acquireLock({ lockDir: LOCKS_DIR, name: lockName, op: 'local-index' }),
+      heldByOther: false,
+    };
+  } catch (err) {
+    if (err instanceof LockError) {
+      logger.info(
+        { lockName, holder: err.holder },
+        'LocalBackend: another session is running the full index — waiting for its snapshot instead of indexing',
+      );
+      return { lock: null, heldByOther: true };
+    }
+    // Environmental failure (read-only FS, …): fail open with today's
+    // behavior rather than refusing to serve the session.
+    logger.warn(
+      { lockName, error: String(err) },
+      'LocalBackend: index lock unavailable — indexing without coordination',
+    );
+    return { lock: null, heldByOther: false };
+  }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    t.unref?.();
+  });
+}
+
+/**
+ * Cross-process fallback-storm guard: exactly one local session runs the
+ * expensive full `indexAll` (up to ~880 MB + ExtractPool + ONNX runtime);
+ * the rest wait for the winner to publish its DB to the shared path and
+ * then seed from it, serving read-only.
+ *
+ * - Winner: holds the lock across the background index, publishes on
+ *   success, releases either way.
+ * - Loser: waits up to `waitMs` for the lock to free, then re-seeds. When
+ *   the winner published, the seed succeeds and no second index runs. When
+ *   nothing was published (winner failed, or the wait expired while it is
+ *   still grinding), the loser runs its own index as a last resort —
+ *   availability wins over memory in a pathological case, and this is still
+ *   no worse than today's always-everyone-indexes behavior.
+ */
+async function coordinateFullLocalIndex(args: {
+  sharedDbPath: string;
+  sessionDbPath: string;
+  waitMs: number;
+}): Promise<IndexCoordination> {
+  const lockName = `${projectHash(args.sharedDbPath)}-local-index`;
+
+  const first = tryClaimIndexLock(lockName);
+  if (!first.heldByOther) return { outcome: 'index', lock: first.lock };
+
+  const deadline = Date.now() + Math.max(0, args.waitMs);
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await sleepMs(Math.min(LOCAL_INDEX_LOCK_POLL_MS, remaining));
+    const retry = tryClaimIndexLock(lockName);
+    if (!retry.heldByOther) {
+      if (!retry.lock) return { outcome: 'index', lock: null };
+      // The winner released (or died — stale locks are reclaimed inside
+      // acquireLock). Seed what it published instead of indexing.
+      const seeded = await seedSessionDbFromShared(args.sharedDbPath, args.sessionDbPath);
+      if (seeded) {
+        releaseLock(retry.lock);
+        logger.info(
+          { sharedDbPath: args.sharedDbPath },
+          'LocalBackend: seeded from a published sibling index — staying read-only, no duplicate full index',
+        );
+        return { outcome: 'seeded' };
+      }
+      // We hold the lock now and there is nothing to seed — the winner
+      // failed without publishing, so take over as the winner.
+      logger.warn(
+        { sharedDbPath: args.sharedDbPath },
+        'LocalBackend: index lock released but nothing was published — taking over the full index',
+      );
+      return { outcome: 'index', lock: retry.lock };
+    }
+  }
+  logger.warn(
+    { sharedDbPath: args.sharedDbPath, waitMs: args.waitMs },
+    'LocalBackend: full-index lock still held after the wait — indexing locally as a last resort',
+  );
+  return { outcome: 'index', lock: null };
 }
 
 /**
@@ -148,12 +290,47 @@ export class LocalBackend implements Backend {
     // exists) so the initial indexAll() below is a hash-gated validation
     // pass instead of a full from-scratch index. N stdio sessions during a
     // daemon outage used to mean N complete re-indexes of the same repo.
-    const seeded = await seedSessionDbFromShared(this.opts.sharedDbPath, this.dbPath);
+    let seeded = await seedSessionDbFromShared(this.opts.sharedDbPath, this.dbPath);
     if (seeded) {
       logger.info(
         { sharedDbPath: this.opts.sharedDbPath, sessionDbPath: this.dbPath },
         'Session DB seeded from shared project DB',
       );
+    }
+
+    // Never index or watch an obviously-wrong root (moved up from below:
+    // the storm guard underneath must not claim the full-index lock for a
+    // session that will never index — it would hold the lock without ever
+    // running indexAll or releasing it).
+    const dangerReason = isDangerousProjectRoot(projectRoot);
+    if (dangerReason) {
+      logger.error(
+        { projectRoot, reason: dangerReason },
+        'LocalBackend: refusing to index — not a project directory. ' +
+          'Start trace-mcp with its working directory set to your project.',
+      );
+    }
+
+    // Fallback-storm guard (TRA-1605): when nothing was seeded, the full
+    // index below is the ~880 MB one — coordinate across processes so only
+    // one session runs it. May flip `seeded` to true (loser seeded from the
+    // winner's published DB). Runs before initializeDatabase() opens the
+    // session file, so a late seed lands cleanly.
+    let indexLock: LockHandle | null = null;
+    if (!seeded && !dangerReason) {
+      const verdict = await coordinateFullLocalIndex({
+        sharedDbPath: this.opts.sharedDbPath,
+        sessionDbPath: this.dbPath,
+        waitMs: resolveLocalIndexWaitMs(
+          this.opts.localIndexWaitMs,
+          process.env.TRACE_MCP_LOCAL_INDEX_WAIT_MS,
+        ),
+      });
+      if (verdict.outcome === 'seeded') {
+        seeded = true;
+      } else {
+        indexLock = verdict.lock;
+      }
     }
 
     // Build all full-mode resources up-front. Measured at ~7 MB / ~21 ms for the
@@ -267,15 +444,7 @@ export class LocalBackend implements Backend {
     // through indexAll + @parcel/watcher: 1.5 GB RSS and a permanent ~70% CPU
     // burn per session, forever, on a project that does not exist (TRA-893).
     // Reads still work — this only takes the write side offline.
-    const dangerReason = isDangerousProjectRoot(projectRoot);
-    if (dangerReason) {
-      logger.error(
-        { projectRoot, reason: dangerReason },
-        'LocalBackend: refusing to index — not a project directory. ' +
-          'Start trace-mcp with its working directory set to your project.',
-      );
-    }
-
+    // (The refusal itself is logged above, before the storm guard.)
     const readOnly = seeded || dangerReason !== null;
     this.readOnly = readOnly;
 
@@ -285,12 +454,26 @@ export class LocalBackend implements Backend {
       this.indexingPromise = this.pipeline
         .indexAll()
         .then(async () => {
+          // Storm-guard winner: publish the fresh index for losing siblings,
+          // then release the lock either way so they stop waiting on us.
+          if (indexLock) {
+            try {
+              const published = await publishSessionDbToShared(this.opts.sharedDbPath, this.dbPath);
+              logger.info(
+                { sharedDbPath: this.opts.sharedDbPath, published },
+                'LocalBackend: full index complete, winner snapshot published for sibling sessions',
+              );
+            } finally {
+              releaseLock(indexLock);
+            }
+          }
           if (this.stopping) return;
           runSummarization();
           runEmbeddings();
           await runSubprojectAutoSyncSafe(projectRoot, config);
         })
         .catch((err) => {
+          if (indexLock) releaseLock(indexLock);
           logger.error({ error: serializeError(err) }, 'LocalBackend: initial indexing failed');
         });
     } else {

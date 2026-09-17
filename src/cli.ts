@@ -2482,6 +2482,9 @@ program
         try {
           const { getReindexStats } = await import('./daemon/reindex-stats.js');
           const { parseDuration } = await import('./cli/daemon-stats.js');
+          const { readSessionFallbacks, summarizeSessionFallbacks } = await import(
+            './daemon/router/fallback-stats.js'
+          );
           const sinceParam = url.searchParams.get('since');
           let sinceMs: number | undefined;
           if (sinceParam) {
@@ -2502,7 +2505,14 @@ program
           }
           const summary = getReindexStats().summarize(sinceMs);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(summary));
+          res.end(
+            JSON.stringify({
+              ...summary,
+              session_fallbacks: summarizeSessionFallbacks(readSessionFallbacks(), {
+                sinceMs,
+              }),
+            }),
+          );
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: String(err) }));

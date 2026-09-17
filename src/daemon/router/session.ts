@@ -15,6 +15,13 @@ import { startParentDeathWatch } from '../../server/parent-death-watch.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { AutoRegisterNotice } from './auto-register-notice.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
+import { recordSessionFallback } from './fallback-stats.js';
+import {
+  computeProxyTimeoutMs,
+  probeProxyReadiness,
+  resolveProxyInitializeTimeout,
+  resolveProxyWarmupGrace,
+} from './proxy-timeout.js';
 import {
   createHandshakeWatchdog,
   type HandshakeWatchdog,
@@ -39,12 +46,6 @@ import type { Backend } from './types.js';
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
-
-/**
- * How long a daemon-backed session gets to answer `initialize` before we give
- * up on it and serve the session in-process instead.
- */
-const PROXY_INITIALIZE_TIMEOUT_MS = 1_000;
 
 const LIST_CHANGED = 'notifications/tools/list_changed';
 
@@ -142,6 +143,22 @@ export interface StdioSessionOptions {
   /** Overrides for the stdio streams. Defaults to the process's own. */
   stdin?: Readable;
   stdout?: Writable;
+  /**
+   * Base budget for the daemon to answer `initialize` before this session
+   * falls back to local mode (TRA-1605). Defaults to env
+   * TRACE_MCP_PROXY_INITIALIZE_TIMEOUT or 1_000. The effective deadline can
+   * only grow past this when /health proves the daemon is alive-but-slow or
+   * warming up — a silent daemon keeps the base, and a healthy daemon's
+   * handshake timing is unchanged.
+   */
+  proxyInitializeTimeoutMs?: number;
+  /**
+   * Extra wait granted when /health reports the daemon is still starting up.
+   * Defaults to env TRACE_MCP_PROXY_WARMUP_GRACE_MS or 30_000. Every session
+   * that sees `starting` waits on the one warming daemon instead of each
+   * forking a local backend (cross-process single-flight).
+   */
+  proxyWarmupGraceMs?: number;
 }
 
 /**
@@ -191,6 +208,16 @@ export class StdioSession {
   /** Id of the in-flight `initialize` request the watchdog below is timing. */
   private initializeId: string | number | null = null;
   private initializeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wall-clock the current proxy watchdog was armed (for adaptive extension). */
+  private proxyArmedAt = 0;
+  /** Base proxy-initialize budget in effect for the current watchdog. */
+  private proxyBaseMs = 0;
+  /**
+   * Absolute deadline the watchdog must not fall back before. Starts at
+   * armedAt + base and only ever moves forward, when a /health probe proves
+   * the daemon is alive-but-slow or still warming up (TRA-1605).
+   */
+  private proxyDeadline = 0;
   /**
    * Set once a daemon has failed to answer `initialize` for this session.
    * Blocks the watcher from swapping us back onto it — a daemon whose /health
@@ -503,21 +530,100 @@ export class StdioSession {
    * Give the proxy a bounded window to complete the handshake; if it misses,
    * serve the session in-process and replay the frame there, so the client
    * gets a real `initialize` result instead of a hung connection (TRA-704).
+   *
+   * The window is adaptive (TRA-1605): a /health probe that shows the daemon
+   * warming up or loaded pushes the deadline forward instead of stampeding N
+   * sessions into local mode at the same fixed instant. A silent daemon keeps
+   * the base budget, so the dead-daemon fast path is unchanged.
    */
   private armInitializeWatchdog(id: string | number): void {
     this.clearInitializeWatchdog();
     if (this.router.getActiveKind() !== 'proxy') return;
     this.initializeId = id;
+    const baseMs = resolveProxyInitializeTimeout(
+      this.opts.proxyInitializeTimeoutMs,
+      process.env.TRACE_MCP_PROXY_INITIALIZE_TIMEOUT,
+    );
+    this.proxyArmedAt = Date.now();
+    this.proxyBaseMs = baseMs;
+    this.proxyDeadline = this.proxyArmedAt + baseMs;
     this.initializeTimer = setTimeout(() => {
-      void this.fallbackToLocal(id, 'proxy-initialize-timeout');
-    }, PROXY_INITIALIZE_TIMEOUT_MS);
+      void this.onProxyWatchdogFire(id);
+    }, baseMs);
     this.initializeTimer.unref?.();
+    void this.maybeExtendProxyDeadline(id, baseMs);
+  }
+
+  /**
+   * One /health probe per handshake: extend the deadline when the daemon is
+   * provably alive-but-slow or still warming up. Never shortens it, never
+   * throws, and no-ops when the handshake already settled.
+   */
+  private async maybeExtendProxyDeadline(id: string | number, baseMs: number): Promise<void> {
+    let readiness: Awaited<ReturnType<typeof probeProxyReadiness>> = null;
+    try {
+      readiness = await probeProxyReadiness(this.opts.daemonPort);
+    } catch {
+      return;
+    }
+    if (id !== this.initializeId || this.router.getActiveKind() !== 'proxy') return;
+    if (!readiness) return;
+    const warmupGraceMs = resolveProxyWarmupGrace(
+      this.opts.proxyWarmupGraceMs,
+      process.env.TRACE_MCP_PROXY_WARMUP_GRACE_MS,
+    );
+    const totalMs = computeProxyTimeoutMs(baseMs, readiness, warmupGraceMs);
+    if (totalMs <= baseMs) return;
+    const deadline = this.proxyArmedAt + totalMs;
+    if (deadline <= Date.now()) return;
+    this.proxyDeadline = deadline;
+    if (this.initializeTimer) clearTimeout(this.initializeTimer);
+    this.initializeTimer = setTimeout(
+      () => {
+        void this.onProxyWatchdogFire(id);
+      },
+      Math.max(0, deadline - Date.now()),
+    );
+    this.initializeTimer.unref?.();
+    logger.info(
+      {
+        id,
+        baseMs,
+        totalMs,
+        starting: readiness.starting,
+        healthRttMs: readiness.rttMs,
+      },
+      readiness.starting
+        ? 'StdioSession: daemon is warming up — waiting instead of falling back to local mode'
+        : 'StdioSession: daemon is loaded but reachable — extending the proxy handshake deadline',
+    );
+  }
+
+  /** The watchdog timer fired: re-arm when an extension moved the deadline, else fall back. */
+  private async onProxyWatchdogFire(id: string | number): Promise<void> {
+    if (id !== this.initializeId) return;
+    const remaining = this.proxyDeadline - Date.now();
+    if (remaining > 50) {
+      // maybeExtendProxyDeadline pushed the deadline after this timer was
+      // scheduled (or re-armed an older one) — wait out the remainder rather
+      // than falling back early.
+      if (this.initializeTimer) clearTimeout(this.initializeTimer);
+      this.initializeTimer = setTimeout(() => {
+        void this.onProxyWatchdogFire(id);
+      }, remaining);
+      this.initializeTimer.unref?.();
+      return;
+    }
+    await this.fallbackToLocal(id, 'proxy-initialize-timeout');
   }
 
   private clearInitializeWatchdog(): void {
     if (this.initializeTimer) clearTimeout(this.initializeTimer);
     this.initializeTimer = null;
     this.initializeId = null;
+    this.proxyArmedAt = 0;
+    this.proxyBaseMs = 0;
+    this.proxyDeadline = 0;
   }
 
   /**
@@ -526,10 +632,15 @@ export class StdioSession {
    * replaying the cached frame through a local backend.
    */
   private async fallbackToLocal(id: string | number, reason: string): Promise<void> {
+    // Read before clearInitializeWatchdog() zeroes it below.
+    const baseMs = this.proxyBaseMs;
     this.clearInitializeWatchdog();
     if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
+    // Count every proxy→local demotion so a fallback storm is visible in
+    // `daemon stats` instead of something to guess about (TRA-1605).
+    recordSessionFallback(reason);
     logger.warn(
-      { id, reason, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
+      { id, reason, timeoutMs: baseMs },
       'StdioSession: daemon did not complete initialize — serving this session in local mode',
     );
     // Build BEFORE claiming the id. This is a genuine first load off disk —
@@ -614,6 +725,7 @@ export class StdioSession {
     if (id === undefined || id === null) return false;
     if (this.shuttingDown || this.proxyDisabled) return false;
     if (this.router.getActiveKind() !== 'proxy') return false;
+    recordSessionFallback('proxy-send-failed');
     logger.warn(
       { id, err: String(err) },
       'StdioSession: proxy send failed — promoting to local mode and replaying the request',
@@ -656,6 +768,7 @@ export class StdioSession {
       // dead daemon with nothing scheduled to try again. Swallow it: the next
       // failed send retries the build through rescueFailedProxySend, by which
       // time a swap window has closed (TRA-1148).
+      recordSessionFallback('daemon-disappeared');
       let local: LocalBackend;
       try {
         local = await this.buildLocalBackend();

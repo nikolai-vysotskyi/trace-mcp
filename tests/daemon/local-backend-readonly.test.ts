@@ -45,6 +45,8 @@ vi.mock('../../src/global.js', () => ({
   TRACE_MCP_HOME: '/tmp/never-exists-trace-mcp-home',
   TOPOLOGY_DB_PATH: '/tmp/never-exists-topology.db',
   DECISIONS_DB_PATH: '/tmp/never-exists-decisions.db',
+  LOCKS_DIR: '/tmp/never-exists-trace-mcp-locks',
+  projectHash: vi.fn(() => 'testhash'),
 }));
 vi.mock('../../src/progress.js', () => ({
   ProgressState: class FakeProgressState {},
@@ -115,9 +117,21 @@ vi.mock('@modelcontextprotocol/sdk/inMemory.js', () => ({
 
 // Controllable seed result — drives the read-only decision.
 const seedMock = vi.fn(async () => true);
+const publishMock = vi.fn(async () => false);
 vi.mock('../../src/daemon/router/session-db.js', () => ({
   seedSessionDbFromShared: seedMock,
+  publishSessionDbToShared: publishMock,
   sweepOrphanedSessionDbs: vi.fn(),
+}));
+
+// Storm-guard lock: this file pins the seeded/read-only decision, not the
+// coordination — always win instantly so the lock never interferes.
+vi.mock('../../src/utils/pid-lock.js', () => ({
+  LockError: class FakeLockError extends Error {
+    holder: unknown = null;
+  },
+  acquireLock: vi.fn(() => ({ filePath: '/tmp/never-exists-test.pid', pid: 1 })),
+  releaseLock: vi.fn(),
 }));
 
 const { LocalBackend } = await import('../../src/daemon/router/local-backend.js');
