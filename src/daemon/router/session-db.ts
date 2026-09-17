@@ -29,6 +29,15 @@ const SESSION_DB_RE = /-session-[0-9a-f]{8}\.db$/;
 const SIDECARS = ['', '-wal', '-shm'];
 
 /**
+ * Age past which an existing-but-empty shared DB is treated as a dead
+ * daemon's leftover rather than a live daemon's work in progress. A daemon
+ * doing its first index touches the file continuously, so a fresh empty
+ * file means "hands off, the daemon owns it"; a stale one means nobody is
+ * ever going to fill it, and a fallback-storm winner may claim it.
+ */
+export const STALE_EMPTY_SHARED_DB_MS = 5 * 60 * 1000;
+
+/**
  * Age threshold for deleting session DBs whose owner PID cannot be
  * determined (corrupt/locked file, pre-migration schema). Old enough that a
  * legitimately running session is implausible.
@@ -120,6 +129,70 @@ export async function seedSessionDbFromShared(
     } catch {
       /* ignored */
     }
+  }
+}
+
+/**
+ * Publish a fallback-storm winner's freshly indexed session DB as the shared
+ * project DB, so losing siblings can seed from it instead of each running
+ * their own full index (TRA-1605).
+ *
+ * Never clobbers a real index: publishes only when the shared DB is missing,
+ * or exists with zero indexed files AND is older than `staleEmptyMs` (a
+ * fresh empty file is a live daemon's first index in progress — hands off).
+ * Also refuses to publish an empty session DB. Returns true when the shared
+ * DB now holds this session's index. Never throws.
+ */
+export async function publishSessionDbToShared(
+  sharedDbPath: string,
+  sessionDbPath: string,
+  opts: { staleEmptyMs?: number } = {},
+): Promise<boolean> {
+  const staleEmptyMs = opts.staleEmptyMs ?? STALE_EMPTY_SHARED_DB_MS;
+  try {
+    if (fs.existsSync(sharedDbPath)) {
+      let dst: Database.Database | null = null;
+      try {
+        dst = new Database(sharedDbPath, { readonly: true, fileMustExist: true });
+        if (countIndexedFiles(dst) > 0) return false;
+      } catch {
+        // Unreadable shared DB (locked, corrupt, mid-write): never overwrite
+        // what we cannot even read — the daemon may own it.
+        return false;
+      } finally {
+        try {
+          dst?.close();
+        } catch {
+          /* ignored */
+        }
+      }
+      let ageMs = Number.POSITIVE_INFINITY;
+      try {
+        ageMs = Date.now() - fs.statSync(sharedDbPath).mtimeMs;
+      } catch {
+        return false;
+      }
+      if (!(ageMs > staleEmptyMs)) return false;
+    }
+    let src: Database.Database | null = null;
+    try {
+      src = new Database(sessionDbPath, { readonly: true, fileMustExist: true });
+      if (countIndexedFiles(src) === 0) return false;
+      await src.backup(sharedDbPath);
+      return true;
+    } finally {
+      try {
+        src?.close();
+      } catch {
+        /* ignored */
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      { sharedDbPath, error: String(err) },
+      'Winner session could not publish its index to the shared DB — siblings will index on their own',
+    );
+    return false;
   }
 }
 

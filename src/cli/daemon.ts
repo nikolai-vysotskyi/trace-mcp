@@ -25,6 +25,7 @@ import {
   readHookStatsFile,
   renderDaemonEvents,
   renderHookStats,
+  renderSessionFallbacks,
 } from './daemon-stats.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
@@ -221,6 +222,16 @@ daemonCommand
     const hookAgg = aggregateHookStats(lines, { sinceMs: now - sinceMs, nowMs: now });
     const port = parseInt(opts.port, 10);
     const daemonStats = await fetchDaemonStats(port);
+    // Fallback counter is read from the local file, not the daemon — a storm
+    // is exactly when the daemon is down, and every session appends to the
+    // same file the daemon itself would read for /api/stats (TRA-1605).
+    const { readSessionFallbacks, summarizeSessionFallbacks } = await import(
+      '../daemon/router/fallback-stats.js'
+    );
+    const fallbackSummary = summarizeSessionFallbacks(readSessionFallbacks(), {
+      sinceMs,
+      nowMs: now,
+    });
 
     if (opts.json) {
       console.log(
@@ -229,6 +240,7 @@ daemonCommand
             window: opts.since,
             hook: hookAgg,
             daemon: daemonStats,
+            sessionFallbacks: fallbackSummary,
           },
           null,
           2,
@@ -238,6 +250,8 @@ daemonCommand
     }
 
     console.log(renderHookStats(hookAgg, opts.since));
+    console.log('');
+    console.log(renderSessionFallbacks(fallbackSummary, opts.since));
     console.log('');
     if (daemonStats) {
       console.log(renderDaemonEvents(daemonStats));
