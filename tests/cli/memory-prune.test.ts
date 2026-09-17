@@ -92,11 +92,24 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
         })();
       `;
       const repoRoot = path.join(__dirname, '..', '..');
-      const res = execFileSync(path.join(repoRoot, 'node_modules', '.bin', 'tsx'), ['-e', script], {
-        cwd: repoRoot,
-        env: { ...process.env, TRACE_MCP_DATA_DIR: tmpHome, PROJ_DIR: projDir, NODE_OPTIONS: '' },
-        encoding: 'utf-8',
-      });
+      // Cross-platform: run the in-repo node with the tsx ESM loader rather
+      // than the node_modules/.bin/tsx shim (not directly executable on
+      // Windows). `--input-type=module` pairs with `-e` like elsewhere.
+      const res = execFileSync(
+        process.execPath,
+        [
+          '--import',
+          path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+          '--input-type=module',
+          '-e',
+          script,
+        ],
+        {
+          cwd: repoRoot,
+          env: { ...process.env, TRACE_MCP_DATA_DIR: tmpHome, PROJ_DIR: projDir, NODE_OPTIONS: '' },
+          encoding: 'utf-8',
+        },
+      );
       expect(res).not.toMatch(/GUARD_FAIL/);
       // The CLI pretty-prints JSON, so a marker block spans lines: accumulate
       // until the top-level closing brace (column 0 — nested closes indent).
