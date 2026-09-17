@@ -163,3 +163,7 @@ rxmna8502/vybe-intelligence-vault
 # ── Swept 2026-09-14 evening (TRA-1501) ──
 # Same author's second repo (0★, pushed 2026-09-14): AGENTS.md carries our routing block verbatim plus container canary scripts (trace-canary.mjs: index → project map → outline over real stdio; cli-preflight.mjs pins CLI versions). Retained user, no outreach — they already run us:
 Egoka/Altera
+
+# ── Swept 2026-09-17 (TRA-1599) ──
+# Genuine third-party research scan (61★, zh): docs/research/ref-scan/out_g10_gateway_mcp.md carries a trace-mcp section read from our own README/DESIGN.md — "answer instead of re-read", 72.7% PR figure, 182 tools/81 langs/88 frameworks, score 3/5. Internal doc, no audience surface, no contact path — nothing to submit, nobody to write to. Noted in the pass section for the positioning signal only:
+lza6/Aggregate-to-2api
