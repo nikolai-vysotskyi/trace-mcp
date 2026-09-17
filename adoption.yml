@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-16T06:42:24.569Z"
+updated: "2026-09-17T06:42:52.091Z"
 active_users:
-  day: 33
-  week: 112
-  month: 226
+  day: 38
+  week: 105
+  month: 230
   first_ping_date: "2026-08-29"
-  days_observed: 19
+  days_observed: 20
   month_window_full: false
-events_28d: 1286
+events_28d: 1387
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 1286
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 61686990
-  tokens_saved_raw: 79599563
-  usd_saved: 61.69
+  tokens_saved: 66240318
+  tokens_saved_raw: 84429945
+  usd_saved: 66.24
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 11
+  days: 12
   capped_days: 1
-  raw_ratio: 1.29
+  raw_ratio: 1.27
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 195
+  new_installs_28d: 199
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -159,41 +159,42 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 389
-  "upgrade": 335
-  "(not set)": 298
-  "new": 195
+  "active": 435
+  "upgrade": 380
+  "(not set)": 307
+  "new": 199
   "unknown": 54
-  "downgrade": 8
+  "downgrade": 11
 by_version:
   "3.25.0": 72
   "3.23.2": 53
   "3.24.0": 49
   "3.22.0": 38
   "(not set)": 36
+  "3.26.0": 33
   "3.10.0": 29
   "3.17.1": 28
   "3.15.0": 26
   "3.11.0": 25
   "3.8.0": 23
+  "3.26.1": 20
   "3.18.0": 19
-  "3.26.0": 17
   "3.14.0": 16
   "3.19.0": 8
   "3.20.0": 8
   "3.25.1": 6
+  "3.26.3": 6
   "3.23.0": 3
   "3.21.0": 2
+  "3.26.2": 2
   "3.7.0": 2
   "3.12.0": 1
   "3.13.0": 1
   "3.23.1": 1
-  "3.5.2": 1
-  "3.6.0": 1
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -211,10 +212,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 348
-  below: 81
+  at_or_above: 392
+  below: 79
   unknown: 36
-  pct: 81
+  pct: 83
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -262,15 +263,15 @@ by_country:
   "United States": 22
   "Russia": 16
   "Chile": 7
+  "Thailand": 7
   "South Korea": 6
   "Italy": 5
   "Poland": 5
   "Sweden": 5
-  "Thailand": 5
   "Brazil": 4
+  "China": 4
   "Denmark": 4
   "Australia": 3
-  "China": 3
   "Germany": 3
   "Netherlands": 3
   "United Kingdom": 3
@@ -282,8 +283,8 @@ by_country:
   "New Zealand": 2
   "Spain": 2
 by_client:
-  "unknown": 182
-  "claude-code": 58
+  "unknown": 186
+  "claude-code": 61
   "(not set)": 36
   "codex-mcp-client": 34
   "antigravity-client": 10
@@ -293,8 +294,8 @@ by_client:
   "cursor-vscode": 3
   "grok-shell-trace-mcp": 3
   "rmcp": 3
+  "Cursor": 2
   "trace-mcp-insights": 2
-  "Cursor": 1
   "Trae": 1
   "b7-measure": 1
   "boaz": 1
@@ -306,4 +307,3 @@ by_client:
   "kimi-code": 1
   "kiro": 1
   "mcp-call": 1
-  "pi-mcp-trace-mcp": 1
