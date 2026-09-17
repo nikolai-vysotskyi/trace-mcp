@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.27.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.3...v3.27.0) (2026-09-17)
+
+
+### Features
+
+* **daemon:** fallback-storm guard — adaptive proxy timeout + cross-process index mutex + fallback counter (TRA-1605) ([#1246](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1246)) ([193a010](https://github.com/nikolai-vysotskyi/trace-mcp/commit/193a0103a72699e9cdd5e607783e396730a2336e))
+
+
+### Bug Fixes
+
+* **daemon:** drain and gate single-file reindexes across stopProject (TRA-1553) ([#1241](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1241)) ([daabadd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/daabadd6f96e37beb1a8ec4b16c0a03c26514904))
+
+
+### Performance
+
+* **indexer:** per-pass resolve-context memo + tailwind read gate (TRA-1602) ([#1245](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1245)) ([2643ba0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2643ba0a1056e8a67a59dc763c521ddccc946fb9))
+
+
+### Documentation
+
+* **outreach:** twenty-fifth pass 2026-09-17 morning — light recheck, one genuine sweep hit (TRA-1599) ([#1243](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1243)) ([8fc6b0f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8fc6b0f7766667c5500bd3e6cf58e388a1ccd00b))
+* **outreach:** twenty-fourth pass 2026-09-16 night — light recheck, sweep clean, TensorBlock evaluated+held (TRA-1590) ([#1240](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1240)) ([d3b4814](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d3b4814a0e5b5d4fc78d4ba27d13cf4ee42fdb4e))
+
+
+### Tests
+
+* **windows:** quarantine timing flakes on loaded CI runners (TRA-1579) ([#1244](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1244)) ([bc15ccf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bc15ccf99e54cbf97c61e7d17b1bfe13489fcc57))
+
 ## [3.26.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.26.2...v3.26.3) (2026-09-16)
 
 
