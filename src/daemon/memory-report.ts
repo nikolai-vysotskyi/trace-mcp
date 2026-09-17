@@ -34,6 +34,8 @@ export interface MemoryReportDeps {
   sessionHandles: { size: number };
   /** sessionId → clientId. Daemon-local. */
   sessionClients: { size: number };
+  /** sessionId → last-traffic epoch ms (stale-session sweep clock). Daemon-local. */
+  sessionLastSeen: { size: number };
   /** Registered project count (projectManager.listProjects().length). */
   registeredProjects: number;
 }
@@ -56,6 +58,7 @@ export interface MemoryReportCaches {
   sessionTransports: number;
   sessionHandles: number;
   sessionClients: number;
+  sessionLastSeen: number;
   registered_projects: number;
   recent_reindex_total_entries: number;
   project_stats_cache_entries: number;
@@ -130,6 +133,7 @@ export function buildMemoryReport(deps: MemoryReportDeps): MemoryReport {
       sessionTransports: deps.sessionTransports.size,
       sessionHandles: deps.sessionHandles.size,
       sessionClients: deps.sessionClients.size,
+      sessionLastSeen: deps.sessionLastSeen.size,
       registered_projects: deps.registeredProjects,
       recent_reindex_total_entries: recent.totalEntries,
       project_stats_cache_entries: stats.size,
