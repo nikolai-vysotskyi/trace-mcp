@@ -13,6 +13,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  publishSessionDbToShared,
   seedSessionDbFromShared,
   sweepOrphanedSessionDbs,
 } from '../../src/daemon/router/session-db.js';
@@ -156,5 +157,82 @@ describe('sweepOrphanedSessionDbs', () => {
       scanned: 0,
       removed: 0,
     });
+  });
+});
+
+describe('publishSessionDbToShared', () => {
+  /** Minimal indexed DB: N rows in `files`. */
+  function makeIndexedDb(p: string, files: string[]): string {
+    const db = new Database(p);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    const insert = db.prepare(`INSERT INTO files (path) VALUES (?)`);
+    for (const f of files) insert.run(f);
+    db.close();
+    return p;
+  }
+
+  function fileCount(p: string): number {
+    const db = new Database(p, { readonly: true });
+    try {
+      return (db.prepare(`SELECT COUNT(*) AS n FROM files`).get() as { n: number }).n;
+    } finally {
+      db.close();
+    }
+  }
+
+  it('publishes a fresh index when the shared DB is missing', async () => {
+    const session = makeIndexedDb(path.join(dir, 's1.db'), ['a.ts', 'b.ts']);
+    const shared = path.join(dir, 'shared-missing.db');
+
+    expect(await publishSessionDbToShared(shared, session)).toBe(true);
+    expect(fileCount(shared)).toBe(2);
+  });
+
+  it('never clobbers a shared DB that already holds an index', async () => {
+    const session = makeIndexedDb(path.join(dir, 's2.db'), ['new.ts']);
+    const shared = makeIndexedDb(path.join(dir, 'shared-real.db'), ['old1.ts', 'old2.ts']);
+
+    expect(await publishSessionDbToShared(shared, session)).toBe(false);
+    expect(fileCount(shared)).toBe(2);
+  });
+
+  it('refuses a fresh-but-empty shared DB (a live daemon may be filling it)', async () => {
+    const session = makeIndexedDb(path.join(dir, 's3.db'), ['a.ts']);
+    const shared = path.join(dir, 'shared-freshempty.db');
+    const db = new Database(shared);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    db.close();
+
+    expect(await publishSessionDbToShared(shared, session)).toBe(false);
+    expect(fileCount(shared)).toBe(0);
+  });
+
+  it('claims a stale empty shared DB (dead daemon leftover)', async () => {
+    const session = makeIndexedDb(path.join(dir, 's4.db'), ['a.ts']);
+    const shared = path.join(dir, 'shared-staleempty.db');
+    const db = new Database(shared);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    db.close();
+    const tenMinAgo = (Date.now() - 10 * 60 * 1000) / 1000;
+    fs.utimesSync(shared, tenMinAgo, tenMinAgo);
+
+    expect(await publishSessionDbToShared(shared, session)).toBe(true);
+    expect(fileCount(shared)).toBe(1);
+  });
+
+  it('refuses to publish an empty session DB', async () => {
+    const session = path.join(dir, 's5.db');
+    const db = new Database(session);
+    db.exec(`CREATE TABLE files (id INTEGER PRIMARY KEY, path TEXT)`);
+    db.close();
+
+    expect(await publishSessionDbToShared(path.join(dir, 'shared-s5.db'), session)).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'shared-s5.db'))).toBe(false);
+  });
+
+  it('returns false (never throws) when the session DB is missing', async () => {
+    expect(
+      await publishSessionDbToShared(path.join(dir, 'shared-s6.db'), path.join(dir, 'nope.db')),
+    ).toBe(false);
   });
 });

@@ -50,6 +50,17 @@ vi.mock('../../src/global.js', () => ({
   TRACE_MCP_HOME: '/tmp/never-exists-trace-mcp-home',
   TOPOLOGY_DB_PATH: '/tmp/never-exists-topology.db',
   DECISIONS_DB_PATH: '/tmp/never-exists-decisions.db',
+  LOCKS_DIR: '/tmp/never-exists-trace-mcp-locks',
+  projectHash: vi.fn(() => 'testhash'),
+}));
+
+// Storm-guard lock is not what this file pins — always win instantly.
+vi.mock('../../src/utils/pid-lock.js', () => ({
+  LockError: class FakeLockError extends Error {
+    holder: unknown = null;
+  },
+  acquireLock: vi.fn(() => ({ filePath: '/tmp/never-exists-test.pid', pid: 1 })),
+  releaseLock: vi.fn(),
 }));
 
 vi.mock('../../src/progress.js', () => ({

@@ -23,11 +23,19 @@ import {
  * Reimplementation of the inline /api/stats handler body from cli.ts. Keeping
  * the test in lockstep with the handler ensures we catch shape drift.
  */
-async function statsHandlerEquivalent(sinceParam: string | null): Promise<ReindexStatsSummary> {
+async function statsHandlerEquivalent(
+  sinceParam: string | null,
+): Promise<ReindexStatsSummary & { session_fallbacks: unknown }> {
   const { getReindexStats: getStats } = await import('../../src/daemon/reindex-stats.js');
   const { parseDuration: parseDur } = await import('../../src/cli/daemon-stats.js');
+  const { readSessionFallbacks, summarizeSessionFallbacks } = await import(
+    '../../src/daemon/router/fallback-stats.js'
+  );
   const sinceMs = sinceParam ? (parseDur(sinceParam) ?? undefined) : undefined;
-  return getStats().summarize(sinceMs);
+  return {
+    ...(await getStats().summarize(sinceMs)),
+    session_fallbacks: summarizeSessionFallbacks(readSessionFallbacks(), { sinceMs }),
+  };
 }
 
 describe('GET /api/stats endpoint surface', () => {
@@ -57,6 +65,12 @@ describe('GET /api/stats endpoint surface', () => {
     });
     expect(typeof out.p50_ms).toBe('number');
     expect(typeof out.p95_ms).toBe('number');
+    // TRA-1605: the handler also serves the session-fallback storm gauge.
+    // Shape only — the backing file is shared per test worker, so other
+    // test files may have recorded fallbacks into it already.
+    expect(typeof out.session_fallbacks.total).toBe('number');
+    expect(typeof out.session_fallbacks.byReason).toBe('object');
+    expect(typeof out.session_fallbacks.perMin).toBe('number');
   });
 
   it('respects optional ?since=1h to filter older events', async () => {

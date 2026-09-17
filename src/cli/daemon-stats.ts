@@ -163,6 +163,20 @@ export interface DaemonEventStats {
   /** p95 wait for the reindex lock, reported separately from the work itself
    *  so a fast reindex stuck behind a queue is visible as such (TRA-935). */
   p95_queued_ms: number;
+  /**
+   * Session local-mode fallbacks over the same window (TRA-1605). Served by
+   * /api/stats from the shared JSONL file; absent when the daemon predates
+   * the counter. The CLI prefers reading the file directly (works while the
+   * daemon is down — exactly when the number matters).
+   */
+  session_fallbacks?: SessionFallbackSummary | null;
+}
+
+export interface SessionFallbackSummary {
+  total: number;
+  byReason: Record<string, number>;
+  perMin: number;
+  windowMs: number;
 }
 
 export function renderDaemonEvents(s: DaemonEventStats): string {
@@ -178,6 +192,31 @@ export function renderDaemonEvents(s: DaemonEventStats): string {
   lines.push(`  fast (skipped_hash):   ${s.fast_skipped_hash} (${pctOf(s.fast_skipped_hash)})`);
   lines.push(`  indexed:               ${s.indexed} (${pctOf(s.indexed)})`);
   lines.push(`  per-call: p50=${s.p50_ms}ms p95=${s.p95_ms}ms  queued p95=${s.p95_queued_ms}ms`);
+  return lines.join('\n');
+}
+
+/**
+ * Fallback-storm gauge (TRA-1605): how many stdio sessions gave up on the
+ * daemon and went local-mode inside the window, and why. A healthy fleet
+ * shows ~0; a storm shows a spike in `proxy-initialize-timeout` — N sessions
+ * timing out together on a loaded box.
+ */
+export function renderSessionFallbacks(
+  s: SessionFallbackSummary | null,
+  windowLabel: string,
+): string {
+  const lines: string[] = [];
+  lines.push(`=== Session local-fallbacks (last ${windowLabel}) ===`);
+  if (!s || s.total === 0) {
+    lines.push('  (no local-mode fallbacks recorded in this window)');
+    return lines.join('\n');
+  }
+  lines.push(`  total: ${s.total} (${s.perMin.toFixed(2)}/min)`);
+  const reasonKeys = Object.keys(s.byReason).sort();
+  if (reasonKeys.length > 0) {
+    const parts = reasonKeys.map((k) => `"${k}": ${s.byReason[k]}`);
+    lines.push(`  by reason: { ${parts.join(', ')} }`);
+  }
   return lines.join('\n');
 }
 
@@ -197,6 +236,7 @@ export async function fetchDaemonStats(port: number): Promise<DaemonEventStats |
       p50_ms: body.p50_ms ?? 0,
       p95_ms: body.p95_ms ?? 0,
       p95_queued_ms: body.p95_queued_ms ?? 0,
+      session_fallbacks: (body.session_fallbacks as SessionFallbackSummary | undefined) ?? null,
     };
   } catch {
     return null;
