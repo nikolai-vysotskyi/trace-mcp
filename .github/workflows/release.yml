@@ -203,7 +203,20 @@ jobs:
           # ingested for this commit yet — better to fail loudly than to ship
           # an SBOM that claims we depend on nothing.
           test "$(jq '.packages | length' "$FILE")" -gt 1
-          gh release upload "$TAG" "$FILE" --repo "${{ github.repository }}" --clobber
+          # TRA-1628: uploads.github.com flaps with `HTTP 500: Error creating
+          # asset temp dir` (killed two win uploads in one evening, 2026-09-17).
+          # `gh release upload --clobber` is idempotent, so retry the whole
+          # invocation with backoff instead of failing on the first 500.
+          for attempt in 1 2 3 4; do
+            if gh release upload "$TAG" "$FILE" --repo "${{ github.repository }}" --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::gh release upload failed 4 times — uploads.github.com is still unavailable"
+              exit 1
+            fi
+            sleep "$((attempt * 30))"
+          done
 
   # TRA-368: the asset gate above proves latest.yml is ON the release. It cannot
   # prove an install would act on it — a feed whose sha512 no longer matches the
@@ -283,6 +296,32 @@ jobs:
       # 25635744167). Stay on `npx -y npm@11 publish` until pnpm fixes
       # the trusted-publisher exchange.
       - run: npx -y npm@11 publish --provenance --access public
+
+  # TRA-1628: v3.27.0 shipped as a GitHub release but never reached npm — the
+  # win upload flaked, verify-release-assets failed, and `publish` was silently
+  # skipped. A skipped job is easy to miss, so this guard turns that outcome
+  # into a loud failure naming the exact recovery. Deliberately NOT a new
+  # external alerting integration (Slack etc.): that is Nikolai's call, and a
+  # red run with remediation steps is sufficient signal without one.
+  # Not a `needs:` of anything and nothing needs it — it only observes.
+  publish-guard:
+    needs: [release-please, verify-release-assets, publish]
+    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
+      VERIFY_RESULT: ${{ needs.verify-release-assets.result }}
+      PUBLISH_RESULT: ${{ needs.publish.result }}
+    steps:
+      - name: Fail loudly when this version did not reach npm
+        run: |
+          if [ "$VERIFY_RESULT" = "success" ] && [ "$PUBLISH_RESULT" = "success" ]; then
+            echo "$TAG reached npm."
+            exit 0
+          fi
+          echo "::error::$TAG did NOT reach npm (verify-release-assets: $VERIFY_RESULT, publish: $PUBLISH_RESULT). The GitHub release exists but the registry does not have this version. Recover: fix the failed job (transient upload 500s usually clear on 'gh run rerun --failed' once the run has finished), then re-run this workflow with input publish_tag=$TAG to re-verify the assets and publish to npm."
+          exit 1
 
   build-app-mac:
     needs: release-please
@@ -519,14 +558,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
-            packages/app/release/*.zip \
-            packages/app/release/*.zip.sha256 \
-            packages/app/release/*.dmg \
-            packages/app/release/*.dmg.sha256 \
-            packages/app/release/trace-mcp-mac.intoto.jsonl \
-            packages/app/release/latest-mac.yml \
-            --clobber
+          set -euo pipefail
+          # TRA-1628: same retry rationale as the sbom job's upload step —
+          # uploads.github.com 500s are transient, --clobber makes a rerun safe.
+          for attempt in 1 2 3 4; do
+            if gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+              packages/app/release/*.zip \
+              packages/app/release/*.zip.sha256 \
+              packages/app/release/*.dmg \
+              packages/app/release/*.dmg.sha256 \
+              packages/app/release/trace-mcp-mac.intoto.jsonl \
+              packages/app/release/latest-mac.yml \
+              --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::gh release upload failed 4 times — uploads.github.com is still unavailable"
+              exit 1
+            fi
+            sleep "$((attempt * 30))"
+          done
 
       # RUNNER_TEMP is discarded anyway; this also drops the keychain out of the
       # search list on a self-hosted runner, and runs even when a step above
@@ -632,9 +683,21 @@ jobs:
             echo "No artifacts found to upload"
             exit 1
           fi
-          gh release upload "${{ needs.release-please.outputs.tag_name }}" \
-            "${FILES[@]}" \
-            "${SUMS[@]}" \
-            packages/app/release/trace-mcp-win.intoto.jsonl \
-            packages/app/release/latest.yml \
-            --clobber
+          # TRA-1628: same retry rationale as the sbom job's upload step —
+          # uploads.github.com 500s are transient, --clobber makes a rerun safe.
+          # This is the leg that actually died twice on 2026-09-17.
+          for attempt in 1 2 3 4; do
+            if gh release upload "${{ needs.release-please.outputs.tag_name }}" \
+              "${FILES[@]}" \
+              "${SUMS[@]}" \
+              packages/app/release/trace-mcp-win.intoto.jsonl \
+              packages/app/release/latest.yml \
+              --clobber; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::gh release upload failed 4 times — uploads.github.com is still unavailable"
+              exit 1
+            fi
+            sleep "$((attempt * 30))"
+          done
