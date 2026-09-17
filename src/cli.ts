@@ -141,7 +141,11 @@ import {
   extractRpcId,
 } from './daemon/mcp-error-response.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
-import { teardownProjectBookkeeping as teardownProjectBookkeepingImpl } from './daemon/project-bookkeeping.js';
+import {
+  collectIdleSessions,
+  dropSessionBookkeeping,
+  teardownProjectBookkeeping as teardownProjectBookkeepingImpl,
+} from './daemon/project-bookkeeping.js';
 import {
   clearKeyForTerminalEvent as clearProgressKeyForTerminalEvent,
   maybePruneOnHighWatermark as maybePruneProgressThrottle,
@@ -843,6 +847,7 @@ program
         sessionHandles,
         sessionClients,
         clients,
+        sessionLastSeen,
       });
     }
 
@@ -995,6 +1000,15 @@ program
     const sessionClients = new Map<string, string>();
     // Reverse lookup: projectRoot → Set<sessionId> (for cleanup)
     const projectSessions = new Map<string, Set<string>>();
+    // Per-session last-traffic timestamps (sessionId → epoch ms) for the
+    // stale-session sweep (TRA-1627). Set when a session is stored after
+    // initialize and refreshed on every /mcp request carrying a known
+    // session id; removed by the session's onclose cleanup. Without this,
+    // a client that dies without DELETE /mcp (kill -9, OOM, `runtime went
+    // offline`) pins its project resident forever: resourcePool.acquire()
+    // in createSessionTransport is balanced only by transport.onclose,
+    // which a dead client never triggers.
+    const sessionLastSeen = new Map<string, number>();
 
     // Durable activity log. Journals die with their session — every agent run
     // is a client that disconnects — so the Activity tab read zero on every
@@ -1047,7 +1061,7 @@ program
       const freshConfig = await loadConfig(projectRoot);
       const sessionConfig = freshConfig.isOk() ? freshConfig.value : managed.config;
 
-      const baseDeps = resourcePool.acquire(projectRoot, managed.config);
+      const baseDeps = resourcePool.getSharedDeps(managed.config);
       const deps = {
         ...baseDeps,
         sessionId,
@@ -1081,6 +1095,15 @@ program
       );
       await handle.server.connect(transport);
 
+      // Count the session only after the fallible setup above succeeded.
+      // An acquire() before a throwing createServer/connect would leak: the
+      // session never reaches the /mcp handler, so neither onclose (never
+      // chained or never fired) nor the idle sweep (no map entry) could
+      // ever release it (TRA-1627 review). Everything below is map sets +
+      // broadcast (effectively non-throwing), matching the post-store
+      // reasoning in the /mcp handler.
+      resourcePool.acquire(projectRoot, managed.config);
+
       // Track client connection
       const clientId = randomUUID();
       clients.set(clientId, {
@@ -1102,6 +1125,7 @@ program
         const sid = transport.sessionId || sessionId;
         sessionTransports.delete(sid);
         projectSessions.get(projectRoot)?.delete(sid);
+        sessionLastSeen.delete(sid);
 
         const h =
           sessionHandles.get(sid) ??
@@ -1225,6 +1249,13 @@ program
     // the same path. If lastSeen hasn't moved in an hour the proxy is gone.
     const CLIENT_STALE_MS = 60 * 60 * 1000;
     const CLIENT_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+    // MCP sessions go stale the same way, with worse consequences (TRA-1627):
+    // a dead session's resourcePool refcount pins its whole project resident,
+    // defeating the idle-unload sweep. Same 1h threshold — a live client with
+    // an hour of zero traffic re-initializes transparently (ProxyBackend
+    // replays its cached initialize frame on 404; direct clients follow the
+    // spec's reinitialize path our 404 names).
+    const SESSION_IDLE_MS = 60 * 60 * 1000;
     const clientSweep = setInterval(() => {
       const now = Date.now();
       const cutoff = now - CLIENT_STALE_MS;
@@ -1239,6 +1270,35 @@ program
           }
         }
       }
+      void (async () => {
+        let reaped = 0;
+        for (const sid of collectIdleSessions(sessionLastSeen, now, SESSION_IDLE_MS)) {
+          const transport = sessionTransports.get(sid);
+          if (transport) {
+            // close() fires the chained onclose → full cleanup including
+            // the resourcePool.release() that balances createSessionTransport.
+            try {
+              await transport.close();
+            } catch {
+              /* best-effort */
+            }
+          }
+          // Defensive: onclose removes the maps itself, but a close() no-op
+          // (or an orphan without a transport) must not leave stragglers.
+          dropSessionBookkeeping(sid, {
+            projectSessions,
+            sessionTransports,
+            sessionHandles,
+            sessionClients,
+            clients,
+            sessionLastSeen,
+          });
+          reaped++;
+        }
+        if (reaped > 0) {
+          logger.info({ reaped }, 'Reaped idle MCP sessions with no traffic');
+        }
+      })();
     }, CLIENT_SWEEP_INTERVAL_MS);
     clientSweep.unref();
 
@@ -1379,11 +1439,15 @@ program
         // it if it has root markers (reusing any existing getDbPath index).
         const projectRoot = (await resolveDeepestKnownRoot(requestedRoot)) ?? requestedRoot;
 
+        // Route by session ID for existing sessions. `transport` /
+        // `createdTransport` live outside the try so the catch can close a
+        // freshly minted session that never became usable (TRA-1627).
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+        let transport: StreamableHTTPServerTransport | undefined;
+        // Transport minted below in this request: not yet usable by any
+        // client, so a failure before it is stored must close it (TRA-1627).
+        let createdTransport: StreamableHTTPServerTransport | undefined;
         try {
-          // Route by session ID for existing sessions
-          const sessionId = req.headers['mcp-session-id'] as string | undefined;
-          let transport: StreamableHTTPServerTransport | undefined;
-
           if (sessionId) {
             transport = getTransportBySessionId(sessionId);
             if (!transport) {
@@ -1397,10 +1461,17 @@ program
               );
               return;
             }
+            // Any traffic on a known session proves the client alive — this
+            // timestamp is what the stale-session sweep reaps on (TRA-1627).
+            // Deliberately NOT pokeActivity here: project idleness is gated
+            // by the session refcount while pinned, and per-request pokes
+            // would keep a chatty-but-idle project resident forever.
+            sessionLastSeen.set(sessionId, Date.now());
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
             transport =
               (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ?? undefined;
+            createdTransport = transport;
             if (!transport) {
               // Auto-register the project on first MCP connect when the path
               // is plausibly a real project root. This recovers the common
@@ -1464,6 +1535,7 @@ program
                   transport =
                     (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ??
                     undefined;
+                  createdTransport = transport;
                 } catch (err) {
                   logger.warn(
                     { err: String(err), projectRoot },
@@ -1512,6 +1584,7 @@ program
           if (isInitializeRequest(parsedBody) && transport.sessionId) {
             const sid = transport.sessionId;
             sessionTransports.set(sid, transport);
+            sessionLastSeen.set(sid, Date.now());
             if (!projectSessions.has(projectRoot)) {
               projectSessions.set(projectRoot, new Set());
             }
@@ -1541,6 +1614,18 @@ program
             }
           }
         } catch (e) {
+          if (createdTransport) {
+            // The freshly minted session never became usable (initialize
+            // failed or the client vanished mid-handshake). Nobody holds
+            // this transport, so onclose can never fire for it — close it
+            // now so its resourcePool.acquire() is released (TRA-1627).
+            // Idempotent with the normal path via the cleanedUp guard.
+            try {
+              await createdTransport.close();
+            } catch {
+              /* best-effort */
+            }
+          }
           if ((e as Error & { stack?: string })?.message === 'BODY_TOO_LARGE') {
             if (!res.headersSent) {
               res.writeHead(413, { 'Content-Type': 'application/json' });
@@ -2644,6 +2729,7 @@ program
           sessionTransports,
           sessionHandles,
           sessionClients,
+          sessionLastSeen,
           registeredProjects: projectManager.listProjects().length,
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
