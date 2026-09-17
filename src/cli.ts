@@ -1061,7 +1061,7 @@ program
       const freshConfig = await loadConfig(projectRoot);
       const sessionConfig = freshConfig.isOk() ? freshConfig.value : managed.config;
 
-      const baseDeps = resourcePool.acquire(projectRoot, managed.config);
+      const baseDeps = resourcePool.getSharedDeps(managed.config);
       const deps = {
         ...baseDeps,
         sessionId,
@@ -1094,6 +1094,15 @@ program
         deps,
       );
       await handle.server.connect(transport);
+
+      // Count the session only after the fallible setup above succeeded.
+      // An acquire() before a throwing createServer/connect would leak: the
+      // session never reaches the /mcp handler, so neither onclose (never
+      // chained or never fired) nor the idle sweep (no map entry) could
+      // ever release it (TRA-1627 review). Everything below is map sets +
+      // broadcast (effectively non-throwing), matching the post-store
+      // reasoning in the /mcp handler.
+      resourcePool.acquire(projectRoot, managed.config);
 
       // Track client connection
       const clientId = randomUUID();
