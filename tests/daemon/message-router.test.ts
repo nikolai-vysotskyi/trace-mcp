@@ -133,7 +133,10 @@ describe('MessageRouter', () => {
     await router.swap(b, { drainTimeoutMs: 30 });
     const elapsed = Date.now() - start;
 
-    expect(elapsed).toBeGreaterThanOrEqual(25);
+    // TRA-1579: Date.now() ticks at ~15.6ms on Windows, so a 30ms drain can
+    // measure as low as ~15ms there. The property is "it waited out the
+    // drain instead of resolving instantly", which any positive wait proves.
+    expect(elapsed).toBeGreaterThanOrEqual(process.platform === 'win32' ? 5 : 25);
     // Synthetic error response should be in client inbox.
     const synth = clientInbox.find((m) => (m as { id?: number }).id === 42);
     expect(synth).toBeDefined();
@@ -153,7 +156,10 @@ describe('MessageRouter', () => {
     const start = Date.now();
     await router.swap(b, { drainTimeoutMs: 500 });
     const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(100);
+    // TRA-1579: no pending work means the swap resolves on the microtask
+    // queue — locally ~0ms. The bound only guards "does not wait out the
+    // 500ms drain", so it scales with OS scheduling slop on loaded runners.
+    expect(elapsed).toBeLessThan(process.platform === 'win32' ? 450 : 100);
   });
 
   it('buffers messages when there is no active backend, flushed by flushPending', async () => {
