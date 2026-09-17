@@ -2526,3 +2526,51 @@ Intelligence lane).
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Twenty-fifth pass, 2026-09-17 morning (TRA-1599): light recheck eight hours after the twenty-fourth pass, one genuine sweep hit classified
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments, `mergeable: MERGEABLE` / `mergeStateStatus: CLEAN`:
+`eltociear#119` (head 09-14), `GetBindu#195`, `yzfly#44`,
+`tolkonepiu#384`, `ai-boost#240` (head 09-14). No ping due anywhere —
+nearest deadline (yzfly re-check 19.09) has not arrived.
+`hermes#395`, `nix#606`, `ai-tooling#585` (no follow-up per TRA-857),
+`pi-extensions#1204`: all OPEN, 0 comments. `Dokploy/mcp#81`: OPEN,
+3 comments, newest still 09-05. `kilocode#13843` / `#12707`: OPEN,
+1 comment each, newest still ours 09-07. `slopstop#633`: OPEN, 1 comment,
+newest still ours 09-06. `atlas#105`: OPEN, 9 comments, newest still the
+maintainer's own 09-07 Tier-2 close-out (comment dates re-read, no new
+reply). `pr-agent#2499`: OPEN, 11 comments, newest still our own 09-14
+reply — wait. `nanocoder#1197`: OPEN, 4 comments, newest still the
+third-party pitch of 09-11; `updated_at` 09-15 is edit/label noise, same
+pattern as before. `outline#34`: OPEN, `mergeable_state: clean`,
+`updated_at` still 09-16T08:04Z (no movement since the twenty-fourth
+pass); issue comments newest still our 09-15 provenance answer, review
+comments all 09-02. Do not comment unless a maintainer replies. TRA-633
+consolidated request to Nikolai stands; still `blocked`, no new ping.
+trace-mcp flat at 175 stars / 21 forks.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): one new repo,
+read to the file, classified genuine with nothing to do.**
+`lza6/Aggregate-to-2api` (61★, Chinese-language 2API gateway project)
+carries a `trace-mcp` section in
+`docs/research/ref-scan/out_g10_gateway_mcp.md` — a read-only competitive
+scan of 28 gateway/MCP directories written for their own project, scoring
+us 3/5. The section was built from our README and DESIGN.md and repeats
+the current copy correctly: "answer instead of re-read", the 72.7% PR
+figure, 182 tools / 81 languages / 88 frameworks. That is the positioning
+signal worth one line: an outsider who read the current page retold the
+mechanism right — the opposite of the hotaru-ritsuki misread that sold
+the graph story to a competitor. No ledger table row: it is an internal
+research doc, not a surface — no listing, no audience, no contact path,
+and nothing to correct. Recorded in `ops/mentions-seen.txt`; no outreach,
+they never asked us anything.
+
+**Catalogs:** moratorium holds (acquisition still unreadable), no
+submissions. No new door evaluated this pass — the sweep hit was the
+movement; queued doors stand (aloth first, TensorBlock second).
+**Competitors:** star snapshot skipped — eight hours after a full sync is
+still noise, not signal; `docs/_data/competitors.yml` untouched
+(Competitor Intelligence lane).
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
