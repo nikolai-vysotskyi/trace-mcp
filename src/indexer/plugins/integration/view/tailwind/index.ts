@@ -419,13 +419,20 @@ export class TailwindPlugin implements FrameworkPlugin {
       : 'tailwind.config.js';
 
     for (const file of files) {
+      // TRA-1602: language gate before the read — only CSS-like and
+      // template-like files can yield a cssSource below, so reading anything
+      // else is pure waste (this loop runs over the whole corpus on every
+      // incremental pass). Output-identical: skipped files always `continue`.
+      const lang = file.language ?? '';
+      const cssLike = isCssLike(lang, file.path);
+      if (!cssLike && !isTemplateLike(lang, file.path)) continue;
       const source = ctx.readFile(file.path);
       if (!source) continue;
 
       let cssSource: string | null = null;
-      if (isCssLike(file.language ?? '', file.path)) {
+      if (cssLike) {
         cssSource = source;
-      } else if (isTemplateLike(file.language ?? '', file.path)) {
+      } else {
         // Vue SFC / Svelte — check <style> block
         cssSource = extractStyleBlock(source);
       }
