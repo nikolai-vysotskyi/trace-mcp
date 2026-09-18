@@ -33,6 +33,14 @@ export const clients = {
   migratingProgress: 'Migrando {{done}} de {{total}}',
   writeFailed: 'Não foi possível gravar a configuração.',
   driftedField: 'Campo divergente: {{field}}',
+  blockedTitle: 'Saia do Claude.app primeiro',
+  blockedWhy:
+    '{{client}} guarda sua configuração onde o Claude.app a sobrescreve enquanto está em execução — tudo o que for gravado agora será descartado. Saia do aplicativo por completo e atualize de novo.',
+  blockedStep1: '1. Saia do Claude.app por completo (Cmd+Q no macOS) — só fechar a janela não basta.',
+  blockedStep2: '2. Clique em «Tentar de novo» abaixo.',
+  blockedStep3: '3. Abra o Claude.app novamente.',
+  blockedRetry: 'Tentar de novo',
+  blockedDismiss: 'Entendi',
   setUpManually: 'Configurar manualmente…',
   hideSteps: 'Ocultar os passos',
 

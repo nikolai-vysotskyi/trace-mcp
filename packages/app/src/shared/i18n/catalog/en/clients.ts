@@ -40,6 +40,14 @@ export const clients = {
   migratingProgress: 'Migrating {{done}} of {{total}}',
   writeFailed: 'The config could not be written.',
   driftedField: 'Drifted field: {{field}}',
+  blockedTitle: 'Quit Claude.app first',
+  blockedWhy:
+    '{{client}} keeps its config where Claude.app rewrites it while running, so anything written now is thrown away. Quit the app completely and update again.',
+  blockedStep1: '1. Quit Claude.app completely (Cmd+Q on macOS) — closing the window is not enough.',
+  blockedStep2: '2. Press Retry update below.',
+  blockedStep3: '3. Start Claude.app again.',
+  blockedRetry: 'Retry update',
+  blockedDismiss: 'Got it',
   setUpManually: 'Set up manually…',
   hideSteps: 'Hide steps',
 

@@ -33,6 +33,14 @@ export const clients = {
   migratingProgress: '{{total}} में से {{done}} माइग्रेट हो रहे हैं',
   writeFailed: 'कॉन्फ़िगरेशन नहीं लिखा जा सका।',
   driftedField: 'बदला हुआ फ़ील्ड: {{field}}',
+  blockedTitle: 'पहले Claude.app बंद करें',
+  blockedWhy:
+    '{{client}} अपना कॉन्फ़िगरेशन वहाँ रखता है जहाँ Claude.app चलते समय उसे फिर से लिख देता है — अभी लिखा गया सब कुछ खो जाएगा। ऐप को पूरी तरह बंद करें और फिर अपडेट करें।',
+  blockedStep1: '1. Claude.app को पूरी तरह बंद करें (macOS पर Cmd+Q) — सिर्फ़ विंडो बंद करना काफ़ी नहीं है।',
+  blockedStep2: '2. नीचे "फिर से अपडेट करें" दबाएँ।',
+  blockedStep3: '3. Claude.app फिर से शुरू करें।',
+  blockedRetry: 'फिर से अपडेट करें',
+  blockedDismiss: 'ठीक है',
   setUpManually: 'खुद सेट करें…',
   hideSteps: 'चरण छिपाएँ',
 
