@@ -55,3 +55,27 @@ it('does not count a mention of the key inside a string value', () => {
 `);
   expect(ampClient()?.hasTraceMcp).toBe(false);
 });
+
+it('detects gemini-cli at ~/.gemini/settings.json without cross-triggering antigravity (TRA-1659)', () => {
+  fs.mkdirSync(path.join(home, '.gemini'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.gemini', 'settings.json'),
+    JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
+    'utf-8',
+  );
+  const clients = detectMcpClients(undefined, home);
+  expect(clients.find((c) => c.name === 'gemini-cli')?.hasTraceMcp).toBe(true);
+  expect(clients.find((c) => c.name === 'antigravity')).toBeUndefined();
+});
+
+it('detects antigravity at ~/.gemini/config/mcp_config.json without cross-triggering gemini-cli (TRA-1659)', () => {
+  fs.mkdirSync(path.join(home, '.gemini', 'config'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.gemini', 'config', 'mcp_config.json'),
+    JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
+    'utf-8',
+  );
+  const clients = detectMcpClients(undefined, home);
+  expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(true);
+  expect(clients.find((c) => c.name === 'gemini-cli')).toBeUndefined();
+});

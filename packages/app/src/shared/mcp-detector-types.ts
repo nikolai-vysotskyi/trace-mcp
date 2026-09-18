@@ -15,6 +15,7 @@ export type DetectedMcpClientName =
   | 'cline'
   | 'kilocode'
   | 'antigravity'
+  | 'gemini-cli'
   | 'kimi'
   | 'opencode';
 
@@ -41,6 +42,7 @@ export const MCP_CLIENT_DISPLAY_NAMES: Record<DetectedMcpClientName, string> = {
   cline: 'Cline',
   kilocode: 'KiloCode',
   antigravity: 'Antigravity',
+  'gemini-cli': 'Gemini CLI',
   kimi: 'Kimi Code CLI',
   opencode: 'OpenCode',
 };

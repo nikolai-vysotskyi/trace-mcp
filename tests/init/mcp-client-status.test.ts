@@ -280,6 +280,7 @@ describe('getMcpClientStatuses', () => {
       'cline',
       'kilocode',
       'antigravity',
+      'gemini-cli',
       'kimi',
       'opencode',
     ]) {
@@ -287,8 +288,13 @@ describe('getMcpClientStatuses', () => {
     }
   });
 
-  it('reports missing → up_to_date round-trip for cline, antigravity, kimi', () => {
-    const clients: Array<'cline' | 'antigravity' | 'kimi'> = ['cline', 'antigravity', 'kimi'];
+  it('reports missing → up_to_date round-trip for cline, antigravity, gemini-cli, kimi', () => {
+    const clients: Array<'cline' | 'antigravity' | 'gemini-cli' | 'kimi'> = [
+      'cline',
+      'antigravity',
+      'gemini-cli',
+      'kimi',
+    ];
     // Missing before any write.
     for (const c of clients) {
       const [before] = getMcpClientStatuses(projectRoot, 'global', [c]);

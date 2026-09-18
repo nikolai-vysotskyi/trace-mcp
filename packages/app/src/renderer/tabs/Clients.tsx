@@ -74,7 +74,8 @@ type ClientName =
   | 'codex'
   | 'amp'
   | 'warp'
-  | 'factory-droid';
+  | 'factory-droid'
+  | 'gemini-cli';
 
 /* Product names: the same in every locale, so they stay inline. */
 const ALL_CLIENTS: { name: ClientName; label: string }[] = [
@@ -90,6 +91,7 @@ const ALL_CLIENTS: { name: ClientName; label: string }[] = [
   { name: 'amp', label: 'AMP' }, // i18n-exempt
   { name: 'warp', label: 'Warp' }, // i18n-exempt
   { name: 'factory-droid', label: 'Factory Droid' }, // i18n-exempt
+  { name: 'gemini-cli', label: 'Gemini CLI' }, // i18n-exempt
 ];
 
 // Clients that support enforcement levels (hooks & tweakcc are CC-specific)
