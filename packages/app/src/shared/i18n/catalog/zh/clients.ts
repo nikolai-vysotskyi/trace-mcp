@@ -32,6 +32,14 @@ export const clients = {
   migratingProgress: '正在迁移 {{done}}/{{total}}',
   writeFailed: '无法写入配置。',
   driftedField: '偏移字段：{{field}}',
+  blockedTitle: '请先退出 Claude.app',
+  blockedWhy:
+    '{{client}} 的配置保存在 Claude.app 运行期间会重写的位置，现在写入的内容会被丢弃。请完全退出应用后再更新。',
+  blockedStep1: '1. 完全退出 Claude.app（macOS 上按 Cmd+Q）——仅关闭窗口不够。',
+  blockedStep2: '2. 点击下方的“重试”。',
+  blockedStep3: '3. 重新启动 Claude.app。',
+  blockedRetry: '重试',
+  blockedDismiss: '知道了',
   setUpManually: '手动配置…',
   hideSteps: '隐藏步骤',
 
