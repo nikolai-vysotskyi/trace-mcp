@@ -33,6 +33,9 @@ export const clients = {
   migratingProgress: 'Migrando {{done}} de {{total}}',
   writeFailed: 'Não foi possível gravar a configuração.',
   driftedField: 'Campo divergente: {{field}}',
+  pickupRestartApp: 'Reinicie {{client}} para aplicar a atualização',
+  pickupRestartSession: 'Reinicie a sessão de {{client}} para aplicar a atualização',
+  pickupReloadWindow: 'Recarregue a janela de {{client}} para aplicar a atualização',
   blockedTitle: 'Saia do Claude.app primeiro',
   blockedWhy:
     '{{client}} guarda sua configuração onde o Claude.app a sobrescreve enquanto está em execução — tudo o que for gravado agora será descartado. Saia do aplicativo por completo e atualize de novo.',

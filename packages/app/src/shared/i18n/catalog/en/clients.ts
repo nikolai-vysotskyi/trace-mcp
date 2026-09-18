@@ -40,6 +40,13 @@ export const clients = {
   migratingProgress: 'Migrating {{done}} of {{total}}',
   writeFailed: 'The config could not be written.',
   driftedField: 'Drifted field: {{field}}',
+  /* TRA-1647 pickup hints: what the user must do after a write before the
+     client picks it up. Shown in the row caption right after a successful
+     Connect/Update, and on the Connected indicator's tooltip. {{client}} is
+     the product name, which stays untranslated (see the header note). */
+  pickupRestartApp: 'Restart {{client}} to apply the update',
+  pickupRestartSession: 'Restart the {{client}} session to apply the update',
+  pickupReloadWindow: 'Reload the {{client}} window to apply the update',
   blockedTitle: 'Quit Claude.app first',
   blockedWhy:
     '{{client}} keeps its config where Claude.app rewrites it while running, so anything written now is thrown away. Quit the app completely and update again.',

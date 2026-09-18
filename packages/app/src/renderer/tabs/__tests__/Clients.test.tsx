@@ -456,3 +456,96 @@ it('opens no sheet for other write errors', async () => {
   expect(await screen.findByText('Error: EACCES')).toBeTruthy();
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+// ── TRA-1647 ──────────────────────────────────────────────────────────────
+
+/* A write that landed but isn't picked up until restart reads as "Update did
+   nothing". Right after a successful Update the row names the next step in
+   its caption — outranking the path the way a failure does. */
+it('names the restart step in the caption right after a successful update', async () => {
+  const stale = {
+    client: 'windsurf',
+    configPath: '/Users/x/.windsurf/mcp.json',
+    status: 'stale',
+    staleReason: 'fields',
+    pickup: 'reload-window',
+  };
+  const fresh = { ...stale, status: 'up_to_date', staleReason: undefined };
+  api().getMcpClientStatuses
+    .mockResolvedValueOnce({ ok: true, statuses: [stale] })
+    .mockResolvedValue({ ok: true, statuses: [fresh] });
+  api().updateMcpClients.mockResolvedValue({ ok: true });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+  expect(
+    await screen.findByText('Reload the Windsurf window to apply the update'),
+  ).toBeTruthy();
+});
+
+/* The caption hint is transient (it clears on manual refresh); the Connected
+   indicator keeps the pickup step on its tooltip afterwards. */
+it('keeps the pickup step on the Connected tooltip', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [
+      {
+        client: 'claude-code',
+        configPath: '/Users/x/.claude.json',
+        status: 'up_to_date',
+        pickup: 'restart-session',
+      },
+    ],
+  });
+  render(<Clients />);
+
+  const connected = await screen.findByText('Connected');
+  expect(connected.getAttribute('title')).toBe(
+    'Restart the Claude Code session to apply the update',
+  );
+});
+
+/* Cline reconnects itself (McpHub watches its own settings file) — no next
+   step to name, so the row keeps its path caption and the indicator no
+   tooltip. */
+it('says nothing about restart for a hot-reload client', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [
+      {
+        client: 'cline',
+        configPath: '/Users/x/cline_mcp_settings.json',
+        status: 'up_to_date',
+        pickup: 'hot-reload',
+      },
+    ],
+  });
+  render(<Clients />);
+
+  const connected = await screen.findByText('Connected');
+  expect(connected.getAttribute('title')).toBeNull();
+  expect(screen.getByText('~/cline_mcp_settings.json')).toBeTruthy();
+  expect(screen.queryByText(/to apply the update/)).toBeNull();
+});
+
+/* The to-verify half of the matrix (cline, kilocode, antigravity, gemini-cli,
+   kimi, opencode, hermes) had no rows at all — a hint for them had nowhere to
+   land. All nineteen clients render; only the two manual ones skip Connect. */
+it('renders every known client row', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: [] });
+  render(<Clients />);
+
+  for (const label of [
+    'Cline',
+    'KiloCode',
+    'Antigravity',
+    'Gemini CLI',
+    'Kimi Code CLI',
+    'OpenCode',
+    'Hermes Agent',
+  ]) {
+    expect(await screen.findByText(label)).toBeTruthy();
+  }
+  expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(17);
+});
