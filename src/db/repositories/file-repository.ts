@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { isAbsolutePathLike } from '../../utils/security.js';
 import type { FileRow } from '../types.js';
 
 export class FileRepository {
@@ -81,6 +82,13 @@ export class FileRepository {
    * falls back to. Only an unambiguous match is accepted — two candidates mean
    * we cannot know which one was meant, so it stays a miss.
    *
+   * TRA-1660: agents also pass ABSOLUTE paths (that is all Read/Grep/hooks ever
+   * return). When the input is absolute, its leading segments are the project
+   * root the index does not store, so the longest-tail-first walk below folds
+   * `/root/src/foo.ts` back to the indexed `src/foo.ts`. Longest tail wins
+   * because it is the most specific; a unique-suffix probe at each level keeps
+   * the cwd-relative behaviour for absolute spellings too.
+   *
    * Never use this on the indexer write path: inserts must stay exact.
    */
   resolveFile(path: string): FileRow | undefined {
@@ -95,8 +103,26 @@ export class FileRepository {
       const normalizedExact = this._stmts.getFile.get(normalized) as FileRow | undefined;
       if (normalizedExact) return normalizedExact;
     }
+    const suffixHit = this.resolveSuffixUnique(normalized);
+    if (suffixHit) return suffixHit;
+    if (isAbsolutePathLike(path)) {
+      const segs = normalized.split(/[\\/]+/).filter(Boolean);
+      // Index 0 (`normalized` itself) was already tried above.
+      for (let i = 1; i < segs.length; i++) {
+        const tail = segs.slice(i).join('/');
+        const tailExact = this._stmts.getFile.get(tail) as FileRow | undefined;
+        if (tailExact) return tailExact;
+        const tailSuffix = this.resolveSuffixUnique(tail);
+        if (tailSuffix) return tailSuffix;
+      }
+    }
+    return undefined;
+  }
+
+  /** Unique-suffix probe: the single indexed path ending in `/suffix`, else undefined. */
+  private resolveSuffixUnique(suffix: string): FileRow | undefined {
     const rows = this._stmts.resolveSuffix.all(
-      `%/${normalized.replace(/([%_\\])/g, '\\$1')}`,
+      `%/${suffix.replace(/([%_\\])/g, '\\$1')}`,
       '\\',
     ) as FileRow[];
     return rows.length === 1 ? rows[0] : undefined;

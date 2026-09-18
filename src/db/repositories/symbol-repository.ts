@@ -12,6 +12,8 @@ export class SymbolRepository {
     getSymbolBySymbolId: Database.Statement;
     getSymbolByFqn: Database.Statement;
     getSymbolById: Database.Statement;
+    getSymbolsBySymbolIdPrefix: Database.Statement;
+    getSymbolsByName: Database.Statement;
   };
 
   constructor(private readonly db: Database.Database) {
@@ -61,6 +63,12 @@ export class SymbolRepository {
       getSymbolBySymbolId: db.prepare('SELECT * FROM symbols WHERE symbol_id = ?'),
       getSymbolByFqn: db.prepare('SELECT * FROM symbols WHERE fqn = ?'),
       getSymbolById: db.prepare('SELECT * FROM symbols WHERE id = ?'),
+      getSymbolsBySymbolIdPrefix: db.prepare(
+        `SELECT * FROM symbols WHERE symbol_id LIKE ? ESCAPE '\\' ORDER BY symbol_id LIMIT ?`,
+      ),
+      getSymbolsByName: db.prepare(
+        'SELECT * FROM symbols WHERE name = ? ORDER BY symbol_id LIMIT ?',
+      ),
     };
   }
 
@@ -208,6 +216,22 @@ export class SymbolRepository {
 
   getSymbolById(id: number): SymbolRow | undefined {
     return this._stmts.getSymbolById.get(id) as SymbolRow | undefined;
+  }
+
+  /**
+   * All symbols whose id starts with `prefix` + `#` (TRA-1660: the caller
+   * guessed `file::Name` without the `#kind` suffix). LIKE metacharacters in
+   * the prefix are escaped so they match literally. Ordered for deterministic
+   * candidates; capped — callers only need to tell 1 apart from many.
+   */
+  findSymbolsBySymbolIdPrefix(prefix: string, limit = 6): SymbolRow[] {
+    const escaped = prefix.replace(/([%_\\])/g, '\\$1');
+    return this._stmts.getSymbolsBySymbolIdPrefix.all(`${escaped}#%`, limit) as SymbolRow[];
+  }
+
+  /** Every symbol with this exact simple name, ordered deterministically. */
+  findSymbolsByName(name: string, limit = 6): SymbolRow[] {
+    return this._stmts.getSymbolsByName.all(name, limit) as SymbolRow[];
   }
 
   getSymbolChildren(parentId: number): SymbolRow[] {

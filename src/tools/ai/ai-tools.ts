@@ -78,8 +78,9 @@ function readSourceSafe(
 function resolveSymbol(
   store: Store,
   opts: { symbolId?: string; fqn?: string },
+  projectRoot?: string,
 ): { sym: SymbolRow; file: FileRow } | null {
-  const resolved = resolveSymbolInput(store, opts);
+  const resolved = resolveSymbolInput(store, opts, { projectRoot });
   if (!resolved) return null;
   return { sym: resolved.symbol, file: resolved.file };
 }
@@ -152,7 +153,7 @@ export function registerAITools(server: McpServer, ctx: AIToolsContext): void {
       fqn: z.string().optional().describe('Fully qualified name'),
     },
     async ({ symbol_id, fqn }) => {
-      const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn });
+      const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn }, projectRoot);
       if (!resolved) {
         return {
           content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }],
@@ -217,7 +218,7 @@ export function registerAITools(server: McpServer, ctx: AIToolsContext): void {
       fqn: z.string().optional().describe('Fully qualified name'),
     },
     async ({ symbol_id, fqn }) => {
-      const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn });
+      const resolved = resolveSymbol(store, { symbolId: symbol_id, fqn }, projectRoot);
       if (!resolved) {
         return {
           content: [{ type: 'text', text: j({ error: 'Symbol not found' }) }],

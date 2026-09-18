@@ -6,13 +6,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
-import type { TraceMcpResult } from '../../errors.js';
+import { notFound, type TraceMcpResult } from '../../errors.js';
 import type { AssembledItem, ContextItem, DetailLevel } from '../../scoring/assembly.js';
 import {
   assembleStructuredContext,
   renderStructuredContext,
 } from '../../scoring/structured-assembly.js';
 import { readByteRange } from '../../utils/source-reader.js';
+import { resolveSymbolFlexible } from '../shared/resolve.js';
 
 /** Import-category edge types to follow for dependency resolution */
 const IMPORT_EDGES = new Set(['esm_imports', 'imports', 'py_imports', 'py_reexports']);
@@ -252,16 +253,16 @@ export function getContextBundle(
 
   const primarySymbols: Array<{ sym: SymbolRow; file: FileRow }> = [];
   for (const id of ids) {
-    const sym =
-      store.getSymbolBySymbolId(id) ?? (id.includes('\\') ? store.getSymbolByFqn(id) : undefined);
-    if (!sym) {
-      return err({ code: 'NOT_FOUND' as const, id });
+    // TRA-1660: same natural-input tolerance as get_symbol — absolute file
+    // parts fold to relative, kind-less `file::Name` resolves when unique.
+    const resolved = resolveSymbolFlexible(store, rootPath, id);
+    if (resolved.status === 'ambiguous') {
+      return err(notFound(id, resolved.candidates, 'unknown_symbol'));
     }
-    const file = store.getFileById(sym.file_id);
-    if (!file) {
-      return err({ code: 'NOT_FOUND' as const, id: `file for ${id}` });
+    if (resolved.status === 'miss') {
+      return err(notFound(id, undefined, 'unknown_symbol'));
     }
-    primarySymbols.push({ sym, file });
+    primarySymbols.push({ sym: resolved.symbol, file: resolved.file });
   }
 
   // Get node IDs for primaries

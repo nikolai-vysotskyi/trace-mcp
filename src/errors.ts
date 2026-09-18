@@ -59,12 +59,16 @@ export function formatToolError(error: TraceMcpError): object {
     if (error.reason) base.reason = error.reason;
     if (error.candidates?.length) {
       base.suggestions = error.candidates;
-      base.help = 'Use search() to find the correct symbol_id';
+      base.help =
+        'Pick the exact symbol_id from suggestions (full form is `path/to/file.ts::Name#kind`, e.g. `src/auth.ts::AuthService#class`) and retry, or use search() to find more candidates.';
     } else if (error.reason === 'not_indexed') {
       base.help =
         'File exists but could not be parsed on demand — it may not match the configured include globs. Check `include`/`exclude` in .trace-mcp.json and run reindex.';
     } else if (error.reason === 'not_found') {
       base.help = 'No file exists at this path. Use search() to locate the correct path.';
+    } else if (error.reason === 'unknown_symbol') {
+      base.help =
+        'Symbol IDs have the form `path/to/file.ts::Name#kind` (e.g. `src/auth.ts::AuthService#class`) — retry with the `#kind` suffix. Otherwise use search() to locate the symbol.';
     } else {
       base.help =
         'If this is a file path, it may not match the configured include globs — check `include`/`exclude` in .trace-mcp.json and reindex. Otherwise use search() to locate the symbol.';

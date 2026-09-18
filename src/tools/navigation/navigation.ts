@@ -35,6 +35,8 @@ import {
   signalFusion,
 } from '../../scoring/signal-fusion.js';
 import { readSymbolSource } from '../../utils/source-reader.js';
+import { normalizeToProjectRelative } from '../../utils/security.js';
+import { resolveSymbolFlexible } from '../shared/resolve.js';
 import { minMax } from '../../util/minmax.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
@@ -85,22 +87,22 @@ export function getSymbol(
   rootPath: string,
   opts: { symbolId?: string; fqn?: string; maxLines?: number; verifyAgainstGit?: boolean },
 ): TraceMcpResult<GetSymbolResult> {
-  let symbol: SymbolRow | undefined;
-
-  if (opts.symbolId) {
-    symbol = store.getSymbolBySymbolId(opts.symbolId);
-  } else if (opts.fqn) {
-    symbol = store.getSymbolByFqn(opts.fqn);
+  const input = opts.symbolId ?? opts.fqn;
+  if (!input) {
+    return err(notFound('unknown'));
   }
 
-  if (!symbol) {
-    return err(notFound(opts.symbolId ?? opts.fqn ?? 'unknown'));
+  // TRA-1660: accept the natural guesses — an absolute file part inside the
+  // project root, or `file::Name` without `#kind` when it names one symbol.
+  const resolved = resolveSymbolFlexible(store, rootPath, input);
+  if (resolved.status === 'ambiguous') {
+    return err(notFound(input, resolved.candidates, 'unknown_symbol'));
   }
-
-  const file = store.getFileById(symbol.file_id);
-  if (!file) {
-    return err(notFound(`file:${symbol.file_id}`));
+  if (resolved.status === 'miss') {
+    return err(notFound(input, undefined, 'unknown_symbol'));
   }
+  const symbol = resolved.symbol;
+  const file = resolved.file;
 
   const absPath = path.resolve(rootPath, file.path);
   let source: string;
@@ -1167,7 +1169,13 @@ export async function getFileOutline(
   filePath: string,
   opts: GetFileOutlineOptions = {},
 ): Promise<TraceMcpResult<FileOutlineResult>> {
-  const file = store.resolveFile(filePath);
+  // TRA-1660: tolerate absolute paths from agents even for direct callers —
+  // resolveFile already walks absolute tails, this folds root-anchored ones
+  // precisely before lookup.
+  const lookupPath = opts.projectRoot
+    ? normalizeToProjectRelative(filePath, opts.projectRoot)
+    : filePath;
+  const file = store.resolveFile(lookupPath);
   if (!file) {
     return err(notFound(filePath));
   }

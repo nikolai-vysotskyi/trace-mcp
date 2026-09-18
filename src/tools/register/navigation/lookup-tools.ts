@@ -9,7 +9,7 @@ import { decisionsForImpact } from '../../../memory/enrichment.js';
 import { aggregateFreshness, computeFileFreshness } from '../../../scoring/freshness.js';
 import { computeRetrievalConfidence } from '../../../scoring/retrieval-confidence.js';
 import type { ServerContext } from '../../../server/types.js';
-import { validatePath } from '../../../utils/security.js';
+import { normalizeToProjectRelative, validatePath } from '../../../utils/security.js';
 import { withLock } from '../../../utils/pid-lock.js';
 import { getChangeImpact } from '../../analysis/impact.js';
 import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
@@ -168,14 +168,18 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
     async ({ path: filePath, detail_level, nested, min_loc_for_nesting, output_format }) => {
       const encode = (payload: unknown): string =>
         output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('get_outline', payload);
-      const blocked = guardPath(filePath);
+      // TRA-1660: agents pass absolute paths — fold to the indexed relative
+      // spelling up front so auto-index, fallback extraction, and explored
+      // tracking all operate on one canonical form.
+      const normalizedPath = normalizeToProjectRelative(filePath, projectRoot);
+      const blocked = guardPath(normalizedPath);
       if (blocked) return blocked;
 
       // Zero-index fallback: if index is empty, use regex-based extraction
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
         try {
-          const fbResult = fallbackOutline(projectRoot, filePath);
+          const fbResult = fallbackOutline(projectRoot, normalizedPath);
           return {
             content: [
               {
@@ -205,13 +209,13 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         minLocForNesting: min_loc_for_nesting,
         projectRoot,
       };
-      let result = await getFileOutline(store, filePath, outlineOpts);
+      let result = await getFileOutline(store, normalizedPath, outlineOpts);
       let autoIndexed = false;
       let existsOnDisk = false;
       if (result.isErr() && result.error.code === 'NOT_FOUND') {
-        existsOnDisk = await autoIndexOnDemand(ctx, filePath);
+        existsOnDisk = await autoIndexOnDemand(ctx, normalizedPath);
         if (existsOnDisk) {
-          result = await getFileOutline(store, filePath, outlineOpts);
+          result = await getFileOutline(store, normalizedPath, outlineOpts);
           autoIndexed = result.isOk();
         }
       }
@@ -229,10 +233,10 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
           isError: true,
         };
       }
-      markExplored(filePath);
+      markExplored(normalizedPath);
       // A suffix-resolved path was consulted under its canonical name too, so a
       // follow-up Read of either spelling counts as consulted.
-      if (result.value.path !== filePath) markExplored(result.value.path);
+      if (result.value.path !== normalizedPath) markExplored(result.value.path);
       const fileRow = store.getFile(result.value.path);
       const freshness = fileRow ? computeFileFreshness(projectRoot, fileRow) : 'fresh';
       const summary = aggregateFreshness([freshness]);
