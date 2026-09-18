@@ -369,3 +369,90 @@ it('does not report presence-only detection as a verified connection', async () 
   expect(await screen.findByText('Configured')).toBeTruthy();
   expect(screen.getAllByText('Connected')).toHaveLength(1);
 });
+
+// ── TRA-1645 ──────────────────────────────────────────────────────────────
+
+/* A write Claude.app refuses must say what to do: the row's red caption
+   truncates to one 11px line, so the refusal opens a sheet with the steps. */
+const DESKTOP_STALE = [
+  {
+    client: 'claude-desktop',
+    configPath: '/Users/x/Library/Application Support/Claude/claude_desktop_config.json',
+    status: 'stale',
+    staleReason: 'legacy-key',
+  },
+];
+
+const RUNNING_ERROR =
+  'Error: Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.';
+
+it('opens a blocking sheet when Claude.app refuses the update', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: DESKTOP_STALE });
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: RUNNING_ERROR });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+  expect(await screen.findByRole('dialog')).toBeTruthy();
+  expect(screen.getByText('Quit Claude.app first')).toBeTruthy();
+  expect(
+    screen.getByText(
+      '1. Quit Claude.app completely (Cmd+Q on macOS) — closing the window is not enough.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Retry update' })).toBeTruthy();
+});
+
+it('retries the update from the sheet and closes it', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: DESKTOP_STALE });
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: RUNNING_ERROR });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+  await screen.findByRole('dialog');
+
+  api().updateMcpClients.mockResolvedValue({ ok: true });
+  fireEvent.click(screen.getByRole('button', { name: 'Retry update' }));
+
+  await waitFor(() => expect(api().updateMcpClients).toHaveBeenCalledTimes(2));
+  expect(api().updateMcpClients.mock.calls[1]).toEqual([['claude-desktop']]);
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+it('dismisses the sheet without retrying', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: DESKTOP_STALE });
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: RUNNING_ERROR });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+  await screen.findByRole('dialog');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(api().updateMcpClients).toHaveBeenCalledTimes(1);
+});
+
+it('closes the sheet on Escape', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: DESKTOP_STALE });
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: RUNNING_ERROR });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+  await screen.findByRole('dialog');
+
+  fireEvent.keyDown(document, { key: 'Escape' });
+
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('opens no sheet for other write errors', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: DESKTOP_STALE });
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: 'Error: EACCES' });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+  expect(await screen.findByText('Error: EACCES')).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+});

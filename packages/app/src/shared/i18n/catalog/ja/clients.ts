@@ -32,6 +32,14 @@ export const clients = {
   migratingProgress: '{{total}} 件中 {{done}} 件を移行中',
   writeFailed: '設定を書き込めませんでした。',
   driftedField: '差異のある項目: {{field}}',
+  blockedTitle: '先にClaude.appを終了してください',
+  blockedWhy:
+    '{{client}}の設定は、Claude.appが実行中に上書きする場所に保存されるため、今書き込んでも破棄されます。アプリを完全に終了してから、再度更新してください。',
+  blockedStep1: '1. Claude.appを完全に終了します（macOSではCmd+Q）。ウィンドウを閉じるだけでは不十分です。',
+  blockedStep2: '2. 下の「再試行」を押します。',
+  blockedStep3: '3. Claude.appを再起動します。',
+  blockedRetry: '再試行',
+  blockedDismiss: 'OK',
   setUpManually: '手動で設定…',
   hideSteps: '手順を隠す',
 

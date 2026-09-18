@@ -32,6 +32,14 @@ export const clients = {
   migratingProgress: '{{total}}개 중 {{done}}개 마이그레이션 중',
   writeFailed: '설정을 저장하지 못했습니다.',
   driftedField: '어긋난 필드: {{field}}',
+  blockedTitle: '먼저 Claude.app을 종료하세요',
+  blockedWhy:
+    '{{client}} 설정은 Claude.app이 실행 중에 다시 쓰는 위치에 저장되므로, 지금 기록한 내용은 버려집니다. 앱을 완전히 종료한 뒤 다시 업데이트하세요.',
+  blockedStep1: '1. Claude.app을 완전히 종료합니다(macOS에서는 Cmd+Q). 창만 닫는 것으로는 부족합니다.',
+  blockedStep2: '2. 아래의 "다시 시도"를 누릅니다.',
+  blockedStep3: '3. Claude.app을 다시 시작합니다.',
+  blockedRetry: '다시 시도',
+  blockedDismiss: '확인',
   setUpManually: '수동으로 설정…',
   hideSteps: '단계 숨기기',
 

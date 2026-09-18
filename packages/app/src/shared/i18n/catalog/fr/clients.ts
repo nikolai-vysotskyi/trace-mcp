@@ -33,6 +33,15 @@ export const clients = {
   migratingProgress: 'Migration de {{done}} sur {{total}}',
   writeFailed: 'La configuration n’a pas pu être écrite.',
   driftedField: 'Champ modifié : {{field}}',
+  blockedTitle: 'Quittez d’abord Claude.app',
+  blockedWhy:
+    '{{client}} stocke sa configuration là où Claude.app la réécrit pendant son exécution : tout ce qui est écrit maintenant sera perdu. Quittez complètement l’application puis relancez la mise à jour.',
+  blockedStep1:
+    '1. Quittez Claude.app complètement (Cmd+Q sur macOS) — fermer la fenêtre ne suffit pas.',
+  blockedStep2: '2. Cliquez sur « Réessayer » ci-dessous.',
+  blockedStep3: '3. Relancez Claude.app.',
+  blockedRetry: 'Réessayer',
+  blockedDismiss: 'Compris',
   setUpManually: 'Configurer manuellement…',
   hideSteps: 'Masquer les étapes',
 

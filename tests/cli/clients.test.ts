@@ -196,6 +196,24 @@ describe('clients update', () => {
     expect(process.exitCode).toBe(1);
   });
 
+  /* TRA-1645: refusing the write while Claude.app runs is a failure, not a
+     quiet no-op — the detail carries the `Error:` marker this exit code (and
+     the desktop app's blocked sheet) keys on. */
+  it('exits non-zero when Claude.app refused the write', async () => {
+    mockConfigureMcpClients.mockReturnValue([
+      {
+        target: '/home/Library/Application Support/Claude/claude_desktop_config.json',
+        action: 'skipped',
+        detail:
+          'Error: Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
+      },
+    ]);
+
+    await run(['update', 'claude-desktop']);
+
+    expect(process.exitCode).toBe(1);
+  });
+
   it('stays zero for a dry run, which also reports every row as skipped', async () => {
     mockConfigureMcpClients.mockReturnValue([
       { target: '/home/.cursor/mcp.json', action: 'skipped', detail: 'Would configure cursor' },
