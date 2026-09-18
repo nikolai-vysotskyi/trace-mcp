@@ -261,8 +261,15 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
     }
   }
 
-  // Antigravity
+  // Antigravity (Google agentic IDE) lives under ~/.gemini/config/ — a
+  // different file from Gemini CLI's ~/.gemini/settings.json below. The two
+  // must never cross-trigger: each checkConfig reads exactly one path.
   checkConfig('antigravity', path.join(HOME, '.gemini', 'config', 'mcp_config.json'));
+
+  // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json,
+  // global-only. Source: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
+  // (user scope; `gemini mcp add -s user` writes this same file).
+  checkConfig('gemini-cli', path.join(HOME, '.gemini', 'settings.json'));
 
   // Kimi Code CLI
   checkConfig('kimi', path.join(HOME, '.kimi', 'mcp.json'));

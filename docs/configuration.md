@@ -803,14 +803,15 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | Continue | `~/.continue/mcpServers/mcp.json` | JSON | `mcpServers` | |
 | Junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | |
 | JetBrains AI Assistant | IDE-internal XML | — | — | Manual: Settings → Tools → AI Assistant → MCP. Use "Import from Claude" if Claude Desktop is configured |
-| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace]` | A legacy `[mcp_servers.trace-mcp]` table is detected and renamed on `init` |
+| Codex | `~/.codex/config.toml`, `<project>/.codex/config.toml` | TOML | `[mcp_servers.trace]` | A legacy `[mcp_servers.trace-mcp]` table is detected and renamed on `init`. Restart Codex after `init`/`update` — it reads `config.toml` once at startup. See [Verifying the Codex connection](#verifying-the-codex-connection) |
 | Hermes Agent | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | YAML | `mcp_servers` | Always global; also writes `AGENTS.md` and pre-allowlists hooks |
 | **AMP** (Sourcegraph) | `~/.config/amp/settings.json[c]`, `<project>/.amp/settings.json[c]` | JSON / JSONC | `amp.mcpServers` (literal dot in key) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 | **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace from `~/.claude.json`. Also writes `AGENTS.md` |
 | **Factory Droid** | `~/.factory/mcp.json`, `<project>/.factory/mcp.json` | JSON | `mcpServers` (entries need `type: "stdio"`) | Also writes `AGENTS.md` |
 | **Cline** | `<VS Code User>/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers` | VS Code extension; global-only (globalStorage has no per-project variant). Detected only when the extension's settings dir exists |
 | **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace does not write — configure that manually if you use the CLI |
-| **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
+| **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026). Different file from Gemini CLI's `~/.gemini/settings.json` — the two do not share entries |
+| **Gemini CLI** (Google) | `~/.gemini/settings.json` | JSON | `mcpServers` | Global-only user scope (`gemini mcp add -s user` writes this file). Pick up a new entry with `/mcp reload` or by restarting the CLI |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
 | **OpenCode** | `~/.config/opencode/opencode.json[c]`, `<project>/opencode.json[c]` | JSON / JSONC | `mcp` (`type: "local"`, `command: ["trace", "serve"]`) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 
@@ -822,6 +823,19 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 - **Max** — Standard + tweakcc system-prompt patches and strict agent-behavior rules.
 
 For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
+
+### Verifying the Codex connection
+
+Codex reads `config.toml` once at startup, so **restart it after every
+`init` or `clients update`** — otherwise the entry sits on disk while the
+running session still uses the old config. Then verify from either side:
+
+- Inside Codex, run `/mcp` — the `trace` server should list as connected.
+- From a shell, run `codex mcp list` — same check without opening a session.
+- From this repo, run `trace-mcp clients status --client codex` (add
+  `--scope project` for the `<project>/.codex/config.toml` layer) — anything
+  but `up_to_date` names the drifted field in `staleReason`, and
+  `trace-mcp clients update codex` rewrites it.
 
 ### Renaming `trace-mcp` → `trace`: what `init` can and can't reach
 

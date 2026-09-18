@@ -191,6 +191,7 @@ function formatClientDisplayName(name: string): string {
     cline: 'Cline',
     kilocode: 'KiloCode',
     antigravity: 'Antigravity',
+    'gemini-cli': 'Gemini CLI',
     kimi: 'Kimi Code CLI',
     opencode: 'OpenCode',
   };

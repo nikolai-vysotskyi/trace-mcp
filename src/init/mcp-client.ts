@@ -926,16 +926,31 @@ export function codexEntryMatches(configPath: string, expected: McpServerEntry):
 export function pinpointCodexEntryDrift(
   configPath: string,
   expected: McpServerEntry,
-): 'legacy-key' | 'command' | 'fields' {
+): 'legacy-key' | 'entry-missing' | 'command' | 'args' | 'cwd' | 'env' | 'fields' | 'parse-error' {
+  let content: string;
   try {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return 'legacy-key';
-    const current = parseCodexTomlSection(content, MCP_KEY);
-    if (!current || current.command !== expected.command) return 'command';
-    return 'fields';
+    content = fs.readFileSync(configPath, 'utf-8');
   } catch {
-    return 'fields';
+    return 'parse-error';
   }
+  const current = parseCodexTomlSection(content, MCP_KEY);
+  if (!current || !current.command) {
+    return codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content) ? 'legacy-key' : 'entry-missing';
+  }
+  // The new key can be entirely correct on its own while a legacy key still
+  // lingers alongside it (a previous run failed partway, or a config was
+  // hand-edited) — that's still the reason to re-run, not a field mismatch.
+  if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return 'legacy-key';
+  if (current.command !== expected.command) return 'command';
+  if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';
+  if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';
+  if (
+    (expected.env || current.env) &&
+    JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})
+  ) {
+    return 'env';
+  }
+  return 'fields';
 }
 
 function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
@@ -1053,6 +1068,10 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
   kilocode: 'reload-window',
   // Reload window / manual server reload (antigravity.google/docs + guides).
   antigravity: 'reload-window',
+  // Setup tutorial: "Restart Gemini CLI. It will automatically try to start
+  // the defined servers." Config edits are silently ignored until a full
+  // process restart (google-gemini/gemini-cli#19792).
+  'gemini-cli': 'restart-session',
   // Conservative — no pickup docs found (kimi-cli reads ~/.kimi/mcp.json).
   kimi: 'restart-session',
   // Config + MCP servers are connected once at startup; hot-reload is an open
@@ -1068,8 +1087,9 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
  *                    args, cwd, env, alwaysLoad). UI should show "Update".
  * - `unmanageable` — client doesn't expose a writable file (Warp,
  *                    JetBrains AI Assistant — IDE/cloud-managed config).
- * - `unknown`      — config exists but format is too lax to compare safely
- *                    (e.g. Codex TOML — we detect presence but not drift).
+ * - `unknown`      — reserved: config exists but its format can't be compared
+ *                    safely. No current client reports it — every writable
+ *                    format (JSON, JSONC, TOML, YAML) has a field-level matcher.
  */
 export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
 
@@ -1152,6 +1172,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'cline',
   'kilocode',
   'antigravity',
+  'gemini-cli',
   'kimi',
   'opencode',
 ];
@@ -1167,6 +1188,7 @@ const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
   'cline',
   'kilocode',
   'antigravity',
+  'gemini-cli',
   'kimi',
 ]);
 
@@ -1311,7 +1333,7 @@ function detectClientStatus(
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
-      // cline, kilocode, antigravity, kimi all use the standard mcpServers JSON
+      // cline, kilocode, antigravity, gemini-cli, kimi all use the standard mcpServers JSON
       // shape compared by entryMatches().
       const present = (() => {
         try {
@@ -1483,8 +1505,16 @@ export function getConfigPath(
       );
     case 'antigravity':
       // Antigravity (Google agentic IDE): standard mcpServers JSON, global-only.
-      // Source: ~/.gemini/config/mcp_config.json.
+      // Source: ~/.gemini/config/mcp_config.json — NOT ~/.gemini/settings.json,
+      // which belongs to Gemini CLI ('gemini-cli' below). Same parent dir,
+      // different file; the writer/detector must keep them apart (TRA-1659).
       return path.join(getHome(), '.gemini', 'config', 'mcp_config.json');
+    case 'gemini-cli':
+      // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json,
+      // global-only. Source: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
+      // (`gemini mcp add -s user` writes this file; without -s it writes the
+      // project-scoped .gemini/settings.json, which init does not target).
+      return path.join(getHome(), '.gemini', 'settings.json');
     case 'kimi':
       // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
       // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html

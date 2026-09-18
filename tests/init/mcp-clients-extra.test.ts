@@ -326,6 +326,74 @@ describe('Kimi detection', () => {
   });
 });
 
+describe('Gemini CLI detection', () => {
+  it('detects ~/.gemini/settings.json with a trace entry', () => {
+    const dir = path.join(fakeHome, '.gemini');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'settings.json'),
+      JSON.stringify({
+        theme: 'Default',
+        mcpServers: { trace: { command: '/bin/true', args: ['serve'] } },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const gemini = clients.find((c) => c.name === 'gemini-cli');
+    expect(gemini).toBeDefined();
+    expect(gemini?.hasTraceMcp).toBe(true);
+  });
+
+  it('detects ~/.gemini/settings.json without trace-mcp', () => {
+    const dir = path.join(fakeHome, '.gemini');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ mcpServers: {} }));
+    const clients = detectMcpClients(projectRoot);
+    const gemini = clients.find((c) => c.name === 'gemini-cli');
+    expect(gemini).toBeDefined();
+    expect(gemini?.hasTraceMcp).toBe(false);
+  });
+});
+
+describe('Antigravity vs Gemini CLI path separation (TRA-1659)', () => {
+  it('does not report antigravity when only ~/.gemini/settings.json (Gemini CLI) exists', () => {
+    const dir = path.join(fakeHome, '.gemini');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'settings.json'),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'antigravity')).toBeUndefined();
+    expect(clients.find((c) => c.name === 'gemini-cli')?.hasTraceMcp).toBe(true);
+  });
+
+  it('does not report gemini-cli when only ~/.gemini/config/mcp_config.json (Antigravity) exists', () => {
+    const dir = path.join(fakeHome, '.gemini', 'config');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'mcp_config.json'),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'gemini-cli')).toBeUndefined();
+    expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(true);
+  });
+
+  it('reports both independently when both files exist', () => {
+    const geminiDir = path.join(fakeHome, '.gemini');
+    const antiDir = path.join(fakeHome, '.gemini', 'config');
+    fs.mkdirSync(antiDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(geminiDir, 'settings.json'),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    fs.writeFileSync(path.join(antiDir, 'mcp_config.json'), JSON.stringify({ mcpServers: {} }));
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'gemini-cli')?.hasTraceMcp).toBe(true);
+    expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(false);
+  });
+});
+
 describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', () => {
   it('Cline: creates cline_mcp_settings.json with trace serve entry', () => {
     const results = configureMcpClients(['cline'], projectRoot, { scope: 'global' });
@@ -380,6 +448,65 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     expect(fs.existsSync(file)).toBe(true);
     const second = configureMcpClients(['kimi'], projectRoot, { scope: 'global' });
     expect(second[0].action).toBe('already_configured');
+  });
+
+  it('Gemini CLI: writes ~/.gemini/settings.json and reports already_configured on re-run', () => {
+    const first = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    expect(first[0].action).toBe('created');
+    const file = path.join(fakeHome, '.gemini', 'settings.json');
+    expect(fs.existsSync(file)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
+    const second = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    expect(second[0].action).toBe('already_configured');
+  });
+
+  it('Gemini CLI: preserves other settings.json keys and existing servers', () => {
+    // settings.json carries the whole CLI config (theme, model, …) — the
+    // writer must only touch mcpServers (TRA-1659).
+    const file = path.join(fakeHome, '.gemini', 'settings.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        theme: 'Default',
+        mcpServers: { linear: { command: 'npx', args: ['@linear/mcp'] } },
+      }),
+    );
+    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.theme).toBe('Default');
+    expect(parsed.mcpServers.linear).toBeDefined();
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
+  });
+
+  it('Gemini CLI: migrates a legacy "trace-mcp" entry to "trace" in place', () => {
+    const file = path.join(fakeHome, '.gemini', 'settings.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } },
+      }),
+    );
+    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
+    expect(parsed.mcpServers.trace.args).toEqual(['serve']);
+  });
+
+  it('Gemini CLI write does not touch the Antigravity file and vice versa', () => {
+    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    expect(fs.existsSync(path.join(fakeHome, '.gemini', 'config', 'mcp_config.json'))).toBe(false);
+    configureMcpClients(['antigravity'], projectRoot, { scope: 'global' });
+    const gemini = JSON.parse(
+      fs.readFileSync(path.join(fakeHome, '.gemini', 'settings.json'), 'utf-8'),
+    );
+    const anti = JSON.parse(
+      fs.readFileSync(path.join(fakeHome, '.gemini', 'config', 'mcp_config.json'), 'utf-8'),
+    );
+    expect(gemini.mcpServers['trace'].args).toEqual(['serve']);
+    expect(anti.mcpServers['trace'].args).toEqual(['serve']);
   });
 });
 
@@ -676,5 +803,52 @@ describe('Codex configuration and drift recovery', () => {
     const updated = fs.readFileSync(configPath, 'utf-8');
     expect(updated).not.toContain('[mcp_servers.trace-mcp]');
     expect(updated).toContain('[mcp_servers.trace]');
+  });
+
+  it('writes a project-scoped .codex/config.toml with cwd pinned to the project', () => {
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('created');
+
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    expect(results[0].target).toBe(configPath);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content).toContain('[mcp_servers.trace]');
+    expect(content).toContain(`cwd = "${projectRoot}"`);
+    // The global file stays untouched — project scope must not leak there.
+    expect(fs.existsSync(path.join(fakeHome, '.codex', 'config.toml'))).toBe(false);
+  });
+
+  it('reports already_configured on a repeated project-scoped run', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    const second = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(second[0].action).toBe('already_configured');
+  });
+
+  it('migrates a legacy section in the project-scoped config', () => {
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace-mcp]\ncommand = "/old/launcher"\nargs = ["serve"]\n',
+    );
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('updated');
+
+    const updated = fs.readFileSync(configPath, 'utf-8');
+    expect(updated).not.toContain('[mcp_servers.trace-mcp]');
+    expect(updated).toContain('[mcp_servers.trace]');
+    expect(updated).toContain(`cwd = "${projectRoot}"`);
+  });
+
+  it('repairs a drifted project-scoped entry back to the pinned cwd', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    const content = fs.readFileSync(configPath, 'utf-8');
+    fs.writeFileSync(configPath, content.replace(`cwd = "${projectRoot}"`, 'cwd = "/stale/dir"'));
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('updated');
+    expect(fs.readFileSync(configPath, 'utf-8')).toContain(`cwd = "${projectRoot}"`);
   });
 });

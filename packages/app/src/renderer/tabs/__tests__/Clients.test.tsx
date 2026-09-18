@@ -529,15 +529,23 @@ it('says nothing about restart for a hot-reload client', async () => {
   expect(screen.queryByText(/to apply the update/)).toBeNull();
 });
 
-/* The to-verify half of the matrix (cline, kilocode, antigravity, kimi,
-   opencode, hermes) had no rows at all — a hint for them had nowhere to
-   land. All eighteen clients render; only the two manual ones skip Connect. */
+/* The to-verify half of the matrix (cline, kilocode, antigravity, gemini-cli,
+   kimi, opencode, hermes) had no rows at all — a hint for them had nowhere to
+   land. All nineteen clients render; only the two manual ones skip Connect. */
 it('renders every known client row', async () => {
   api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: [] });
   render(<Clients />);
 
-  for (const label of ['Cline', 'KiloCode', 'Antigravity', 'Kimi Code CLI', 'OpenCode', 'Hermes Agent']) {
+  for (const label of [
+    'Cline',
+    'KiloCode',
+    'Antigravity',
+    'Gemini CLI',
+    'Kimi Code CLI',
+    'OpenCode',
+    'Hermes Agent',
+  ]) {
     expect(await screen.findByText(label)).toBeTruthy();
   }
-  expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(16);
+  expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(17);
 });
