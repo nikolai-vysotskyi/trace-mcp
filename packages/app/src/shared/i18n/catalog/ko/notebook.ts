@@ -9,6 +9,9 @@ export const notebook = {
   running: '실행 중…',
   runningStatus: '실행 중',
   unknownError: '알 수 없는 오류',
+  retry: '다시 시도',
+  notRegistered: '“{{path}}”이(가) 아직 데몬에 등록되지 않았습니다. 프로젝트 목록에서 추가한 뒤 이 셀을 다시 실행하세요.',
+  technicalDetails: '기술 세부 정보',
   truncated_other: '… (잘림, {{count}}자 더 있음)',
 
   searchDescription: '프로젝트 전체에서 이름으로 심볼 검색',

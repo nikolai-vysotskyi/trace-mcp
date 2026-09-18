@@ -10,6 +10,9 @@ export const notebook = {
   running: 'चल रहा है…',
   runningStatus: 'चल रहा है',
   unknownError: 'अज्ञात एरर',
+  retry: 'पुनः प्रयास करें',
+  notRegistered: '«{{path}}» अभी daemon में पंजीकृत नहीं है। इसे प्रोजेक्ट सूची से जोड़ें, फिर यह सेल दोबारा चलाएँ।',
+  technicalDetails: 'तकनीकी विवरण',
   truncated_one: '… (छोटा किया गया, {{count}} और अक्षर)',
   truncated_other: '… (छोटा किया गया, {{count}} और अक्षर)',
 

@@ -9,6 +9,9 @@ export const notebook = {
   running: '実行中…',
   runningStatus: '実行中',
   unknownError: '不明なエラー',
+  retry: '再試行',
+  notRegistered: '「{{path}}」はまだ daemon に登録されていません。プロジェクト一覧から追加して、このセルをもう一度実行してください。',
+  technicalDetails: '技術的な詳細',
   truncated_other: '…（省略、あと {{count}} 文字）',
 
   searchDescription: 'プロジェクト全体から名前でシンボルを検索',
