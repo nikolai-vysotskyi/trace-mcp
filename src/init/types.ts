@@ -52,6 +52,7 @@ export interface DetectedMcpClient {
     | 'cline'
     | 'kilocode'
     | 'antigravity'
+    | 'gemini-cli'
     | 'kimi'
     | 'opencode';
   configPath: string;

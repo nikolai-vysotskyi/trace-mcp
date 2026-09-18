@@ -1084,6 +1084,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'cline',
   'kilocode',
   'antigravity',
+  'gemini-cli',
   'kimi',
   'opencode',
 ];
@@ -1099,6 +1100,7 @@ const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
   'cline',
   'kilocode',
   'antigravity',
+  'gemini-cli',
   'kimi',
 ]);
 
@@ -1243,7 +1245,7 @@ function detectClientStatus(
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
-      // cline, kilocode, antigravity, kimi all use the standard mcpServers JSON
+      // cline, kilocode, antigravity, gemini-cli, kimi all use the standard mcpServers JSON
       // shape compared by entryMatches().
       const present = (() => {
         try {
@@ -1414,8 +1416,16 @@ export function getConfigPath(
       );
     case 'antigravity':
       // Antigravity (Google agentic IDE): standard mcpServers JSON, global-only.
-      // Source: ~/.gemini/config/mcp_config.json.
+      // Source: ~/.gemini/config/mcp_config.json — NOT ~/.gemini/settings.json,
+      // which belongs to Gemini CLI ('gemini-cli' below). Same parent dir,
+      // different file; the writer/detector must keep them apart (TRA-1659).
       return path.join(getHome(), '.gemini', 'config', 'mcp_config.json');
+    case 'gemini-cli':
+      // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json,
+      // global-only. Source: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
+      // (`gemini mcp add -s user` writes this file; without -s it writes the
+      // project-scoped .gemini/settings.json, which init does not target).
+      return path.join(getHome(), '.gemini', 'settings.json');
     case 'kimi':
       // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
       // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html
