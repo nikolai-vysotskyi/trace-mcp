@@ -10,6 +10,9 @@ export const notebook = {
   running: 'Läuft…',
   runningStatus: 'Läuft',
   unknownError: 'Unbekannter Fehler',
+  retry: 'Wiederholen',
+  notRegistered: '„{{path}}“ ist beim Daemon noch nicht registriert. Füge es über die Projektliste hinzu und führe die Zelle erneut aus.',
+  technicalDetails: 'Technische Details',
   truncated_one: '… (gekürzt, {{count}} weiteres Zeichen)',
   truncated_other: '… (gekürzt, {{count}} weitere Zeichen)',
 

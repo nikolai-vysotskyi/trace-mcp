@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Notebook } from '../Notebook';
+import { DaemonError } from '../notebook-runtime';
 
 const root = '/Users/someone/code/my-project';
 
@@ -109,5 +110,49 @@ describe('Notebook', () => {
     fireEvent.change(screen.getByLabelText('Tool'), { target: { value: 'get_outline' } });
     expect(screen.getByPlaceholderText('src/server/server.ts')).toHaveProperty('value', '');
     expect(screen.queryByPlaceholderText('e.g. registerTool')).toBeNull();
+  });
+
+  it('explains an unregistered project instead of dumping the daemon envelope (TRA-1642)', async () => {
+    const { callTool } = renderNotebook(
+      vi.fn().mockRejectedValue(
+        new DaemonError(
+          `"my-project" isn't registered with this daemon. Add it from the app's project list.`,
+          { status: 404, reason: 'not_registered' },
+        ),
+      ),
+    );
+    fireEvent.change(screen.getByPlaceholderText('e.g. registerTool'), {
+      target: { value: 'registerTool' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    const alert = screen.getByRole('alert');
+    // A sentence with the full path (the daemon's basename reads as the
+    // product itself when the folder is called trace-mcp), never the wire
+    // envelope.
+    expect(alert.textContent).toContain('/Users/someone/code/my-project');
+    expect(alert.textContent).not.toMatch(/HTTP 404/);
+    expect(alert.textContent).not.toMatch(/\{"error"/);
+    // A next step and the daemon's own line tucked into the details.
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+    expect(screen.getByText('Technical details')).toBeTruthy();
+
+    // Retry re-runs the cell.
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(callTool).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps rendering other daemon failures as the daemon sentence', async () => {
+    renderNotebook(vi.fn().mockRejectedValue(new Error('Server error (500)')));
+    fireEvent.change(screen.getByPlaceholderText('e.g. registerTool'), {
+      target: { value: 'registerTool' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByRole('alert').textContent).toBe('Server error (500)');
+    // No friendly-state chrome for failures that are not `not_registered`.
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 });

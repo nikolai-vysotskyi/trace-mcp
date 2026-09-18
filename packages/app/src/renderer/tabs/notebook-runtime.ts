@@ -128,6 +128,40 @@ export interface NotebookClient {
   callTool(tool: ToolName, args: Record<string, string>, root: string): Promise<unknown>;
 }
 
+// ── Daemon errors ────────────────────────────────────────────────
+// The daemon answers a project it doesn't serve with a JSON envelope
+// `{ error, reason }` (see `writeProjectResolutionError` in src/cli.ts).
+// Throwing `HTTP 404: {"error":…}` verbatim paints the wire protocol on the
+// screen (TRA-1642) — unwrap the envelope first so the cell shows the
+// daemon's sentence, and carry `reason` so the UI can upgrade known cases
+// (`not_registered`) to a friendlier state instead of a bare red line.
+
+export class DaemonError extends Error {
+  readonly status: number;
+  readonly reason?: string;
+  constructor(message: string, opts: { status: number; reason?: string }) {
+    super(message);
+    this.name = 'DaemonError';
+    this.status = opts.status;
+    this.reason = opts.reason;
+  }
+}
+
+/** Unwrap one `{ error, reason }` envelope; fall back to the bare status. */
+export function daemonError(status: number, bodyText: string): DaemonError {
+  const text = bodyText.trim();
+  const fallback = text ? `HTTP ${status}: ${text}` : `HTTP ${status}`;
+  try {
+    const parsed = JSON.parse(bodyText) as { error?: unknown; reason?: unknown };
+    const message =
+      typeof parsed.error === 'string' && parsed.error.trim() ? parsed.error : fallback;
+    const reason = typeof parsed.reason === 'string' ? parsed.reason : undefined;
+    return new DaemonError(message, { status, reason });
+  } catch {
+    return new DaemonError(fallback, { status });
+  }
+}
+
 export const defaultNotebookClient: NotebookClient = {
   async callTool(tool, args, root) {
     if (tool === 'search') {
@@ -136,7 +170,7 @@ export const defaultNotebookClient: NotebookClient = {
       const params = new URLSearchParams({ project: root, q, limit: '30' });
       if (kind) params.set('kind', kind);
       const r = await daemonFetch(`${BASE}/api/projects/symbols?${params}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text().catch(() => '')}`);
+      if (!r.ok) throw daemonError(r.status, await r.text().catch(() => ''));
       return await r.json();
     }
     // JSON-RPC path: initialize a session, then call the tool.
@@ -154,7 +188,7 @@ export const defaultNotebookClient: NotebookClient = {
         },
       }),
     }, DAEMON_TOOL_TIMEOUT_MS);
-    if (!initRes.ok) throw new Error(`init failed: HTTP ${initRes.status}`);
+    if (!initRes.ok) throw daemonError(initRes.status, await initRes.text().catch(() => ''));
     const sessionId = initRes.headers.get('mcp-session-id') ?? '';
     if (!sessionId) throw new Error('init did not return a session ID');
     // Drain the init response body so the server doesn't keep it open.
@@ -188,7 +222,7 @@ export const defaultNotebookClient: NotebookClient = {
         params: { name: tool, arguments: cleanArgs },
       }),
     }, DAEMON_TOOL_TIMEOUT_MS);
-    if (!callRes.ok) throw new Error(`HTTP ${callRes.status}: ${await callRes.text().catch(() => '')}`);
+    if (!callRes.ok) throw daemonError(callRes.status, await callRes.text().catch(() => ''));
     const ct = callRes.headers.get('content-type') ?? '';
     let payload: unknown;
     if (ct.includes('text/event-stream')) {

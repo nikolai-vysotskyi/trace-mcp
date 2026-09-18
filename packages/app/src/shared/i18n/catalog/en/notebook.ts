@@ -22,6 +22,9 @@ export const notebook = {
   running: 'Running…',
   runningStatus: 'Running',
   unknownError: 'Unknown error',
+  retry: 'Retry',
+  notRegistered: '"{{path}}" isn\'t registered with the daemon yet. Add it from the project list, then run this cell again.',
+  technicalDetails: 'Technical details',
   truncated_one: '… (truncated, {{count}} more char)',
   truncated_other: '… (truncated, {{count}} more chars)',
 

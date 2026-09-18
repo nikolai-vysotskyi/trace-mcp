@@ -28,6 +28,7 @@ import {
 import {
   NOTEBOOK_TOOLS,
   TOOL_BY_NAME,
+  DaemonError,
   defaultNotebookClient,
   type NotebookClient,
   type ToolName,
@@ -58,6 +59,10 @@ interface Cell {
   status: 'idle' | 'running' | 'ok' | 'error';
   result: unknown;
   error?: string;
+  /** Daemon `reason` (e.g. `not_registered`) when the error came from one. */
+  errorReason?: string;
+  /** The daemon's own sentence — shown in the tooltip/details, not the line. */
+  errorDetails?: string;
 }
 
 function makeCell(): Cell {
@@ -120,12 +125,32 @@ export function Notebook({
         });
         return;
       }
-      updateCell(id, { status: 'running', error: undefined, result: null });
+      updateCell(id, {
+        status: 'running',
+        error: undefined,
+        errorReason: undefined,
+        errorDetails: undefined,
+        result: null,
+      });
       try {
         const result = await client.callTool(cell.tool, cell.args, root);
         updateCell(id, { status: 'ok', result });
       } catch (err) {
-        updateCell(id, { status: 'error', error: (err as Error).message ?? t('unknownError') });
+        if (err instanceof DaemonError && err.reason === 'not_registered') {
+          // The daemon names the project by basename, which reads as the
+          // product itself when the folder happens to be called trace-mcp —
+          // say the full path instead, and keep the daemon's sentence in the
+          // tooltip/details (TRA-1642).
+          updateCell(id, {
+            status: 'error',
+            error: t('notRegistered', { path: root }),
+            errorReason: 'not_registered',
+            errorDetails: err.message,
+            result: null,
+          });
+        } else {
+          updateCell(id, { status: 'error', error: (err as Error).message ?? t('unknownError'), result: null });
+        }
       }
     },
     [cells, client, root, updateCell, t],
@@ -239,7 +264,7 @@ function CellView({
             // Reset args when switching tool to avoid carrying stale keys.
             const args: Record<string, string> = {};
             for (const f of nextDef.fields) args[f.key] = '';
-            onChange({ tool: next, args, status: 'idle', result: null, error: undefined });
+            onChange({ tool: next, args, status: 'idle', result: null, error: undefined, errorReason: undefined, errorDetails: undefined });
           }}
         />
         <span className="flex-1" />
@@ -312,10 +337,38 @@ function CellView({
              verified at 4.94:1 on --surface-sunken. The glyph, not the fill,
              is what makes this read as an error. */
           <ResultBox>
-            <div role="alert" className="flex items-center gap-2" style={{ color: 'var(--status-red)' }}>
-              <Icon name="warning" size={14} />
-              {cell.error}
-            </div>
+            {cell.errorReason === 'not_registered' && cell.errorDetails ? (
+              /* Unregistered project: a sentence with a next step and the
+                 full path (the daemon's basename reads as the product itself
+                 when the folder is called trace-mcp), a Retry that re-runs
+                 the cell, and the daemon's own line tucked into the
+                 tooltip/details (TRA-1642). */
+              <div role="alert" className="flex flex-col gap-2" title={cell.errorDetails}>
+                <div className="flex items-center gap-2" style={{ color: 'var(--status-red)' }}>
+                  <Icon name="warning" size={14} />
+                  <span className="flex-1" style={{ overflowWrap: 'anywhere' }}>
+                    {cell.error}
+                  </span>
+                  <Button size="small" onClick={onRun}>
+                    {t('retry')}
+                  </Button>
+                </div>
+                <details
+                  className="text-[11px] leading-4"
+                  style={{ color: 'var(--label-secondary)' }}
+                >
+                  <summary>{t('technicalDetails')}</summary>
+                  <span className="mono" style={{ overflowWrap: 'anywhere' }}>
+                    {cell.errorDetails}
+                  </span>
+                </details>
+              </div>
+            ) : (
+              <div role="alert" className="flex items-center gap-2" style={{ color: 'var(--status-red)' }}>
+                <Icon name="warning" size={14} />
+                {cell.error}
+              </div>
+            )}
           </ResultBox>
         )}
         {cell.status === 'ok' && cell.result !== null && <ResultView result={cell.result} />}

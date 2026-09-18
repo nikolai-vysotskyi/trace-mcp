@@ -9,6 +9,9 @@ export const notebook = {
   running: '运行中…',
   runningStatus: '运行中',
   unknownError: '未知错误',
+  retry: '重试',
+  notRegistered: '“{{path}}”尚未在 daemon 中注册。请先从项目列表中添加，再重新运行此单元格。',
+  technicalDetails: '技术详情',
   truncated_other: '…（已截断，还有 {{count}} 个字符）',
 
   searchDescription: '按名称在整个项目中搜索符号',
