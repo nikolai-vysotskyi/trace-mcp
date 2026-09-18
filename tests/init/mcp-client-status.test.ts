@@ -357,6 +357,92 @@ describe('getMcpClientStatuses', () => {
     expect(legacyDrift.status).toBe('stale');
     expect(legacyDrift.staleReason).toBe('legacy-key');
   });
+
+  it('flags codex `stale` with per-field reasons (args/cwd/env) like the JSON clients', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    const configPath = s.configPath as string;
+    const pristine = fs.readFileSync(configPath, 'utf-8');
+
+    // args drift
+    fs.writeFileSync(
+      configPath,
+      pristine.replace('args = ["serve"]', 'args = ["serve", "--extra"]'),
+    );
+    const [argsDrift] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(argsDrift.status).toBe('stale');
+    expect(argsDrift.staleReason).toBe('args');
+
+    // cwd drift — a global entry must carry no cwd (TRA-501)
+    fs.writeFileSync(configPath, `${pristine.trimEnd()}\ncwd = "/stale/dir"\n`);
+    const [cwdDrift] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(cwdDrift.status).toBe('stale');
+    expect(cwdDrift.staleReason).toBe('cwd');
+
+    // env drift — expected entry has no env block
+    fs.writeFileSync(configPath, `${pristine.trimEnd()}\n[mcp_servers.trace.env]\nFOO = "bar"\n`);
+    const [envDrift] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(envDrift.status).toBe('stale');
+    expect(envDrift.staleReason).toBe('env');
+  });
+
+  it('flags codex `stale` reason="entry-missing" when the section has no command', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    const configPath = s.configPath as string;
+    fs.writeFileSync(configPath, '[mcp_servers.trace]\nargs = ["serve"]\n');
+    const [drifted] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(drifted.status).toBe('stale');
+    expect(drifted.staleReason).toBe('entry-missing');
+  });
+
+  it('round-trips codex at project scope: missing → up_to_date with cwd pinned', () => {
+    const [missing] = getMcpClientStatuses(projectRoot, 'project', ['codex']);
+    expect(missing.status).toBe('missing');
+    expect(missing.configPath).toBe(path.join(projectRoot, '.codex', 'config.toml'));
+
+    configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    const [s] = getMcpClientStatuses(projectRoot, 'project', ['codex']);
+    expect(s.status).toBe('up_to_date');
+    expect(s.staleReason).toBeUndefined();
+  });
+
+  it('flags a project-scoped codex legacy key and migrates it on update', () => {
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace-mcp]\ncommand = "/old/launcher"\nargs = ["serve"]\n',
+    );
+    const [before] = getMcpClientStatuses(projectRoot, 'project', ['codex']);
+    expect(before.status).toBe('stale');
+    expect(before.staleReason).toBe('legacy-key');
+
+    // `clients update codex --scope project` is exactly this call.
+    const [step] = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(step.action).toBe('updated');
+    const [after] = getMcpClientStatuses(projectRoot, 'project', ['codex']);
+    expect(after.status).toBe('up_to_date');
+  });
+
+  it('repairs a drifted global codex entry via update and reports up_to_date', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    const configPath = s.configPath as string;
+    const pristine = fs.readFileSync(configPath, 'utf-8');
+    fs.writeFileSync(
+      configPath,
+      pristine.replace('args = ["serve"]', 'args = ["serve", "--stale"]'),
+    );
+    expect(getMcpClientStatuses(projectRoot, 'global', ['codex'])[0].status).toBe('stale');
+
+    // `clients update codex` is exactly this call.
+    const [step] = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(step.action).toBe('updated');
+    const [after] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
+    expect(after.status).toBe('up_to_date');
+    expect(after.staleReason).toBeUndefined();
+  });
 });
 
 // TRA-498: the level a client's config is already on, so the app's "Update"

@@ -677,4 +677,51 @@ describe('Codex configuration and drift recovery', () => {
     expect(updated).not.toContain('[mcp_servers.trace-mcp]');
     expect(updated).toContain('[mcp_servers.trace]');
   });
+
+  it('writes a project-scoped .codex/config.toml with cwd pinned to the project', () => {
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('created');
+
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    expect(results[0].target).toBe(configPath);
+    const content = fs.readFileSync(configPath, 'utf-8');
+    expect(content).toContain('[mcp_servers.trace]');
+    expect(content).toContain(`cwd = "${projectRoot}"`);
+    // The global file stays untouched — project scope must not leak there.
+    expect(fs.existsSync(path.join(fakeHome, '.codex', 'config.toml'))).toBe(false);
+  });
+
+  it('reports already_configured on a repeated project-scoped run', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    const second = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(second[0].action).toBe('already_configured');
+  });
+
+  it('migrates a legacy section in the project-scoped config', () => {
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(
+      configPath,
+      '[mcp_servers.trace-mcp]\ncommand = "/old/launcher"\nargs = ["serve"]\n',
+    );
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('updated');
+
+    const updated = fs.readFileSync(configPath, 'utf-8');
+    expect(updated).not.toContain('[mcp_servers.trace-mcp]');
+    expect(updated).toContain('[mcp_servers.trace]');
+    expect(updated).toContain(`cwd = "${projectRoot}"`);
+  });
+
+  it('repairs a drifted project-scoped entry back to the pinned cwd', () => {
+    configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    const configPath = path.join(projectRoot, '.codex', 'config.toml');
+    const content = fs.readFileSync(configPath, 'utf-8');
+    fs.writeFileSync(configPath, content.replace(`cwd = "${projectRoot}"`, 'cwd = "/stale/dir"'));
+
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('updated');
+    expect(fs.readFileSync(configPath, 'utf-8')).toContain(`cwd = "${projectRoot}"`);
+  });
 });
