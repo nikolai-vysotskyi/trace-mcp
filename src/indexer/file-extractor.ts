@@ -95,6 +95,15 @@ export class FileExtractor {
         logger.warn({ file: relPath }, 'Symlink skipped');
         return { kind: 'error' };
       }
+      // TRA-1649: the watcher enqueues directory paths (mkdir/create events
+      // for `.multica`, `.opencode/skills/...`, etc.). readFileSync below
+      // throws EISDIR on them, which was counted as an indexing `error` and
+      // retried forever — a directory never becomes a file. Drop them here
+      // as `skipped`, before any read.
+      if (stat.isDirectory()) {
+        logger.debug({ file: relPath }, 'Directory skipped (not a file)');
+        return { kind: 'skipped' };
+      }
       fileMtimeMs = stat.mtimeMs;
       // TRA-1536: captured here so the size gates below need no second stat —
       // the pre-read size precheck and the hardened mtime fast-path both read
@@ -152,7 +161,14 @@ export class FileExtractor {
     let content: Buffer;
     try {
       content = fs.readFileSync(absPath);
-    } catch {
+    } catch (err) {
+      // TRA-1649 TOCTOU guard: the path was a file at lstat time but became
+      // a directory before the read (or lstat failed above and the read is
+      // the first touch). EISDIR is a directory, not a failure — skip it.
+      if ((err as NodeJS.ErrnoException)?.code === 'EISDIR') {
+        logger.debug({ file: relPath }, 'Directory skipped (not a file)');
+        return { kind: 'skipped' };
+      }
       logger.warn({ file: relPath }, 'Cannot read file');
       return { kind: 'error' };
     }
