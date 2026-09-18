@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
+import picomatch from 'picomatch';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig, TraceMcpConfigSchema } from '../../src/config.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
@@ -117,6 +118,67 @@ describe('config', () => {
     expect(matched.some((m) => m.includes('/obj/'))).toBe(false);
     expect(matched.some((m) => m.includes('/bin/Debug/'))).toBe(false);
     expect(matched.some((m) => m.includes('/bin/Release/'))).toBe(false);
+  });
+
+  it('default excludes skip run-artifact churn without touching real sources (TRA-1665)', async () => {
+    // A watched dir a build/ML run keeps writing into overflows the OS event
+    // queue → dropped events → a full-walk reconcile per drop. The defaults
+    // must keep `.zig-cache/` and churn files (`*.tar.gz`, `*.bin`, `*.log`)
+    // out of enumeration and the watcher, while real sources still index.
+    tmpDir = createTmpDir('trace-mcp-artifacts-');
+    const files = [
+      'src/main.zig',
+      'src/main.ts',
+      // Zig build cache: generated .zig must not be enumerated.
+      'work/.zig-cache/o/abc123/build.zig',
+      // Run outputs with indexed-unrelated extensions.
+      'work/run.log',
+      'work/model.bin',
+      'work/data.tar.gz',
+      // Rust `src/bin/*.rs` convention must survive the `*.bin` exclusion.
+      'src/bin/tool.rs',
+    ];
+    for (const f of files) {
+      const abs = path.join(tmpDir, f);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, '// x\n');
+    }
+
+    const config = (await loadConfig(tmpDir))._unsafeUnwrap();
+    for (const p of ['**/.zig-cache/**', '**/*.tar.gz', '**/*.bin', '**/*.log']) {
+      expect(config.exclude).toContain(p);
+    }
+    const matched = await fg(config.include, {
+      cwd: tmpDir,
+      ignore: config.exclude,
+      dot: false,
+      onlyFiles: true,
+    });
+    expect(matched).toContain('src/main.zig');
+    expect(matched).toContain('src/main.ts');
+    expect(matched).toContain('src/bin/tool.rs');
+    expect(matched.some((m) => m.includes('.zig-cache/'))).toBe(false);
+
+    // The file-level patterns gate the watcher (same picomatch call it uses),
+    // even though fast-glob would never enumerate these extensions anyway.
+    const isExcluded = picomatch(config.exclude, { dot: true });
+    expect(isExcluded('work/run.log')).toBe(true);
+    expect(isExcluded('work/model.bin')).toBe(true);
+    expect(isExcluded('work/data.tar.gz')).toBe(true);
+    expect(isExcluded('work/archive.tgz')).toBe(true);
+    expect(isExcluded('src/main.ts')).toBe(false);
+    expect(isExcluded('src/bin/tool.rs')).toBe(false);
+  });
+
+  it('normalizes a user .zig-cache exclude to the deep form (TRA-1665)', async () => {
+    tmpDir = createTmpDir('trace-mcp-test-');
+    fs.writeFileSync(
+      path.join(tmpDir, '.trace-mcp.json'),
+      JSON.stringify({ exclude: ['.zig-cache/**'] }),
+    );
+
+    const config = (await loadConfig(tmpDir))._unsafeUnwrap();
+    expect(config.exclude).toContain('**/.zig-cache/**');
   });
 
   it('loads .trace-mcp.json config file', async () => {

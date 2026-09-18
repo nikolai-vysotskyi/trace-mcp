@@ -61,6 +61,19 @@ describe('vitals log', () => {
     expect(v.rss_mb).toBeGreaterThan(0);
     expect(v.heap_used_mb).toBeGreaterThan(0);
     expect(v.uptime_s).toBeGreaterThanOrEqual(0);
+    expect(v.fs_drops).toBeUndefined();
+  });
+
+  // TRA-1665: the reconcile-storm counter must be visible in the vitals line.
+  it('carries the reconcile tally when supplied', () => {
+    const v = buildVitals({
+      loaded: 2,
+      indexing: 0,
+      reconcile: { drops: 1059, reconciles: 12, suppressed: 1047 },
+    });
+    expect(v.fs_drops).toBe(1059);
+    expect(v.fs_reconciles).toBe(12);
+    expect(v.fs_reconcile_suppressed).toBe(1047);
   });
 
   it('emits immediately and on every interval tick, and stops on demand', () => {
