@@ -167,3 +167,7 @@ Egoka/Altera
 # ── Swept 2026-09-17 (TRA-1599) ──
 # Genuine third-party research scan (61★, zh): docs/research/ref-scan/out_g10_gateway_mcp.md carries a trace-mcp section read from our own README/DESIGN.md — "answer instead of re-read", 72.7% PR figure, 182 tools/81 langs/88 frameworks, score 3/5. Internal doc, no audience surface, no contact path — nothing to submit, nobody to write to. Noted in the pass section for the positioning signal only:
 lza6/Aggregate-to-2api
+
+# ── Swept 2026-09-17 night (TRA-1624) ──
+# Single-author zh-TW Claude-maintained catalog (0★, 0 forks, 163 entries, static index.html, no license, no submission path): catalog.json already carries us accurately (81 langs, 87 frameworks, over-70% PR tokens, added 2026-09-07). No audience, nothing to submit, ledger row added:
+cyc123456789/claude-catalog
