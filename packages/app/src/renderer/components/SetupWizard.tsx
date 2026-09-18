@@ -502,7 +502,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
         )}
 
         <div className="lx-sheet-actions">
-          <Button size="large" onClick={() => setStep('project')}>
+          <Button size="large" onClick={dismissAndPersist}>
             {t('guard:wizard.skip')}
           </Button>
           <Button
@@ -565,7 +565,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
         )}
 
         <div className="lx-sheet-actions">
-          <Button size="large" onClick={() => setStep('complete')}>
+          <Button size="large" onClick={dismissAndPersist}>
             {t('guard:wizard.skip')}
           </Button>
           <Button
