@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.28.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.27.1...v3.28.0) (2026-09-18)
+
+
+### Features
+
+* **app,cli:** per-client restart-to-pickup hint after MCP client update (TRA-1647) ([#1267](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1267)) ([e48bb74](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e48bb74e9ba2fe1c492236c5dc6fcf0ebd19a52d))
+* **clients:** codex TOML drift parity, project-layer guide and tests (TRA-1657) ([#1266](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1266)) ([f115596](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f115596f5642992f3882c9005d1a0013da690322))
+* **daemon:** sweep-eligibility observability in vitals (TRA-1625) ([#1250](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1250)) ([a1641de](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1641de7886e64ad023d0866e448867c49c57a11))
+* **init:** add Gemini CLI MCP client support (TRA-1659) ([#1265](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1265)) ([347bd9f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/347bd9fea6ecdb248e74dbd264c906a5c87ca29c))
+
+
+### Bug Fixes
+
+* **app:** blocked Claude Desktop write opens a sheet with the quit-and-retry steps (TRA-1645) ([#1258](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1258)) ([6ebdb89](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ebdb8957c5b729f15cabc25a093656cf4849e68))
+* **app:** overview shows not-registered empty state instead of eternal load error (TRA-1643) ([#1257](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1257)) ([db375b0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db375b068f9889b04c1572b5adcb6ce57110adab))
+* **daemon:** reap MCP sessions idle &gt;1h so dead clients stop pinning projects (TRA-1627) ([#1251](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1251)) ([1d3009e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1d3009e94e1a693cba91ae606c6b4b200e3dbee8))
+* **errors:** missing target returns VALIDATION_ERROR, not echoable NOT_FOUND (TRA-1633) ([#1254](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1254)) ([ec9f148](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ec9f1485994eeac785a93cc341c486bdad4066b4))
+* **indexer:** skip directories instead of erroring (TRA-1649) ([#1259](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1259)) ([90bd2de](https://github.com/nikolai-vysotskyi/trace-mcp/commit/90bd2de6c8a0b7baa44c841fb27b77597c2e09f0))
+* **navigation:** accept absolute paths and kind-less symbol ids (TRA-1660) ([#1268](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1268)) ([5962d40](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5962d405283a647af300b103daae67c3b5843886))
+* **notebook:** friendly state for unregistered projects instead of raw daemon JSON (TRA-1642) ([#1256](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1256)) ([ca16514](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca165143eae3f2f2b705c05906f9906e9e9ee571))
+
+
+### Documentation
+
+* **outreach:** awesome-claude-code submitted 2026-09-18 as [#2871](https://github.com/nikolai-vysotskyi/trace-mcp/issues/2871), awaiting triage (TRA-1651) ([#1261](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1261)) ([6b321a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6b321a80b8336ba32792aba35da0f54db47b2703))
+* **outreach:** twenty-sixth pass 2026-09-18 night — delta recheck, one genuine sweep hit (TRA-1624) ([#1249](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1249)) ([c148c01](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c148c01debf1263b6fc5fef7cebb3626a453ad5b))
+
+
+### Tests
+
+* **e2e:** umbrella indexing lifecycle + unload/reload + watcher-dir regressions ([#1260](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1260)) ([0374a7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0374a7f0db9f9e24717ec7de96d418863ae431c3))
+
+
+### CI/CD
+
+* **release:** retry gh release upload with backoff, fail loudly when npm is skipped (TRA-1628) ([#1253](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1253)) ([39f421c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39f421ca4f7a487a2b93915a5a92c596d62c215d))
+
 ## [3.27.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.27.0...v3.27.1) (2026-09-17)
 
 
