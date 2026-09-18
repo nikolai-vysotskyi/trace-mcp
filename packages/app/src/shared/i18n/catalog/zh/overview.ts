@@ -31,6 +31,8 @@ export const overview = {
   unknown: '未知',
   emptyIndexTitle: '尚未索引',
   emptyIndexBody: '索引这个项目，才能浏览它的符号、边和历史。',
+  notRegisteredTitle: '未在守护进程中注册',
+  notRegisteredBody: '“{{name}}”尚未加入守护进程的项目列表。添加它以建立索引并浏览。',
 
   errorIndexSummary: '索引摘要',
   errorCoverage: '依赖覆盖率',
