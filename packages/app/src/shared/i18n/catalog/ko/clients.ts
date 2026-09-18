@@ -32,6 +32,9 @@ export const clients = {
   migratingProgress: '{{total}}개 중 {{done}}개 마이그레이션 중',
   writeFailed: '설정을 저장하지 못했습니다.',
   driftedField: '어긋난 필드: {{field}}',
+  pickupRestartApp: '업데이트를 적용하려면 {{client}}를 다시 시작하세요',
+  pickupRestartSession: '업데이트를 적용하려면 {{client}} 세션을 다시 시작하세요',
+  pickupReloadWindow: '업데이트를 적용하려면 {{client}} 창을 다시 로드하세요',
   blockedTitle: '먼저 Claude.app을 종료하세요',
   blockedWhy:
     '{{client}} 설정은 Claude.app이 실행 중에 다시 쓰는 위치에 저장되므로, 지금 기록한 내용은 버려집니다. 앱을 완전히 종료한 뒤 다시 업데이트하세요.',

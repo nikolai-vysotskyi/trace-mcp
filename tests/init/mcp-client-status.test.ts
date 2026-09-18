@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ALL_MCP_CLIENT_NAMES, MCP_CLIENT_PICKUP } from '../../src/init/mcp-client.js';
 
 // Same module-isolation dance as mcp-clients-extra.test.ts: HOME is captured
 // at module load via `const HOME = os.homedir()`, so we reset modules between
@@ -60,6 +61,7 @@ describe('getMcpClientStatuses', () => {
         client: 'warp',
         configPath: null,
         status: 'unmanageable',
+        pickup: null,
         level: null,
         configExists: false,
       },
@@ -67,6 +69,7 @@ describe('getMcpClientStatuses', () => {
         client: 'jetbrains-ai',
         configPath: null,
         status: 'unmanageable',
+        pickup: null,
         level: null,
         configExists: false,
       },
@@ -510,5 +513,43 @@ describe('configureMcpClients migrates the settings.json tool-name prefix too', 
     const updated = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
     expect(updated.permissions.allow).toEqual(['mcp__trace__search']);
     expect(fs.existsSync(path.join(projectRoot, '.claude', 'settings.local.json'))).toBe(false);
+  });
+});
+
+// TRA-1647: per-client pickup metadata — what the user must do after a write
+// before the client picks it up. The matrix was verified against docs/code
+// 2026-09-18; these tests pin it so a new client cannot ship without a
+// pickup value and a correction cannot silently regress.
+describe('MCP_CLIENT_PICKUP (TRA-1647)', () => {
+  it('covers every known client', () => {
+    for (const name of ALL_MCP_CLIENT_NAMES) {
+      expect(name in MCP_CLIENT_PICKUP, `${name} has no pickup entry`).toBe(true);
+    }
+  });
+
+  it('is null only for the manually-configured clients', () => {
+    const nulls = (Object.entries(MCP_CLIENT_PICKUP) as Array<[string, string | null]>).filter(
+      ([, v]) => v === null,
+    );
+    expect(nulls.map(([k]) => k).sort()).toEqual(['jetbrains-ai', 'warp']);
+  });
+
+  // Cline watches cline_mcp_settings.json itself (McpHub + chokidar) — the
+  // only client proven to hot-reload. Cursor looked like one until the docs
+  // said otherwise ("Save the file and restart Cursor", cursor.com/docs/mcp).
+  it('hot-reloads only on cline; cursor and claude-desktop need a full restart', () => {
+    expect(MCP_CLIENT_PICKUP['cline']).toBe('hot-reload');
+    expect(MCP_CLIENT_PICKUP['cursor']).toBe('restart-app');
+    expect(MCP_CLIENT_PICKUP['claude-desktop']).toBe('restart-app');
+  });
+
+  it('ships the pickup code on every status getMcpClientStatuses reports', () => {
+    configureMcpClients(['cursor', 'codex'], projectRoot, { scope: 'global' });
+    const statuses = getMcpClientStatuses(projectRoot, 'global', ['cursor', 'codex', 'warp']);
+    expect(statuses.map((s) => [s.client, s.pickup])).toEqual([
+      ['cursor', 'restart-app'],
+      ['codex', 'restart-session'],
+      ['warp', null],
+    ]);
   });
 });

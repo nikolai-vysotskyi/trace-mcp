@@ -25,6 +25,8 @@ import { Command } from 'commander';
 import {
   configureMcpClients,
   getMcpClientStatuses,
+  MCP_CLIENT_PICKUP,
+  type McpClientPickup,
   type McpClientStatus,
 } from '../init/mcp-client.js';
 import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
@@ -136,6 +138,63 @@ function printUpdateReport(targets: string[], steps: InitStepResult[]): void {
   for (const s of steps) {
     console.log(`  ${s.action.padEnd(18)}  ${s.target}${s.detail ? `  (${s.detail})` : ''}`);
   }
+  // TRA-1647: a write that landed but isn't picked up until restart reads as
+  // "Update did nothing". Say the next step, per client, right under the row
+  // that wrote. (The mocked mcp-client module in tests/cli/clients.test.ts
+  // does not export the table — hence the optional access.)
+  for (const name of targets) {
+    const pickup = (MCP_CLIENT_PICKUP as Record<string, McpClientPickup | null> | undefined)?.[
+      name
+    ];
+    if (!pickup || pickup === 'hot-reload') continue;
+    const wrote = steps.some(
+      (s) =>
+        (s.action === 'created' || s.action === 'updated') && s.detail?.startsWith(`${name} (`),
+    );
+    if (wrote) console.log(`  → ${formatPickupHint(name, pickup)}`);
+  }
+}
+
+/**
+ * English CLI copy of the pickup metadata. The CLI prints English directly
+ * (unlike the desktop app, which localises the same codes) — keep these three
+ * sentences in sync with the `pickup*` catalogue keys in
+ * packages/app/src/shared/i18n/catalog/en/clients.ts.
+ */
+function formatPickupHint(name: string, pickup: McpClientPickup): string {
+  const label = formatClientDisplayName(name);
+  switch (pickup) {
+    case 'restart-app':
+      return `Restart ${label} to apply the update.`;
+    case 'restart-session':
+      return `Restart the ${label} session to apply the update.`;
+    case 'reload-window':
+      return `Reload the ${label} window to apply the update.`;
+    case 'hot-reload':
+      return '';
+  }
+}
+
+function formatClientDisplayName(name: string): string {
+  const names: Record<string, string> = {
+    'claude-code': 'Claude Code',
+    'claw-code': 'Claw Code',
+    'claude-desktop': 'Claude Desktop',
+    cursor: 'Cursor',
+    windsurf: 'Windsurf',
+    continue: 'Continue',
+    junie: 'Junie',
+    codex: 'Codex',
+    hermes: 'Hermes Agent',
+    amp: 'AMP',
+    'factory-droid': 'Factory Droid',
+    cline: 'Cline',
+    kilocode: 'KiloCode',
+    antigravity: 'Antigravity',
+    kimi: 'Kimi Code CLI',
+    opencode: 'OpenCode',
+  };
+  return names[name] ?? name;
 }
 
 function printHumanReport(scope: string, statuses: McpClientStatus[]): void {
