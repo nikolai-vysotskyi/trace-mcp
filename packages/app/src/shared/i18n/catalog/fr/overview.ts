@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: 'Index',
   staleNumbers: 'Voici les derniers chiffres indexés.',
+  truncatedWarning:
+    'Index partiel — {{found}} fichiers trouvés, seulement {{limit}} indexés. Augmentez security.max_files puis réindexez.',
   rowStatus: 'État',
   rowFiles: 'Fichiers indexés',
   rowSymbols: 'Symboles',

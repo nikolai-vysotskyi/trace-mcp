@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: 'インデックス',
   staleNumbers: '表示中の数値は前回のものです。',
+  truncatedWarning:
+    'インデックスが不完全です — {{found}}件中{{limit}}件のみインデックス化されました。security.max_files を増やして再インデックスしてください。',
   rowStatus: '状態',
   rowFiles: 'インデックス済みファイル',
   rowSymbols: 'シンボル',

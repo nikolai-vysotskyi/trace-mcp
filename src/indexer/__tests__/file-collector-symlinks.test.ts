@@ -53,13 +53,15 @@ describe('collectFiles — symlink containment (#218)', () => {
 
     const config = TraceMcpConfigSchema.parse({ include: ['**/*.ts'], exclude: [] });
 
-    const entries = await collectFiles({
-      config,
-      rootPath: workDir,
-      workspaces: [],
-      traceignore: undefined,
-      maxFiles: 10_000,
-    });
+    const entries = (
+      await collectFiles({
+        config,
+        rootPath: workDir,
+        workspaces: [],
+        traceignore: undefined,
+        maxFiles: 10_000,
+      })
+    ).files;
 
     expect(entries).toEqual(expect.arrayContaining(['src/real.ts', 'roles/docker/task.ts']));
     // No path may traverse into (or through) the symlinked directory — that
@@ -90,13 +92,15 @@ describe('collectFiles — symlink containment (#218)', () => {
     }
 
     const defaultConfig = TraceMcpConfigSchema.parse({ include: ['**/*.ts'], exclude: [] });
-    const defaultEntries = await collectFiles({
-      config: defaultConfig,
-      rootPath: projectDir,
-      workspaces: [],
-      traceignore: undefined,
-      maxFiles: 10_000,
-    });
+    const defaultEntries = (
+      await collectFiles({
+        config: defaultConfig,
+        rootPath: projectDir,
+        workspaces: [],
+        traceignore: undefined,
+        maxFiles: 10_000,
+      })
+    ).files;
     expect(defaultEntries).toEqual(['real.ts']);
 
     const followConfig = TraceMcpConfigSchema.parse({
@@ -104,13 +108,15 @@ describe('collectFiles — symlink containment (#218)', () => {
       exclude: [],
       follow_symlinks: true,
     });
-    const followEntries = await collectFiles({
-      config: followConfig,
-      rootPath: projectDir,
-      workspaces: [],
-      traceignore: undefined,
-      maxFiles: 10_000,
-    });
+    const followEntries = (
+      await collectFiles({
+        config: followConfig,
+        rootPath: projectDir,
+        workspaces: [],
+        traceignore: undefined,
+        maxFiles: 10_000,
+      })
+    ).files;
     expect(followEntries).toEqual(expect.arrayContaining(['real.ts', 'linked/shared.ts']));
   });
 });

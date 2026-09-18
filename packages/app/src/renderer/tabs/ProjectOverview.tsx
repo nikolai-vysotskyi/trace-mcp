@@ -58,6 +58,8 @@ interface ProjectStats {
   symbols: number;
   edges: number;
   lastIndexed?: string;
+  /** Present when the last full walk hit security.max_files (TRA-1664). */
+  truncated?: { found: number; limit: number };
 }
 
 interface CoverageGap {
@@ -802,6 +804,30 @@ export function ProjectOverview({
                       style={{ color: 'var(--label-secondary)' }}
                     >
                       {t('staleNumbers')}
+                    </div>
+                  )}
+                  {stats.truncated && (
+                    /* TRA-1664: the last full walk hit security.max_files, so
+                       search silently misses everything past the cap. The stamp
+                       behind this comes from the walk itself (not the row
+                       counts below, which also cover env/phantom rows), and it
+                       survives daemon restarts — a "ready" card without it
+                       reads as a whole index that was never built. */
+                    <div
+                      role="status"
+                      className="mx-3 mt-2 px-3 py-2 rounded-lg text-[13px]"
+                      style={{
+                        background:
+                          'color-mix(in srgb, var(--status-orange) 9%, transparent)',
+                        color: 'var(--label)',
+                        border:
+                          '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
+                      }}
+                    >
+                      {t('truncatedWarning', {
+                        found: formatNumber(stats.truncated.found),
+                        limit: formatNumber(stats.truncated.limit),
+                      })}
                     </div>
                   )}
                   <ListRow

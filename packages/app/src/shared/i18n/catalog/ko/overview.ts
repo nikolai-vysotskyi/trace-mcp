@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: '인덱스',
   staleNumbers: '아래는 마지막으로 인덱싱한 수치입니다.',
+  truncatedWarning:
+    '인덱스가 불완전합니다 — {{found}}개 중 {{limit}}개만 인덱싱되었습니다. security.max_files를 늘리고 다시 인덱싱하세요.',
   rowStatus: '상태',
   rowFiles: '인덱싱된 파일',
   rowSymbols: '심볼',
