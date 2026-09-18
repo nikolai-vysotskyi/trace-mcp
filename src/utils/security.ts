@@ -194,6 +194,36 @@ export function validatePath(filePath: string, rootPath: string): TraceMcpResult
   return ok(resolved);
 }
 
+/**
+ * True for absolute-looking paths on any OS (`/x`, `\x`, `C:\x`, `C:/x`).
+ * `path.isAbsolute` is platform-dependent (on POSIX it misses `C:\x`), and
+ * agents send whatever their OS produced — so match the shape explicitly.
+ */
+export function isAbsolutePathLike(p: string): boolean {
+  return /^([A-Za-z]:)?[\\/]/.test(p);
+}
+
+/**
+ * Map a caller-supplied file path to the project-relative spelling the index
+ * stores (TRA-1660).
+ *
+ * Agents only ever learn absolute paths (Read/Grep/hooks return those), so a
+ * `get_outline` call with `/root/src/foo.ts` used to MISS the indexed
+ * `src/foo.ts` with a bare NOT_FOUND. An absolute path inside the project
+ * root is silently folded to relative; anything else (already-relative
+ * spellings, paths outside the root) is returned in a canonicalised but
+ * otherwise unchanged form so downstream guards keep rejecting escapes.
+ */
+export function normalizeToProjectRelative(filePath: string, rootPath: string): string {
+  if (!filePath || !rootPath) return filePath;
+  const rel = path.relative(path.resolve(rootPath), path.resolve(rootPath, filePath));
+  if (!rel) return filePath;
+  // Outside the root (`..` or `..\...`) — leave untouched; validatePath
+  // rejects it downstream exactly as before.
+  if (rel === '..' || rel.startsWith(`..${path.sep}`)) return filePath;
+  return rel.split(path.sep).join('/');
+}
+
 export function detectSecrets(
   content: string,
   patterns?: string[],

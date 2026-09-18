@@ -71,4 +71,39 @@ describe('Store.resolveFile', () => {
     seed(store, ['app/Models/City.php']);
     expect(store.resolveFile('app/Models/Ghost.php')).toBeUndefined();
   });
+
+  // TRA-1660: agents pass absolute paths (Read/Grep/hooks only return those).
+  it('resolves an absolute path to the indexed relative file', () => {
+    const store = createTestStore();
+    seed(store, ['src/auth.ts']);
+    expect(store.resolveFile('/proj/src/auth.ts')?.path).toBe('src/auth.ts');
+  });
+
+  it('prefers the longest absolute tail (most specific match)', () => {
+    const store = createTestStore();
+    seed(store, ['src/auth.ts', 'sub/src/auth.ts']);
+    // `/x/sub/src/auth.ts` ends with both indexed spellings — the longest
+    // tail `sub/src/auth.ts` is exact and wins.
+    expect(store.resolveFile('/x/sub/src/auth.ts')?.path).toBe('sub/src/auth.ts');
+  });
+
+  it('applies the unique-suffix rule to absolute tails too', () => {
+    const store = createTestStore();
+    seed(store, ['thewed-laravel/app/Http/Controllers/SitemapController.php']);
+    expect(
+      store.resolveFile('/work/thewed-laravel/app/Http/Controllers/SitemapController.php')?.path,
+    ).toBe('thewed-laravel/app/Http/Controllers/SitemapController.php');
+  });
+
+  it('refuses to guess when the absolute tail is ambiguous', () => {
+    const store = createTestStore();
+    seed(store, ['a/src/auth.ts', 'b/src/auth.ts']);
+    expect(store.resolveFile('/proj/src/auth.ts')).toBeUndefined();
+  });
+
+  it('still misses absolute paths with no indexed tail', () => {
+    const store = createTestStore();
+    seed(store, ['src/auth.ts']);
+    expect(store.resolveFile('/proj/src/ghost.ts')).toBeUndefined();
+  });
 });
