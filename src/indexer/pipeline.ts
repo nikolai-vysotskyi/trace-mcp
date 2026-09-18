@@ -845,7 +845,8 @@ export class IndexingPipeline {
    * full walk excludes (TRA-468).
    *
    * Pure — no DB, no lock. That is what lets `indexFiles()` decide a batch is
-   * a no-op before it queues behind the pipeline lock (TRA-935).
+   * a no-op before it queues behind the pipeline lock (TRA-935). Touches the
+   * filesystem (one stat per path) but never the database.
    */
   private filterIndexablePaths(filePaths: string[]): string[] {
     // Same exclude gate collectFiles() applies via fast-glob. Without it,
@@ -881,6 +882,20 @@ export class IndexingPipeline {
       if (gitignore?.isIgnored(relPosix)) {
         logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
         continue;
+      }
+      // TRA-1649: the watcher enqueues directory paths (mkdir/create events
+      // for `.multica`, `.opencode/skills/...`, etc.). Dropping them here
+      // keeps them out of `totalFiles` entirely; FileExtractor keeps its own
+      // isDirectory guard as a safety net for direct callers. A stat failure
+      // (deleted between event and run) keeps the path so the extractor's
+      // read path handles it as before.
+      try {
+        if (fs.statSync(path.resolve(this.rootPath, rel)).isDirectory()) {
+          logger.debug({ file: rel }, 'Directory skipped in indexFiles');
+          continue;
+        }
+      } catch {
+        /* stat failed — leave the path for the extractor to handle */
       }
       // Store paths are always posix-separated (collectFiles() via
       // fast-glob) — pushing `rel` instead of `relPosix` inserted a phantom
