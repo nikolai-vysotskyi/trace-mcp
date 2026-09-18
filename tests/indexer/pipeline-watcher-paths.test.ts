@@ -50,7 +50,7 @@ describe('indexFiles() — directory entries in the batch', () => {
     expect(found.items.map((i) => i.symbol.name)).toContain('alpha');
   });
 
-  it.fails('directories are skipped without counting errors (TRA-1649)', async () => {
+  it('directories are skipped without counting errors (TRA-1649, fixed by #1259)', async () => {
     const result = await pipeline.indexFiles(['src/alpha.ts', 'sub']);
     expect(result.errors).toBe(0);
     const paths = store.getAllFiles().map((f) => f.path);
