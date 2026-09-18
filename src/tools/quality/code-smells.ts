@@ -233,12 +233,21 @@ function detectEmptyFunctions(
       // The empty body is intentional because TypeScript auto-generates field assignments.
       // We must only check the parameter list between ( and ), not the entire constructor header,
       // so access modifiers on the constructor itself (e.g. public constructor() {}) don't cause false skips.
-      if (sym.kind === 'constructor' || sym.name === 'constructor') {
+      // PHP __construct is indexed as kind='method' (see php/index.ts), so match by name too (TRA-1672).
+      const isConstructorLike =
+        sym.kind === 'constructor' || sym.name === 'constructor' || sym.name === '__construct';
+      if (isConstructorLike) {
         const openParen = header.indexOf('(');
         const closeParen = header.lastIndexOf(')');
         const params =
           openParen !== -1 && closeParen > openParen ? header.slice(openParen + 1, closeParen) : '';
         if (/\b(?:private|protected|public|readonly)\s+[\w$]/.test(params)) {
+          continue;
+        }
+        // PHP: any __construct params mean DI (promoted or plain typed, e.g.
+        // __construct(private RedirectResolver $redirects) or
+        // __construct(RedirectResolver $redirects)) — not a stub (TRA-1672).
+        if (sym.name === '__construct' && params.trim() !== '') {
           continue;
         }
       }
@@ -266,6 +275,14 @@ function detectEmptyFunctions(
     const isEmpty = strippedLines.length === 0;
     const isStub =
       !isEmpty && strippedLines.length <= 2 && STUB_BODY_PATTERNS.some((p) => p.test(joined));
+
+    // PHP: an empty __construct() is framework boilerplate (e.g. Laravel Jobs
+    // with an explicit default constructor), never a "stub to fill in" —
+    // unlike empty regular methods/callbacks (TRA-1672). Explicit placeholder
+    // bodies (throw / TODO) are still reported as stubs.
+    if (isEmpty && sym.name === '__construct') {
+      continue;
+    }
 
     if (isEmpty || isStub) {
       const description = isEmpty
