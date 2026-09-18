@@ -929,6 +929,17 @@ export const TraceMcpConfigSchema = z.object({
     '**/coverage/**',
     '**/*.min.js',
     '**/*.min.css',
+    // Run-artifact churn (TRA-1665): a watched dir that a build/ML run keeps
+    // writing into overflows the OS event queue → dropped events → a full-walk
+    // reconcile per drop. These extensions are not in SOURCE_EXTS, so the
+    // patterns change nothing about what gets indexed — they keep churn files
+    // from ever waking the watcher (native ignore + per-event filter) instead.
+    // `**/*.bin` is file-only and does not touch Rust's `src/bin/*.rs`.
+    '**/.zig-cache/**',
+    '**/*.tar.gz',
+    '**/*.tgz',
+    '**/*.bin',
+    '**/*.log',
   ]),
   // Directory symlinks are not followed during indexing by default — a symlink
   // cycling back to an ancestor (e.g. Ansible Molecule's `roles/<role> -> ../../../`
@@ -1291,6 +1302,7 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
       'bootstrap/cache',
       '.nuxt',
       '.next',
+      '.zig-cache',
     ];
     parsed.data.exclude = parsed.data.exclude.map((pattern) => {
       for (const dir of deepExcludeDirs) {

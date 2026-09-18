@@ -113,7 +113,7 @@ describe('FileWatcher — dropped-event tally', () => {
     await capturedCallback!(dropped, []);
     await capturedCallback!(dropped, []);
 
-    expect(getDroppedEventStats()).toEqual({ drops: 2, reconciles: 2 });
+    expect(getDroppedEventStats()).toEqual({ drops: 2, reconciles: 2, suppressed: 0 });
     await watcher.stop();
   });
 
@@ -122,7 +122,7 @@ describe('FileWatcher — dropped-event tally', () => {
 
     await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
 
-    expect(getDroppedEventStats()).toEqual({ drops: 1, reconciles: 0 });
+    expect(getDroppedEventStats()).toEqual({ drops: 1, reconciles: 0, suppressed: 0 });
     await watcher.stop();
   });
 
@@ -131,7 +131,130 @@ describe('FileWatcher — dropped-event tally', () => {
 
     await capturedCallback!(new Error('EMFILE: too many open files'), []);
 
-    expect(getDroppedEventStats()).toEqual({ drops: 0, reconciles: 0 });
+    expect(getDroppedEventStats()).toEqual({ drops: 0, reconciles: 0, suppressed: 0 });
     await watcher.stop();
+  });
+});
+
+/**
+ * TRA-1665: a watcher on a churn-heavy dir (build/ML run artifacts written
+ * continuously) used to run one full-walk reconcile per dropped-events report
+ * — a per-minute 10k-file walk for as long as the run lasted. The storm
+ * breaker collapses sustained drops into one trailing pass per cooldown.
+ */
+describe('FileWatcher — reconcile storm backoff', () => {
+  beforeEach(() => resetDroppedEventStats());
+
+  interface StormHarness {
+    watcher: InstanceType<typeof FileWatcher>;
+    advance: (ms: number) => void;
+    fireStormTimer: () => void;
+    hasStormTimer: () => boolean;
+  }
+
+  async function startStormWatcher(onRescan: () => Promise<void>): Promise<StormHarness> {
+    let now = 1_000_000;
+    let timerCb: (() => void) | null = null;
+    // Deterministic timer: the debounce path is unused in these tests (no
+    // change events fire), so capturing the storm timer callback is enough.
+    const fakeSetTimeout = ((cb: () => void) => {
+      timerCb = cb;
+      return {} as unknown as NodeJS.Timeout;
+    }) as unknown as typeof setTimeout;
+    const fakeClearTimeout = (() => {
+      timerCb = null;
+    }) as unknown as typeof clearTimeout;
+    const watcher = new FileWatcher(fakeSetTimeout, fakeClearTimeout, {
+      now: () => now,
+      stormWindowMs: 300_000,
+      stormThreshold: 3,
+      stormCooldownMs: 300_000,
+    });
+    await watcher.start(process.cwd(), {} as never, async () => {}, 10, undefined, { onRescan });
+    return {
+      watcher,
+      advance: (ms: number) => {
+        now += ms;
+      },
+      fireStormTimer: () => {
+        // A real setTimeout fires once — consume the callback like it does.
+        const cb = timerCb;
+        timerCb = null;
+        cb?.();
+      },
+      hasStormTimer: () => timerCb !== null,
+    };
+  }
+
+  const dropped = () => new Error('Events were dropped by the FSEvents client.');
+
+  it('runs isolated drops immediately without engaging the breaker', async () => {
+    const onRescan = vi.fn(async () => {});
+    const h = await startStormWatcher(onRescan);
+
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+
+    expect(onRescan).toHaveBeenCalledTimes(2);
+    expect(getDroppedEventStats()).toEqual({ drops: 2, reconciles: 2, suppressed: 0 });
+    expect(h.hasStormTimer()).toBe(false);
+    await h.watcher.stop();
+  });
+
+  it('collapses a sustained storm into one trailing pass per cooldown', async () => {
+    const onRescan = vi.fn(async () => {});
+    const h = await startStormWatcher(onRescan);
+
+    // Three drops inside the window: each is still honored with a walk (the
+    // in-flight collapse may fold one into a follow-up — wait it out), but
+    // the third opens the breaker.
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    await vi.waitFor(() => expect(onRescan).toHaveBeenCalledTimes(3));
+
+    // The storm tail: two more drops, no more walks — one pending pass.
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    expect(onRescan).toHaveBeenCalledTimes(3);
+    expect(getDroppedEventStats()).toEqual({ drops: 5, reconciles: 3, suppressed: 2 });
+    expect(h.hasStormTimer()).toBe(true);
+
+    // Cooldown elapses: exactly one trailing walk covers the whole tail.
+    h.fireStormTimer();
+    await vi.waitFor(() => expect(onRescan).toHaveBeenCalledTimes(4));
+    expect(getDroppedEventStats()).toEqual({ drops: 5, reconciles: 4, suppressed: 2 });
+
+    // Breaker closed again: the next drop reconciles immediately.
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    await vi.waitFor(() => expect(onRescan).toHaveBeenCalledTimes(5));
+    expect(h.hasStormTimer()).toBe(false);
+    await h.watcher.stop();
+  });
+
+  it('stop() disarms the breaker — a suppressed storm never runs post-stop', async () => {
+    const onRescan = vi.fn(async () => {});
+    const h = await startStormWatcher(onRescan);
+
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    h.advance(60_000);
+    await capturedCallback!(dropped(), []);
+    expect(onRescan).toHaveBeenCalledTimes(3);
+    expect(h.hasStormTimer()).toBe(true);
+
+    await h.watcher.stop();
+    h.fireStormTimer();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(onRescan).toHaveBeenCalledTimes(3);
   });
 });

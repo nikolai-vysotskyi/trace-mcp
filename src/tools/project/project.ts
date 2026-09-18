@@ -90,13 +90,25 @@ export function getIndexHealth(
   // inside those windows was invisible to the watcher until the reconcile pass
   // caught up (TRA-852). Report it — an agent asking about index freshness
   // cannot read the daemon log, which is where this otherwise only exists.
-  const { drops, reconciles } = getDroppedEventStats();
+  const { drops, reconciles, suppressed } = getDroppedEventStats();
   if (drops > 0) {
     warnings.push(
       `The OS dropped file-system events ${drops} time(s) since this process started; ` +
         `${reconciles} index reconcile pass(es) were started in response ` +
         `(started, not necessarily finished — a pass that failed is logged, not subtracted). ` +
         `Results served between a drop and its reconcile may have been stale.`,
+    );
+  }
+  // Sustained drop storms (e.g. a watched dir a build/ML run keeps writing
+  // into) no longer reconcile per drop — the breaker collapses them into one
+  // trailing pass per cooldown (TRA-1665). Surface the coalesced count so a
+  // storm is visible here, not just in the daemon log.
+  if (suppressed > 0) {
+    if (status === 'ok') status = 'degraded';
+    warnings.push(
+      `Reconcile storm backoff coalesced ${suppressed} dropped-event report(s) since this ` +
+        `process started: full-walk reconciles were deferred to one trailing pass per cooldown ` +
+        `instead of one walk per drop. Results for churn-heavy roots may lag until the storm subsides.`,
     );
   }
 
