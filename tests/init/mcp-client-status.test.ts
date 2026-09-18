@@ -291,14 +291,9 @@ describe('getMcpClientStatuses', () => {
     }
   });
 
-  it('reports missing → up_to_date round-trip for cline, antigravity, gemini-cli, minimax-code, kimi', () => {
-    const clients: Array<'cline' | 'antigravity' | 'gemini-cli' | 'minimax-code' | 'kimi'> = [
-      'cline',
-      'antigravity',
-      'gemini-cli',
-      'minimax-code',
-      'kimi',
-    ];
+  it('reports missing → up_to_date round-trip for cline, antigravity, gemini-cli, minimax-code, zed, kimi', () => {
+    const clients: Array<'cline' | 'antigravity' | 'gemini-cli' | 'minimax-code' | 'zed' | 'kimi'> =
+      ['cline', 'antigravity', 'gemini-cli', 'minimax-code', 'zed', 'kimi'];
     // Missing before any write.
     for (const c of clients) {
       const [before] = getMcpClientStatuses(projectRoot, 'global', [c]);

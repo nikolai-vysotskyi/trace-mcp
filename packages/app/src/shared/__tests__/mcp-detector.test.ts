@@ -117,3 +117,31 @@ it('detects minimax-code at the legacy ~/.mavis path, primary winning when both 
   expect(both).toHaveLength(1);
   expect(both[0].configPath).toBe(path.join(home, '.minimax', 'mcp.json'));
 });
+
+it('detects zed at ~/.config/zed/settings.json via context_servers (TRA-1658)', () => {
+  fs.mkdirSync(path.join(home, '.config', 'zed'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.config', 'zed', 'settings.json'),
+    JSON.stringify({
+      context_servers: { trace: { source: 'custom', command: 'x', args: ['serve'] } },
+    }),
+    'utf-8',
+  );
+  expect(detectMcpClients(undefined, home).find((c) => c.name === 'zed')).toEqual({
+    name: 'zed',
+    configPath: path.join(home, '.config', 'zed', 'settings.json'),
+    hasTraceMcp: true,
+  });
+});
+
+it('does not read mcpServers as a zed entry (TRA-1658)', () => {
+  fs.mkdirSync(path.join(home, '.config', 'zed'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.config', 'zed', 'settings.json'),
+    JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
+    'utf-8',
+  );
+  expect(
+    detectMcpClients(undefined, home).find((c) => c.name === 'zed')?.hasTraceMcp,
+  ).toBe(false);
+});
