@@ -926,16 +926,31 @@ export function codexEntryMatches(configPath: string, expected: McpServerEntry):
 export function pinpointCodexEntryDrift(
   configPath: string,
   expected: McpServerEntry,
-): 'legacy-key' | 'command' | 'fields' {
+): 'legacy-key' | 'entry-missing' | 'command' | 'args' | 'cwd' | 'env' | 'fields' | 'parse-error' {
+  let content: string;
   try {
-    const content = fs.readFileSync(configPath, 'utf-8');
-    if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return 'legacy-key';
-    const current = parseCodexTomlSection(content, MCP_KEY);
-    if (!current || current.command !== expected.command) return 'command';
-    return 'fields';
+    content = fs.readFileSync(configPath, 'utf-8');
   } catch {
-    return 'fields';
+    return 'parse-error';
   }
+  const current = parseCodexTomlSection(content, MCP_KEY);
+  if (!current || !current.command) {
+    return codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content) ? 'legacy-key' : 'entry-missing';
+  }
+  // The new key can be entirely correct on its own while a legacy key still
+  // lingers alongside it (a previous run failed partway, or a config was
+  // hand-edited) — that's still the reason to re-run, not a field mismatch.
+  if (codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)) return 'legacy-key';
+  if (current.command !== expected.command) return 'command';
+  if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';
+  if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';
+  if (
+    (expected.env || current.env) &&
+    JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})
+  ) {
+    return 'env';
+  }
+  return 'fields';
 }
 
 function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
@@ -1007,8 +1022,9 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
  *                    args, cwd, env, alwaysLoad). UI should show "Update".
  * - `unmanageable` — client doesn't expose a writable file (Warp,
  *                    JetBrains AI Assistant — IDE/cloud-managed config).
- * - `unknown`      — config exists but format is too lax to compare safely
- *                    (e.g. Codex TOML — we detect presence but not drift).
+ * - `unknown`      — reserved: config exists but its format can't be compared
+ *                    safely. No current client reports it — every writable
+ *                    format (JSON, JSONC, TOML, YAML) has a field-level matcher.
  */
 export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
 
