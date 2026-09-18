@@ -301,5 +301,14 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
     }
   }
 
+  // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json (user)
+  // or .gemini/settings.json (project). A different file from Antigravity's
+  // ~/.gemini/config/mcp_config.json under the same ~/.gemini dir — same
+  // rule as the writer (TRA-1659): never confuse the two.
+  checkConfig('gemini-cli', path.join(HOME, '.gemini', 'settings.json'));
+  if (projectRoot && !clients.some((c) => c.name === 'gemini-cli')) {
+    checkConfig('gemini-cli', path.join(projectRoot, '.gemini', 'settings.json'));
+  }
+
   return clients;
 }

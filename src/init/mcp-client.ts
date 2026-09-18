@@ -1086,6 +1086,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'antigravity',
   'kimi',
   'opencode',
+  'gemini-cli',
 ];
 
 /**
@@ -1243,8 +1244,8 @@ function detectClientStatus(
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
-      // cline, kilocode, antigravity, kimi all use the standard mcpServers JSON
-      // shape compared by entryMatches().
+      // cline, kilocode, antigravity, kimi, gemini-cli all use the standard
+      // mcpServers JSON shape compared by entryMatches().
       const present = (() => {
         try {
           const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -1429,6 +1430,15 @@ export function getConfigPath(
       const projJsonc = path.join(projectRoot, 'opencode.jsonc');
       return fs.existsSync(projJsonc) ? projJsonc : path.join(projectRoot, 'opencode.json');
     }
+    case 'gemini-cli':
+      // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json
+      // (user) or .gemini/settings.json (project). A different file from
+      // Antigravity's ~/.gemini/config/mcp_config.json under the same
+      // ~/.gemini dir — the two must never be confused (TRA-1659).
+      // Source: https://github.com/google-gemini/gemini-cli/blob/HEAD/docs/tools/mcp-server.md
+      return scope === 'global'
+        ? path.join(getHome(), '.gemini', 'settings.json')
+        : path.join(projectRoot, '.gemini', 'settings.json');
     default:
       return null;
   }

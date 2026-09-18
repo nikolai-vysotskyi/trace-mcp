@@ -53,7 +53,8 @@ export interface DetectedMcpClient {
     | 'kilocode'
     | 'antigravity'
     | 'kimi'
-    | 'opencode';
+    | 'opencode'
+    | 'gemini-cli';
   configPath: string;
   hasTraceMcp: boolean;
 }

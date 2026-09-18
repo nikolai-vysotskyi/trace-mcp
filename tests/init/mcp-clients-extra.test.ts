@@ -381,6 +381,39 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     const second = configureMcpClients(['kimi'], projectRoot, { scope: 'global' });
     expect(second[0].action).toBe('already_configured');
   });
+
+  it('Gemini CLI: writes ~/.gemini/settings.json, project .gemini/settings.json, migrates legacy key', () => {
+    const global = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    expect(global[0].action).toBe('created');
+    const file = path.join(fakeHome, '.gemini', 'settings.json');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].alwaysLoad).toBeUndefined();
+
+    const projFile = path.join(projectRoot, '.gemini', 'settings.json');
+    const proj = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'project' });
+    expect(proj[0].action).toBe('created');
+    const projParsed = JSON.parse(fs.readFileSync(projFile, 'utf-8'));
+    // Project scope pins the entry to the project via cwd (TRA-501).
+    expect(projParsed.mcpServers['trace'].cwd).toBe(projectRoot);
+
+    // Legacy key migrates in place, like every standard-shape client.
+    const legacy = { mcpServers: { 'trace-mcp': { command: '/old', args: ['serve'] } } };
+    fs.writeFileSync(projFile, JSON.stringify(legacy));
+    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'project' });
+    const migrated = JSON.parse(fs.readFileSync(projFile, 'utf-8'));
+    expect(migrated.mcpServers['trace-mcp']).toBeUndefined();
+    expect(migrated.mcpServers['trace'].args).toEqual(['serve']);
+  });
+
+  it('Gemini CLI: never touches the Antigravity file under the same ~/.gemini dir', () => {
+    const antiFile = path.join(fakeHome, '.gemini', 'config', 'mcp_config.json');
+    fs.mkdirSync(path.dirname(antiFile), { recursive: true });
+    fs.writeFileSync(antiFile, JSON.stringify({ mcpServers: {} }));
+    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
+    expect(JSON.parse(fs.readFileSync(antiFile, 'utf-8'))).toEqual({ mcpServers: {} });
+    expect(fs.existsSync(path.join(fakeHome, '.gemini', 'settings.json'))).toBe(true);
+  });
 });
 
 describe('Hermes YAML writer', () => {
