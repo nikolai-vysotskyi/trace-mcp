@@ -208,6 +208,17 @@ describe('getSymbol — natural inputs (TRA-1660)', () => {
     expect(r.isErr()).toBe(true);
     expect(r._unsafeUnwrapErr().code).toBe('NOT_FOUND');
   });
+
+  it('misses carry unknown_symbol so the rendered help names the #kind form', () => {
+    const { store, root } = setup();
+    const r = getSymbol(store, root, { symbolId: 'src/auth.ts::Ghost' });
+    expect(r.isErr()).toBe(true);
+    const err = r._unsafeUnwrapErr();
+    expect(err.code).toBe('NOT_FOUND');
+    if (err.code !== 'NOT_FOUND') throw new Error('unreachable');
+    expect(err.reason).toBe('unknown_symbol');
+    expect(JSON.stringify(formatToolError(err))).toContain('#kind');
+  });
 });
 
 // ─── getFileOutline ─────────────────────────────────────────────────────────

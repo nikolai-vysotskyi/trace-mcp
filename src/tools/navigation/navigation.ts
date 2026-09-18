@@ -99,7 +99,7 @@ export function getSymbol(
     return err(notFound(input, resolved.candidates, 'unknown_symbol'));
   }
   if (resolved.status === 'miss') {
-    return err(notFound(input));
+    return err(notFound(input, undefined, 'unknown_symbol'));
   }
   const symbol = resolved.symbol;
   const file = resolved.file;
