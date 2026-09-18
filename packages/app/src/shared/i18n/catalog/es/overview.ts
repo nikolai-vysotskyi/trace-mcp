@@ -37,6 +37,7 @@ export const overview = {
   errorIndexSummary: 'el resumen del índice',
   errorCoverage: 'la cobertura de dependencias',
   errorQuality: 'el escaneo de calidad',
+  errorSecurity: 'el escaneo de seguridad',
   errorServices: 'la lista de servicios',
 
   sectionCoverage: 'Cobertura',
@@ -74,6 +75,14 @@ export const overview = {
   emptySmellBody: 'No hay nada que limpiar en esta categoría entre los {{n}} archivos escaneados.',
   openInEditorTitle: 'Abrir {{file}}:{{line}} en tu editor',
   moreNotShown: '{{n}} más sin mostrar',
+
+  // ── Security ──
+  sectionSecurity: 'Seguridad',
+  securitySeverityLabel: 'Severidad',
+  severityAll: 'Todas',
+  severityCritical: 'crítica',
+  emptySecurityTitle: 'Sin hallazgos de seguridad',
+  emptySecurityBody: 'Nada marcado en {{n}} archivos escaneados.',
 
   sectionServices: 'Servicios',
   servicesAdd: 'Añadir',
