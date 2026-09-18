@@ -54,6 +54,43 @@ const NO_SMELLS = {
   summary: { todo_comment: 0, empty_function: 0, hardcoded_value: 0, debug_artifact: 0 },
   total: 0,
 };
+/* TRA-1675. The Workspace Security column is a count; this is the list behind
+   it — the same shape GET /api/projects/security answers with. */
+const NO_SECURITY = {
+  files_scanned: 77,
+  findings: [],
+  summary: { critical: 0, high: 0, medium: 0, low: 0 },
+  suppressed_low_confidence: 0,
+};
+const SECURITY_WITH_FINDINGS = {
+  files_scanned: 77,
+  findings: [
+    {
+      rule_id: 'CWE-89',
+      rule_name: 'SQL Injection',
+      severity: 'critical',
+      file: 'src/search.ts',
+      line: 3,
+      column: 12,
+      snippet: 'db.query(`SELECT * FROM products WHERE name LIKE `%${q}%``)',
+      fix: 'Use parameterized queries.',
+      confidence: 'high',
+    },
+    {
+      rule_id: 'CWE-79',
+      rule_name: 'XSS',
+      severity: 'medium',
+      file: 'src/view.ts',
+      line: 12,
+      column: 5,
+      snippet: 'el.innerHTML = body',
+      fix: 'Escape HTML before inserting.',
+      confidence: 'high',
+    },
+  ],
+  summary: { critical: 1, high: 0, medium: 1, low: 0 },
+  suppressed_low_confidence: 0,
+};
 
 beforeEach(() => {
   /* The pane keeps its last stats in localStorage (TRA-934), and jsdom shares
@@ -110,7 +147,7 @@ describe('formatting helpers', () => {
 
 describe('ProjectOverview surface', () => {
   it('offers reindex as a capsule button, not a full-bleed accent bar', async () => {
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     const { container } = render(<ProjectOverview root={ROOT} />);
 
     const button = await screen.findByRole('button', { name: 'Reindex' });
@@ -125,7 +162,7 @@ describe('ProjectOverview surface', () => {
 
   it('shows the indexing phase as a progress bar with an accessible value', async () => {
     daemon.projects = [{ root: ROOT, status: 'indexing', progress: { phase: 'Resolving edges', percent: 42 } }];
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     const bar = await screen.findByRole('progressbar', { name: 'Indexing progress' });
@@ -145,6 +182,7 @@ describe('ProjectOverview surface', () => {
       '/coverage': COVERAGE,
       '/subprojects': { repos: [], services: [] },
       '/smells': NO_SMELLS,
+      '/security': NO_SECURITY,
     });
     render(<ProjectOverview root={ROOT} />);
 
@@ -161,11 +199,80 @@ describe('ProjectOverview surface', () => {
       '/coverage': COVERAGE,
       '/subprojects': { repos: [], services: [] },
       '/smells': NO_SMELLS,
+      '/security': NO_SECURITY,
     });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText('No debug artifacts')).toBeTruthy();
     expect(screen.queryByText(/debug_artifact/)).toBeNull();
+  });
+
+  /* TRA-1675. The Workspace Security column is a bare count — this is the
+     list behind it: severity badge, rule name and id, file:line and snippet. */
+  it('lists security findings with severity, rule and location', async () => {
+    mockApi({
+      '/stats': STATS,
+      '/coverage': COVERAGE,
+      '/subprojects': { repos: [], services: [] },
+      '/smells': NO_SMELLS,
+      '/security': SECURITY_WITH_FINDINGS,
+    });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Security')).toBeTruthy();
+    expect(screen.getByText(/SQL Injection/)).toBeTruthy();
+    expect(screen.getByText(/CWE-89/)).toBeTruthy();
+    expect(screen.getByText(/src\/search\.ts:3/)).toBeTruthy();
+    expect(screen.getByText('2 findings')).toBeTruthy();
+  });
+
+  it('filters the security list by severity without re-fetching', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/security')) {
+        return { ok: true, status: 200, json: async () => SECURITY_WITH_FINDINGS } as unknown as Response;
+      }
+      if (String(url).includes('/stats')) {
+        return { ok: true, status: 200, json: async () => STATS } as unknown as Response;
+      }
+      if (String(url).includes('/coverage')) {
+        return { ok: true, status: 200, json: async () => COVERAGE } as unknown as Response;
+      }
+      if (String(url).includes('/subprojects')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ repos: [], services: [] }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => NO_SMELLS } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText(/SQL Injection/)).toBeTruthy();
+    expect(screen.getByText(/XSS/)).toBeTruthy();
+    const securityCalls = () =>
+      fetchMock.mock.calls.filter((c) => String(c[0]).includes('/security')).length;
+
+    screen.getByRole('button', { name: 'critical' }).click();
+    await waitFor(() => expect(screen.queryByText(/XSS/)).toBeNull());
+    expect(screen.getByText(/SQL Injection/)).toBeTruthy();
+    /* The picker slices the one daemon answer client-side. */
+    expect(securityCalls()).toBe(1);
+  });
+
+  it('states an empty security scan as designed, not as a grey line', async () => {
+    mockApi({
+      '/stats': STATS,
+      '/coverage': COVERAGE,
+      '/subprojects': { repos: [], services: [] },
+      '/smells': NO_SMELLS,
+      '/security': NO_SECURITY,
+    });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('No security findings')).toBeTruthy();
+    expect(screen.getByText(/Nothing flagged across/)).toBeTruthy();
   });
 
   it('exposes every service action without a hover', async () => {
@@ -186,6 +293,7 @@ describe('ProjectOverview surface', () => {
         ],
       },
       '/smells': NO_SMELLS,
+      '/security': NO_SECURITY,
     });
     render(<ProjectOverview root={ROOT} />);
 
@@ -202,7 +310,7 @@ describe('ProjectOverview surface', () => {
        "Index project" sitting directly above "Files indexed 78". */
     daemon.projects = [];
     daemon.loading = true;
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText('Checking…')).toBeTruthy();
@@ -255,7 +363,7 @@ describe('ProjectOverview surface', () => {
     daemon.projects = [];
     daemon.loading = false;
     daemon.connected = true;
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText('Not tracked')).toBeTruthy();
@@ -273,7 +381,7 @@ describe('ProjectOverview surface', () => {
     daemon.projects = [];
     daemon.loading = false;
     daemon.connected = false;
-    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
+    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
@@ -293,7 +401,7 @@ describe('ProjectOverview surface', () => {
     daemon.projects = [];
     daemon.loading = true;
     daemon.connected = false;
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByRole('button', { name: 'Checking…' })).toBeTruthy();
@@ -310,7 +418,7 @@ describe('ProjectOverview surface', () => {
     daemon.projects = [{ root: ROOT, status: 'ready' }];
     daemon.loading = false;
     daemon.connected = false;
-    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
+    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
@@ -333,7 +441,7 @@ describe('ProjectOverview surface', () => {
     daemon.projects = [];
     daemon.loading = true;
     daemon.connected = false;
-    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
+    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByRole('button', { name: 'Checking…' })).toBeTruthy();
@@ -343,7 +451,7 @@ describe('ProjectOverview surface', () => {
   });
 
   it('keeps the chrome and offers a retry when a section fails', async () => {
-    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     await waitFor(() => expect(screen.getByText(/Couldn't load the index summary/)).toBeTruthy());
@@ -359,7 +467,7 @@ describe('ProjectOverview surface', () => {
      put the same sentence on screen twice, over a project last indexed five
      days ago and a daemon with nothing running. */
   it('states a multi-section failure once, with one retry', async () => {
-    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     await waitFor(() =>
@@ -473,7 +581,7 @@ describe('the surface reads from the catalogue, not from literals', () => {
 
   it('renders in Russian when Russian is the active language', async () => {
     setLocale('ru');
-    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     expect(await screen.findByRole('button', { name: 'Переиндексировать' })).toBeTruthy();
@@ -494,7 +602,7 @@ describe('the surface reads from the catalogue, not from literals', () => {
     ['es', 'No se pudieron cargar el resumen del índice y el escaneo de calidad.'],
   ])('agrees with a plural subject in %s', async (locale, sentence) => {
     setLocale(locale);
-    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null, '/security': NO_SECURITY });
     render(<ProjectOverview root={ROOT} />);
 
     await waitFor(() => expect(screen.getByText(sentence)).toBeTruthy());

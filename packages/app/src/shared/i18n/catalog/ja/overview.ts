@@ -37,6 +37,7 @@ export const overview = {
   errorIndexSummary: 'インデックスの概要',
   errorCoverage: '依存関係のカバレッジ',
   errorQuality: '品質スキャン',
+  errorSecurity: 'セキュリティスキャン',
   errorServices: 'サービス一覧',
 
   sectionCoverage: 'カバレッジ',
@@ -72,6 +73,14 @@ export const overview = {
   emptySmellBody: 'スキャンした {{n}} 件のファイルに、このカテゴリで対処すべき箇所はありません。',
   openInEditorTitle: '{{file}}:{{line}} をエディタで開く',
   moreNotShown: '他に {{n}} 件（非表示）',
+
+  // ── Security ──
+  sectionSecurity: 'セキュリティ',
+  securitySeverityLabel: '重要度',
+  severityAll: 'すべて',
+  severityCritical: 'クリティカル',
+  emptySecurityTitle: 'セキュリティの検出なし',
+  emptySecurityBody: '{{n}} 件のスキャン済みファイルに問題はありません。',
 
   sectionServices: 'サービス',
   servicesAdd: '追加',

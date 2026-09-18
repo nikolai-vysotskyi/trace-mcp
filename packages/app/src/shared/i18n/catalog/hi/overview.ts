@@ -37,6 +37,7 @@ export const overview = {
   errorIndexSummary: 'इंडेक्स का सारांश',
   errorCoverage: 'डिपेंडेंसी कवरेज',
   errorQuality: 'क्वालिटी स्कैन',
+  errorSecurity: 'सुरक्षा स्कैन',
   errorServices: 'सर्विस सूची',
 
   sectionCoverage: 'कवरेज',
@@ -73,6 +74,14 @@ export const overview = {
   emptySmellBody: 'स्कैन की गई {{n}} फ़ाइलों में इस श्रेणी में साफ़ करने लायक कुछ नहीं।',
   openInEditorTitle: '{{file}}:{{line}} अपने एडिटर में खोलें',
   moreNotShown: '{{n}} और नहीं दिखाए गए',
+
+  // ── Security ──
+  sectionSecurity: 'सुरक्षा',
+  securitySeverityLabel: 'गंभीरता',
+  severityAll: 'सभी',
+  severityCritical: 'गंभीर',
+  emptySecurityTitle: 'कोई सुरक्षा निष्कर्ष नहीं',
+  emptySecurityBody: '{{n}} स्कैन की गई फ़ाइलों में कुछ नहीं मिला।',
 
   sectionServices: 'सर्विसेज़',
   servicesAdd: 'जोड़ें',

@@ -47,6 +47,7 @@ export const overview = {
   errorIndexSummary: 'сводку индекса',
   errorCoverage: 'покрытие зависимостей',
   errorQuality: 'проверку качества',
+  errorSecurity: 'проверку безопасности',
   errorServices: 'список сервисов',
 
   sectionCoverage: 'Покрытие',
@@ -85,6 +86,13 @@ export const overview = {
   emptySmellBody: 'В этой категории чистить нечего — просмотрено файлов: {{n}}.',
   openInEditorTitle: 'Открыть {{file}}:{{line}} в редакторе',
   moreNotShown: 'Ещё {{n}} не показаны',
+
+  sectionSecurity: 'Безопасность',
+  securitySeverityLabel: 'Серьёзность',
+  severityAll: 'Все',
+  severityCritical: 'критический',
+  emptySecurityTitle: 'Уязвимостей не найдено',
+  emptySecurityBody: 'Ничего не отмечено в {{n}} просмотренных файлах.',
 
   sectionServices: 'Сервисы',
   servicesAdd: 'Добавить',
