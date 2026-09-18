@@ -82,6 +82,7 @@ import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
 import { countReindexingProjects, handleReindexFile } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
+import { getDroppedEventStats } from './indexer/watcher.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
 // Statically imported (unlike session.ts's own default dynamic import) so
 // `serve`'s SnapshotBackend fast path (TRA-948) resolves it near-instantly
@@ -3386,6 +3387,9 @@ program
           // TRA-1625: sweep skip reasons, so a daemon holding far more than
           // maxLoaded while unloading nothing is diagnosable from the log.
           sweep: projectManager.sweepEligibility(configuredIdleUnloadMinutes * 60_000),
+          // TRA-1665: dropped-event / reconcile tally, so a per-minute
+          // full-walk storm on a churn-heavy root is visible in the vitals.
+          reconcile: getDroppedEventStats(),
         };
       },
     });

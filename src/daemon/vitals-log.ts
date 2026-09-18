@@ -27,6 +27,15 @@ export interface DaemonVitals {
   sweep_pinned?: number;
   sweep_fresh?: number;
   sweep_evictable?: number;
+  /**
+   * Dropped-fs-event tally (TRA-1665) — present when the caller supplies it.
+   * A climbing `fs_drops` with a flat `fs_reconciles` means the storm breaker
+   * is coalescing per-minute full-walks into one trailing pass per cooldown;
+   * a climbing `fs_reconciles` means full-walks are actually running.
+   */
+  fs_drops?: number;
+  fs_reconciles?: number;
+  fs_reconcile_suppressed?: number;
 }
 
 export interface SweepBreakdown {
@@ -36,11 +45,20 @@ export interface SweepBreakdown {
   evictable: number;
 }
 
+/** Process-wide dropped-event / reconcile tally, mirroring getDroppedEventStats(). */
+export interface ReconcileCounts {
+  drops: number;
+  reconciles: number;
+  suppressed: number;
+}
+
 export interface ProjectCounts {
   loaded: number;
   indexing: number;
   /** Optional idle-sweep eligibility (ProjectManager.sweepEligibility). */
   sweep?: SweepBreakdown;
+  /** Optional dropped-event tally (FileWatcher.getDroppedEventStats). */
+  reconcile?: ReconcileCounts;
 }
 
 const toMb = (bytes: number): number => Math.round(bytes / 1024 / 1024);
@@ -71,6 +89,13 @@ export function buildVitals(counts: ProjectCounts): DaemonVitals {
           sweep_pinned: counts.sweep.pinned,
           sweep_fresh: counts.sweep.fresh,
           sweep_evictable: counts.sweep.evictable,
+        }
+      : {}),
+    ...(counts.reconcile
+      ? {
+          fs_drops: counts.reconcile.drops,
+          fs_reconciles: counts.reconcile.reconciles,
+          fs_reconcile_suppressed: counts.reconcile.suppressed,
         }
       : {}),
   };

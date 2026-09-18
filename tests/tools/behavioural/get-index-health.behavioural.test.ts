@@ -7,12 +7,25 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as parcelWatcher from '@parcel/watcher';
 import type { TraceMcpConfig } from '../../../src/config.js';
 import { initializeDatabase } from '../../../src/db/schema.js';
 import { Store } from '../../../src/db/store.js';
+import { FileWatcher, resetDroppedEventStats } from '../../../src/indexer/watcher.js';
 import { getIndexHealth } from '../../../src/tools/project/project.js';
 import { createTestStore } from '../../test-utils.js';
+
+type WatcherCallback = (err: Error | null, events: parcelWatcher.Event[]) => void | Promise<void>;
+
+let capturedCallback: WatcherCallback | null = null;
+
+vi.mock('@parcel/watcher', () => ({
+  subscribe: async (_root: string, cb: WatcherCallback) => {
+    capturedCallback = cb;
+    return { unsubscribe: async () => {} };
+  },
+}));
 
 function makeConfig(): TraceMcpConfig {
   return {
@@ -198,5 +211,29 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(result.status).toBe('ok');
     expect(result.projectRoot).toBe('/Users/nikolai/workdir');
     expect(result.next_steps).toBeUndefined();
+  });
+
+  // TRA-1665: once the storm breaker coalesces drops, get_index_health must
+  // say so — the daemon log is not readable from an agent session.
+  it('reports a reconcile-storm warning once the breaker coalesces drops', async () => {
+    resetDroppedEventStats();
+    const watcher = new FileWatcher();
+    try {
+      await watcher.start(process.cwd(), ctx.config, async () => {}, 10, undefined, {
+        onRescan: async () => {},
+      });
+      // Four rapid drops: the third opens the breaker, the fourth is
+      // coalesced (suppressed) however the in-flight passes interleave.
+      for (let i = 0; i < 4; i++) {
+        await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+      }
+      ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+      const result = getIndexHealth(ctx.store, ctx.config);
+      expect(result.status).toBe('degraded');
+      expect(result.warnings.some((w) => w.includes('Reconcile storm backoff'))).toBe(true);
+    } finally {
+      await watcher.stop();
+      resetDroppedEventStats();
+    }
   });
 });

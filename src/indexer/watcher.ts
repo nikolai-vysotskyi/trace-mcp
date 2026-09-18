@@ -37,15 +37,16 @@ function isEventsDroppedError(err: unknown): boolean {
 }
 
 /**
- * Process-wide tally of drop reports and the reconcile passes they triggered.
- * Reported by `get_index_health` so a session can tell "the OS never dropped
- * anything" from "it dropped events and the repair did/didn't run" — a
- * distinction that otherwise only exists in the daemon log, which the agent
- * asking the question cannot read (TRA-813).
+ * Process-wide tally of drop reports, the reconcile passes they triggered,
+ * and the reports the storm breaker coalesced instead of running immediately.
+ * Reported by `get_index_health` and the daemon vitals line so a session can
+ * tell "the OS never dropped anything" from "it dropped events and the repair
+ * did/didn't run" — a distinction that otherwise only exists in the daemon
+ * log, which the agent asking the question cannot read (TRA-813).
  */
-const droppedEventStats = { drops: 0, reconciles: 0 };
+const droppedEventStats = { drops: 0, reconciles: 0, suppressed: 0 };
 
-export function getDroppedEventStats(): { drops: number; reconciles: number } {
+export function getDroppedEventStats(): { drops: number; reconciles: number; suppressed: number } {
   return { ...droppedEventStats };
 }
 
@@ -53,6 +54,37 @@ export function getDroppedEventStats(): { drops: number; reconciles: number } {
 export function resetDroppedEventStats(): void {
   droppedEventStats.drops = 0;
   droppedEventStats.reconciles = 0;
+  droppedEventStats.suppressed = 0;
+}
+
+/**
+ * Storm backoff for dropped-event reconciles (TRA-1665).
+ *
+ * A watcher on a directory with intense artifact churn (build/ML run outputs
+ * written continuously) overflows the OS event queue over and over: every
+ * drop used to trigger its own full-walk reconcile, so one root re-walked
+ * ~10k files every minute for as long as the run lasted. The in-flight
+ * collapse in `runRescan` only helps bursts — it cannot help a sustained
+ * storm where each pass finishes before the next drop arrives.
+ *
+ * Once `RECONCILE_STORM_THRESHOLD` drops land inside `RECONCILE_STORM_WINDOW_MS`,
+ * the breaker opens for `RECONCILE_STORM_COOLDOWN_MS`: further drops are
+ * counted (`suppressed`) and collapse into a single trailing full-walk when the
+ * cooldown elapses, instead of a walk per drop. The threshold-crossing drop
+ * itself still runs immediately — the index covers the lost window up to now,
+ * and the trailing pass covers the rest, so no window is ever skipped, only
+ * deferred.
+ */
+export const RECONCILE_STORM_WINDOW_MS = 5 * 60_000;
+export const RECONCILE_STORM_THRESHOLD = 3;
+export const RECONCILE_STORM_COOLDOWN_MS = 5 * 60_000;
+
+/** Test seam for the storm breaker clock and thresholds. */
+export interface WatcherStormTuning {
+  now?: () => number;
+  stormWindowMs?: number;
+  stormThreshold?: number;
+  stormCooldownMs?: number;
 }
 
 function isMacSystemPolicyError(e: unknown): boolean {
@@ -146,6 +178,18 @@ export class FileWatcher {
   private activeRescan: Promise<void> | null = null;
   private rescanPending = false;
   /**
+   * Storm-breaker state (TRA-1665), per watcher instance — a storm is always
+   * about one root's churn, never the process. `dropTimestamps` holds the
+   * recent drop-report times inside the sliding window; `stormQuietUntilMs`
+   * is the instant an open breaker closes; `stormPending` is the single
+   * trailing pass the suppressed drops collapse into.
+   */
+  private dropTimestamps: number[] = [];
+  private stormQuietUntilMs = 0;
+  private stormCoalesced = 0;
+  private stormPending: { onRescan: () => Promise<void>; rootPath: string } | null = null;
+  private stormTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
    * Serializes start()/stop()/restartWithExcludes() on this instance. Without
    * this, two overlapping calls (e.g. ProjectManager.restartManagedAncestorWatchers
    * firing for two sibling descendants registered under the same ancestor at
@@ -189,7 +233,22 @@ export class FileWatcher {
   constructor(
     private readonly _setTimeout: typeof setTimeout = setTimeout,
     private readonly _clearTimeout: typeof clearTimeout = clearTimeout,
-  ) {}
+    stormTuning: WatcherStormTuning = {},
+  ) {
+    this.stormTuning = {
+      now: stormTuning.now ?? Date.now,
+      stormWindowMs: stormTuning.stormWindowMs ?? RECONCILE_STORM_WINDOW_MS,
+      stormThreshold: stormTuning.stormThreshold ?? RECONCILE_STORM_THRESHOLD,
+      stormCooldownMs: stormTuning.stormCooldownMs ?? RECONCILE_STORM_COOLDOWN_MS,
+    };
+  }
+
+  private readonly stormTuning: {
+    now: () => number;
+    stormWindowMs: number;
+    stormThreshold: number;
+    stormCooldownMs: number;
+  };
 
   async start(
     rootPath: string,
@@ -264,12 +323,16 @@ export class FileWatcher {
           if (isEventsDroppedError(err)) {
             droppedEventStats.drops++;
             // Don't just log: the events are gone, so nothing else will ever
-            // reindex what changed in the lost window (TRA-852).
-            logger.warn(
-              { rootPath, error: String(err) },
-              'File system events were dropped — reconciling index with disk',
-            );
-            this.runRescan(opts?.onRescan, rootPath);
+            // reindex what changed in the lost window (TRA-852). Under a
+            // sustained storm the breaker defers this drop into one trailing
+            // pass instead of a full-walk per drop (TRA-1665).
+            if (!this.deferStormDrop(opts?.onRescan, rootPath, err)) {
+              logger.warn(
+                { rootPath, error: String(err) },
+                'File system events were dropped — reconciling index with disk',
+              );
+              this.runRescan(opts?.onRescan, rootPath);
+            }
             return;
           }
           logger.error({ error: err }, 'Watcher error');
@@ -344,6 +407,89 @@ export class FileWatcher {
     logger.info({ rootPath }, 'File watcher started');
   }
 
+  /**
+   * Storm-breaker gate for a dropped-events report (TRA-1665). Returns true
+   * when this drop was coalesced into the deferred trailing pass (the caller
+   * must then skip both the warn and the immediate `runRescan`), false when
+   * the caller should proceed exactly as before.
+   *
+   * Callers without an `onRescan` never reconcile, so there is nothing to
+   * defer — they always take the legacy path.
+   */
+  private deferStormDrop(
+    onRescan: (() => Promise<void>) | undefined,
+    rootPath: string,
+    err: unknown,
+  ): boolean {
+    if (!onRescan) return false;
+    const now = this.stormTuning.now();
+    const windowStart = now - this.stormTuning.stormWindowMs;
+    this.dropTimestamps = this.dropTimestamps.filter((t) => t >= windowStart);
+    this.dropTimestamps.push(now);
+
+    if (now < this.stormQuietUntilMs) {
+      // Breaker open: count and collapse. One trailing pass already covers
+      // everything since the storm began, so an immediate walk would only
+      // re-walk churn that is still being written.
+      droppedEventStats.suppressed++;
+      this.stormCoalesced++;
+      this.stormPending = { onRescan, rootPath };
+      this.ensureStormTimer();
+      logger.debug(
+        { rootPath, coalesced: this.stormCoalesced },
+        'Reconcile storm in progress — drop coalesced into deferred full-walk',
+      );
+      return true;
+    }
+
+    if (this.dropTimestamps.length >= this.stormTuning.stormThreshold) {
+      // Storm onset. This drop still runs immediately via the caller, so the
+      // lost window up to now is covered; the breaker only throttles what
+      // comes after, and the trailing pass covers that tail.
+      this.stormQuietUntilMs = now + this.stormTuning.stormCooldownMs;
+      this.stormCoalesced = 0;
+      logger.warn(
+        {
+          rootPath,
+          error: String(err),
+          dropsInWindow: this.dropTimestamps.length,
+          cooldownMs: this.stormTuning.stormCooldownMs,
+        },
+        'Reconcile storm detected — deferring further full-walks to one trailing pass after cooldown',
+      );
+    }
+    return false;
+  }
+
+  /**
+   * Arms the single trailing pass for an open breaker. Idempotent: further
+   * suppressed drops only refresh `stormPending`, never arm a second timer.
+   * The timer fires once at the breaker's close and routes through the normal
+   * `runRescan` path, so in-flight collapse and `stop()` draining apply.
+   */
+  private ensureStormTimer(): void {
+    if (this.stormTimer || !this.stormPending) return;
+    const delay = Math.max(0, this.stormQuietUntilMs - this.stormTuning.now());
+    this.stormTimer = this._setTimeout(() => {
+      this.stormTimer = null;
+      const pending = this.stormPending;
+      this.stormPending = null;
+      // Close the breaker BEFORE running so drops landing during the trailing
+      // pass take the normal path (in-flight collapse) instead of re-arming.
+      this.stormQuietUntilMs = 0;
+      this.dropTimestamps = [];
+      const coalesced = this.stormCoalesced;
+      this.stormCoalesced = 0;
+      if (pending) {
+        logger.warn(
+          { rootPath: pending.rootPath, coalescedDrops: coalesced },
+          'Reconcile storm cooldown elapsed — running deferred full-walk',
+        );
+        this.runRescan(pending.onRescan, pending.rootPath);
+      }
+    }, delay);
+  }
+
   private runRescan(onRescan: (() => Promise<void>) | undefined, rootPath: string): void {
     if (!onRescan) return;
     if (this.activeRescan) {
@@ -415,6 +561,19 @@ export class FileWatcher {
       this.debounceTimer = null;
     }
     this.pendingPaths.clear();
+    // A storm-breaker trailing pass must never fire post-stop against a
+    // disposed pipeline: drop the collapsed work (its window is already
+    // covered by the last completed pass as far as it goes; the next start
+    // re-walks anyway) and disarm the timer. A trailing pass already running
+    // is awaited via `activeRescan` below.
+    if (this.stormTimer) {
+      this._clearTimeout(this.stormTimer);
+      this.stormTimer = null;
+    }
+    this.stormPending = null;
+    this.stormQuietUntilMs = 0;
+    this.stormCoalesced = 0;
+    this.dropTimestamps = [];
     // A reconcile pass holds the caller's pipeline, and callers dispose it as
     // soon as stop() returns. Drop any queued follow-up (cleared first, so the
     // in-flight pass's `finally` doesn't start one) and wait out the active
