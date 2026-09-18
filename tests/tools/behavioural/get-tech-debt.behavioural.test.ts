@@ -155,6 +155,28 @@ describe('getTechDebt() — behavioural contract (get_tech_debt)', () => {
     expect(value.project_grade).toBeNull();
   });
 
+  it('clean module discriminates from dirty one and can reach A/B (TRA-1671)', () => {
+    // Clean module: trivial complexity, no coupling, no git churn (non-git
+    // branch → absolute churn 0). Dirty module: high complexity.
+    const fClean = insertFile(store, 'src/clean/spotless.ts');
+    insertFn(store, fClean, 'tiny', 2);
+    const fDirty = insertFile(store, 'src/dirty/mess.ts');
+    insertFn(store, fDirty, 'monster', 30);
+    for (let i = 0; i < 20; i++) insertFn(store, fClean, `pad${i}`, 0);
+
+    const value = getTechDebt(store, '/project')._unsafeUnwrap();
+    const clean = value.modules.find((m) => m.module === 'src/clean');
+    const dirty = value.modules.find((m) => m.module === 'src/dirty');
+    expect(clean).toBeDefined();
+    expect(dirty).toBeDefined();
+    // No git data → churn signal must be 0, not a ~0.5 rank-percentile floor.
+    expect(clean!.breakdown.churn).toBe(0);
+    // The scale must separate them: clean reaches the healthy end (A/B),
+    // dirty stays at the debt end (C or worse).
+    expect(['A', 'B']).toContain(clean!.grade);
+    expect(clean!.score).toBeLessThan(dirty!.score);
+  });
+
   it('a handful of symbols scores modules but withholds project_grade (TRA-1057)', () => {
     // 1 file / 1 symbol — same shape as the real `tra925proj` fixture that
     // shipped a grade B on essentially no data.
