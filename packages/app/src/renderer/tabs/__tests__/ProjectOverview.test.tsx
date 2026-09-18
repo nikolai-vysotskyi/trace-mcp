@@ -376,6 +376,90 @@ describe('ProjectOverview surface', () => {
     expect(screen.getByText('Coverage')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
   });
+
+  /* TRA-1643. The daemon answers 404 `not_registered` for a root it never saw
+     — a deterministic answer, not a transient failure. The surface shows the
+     not-registered empty state with the button that fixes it, not the
+     "Couldn't load" banner whose Retry re-asks the same question. Coverage
+     and Services answer locally without registration, so without the takeover
+     the page renders half-alive under the banner. */
+  it('shows the not-registered empty state instead of a load error for an unknown project', async () => {
+    daemon.projects = [];
+    daemon.loading = false;
+    daemon.connected = true;
+    const notRegistered = {
+      ok: false,
+      status: 404,
+      json: async () => ({
+        error: '"demo-app" isn\'t registered with this daemon. Add it from the app\'s project list.',
+        reason: 'not_registered',
+      }),
+    } as unknown as Response;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/coverage')) {
+          return { ok: true, status: 200, json: async () => COVERAGE } as unknown as Response;
+        }
+        if (String(url).includes('/subprojects')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ repos: [], services: [] }),
+          } as unknown as Response;
+        }
+        return notRegistered;
+      }),
+    );
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Not registered with this daemon')).toBeTruthy();
+    expect(
+      screen.getByText(/isn't in this daemon's project list yet/),
+    ).toBeTruthy();
+    /* No load-failure banner, no Retry that could never succeed — the fix is
+       the Add button (one in the toolbar, one in the empty state). */
+    expect(screen.queryByText(/Couldn't load/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Index project' })).toHaveLength(2);
+    /* And the locally-answered sections stay hidden rather than rendering
+       half-alive under the banner. */
+    expect(screen.queryByText('Coverage')).toBeNull();
+    expect(screen.queryByText('No services detected')).toBeNull();
+  });
+
+  it('keeps the transient banner for failures that are not "not registered"', async () => {
+    daemon.projects = [{ root: ROOT, status: 'ready' }];
+    daemon.loading = false;
+    daemon.connected = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (String(url).includes('/stats')) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ error: 'boom' }),
+          } as unknown as Response;
+        }
+        if (String(url).includes('/coverage')) {
+          return { ok: true, status: 200, json: async () => COVERAGE } as unknown as Response;
+        }
+        if (String(url).includes('/subprojects')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ repos: [], services: [] }),
+          } as unknown as Response;
+        }
+        return { ok: true, status: 200, json: async () => NO_SMELLS } as unknown as Response;
+      }),
+    );
+    render(<ProjectOverview root={ROOT} />);
+
+    await waitFor(() => expect(screen.getByText(/Couldn't load the index summary/)).toBeTruthy());
+    expect(screen.queryByText('Not registered with this daemon')).toBeNull();
+  });
 });
 
 /* TRA-384. A key that is in the catalogue but not wired into the component

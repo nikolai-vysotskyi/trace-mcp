@@ -31,6 +31,8 @@ export const overview = {
   unknown: '不明',
   emptyIndexTitle: 'まだインデックスされていません',
   emptyIndexBody: 'このプロジェクトをインデックスすると、シンボル・エッジ・履歴を調べられます。',
+  notRegisteredTitle: 'デーモンに未登録です',
+  notRegisteredBody: '「{{name}}」はデーモンのプロジェクト一覧にまだありません。追加してインデックスと探索を始めましょう。',
 
   errorIndexSummary: 'インデックスの概要',
   errorCoverage: '依存関係のカバレッジ',

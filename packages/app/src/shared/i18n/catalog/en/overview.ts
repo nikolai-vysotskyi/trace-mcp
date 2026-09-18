@@ -49,6 +49,11 @@ export const overview = {
   unknown: 'Unknown',
   emptyIndexTitle: 'Not indexed yet',
   emptyIndexBody: 'Index this project to explore its symbols, edges and history.',
+  /* TRA-1643. The daemon answered 404 `not_registered` for this root: nothing
+     failed to load, the project simply is not in its list. The surface shows
+     this instead of the load-failure banner, whose Retry could never succeed. */
+  notRegisteredTitle: 'Not registered with this daemon',
+  notRegisteredBody: '"{{name}}" isn\'t in this daemon\'s project list yet. Add it to index and explore it.',
 
   /* SectionError composes "Couldn't load {what}." in lattice/ui, so these are
      fragments rather than sentences until that surface is extracted too. Each

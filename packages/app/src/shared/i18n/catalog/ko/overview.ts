@@ -31,6 +31,8 @@ export const overview = {
   unknown: '알 수 없음',
   emptyIndexTitle: '아직 인덱싱되지 않음',
   emptyIndexBody: '이 프로젝트를 인덱싱하면 심볼, 엣지, 기록을 살펴볼 수 있습니다.',
+  notRegisteredTitle: '데몬에 등록되지 않음',
+  notRegisteredBody: '“{{name}}”이(가) 데몬의 프로젝트 목록에 아직 없습니다. 추가하여 인덱싱하고 탐색하세요.',
 
   errorIndexSummary: '인덱스 요약',
   errorCoverage: '의존성 커버리지',

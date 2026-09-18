@@ -31,6 +31,8 @@ export const overview = {
   unknown: 'Desconhecida',
   emptyIndexTitle: 'Ainda não indexado',
   emptyIndexBody: 'Indexe este projeto para explorar seus símbolos, arestas e histórico.',
+  notRegisteredTitle: 'Não registrado no daemon',
+  notRegisteredBody: '“{{name}}” ainda não está na lista de projetos do daemon. Adicione-o para indexar e explorar.',
 
   errorIndexSummary: 'o resumo do índice',
   errorCoverage: 'a cobertura de dependências',

@@ -31,6 +31,8 @@ export const overview = {
   unknown: 'अज्ञात',
   emptyIndexTitle: 'अभी इंडेक्स नहीं हुआ',
   emptyIndexBody: 'इसके सिंबल, एज और इतिहास देखने के लिए इस प्रोजेक्ट को इंडेक्स करें।',
+  notRegisteredTitle: 'डेमन में पंजीकृत नहीं',
+  notRegisteredBody: '“{{name}}” अभी डेमन की परियोजना सूची में नहीं है। इसे इंडेक्स और एक्सप्लोर करने के लिए जोड़ें।',
 
   errorIndexSummary: 'इंडेक्स का सारांश',
   errorCoverage: 'डिपेंडेंसी कवरेज',
