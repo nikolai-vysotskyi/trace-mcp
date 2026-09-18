@@ -173,6 +173,19 @@ export class Store {
   }
 
   /**
+   * TRA-1660: kind-less `file::Name` disambiguation — every symbol whose id is
+   * `prefix#<kind>`. See SymbolRepository.findSymbolsBySymbolIdPrefix.
+   */
+  findSymbolsBySymbolIdPrefix(prefix: string, limit = 6): SymbolRow[] {
+    return this.symbols.findSymbolsBySymbolIdPrefix(prefix, limit);
+  }
+
+  /** Every symbol with this exact simple name (true uniqueness check). */
+  findSymbolsByName(name: string, limit = 6): SymbolRow[] {
+    return this.symbols.findSymbolsByName(name, limit);
+  }
+
+  /**
    * Count how many distinct symbols share this exact simple name. Used by
    * findReferences to detect when a name is too common for text_matched
    * edges to be trustworthy (graphify v0.5.5 / v0.6.3 phantom-god-node fix).
