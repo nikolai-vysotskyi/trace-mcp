@@ -11,6 +11,7 @@ import type { McpClientStatus } from '../../src/init/mcp-client.js';
 vi.mock('../../src/init/mcp-client.js', () => ({
   getMcpClientStatuses: vi.fn(),
   configureMcpClients: vi.fn(() => []),
+  MCP_CLIENT_PICKUP: { cursor: 'restart-app', cline: 'hot-reload' },
 }));
 
 vi.mock('../../src/project-root.js', () => ({
@@ -44,16 +45,32 @@ beforeEach(() => {
 });
 
 const SAMPLE_STATUSES: McpClientStatus[] = [
-  { client: 'claude-code', configPath: '/home/.claude.json', status: 'up_to_date' },
-  { client: 'cursor', configPath: null, status: 'missing' },
+  {
+    client: 'claude-code',
+    configPath: '/home/.claude.json',
+    status: 'up_to_date',
+    pickup: 'restart-session',
+  },
+  { client: 'cursor', configPath: null, status: 'missing', pickup: 'restart-app' },
   {
     client: 'windsurf',
     configPath: '/home/.windsurf/config.json',
     status: 'stale',
     staleReason: 'alwaysLoad',
+    pickup: 'reload-window',
   },
-  { client: 'jetbrains-ai', configPath: '/home/.jetbrains/mcp.json', status: 'unmanageable' },
-  { client: 'codex', configPath: '/home/.codex/config.toml', status: 'unknown' },
+  {
+    client: 'jetbrains-ai',
+    configPath: '/home/.jetbrains/mcp.json',
+    status: 'unmanageable',
+    pickup: null,
+  },
+  {
+    client: 'codex',
+    configPath: '/home/.codex/config.toml',
+    status: 'unknown',
+    pickup: 'restart-session',
+  },
 ];
 
 describe('clients status — human output', () => {
@@ -74,7 +91,7 @@ describe('clients status — human output', () => {
 
   it('renders "—" for a missing configPath', async () => {
     mockGetMcpClientStatuses.mockReturnValue([
-      { client: 'cursor', configPath: null, status: 'missing' },
+      { client: 'cursor', configPath: null, status: 'missing', pickup: 'restart-app' },
     ]);
 
     await run(['status']);
@@ -167,7 +184,12 @@ describe('clients update', () => {
 
   it('says so and calls nothing when every config already matches', async () => {
     mockGetMcpClientStatuses.mockReturnValue([
-      { client: 'cursor', configPath: '/home/.cursor/mcp.json', status: 'up_to_date' },
+      {
+        client: 'cursor',
+        configPath: '/home/.cursor/mcp.json',
+        status: 'up_to_date',
+        pickup: 'restart-app',
+      },
     ]);
 
     await run(['update']);
@@ -238,6 +260,38 @@ describe('clients update', () => {
       clients: ['cursor'],
     });
     expect(parsed.steps[0].action).toBe('updated');
+  });
+
+  /* TRA-1647: a write that landed but isn't picked up until restart reads as
+     "Update did nothing" — the human report names the next step per client. */
+  it('names the restart step after a successful write', async () => {
+    mockConfigureMcpClients.mockReturnValue([
+      { target: '/home/.cursor/mcp.json', action: 'updated', detail: 'cursor (global)' },
+    ]);
+
+    await run(['update', 'cursor']);
+
+    expect(printed()).toContain('→ Restart Cursor to apply the update.');
+  });
+
+  it('says nothing about restart when the client hot-reloads', async () => {
+    mockConfigureMcpClients.mockReturnValue([
+      { target: '/home/cline.json', action: 'updated', detail: 'cline (global)' },
+    ]);
+
+    await run(['update', 'cline']);
+
+    expect(printed()).not.toContain('→');
+  });
+
+  it('says nothing about restart when nothing was written', async () => {
+    mockConfigureMcpClients.mockReturnValue([
+      { target: '/home/.cursor/mcp.json', action: 'skipped', detail: 'Would configure cursor' },
+    ]);
+
+    await run(['update', 'cursor', '--dry-run']);
+
+    expect(printed()).not.toContain('→');
   });
 });
 

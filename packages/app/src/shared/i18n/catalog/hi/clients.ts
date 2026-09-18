@@ -33,6 +33,9 @@ export const clients = {
   migratingProgress: '{{total}} में से {{done}} माइग्रेट हो रहे हैं',
   writeFailed: 'कॉन्फ़िगरेशन नहीं लिखा जा सका।',
   driftedField: 'बदला हुआ फ़ील्ड: {{field}}',
+  pickupRestartApp: 'अपडेट लागू करने के लिए {{client}} को फिर से शुरू करें',
+  pickupRestartSession: 'अपडेट लागू करने के लिए {{client}} का सेशन फिर से शुरू करें',
+  pickupReloadWindow: 'अपडेट लागू करने के लिए {{client}} की विंडो फिर से लोड करें',
   blockedTitle: 'पहले Claude.app बंद करें',
   blockedWhy:
     '{{client}} अपना कॉन्फ़िगरेशन वहाँ रखता है जहाँ Claude.app चलते समय उसे फिर से लिख देता है — अभी लिखा गया सब कुछ खो जाएगा। ऐप को पूरी तरह बंद करें और फिर अपडेट करें।',
