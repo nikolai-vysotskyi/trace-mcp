@@ -40,6 +40,7 @@ export const overview = {
   errorIndexSummary: 'die Index-Übersicht',
   errorCoverage: 'die Abdeckung der Abhängigkeiten',
   errorQuality: 'der Qualitätsscan',
+  errorSecurity: 'der Sicherheitsscan',
   errorServices: 'die Dienstliste',
 
   // ── Coverage ──
@@ -78,6 +79,14 @@ export const overview = {
   emptySmellBody: 'In dieser Kategorie gibt es in {{n}} gescannten Dateien nichts aufzuräumen.',
   openInEditorTitle: '{{file}}:{{line}} im Editor öffnen',
   moreNotShown: '{{n}} weitere nicht angezeigt',
+
+  // ── Security ──
+  sectionSecurity: 'Sicherheit',
+  securitySeverityLabel: 'Schweregrad',
+  severityAll: 'Alle',
+  severityCritical: 'kritisch',
+  emptySecurityTitle: 'Keine Sicherheitsfunde',
+  emptySecurityBody: 'Nichts markiert in {{n}} gescannten Dateien.',
 
   // ── Services ──
   sectionServices: 'Dienste',

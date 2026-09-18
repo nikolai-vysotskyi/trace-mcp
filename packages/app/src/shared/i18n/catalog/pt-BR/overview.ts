@@ -37,6 +37,7 @@ export const overview = {
   errorIndexSummary: 'o resumo do índice',
   errorCoverage: 'a cobertura de dependências',
   errorQuality: 'a varredura de qualidade',
+  errorSecurity: 'a varredura de segurança',
   errorServices: 'a lista de serviços',
 
   sectionCoverage: 'Cobertura',
@@ -74,6 +75,14 @@ export const overview = {
   emptySmellBody: 'Nada a limpar nesta categoria nos {{n}} arquivos varridos.',
   openInEditorTitle: 'Abrir {{file}}:{{line}} no seu editor',
   moreNotShown: 'mais {{n}} não exibidos',
+
+  // ── Security ──
+  sectionSecurity: 'Segurança',
+  securitySeverityLabel: 'Gravidade',
+  severityAll: 'Todas',
+  severityCritical: 'crítica',
+  emptySecurityTitle: 'Nenhum achado de segurança',
+  emptySecurityBody: 'Nada marcado em {{n}} arquivos verificados.',
 
   sectionServices: 'Serviços',
   servicesAdd: 'Adicionar',

@@ -158,6 +158,7 @@ import { handleJournalStatsRequest, type JournalStatsContext } from './api/journ
 import { handleMemoryRequest } from './api/memory-routes.js';
 import { handleProjectStatsRequest } from './api/project-stats-routes.js';
 import { buildProjectFilesQuery } from './api/project-files-query.js';
+import { parseProjectSecurityQuery } from './api/project-security-query.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
@@ -165,6 +166,7 @@ import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
+import { scanSecurity } from './tools/quality/security-scan.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
@@ -2090,6 +2092,55 @@ program
           res.end(
             JSON.stringify({
               error: (e as Error & { stack?: string })?.message ?? 'Failed to scan code smells',
+            }),
+          );
+        }
+        return;
+      }
+
+      // REST API: security findings (OWASP pattern scan) for a project.
+      // Mirrors /api/projects/smells above: the Workspace table only carries
+      // the critical+high count, and Overview needs the list itself
+      // (severity/rule/file:line/snippet) with a severity filter (TRA-1675).
+      if (req.method === 'GET' && url.pathname === '/api/projects/security') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
+          return;
+        }
+        const managed = resolution.managed;
+        const parsed = parseProjectSecurityQuery(url);
+        if (!parsed.ok) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: parsed.error }));
+          return;
+        }
+        try {
+          const result = scanSecurity(managed.store, projectRoot, {
+            rules: parsed.value.rules,
+            severityThreshold: parsed.value.severityThreshold,
+            includeLowConfidence: parsed.value.includeLowConfidence,
+          });
+          if (result.isErr()) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(result.error) }));
+            return;
+          }
+          const value = result.value;
+          const findings = value.findings.slice(0, parsed.value.limit);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ...value, findings }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to scan security',
             }),
           );
         }
