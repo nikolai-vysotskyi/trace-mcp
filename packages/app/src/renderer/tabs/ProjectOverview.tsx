@@ -122,6 +122,14 @@ interface ServiceInfo {
     differently (an em dash vs a skeleton), so they are tracked separately. */
 type Load = 'idle' | 'loading' | 'ready' | 'failed';
 
+/** What the daemon answers for a project-scoped read of a root it does not
+    know (`resolveProjectForRest` in cli.ts): 404 with a machine-readable
+    reason next to the human sentence. */
+async function readDaemonReason(res: Response): Promise<string | undefined> {
+  const body = (await res.json().catch(() => null)) as { reason?: unknown } | null;
+  return typeof body?.reason === 'string' ? body.reason : undefined;
+}
+
 const BASE = 'http://127.0.0.1:3741';
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
 /** Findings past this are summarised rather than listed — the surface is an
@@ -299,6 +307,11 @@ export function ProjectOverview({
   const [smellsCategory, setSmellsCategory] = useState<SmellFinding['category']>('debug_artifact');
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  /* The daemon answered 404 `not_registered` for this root (TRA-1643): the
+     project is not in its list, so no Retry can succeed — the fix is adding
+     it, not re-asking. While set, the surface shows the not-registered empty
+     state instead of the load-failure banner and the half-alive sections. */
+  const [notRegistered, setNotRegistered] = useState(false);
 
   /* The Index card is the first thing on this screen with a number in it. */
   /* A snapshot on screen is a useful frame — that is the point of keeping it. */
@@ -319,11 +332,17 @@ export function ProjectOverview({
       const res = await daemonFetchProject(
         `${BASE}/api/projects/stats?project=${encodeURIComponent(root)}`,
       );
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        if (res.status === 404 && (await readDaemonReason(res)) === 'not_registered') {
+          setNotRegistered(true);
+        }
+        throw new Error(String(res.status));
+      }
       const fresh = (await res.json()) as ProjectStats;
       setStats(fresh);
       saveSnapshot(statsKey, fresh);
       setStatsFresh(true);
+      setNotRegistered(false);
       setStatsLoad('ready');
     } catch {
       setStatsLoad('failed');
@@ -363,8 +382,14 @@ export function ProjectOverview({
       try {
         const params = new URLSearchParams({ project: root, category, limit: '500' });
         const res = await daemonFetchProject(`${BASE}/api/projects/smells?${params}`);
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) {
+          if (res.status === 404 && (await readDaemonReason(res)) === 'not_registered') {
+            setNotRegistered(true);
+          }
+          throw new Error(String(res.status));
+        }
         setSmells(await res.json());
+        setNotRegistered(false);
         setSmellsLoad('ready');
       } catch {
         setSmellsLoad('failed');
@@ -383,6 +408,7 @@ export function ProjectOverview({
        saw it depended on which finished first. There is nothing to ask a daemon
        that has not answered yet; the sections stay on their skeletons. */
     if (daemonLoading) return;
+    setNotRegistered(false);
     fetchStats();
     fetchCoverage();
     fetchServices();
@@ -486,6 +512,17 @@ export function ProjectOverview({
             ? t('statusError')
             : t('statusNotIndexed');
 
+  /* TRA-1643. A root the daemon does not know is not a load failure: Retry
+     re-asks a question with a deterministic answer. While the flag from the
+     404 above stands — and the project has not meanwhile appeared in the
+     daemon's list (e.g. just re-added, optimistically `pending`) — the whole
+     surface is the not-registered empty state, not a banner over half-alive
+     sections. Coverage and Services answer locally without registration, and
+     showing them under a "couldn't load" banner is what made the page read
+     as broken rather than unadded. */
+  const showNotRegistered =
+    notRegistered && !daemonDown && !listPending && !project;
+
   const likelyUnknown = useMemo(
     () => coverage?.unknown.filter((u) => u.needs_plugin === 'likely') ?? [],
     [coverage],
@@ -528,11 +565,13 @@ export function ProjectOverview({
   const smellsFailed = smellsLoad === 'failed' && !smells;
   const servicesFailed = servicesLoad === 'failed' && svcList.length === 0;
   const failures: { what: string; retry: () => void }[] = [];
-  if (statsFailed) failures.push({ what: t('errorIndexSummary'), retry: fetchStats });
-  if (coverageFailed) failures.push({ what: t('errorCoverage'), retry: fetchCoverage });
-  if (smellsFailed)
-    failures.push({ what: t('errorQuality'), retry: () => fetchSmells(smellsCategory) });
-  if (servicesFailed) failures.push({ what: t('errorServices'), retry: fetchServices });
+  if (!showNotRegistered) {
+    if (statsFailed) failures.push({ what: t('errorIndexSummary'), retry: fetchStats });
+    if (coverageFailed) failures.push({ what: t('errorCoverage'), retry: fetchCoverage });
+    if (smellsFailed)
+      failures.push({ what: t('errorQuality'), retry: () => fetchSmells(smellsCategory) });
+    if (servicesFailed) failures.push({ what: t('errorServices'), retry: fetchServices });
+  }
   const collapsed = failures.length > 1;
 
   return (
@@ -684,6 +723,26 @@ export function ProjectOverview({
              on Workspace — which does have a flex parent — sat centred. */
           <div className="h-full flex flex-col">
             <DaemonDownPane restarting={restarting} onRestart={() => void restartDaemon()} />
+          </div>
+        ) : showNotRegistered ? (
+          /* TRA-1643 — the flex column is load-bearing for the same reason as
+             above: `ws-center-empty` centres with `flex: 1`, which needs the
+             flex parent this scroll container does not provide. */
+          <div className="h-full flex flex-col">
+            <EmptyState
+              icon="database"
+              title={t('notRegisteredTitle')}
+              subtitle={t('notRegisteredBody', { name: projectName })}
+              action={
+                <Button
+                  variant="prominent"
+                  icon="add"
+                  onClick={() => void addProject(root).catch(() => {})}
+                >
+                  {untracked ? t('actionReAdd') : t('actionIndex')}
+                </Button>
+              }
+            />
           </div>
         ) : (
         <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
