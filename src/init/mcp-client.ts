@@ -348,12 +348,16 @@ export function configureMcpClients(
     // whenever its own preferences change, dropping any foreign top-level keys.
     // If it's running during init, our write wins briefly and then gets clobbered
     // on the next preferences flush. Refuse to write and tell the user to quit.
+    // The `Error:` prefix is the failure marker: `clients update` keys its
+    // exit code on it, and the desktop app keys its blocked-sheet on it
+    // (TRA-1645) — without it a refusal exits 0 and the Update button spins
+    // into nothing.
     if (name === 'claude-desktop' && !opts.dryRun && isClaudeDesktopRunning()) {
       results.push({
         target: configPath,
         action: 'skipped',
         detail:
-          'Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
+          'Error: Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
       });
       continue;
     }
@@ -387,12 +391,13 @@ export function configureMcpClients(
       // For Claude Desktop specifically, verify the write survived. The app
       // may have been launched between our isClaudeDesktopRunning() check
       // and now; if it flushed preferences, our entry is already gone.
+      // Same `Error:` failure marker as the refusal above (TRA-1645).
       if (name === 'claude-desktop' && !verifyTraceMcpEntry(configPath)) {
         results.push({
           target: configPath,
           action: 'skipped',
           detail:
-            'Write was overwritten by Claude.app. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
+            'Error: Write was overwritten by Claude.app. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp init`.',
         });
         continue;
       }

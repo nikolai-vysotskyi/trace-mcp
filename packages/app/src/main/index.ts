@@ -424,12 +424,24 @@ ipcMain.handle(
         {
           timeout: 30_000,
         },
-        (error) => {
+        (error, stdout, stderr) => {
           if (error) {
             resolve({ ok: false, error: error.message });
-          } else {
-            resolve({ ok: true });
+            return;
           }
+          // `init` exits 0 with a refused client write filed as a "Needs
+          // attention" warning by design — but this call configures ONE
+          // client, so a refusal is the whole result, not a footnote. Without
+          // this the Connect button for a running Claude.app spins and stays
+          // Connect with nothing said anywhere (TRA-1645).
+          const refusal = `${stdout ?? ''}\n${stderr ?? ''}`.match(
+            /Error: Claude\.app is running[^\n]*|Error: Write was overwritten by Claude[^\n]*/,
+          );
+          if (refusal) {
+            resolve({ ok: false, error: refusal[0].trim() });
+            return;
+          }
+          resolve({ ok: true });
         },
       );
     });

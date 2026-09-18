@@ -33,6 +33,14 @@ export const clients = {
   migratingProgress: 'Переносим {{done}} из {{total}}',
   writeFailed: 'Не удалось записать конфигурацию.',
   driftedField: 'Разошлось поле: {{field}}',
+  blockedTitle: 'Сначала выйдите из Claude.app',
+  blockedWhy:
+    '{{client}} хранит конфиг там, куда Claude.app пишет, пока запущен, — записанное сейчас будет отброшено. Полностью выйдите из приложения и повторите обновление.',
+  blockedStep1: '1. Полностью выйдите из Claude.app (Cmd+Q на macOS) — закрыть окно недостаточно.',
+  blockedStep2: '2. Нажмите «Повторить» ниже.',
+  blockedStep3: '3. Запустите Claude.app снова.',
+  blockedRetry: 'Повторить',
+  blockedDismiss: 'Понятно',
   setUpManually: 'Настроить вручную…',
   hideSteps: 'Скрыть шаги',
 

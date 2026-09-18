@@ -35,8 +35,13 @@
  * the enforcement level; and the drifted rows, which after any upgrade are
  * every configured client at once, get one action for the bucket the list
  * already sorts them into.
+ *
+ * TRA-1645 then found what the row caption could not say: a write Claude.app
+ * refuses (it rewrites claude_desktop_config.json while running) surfaced only
+ * as a truncated 11px red line, with nothing saying the fix is to quit the app
+ * and retry. That refusal opens a sheet with the steps instead.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { relativeTime } from '../i18n/format';
 import { DaemonDownPane } from '../components/DaemonDownPane';
@@ -487,6 +492,78 @@ function SupportedClientRow({
   );
 }
 
+// ── Sheet for a write Claude.app refused ──────────────────────────────
+
+/**
+ * The refusal the CLI answers when a write targets Claude Desktop while
+ * Claude.app is running. Both wordings live in `src/init/mcp-client.ts`
+ * (`configureMcpClients` refusing upfront, and the post-write verify): matching
+ * them here is what turns a truncated red caption into the sheet below, which
+ * is the only place that says what to actually do (TRA-1645).
+ */
+function isClaudeRunningError(error?: string): boolean {
+  return /Claude\.app is running|overwritten by Claude/i.test(error ?? '');
+}
+
+function ClaudeBlockedSheet({
+  clientLabel,
+  retrying,
+  onRetry,
+  onClose,
+}: {
+  clientLabel: string;
+  retrying: boolean;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('clients');
+  const titleId = useId();
+  const bodyId = useId();
+  /* Same dismiss idiom as ConfirmPopover: Escape always cancels, and the ref
+     keeps the handler stable so the effect subscribes once. */
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
+  return (
+    <div className="lx-sheet-scrim" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={bodyId}
+        className="lx-sheet"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id={titleId} className="lx-sheet-title">
+          {t('blockedTitle')}
+        </h2>
+        <div id={bodyId} className="lx-sheet-body">
+          <p className="lx-sheet-text">{t('blockedWhy', { client: clientLabel })}</p>
+          <p className="lx-sheet-text">{t('blockedStep1')}</p>
+          <p className="lx-sheet-text">{t('blockedStep2')}</p>
+          <p className="lx-sheet-text">{t('blockedStep3')}</p>
+        </div>
+        <div className="lx-sheet-actions">
+          <Button onClick={onClose}>{t('blockedDismiss')}</Button>
+          <Button variant="prominent" autoFocus disabled={retrying} onClick={onRetry}>
+            {retrying ? t('updating') : t('blockedRetry')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Surface ───────────────────────────────────────────────────────
 export function Clients() {
   const { t } = useTranslation('clients');
@@ -497,6 +574,13 @@ export function Clients() {
   const [configuringClient, setConfiguringClient] = useState<string | null>(null);
   /** Client name → what its last write said when it failed. */
   const [errors, setErrors] = useState<Record<string, string>>({});
+  /**
+   * The client whose last write Claude.app refused. The row keeps its red
+   * caption, but the caption truncates to one 11px line and never says the fix
+   * is to quit Claude.app and retry — the sheet above is what says it.
+   */
+  const [blockedClient, setBlockedClient] = useState<string | null>(null);
+  const closeBlocked = useCallback(() => setBlockedClient(null), []);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
 
@@ -564,7 +648,9 @@ export function Clients() {
     setConfiguringClient(clientName);
     try {
       const result = await window.electronAPI?.configureMcpClient(clientName, level);
-      if (recordResult(clientName, result)) await detectClients();
+      const ok = recordResult(clientName, result);
+      if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
+      if (ok) await detectClients();
     } finally {
       setConfiguringClient(null);
     }
@@ -574,7 +660,9 @@ export function Clients() {
     setConfiguringClient(clientName);
     try {
       const result = await window.electronAPI?.updateMcpClients?.([clientName]);
-      if (recordResult(clientName, result)) await detectClients();
+      const ok = recordResult(clientName, result);
+      if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
+      if (ok) await detectClients();
     } finally {
       setConfiguringClient(null);
     }
@@ -588,12 +676,23 @@ export function Clients() {
     try {
       for (const [i, name] of names.entries()) {
         setBulk({ done: i, total: names.length });
-        recordResult(name, await window.electronAPI?.updateMcpClients?.([name]));
+        const result = await window.electronAPI?.updateMcpClients?.([name]);
+        recordResult(name, result);
+        if (isClaudeRunningError(result?.error)) setBlockedClient(name);
       }
     } finally {
       setBulk(null);
       await detectClients();
     }
+  };
+
+  /* Retry from the blocked sheet: the entry exists and only needs repairing,
+     so this goes through `clients update` even when the block interrupted a
+     Connect — never back through setup, which would re-ask the level (TRA-497). */
+  const retryBlocked = () => {
+    const name = blockedClient;
+    setBlockedClient(null);
+    if (name) void handleUpdate(name);
   };
 
   const refreshAll = () => {
@@ -783,6 +882,14 @@ export function Clients() {
         </div>
         )}
       </div>
+      {blockedClient && (
+        <ClaudeBlockedSheet
+          clientLabel={CLIENT_LABELS[blockedClient] ?? blockedClient}
+          retrying={configuringClient === blockedClient}
+          onRetry={retryBlocked}
+          onClose={closeBlocked}
+        />
+      )}
     </div>
   );
 }
