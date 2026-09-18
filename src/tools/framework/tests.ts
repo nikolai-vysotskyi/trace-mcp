@@ -3,7 +3,7 @@ import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
 import type { SymbolRow } from '../../db/types.js';
-import { notFound, type TraceMcpResult } from '../../errors.js';
+import { notFound, validationError, type TraceMcpResult } from '../../errors.js';
 import { resolveSymbolInput } from '../shared/resolve.js';
 
 export type TestsForConfidence = 'text_match' | 'import_and_call' | 'direct_invocation';
@@ -94,7 +94,13 @@ export function getTestsFor(
     targetFile = f.path;
     fileNodeId = store.getNodeId('file', f.id);
   } else {
-    return err(notFound('provide symbol_id, fqn, or file_path'));
+    // Same echo-trap guard as find_usages (TRA-1633): missing target is a
+    // caller bug, so VALIDATION_ERROR with no quotable pseudo-value.
+    return err(
+      validationError(
+        'get_tests_for needs a target: pass one of symbol_id, fqn, or file_path. Use search() to locate the symbol first.',
+      ),
+    );
   }
 
   const fileLevelTests = collectFileLevelCandidates(store, {

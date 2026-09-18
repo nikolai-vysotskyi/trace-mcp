@@ -1,7 +1,7 @@
 import { err, ok } from 'neverthrow';
 import { type BudgetExceeded, type BudgetGuard, forTool } from '../../compute-guard.js';
 import type { Store } from '../../db/store.js';
-import { notFound, type TraceMcpResult } from '../../errors.js';
+import { notFound, validationError, type TraceMcpResult } from '../../errors.js';
 import { expandMethodViaCha } from '../shared/cha.js';
 import {
   emptyResolutionTiers,
@@ -106,7 +106,16 @@ export function findReferences(
     targetMeta.file = file.path;
     nodeId = store.getNodeId('file', file.id);
   } else {
-    return err(notFound('provide symbol_id, fqn, or file_path'));
+    // No target at all: this is a caller bug, not a missed lookup. Report
+    // VALIDATION_ERROR (not NOT_FOUND) with a message that names the missing
+    // parameters without quoting a value-like string — a quoted
+    // 'provide symbol_id, fqn, or file_path' was echoed back verbatim by
+    // agents as the next call's argument, looping on NOT_FOUND (TRA-1633).
+    return err(
+      validationError(
+        'find_usages needs a target: pass one of symbol_id, fqn, or file_path. Use search() to locate the symbol first.',
+      ),
+    );
   }
 
   if (nodeId === undefined) {
