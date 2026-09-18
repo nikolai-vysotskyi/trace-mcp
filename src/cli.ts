@@ -3383,6 +3383,9 @@ program
           indexing:
             loaded.filter((p) => p.status === 'indexing' || p.status === 'starting').length +
             countReindexingProjects(),
+          // TRA-1625: sweep skip reasons, so a daemon holding far more than
+          // maxLoaded while unloading nothing is diagnosable from the log.
+          sweep: projectManager.sweepEligibility(configuredIdleUnloadMinutes * 60_000),
         };
       },
     });

@@ -22,11 +22,25 @@ export interface DaemonVitals {
   uptime_s: number;
   projects_loaded: number;
   projects_indexing: number;
+  /** Idle-sweep eligibility breakdown — present when the caller supplies it. */
+  sweep_busy?: number;
+  sweep_pinned?: number;
+  sweep_fresh?: number;
+  sweep_evictable?: number;
+}
+
+export interface SweepBreakdown {
+  busy: number;
+  pinned: number;
+  fresh: number;
+  evictable: number;
 }
 
 export interface ProjectCounts {
   loaded: number;
   indexing: number;
+  /** Optional idle-sweep eligibility (ProjectManager.sweepEligibility). */
+  sweep?: SweepBreakdown;
 }
 
 const toMb = (bytes: number): number => Math.round(bytes / 1024 / 1024);
@@ -51,6 +65,14 @@ export function buildVitals(counts: ProjectCounts): DaemonVitals {
     uptime_s: Math.round(process.uptime()),
     projects_loaded: counts.loaded,
     projects_indexing: counts.indexing,
+    ...(counts.sweep
+      ? {
+          sweep_busy: counts.sweep.busy,
+          sweep_pinned: counts.sweep.pinned,
+          sweep_fresh: counts.sweep.fresh,
+          sweep_evictable: counts.sweep.evictable,
+        }
+      : {}),
   };
 }
 
