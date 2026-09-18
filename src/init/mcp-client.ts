@@ -1015,6 +1015,71 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
 // ---------------------------------------------------------------------------
 
 /**
+ * What the user must do after an entry is written before the client picks it
+ * up (TRA-1647) — the "everywhere" half of the TRA-1645 follow-up. This is the
+ * *pickup* side, not the *clobber* side: no client below rewrites its config
+ * in the background (only Claude Desktop does, guarded by
+ * `isClaudeDesktopRunning`), they just read it at different moments.
+ *
+ * Verified 2026-09-18 against docs and code; each entry carries its source.
+ * Where nothing conclusive exists the value is the conservative one — a
+ * needless reload is an annoyance, a missing hint reads as "Update did
+ * nothing". Never add a running-guard off this table: only a proven
+ * background rewrite earns one, and only `claude-desktop` has it.
+ */
+export type McpClientPickup = 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app';
+
+export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPickup | null> = {
+  // No hot-reload; open feature requests (anomalyco/claude-code#40059, #24057, #13281).
+  'claude-code': 'restart-session',
+  // CLI agent, same shape as claude-code (conservative — no pickup docs found).
+  'claw-code': 'restart-session',
+  // Reads the config at launch (plus the background-rewrite clobber above).
+  'claude-desktop': 'restart-app',
+  // cursor.com/docs/mcp: "Save the file and restart Cursor". Community reports
+  // auto-detect, but 2026 regressions show only a full restart is reliable.
+  cursor: 'restart-app',
+  // Refresh button in Manage MCPs re-reads mcp_config.json, no restart
+  // (docs.devin.ai/windsurf/plugins/cascade/mcp); a window reload also applies.
+  windsurf: 'reload-window',
+  // "Continue: Reload Configuration" command / reload the extension
+  // (docs.continue.dev, connector.zone guides).
+  continue: 'reload-window',
+  // JetBrains docs ("Clients Auto-Configuration"): "Restart your client for
+  // the configuration to take effect".
+  junie: 'restart-app',
+  // Manual setup through the IDE — n/a.
+  'jetbrains-ai': null,
+  // Config shared by CLI/desktop/IDE; restart the client (docs, issue #7767).
+  codex: 'restart-session',
+  // Conservative — no pickup docs found for the YAML agent config.
+  hermes: 'restart-session',
+  // Guides: "Restart Amp" / "Restart VS Code and Amp CLI after making changes".
+  amp: 'restart-session',
+  // Manual setup through Warp Settings — n/a.
+  warp: null,
+  // Conservative — no pickup docs found for the CLI agent config.
+  'factory-droid': 'restart-session',
+  // McpHub watches cline_mcp_settings.json via chokidar and reconnects
+  // changed servers itself (cline/cline src/services/mcp/McpHub.ts).
+  cline: 'hot-reload',
+  // Cline fork, but the watcher's lineage in the current extension is
+  // unproven — conservative.
+  kilocode: 'reload-window',
+  // Reload window / manual server reload (antigravity.google/docs + guides).
+  antigravity: 'reload-window',
+  // Setup tutorial: "Restart Gemini CLI. It will automatically try to start
+  // the defined servers." Config edits are silently ignored until a full
+  // process restart (google-gemini/gemini-cli#19792).
+  'gemini-cli': 'restart-session',
+  // Conservative — no pickup docs found (kimi-cli reads ~/.kimi/mcp.json).
+  kimi: 'restart-session',
+  // Config + MCP servers are connected once at startup; hot-reload is an open
+  // feature request (anomalyco/opencode#39987).
+  opencode: 'restart-session',
+};
+
+/**
  * Per-client config status:
  * - `missing`      — config file or trace-mcp entry not present.
  * - `up_to_date`   — entry on disk equals what we'd write now.
@@ -1042,6 +1107,13 @@ export interface McpClientStatus {
   status: ClientConfigStatus;
   /** Short machine-friendly reason when `status === 'stale'` (e.g. "alwaysLoad"). */
   staleReason?: string;
+  /**
+   * What the user must do after a write before this client picks it up —
+   * `MCP_CLIENT_PICKUP[name]`, fanned out here so `clients status --json`
+   * carries it to the desktop app. A code, never a sentence: the renderer
+   * owns the wording (DESIGN.md §5).
+   */
+  pickup: McpClientPickup | null;
   /**
    * Enforcement level the config on disk is currently on, so "Update" can
    * refresh a client without re-asking a setup question the user already
@@ -1164,7 +1236,7 @@ function detectClientStatus(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
-): Omit<McpClientStatus, 'level' | 'configExists'> {
+): Omit<McpClientStatus, 'level' | 'configExists' | 'pickup'> {
   if (name === 'jetbrains-ai' || name === 'warp') {
     return { client: name, configPath: null, status: 'unmanageable' };
   }
@@ -1329,6 +1401,7 @@ export function getMcpClientStatuses(
     const configured = status.status !== 'missing' && status.status !== 'unmanageable';
     return {
       ...status,
+      pickup: MCP_CLIENT_PICKUP[name] ?? null,
       level: configured ? detectEnforcementLevel(name) : null,
       configExists: status.configPath ? fs.existsSync(status.configPath) : false,
     };

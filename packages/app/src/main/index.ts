@@ -368,6 +368,8 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
       status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
       staleReason?: string;
       level?: 'base' | 'standard' | 'max' | null;
+      /** TRA-1647 pickup code from `clients status --json`; absent on older CLIs. */
+      pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
   }>((resolve) => {
     execCli(

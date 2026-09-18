@@ -33,6 +33,9 @@ export const clients = {
   migratingProgress: 'Migration de {{done}} sur {{total}}',
   writeFailed: 'La configuration n’a pas pu être écrite.',
   driftedField: 'Champ modifié : {{field}}',
+  pickupRestartApp: 'Redémarrez {{client}} pour appliquer la mise à jour',
+  pickupRestartSession: 'Redémarrez la session {{client}} pour appliquer la mise à jour',
+  pickupReloadWindow: 'Rechargez la fenêtre {{client}} pour appliquer la mise à jour',
   blockedTitle: 'Quittez d’abord Claude.app',
   blockedWhy:
     '{{client}} stocke sa configuration là où Claude.app la réécrit pendant son exécution : tout ce qui est écrit maintenant sera perdu. Quittez complètement l’application puis relancez la mise à jour.',

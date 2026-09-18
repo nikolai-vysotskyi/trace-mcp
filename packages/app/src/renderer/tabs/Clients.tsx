@@ -72,10 +72,16 @@ type ClientName =
   | 'junie'
   | 'jetbrains-ai'
   | 'codex'
+  | 'hermes'
   | 'amp'
   | 'warp'
   | 'factory-droid'
-  | 'gemini-cli';
+  | 'cline'
+  | 'kilocode'
+  | 'antigravity'
+  | 'gemini-cli'
+  | 'kimi'
+  | 'opencode';
 
 /* Product names: the same in every locale, so they stay inline. */
 const ALL_CLIENTS: { name: ClientName; label: string }[] = [
@@ -88,10 +94,16 @@ const ALL_CLIENTS: { name: ClientName; label: string }[] = [
   { name: 'junie', label: 'Junie' }, // i18n-exempt
   { name: 'jetbrains-ai', label: 'JetBrains AI Assistant' }, // i18n-exempt
   { name: 'codex', label: 'Codex' }, // i18n-exempt
+  { name: 'hermes', label: 'Hermes Agent' }, // i18n-exempt
   { name: 'amp', label: 'AMP' }, // i18n-exempt
   { name: 'warp', label: 'Warp' }, // i18n-exempt
   { name: 'factory-droid', label: 'Factory Droid' }, // i18n-exempt
+  { name: 'cline', label: 'Cline' }, // i18n-exempt
+  { name: 'kilocode', label: 'KiloCode' }, // i18n-exempt
+  { name: 'antigravity', label: 'Antigravity' }, // i18n-exempt
   { name: 'gemini-cli', label: 'Gemini CLI' }, // i18n-exempt
+  { name: 'kimi', label: 'Kimi Code CLI' }, // i18n-exempt
+  { name: 'opencode', label: 'OpenCode' }, // i18n-exempt
 ];
 
 // Clients that support enforcement levels (hooks & tweakcc are CC-specific)
@@ -136,6 +148,12 @@ interface RichClientStatus {
   status: ClientConfigStatus;
   staleReason?: string;
   /**
+   * TRA-1647 pickup code from `clients status --json`: what the user must do
+   * after a write before this client picks it up. Absent on a daemon older
+   * than the field, which reads as "we don't know" and shows no hint.
+   */
+  pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
+  /**
    * Enforcement level the config on disk is already on. `null` — or absent, on
    * a daemon older than the field — means "we don't know", which is the cue to
    * ask the user rather than reuse a level.
@@ -171,6 +189,28 @@ function clientStatus(client: ClientInfo): Tone {
 const CLIENT_LABELS: Record<string, string> = Object.fromEntries(
   ALL_CLIENTS.map((c) => [c.name, c.label]),
 );
+
+/**
+ * TRA-1647: the pickup code → catalogue key. `hot-reload` needs nothing, so
+ * it has no sentence; `null`/absent (manual clients, older daemons) neither.
+ * The code crosses IPC; the wording lives here (DESIGN.md §5).
+ */
+const PICKUP_KEYS = {
+  'restart-app': 'pickupRestartApp',
+  'restart-session': 'pickupRestartSession',
+  'reload-window': 'pickupReloadWindow',
+} as const;
+
+type ClientPickup = keyof typeof PICKUP_KEYS | 'hot-reload';
+
+function pickupSentence(
+  t: (key: string, opts?: Record<string, string>) => string,
+  pickup: ClientPickup | null | undefined,
+  clientLabel: string,
+): string | null {
+  if (!pickup || pickup === 'hot-reload') return null;
+  return t(PICKUP_KEYS[pickup], { client: clientLabel });
+}
 
 /** The row's primary label: the project being worked on, then the client that
     is working on it. The session id is neither, so it is never the headline. */
@@ -314,6 +354,8 @@ function SupportedClientRow({
   configPath,
   configExists,
   staleReason,
+  pickup,
+  justWritten,
   error,
   configuring,
   last,
@@ -342,6 +384,15 @@ function SupportedClientRow({
   configPath?: string | null;
   configExists?: boolean;
   staleReason?: string;
+  /** TRA-1647 pickup code for this client (absent on older daemons). */
+  pickup?: ClientPickup | null;
+  /**
+   * Whether this row's entry was just written by Connect/Update in this
+   * session. A write that landed but isn't picked up until restart reads as
+   * "Update did nothing" — while this is set, the caption names the next
+   * step instead of the path.
+   */
+  justWritten?: boolean;
   /** What the last write for this row said when it failed. */
   error?: string;
   configuring: boolean;
@@ -374,16 +425,25 @@ function SupportedClientRow({
      outranks the path: the path is where the entry lives, which the row also
      implies, and the error is the only thing here the user can act on.
 
+     TRA-1647: a write that just landed outranks the path for the same reason.
+     The client hasn't picked the entry up yet (restart/reload), and a row
+     that flips to "Connected" with nothing else to say reads as a write that
+     changed nothing. The hint clears on manual refresh; the tooltip below
+     keeps it afterwards.
+
      An unconfigured row used to be the one row on this screen with nothing in
      this slot — a bare "Windsurf · Connect" that could not tell an installed
      client one click from working apart from one that is not on the machine at
      all (TRA-479). It now says which: the file Connect will write into, or that
      there is no such file. */
+  const restartHint = justWritten ? pickupSentence(t, pickup, label) : null;
   const caption = error
     ? error
-    : isManual && showSteps
-      ? MANUAL_HINTS[name]
-      : status === 'missing'
+    : restartHint
+      ? restartHint
+      : isManual && showSteps
+        ? MANUAL_HINTS[name]
+        : status === 'missing'
         ? configExists === true && configPath
           ? shortPath(configPath)
           : configExists === false
@@ -428,11 +488,18 @@ function SupportedClientRow({
         /* Colour alone never carries the state: the dot is paired with the word.
            Neutral for presence-only — a grey dot next to "Configured" claims
            exactly what we checked, where a green one next to "Connected" would
-           claim a comparison we never ran. */
+           claim a comparison we never ran. TRA-1647: a verified row also names
+           its pickup on hover, so the next step survives after the caption
+           hint clears. Presence-only keeps its own hint — the unchecked
+           format is the more important persistent fact there. */
         <span
           className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
           style={{ color: 'var(--label-secondary)' }}
-          title={presenceOnly ? t('configuredHint') : undefined}
+          title={
+            presenceOnly
+              ? t('configuredHint')
+              : (pickupSentence(t, pickup, label) ?? undefined)
+          }
         >
           <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
           {presenceOnly ? t('configured') : t('connected')}
@@ -577,6 +644,17 @@ export function Clients() {
   /** Client name → what its last write said when it failed. */
   const [errors, setErrors] = useState<Record<string, string>>({});
   /**
+   * Clients whose entry Connect/Update wrote in this session (TRA-1647).
+   * Their rows name the pickup step in the caption until a manual refresh —
+   * the auto re-detect after a write must not clear it, or the hint would
+   * never survive to be read.
+   */
+  const [justWritten, setJustWritten] = useState<string[]>([]);
+  const markWritten = useCallback((names: string[]) => {
+    if (names.length === 0) return;
+    setJustWritten((prev) => [...prev.filter((n) => !names.includes(n)), ...names]);
+  }, []);
+  /**
    * The client whose last write Claude.app refused. The row keeps its red
    * caption, but the caption truncates to one 11px line and never says the fix
    * is to quit Claude.app and retry — the sheet above is what says it.
@@ -652,7 +730,10 @@ export function Clients() {
       const result = await window.electronAPI?.configureMcpClient(clientName, level);
       const ok = recordResult(clientName, result);
       if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
-      if (ok) await detectClients();
+      if (ok) {
+        markWritten([clientName]);
+        await detectClients();
+      }
     } finally {
       setConfiguringClient(null);
     }
@@ -664,7 +745,10 @@ export function Clients() {
       const result = await window.electronAPI?.updateMcpClients?.([clientName]);
       const ok = recordResult(clientName, result);
       if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
-      if (ok) await detectClients();
+      if (ok) {
+        markWritten([clientName]);
+        await detectClients();
+      }
     } finally {
       setConfiguringClient(null);
     }
@@ -676,12 +760,14 @@ export function Clients() {
   const handleUpdateAll = async (names: string[]) => {
     setBulk({ done: 0, total: names.length });
     try {
+      const written: string[] = [];
       for (const [i, name] of names.entries()) {
         setBulk({ done: i, total: names.length });
         const result = await window.electronAPI?.updateMcpClients?.([name]);
-        recordResult(name, result);
+        if (recordResult(name, result)) written.push(name);
         if (isClaudeRunningError(result?.error)) setBlockedClient(name);
       }
+      markWritten(written);
     } finally {
       setBulk(null);
       await detectClients();
@@ -698,6 +784,7 @@ export function Clients() {
   };
 
   const refreshAll = () => {
+    setJustWritten([]);
     detectClients();
     fetchClients();
   };
@@ -848,6 +935,8 @@ export function Clients() {
                       configPath={s.configPath}
                       configExists={s.configExists}
                       staleReason={s.staleReason}
+                      pickup={s.pickup}
+                      justWritten={justWritten.includes(c.name)}
                       error={errors[c.name]}
                       configuring={
                         configuringClient === c.name || (bulk !== null && bucket.includes(c.name))

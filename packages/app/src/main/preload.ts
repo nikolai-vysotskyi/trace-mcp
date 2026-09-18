@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       level?: 'base' | 'standard' | 'max' | null;
       /** Whether `configPath` exists on disk (TRA-479). */
       configExists?: boolean;
+      /** TRA-1647 pickup code from `clients status --json`; absent on older CLIs. */
+      pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
   }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
   configureMcpClient: (

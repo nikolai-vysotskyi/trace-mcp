@@ -33,6 +33,9 @@ export const clients = {
   migratingProgress: 'Переносим {{done}} из {{total}}',
   writeFailed: 'Не удалось записать конфигурацию.',
   driftedField: 'Разошлось поле: {{field}}',
+  pickupRestartApp: 'Перезапустите {{client}}, чтобы применить обновление',
+  pickupRestartSession: 'Перезапустите сессию {{client}}, чтобы применить обновление',
+  pickupReloadWindow: 'Перезагрузите окно {{client}}, чтобы применить обновление',
   blockedTitle: 'Сначала выйдите из Claude.app',
   blockedWhy:
     '{{client}} хранит конфиг там, куда Claude.app пишет, пока запущен, — записанное сейчас будет отброшено. Полностью выйдите из приложения и повторите обновление.',
