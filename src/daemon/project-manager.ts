@@ -111,6 +111,22 @@ export interface ManagedProject {
   initialIndexPromise?: Promise<void>;
 }
 
+/**
+ * Read-only sweep observability (TRA-1625). Classification of every loaded
+ * project with the exact exemptions `unloadIdleProjects` applies, so a daemon
+ * that holds far more than `maxLoaded` projects while unloading nothing is
+ * diagnosable from the vitals line instead of a guess: `pinned` points at
+ * session refcounts that never release, `fresh` at something constantly
+ * touching every project, `busy` at wedged indexing.
+ */
+export interface SweepEligibility {
+  loaded: number;
+  busy: number;
+  pinned: number;
+  fresh: number;
+  evictable: number;
+}
+
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
@@ -1147,6 +1163,35 @@ export class ProjectManager {
   touchActivity(root: string): void {
     const managed = this.projects.get(root);
     if (managed) managed.lastAccessedAt = Date.now();
+  }
+
+  /**
+   * Classify every loaded project with the exact exemptions
+   * `unloadIdleProjects` applies. Read-only: never unloads anything.
+   * `evictable` is what the TTL path of `unloadIdleProjects(idleMs, 0)`
+   * would unload on this tick. With `idleMs <= 0` the TTL rule is off, so
+   * everything neither busy nor pinned counts as `fresh`.
+   */
+  sweepEligibility(idleMs: number): SweepEligibility {
+    const out: SweepEligibility = { loaded: 0, busy: 0, pinned: 0, fresh: 0, evictable: 0 };
+    const now = Date.now();
+    for (const managed of this.projects.values()) {
+      out.loaded++;
+      if (managed.status === 'starting' || managed.status === 'indexing') {
+        out.busy++;
+        continue;
+      }
+      if ((this.resourcePool?.getRefCount(managed.root) ?? 0) > 0) {
+        out.pinned++;
+        continue;
+      }
+      if (idleMs > 0 && now - managed.lastAccessedAt >= idleMs) {
+        out.evictable++;
+      } else {
+        out.fresh++;
+      }
+    }
+    return out;
   }
 
   /**
