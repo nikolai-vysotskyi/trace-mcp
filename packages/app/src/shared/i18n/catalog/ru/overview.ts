@@ -40,6 +40,9 @@ export const overview = {
   emptyIndexTitle: 'Ещё не проиндексирован',
   emptyIndexBody:
     'Проиндексируйте проект, чтобы работать с его символами, связями и историей.',
+  notRegisteredTitle: 'Проект не зарегистрирован в службе',
+  notRegisteredBody:
+    '«{{name}}» пока нет в списке проектов службы. Добавьте его, чтобы проиндексировать и изучать.',
 
   errorIndexSummary: 'сводку индекса',
   errorCoverage: 'покрытие зависимостей',
