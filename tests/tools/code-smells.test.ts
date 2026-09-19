@@ -533,6 +533,102 @@ class PublicCtorWithParamProp {
       expect(findings.every((f) => f.symbol === 'constructor')).toBe(true);
     });
 
+    test('does not flag PHP __construct with DI or empty boilerplate (TRA-1672)', () => {
+      const content = `<?php
+class RedirectService {
+  public function __construct(private RedirectResolver $redirects) {}
+}
+
+class PlainDiService {
+  public function __construct(RedirectResolver $redirects) {}
+}
+
+class SendMailJob {
+  public function __construct() {}
+}
+`;
+      const fileId = writeFile(store, 'src/jobs.php', content, 'php');
+
+      const specs = [
+        {
+          needle: 'public function __construct(private RedirectResolver $redirects) {}',
+          lineStart: 3,
+          lineEnd: 3,
+        },
+        {
+          needle: 'public function __construct(RedirectResolver $redirects) {}',
+          lineStart: 7,
+          lineEnd: 7,
+        },
+        { needle: 'public function __construct() {}', lineStart: 11, lineEnd: 11 },
+      ];
+      for (const spec of specs) {
+        const idx = content.indexOf(spec.needle);
+        expect(idx).toBeGreaterThanOrEqual(0);
+        insertSymbol(store, fileId, {
+          name: '__construct',
+          kind: 'method',
+          byteStart: idx,
+          byteEnd: idx + spec.needle.length,
+          lineStart: spec.lineStart,
+          lineEnd: spec.lineEnd,
+          signature: spec.needle,
+        });
+      }
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('still flags empty regular PHP methods and stub __construct bodies (TRA-1672)', () => {
+      const content = `<?php
+class ReportService {
+  public function generate() {}
+}
+
+class StubService {
+  public function __construct() {
+    // TODO: inject deps
+  }
+}
+`;
+      const fileId = writeFile(store, 'src/report.php', content, 'php');
+
+      const emptyNeedle = 'public function generate() {}';
+      const emptyIdx = content.indexOf(emptyNeedle);
+      insertSymbol(store, fileId, {
+        name: 'generate',
+        kind: 'method',
+        byteStart: emptyIdx,
+        byteEnd: emptyIdx + emptyNeedle.length,
+        lineStart: 3,
+        lineEnd: 3,
+        signature: emptyNeedle,
+      });
+
+      const stubNeedle = `public function __construct() {
+    // TODO: inject deps
+  }`;
+      const stubIdx = content.indexOf(stubNeedle);
+      expect(stubIdx).toBeGreaterThanOrEqual(0);
+      insertSymbol(store, fileId, {
+        name: '__construct',
+        kind: 'method',
+        byteStart: stubIdx,
+        byteEnd: stubIdx + stubNeedle.length,
+        lineStart: 7,
+        lineEnd: 9,
+        signature: 'public function __construct()',
+      });
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['empty_function'] });
+      expect(result.isOk()).toBe(true);
+      const findings = result._unsafeUnwrap().findings;
+      expect(findings).toHaveLength(2);
+      expect(findings.map((f) => f.symbol).sort()).toEqual(['__construct', 'generate']);
+    });
+
     test('does not flag abstract methods or .d.ts files (TRA-1070)', () => {
       const dtsContent = `export declare function declareFn(): void;\n`;
       const dtsId = writeFile(store, 'src/types.d.ts', dtsContent, 'typescript');
