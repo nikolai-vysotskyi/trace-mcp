@@ -435,6 +435,101 @@ export function launcherEnvContent(nodePath: string, cliPath: string, version: s
   ].join('\n');
 }
 
+// ── cross-surface spawn lock (TRA-1607) ──────────────────────────────
+
+/**
+ * The same lock `src/daemon/lifecycle.ts::acquireSpawnLock` holds, reimplemented
+ * here because the Electron main bundle compiles standalone and cannot import
+ * from src/. Same file (`<home>/daemon-spawn.lock`), same format
+ * (`<pid>\n[<token>\n]` — the CLI writes a start-token second line; this side
+ * writes pid-only, which the CLI accepts as liveness-only), same stale rule
+ * (holder dead, or file older than 30 s). Keep all three in sync.
+ */
+export const SPAWN_LOCK_NAME = 'daemon-spawn.lock';
+export const SPAWN_LOCK_STALE_MS = 30_000;
+
+function spawnLockPath(home: string): string {
+  return path.join(home, SPAWN_LOCK_NAME);
+}
+
+function spawnLockHolderPid(home: string): number | null {
+  try {
+    const first = fs
+      .readFileSync(spawnLockPath(home), 'utf-8')
+      .split(/\r?\n/)[0]
+      ?.trim();
+    const pid = first ? parseInt(first, 10) : NaN;
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Take the spawn lock. True when acquired (or when a stale lock was
+ * reclaimed); false when another live process is currently installing.
+ * Caller MUST call releaseSpawnLock() when done. Never throws.
+ */
+export function acquireSpawnLock(home: string = getLauncherDir()): boolean {
+  try {
+    if (!fs.existsSync(home)) fs.mkdirSync(home, { recursive: true });
+  } catch {
+    return false;
+  }
+  const lockFile = spawnLockPath(home);
+  try {
+    const fd = fs.openSync(lockFile, 'wx');
+    fs.writeSync(fd, `${process.pid}\n`);
+    fs.closeSync(fd);
+    return true;
+  } catch {
+    /* held — examine below */
+  }
+  try {
+    const stat = fs.statSync(lockFile);
+    const holder = spawnLockHolderPid(home);
+    const stale = Date.now() - stat.mtimeMs > SPAWN_LOCK_STALE_MS;
+    const dead = holder === null || !isPidAlive(holder);
+    if (!stale && !dead) return false;
+    // Atomic takeover: drop the dead file, retry the O_EXCL create. A racing
+    // installer that recreates it between our unlink and create wins — our
+    // create then fails and we report "held".
+    try {
+      fs.unlinkSync(lockFile);
+    } catch {
+      /* already gone — fall through to the create */
+    }
+    try {
+      const fd = fs.openSync(lockFile, 'wx');
+      fs.writeSync(fd, `${process.pid}\n`);
+      fs.closeSync(fd);
+      return true;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
+/** Release the spawn lock, but only when it still names us. Never throws. */
+export function releaseSpawnLock(home: string = getLauncherDir()): void {
+  try {
+    if (spawnLockHolderPid(home) === process.pid) fs.unlinkSync(spawnLockPath(home));
+  } catch {
+    /* noop */
+  }
+}
+
 // ── launchd layer ────────────────────────────────────────────────────
 
 function launchctl(args: string[]): { ok: boolean; stderr: string } {
@@ -688,36 +783,55 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
     /* absent */
   }
 
-  if (!plistCurrent) {
-    // Boot out whatever is there before replacing the file — launchd keeps
-    // serving the loaded copy otherwise.
-    if (fs.existsSync(plist)) {
-      logDaemonStopAttribution(home, 'bootout', 'desktop-app: plist refresh');
-      runLaunchctl(['bootout', domain, plist]);
-      runLaunchctl(['unload', plist]);
-    }
-    try {
-      writeIfChanged(plist, generatePlist(shimPath, home), 0o644);
-      changed = true;
-    } catch (err) {
-      const message = `could not write the LaunchAgent at ${plist}: ${(err as Error).message}`;
-      log(message);
-      return { state: { phase: 'failed', message }, changed, reason: decision.reason };
-    }
+  // Single-instance with the CLI (TRA-1607): the same daemon-spawn.lock the
+  // stdio auto-spawn and `daemon start`/`restart` hold. Without this, app
+  // launch racing either of them restarts a daemon the other side just
+  // started. launchd dedupes the supervised job itself, but the decision to
+  // kickstart into another installer's window still double-restarts. When the
+  // lock is held we install nothing and fall through to the health wait
+  // below, which reports on the winner's daemon.
+  const haveSpawnLock = acquireSpawnLock(home);
+  if (!haveSpawnLock) {
+    log('daemon install: spawn lock held by another process — skipping install, waiting for its daemon');
   }
-
-  const loaded = runLaunchctl(['list', PLIST_LABEL]).ok;
-  if (!loaded) {
-    runLaunchctl(['enable', `${domain}/${PLIST_LABEL}`]);
-    const boot = runLaunchctl(['bootstrap', domain, plist]);
-    if (!boot.ok && !/already loaded|File exists/i.test(boot.stderr)) {
-      runLaunchctl(['load', '-w', plist]);
+  // Re-read after the guarded section: when we skipped the install above,
+  // `loaded` still describes the job the winner is (re)starting.
+  let loaded = false;
+  try {
+    if (!plistCurrent && haveSpawnLock) {
+      // Boot out whatever is there before replacing the file — launchd keeps
+      // serving the loaded copy otherwise.
+      if (fs.existsSync(plist)) {
+        logDaemonStopAttribution(home, 'bootout', 'desktop-app: plist refresh');
+        runLaunchctl(['bootout', domain, plist]);
+        runLaunchctl(['unload', plist]);
+      }
+      try {
+        writeIfChanged(plist, generatePlist(shimPath, home), 0o644);
+        changed = true;
+      } catch (err) {
+        const message = `could not write the LaunchAgent at ${plist}: ${(err as Error).message}`;
+        log(message);
+        return { state: { phase: 'failed', message }, changed, reason: decision.reason };
+      }
     }
-  } else if (changed) {
-    // Same label, new binary underneath: restart so the running daemon is the
-    // one we just installed. `-k` also resets launchd's throttle.
-    logDaemonStopAttribution(home, 'kickstart', 'desktop-app: bundled daemon upgrade');
-    runLaunchctl(['kickstart', '-k', `${domain}/${PLIST_LABEL}`]);
+
+    const jobLoaded = runLaunchctl(['list', PLIST_LABEL]).ok;
+    loaded = jobLoaded;
+    if (!jobLoaded && haveSpawnLock) {
+      runLaunchctl(['enable', `${domain}/${PLIST_LABEL}`]);
+      const boot = runLaunchctl(['bootstrap', domain, plist]);
+      if (!boot.ok && !/already loaded|File exists/i.test(boot.stderr)) {
+        runLaunchctl(['load', '-w', plist]);
+      }
+    } else if (changed && haveSpawnLock) {
+      // Same label, new binary underneath: restart so the running daemon is the
+      // one we just installed. `-k` also resets launchd's throttle.
+      logDaemonStopAttribution(home, 'kickstart', 'desktop-app: bundled daemon upgrade');
+      runLaunchctl(['kickstart', '-k', `${domain}/${PLIST_LABEL}`]);
+    }
+  } finally {
+    if (haveSpawnLock) releaseSpawnLock(home);
   }
 
   if (!changed && loaded) {

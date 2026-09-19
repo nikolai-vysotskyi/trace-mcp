@@ -11,6 +11,13 @@ import Database from 'better-sqlite3';
 import { Command } from 'commander';
 import { buildSavingsReport, formatSavingsReport, type SavingsReport } from '../savings-report.js';
 import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH, TRACE_MCP_HOME } from '../global.js';
+import {
+  diagnoseProcesses,
+  formatProcessReport,
+  listTraceMcpProcesses,
+  type DaemonProcessReport,
+} from '../daemon/process-inventory.js';
+import { isLaunchdJobLoaded, readRegisteredDaemonPid } from '../daemon/lifecycle.js';
 import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
 import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
 import { findPrunableProjectConfigSections, pruneProjectConfigSections } from '../config-jsonc.js';
@@ -160,6 +167,10 @@ export const doctorCommand = new Command('doctor')
       // launching us through an MCP client with no cwd needs answered.
       const serveRoot = diagnoseServeRoot();
 
+      // Single-daemon inventory (TRA-1607): every trace-mcp PID with role +
+      // RSS + age, flagging duplicate daemons and orphaned sessions.
+      const daemonProcesses = diagnoseDaemonProcesses();
+
       // Registry/DB integrity (#168) — independent of project conflicts. Surfaces
       // stale registrations (deleted folders, missing/corrupt DBs) that would
       // otherwise only manifest as runtime "Project not found" errors.
@@ -225,6 +236,7 @@ export const doctorCommand = new Command('doctor')
             JSON.stringify(
               {
                 serveRoot,
+                daemonProcesses,
                 registry,
                 registryFix,
                 topology,
@@ -244,7 +256,16 @@ export const doctorCommand = new Command('doctor')
         } else {
           console.log(
             JSON.stringify(
-              { serveRoot, registry, topology, decisions, stateHygiene, savings, ...report },
+              {
+                serveRoot,
+                daemonProcesses,
+                registry,
+                topology,
+                decisions,
+                stateHygiene,
+                savings,
+                ...report,
+              },
               null,
               2,
             ),
@@ -254,6 +275,7 @@ export const doctorCommand = new Command('doctor')
       }
 
       printServeRootReport(serveRoot);
+      printProcessReport(daemonProcesses);
       printRegistryReport(registry);
       printTopologyReport(topology);
       printDecisionsReport(decisions);
@@ -733,6 +755,42 @@ export function fixStateHygiene(
     removedConfigSections,
     removedTmpFiles,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Daemon process inventory (TRA-1607 / PROC-3)
+// ---------------------------------------------------------------------------
+
+export type { DaemonProcessReport };
+
+/**
+ * Inventory every trace-mcp process on this machine and flag single-daemon
+ * violations: duplicate `serve-http` daemons (double watchers, double ONNX,
+ * double SQLite handles on the same files) and orphaned stdio sessions whose
+ * parent is gone. Best-effort — when `ps` is unavailable the report carries
+ * `listFailed` instead of throwing.
+ */
+export function diagnoseDaemonProcesses(): DaemonProcessReport {
+  const { processes, listFailed } = listTraceMcpProcesses();
+  if (listFailed) {
+    return {
+      processes: [],
+      daemons: [],
+      duplicates: [],
+      orphans: [],
+      registeredPid: null,
+      listFailed: true,
+    };
+  }
+  return diagnoseProcesses(processes, {
+    registeredPid: readRegisteredDaemonPid(),
+    launchdLoaded: isLaunchdJobLoaded(),
+  });
+}
+
+function printProcessReport(r: DaemonProcessReport): void {
+  for (const line of formatProcessReport(r)) console.log(line);
+  console.log('');
 }
 
 export interface BlockedOverlapContainer {
