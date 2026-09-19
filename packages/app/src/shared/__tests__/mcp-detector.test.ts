@@ -22,7 +22,18 @@ beforeEach(() => {
   // resolves to the sandbox default no matter what the CI host exports.
   // Without this the zed rows below vanish on hosts that export XDG.
   vi.stubEnv('XDG_CONFIG_HOME', '');
+  // Zed resolves %APPDATA%\Zed on Windows — sandbox it so a Windows run
+  // never touches the real roaming profile (same TRA-73 lesson as the
+  // root suite's APPDATA stub).
+  vi.stubEnv('APPDATA', path.join(home, 'AppData', 'Roaming'));
 });
+
+function zedUserDir(): string {
+  if (process.platform === 'win32') {
+    return path.join(home, 'AppData', 'Roaming', 'Zed');
+  }
+  return path.join(home, '.config', 'zed');
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -123,10 +134,10 @@ it('detects minimax-code at the legacy ~/.mavis path, primary winning when both 
   expect(both[0].configPath).toBe(path.join(home, '.minimax', 'mcp.json'));
 });
 
-it('detects zed at ~/.config/zed/settings.json via context_servers (TRA-1658)', () => {
-  fs.mkdirSync(path.join(home, '.config', 'zed'), { recursive: true });
+it('detects zed at the user settings.json via context_servers (TRA-1658)', () => {
+  fs.mkdirSync(zedUserDir(), { recursive: true });
   fs.writeFileSync(
-    path.join(home, '.config', 'zed', 'settings.json'),
+    path.join(zedUserDir(), 'settings.json'),
     JSON.stringify({
       context_servers: { trace: { source: 'custom', command: 'x', args: ['serve'] } },
     }),
@@ -134,15 +145,15 @@ it('detects zed at ~/.config/zed/settings.json via context_servers (TRA-1658)', 
   );
   expect(detectMcpClients(undefined, home).find((c) => c.name === 'zed')).toEqual({
     name: 'zed',
-    configPath: path.join(home, '.config', 'zed', 'settings.json'),
+    configPath: path.join(zedUserDir(), 'settings.json'),
     hasTraceMcp: true,
   });
 });
 
 it('does not read mcpServers as a zed entry (TRA-1658)', () => {
-  fs.mkdirSync(path.join(home, '.config', 'zed'), { recursive: true });
+  fs.mkdirSync(zedUserDir(), { recursive: true });
   fs.writeFileSync(
-    path.join(home, '.config', 'zed', 'settings.json'),
+    path.join(zedUserDir(), 'settings.json'),
     JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
     'utf-8',
   );

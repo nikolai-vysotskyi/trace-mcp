@@ -605,7 +605,12 @@ describe('MiniMax Code writer (standard mcpServers, TRA-1670)', () => {
 });
 
 describe('Zed detection (TRA-1658)', () => {
+  // Mirror getConfigPath's platform branch: %APPDATA%\Zed on Windows
+  // (APPDATA is stubbed to the sandbox), ~/.config/zed elsewhere.
   function userFile(): string {
+    if (process.platform === 'win32') {
+      return path.join(fakeHome, 'AppData', 'Roaming', 'Zed', 'settings.json');
+    }
     return path.join(fakeHome, '.config', 'zed', 'settings.json');
   }
 
@@ -653,7 +658,11 @@ describe('Zed detection (TRA-1658)', () => {
 });
 
 describe('Zed writer (context_servers + source:custom, TRA-1658)', () => {
+  // Same platform branch as detection above.
   function userFile(): string {
+    if (process.platform === 'win32') {
+      return path.join(fakeHome, 'AppData', 'Roaming', 'Zed', 'settings.json');
+    }
     return path.join(fakeHome, '.config', 'zed', 'settings.json');
   }
 
@@ -733,15 +742,19 @@ describe('Zed writer (context_servers + source:custom, TRA-1658)', () => {
     expect(parsed.context_servers.trace.source).toBe('custom');
   });
 
-  it('honors $XDG_CONFIG_HOME for the user file when exported', () => {
-    const xdg = path.join(sandbox, 'xdg');
-    vi.stubEnv('XDG_CONFIG_HOME', xdg);
-    const results = configureMcpClients(['zed'], projectRoot, { scope: 'global' });
-    expect(results[0].action).toBe('created');
-    const file = path.join(xdg, 'zed', 'settings.json');
-    expect(results[0].target).toBe(file);
-    expect(fs.existsSync(file)).toBe(true);
-  });
+  // XDG is only honored on non-Windows (the win32 branch wins first).
+  it.skipIf(process.platform === 'win32')(
+    'honors $XDG_CONFIG_HOME for the user file when exported',
+    () => {
+      const xdg = path.join(sandbox, 'xdg');
+      vi.stubEnv('XDG_CONFIG_HOME', xdg);
+      const results = configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+      expect(results[0].action).toBe('created');
+      const file = path.join(xdg, 'zed', 'settings.json');
+      expect(results[0].target).toBe(file);
+      expect(fs.existsSync(file)).toBe(true);
+    },
+  );
 });
 
 describe('Hermes YAML writer', () => {
