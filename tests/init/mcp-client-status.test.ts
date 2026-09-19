@@ -291,11 +291,12 @@ describe('getMcpClientStatuses', () => {
     }
   });
 
-  it('reports missing → up_to_date round-trip for cline, antigravity, gemini-cli, kimi', () => {
-    const clients: Array<'cline' | 'antigravity' | 'gemini-cli' | 'kimi'> = [
+  it('reports missing → up_to_date round-trip for cline, antigravity, gemini-cli, minimax-code, kimi', () => {
+    const clients: Array<'cline' | 'antigravity' | 'gemini-cli' | 'minimax-code' | 'kimi'> = [
       'cline',
       'antigravity',
       'gemini-cli',
+      'minimax-code',
       'kimi',
     ];
     // Missing before any write.

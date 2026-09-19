@@ -510,6 +510,97 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
   });
 });
 
+describe('MiniMax Code detection (TRA-1670)', () => {
+  it('detects ~/.minimax/mcp.json with a trace entry', () => {
+    const dir = path.join(fakeHome, '.minimax');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'mcp.json'),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'minimax-code')?.hasTraceMcp).toBe(true);
+  });
+
+  it('detects ~/.minimax/mcp.json without trace-mcp', () => {
+    const dir = path.join(fakeHome, '.minimax');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'mcp.json'), JSON.stringify({ mcpServers: {} }));
+    const clients = detectMcpClients(projectRoot);
+    const minimax = clients.find((c) => c.name === 'minimax-code');
+    expect(minimax).toBeDefined();
+    expect(minimax?.hasTraceMcp).toBe(false);
+  });
+
+  it('detects the legacy ~/.mavis/mcp/mcp.json location', () => {
+    const dir = path.join(fakeHome, '.mavis', 'mcp');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'mcp.json'),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const rows = clients.filter((c) => c.name === 'minimax-code');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].configPath).toBe(path.join(dir, 'mcp.json'));
+    expect(rows[0].hasTraceMcp).toBe(true);
+  });
+
+  it('prefers the primary file when both primary and legacy exist', () => {
+    for (const dir of [path.join(fakeHome, '.minimax'), path.join(fakeHome, '.mavis', 'mcp')]) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'mcp.json'), JSON.stringify({ mcpServers: {} }));
+    }
+    const clients = detectMcpClients(projectRoot);
+    const rows = clients.filter((c) => c.name === 'minimax-code');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].configPath).toBe(path.join(fakeHome, '.minimax', 'mcp.json'));
+  });
+});
+
+describe('MiniMax Code writer (standard mcpServers, TRA-1670)', () => {
+  it('creates ~/.minimax/mcp.json and reports already_configured on re-run', () => {
+    const first = configureMcpClients(['minimax-code'], projectRoot, { scope: 'global' });
+    expect(first[0].action).toBe('created');
+    const file = path.join(fakeHome, '.minimax', 'mcp.json');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].alwaysLoad).toBeUndefined();
+    const second = configureMcpClients(['minimax-code'], projectRoot, { scope: 'global' });
+    expect(second[0].action).toBe('already_configured');
+  });
+
+  it('writes into the legacy file when that is where the user data is', () => {
+    const legacy = path.join(fakeHome, '.mavis', 'mcp', 'mcp.json');
+    fs.mkdirSync(path.dirname(legacy), { recursive: true });
+    fs.writeFileSync(
+      legacy,
+      JSON.stringify({ mcpServers: { linear: { command: 'npx', args: ['@linear/mcp'] } } }),
+    );
+    configureMcpClients(['minimax-code'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(legacy, 'utf-8'));
+    expect(parsed.mcpServers.linear).toBeDefined();
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
+    // No fork into the primary location.
+    expect(fs.existsSync(path.join(fakeHome, '.minimax', 'mcp.json'))).toBe(false);
+  });
+
+  it('migrates a legacy "trace-mcp" entry to "trace" in place', () => {
+    const file = path.join(fakeHome, '.minimax', 'mcp.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } },
+      }),
+    );
+    configureMcpClients(['minimax-code'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
+    expect(parsed.mcpServers.trace.args).toEqual(['serve']);
+  });
+});
+
 describe('Hermes YAML writer', () => {
   function configPath(): string {
     return path.join(fakeHome, '.hermes', 'config.yaml');

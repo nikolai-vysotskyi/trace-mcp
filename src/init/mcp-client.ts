@@ -1072,6 +1072,9 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
   // the defined servers." Config edits are silently ignored until a full
   // process restart (google-gemini/gemini-cli#19792).
   'gemini-cli': 'restart-session',
+  // No pickup docs found; desktop app + CLI read the data-dir files at
+  // launch. Conservative restart-app (TRA-1670).
+  'minimax-code': 'restart-app',
   // Conservative — no pickup docs found (kimi-cli reads ~/.kimi/mcp.json).
   kimi: 'restart-session',
   // Config + MCP servers are connected once at startup; hot-reload is an open
@@ -1173,6 +1176,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'kilocode',
   'antigravity',
   'gemini-cli',
+  'minimax-code',
   'kimi',
   'opencode',
 ];
@@ -1189,6 +1193,7 @@ const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
   'kilocode',
   'antigravity',
   'gemini-cli',
+  'minimax-code',
   'kimi',
 ]);
 
@@ -1333,8 +1338,8 @@ function detectClientStatus(
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
-      // cline, kilocode, antigravity, gemini-cli, kimi all use the standard mcpServers JSON
-      // shape compared by entryMatches().
+      // cline, kilocode, antigravity, gemini-cli, minimax-code, kimi all use
+      // the standard mcpServers JSON shape compared by entryMatches().
       const present = (() => {
         try {
           const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -1515,6 +1520,24 @@ export function getConfigPath(
       // (`gemini mcp add -s user` writes this file; without -s it writes the
       // project-scoped .gemini/settings.json, which init does not target).
       return path.join(getHome(), '.gemini', 'settings.json');
+    case 'minimax-code': {
+      // MiniMax Code (open-source, MIT): standard mcpServers JSON, global-only.
+      // Primary data dir ~/.minimax (their resolver migrates ~/.mavis itself);
+      // both <dir>/mcp.json and <dir>/mcp/mcp.json are read, writes go to
+      // <dir>/mcp.json. Prefer an existing file so we edit where the user's
+      // data is; create at the primary otherwise. Their own CLI writes the
+      // project layer <project>/.mcp.json (shared filename/shape with Claude
+      // Code, which reads it too), so init targets global only.
+      // Source: MiniMax-AI/minimax-code,
+      // packages/local-runtime-v2/src/service/mcp/ (TRA-1670).
+      const candidates = [
+        path.join(getHome(), '.minimax', 'mcp.json'),
+        path.join(getHome(), '.minimax', 'mcp', 'mcp.json'),
+        path.join(getHome(), '.mavis', 'mcp', 'mcp.json'),
+        path.join(getHome(), '.mavis', 'mcp.json'),
+      ];
+      return candidates.find((p) => fs.existsSync(p)) ?? candidates[0];
+    }
     case 'kimi':
       // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
       // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html

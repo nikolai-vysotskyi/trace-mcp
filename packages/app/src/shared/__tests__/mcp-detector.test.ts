@@ -79,3 +79,41 @@ it('detects antigravity at ~/.gemini/config/mcp_config.json without cross-trigge
   expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(true);
   expect(clients.find((c) => c.name === 'gemini-cli')).toBeUndefined();
 });
+
+it('detects minimax-code at ~/.minimax/mcp.json (TRA-1670)', () => {
+  fs.mkdirSync(path.join(home, '.minimax'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.minimax', 'mcp.json'),
+    JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
+    'utf-8',
+  );
+  expect(
+    detectMcpClients(undefined, home).find((c) => c.name === 'minimax-code'),
+  ).toEqual({
+    name: 'minimax-code',
+    configPath: path.join(home, '.minimax', 'mcp.json'),
+    hasTraceMcp: true,
+  });
+});
+
+it('detects minimax-code at the legacy ~/.mavis path, primary winning when both exist (TRA-1670)', () => {
+  fs.mkdirSync(path.join(home, '.mavis', 'mcp'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.mavis', 'mcp', 'mcp.json'),
+    JSON.stringify({ mcpServers: { trace: { command: 'x', args: ['serve'] } } }),
+    'utf-8',
+  );
+  const legacyOnly = detectMcpClients(undefined, home).filter((c) => c.name === 'minimax-code');
+  expect(legacyOnly).toHaveLength(1);
+  expect(legacyOnly[0].configPath).toBe(path.join(home, '.mavis', 'mcp', 'mcp.json'));
+
+  fs.mkdirSync(path.join(home, '.minimax'), { recursive: true });
+  fs.writeFileSync(
+    path.join(home, '.minimax', 'mcp.json'),
+    JSON.stringify({ mcpServers: {} }),
+    'utf-8',
+  );
+  const both = detectMcpClients(undefined, home).filter((c) => c.name === 'minimax-code');
+  expect(both).toHaveLength(1);
+  expect(both[0].configPath).toBe(path.join(home, '.minimax', 'mcp.json'));
+});

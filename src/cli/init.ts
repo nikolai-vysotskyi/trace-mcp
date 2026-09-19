@@ -71,7 +71,7 @@ export const initCommand = new Command('init')
   .option('--skip-app', 'Do not install or update the menu bar app')
   .option(
     '--mcp-client <name>',
-    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | gemini-cli | kimi | opencode',
+    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | gemini-cli | minimax-code | kimi | opencode',
   )
   .option('--scope <scope>', 'MCP config target: project | global', 'global')
   .option('--force', 'Overwrite existing configuration')
@@ -179,6 +179,7 @@ export const initCommand = new Command('init')
             'kilocode',
             'antigravity',
             'gemini-cli',
+            'minimax-code',
             'kimi',
             'opencode',
           ];
@@ -978,6 +979,7 @@ function formatClientName(name: string): string {
     kilocode: 'Kilo Code',
     antigravity: 'Antigravity',
     'gemini-cli': 'Gemini CLI',
+    'minimax-code': 'MiniMax Code',
     kimi: 'Kimi Code CLI',
     opencode: 'OpenCode',
   };

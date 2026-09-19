@@ -53,6 +53,7 @@ export interface DetectedMcpClient {
     | 'kilocode'
     | 'antigravity'
     | 'gemini-cli'
+    | 'minimax-code'
     | 'kimi'
     | 'opencode';
   configPath: string;

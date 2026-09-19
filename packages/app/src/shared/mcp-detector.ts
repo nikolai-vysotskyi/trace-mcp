@@ -271,6 +271,22 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
   // (user scope; `gemini mcp add -s user` writes this same file).
   checkConfig('gemini-cli', path.join(HOME, '.gemini', 'settings.json'));
 
+  // MiniMax Code: standard mcpServers JSON, global-only. Primary
+  // ~/.minimax/mcp.json (also <dir>/mcp/mcp.json), legacy ~/.mavis
+  // equivalents — first existing file wins, mirroring the writer
+  // (TRA-1670).
+  for (const p of [
+    path.join(HOME, '.minimax', 'mcp.json'),
+    path.join(HOME, '.minimax', 'mcp', 'mcp.json'),
+    path.join(HOME, '.mavis', 'mcp', 'mcp.json'),
+    path.join(HOME, '.mavis', 'mcp.json'),
+  ]) {
+    if (fs.existsSync(p)) {
+      checkConfig('minimax-code', p);
+      break;
+    }
+  }
+
   // Kimi Code CLI
   checkConfig('kimi', path.join(HOME, '.kimi', 'mcp.json'));
 
