@@ -419,6 +419,14 @@ export function getChangeImpact(
     fqn?: string;
     symbolIds?: string[];
     decoratorFilter?: string;
+    /**
+     * ObservationPack paging (TRA-1700): emit the full impact-ranked dependents
+     * list instead of the 25-item budget slice so the caller can archive it and
+     * serve exact pages. Summary stats are computed over the full set either
+     * way; only the enumerated list changes. Default false — every existing
+     * caller keeps the capped response 1:1.
+     */
+    emitAllDependents?: boolean;
   },
   depth = 3,
   maxDependents = 200,
@@ -761,6 +769,23 @@ export function getChangeImpact(
   // and all summary stats above remain computed over the full set.
   const { emitted: emittedDependents, truncated: dependentsTruncated } =
     capEmittedDependents(dependents);
+  // TRA-1700 (ObservationPack): the compact path needs the full ranked list to
+  // archive it and serve exact pages. Symbol detail stays trimmed per dependent
+  // (the per-item bound is about row width, not list length); the traversal
+  // cap (maxDependents) still bounds the worst case.
+  const fullRankedDependents =
+    opts.emitAllDependents === true
+      ? [...dependents]
+          .sort((a, b) => {
+            if (a.depth !== b.depth) return a.depth - b.depth;
+            return dependentWeight(b) - dependentWeight(a);
+          })
+          .map((d) =>
+            !d.symbols || d.symbols.length <= MAX_SYMBOLS_PER_DEPENDENT
+              ? d
+              : { ...d, symbols: d.symbols.slice(0, MAX_SYMBOLS_PER_DEPENDENT) },
+          )
+      : null;
 
   const result: ChangeImpactResult = {
     target: {
@@ -772,7 +797,7 @@ export function getChangeImpact(
     summary,
     risk,
     affectedTests,
-    dependents: emittedDependents,
+    dependents: fullRankedDependents ?? emittedDependents,
     totalAffected: dependents.length,
     resolution_tiers: resolutionTiers,
   };
