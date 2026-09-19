@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.29.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.28.0...v3.29.0) (2026-09-19)
+
+
+### Features
+
+* **clients,savings,app:** close the value loop from the app — one-click PreToolUse redirect + honest Savings (TRA-1698) ([#1283](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1283)) ([23db2d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23db2d8f480a86332828ec711035e9efc7b44698))
+* **clients:** MiniMax Code writer, detect, status and UI row (TRA-1670) ([#1274](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1274)) ([ad3f596](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad3f596a683f4c24329c4342035dc9c02cc9e437))
+* **memory:** one-shot mine CTA and automining flag in Memory empty states (TRA-1689) ([#1281](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1281)) ([e6380b7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6380b7cce98b79d5702c7d764b8a27be6347fdf))
+* **overview:** expose security findings list via REST + Overview section (TRA-1675) ([#1279](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1279)) ([70d1a80](https://github.com/nikolai-vysotskyi/trace-mcp/commit/70d1a8014cfe46aa56b5de1e3bf39dc63e8eadfb))
+
+
+### Bug Fixes
+
+* **daemon:** register endpoint full reindex in stop drain + stopping gate (TRA-1674) ([#1278](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1278)) ([ed1823c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed1823c0b8638c547e6e454afdde7219695e67aa))
+* **debt:** absolute churn signal + recalibrated A/B cutoffs (TRA-1671) ([#1273](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1273)) ([757e3b5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/757e3b5fa0e4453c841b79ec8350e343a1e5969e))
+* **indexer,app:** surface silent max_files truncation (TRA-1664) ([#1271](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1271)) ([2129ff5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2129ff5f6f6b40a24f7e73aa4096ab94e61aa87e))
+* **indexer:** EnvIndexer respects descendant excludes and gitignore (TRA-1666) ([#1269](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1269)) ([2323fd6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2323fd674e6ce16e8b436faebdcf369d56392085))
+* **indexer:** reconcile-storm backoff and run-artifact default excludes (TRA-1665) ([#1270](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1270)) ([09f7a97](https://github.com/nikolai-vysotskyi/trace-mcp/commit/09f7a97b2330dfb09703433b942129492bb7eef7))
+* **quality:** skip PHP __construct DI and empty boilerplate in empty_function (TRA-1672) ([#1275](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1275)) ([0e1d157](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e1d1578da0f9055f52d500b2aa428b1adf32ba1))
+
+
+### Documentation
+
+* **outreach:** delta recheck 2026-09-19 morning — all threads silent, sweep clean, graft listing surface checked (TRA-1684) ([#1280](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1280)) ([80da4bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/80da4bcbb781b58030aa86819ab3af100bd15163))
+* **outreach:** evening delta 2026-09-19 — threads silent, sweep clean, ripwire + context-mode surfaces checked (TRA-1697) ([#1282](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1282)) ([51829bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/51829bc3cd464a65ec6e3bfb1be9234b97680fd2))
+* **outreach:** yzfly recheck 2026-09-19 still open, maintainer quiet since 08-30 (TRA-1673) ([#1276](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1276)) ([ba94aee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ba94aee05d958e3b6a52599d00e38bf3f1e2f210))
+
 ## [3.28.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.27.1...v3.28.0) (2026-09-18)
 
 
