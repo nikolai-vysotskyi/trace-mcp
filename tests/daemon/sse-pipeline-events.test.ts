@@ -530,6 +530,14 @@ describe('R09 v2 — DaemonEvent union guardrail (parsed from src/cli.ts)', () =
     expect(source).toMatch(/type:\s*'reindex_completed'/);
     expect(source).toMatch(/type:\s*'reindex_errored'/);
     expect(source).toMatch(/managed\.pipeline[\s\S]{0,200}\.indexAll/);
+    // TRA-1674: the same handler must keep its stop-race wiring — the full
+    // indexAll run registers as in-flight reindex work (so stopProject's
+    // bounded drain waits for it) and refuses to start on a stopping
+    // project (same 503 contract as handleReindexFile). If either line is
+    // removed, the 2026-09-18 "Reindex failed" race is back.
+    expect(source).toMatch(/beginReindex\(projectRoot\)/);
+    expect(source).toMatch(/\.finally\(endReindex\)/);
+    expect(source).toMatch(/isProjectStopping\(projectRoot\)/);
   });
 
   it('confirms embed_progress is emitted from src/tools/register/core.ts', () => {
