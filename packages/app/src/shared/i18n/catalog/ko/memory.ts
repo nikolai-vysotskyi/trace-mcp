@@ -43,6 +43,12 @@ export const memory = {
   noDecisionsSubtitle:
     '결정은 이 코드베이스가 지금의 모습인 이유를 적어 둔 메모입니다 — 트레이드오프, 컨벤션, 버그의 근본 원인. 어시스턴트는 코드를 바꾸기 전에 이를 다시 읽습니다.',
   addFirstDecision: '첫 결정 추가',
+  mineSessions: '최근 세션 마이닝',
+  mining: '마이닝 중…',
+  mineResult: '세션 {{mined}}개 마이닝 · 결정 {{added}}개 추가',
+  mineFailed: '마이닝에 실패했습니다 — 다시 시도하세요.',
+  autoMiningOff:
+    '자동 마이닝이 꺼져 있습니다 — memory.background.enabled를 켜면 자동으로 채워집니다.',
 
   active: '활성',
   expired: '만료됨',

@@ -45,6 +45,12 @@ export const memory = {
   noDecisionsSubtitle:
     'Decision एक नोट है कि यह कोडबेस ऐसा क्यों है — कोई ट्रेड-ऑफ़, कोई परिपाटी, किसी बग का मूल कारण। असिस्टेंट आपका कोड बदलने से पहले इन्हें पढ़ते हैं।',
   addFirstDecision: 'पहला decision जोड़ें',
+  mineSessions: 'हाल के सत्र खंगालें',
+  mining: 'खंगाला जा रहा है…',
+  mineResult: '{{mined}} सत्र खंगाले · {{added}} निर्णय जोड़े गए',
+  mineFailed: 'खंगालना विफल रहा — पुनः प्रयास करें।',
+  autoMiningOff:
+    'स्वचालित खंगालना बंद है — इसे स्वतः भरने के लिए memory.background.enabled चालू करें।',
 
   active: 'सक्रिय',
   expired: 'समाप्त',
