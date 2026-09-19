@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { detectMcpClients } from '../mcp-detector';
 
 let home: string;
@@ -18,9 +18,14 @@ function ampClient() {
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-detector-'));
+  // Zed honors $XDG_CONFIG_HOME on Linux — pin it empty so the user path
+  // resolves to the sandbox default no matter what the CI host exports.
+  // Without this the zed rows below vanish on hosts that export XDG.
+  vi.stubEnv('XDG_CONFIG_HOME', '');
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(home, { recursive: true, force: true });
 });
 
