@@ -278,7 +278,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Pass symbol_ids to scope analysis to changed symbols only. Use before modifying code to understand blast radius. For a quick risk score alone use assess_change_risk; for who-calls-what use get_call_graph. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Pass symbol_ids to scope to changed symbols. Use before modifying code. For a quick risk score alone use assess_change_risk; for who-calls-what use get_call_graph. compact pages results; bundle recalls. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
       file_path: optionalNonEmptyString(512).describe('Relative file path to analyze'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to analyze'),
@@ -309,32 +309,8 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         .max(5000)
         .optional()
         .describe('Cap on returned dependents (default 200)'),
-      compact: z
-        .boolean()
-        .optional()
-        .describe(
-          'ObservationPack paging (TRA-1700): when the full result exceeds ~10KB, archive it locally and return the summary + first 25 dependents + an observation handle. Recall further pages with bundle_id. Omit/false = legacy capped response 1:1.',
-        ),
-      bundle_id: z
-        .string()
-        .max(64)
-        .optional()
-        .describe(
-          'Recall a page from a previous compact=true response (observation handle obs_<24hex>). Pair with bundle_offset/bundle_limit.',
-        ),
-      bundle_offset: z
-        .number()
-        .int()
-        .min(0)
-        .optional()
-        .describe('Item offset into the archived dependents list (default 0)'),
-      bundle_limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(500)
-        .optional()
-        .describe('Max dependents per recall page (default 25)'),
+      compact: z.boolean().optional().describe('Paged recall (opt-in).'),
+      bundle: z.string().optional().describe('Handle; @N = page N.'),
     },
     async ({
       file_path,
@@ -345,36 +321,34 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       depth,
       max_dependents,
       compact,
-      bundle_id,
-      bundle_offset,
-      bundle_limit,
+      bundle,
     }) => {
-      // Recall path: serve an exact page from the local archive. Fail-open
-      // means failing LOUD here (re-run the query) rather than fabricating.
-      if (bundle_id) {
-        if (!isObservationId(bundle_id)) {
+      // Recall path: serve an exact page from the local archive. The handle
+      // carries an optional cursor suffix (`obs_<24hex>@25`); without it the
+      // first page is served. Fail-open means failing LOUD here (re-run the
+      // query) rather than fabricating.
+      if (bundle) {
+        const [handle, cursor] = bundle.split('@');
+        const offset = cursor === undefined || cursor === '' ? 0 : Number(cursor);
+        if (!isObservationId(handle ?? '') || !Number.isSafeInteger(offset) || offset < 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: j(formatToolError(validationError(`Unknown observation id: ${bundle_id}`))),
+                text: j(formatToolError(validationError(`Unknown observation id: ${bundle}`))),
               },
             ],
             isError: true,
           };
         }
         try {
-          const page = recallObservation(
-            bundle_id,
-            bundle_offset ?? 0,
-            bundle_limit ?? OBSERVATION_FIRST_PAGE_ITEMS,
-          );
+          const page = recallObservation(handle as string, offset, OBSERVATION_FIRST_PAGE_ITEMS);
           return {
             content: [
               {
                 type: 'text',
                 text: jh('get_change_impact', {
-                  bundle_id,
+                  bundle: handle,
                   dependents: page.items,
                   bundle_offset: page.offset,
                   next_offset: page.nextOffset,
@@ -458,7 +432,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
               next_offset: nextOffset,
               eof,
               recall:
-                'Large result archived locally. Recall further pages with get_change_impact { bundle_id, bundle_offset, bundle_limit }.',
+                'Large result archived locally. Recall page N with get_change_impact {"bundle": "<id>@N"}.',
             };
           } else {
             // Under the threshold there is nothing to page: restore the exact
