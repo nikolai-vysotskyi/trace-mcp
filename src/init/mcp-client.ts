@@ -1104,12 +1104,23 @@ export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanagea
  */
 export type EnforcementLevel = 'base' | 'standard' | 'max';
 
+export type ClientHookState = 'active' | 'missing' | 'na';
+
 export interface McpClientStatus {
   client: DetectedMcpClient['name'];
   configPath: string | null;
   status: ClientConfigStatus;
   /** Short machine-friendly reason when `status === 'stale'` (e.g. "alwaysLoad"). */
   staleReason?: string;
+  /**
+   * PreToolUse redirect (guard hook) state for this client.
+   * `active` — the guard hook is wired into the client's global settings;
+   * `missing` — Claude-family client without it (the value loop is open);
+   * `na` — clients that don't run hooks. TRA-1698: `clients status` used to
+   * report only the MCP entry, so "Connected" in the app meant "entry present"
+   * while agents kept reading files directly.
+   */
+  hook: ClientHookState;
   /**
    * What the user must do after a write before this client picks it up —
    * `MCP_CLIENT_PICKUP[name]`, fanned out here so `clients status --json`
@@ -1148,6 +1159,17 @@ export const CLAUDE_FAMILY_CONFIG_DIR: Partial<Record<DetectedMcpClient['name'],
   'claude-desktop': '.claude',
   'claw-code': '.claw',
 };
+
+/** PreToolUse redirect state: only the Claude family runs hooks (TRA-1698). */
+function detectHookState(name: DetectedMcpClient['name']): ClientHookState {
+  const configDir = CLAUDE_FAMILY_CONFIG_DIR[name];
+  if (!configDir) return 'na';
+  try {
+    return isGuardHookInstalled(configDir) ? 'active' : 'missing';
+  } catch {
+    return 'missing';
+  }
+}
 
 /** Read back the level from the artifacts each level installs. */
 function detectEnforcementLevel(name: DetectedMcpClient['name']): EnforcementLevel | null {
@@ -1241,7 +1263,7 @@ function detectClientStatus(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
-): Omit<McpClientStatus, 'level' | 'configExists' | 'pickup'> {
+): Omit<McpClientStatus, 'level' | 'configExists' | 'pickup' | 'hook'> {
   if (name === 'jetbrains-ai' || name === 'warp') {
     return { client: name, configPath: null, status: 'unmanageable' };
   }
@@ -1407,6 +1429,7 @@ export function getMcpClientStatuses(
     return {
       ...status,
       pickup: MCP_CLIENT_PICKUP[name] ?? null,
+      hook: detectHookState(name),
       level: configured ? detectEnforcementLevel(name) : null,
       configExists: status.configPath ? fs.existsSync(status.configPath) : false,
     };

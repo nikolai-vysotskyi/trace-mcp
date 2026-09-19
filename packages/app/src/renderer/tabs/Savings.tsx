@@ -41,6 +41,10 @@ interface SavingsReport {
   model_source?: 'detected' | 'fallback';
   since: string | null;
   methodology_url: string;
+  /** TRA-1698: false when the PreToolUse redirect is off — the figure counts
+      only voluntary calls while agents still read files directly. Absent on an
+      older daemon, which reads as "we don't know" and shows no row. */
+  redirect_active?: boolean;
   reason?: string;
 }
 
@@ -165,6 +169,18 @@ function SavingsFigure({ report: r }: { report: SavingsReport }) {
           <ListRow label={t('rowReturned')} value={compact(r.response_tokens)} />
           <ListRow label={t('rowReduction')} value={`${r.reduction_pct}%`} />
           <ListRow label={t('rowCalls')} value={formatNumber(r.calls)} />
+          {r.redirect_active !== undefined && (
+            <ListRow
+              label={t('rowRedirect')}
+              value={
+                r.redirect_active ? (
+                  t('redirectOn')
+                ) : (
+                  <span style={{ color: 'var(--status-orange)' }}>{t('redirectOff')}</span>
+                )
+              }
+            />
+          )}
           {r.unmeasured_calls > 0 && (
             <ListRow label={t('rowExcluded')} value={formatNumber(r.unmeasured_calls)} />
           )}
@@ -174,6 +190,16 @@ function SavingsFigure({ report: r }: { report: SavingsReport }) {
             last
           />
         </Card>
+        {/* TRA-1698: without the redirect this screen used to print the figure
+            as the result. It is the floor — say so next to the number. */}
+        {r.redirect_active === false && (
+          <p
+            className="text-[11px] leading-[15px] px-1"
+            style={{ color: 'var(--label-secondary)' }}
+          >
+            {t('redirectOffBody')}
+          </p>
+        )}
       </Section>
 
       {/* The honesty boundary travels with the number, not a page away. */}

@@ -54,4 +54,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md и хуки',
   levelMax: 'Максимум',
   levelMaxHint: 'CLAUDE.md, хуки и tweakcc — рекомендуем',
+  hookActive: 'Хук активен',
+  hookActiveHint: 'PreToolUse-редирект включён — чтения файлов идут через trace-mcp',
+  hookMissing: 'Нет редирект-хука',
+  hookMissingHint: 'Запись есть, но агенты продолжают читать файлы напрямую',
+  enableRedirect: 'Включить редирект',
+  enablingRedirect: 'Включаем…',
+  redirectEnabled: 'PreToolUse-редирект включён — чтения файлов идут через trace-mcp',
+  redirectFailed: 'Не удалось установить редирект-хук.',
 } as const;

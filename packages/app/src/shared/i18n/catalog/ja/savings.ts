@@ -16,6 +16,10 @@ export const savings = {
   sectionMethod: '算出方法',
   methodBody: '返した側は、実際に通信で流れたトークンの推定値（文字数/4）です。基準側 — 同じ問いをファイル読み込みで済ませた場合の費用 — は推定なので、この数字は控えめな下限値であり、誇張のない試算です。',
   methodLink: '算出方法を読む',
+  rowRedirect: 'PreToolUseリダイレクト',
+  redirectOn: '有効',
+  redirectOff: '無効 — この数値は下限です',
+  redirectOffBody: 'リダイレクトフックが未インストールのため、エージェントはファイルを直接読み続けており、自発的なtrace-mcp呼び出しのみが集計されています。Clientsでリダイレクトを有効化してループを閉じてください。',
   notEnoughTitle: '実測した呼び出しがまだ足りません',
   notEnoughSubtitle: 'しばらくエージェントから trace-mcp を使って、また見に来てください。',
 };

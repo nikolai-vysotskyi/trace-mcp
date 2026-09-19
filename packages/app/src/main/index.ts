@@ -368,6 +368,8 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
       status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
       staleReason?: string;
       level?: 'base' | 'standard' | 'max' | null;
+      /** TRA-1698 PreToolUse redirect state; absent on older CLIs. */
+      hook?: 'active' | 'missing' | 'na' | null;
       /** TRA-1647 pickup code from `clients status --json`; absent on older CLIs. */
       pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
@@ -470,6 +472,57 @@ ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
           return;
         }
         resolve({ ok: true });
+      },
+    );
+  });
+});
+
+// IPC: install the PreToolUse redirect (guard hook) in one click (TRA-1698).
+//
+// The Clients screen could only write MCP entries; the hook that closes the
+// value loop (redirect Read/Grep/Glob/Bash → trace-mcp tools) required a
+// terminal (`setup-hooks` / `init`). This routes the same `setup-hooks`
+// command the CLI documents through the app, then verifies the hook is wired
+// (the trial check the issue asks for) before reporting success.
+ipcMain.handle('install-redirect-hook', async () => {
+  return new Promise<{ ok: boolean; error?: string; verified?: boolean }>((resolve) => {
+    execCli(
+      ['setup-hooks', '--global'],
+      { timeout: 30_000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+          return;
+        }
+        // Verify: re-run the probe through `clients status` so success means
+        // the hook is actually active, not just that the command exited 0.
+        // TRA-1698 review note: an inconclusive re-probe (error/unparseable)
+        // must not claim verification — it reports `verified: false` and the
+        // renderer shows no "redirect is on" confirmation for it.
+        execCli(
+          ['clients', 'status', '--json', '--scope', 'global'],
+          { timeout: 15_000, maxBuffer: 1024 * 1024 },
+          (statusError, statusStdout) => {
+            if (statusError) {
+              resolve({ ok: true, verified: false });
+              return;
+            }
+            try {
+              const parsed = JSON.parse(statusStdout) as {
+                statuses?: Array<{ hook?: string }>;
+              };
+              const hooks = (parsed.statuses ?? []).map((s) => s.hook);
+              const relevant = hooks.filter((h) => h === 'active' || h === 'missing');
+              if (relevant.length > 0 && !relevant.includes('active')) {
+                resolve({ ok: false, error: 'Hook installed but not detected — check ~/.claude/settings.json' });
+                return;
+              }
+              resolve({ ok: true, verified: true });
+            } catch {
+              resolve({ ok: true, verified: false });
+            }
+          },
+        );
       },
     );
   });

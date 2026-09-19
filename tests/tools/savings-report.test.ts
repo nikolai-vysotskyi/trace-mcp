@@ -128,6 +128,45 @@ describe('buildSavingsReport', () => {
     expect(text).toContain('chars/4');
     expect(text).toContain('0.220–0.368');
   });
+
+  // TRA-1698: the figure counts only voluntary calls while the PreToolUse
+  // redirect is off — the report must say it is a floor, not the loop's result.
+  it('marks the figure as a floor when the redirect hook is off', () => {
+    const r = buildSavingsReport(
+      store({
+        total_calls: 100,
+        measured: {
+          ...emptyMeasured(),
+          calls: 100,
+          tokens_saved: 50_000,
+          raw_tokens: 80_000,
+          actual_tokens: 30_000,
+        },
+      }),
+      { redirectActive: false },
+    );
+    expect(r.enough_data).toBe(true);
+    expect(r.redirect_active).toBe(false);
+    expect(formatSavingsReport(r)).toContain('setup-hooks --global');
+  });
+
+  it('says nothing about the redirect when the hook is active', () => {
+    const r = buildSavingsReport(
+      store({
+        total_calls: 100,
+        measured: {
+          ...emptyMeasured(),
+          calls: 100,
+          tokens_saved: 50_000,
+          raw_tokens: 80_000,
+          actual_tokens: 30_000,
+        },
+      }),
+      { redirectActive: true },
+    );
+    expect(r.redirect_active).toBe(true);
+    expect(formatSavingsReport(r)).not.toContain('redirect hook');
+  });
 });
 
 /**
