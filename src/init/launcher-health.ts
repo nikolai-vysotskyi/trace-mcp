@@ -85,9 +85,10 @@ function commandsFromYaml(raw: string): string[] {
 /**
  * Our `command` from any JSON-shaped config. Parsed as JSONC so AMP's
  * `settings.jsonc` and a hand-commented config both survive. Buckets cover the
- * three shapes clients use: `mcpServers`, `servers`, AMP's literal-dot
- * `amp.mcpServers` key, and the per-project copies inside `~/.claude.json`
- * (which is what an already-running Claude Code actually spawns).
+ * shapes clients use: `mcpServers`, `servers`, AMP's literal-dot
+ * `amp.mcpServers` key, Zed's `context_servers`, and the per-project copies
+ * inside `~/.claude.json` (which is what an already-running Claude Code
+ * actually spawns).
  */
 function commandsFromJson(raw: string): string[] {
   const parsed = parseJsonc(raw) as Record<string, unknown> | null;
@@ -96,6 +97,7 @@ function commandsFromJson(raw: string): string[] {
     parsed.mcpServers,
     parsed.servers,
     parsed['amp.mcpServers'],
+    parsed.context_servers,
     parsed.mcp,
   ];
   const projects = parsed.projects as Record<string, { mcpServers?: unknown }> | undefined;

@@ -54,6 +54,7 @@ export interface DetectedMcpClient {
     | 'antigravity'
     | 'gemini-cli'
     | 'minimax-code'
+    | 'zed'
     | 'kimi'
     | 'opencode';
   configPath: string;

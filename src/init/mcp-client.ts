@@ -229,6 +229,42 @@ export function configureMcpClients(
       continue;
     }
 
+    // Zed: `context_servers` (not `mcpServers`) in settings.json, entries
+    // stamped `source: "custom"`. jsonc-parser modify()/applyEdits() so the
+    // rest of the editor config (and any comments) survives the write.
+    if (name === 'zed') {
+      const configPath = getConfigPath(name, projectRoot, opts.scope);
+      if (!configPath) {
+        results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+        continue;
+      }
+      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
+
+      if (fs.existsSync(configPath) && zedEntryMatches(configPath, entry)) {
+        results.push({ target: configPath, action: 'already_configured', detail: name });
+        continue;
+      }
+      if (opts.dryRun) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would configure ${name} (${opts.scope})`,
+        });
+        continue;
+      }
+      try {
+        const action = writeZedJsoncEntry(configPath, entry);
+        results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+      } catch (err) {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Error: ${(err as Error).message}`,
+        });
+      }
+      continue;
+    }
+
     // OpenCode: JSON format with `mcp` key and `command: string[]`
     if (name === 'opencode') {
       const configPath = getConfigPath(name, projectRoot, opts.scope);
@@ -709,6 +745,115 @@ function writeFactoryJsonEntry(
 }
 
 // ---------------------------------------------------------------------------
+// Zed JSONC writer (`context_servers`, entries stamped `source: "custom"`)
+// ---------------------------------------------------------------------------
+
+function zedServersOf(configPath: string): Record<string, unknown> | undefined {
+  const content = fs.readFileSync(configPath, 'utf-8');
+  const parsed = parseJsonc(content) as Record<string, unknown> | null;
+  return parsed?.context_servers as Record<string, unknown> | undefined;
+}
+
+function zedEntryMatches(configPath: string, expected: McpServerEntry): boolean {
+  try {
+    const servers = zedServersOf(configPath);
+    // A lingering legacy key must force the write path (which deletes it) —
+    // see entryMatches() above for why.
+    if (servers && LEGACY_MCP_KEY in servers) return false;
+    const current = servers?.[MCP_KEY] as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object') return false;
+    // `source` is deliberately not compared: entries added through Zed's own
+    // UI may not carry it, and that alone is not drift worth rewriting for.
+    if (current.command !== expected.command) return false;
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return false;
+    if (expected.env || current.env) {
+      if (JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})) return false;
+    }
+    if ((current.alwaysLoad ?? false) !== (expected.alwaysLoad ?? false)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pinpointZedEntryDrift(configPath: string, expected: McpServerEntry): string {
+  try {
+    const servers = zedServersOf(configPath);
+    const current = servers?.[MCP_KEY] as Record<string, unknown> | undefined;
+    if (!current || typeof current !== 'object') {
+      return servers?.[LEGACY_MCP_KEY] ? 'legacy-key' : 'entry-missing';
+    }
+    // A correct new key with a lingering legacy key beside it still needs the
+    // write path (which deletes the legacy key), not a field comparison.
+    if (servers && typeof servers === 'object' && LEGACY_MCP_KEY in servers) return 'legacy-key';
+    if (current.command !== expected.command) return 'command';
+    if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';
+    if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';
+    if (
+      (expected.env || current.env) &&
+      JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})
+    ) {
+      return 'env';
+    }
+    if ((current.alwaysLoad ?? false) !== (expected.alwaysLoad ?? false)) return 'alwaysLoad';
+    return 'fields';
+  } catch {
+    return 'parse-error';
+  }
+}
+
+function writeZedJsoncEntry(configPath: string, entry: McpServerEntry): 'created' | 'updated' {
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  // Manual entries are stamped source:"custom" (the documented value for
+  // hand-added servers; third-party guides call it required, official docs
+  // show working entries without it). Written on every write, not only
+  // create: once trace-mcp manages the entry it is manual by definition,
+  // whatever the UI wrote before. The matcher deliberately ignores `source`,
+  // so a UI-added entry without it still verifies as up_to_date.
+  const value: Record<string, unknown> = {
+    source: 'custom',
+    command: entry.command,
+    args: entry.args,
+    ...(entry.cwd ? { cwd: entry.cwd } : {}),
+    ...(entry.env ? { env: entry.env } : {}),
+  };
+
+  let isNew = true;
+  let content = '{}';
+  // Atomic read: avoids TOCTOU between existsSync and readFileSync.
+  try {
+    content = fs.readFileSync(configPath, 'utf-8') || '{}';
+    isNew = false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
+
+  // jsonc-parser preserves comments and formatting around untouched regions.
+  // modify() with value=undefined throws if the path doesn't already exist —
+  // only ask it to delete the legacy key when there's actually one there.
+  const existingServers = (parseJsonc(content) as Record<string, unknown> | null)?.[
+    'context_servers'
+  ] as Record<string, unknown> | undefined;
+  if (existingServers && LEGACY_MCP_KEY in existingServers) {
+    const removeEdits = modify(content, ['context_servers', LEGACY_MCP_KEY], undefined, {
+      formattingOptions: AMP_FORMATTING,
+    });
+    content = applyEdits(content, removeEdits);
+  }
+  const addEdits = modify(content, ['context_servers', MCP_KEY], value, {
+    formattingOptions: AMP_FORMATTING,
+  });
+  const updated = applyEdits(content, addEdits);
+  atomicWriteString(configPath, updated.endsWith('\n') ? updated : updated + '\n', {
+    rejectSymlinks: true,
+  });
+  return isNew ? 'created' : 'updated';
+}
+
+// ---------------------------------------------------------------------------
 // OpenCode JSON writer (top-level `mcp` key, `type: "local"`, `command: string[]`)
 // ---------------------------------------------------------------------------
 
@@ -1072,6 +1217,10 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
   // the defined servers." Config edits are silently ignored until a full
   // process restart (google-gemini/gemini-cli#19792).
   'gemini-cli': 'restart-session',
+  // No pickup confirmation in official docs (third-party guides claim saving
+  // settings.json restarts the context-server process). Conservative
+  // restart-app until verified on a live Zed (TRA-1658 review).
+  zed: 'restart-app',
   // No pickup docs found; desktop app + CLI read the data-dir files at
   // launch. Conservative restart-app (TRA-1670).
   'minimax-code': 'restart-app',
@@ -1199,6 +1348,7 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'antigravity',
   'gemini-cli',
   'minimax-code',
+  'zed',
   'kimi',
   'opencode',
 ];
@@ -1323,6 +1473,26 @@ function detectClientStatus(
         ? { client: name, configPath, status: 'up_to_date' }
         : { client: name, configPath, status: 'stale', staleReason: 'fields' };
     }
+    case 'zed': {
+      const present = (() => {
+        try {
+          const parsed = parseJsonc(fs.readFileSync(configPath, 'utf-8')) as Record<
+            string,
+            unknown
+          > | null;
+          const servers = parsed?.context_servers as Record<string, unknown> | undefined;
+          return Boolean(servers?.[MCP_KEY] ?? servers?.[LEGACY_MCP_KEY]);
+        } catch {
+          return false;
+        }
+      })();
+      if (!present) return { client: name, configPath, status: 'missing' };
+      if (zedEntryMatches(configPath, expected as McpServerEntry)) {
+        return { client: name, configPath, status: 'up_to_date' };
+      }
+      const reason = pinpointZedEntryDrift(configPath, expected as McpServerEntry);
+      return { client: name, configPath, status: 'stale', staleReason: reason };
+    }
     case 'codex': {
       try {
         const content = fs.readFileSync(configPath, 'utf-8');
@@ -1362,6 +1532,7 @@ function detectClientStatus(
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
       // cline, kilocode, antigravity, gemini-cli, minimax-code, kimi all use
       // the standard mcpServers JSON shape compared by entryMatches().
+      // Zed has its own matcher (context_servers) just below.
       const present = (() => {
         try {
           const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -1543,6 +1714,22 @@ export function getConfigPath(
       // (`gemini mcp add -s user` writes this file; without -s it writes the
       // project-scoped .gemini/settings.json, which init does not target).
       return path.join(getHome(), '.gemini', 'settings.json');
+    case 'zed': {
+      // Zed: `context_servers` in settings.json (not `mcpServers`). User file
+      // ~/.config/zed (macOS/Linux; $XDG_CONFIG_HOME honored on Linux),
+      // %APPDATA%\Zed on Windows; project layer <project>/.zed/settings.json
+      // overrides it. Source: https://zed.dev/docs/ai/mcp
+      if (scope === 'project') return path.join(projectRoot, '.zed', 'settings.json');
+      if (process.platform === 'win32') {
+        return path.join(
+          process.env.APPDATA ?? path.join(getHome(), 'AppData', 'Roaming'),
+          'Zed',
+          'settings.json',
+        );
+      }
+      const xdg = process.env.XDG_CONFIG_HOME?.trim();
+      return path.join(xdg ? xdg : path.join(getHome(), '.config'), 'zed', 'settings.json');
+    }
     case 'minimax-code': {
       // MiniMax Code (open-source, MIT): standard mcpServers JSON, global-only.
       // Primary data dir ~/.minimax (their resolver migrates ~/.mavis itself);
