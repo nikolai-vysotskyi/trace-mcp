@@ -43,6 +43,12 @@ export const memory = {
   noDecisionsSubtitle:
     '決定事項とは、このコードベースが今の形になっている理由のメモです（トレードオフ、規約、不具合の根本原因など）。アシスタントはコードを変更する前にこれを読み返します。',
   addFirstDecision: '最初の決定事項を追加',
+  mineSessions: '最近のセッションをマイニング',
+  mining: 'マイニング中…',
+  mineResult: '{{mined}}件のセッションをマイニング · {{added}}件の決定を追加',
+  mineFailed: 'マイニングに失敗しました — もう一度お試しください。',
+  autoMiningOff:
+    '自動マイニングはオフです — memory.background.enabled を有効にすると自動で蓄積されます。',
 
   active: '有効',
   expired: '期限切れ',

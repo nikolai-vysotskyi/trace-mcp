@@ -832,7 +832,112 @@ function DecisionCard({
   );
 }
 
-function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
+// ── One-shot mining (TRA-1689) ────────────────────────────────────────────────
+// The Memory tab is empty on a default install because background mining is
+// opt-in — and the empty states never said so. These two pieces close that
+// gap: the status hook reports the effective `memory.background.enabled`
+// flag (null while unknown, so the UI never guesses), and the button runs a
+// one-shot offline regex mine that needs no config change.
+
+function useMemoryBackground(root: string): boolean | null {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEnabled(null);
+    daemonFetch(`${BASE}/api/projects/memory/status?${new URLSearchParams({ project: root })}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { backgroundEnabled?: unknown } | null) => {
+        if (!cancelled && data && typeof data.backgroundEnabled === 'boolean') {
+          setEnabled(data.backgroundEnabled);
+        }
+      })
+      .catch(() => {/* optional — the hint stays hidden when unknown */});
+    return () => {
+      cancelled = true;
+    };
+  }, [root]);
+
+  return enabled;
+}
+
+function MineSessionsButton({
+  root,
+  prominent,
+  onMined,
+}: {
+  root: string;
+  prominent?: boolean;
+  onMined?: () => void;
+}) {
+  const { t } = useTranslation('memory');
+  const [mining, setMining] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [result, setResult] = useState<{ mined: number; added: number } | null>(null);
+
+  const handleMine = async () => {
+    setMining(true);
+    setFailed(false);
+    setResult(null);
+    try {
+      const res = await daemonFetch(`${BASE}/api/projects/memory/mine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_root: root }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { mined?: number; added?: number };
+      setResult({ mined: data.mined ?? 0, added: data.added ?? 0 });
+      onMined?.();
+    } catch {
+      setFailed(true);
+    }
+    setMining(false);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <Button
+        variant={prominent ? 'prominent' : 'bordered'}
+        icon="history"
+        disabled={mining}
+        onClick={handleMine}
+      >
+        {mining ? t('mining') : t('mineSessions')}
+      </Button>
+      {result && (
+        <span
+          className="text-[11px] leading-[13px] tabular-nums text-center"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {t('mineResult', {
+            mined: formatNumber(result.mined),
+            added: formatNumber(result.added),
+          })}
+        </span>
+      )}
+      {failed && (
+        <span
+          className="text-[11px] leading-[13px] text-center"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {t('mineFailed')}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DecisionsView({
+  root,
+  subTab,
+  backgroundEnabled,
+}: {
+  root: string;
+  subTab?: ReactNode;
+  /** Effective `memory.background.enabled`, or null while unknown. */
+  backgroundEnabled: boolean | null;
+}) {
   const { t } = useTranslation('memory');
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [stats, setStats] = useState<DecisionStats | null>(null);
@@ -970,6 +1075,13 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
     );
     void fetchStats();
   };
+
+  /* One-shot mining from the empty state lands decisions that the current
+     list does not know about yet — refetch both halves (TRA-1689). */
+  const handleMined = useCallback(() => {
+    void fetchDecisions(debouncedQuery, activeType);
+    void fetchStats();
+  }, [fetchDecisions, fetchStats, debouncedQuery, activeType]);
 
   const hasFilters = debouncedQuery !== '' || exclude !== '' || activeType !== '';
 
@@ -1144,9 +1256,22 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                     title={t('noDecisionsTitle')}
                     subtitle={t('noDecisionsSubtitle')}
                     action={
-                      <Button variant="prominent" icon="add" onClick={() => setShowAddForm(true)}>
-                        {t('addFirstDecision')}
-                      </Button>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <div className="flex items-center gap-2 flex-wrap justify-center">
+                          <Button variant="prominent" icon="add" onClick={() => setShowAddForm(true)}>
+                            {t('addFirstDecision')}
+                          </Button>
+                          <MineSessionsButton root={root} onMined={handleMined} />
+                        </div>
+                        {backgroundEnabled === false && (
+                          <span
+                            className="text-[11px] leading-[13px] text-center"
+                            style={{ color: 'var(--label-secondary)' }}
+                          >
+                            {t('autoMiningOff')}
+                          </span>
+                        )}
+                      </div>
                     }
                   />
                 )
@@ -1563,7 +1688,16 @@ function CorpusDeleteButton({
   );
 }
 
-function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
+function SessionsView({
+  root,
+  subTab,
+  backgroundEnabled,
+}: {
+  root: string;
+  subTab?: ReactNode;
+  /** Effective `memory.background.enabled`, or null while unknown. */
+  backgroundEnabled: boolean | null;
+}) {
   const { t } = useTranslation('memory');
   const [sessions, setSessions] = useState<MinedSession[]>([]);
   /* True from the first frame: every one of these views fetches on mount,
@@ -1571,7 +1705,7 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
      frame before the rows land (TRA-934). */
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchSessions = useCallback(() => {
     setLoading(true);
     daemonFetch(
       `${BASE}/api/projects/sessions?${new URLSearchParams({ project: root, limit: '100' })}`,
@@ -1583,6 +1717,10 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
       .catch(() => {/* optional */})
       .finally(() => setLoading(false));
   }, [root]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   return (
     <ViewShell
@@ -1599,6 +1737,19 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
               icon="history"
               title={t('noSessionsTitle')}
               subtitle={t('noSessionsSubtitle')}
+              action={
+                <div className="flex flex-col items-center gap-1.5">
+                  <MineSessionsButton root={root} prominent onMined={fetchSessions} />
+                  {backgroundEnabled === false && (
+                    <span
+                      className="text-[11px] leading-[13px] text-center"
+                      style={{ color: 'var(--label-secondary)' }}
+                    >
+                      {t('autoMiningOff')}
+                    </span>
+                  )}
+                </div>
+              }
             />
           )}
 
@@ -1960,6 +2111,8 @@ export function MemoryExplorer({ root }: { root: string }) {
   // Pending count lives in the parent so the Review (N) badge in the tab bar
   // stays in sync with optimistic mutations inside ReviewView.
   const [pendingCount, setPendingCount] = useState(0);
+  // Effective automining flag for the empty-state hints (TRA-1689).
+  const backgroundEnabled = useMemoryBackground(root);
 
   // Refresh the badge whenever the user switches into Memory or any sub-view.
   // Cheap stats endpoint, returns the same number ReviewView would compute.
@@ -1997,12 +2150,16 @@ export function MemoryExplorer({ root }: { root: string }) {
 
   return (
     <>
-      {activeTab === 'decisions' && <DecisionsView root={root} subTab={switcher} />}
+      {activeTab === 'decisions' && (
+        <DecisionsView root={root} subTab={switcher} backgroundEnabled={backgroundEnabled} />
+      )}
       {activeTab === 'review' && (
         <ReviewView root={root} subTab={switcher} onPendingCountChange={setPendingCount} />
       )}
       {activeTab === 'corpora' && <CorporaView root={root} subTab={switcher} />}
-      {activeTab === 'sessions' && <SessionsView root={root} subTab={switcher} />}
+      {activeTab === 'sessions' && (
+        <SessionsView root={root} subTab={switcher} backgroundEnabled={backgroundEnabled} />
+      )}
     </>
   );
 }

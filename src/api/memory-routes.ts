@@ -15,6 +15,8 @@
  *   POST   /api/projects/decisions/:id/review       — set review_status (approve/reject)
  *   POST   /api/projects/corpora/:name/query        — query a corpus pack
  *   DELETE /api/projects/corpora/:name              — delete corpus files
+ *   POST   /api/projects/memory/mine                — one-shot regex mining (no config change)
+ *   GET    /api/projects/memory/status              — effective background-mining flag
  *
  * Integration: in src/cli.ts, just before the `res.writeHead(404)` fallthrough:
  *
@@ -40,6 +42,8 @@ import {
   handleDecisionsStats,
   handleListCorpora,
   handleListSessions,
+  handleMemoryStatus,
+  handleMineMemory,
 } from './memory-routes-handlers.js';
 
 // ── Route dispatcher ────────────────────────────────────────────────────────
@@ -99,6 +103,12 @@ export function handleMemoryRequest(
     return true;
   }
 
+  // POST /api/projects/memory/mine — one-shot mining without config change
+  if (method === 'POST' && url.pathname === '/api/projects/memory/mine') {
+    handleMineMemory(req, res);
+    return true;
+  }
+
   // ── v1 read-only routes ─────────────────────────────────────────────────────
   if (method !== 'GET') return false;
 
@@ -129,6 +139,12 @@ export function handleMemoryRequest(
   // GET /api/projects/sessions — list mined sessions from decisions.db
   if (url.pathname === '/api/projects/sessions') {
     handleListSessions(res, url);
+    return true;
+  }
+
+  // GET /api/projects/memory/status — effective background-mining flag
+  if (url.pathname === '/api/projects/memory/status') {
+    handleMemoryStatus(res, url);
     return true;
   }
 

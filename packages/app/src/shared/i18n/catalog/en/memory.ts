@@ -58,6 +58,12 @@ export const memory = {
   noDecisionsSubtitle:
     'A decision is a note about why this codebase is the way it is — a trade-off, a convention, the root cause of a bug. Assistants read them back before they change your code.',
   addFirstDecision: 'Add the first decision',
+  mineSessions: 'Mine recent sessions',
+  mining: 'Mining…',
+  mineResult: '{{mined}} sessions mined · {{added}} decisions added',
+  mineFailed: 'Mining failed — try again.',
+  autoMiningOff:
+    'Automatic mining is off — enable memory.background.enabled to fill this over time.',
 
   // ── Decision card ──────────────────────────────────────────────────────
   active: 'Active',

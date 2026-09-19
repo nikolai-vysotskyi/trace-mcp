@@ -45,6 +45,12 @@ export const memory = {
   noDecisionsSubtitle:
     'Uma decisão é uma nota sobre por que este código é como é — um trade-off, uma convenção, a causa raiz de um bug. Os assistentes as releem antes de mexer no seu código.',
   addFirstDecision: 'Adicionar a primeira decisão',
+  mineSessions: 'Minerar sessões recentes',
+  mining: 'Minerando…',
+  mineResult: '{{mined}} sessões mineradas · {{added}} decisões adicionadas',
+  mineFailed: 'A mineração falhou — tente de novo.',
+  autoMiningOff:
+    'A mineração automática está desligada — ative memory.background.enabled para preencher com o tempo.',
 
   active: 'Ativa',
   expired: 'Expirada',
