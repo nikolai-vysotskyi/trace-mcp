@@ -5,11 +5,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
+import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
+import { descendantExcludeGlobs } from '../registry.js';
 import { initContentHasher } from '../util/hash.js';
 import { parseEnvFile } from '../utils/env-parser.js';
+import { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
@@ -24,14 +27,19 @@ function isEnvFilePattern(pattern: string): boolean {
 
 export class EnvIndexer {
   private traceignore: TraceignoreMatcher;
+  private gitignore: GitignoreMatcher | undefined;
 
   constructor(
     private store: Store,
     private config: TraceMcpConfig,
     private rootPath: string,
     traceignore?: TraceignoreMatcher,
+    gitignore?: GitignoreMatcher,
   ) {
     this.traceignore = traceignore ?? new TraceignoreMatcher(rootPath, config.ignore);
+    this.gitignore =
+      gitignore ??
+      (config.ignore?.gitignore === false ? undefined : new GitignoreMatcher(rootPath));
   }
 
   async indexEnvFiles(force: boolean): Promise<void> {
@@ -47,7 +55,11 @@ export class EnvIndexer {
     // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
     // the code index. EnvIndexer only records keys + inferred types/formats (no values),
     // so those patterns would wrongly hide our input — filter them before globbing.
-    const ignore = this.config.exclude.filter((p) => !isEnvFilePattern(p));
+    // descendantExcludeGlobs: a registered descendant owns its own subtree, so an
+    // umbrella root must not index the descendant's .env files into a second DB
+    // (#209 / TRA-468 — same gate collectFiles() and filterIndexablePaths apply).
+    const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+    const ignore = [...this.config.exclude.filter((p) => !isEnvFilePattern(p)), ...descendantGlobs];
 
     // followSymbolicLinks defaults to false (config.follow_symlinks) — a directory
     // symlink cycling back to an ancestor (e.g. Ansible Molecule's
@@ -69,9 +81,29 @@ export class EnvIndexer {
 
     logger.info({ count: envPaths.length }, 'Indexing .env files (keys only)');
 
+    // Post-glob gates mirroring filterIndexablePaths: the fast-glob ignore
+    // above handles the common case, but these catch anything the glob
+    // misses so event-driven callers can't re-add excluded rows either.
+    const ownedByDescendant = descendantGlobs.length
+      ? picomatch(descendantGlobs, { dot: true })
+      : undefined;
+
     for (const relPath of envPaths) {
       if (this.traceignore.isIgnored(relPath)) {
         logger.debug({ file: relPath }, '.env file skipped by .traceignore');
+        continue;
+      }
+
+      const relPosix = relPath.split(path.sep).join('/');
+      if (ownedByDescendant?.(relPosix)) {
+        logger.debug(
+          { file: relPath },
+          '.env file skipped: owned by a more-specific registered project',
+        );
+        continue;
+      }
+      if (this.gitignore?.isIgnored(relPosix)) {
+        logger.debug({ file: relPath }, '.env file skipped: git-ignored');
         continue;
       }
 
