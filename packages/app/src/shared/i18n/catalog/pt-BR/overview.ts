@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: 'Índice',
   staleNumbers: 'Estes são os últimos números indexados.',
+  truncatedWarning:
+    'Índice parcial — {{found}} arquivos encontrados, apenas {{limit}} indexados. Aumente security.max_files e reindexe.',
   rowStatus: 'Estado',
   rowFiles: 'Arquivos indexados',
   rowSymbols: 'Símbolos',

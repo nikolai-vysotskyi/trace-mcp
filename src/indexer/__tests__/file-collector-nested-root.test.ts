@@ -41,13 +41,15 @@ describe('collectFiles — nested project root (TRA-184)', () => {
       exclude: [],
     });
 
-    const entries = await collectFiles({
-      config,
-      rootPath: workDir,
-      workspaces: [],
-      traceignore: undefined,
-      maxFiles: 10_000,
-    });
+    const entries = (
+      await collectFiles({
+        config,
+        rootPath: workDir,
+        workspaces: [],
+        traceignore: undefined,
+        maxFiles: 10_000,
+      })
+    ).files;
 
     expect(entries).toEqual(expect.arrayContaining(['README.md', 'checkout/src/index.ts']));
   });

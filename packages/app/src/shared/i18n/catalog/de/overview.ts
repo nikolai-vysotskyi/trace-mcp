@@ -25,6 +25,8 @@ export const overview = {
   // ── Index ──
   sectionIndex: 'Index',
   staleNumbers: 'Dies sind die zuletzt indexierten Zahlen.',
+  truncatedWarning:
+    'Unvollständiger Index — {{found}} Dateien gefunden, nur {{limit}} indexiert. Erhöhen Sie security.max_files und indexieren Sie neu.',
   rowStatus: 'Status',
   rowFiles: 'Indexierte Dateien',
   rowSymbols: 'Symbole',

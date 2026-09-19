@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: '索引',
   staleNumbers: '以下是上次索引的数字。',
+  truncatedWarning:
+    '索引不完整 — 找到 {{found}} 个文件，仅索引了 {{limit}} 个。请提高 security.max_files 并重新索引。',
   rowStatus: '状态',
   rowFiles: '已索引文件',
   rowSymbols: '符号',

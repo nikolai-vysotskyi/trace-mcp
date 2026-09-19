@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: 'इंडेक्स',
   staleNumbers: 'ये पिछली बार के इंडेक्स किए आँकड़े हैं।',
+  truncatedWarning:
+    'आंशिक इंडेक्स — {{found}} फ़ाइलें मिलीं, केवल {{limit}} इंडेक्स हुईं। security.max_files बढ़ाएँ और फिर से इंडेक्स करें।',
   rowStatus: 'स्थिति',
   rowFiles: 'इंडेक्स हुई फ़ाइलें',
   rowSymbols: 'सिंबल',

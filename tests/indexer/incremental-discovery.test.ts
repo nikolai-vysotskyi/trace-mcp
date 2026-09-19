@@ -244,14 +244,16 @@ describe('property: fast path never misses what the walk+prefilter flags', () =>
       // A non-indexable file that must never leak into `changed`.
       write(dir, 'notes.md', '# notes\n');
 
-      const walked = await collectFiles({
-        config: { include: INCLUDE, exclude: [] } as TraceMcpConfig,
-        rootPath: dir,
-        workspaces: [],
-        traceignore: undefined,
-        gitignore: undefined,
-        maxFiles: 10_000,
-      });
+      const walked = (
+        await collectFiles({
+          config: { include: INCLUDE, exclude: [] } as TraceMcpConfig,
+          rootPath: dir,
+          workspaces: [],
+          traceignore: undefined,
+          gitignore: undefined,
+          maxFiles: 10_000,
+        })
+      ).files;
       // Fake "stored rows" with the real mtimes/sizes of the just-written files.
       const existing = new Map(
         walked.map((rel) => {
@@ -318,14 +320,16 @@ describe('property: fast path never misses what the walk+prefilter flags', () =>
       // Oracle = what the downstream consumer (prefilter over the full walk)
       // would flag: re-walk, then split against drifted stored rows. New and
       // renamed-target files have no stored row → candidates by definition.
-      const rewalked = await collectFiles({
-        config: { include: INCLUDE, exclude: [] } as TraceMcpConfig,
-        rootPath: dir,
-        workspaces: [],
-        traceignore: undefined,
-        gitignore: undefined,
-        maxFiles: 10_000,
-      });
+      const rewalked = (
+        await collectFiles({
+          config: { include: INCLUDE, exclude: [] } as TraceMcpConfig,
+          rootPath: dir,
+          workspaces: [],
+          traceignore: undefined,
+          gitignore: undefined,
+          maxFiles: 10_000,
+        })
+      ).files;
       const { candidates } = selectChangedFiles(dir, rewalked, existing, false);
       for (const c of candidates) {
         expect(res.changed).toContain(c);

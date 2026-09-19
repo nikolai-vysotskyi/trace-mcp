@@ -333,6 +333,36 @@ describe('ProjectOverview surface', () => {
     expect(screen.getByText('These are the last indexed numbers.')).toBeTruthy();
   });
 
+  /* TRA-1664: a root with more files than security.max_files used to read as a
+     whole index — status ready, counts, no warning — while search silently
+     missed everything past the cap. The daemon stamps the walk into stats, and
+     the card must read partial. */
+  it('warns when the index was cut at security.max_files instead of reading whole', async () => {
+    mockApi({
+      '/stats': { ...STATS, truncated: { found: 14149, limit: 10000 } },
+      '/coverage': COVERAGE,
+      '/subprojects': { repos: [], services: [] },
+      '/smells': NO_SMELLS,
+    });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText(/Partial index/)).toBeTruthy();
+    expect(screen.getByText(/14[,. ]?149/)).toBeTruthy();
+  });
+
+  it('shows no truncation warning when the walk fit under the cap', async () => {
+    mockApi({
+      '/stats': STATS,
+      '/coverage': COVERAGE,
+      '/subprojects': { repos: [], services: [] },
+      '/smells': NO_SMELLS,
+    });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('337')).toBeTruthy();
+    expect(screen.queryByText(/Partial index/)).toBeNull();
+  });
+
   /* The stale line used to borrow the Workspace's `busyStale`, whose lead half
      asserts the daemon is busy — a claim `!statsFresh` does not establish. It
      printed directly above the Status row that names the real condition, so the
