@@ -66,6 +66,23 @@ import type { ProjectResourcePool } from './resource-pool.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
 
+/**
+ * Canonical in-memory key for the managed-projects map (TRA-1608).
+ *
+ * The map used to be keyed by the raw caller string, so the same filesystem
+ * root added as `/tmp/ws/` and `/tmp/ws` (or via a relative path) produced
+ * TWO managed projects — two pipelines, two DB handles and, worst of all,
+ * two live `@parcel/watcher` subscriptions on one root. `path.resolve`
+ * collapses trailing slashes / `.` / relative spellings to one key, so one
+ * filesystem root always means one managed project and one subscription.
+ * This mirrors the registry, whose keys are already `path.resolve`d
+ * (setupProject), and the `normRoot` convention in subproject-search.
+ * (Symlink aliases still resolve to different keys — same as the registry.)
+ */
+export function managerKey(root: string): string {
+  return path.resolve(root);
+}
+
 export interface ManagedProject {
   root: string;
   config: TraceMcpConfig;
@@ -231,6 +248,10 @@ export class ProjectManager {
     projectRoot: string,
     opts?: { watch?: boolean; persist?: boolean },
   ): Promise<ManagedProject> {
+    // TRA-1608: canonicalize first — every downstream use (map key,
+    // managed.root, pipeline/watcher roots, registry lookups) then refers to
+    // one filesystem root by one string. See managerKey().
+    projectRoot = managerKey(projectRoot);
     const existing = this.projects.get(projectRoot);
     if (existing) return existing;
 
@@ -927,6 +948,9 @@ export class ProjectManager {
    * daemon restart) and `removeProject()` (explicit user removal).
    */
   private async stopProject(root: string): Promise<void> {
+    // TRA-1608: the map is keyed by managerKey() — normalize the argument so
+    // a caller holding a non-canonical spelling still tears down the project.
+    root = managerKey(root);
     const managed = this.projects.get(root);
     if (!managed) return;
     // TRA-1553: refuse new single-file reindex work from this point on. This
@@ -1072,6 +1096,10 @@ export class ProjectManager {
     root: string,
     options?: RemoveArtifactsOptions,
   ): Promise<RemoveArtifactsResult> {
+    // TRA-1608: canonicalize once — stopProject() re-normalizes idempotently,
+    // and the artifact/registry/ancestor-restart calls below all key on the
+    // same string the registry itself uses (path.resolve-normalized).
+    root = managerKey(root);
     await this.stopProject(root);
     let artifacts: RemoveArtifactsResult;
     try {
@@ -1130,7 +1158,7 @@ export class ProjectManager {
   async sweepEphemeralProjects(ttlHours = 72): Promise<string[]> {
     const removed: string[] = [];
     for (const candidate of findEphemeralProjects(ttlHours)) {
-      const managed = this.projects.get(candidate.root);
+      const managed = this.projects.get(managerKey(candidate.root));
       if (managed && (managed.status === 'starting' || managed.status === 'indexing')) continue;
       if ((this.resourcePool?.getRefCount(candidate.root) ?? 0) > 0) continue;
       logger.info(
@@ -1145,7 +1173,7 @@ export class ProjectManager {
 
   /** Get a managed project by root path. */
   getProject(root: string): ManagedProject | undefined {
-    return this.projects.get(root);
+    return this.projects.get(managerKey(root));
   }
 
   /** Get all managed projects. */
@@ -1161,7 +1189,7 @@ export class ProjectManager {
    * isn't currently loaded.
    */
   touchActivity(root: string): void {
-    const managed = this.projects.get(root);
+    const managed = this.projects.get(managerKey(root));
     if (managed) managed.lastAccessedAt = Date.now();
   }
 
