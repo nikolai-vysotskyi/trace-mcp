@@ -1,7 +1,7 @@
 ---
 title: "Configuration Reference — all config options (works with none)"
 description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-16
+updated: 2026-09-19
 ---
 
 # Configuration
@@ -813,7 +813,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026). Different file from Gemini CLI's `~/.gemini/settings.json` — the two do not share entries |
 | **Gemini CLI** (Google) | `~/.gemini/settings.json` | JSON | `mcpServers` | Global-only user scope (`gemini mcp add -s user` writes this file). Pick up a new entry with `/mcp reload` or by restarting the CLI |
 | **MiniMax Code** (MiniMax, open-source) | `~/.minimax/mcp.json` (legacy `~/.mavis/mcp.json`, `~/.mavis/mcp/mcp.json` also read) | JSON | `mcpServers` | Global-only. Their resolver migrates `~/.mavis` itself; the writer prefers an existing file. Restart the app and verify the server appears (their v3.0.48 runtime has a known non-builtin pickup bug) |
-| **Zed** | `~/.config/zed/settings.json`, `<project>/.zed/settings.json` (`%APPDATA%\Zed\settings.json` on Windows) | JSON | `context_servers` (entries stamped `source: "custom"`) | Comments and formatting preserved via `jsonc-parser`. Saving the file restarts the context-server process, no editor restart needed |
+| **Zed** | `~/.config/zed/settings.json`, `<project>/.zed/settings.json` (`%APPDATA%\Zed\settings.json` on Windows) | JSON | `context_servers` (entries stamped `source: "custom"`) | Comments and formatting preserved via `jsonc-parser`. Restart Zed (or reload the window) and verify the green dot in Settings → AI → MCP Servers |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
 | **OpenCode** | `~/.config/opencode/opencode.json[c]`, `<project>/opencode.json[c]` | JSON / JSONC | `mcp` (`type: "local"`, `command: ["trace", "serve"]`) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 

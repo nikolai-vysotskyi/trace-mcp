@@ -46,6 +46,12 @@ export const memory = {
   noDecisionsSubtitle:
     'Une décision est une note sur les raisons d’être de ce code — un compromis, une convention, la cause d’un bug. Les assistants les relisent avant de modifier votre code.',
   addFirstDecision: 'Ajouter la première décision',
+  mineSessions: 'Analyser les sessions récentes',
+  mining: 'Analyse en cours…',
+  mineResult: '{{mined}} sessions analysées · {{added}} décisions ajoutées',
+  mineFailed: 'L’analyse a échoué — réessayez.',
+  autoMiningOff:
+    'La fouille automatique est désactivée — activez memory.background.enabled pour remplir ceci au fil du temps.',
 
   active: 'Active',
   expired: 'Expirée',

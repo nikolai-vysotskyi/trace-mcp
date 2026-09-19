@@ -80,7 +80,12 @@ import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
-import { countReindexingProjects, handleReindexFile } from './daemon/reindex-file-handler.js';
+import {
+  beginReindex,
+  countReindexingProjects,
+  handleReindexFile,
+  isProjectStopping,
+} from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
 import { getDroppedEventStats } from './indexer/watcher.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
@@ -104,7 +109,7 @@ import {
 } from './global.js';
 import { DecisionStore } from './memory/decision-store.js';
 import { sweepOrphanedSessionDbs } from './daemon/router/session-db.js';
-import { IndexingPipeline } from './indexer/pipeline.js';
+import { IndexingPipeline, readIndexTruncation } from './indexer/pipeline.js';
 import {
   type GuardEnforceTier,
   installGuardHook,
@@ -158,6 +163,7 @@ import { handleJournalStatsRequest, type JournalStatsContext } from './api/journ
 import { handleMemoryRequest } from './api/memory-routes.js';
 import { handleProjectStatsRequest } from './api/project-stats-routes.js';
 import { buildProjectFilesQuery } from './api/project-files-query.js';
+import { parseProjectSecurityQuery } from './api/project-security-query.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
@@ -165,6 +171,7 @@ import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
+import { scanSecurity } from './tools/quality/security-scan.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
@@ -2033,9 +2040,19 @@ program
           const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as
             | { t: string | null }
             | undefined;
+          // TRA-1664: the last full walk may have hit security.max_files, in
+          // which case the index is partial and the UI must say so. The stamp
+          // survives restarts (incremental fast paths never re-walk the tree).
+          const truncated = readIndexTruncation(managed.store);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
-            JSON.stringify({ files, symbols, edges, lastIndexed: sqliteUtcToIso(lastRow?.t) }),
+            JSON.stringify({
+              files,
+              symbols,
+              edges,
+              lastIndexed: sqliteUtcToIso(lastRow?.t),
+              ...(truncated ? { truncated } : {}),
+            }),
           );
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -2090,6 +2107,55 @@ program
           res.end(
             JSON.stringify({
               error: (e as Error & { stack?: string })?.message ?? 'Failed to scan code smells',
+            }),
+          );
+        }
+        return;
+      }
+
+      // REST API: security findings (OWASP pattern scan) for a project.
+      // Mirrors /api/projects/smells above: the Workspace table only carries
+      // the critical+high count, and Overview needs the list itself
+      // (severity/rule/file:line/snippet) with a severity filter (TRA-1675).
+      if (req.method === 'GET' && url.pathname === '/api/projects/security') {
+        const projectRoot = url.searchParams.get('project');
+        if (!projectRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const resolution = resolveProjectForRest(projectRoot);
+        if (!resolution.ok) {
+          writeProjectResolutionError(res, resolution);
+          return;
+        }
+        const managed = resolution.managed;
+        const parsed = parseProjectSecurityQuery(url);
+        if (!parsed.ok) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: parsed.error }));
+          return;
+        }
+        try {
+          const result = scanSecurity(managed.store, projectRoot, {
+            rules: parsed.value.rules,
+            severityThreshold: parsed.value.severityThreshold,
+            includeLowConfidence: parsed.value.includeLowConfidence,
+          });
+          if (result.isErr()) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(result.error) }));
+            return;
+          }
+          const value = result.value;
+          const findings = value.findings.slice(0, parsed.value.limit);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ...value, findings }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: (e as Error & { stack?: string })?.message ?? 'Failed to scan security',
             }),
           );
         }
@@ -2447,6 +2513,17 @@ program
           return;
         }
         const managed = resolution.managed;
+        // TRA-1674: refuse to start a full reindex against a project that is
+        // already tearing down (same 503-with-retry contract as the
+        // single-file handleReindexFile gate from TRA-1553) — otherwise the
+        // run below races stopProject()'s db.close() and dies with "The
+        // database connection is not open" (field: 2026-09-18, "Reindex
+        // failed" for a project the idle-unload sweep evicted mid-run).
+        if (isProjectStopping(projectRoot)) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'project is stopping', retryAfterSec: 5 }));
+          return;
+        }
         // R09 v2: lifecycle events around the reindex call.
         // started is fire-and-forget; completed/errored fire on the
         // async settlement of the pipeline promise.
@@ -2456,6 +2533,13 @@ program
           project: projectRoot,
           pipeline: 'index',
         });
+        // TRA-1674: register the full indexAll run as in-flight reindex work
+        // so stopProject()'s bounded drain (waitForReindexDrain) waits for it
+        // instead of closing the DB underneath it. The single-file paths
+        // (handleReindexFile, register_edit) already register via
+        // beginReindex; this endpoint was the one full-reindex path that did
+        // not, which is exactly the race the field log showed.
+        const endReindex = beginReindex(projectRoot);
         managed.pipeline
           .indexAll(true)
           .then((result) => {
@@ -2475,7 +2559,8 @@ program
               pipeline: 'index',
               message: err instanceof Error ? err.message : String(err),
             });
-          });
+          })
+          .finally(endReindex);
         res.writeHead(202, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'reindex_started', project: projectRoot }));
         return;

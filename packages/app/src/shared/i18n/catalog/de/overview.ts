@@ -25,6 +25,8 @@ export const overview = {
   // ── Index ──
   sectionIndex: 'Index',
   staleNumbers: 'Dies sind die zuletzt indexierten Zahlen.',
+  truncatedWarning:
+    'Unvollständiger Index — {{found}} Dateien gefunden, nur {{limit}} indexiert. Erhöhen Sie security.max_files und indexieren Sie neu.',
   rowStatus: 'Status',
   rowFiles: 'Indexierte Dateien',
   rowSymbols: 'Symbole',
@@ -40,6 +42,7 @@ export const overview = {
   errorIndexSummary: 'die Index-Übersicht',
   errorCoverage: 'die Abdeckung der Abhängigkeiten',
   errorQuality: 'der Qualitätsscan',
+  errorSecurity: 'der Sicherheitsscan',
   errorServices: 'die Dienstliste',
 
   // ── Coverage ──
@@ -78,6 +81,14 @@ export const overview = {
   emptySmellBody: 'In dieser Kategorie gibt es in {{n}} gescannten Dateien nichts aufzuräumen.',
   openInEditorTitle: '{{file}}:{{line}} im Editor öffnen',
   moreNotShown: '{{n}} weitere nicht angezeigt',
+
+  // ── Security ──
+  sectionSecurity: 'Sicherheit',
+  securitySeverityLabel: 'Schweregrad',
+  severityAll: 'Alle',
+  severityCritical: 'kritisch',
+  emptySecurityTitle: 'Keine Sicherheitsfunde',
+  emptySecurityBody: 'Nichts markiert in {{n}} gescannten Dateien.',
 
   // ── Services ──
   sectionServices: 'Dienste',

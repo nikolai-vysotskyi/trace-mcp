@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: 'Index',
   staleNumbers: 'Voici les derniers chiffres indexés.',
+  truncatedWarning:
+    'Index partiel — {{found}} fichiers trouvés, seulement {{limit}} indexés. Augmentez security.max_files puis réindexez.',
   rowStatus: 'État',
   rowFiles: 'Fichiers indexés',
   rowSymbols: 'Symboles',
@@ -37,6 +39,7 @@ export const overview = {
   errorIndexSummary: 'le résumé de l’index',
   errorCoverage: 'la couverture des dépendances',
   errorQuality: 'l’analyse de qualité',
+  errorSecurity: 'l’analyse de sécurité',
   errorServices: 'la liste des services',
 
   sectionCoverage: 'Couverture',
@@ -74,6 +77,14 @@ export const overview = {
   emptySmellBody: 'Rien à nettoyer dans cette catégorie sur {{n}} fichiers analysés.',
   openInEditorTitle: 'Ouvrir {{file}}:{{line}} dans votre éditeur',
   moreNotShown: '{{n}} de plus non affichés',
+
+  // ── Security ──
+  sectionSecurity: 'Sécurité',
+  securitySeverityLabel: 'Gravité',
+  severityAll: 'Toutes',
+  severityCritical: 'critique',
+  emptySecurityTitle: 'Aucun résultat de sécurité',
+  emptySecurityBody: 'Rien à signaler dans {{n}} fichiers analysés.',
 
   sectionServices: 'Services',
   servicesAdd: 'Ajouter',

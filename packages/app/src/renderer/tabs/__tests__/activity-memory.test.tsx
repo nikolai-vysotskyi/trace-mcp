@@ -53,13 +53,17 @@ const DECISION = {
 };
 
 /** Route every endpoint these two surfaces touch; `decisions` is overridable. */
-function mockApi(decisions: unknown[] = []) {
+function mockApi(decisions: unknown[] = [], opts: { backgroundEnabled?: boolean } = {}) {
+  const calls: string[] = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const u = String(input);
+      calls.push(`${init?.method ?? 'GET'} ${u}`);
       let body: unknown = {};
-      if (u.includes('/journal/stats')) body = EMPTY_STATS;
+      if (u.includes('/memory/status')) body = { backgroundEnabled: opts.backgroundEnabled ?? false };
+      else if (u.includes('/memory/mine')) body = { scanned: 3, mined: 2, added: 1, durationMs: 12 };
+      else if (u.includes('/journal/stats')) body = EMPTY_STATS;
       else if (u.includes('/journal')) body = [];
       else if (u.includes('/decisions/stats')) {
         body = { total: decisions.length, active: decisions.length, by_type: {}, by_source: {} };
@@ -75,6 +79,7 @@ function mockApi(decisions: unknown[] = []) {
       );
     }),
   );
+  return calls;
 }
 
 beforeEach(() => {
@@ -176,6 +181,55 @@ describe('Memory surface', () => {
     await mount(<MemoryExplorer root={ROOT} />);
     screen.getByText('No decisions yet');
     screen.getByRole('button', { name: 'Add the first decision' });
+  });
+
+  /* TRA-1689: on a default install background mining is off and the tab used
+     to read as eternally "empty" with no way forward. The empty states now
+     say automining is off and offer a one-shot mine. */
+  describe('one-shot mining (TRA-1689)', () => {
+    it('offers a mine action next to the add action on the empty decisions list', async () => {
+      mockApi();
+      await mount(<MemoryExplorer root={ROOT} />);
+      await screen.findByText('No decisions yet');
+      screen.getByRole('button', { name: 'Mine recent sessions' });
+    });
+
+    it('states that automatic mining is off instead of reading as merely empty', async () => {
+      mockApi([], { backgroundEnabled: false });
+      await mount(<MemoryExplorer root={ROOT} />);
+      await screen.findByText(/Automatic mining is off/);
+    });
+
+    it('hides the automining line when mining is enabled', async () => {
+      mockApi([], { backgroundEnabled: true });
+      await mount(<MemoryExplorer root={ROOT} />);
+      await screen.findByText('No decisions yet');
+      expect(screen.queryByText(/Automatic mining is off/)).toBeNull();
+      /* The one-shot action stays — it is useful even with automining on. */
+      screen.getByRole('button', { name: 'Mine recent sessions' });
+    });
+
+    it('posts a one-shot mine and reports what it found', async () => {
+      const calls = mockApi();
+      await mount(<MemoryExplorer root={ROOT} />);
+      await screen.findByText('No decisions yet');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Mine recent sessions' }));
+      });
+      expect(calls.some((c) => c.startsWith('POST') && c.includes('/memory/mine'))).toBe(true);
+      await screen.findByText(/2 sessions mined · 1 decisions added/);
+    });
+
+    it('offers the same mine action on the empty sessions list', async () => {
+      mockApi();
+      await mount(<MemoryExplorer root={ROOT} />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Sessions' }));
+      });
+      await screen.findByText('No sessions mined yet');
+      screen.getByRole('button', { name: 'Mine recent sessions' });
+      await screen.findByText(/Automatic mining is off/);
+    });
   });
 
   it('walks the decision list with the arrow keys', async () => {

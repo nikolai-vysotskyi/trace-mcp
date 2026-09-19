@@ -807,9 +807,12 @@ function writeZedJsoncEntry(configPath: string, entry: McpServerEntry): 'created
   const dir = path.dirname(configPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  // Manual entries carry source:"custom" — without it Zed silently skips the
-  // row. Written on every write (not only create): once trace-mcp manages the
-  // entry it is manual by definition, whatever the UI wrote before.
+  // Manual entries are stamped source:"custom" (the documented value for
+  // hand-added servers; third-party guides call it required, official docs
+  // show working entries without it). Written on every write, not only
+  // create: once trace-mcp manages the entry it is manual by definition,
+  // whatever the UI wrote before. The matcher deliberately ignores `source`,
+  // so a UI-added entry without it still verifies as up_to_date.
   const value: Record<string, unknown> = {
     source: 'custom',
     command: entry.command,
@@ -1214,9 +1217,10 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
   // the defined servers." Config edits are silently ignored until a full
   // process restart (google-gemini/gemini-cli#19792).
   'gemini-cli': 'restart-session',
-  // Saving settings.json restarts the context-server process without an
-  // editor restart (third-party guides; unconfirmed in official docs).
-  zed: 'hot-reload',
+  // No pickup confirmation in official docs (third-party guides claim saving
+  // settings.json restarts the context-server process). Conservative
+  // restart-app until verified on a live Zed (TRA-1658 review).
+  zed: 'restart-app',
   // No pickup docs found; desktop app + CLI read the data-dir files at
   // launch. Conservative restart-app (TRA-1670).
   'minimax-code': 'restart-app',

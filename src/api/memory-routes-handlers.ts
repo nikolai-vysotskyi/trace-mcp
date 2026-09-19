@@ -16,8 +16,11 @@ import type http from 'node:http';
 import Database from 'better-sqlite3';
 import { escapeFtsQuery } from '../db/fts.js';
 import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
+import { ensureGlobalDirs } from '../global.js';
+import { loadConfig } from '../config.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { runMineStage } from '../memory/scheduler/stages.js';
 import { CorpusStore, validateCorpusName, CorpusValidationError } from '../memory/corpus-store.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
 
@@ -764,4 +767,95 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
   } finally {
     db.close();
   }
+}
+
+// ── memory status + one-shot mine (TRA-1689) ───────────────────────────────
+// The Memory tab is dead on a default install (background mining defaults to
+// off) and its empty states never said so. These two endpoints let the UI
+// state the automining flag honestly and offer a one-shot mine that does not
+// touch the config.
+
+/** GET /api/projects/memory/status — report the effective automining flag. */
+export function handleMemoryStatus(res: http.ServerResponse, url: URL): void {
+  const projectRoot = url.searchParams.get('project');
+  if (!projectRoot) {
+    sendJson(res, 400, { error: 'Missing ?project= query param' });
+    return;
+  }
+
+  void (async () => {
+    try {
+      // Effective config: global defaults → per-project section → local
+      // overrides. Unresolvable config reads as disabled, never as an error —
+      // the UI treats "unknown" the same as "off" (no hint either way would
+      // be the old silent empty state again).
+      const result = await loadConfig(projectRoot);
+      if (!result.isOk()) {
+        sendJson(res, 200, { backgroundEnabled: false });
+        return;
+      }
+      sendJson(res, 200, {
+        backgroundEnabled: result.value.memory?.background?.enabled ?? false,
+      });
+    } catch {
+      sendJson(res, 200, { backgroundEnabled: false });
+    }
+  })();
+}
+
+/** Projects with a mine already running — the daemon is one thread, so a
+ *  second POST for the same root gets a 409 instead of queueing behind a
+ *  multi-minute transcript scan. */
+const mineInFlight = new Set<string>();
+
+/**
+ * POST /api/projects/memory/mine — one-shot regex mining for a project.
+ *
+ * Body: `{ project_root: string }`. Uses the offline regex strategy (no AI
+ * provider, no cost, no config change) — the same pass the background
+ * scheduler would run. Mined decisions flow through the review queue like
+ * any other mined batch.
+ */
+export function handleMineMemory(req: http.IncomingMessage, res: http.ServerResponse): void {
+  void (async () => {
+    const body = await parseBody<{ project_root?: unknown }>(req);
+    const projectRoot = typeof body?.project_root === 'string' ? body.project_root.trim() : '';
+    if (!projectRoot) {
+      sendJson(res, 400, { error: 'Missing project_root in request body' });
+      return;
+    }
+    if (mineInFlight.has(projectRoot)) {
+      sendJson(res, 409, { error: 'A mining run for this project is already in progress' });
+      return;
+    }
+
+    mineInFlight.add(projectRoot);
+    try {
+      ensureGlobalDirs();
+      const store = new DecisionStore(DECISIONS_DB_PATH);
+      try {
+        const result = await runMineStage({
+          decisionStore: store,
+          projectRoot,
+          strategy: 'regex',
+        });
+        if (!result.ok && !result.skipped) {
+          sendJson(res, 500, { error: result.error ?? 'Mining failed' });
+          return;
+        }
+        sendJson(res, 200, {
+          scanned: result.scanned ?? 0,
+          mined: result.mined ?? 0,
+          added: result.added ?? 0,
+          durationMs: result.durationMs,
+        });
+      } finally {
+        store.close();
+      }
+    } catch (e) {
+      sendJson(res, 500, { error: (e as Error)?.message ?? 'Mining failed' });
+    } finally {
+      mineInFlight.delete(projectRoot);
+    }
+  })();
 }

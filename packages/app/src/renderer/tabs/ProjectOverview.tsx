@@ -8,7 +8,7 @@
  *              toolbar's bottom edge, not a full-bleed accent band across the
  *              content.
  *   Content  — inset grouped lists capped at a readable measure and centred:
- *              Index · Guard · Coverage · Quality · Services.
+ *              Index · Guard · Coverage · Quality · Security · Services.
  *
  * What this replaces, measured on the running app before the rewrite:
  *   - "Re-index Project" as a 1640px-wide accent-filled bar spanning the whole
@@ -58,6 +58,8 @@ interface ProjectStats {
   symbols: number;
   edges: number;
   lastIndexed?: string;
+  /** Present when the last full walk hit security.max_files (TRA-1664). */
+  truncated?: { found: number; limit: number };
 }
 
 interface CoverageGap {
@@ -100,6 +102,28 @@ interface SmellReport {
   findings: SmellFinding[];
   summary: Record<SmellFinding['category'], number>;
   total: number;
+}
+
+type SecuritySeverity = 'critical' | 'high' | 'medium' | 'low';
+
+interface SecurityFinding {
+  rule_id: string;
+  rule_name: string;
+  severity: SecuritySeverity;
+  file: string;
+  line: number;
+  column: number;
+  snippet: string;
+  fix: string;
+  confidence: 'low' | 'medium' | 'high';
+  evidence?: string;
+}
+
+interface SecurityReport {
+  files_scanned: number;
+  findings: SecurityFinding[];
+  summary: Record<SecuritySeverity, number>;
+  suppressed_low_confidence: number;
 }
 
 interface SubprojectInfo {
@@ -170,6 +194,14 @@ const PRIORITY_TONE: Record<string, Tone> = {
   likely: 'red',
   medium: 'orange',
   maybe: 'orange',
+  low: 'neutral',
+};
+
+/* The quality scan has no critical; security does — it reads red like high. */
+const SECURITY_TONE: Record<SecuritySeverity, Tone> = {
+  critical: 'red',
+  high: 'red',
+  medium: 'orange',
   low: 'neutral',
 };
 
@@ -305,6 +337,11 @@ export function ProjectOverview({
   const [smells, setSmells] = useState<SmellReport | null>(null);
   const [smellsLoad, setSmellsLoad] = useState<Load>('loading');
   const [smellsCategory, setSmellsCategory] = useState<SmellFinding['category']>('debug_artifact');
+  const [security, setSecurity] = useState<SecurityReport | null>(null);
+  const [securityLoad, setSecurityLoad] = useState<Load>('loading');
+  /* Client-side filter — the daemon answers the whole list once, and the
+     picker slices it without re-asking (TRA-1675). */
+  const [securitySeverity, setSecuritySeverity] = useState<'all' | SecuritySeverity>('all');
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   /* The daemon answered 404 `not_registered` for this root (TRA-1643): the
@@ -398,6 +435,25 @@ export function ProjectOverview({
     [root],
   );
 
+  const fetchSecurity = useCallback(async () => {
+    setSecurityLoad('loading');
+    try {
+      const params = new URLSearchParams({ project: root, limit: '500' });
+      const res = await daemonFetchProject(`${BASE}/api/projects/security?${params}`);
+      if (!res.ok) {
+        if (res.status === 404 && (await readDaemonReason(res)) === 'not_registered') {
+          setNotRegistered(true);
+        }
+        throw new Error(String(res.status));
+      }
+      setSecurity(await res.json());
+      setNotRegistered(false);
+      setSecurityLoad('ready');
+    } catch {
+      setSecurityLoad('failed');
+    }
+  }, [root]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches after the project leaves 'indexing' so the panel reflects the new totals.
   useEffect(() => {
     /* Not before the daemon has answered (TRA-489). `deriveDaemonState` reduces
@@ -413,12 +469,14 @@ export function ProjectOverview({
     fetchCoverage();
     fetchServices();
     fetchSmells(smellsCategory);
+    fetchSecurity();
   }, [
     daemonLoading,
     fetchStats,
     fetchCoverage,
     fetchServices,
     fetchSmells,
+    fetchSecurity,
     smellsCategory,
     status,
   ]);
@@ -545,6 +603,22 @@ export function ProjectOverview({
   const showGroupHeaders = groups.keys.length > 1 || Boolean(groups.keys[0]);
 
   const visibleFindings = smells?.findings.slice(0, FINDING_LIMIT) ?? [];
+  /* The severity picker slices the one daemon answer client-side — switching
+     it re-renders, it does not re-fetch (TRA-1675). */
+  const securityFindings = security?.findings ?? [];
+  const visibleSecurity = (
+    securitySeverity === 'all'
+      ? securityFindings
+      : securityFindings.filter((f) => f.severity === securitySeverity)
+  ).slice(0, FINDING_LIMIT);
+  /* `critical` has no quality-scan counterpart, so it owns its key; the rest
+     reuse the priority words the Quality badges already speak. */
+  const securityBadge = (severity: SecuritySeverity): string =>
+    severity === 'critical' ? t('severityCritical') : badgeLabel(severity);
+  const filteredSecurityTotal =
+    securitySeverity === 'all'
+      ? securityFindings.length
+      : securityFindings.filter((f) => f.severity === securitySeverity).length;
   /* The API's word when the catalogue has one, the API's word when it does
      not — a badge is never allowed to render a raw key. */
   const badgeLabel = (value: string): string =>
@@ -563,6 +637,7 @@ export function ProjectOverview({
   const statsFailed = statsLoad === 'failed' && !stats;
   const coverageFailed = coverageLoad === 'failed' && !coverage;
   const smellsFailed = smellsLoad === 'failed' && !smells;
+  const securityFailed = securityLoad === 'failed' && !security;
   const servicesFailed = servicesLoad === 'failed' && svcList.length === 0;
   const failures: { what: string; retry: () => void }[] = [];
   if (!showNotRegistered) {
@@ -570,6 +645,7 @@ export function ProjectOverview({
     if (coverageFailed) failures.push({ what: t('errorCoverage'), retry: fetchCoverage });
     if (smellsFailed)
       failures.push({ what: t('errorQuality'), retry: () => fetchSmells(smellsCategory) });
+    if (securityFailed) failures.push({ what: t('errorSecurity'), retry: fetchSecurity });
     if (servicesFailed) failures.push({ what: t('errorServices'), retry: fetchServices });
   }
   const collapsed = failures.length > 1;
@@ -804,6 +880,30 @@ export function ProjectOverview({
                       {t('staleNumbers')}
                     </div>
                   )}
+                  {stats.truncated && (
+                    /* TRA-1664: the last full walk hit security.max_files, so
+                       search silently misses everything past the cap. The stamp
+                       behind this comes from the walk itself (not the row
+                       counts below, which also cover env/phantom rows), and it
+                       survives daemon restarts — a "ready" card without it
+                       reads as a whole index that was never built. */
+                    <div
+                      role="status"
+                      className="mx-3 mt-2 px-3 py-2 rounded-lg text-[13px]"
+                      style={{
+                        background:
+                          'color-mix(in srgb, var(--status-orange) 9%, transparent)',
+                        color: 'var(--label)',
+                        border:
+                          '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
+                      }}
+                    >
+                      {t('truncatedWarning', {
+                        found: formatNumber(stats.truncated.found),
+                        limit: formatNumber(stats.truncated.limit),
+                      })}
+                    </div>
+                  )}
                   <ListRow
                     label={t('rowStatus')}
                     value={
@@ -1033,6 +1133,103 @@ export function ProjectOverview({
                     >
                       {t('moreNotShown', {
                         n: formatNumber(smells.findings.length - FINDING_LIMIT),
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </Card>
+          </Section>
+          )}
+
+          {/* ── Security ─────────────────────────────────────────────
+              The Workspace table's Security column is a critical+high count
+              with nowhere to read the findings behind it (TRA-1675). This
+              lists them the way Quality does: severity badge, rule, file:line
+              and snippet, opening in the editor on click. */}
+          {!(collapsed && securityFailed) && (
+          <Section
+            title={t('sectionSecurity')}
+            trailing={
+              security ? (
+                <Badge tone={securityFindings.length === 0 ? 'green' : 'red'}>
+                  {t('findings', { count: securityFindings.length, n: formatNumber(securityFindings.length) })}
+                </Badge>
+              ) : undefined
+            }
+          >
+            <div className="px-1">
+              <SegmentedControl
+                options={[
+                  { value: 'all', label: t('severityAll') },
+                  { value: 'critical', label: t('severityCritical') },
+                  { value: 'high', label: t('priorityHigh') },
+                  { value: 'medium', label: t('priorityMedium') },
+                  { value: 'low', label: t('priorityLow') },
+                ]}
+                value={securitySeverity}
+                onChange={(v) => setSecuritySeverity(v as 'all' | SecuritySeverity)}
+                aria-label={t('securitySeverityLabel')}
+              />
+            </div>
+            <Card>
+              {securityLoad === 'loading' && !security ? (
+                <SkeletonRows rows={4} />
+              ) : securityFailed ? (
+                <SectionError what={t('errorSecurity')} onRetry={fetchSecurity} />
+              ) : visibleSecurity.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="check"
+                  title={t('emptySecurityTitle')}
+                  subtitle={t('emptySecurityBody', { n: formatNumber(security?.files_scanned ?? 0) })}
+                />
+              ) : (
+                <>
+                  {visibleSecurity.map((f, i) => (
+                    <button
+                      type="button"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: file+line can repeat for several findings on one line; the index disambiguates within a stable sliced list.
+                      key={`${f.file}:${f.line}:${i}`}
+                      onClick={() =>
+                        window.electronAPI?.openInEditor?.(`${root}/${f.file}:${f.line}`)
+                      }
+                      className="flex items-start gap-2 px-3 py-2 w-full text-left"
+                      style={{
+                        borderBottom:
+                          i === visibleSecurity.length - 1 && filteredSecurityTotal <= FINDING_LIMIT
+                            ? 'none'
+                            : '0.5px solid var(--separator)',
+                        cursor: 'default',
+                      }}
+                      title={t('openInEditorTitle', { file: f.file, line: f.line })}
+                    >
+                      <Badge tone={SECURITY_TONE[f.severity]}>
+                        {securityBadge(f.severity)}
+                      </Badge>
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className="block text-[13px] leading-4 truncate"
+                          style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
+                        >
+                          {f.snippet}
+                        </span>
+                        <span
+                          className="block text-[11px] leading-[13px] truncate mt-0.5"
+                          style={{ color: 'var(--label-secondary)' }}
+                        >
+                          {f.rule_name} · {f.rule_id} · {f.file}:{f.line}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                  {filteredSecurityTotal > FINDING_LIMIT && (
+                    <div
+                      className="px-3 py-2 text-[11px] leading-[13px]"
+                      style={{ color: 'var(--label-secondary)' }}
+                    >
+                      {t('moreNotShown', {
+                        n: formatNumber(filteredSecurityTotal - FINDING_LIMIT),
                       })}
                     </div>
                   )}

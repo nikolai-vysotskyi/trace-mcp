@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: '索引',
   staleNumbers: '以下是上次索引的数字。',
+  truncatedWarning:
+    '索引不完整 — 找到 {{found}} 个文件，仅索引了 {{limit}} 个。请提高 security.max_files 并重新索引。',
   rowStatus: '状态',
   rowFiles: '已索引文件',
   rowSymbols: '符号',
@@ -37,6 +39,7 @@ export const overview = {
   errorIndexSummary: '索引摘要',
   errorCoverage: '依赖覆盖率',
   errorQuality: '质量扫描',
+  errorSecurity: '安全扫描',
   errorServices: '服务列表',
 
   sectionCoverage: '覆盖率',
@@ -70,6 +73,14 @@ export const overview = {
   emptySmellBody: '在扫描过的 {{n}} 个文件里，这一类没有需要清理的内容。',
   openInEditorTitle: '在编辑器中打开 {{file}}:{{line}}',
   moreNotShown: '还有 {{n}} 项未显示',
+
+  // ── Security ──
+  sectionSecurity: '安全',
+  securitySeverityLabel: '严重级别',
+  severityAll: '全部',
+  severityCritical: '严重',
+  emptySecurityTitle: '未发现安全问题',
+  emptySecurityBody: '已扫描 {{n}} 个文件，未发现问题。',
 
   sectionServices: '服务',
   servicesAdd: '添加',

@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { beginReindex, countReindexingProjects } from '../../src/daemon/reindex-file-handler.js';
 
 vi.mock('../../../src/registry.js', () => ({
   listProjects: vi.fn(() => []),
@@ -123,4 +124,59 @@ describe('ProjectManager unload → re-add → forced reindex', () => {
       'LifecycleProbe',
     );
   }, 180_000);
+});
+
+describe('Endpoint full reindex vs stopProject drain (TRA-1674)', () => {
+  it('the stop drain waits for an endpoint-style full reindex instead of closing the DB under it', async () => {
+    // Field evidence (2026-09-18): POST /api/projects/reindex fired a
+    // fire-and-forget pipeline.indexAll(true) that the idle-unload sweep
+    // killed mid-run — stopProject()'s db.close() landed inside
+    // reconcileScope's getAllFiles and the run died as a caught "Reindex
+    // failed". The single-file paths were already covered by TRA-1553's
+    // drain; the full-reindex endpoint was the one path that never
+    // registered via beginReindex. This test drives a real ProjectManager
+    // through exactly that interleaving, with the run stalled inside
+    // collectFiles so the stop is guaranteed to land mid-run.
+    const { ProjectManager: PM } = await loadImpl();
+    const local: AnyManager = new PM();
+    try {
+      const managed = await local.addProject(fixtureRoot, { watch: false, persist: false });
+      await managed.initialIndexPromise;
+      expect(managed.status).toBe('ready');
+
+      const pipeline = managed.pipeline as AnyManager;
+      const origCollect: (...args: unknown[]) => Promise<unknown> =
+        pipeline.collectFiles.bind(pipeline);
+      let release!: () => void;
+      const gate = new Promise<void>((r) => {
+        release = r;
+      });
+      pipeline.collectFiles = async (...args: unknown[]) => {
+        await gate;
+        return origCollect(...args);
+      };
+
+      // Exactly what the fixed POST /api/projects/reindex handler does.
+      const endReindex = beginReindex(fixtureRoot);
+      expect(countReindexingProjects()).toBe(1);
+      const run = managed.pipeline.indexAll(true).finally(endReindex);
+
+      const shutdown = local.shutdown();
+      // Let shutdown reach the bounded drain, then let the run proceed. The
+      // 100 ms only orders the two sides for determinism — the gate, not the
+      // sleep, is what makes the interleaving exact.
+      await new Promise((r) => setTimeout(r, 100));
+      release();
+      const result = await run;
+      expect(result.errors).toBe(0);
+      await shutdown;
+      expect(countReindexingProjects()).toBe(0);
+    } finally {
+      try {
+        await local?.shutdown?.();
+      } catch {
+        /* best-effort — already shut down on the happy path */
+      }
+    }
+  }, 120_000);
 });

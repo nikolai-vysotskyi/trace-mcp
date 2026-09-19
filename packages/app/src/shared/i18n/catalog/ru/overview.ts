@@ -30,6 +30,11 @@ export const overview = {
 
   sectionIndex: 'Индекс',
   staleNumbers: 'Это последние проиндексированные значения.',
+  /* TRA-1664: при последнем полном обходе файлов оказалось больше, чем
+     security.max_files, — индекс частичный, поиск не видит ничего за пределом
+     лимита. `found` — сколько файлов найдено до обрезки, `limit` — сам лимит. */
+  truncatedWarning:
+    'Индекс частичный — найдено файлов: {{found}}, проиндексировано только {{limit}}. Увеличьте security.max_files и переиндексируйте.',
   rowStatus: 'Состояние',
   rowFiles: 'Файлов проиндексировано',
   rowSymbols: 'Символов',
@@ -47,6 +52,7 @@ export const overview = {
   errorIndexSummary: 'сводку индекса',
   errorCoverage: 'покрытие зависимостей',
   errorQuality: 'проверку качества',
+  errorSecurity: 'проверку безопасности',
   errorServices: 'список сервисов',
 
   sectionCoverage: 'Покрытие',
@@ -85,6 +91,13 @@ export const overview = {
   emptySmellBody: 'В этой категории чистить нечего — просмотрено файлов: {{n}}.',
   openInEditorTitle: 'Открыть {{file}}:{{line}} в редакторе',
   moreNotShown: 'Ещё {{n}} не показаны',
+
+  sectionSecurity: 'Безопасность',
+  securitySeverityLabel: 'Серьёзность',
+  severityAll: 'Все',
+  severityCritical: 'критический',
+  emptySecurityTitle: 'Уязвимостей не найдено',
+  emptySecurityBody: 'Ничего не отмечено в {{n}} просмотренных файлах.',
 
   sectionServices: 'Сервисы',
   servicesAdd: 'Добавить',

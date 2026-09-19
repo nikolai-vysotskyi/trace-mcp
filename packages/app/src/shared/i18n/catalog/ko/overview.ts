@@ -22,6 +22,8 @@ export const overview = {
 
   sectionIndex: '인덱스',
   staleNumbers: '아래는 마지막으로 인덱싱한 수치입니다.',
+  truncatedWarning:
+    '인덱스가 불완전합니다 — {{found}}개 중 {{limit}}개만 인덱싱되었습니다. security.max_files를 늘리고 다시 인덱싱하세요.',
   rowStatus: '상태',
   rowFiles: '인덱싱된 파일',
   rowSymbols: '심볼',
@@ -37,6 +39,7 @@ export const overview = {
   errorIndexSummary: '인덱스 요약',
   errorCoverage: '의존성 커버리지',
   errorQuality: '품질 스캔',
+  errorSecurity: '보안 스캔',
   errorServices: '서비스 목록',
 
   sectionCoverage: '커버리지',
@@ -70,6 +73,14 @@ export const overview = {
   emptySmellBody: '스캔한 파일 {{n}}개에서 이 분류로 정리할 것이 없습니다.',
   openInEditorTitle: '편집기에서 {{file}}:{{line}} 열기',
   moreNotShown: '표시되지 않은 항목 {{n}}개',
+
+  // ── Security ──
+  sectionSecurity: '보안',
+  securitySeverityLabel: '심각도',
+  severityAll: '전체',
+  severityCritical: '심각',
+  emptySecurityTitle: '보안 발견 없음',
+  emptySecurityBody: '스캔한 {{n}}개 파일에서 발견된 항목이 없습니다.',
 
   sectionServices: '서비스',
   servicesAdd: '추가',

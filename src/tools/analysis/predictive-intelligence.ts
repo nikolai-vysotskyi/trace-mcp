@@ -379,9 +379,23 @@ function riskLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
 /** Minimum indexed symbols before a project-level tech-debt grade is meaningful (TRA-1057). */
 const MIN_SYMBOLS_FOR_GRADE = 20;
 
+/**
+ * Absolute churn ceiling for tech-debt scoring (commits/week per file).
+ * ~2 sustained commits/week is already hot; quiet files score near 0.
+ * (TRA-1671: the old rank-percentile pinned the project mean at ~0.5 for
+ * every project, a +0.1 structural offset with zero discrimination — and a
+ * random 0..1 spread when all files had identical churn, e.g. no git data.)
+ */
+const DEBT_CHURN_ABSOLUTE_CEILING = 2;
+
 function debtGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'F' {
-  if (score < 0.2) return 'A';
-  if (score < 0.4) return 'B';
+  // TRA-1671: recalibrated so the scale discriminates. The old 0.2/0.4 cutoffs
+  // made A mathematically unreachable at any test_gap > 0 (0.25 × 0.8 = 0.2
+  // floor before complexity/coupling/churn) and B nearly so — 14 of 15 living
+  // projects scored C. C/D/F boundaries are unchanged so existing
+  // max_tech_debt_grade gates keep their meaning; only A/B move down-scale.
+  if (score < 0.3) return 'A';
+  if (score < 0.45) return 'B';
   if (score < 0.6) return 'C';
   if (score < 0.8) return 'D';
   return 'F';
@@ -763,12 +777,9 @@ export function getTechDebt(
     moduleFiles.get(mod)!.push(f.path);
   }
 
-  // Build churn rank percentile across all files
-  const churnRaw = new Map<string, number>();
-  for (const f of allFiles) {
-    churnRaw.set(f.path, gitStats.get(f.path)?.churnPerWeek ?? 0);
-  }
-  const churnRanks = rankPercentile(churnRaw);
+  // Churn is an absolute signal (mean commits/week per module, clamp-normalized).
+  // A rank-percentile here would pin every project's mean at ~0.5 regardless
+  // of how quiet or hot it actually is (TRA-1671).
 
   // Score each module
   const modules: TechDebtModule[] = [];
@@ -790,9 +801,12 @@ export function getTechDebt(
     const testedCount = files.filter((f) => testedFiles.has(f)).length;
     const sTestGap = 1 - (files.length > 0 ? testedCount / files.length : 0);
 
-    // Churn: mean churn rank
-    const churnVals = files.map((f) => churnRanks.get(f) ?? 0);
-    const sChurn = churnVals.reduce((a, b) => a + b, 0) / churnVals.length;
+    // Churn: mean absolute churn per week, clamp-normalized. Quiet modules
+    // score near 0; only sustained hot churn approaches 1.
+    const churnVals = files.map((f) => gitStats.get(f)?.churnPerWeek ?? 0);
+    const meanChurn =
+      churnVals.length > 0 ? churnVals.reduce((a, b) => a + b, 0) / churnVals.length : 0;
+    const sChurn = clampNormalize(meanChurn, DEBT_CHURN_ABSOLUTE_CEILING);
 
     const score =
       w.complexity * sComplexity +

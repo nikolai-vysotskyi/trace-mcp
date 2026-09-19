@@ -691,6 +691,25 @@ describe('Zed writer (context_servers + source:custom, TRA-1658)', () => {
     expect(parsed.context_servers['trace'].source).toBe('custom');
   });
 
+  it('keeps a comment inside context_servers next to the edited entry', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(
+      userFile(),
+      [
+        '{',
+        ' "context_servers": {',
+        '  // reached over stdio; keep alive',
+        '  "linear": {"command": "npx", "args": ["@linear/mcp"]}',
+        ' }}',
+      ].join('\n'),
+    );
+    configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    const text = fs.readFileSync(userFile(), 'utf-8');
+    expect(text).toContain('// reached over stdio; keep alive');
+    expect(text).toContain('"linear"');
+    expect(text).toContain('"trace"');
+  });
+
   it('writes project scope to .zed/settings.json with pinned cwd', () => {
     const results = configureMcpClients(['zed'], projectRoot, { scope: 'project' });
     expect(results[0].action).toBe('created');
