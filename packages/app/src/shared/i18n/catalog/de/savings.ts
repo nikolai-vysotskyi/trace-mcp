@@ -16,6 +16,10 @@ export const savings = {
   sectionMethod: 'Methode',
   methodBody: 'Die zurückgegebene Hälfte ist eine Schätzung (Zeichen/4) der Tokens, die über die Leitung gingen. Die Basis-Hälfte — was dieselben Fragen als Dateilesen gekostet hätten — ist weiterhin eine Schätzung. Diese Zahl ist also eine Untergrenze, keine Schlagzeile.',
   methodLink: 'Methode lesen',
+  rowRedirect: 'PreToolUse-Redirect',
+  redirectOn: 'An',
+  redirectOff: 'Aus — diese Zahl ist eine Untergrenze',
+  redirectOffBody: 'Der Redirect-Hook ist nicht installiert: Agenten lesen Dateien weiter direkt, gezählt werden nur freiwillige trace-mcp-Aufrufe. Schalte den Redirect unter Clients ein, um die Schleife zu schließen.',
   notEnoughTitle: 'Noch zu wenige gemessene Aufrufe',
   notEnoughSubtitle: 'Nutze trace-mcp eine Weile aus deinem Agenten und schau später wieder vorbei.',
 };

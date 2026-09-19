@@ -150,11 +150,18 @@ interface RichClientStatus {
   status: ClientConfigStatus;
   staleReason?: string;
   /**
-   * TRA-1647 pickup code from `clients status --json`: what the user must do
+   * TRA-1698 pickup code from `clients status --json`: what the user must do
    * after a write before this client picks it up. Absent on a daemon older
    * than the field, which reads as "we don't know" and shows no hint.
    */
   pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
+  /**
+   * TRA-1698 PreToolUse redirect (guard hook) state. `active` — file reads go
+   * through trace-mcp; `missing` — the entry is there but agents still read
+   * files directly; `na` — the client doesn't run hooks. Absent on a daemon
+   * older than the field, which reads as "we don't know" and shows no badge.
+   */
+  hook?: 'active' | 'missing' | 'na' | null;
   /**
    * Enforcement level the config on disk is already on. `null` — or absent, on
    * a daemon older than the field — means "we don't know", which is the cue to
@@ -357,13 +364,16 @@ function SupportedClientRow({
   configExists,
   staleReason,
   pickup,
+  hook,
   justWritten,
   error,
   configuring,
+  redirectBusy,
   last,
   onConnect,
   onConnectWithLevel,
   onUpdate,
+  onEnableRedirect,
 }: {
   name: ClientName;
   label: string;
@@ -388,6 +398,8 @@ function SupportedClientRow({
   staleReason?: string;
   /** TRA-1647 pickup code for this client (absent on older daemons). */
   pickup?: ClientPickup | null;
+  /** TRA-1698 redirect state (absent on older daemons — shows no badge). */
+  hook?: 'active' | 'missing' | 'na' | null;
   /**
    * Whether this row's entry was just written by Connect/Update in this
    * session. A write that landed but isn't picked up until restart reads as
@@ -398,10 +410,14 @@ function SupportedClientRow({
   /** What the last write for this row said when it failed. */
   error?: string;
   configuring: boolean;
+  /** The one-click redirect install is running (banner button spins, rows wait). */
+  redirectBusy: boolean;
   last: boolean;
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
   onUpdate: () => void;
+  /** TRA-1698: install the PreToolUse redirect without a terminal. */
+  onEnableRedirect: () => void;
 }) {
   const { t } = useTranslation('clients');
   const isManual = MANUAL_CLIENTS.has(name) || status === 'unmanageable';
@@ -439,6 +455,11 @@ function SupportedClientRow({
      all (TRA-479). It now says which: the file Connect will write into, or that
      there is no such file. */
   const restartHint = justWritten ? pickupSentence(t, pickup, label) : null;
+  /* TRA-1698: a configured entry without the redirect is the misleading
+     "Connected" the issue is about — the row's second line (below) names it
+     and offers the one-click fix, so the caption keeps the path. */
+  const showEnableRedirect = connected && hook === 'missing';
+  const showHookActive = connected && hook === 'active';
   const caption = error
     ? error
     : restartHint
@@ -462,8 +483,9 @@ function SupportedClientRow({
         /* 44 bare, 48 with a caption — both on the 4pt grid. Padding used to
            set this height and landed the row on 46, which is off the scale and
            now sets the rhythm for the whole list: after TRA-479 almost every
-           row carries a caption. */
-        minHeight: caption ? 48 : 44,
+           row carries a caption. TRA-1698: a hook second line counts as a
+           caption for the same reason. */
+        minHeight: caption || showEnableRedirect || showHookActive ? 48 : 44,
         borderBottom: last ? 'none' : '0.5px solid var(--separator)',
       }}
     >
@@ -493,18 +515,48 @@ function SupportedClientRow({
            claim a comparison we never ran. TRA-1647: a verified row also names
            its pickup on hover, so the next step survives after the caption
            hint clears. Presence-only keeps its own hint — the unchecked
-           format is the more important persistent fact there. */
-        <span
-          className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
-          style={{ color: 'var(--label-secondary)' }}
-          title={
-            presenceOnly
-              ? t('configuredHint')
-              : (pickupSentence(t, pickup, label) ?? undefined)
-          }
-        >
-          <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
-          {presenceOnly ? t('configured') : t('connected')}
+           format is the more important persistent fact there.
+           TRA-1698: a second line names the redirect state, so "Connected"
+           can no longer mean "entry present while agents read files directly".
+           A missing hook gets the one-click fix right here; an active one gets
+           a quiet confirmation and nothing else. */
+        <span className="flex flex-col items-end gap-1 shrink-0">
+          <span
+            className="flex items-center gap-1.5 text-[13px] leading-4"
+            style={{ color: 'var(--label-secondary)' }}
+            title={
+              presenceOnly
+                ? t('configuredHint')
+                : (pickupSentence(t, pickup, label) ??
+                  (hook === 'missing'
+                    ? t('hookMissingHint')
+                    : hook === 'active'
+                      ? t('hookActiveHint')
+                      : undefined))
+            }
+          >
+            <StatusDot tone={presenceOnly ? 'neutral' : 'green'} />
+            {presenceOnly ? t('configured') : t('connected')}
+          </span>
+          {showHookActive && (
+            <span
+              className="text-[11px] leading-[13px]"
+              style={{ color: 'var(--label-secondary)' }}
+              title={t('hookActiveHint')}
+            >
+              {t('hookActive')}
+            </span>
+          )}
+          {showEnableRedirect && (
+            <Button
+              size="small"
+              disabled={redirectBusy || configuring}
+              onClick={onEnableRedirect}
+              title={t('hookMissingHint')}
+            >
+              {redirectBusy ? t('enablingRedirect') : t('enableRedirect')}
+            </Button>
+          )}
         </span>
       ) : status === 'legacy' ? (
         /* Nothing is broken or drifted here — the entry names the server
@@ -665,6 +717,16 @@ export function Clients() {
   const closeBlocked = useCallback(() => setBlockedClient(null), []);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  /**
+   * TRA-1698 one-click redirect. The hook is global (one install covers every
+   * Claude-family client), so this lives on the surface, not the row — the row
+   * button below just calls the same handler. `redirectDone` shows the
+   * confirmation until the next manual refresh; the rows' own "Hook active"
+   * badges are the persistent proof (re-detected after the install).
+   */
+  const [redirectBusy, setRedirectBusy] = useState(false);
+  const [redirectError, setRedirectError] = useState<string | null>(null);
+  const [redirectDone, setRedirectDone] = useState(false);
 
   /* Useful once the client list has anything to show — detection resolved,
      or a partial list already on screen. */
@@ -785,8 +847,38 @@ export function Clients() {
     if (name) void handleUpdate(name);
   };
 
+  /* TRA-1698: install the PreToolUse redirect without a terminal, then
+     re-detect — success means the hook is actually active (the main process
+     verified it), not just that the command exited 0. The "redirect is on"
+     confirmation shows only when verification confirmed it; an unverified
+     install just re-detects and lets the rows tell the truth. */
+  const handleEnableRedirect = async () => {
+    const install = window.electronAPI?.installRedirectHook;
+    if (!install) {
+      setRedirectError(t('redirectFailed'));
+      return;
+    }
+    setRedirectBusy(true);
+    setRedirectError(null);
+    try {
+      const result = await install();
+      if (result?.ok) {
+        if (result.verified !== false) setRedirectDone(true);
+        await detectClients();
+      } else {
+        setRedirectError(result?.error ?? t('redirectFailed'));
+      }
+    } catch (err) {
+      setRedirectError(err instanceof Error ? err.message : t('redirectFailed'));
+    } finally {
+      setRedirectBusy(false);
+    }
+  };
+
   const refreshAll = () => {
     setJustWritten([]);
+    setRedirectDone(false);
+    setRedirectError(null);
     detectClients();
     fetchClients();
   };
@@ -869,6 +961,12 @@ export function Clients() {
   const bucketLabel = stale.length ? t('updateAll') : t('migrateAll');
   const bucketProgressKey = stale.length ? 'updatingProgress' : 'migratingProgress';
 
+  /* TRA-1698: the redirect banner. Unknown (older daemon, `hook` absent) shows
+     nothing — claiming anything about a probe we never ran is what made
+     "Connected" misleading in the first place. */
+  const hookMissingAny = !detecting && statuses.some((s) => s.hook === 'missing');
+  const showRedirectDone = !detecting && redirectDone && !hookMissingAny && !redirectError;
+
   const sessions = [...clients].sort(
     (a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime(),
   );
@@ -938,20 +1036,61 @@ export function Clients() {
                       configExists={s.configExists}
                       staleReason={s.staleReason}
                       pickup={s.pickup}
+                      hook={s.hook}
                       justWritten={justWritten.includes(c.name)}
                       error={errors[c.name]}
                       configuring={
                         configuringClient === c.name || (bulk !== null && bucket.includes(c.name))
                       }
+                      redirectBusy={redirectBusy}
                       last={i === sortedClients.length - 1}
                       onConnect={() => handleConnect(c.name)}
                       onConnectWithLevel={(level) => handleConnect(c.name, level)}
                       onUpdate={() => handleUpdate(c.name)}
+                      onEnableRedirect={handleEnableRedirect}
                     />
                   );
                 })
               )}
             </Card>
+            {/* TRA-1698: without the redirect the entries above are configured
+                but the value loop is open — agents keep reading files directly.
+                One click installs the hook; the rows' "Hook active" badges are
+                the persistent proof afterwards. */}
+            {(hookMissingAny || redirectError || showRedirectDone) && (
+              <div
+                className="flex items-center gap-2 px-3 py-2.5"
+                style={{
+                  background: 'var(--surface)',
+                  borderRadius: 12,
+                  border: '0.5px solid var(--separator)',
+                }}
+                role={redirectError ? 'alert' : 'status'}
+              >
+                <Icon
+                  name={showRedirectDone ? 'check' : 'warning'}
+                  size={14}
+                  className="shrink-0"
+                />
+                <span
+                  className="flex-1 min-w-0 text-[12px] leading-4"
+                  style={{
+                    color: redirectError ? 'var(--status-red)' : 'var(--label-secondary)',
+                  }}
+                >
+                  {redirectError ?? (showRedirectDone ? t('redirectEnabled') : t('hookMissingHint'))}
+                </span>
+                {hookMissingAny && (
+                  <Button
+                    size="small"
+                    disabled={redirectBusy || configuringClient !== null || bulk !== null}
+                    onClick={handleEnableRedirect}
+                  >
+                    {redirectBusy ? t('enablingRedirect') : t('enableRedirect')}
+                  </Button>
+                )}
+              </div>
+            )}
           </Section>
 
           <Section title={t('sessions')} count={sessions.length}>

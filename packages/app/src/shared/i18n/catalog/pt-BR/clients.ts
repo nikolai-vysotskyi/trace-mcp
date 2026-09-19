@@ -54,4 +54,12 @@ export const clients = {
   levelStandardHint: '[internal record] e hooks',
   levelMax: 'Máximo',
   levelMaxHint: '[internal record], hooks e tweakcc — recomendado',
+  hookActive: 'Hook ativo',
+  hookActiveHint: 'Redirecionamento PreToolUse ativo — leituras passam pelo trace-mcp',
+  hookMissing: 'Sem hook de redirecionamento',
+  hookMissingHint: 'Entrada configurada, mas os agentes continuam lendo arquivos diretamente',
+  enableRedirect: 'Ativar redirecionamento',
+  enablingRedirect: 'Ativando…',
+  redirectEnabled: 'Redirecionamento PreToolUse ativo — leituras passam pelo trace-mcp',
+  redirectFailed: 'Não foi possível instalar o hook de redirecionamento.',
 } as const;

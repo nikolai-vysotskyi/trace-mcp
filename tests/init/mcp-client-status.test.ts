@@ -62,6 +62,7 @@ describe('getMcpClientStatuses', () => {
         configPath: null,
         status: 'unmanageable',
         pickup: null,
+        hook: 'na',
         level: null,
         configExists: false,
       },
@@ -70,6 +71,7 @@ describe('getMcpClientStatuses', () => {
         configPath: null,
         status: 'unmanageable',
         pickup: null,
+        hook: 'na',
         level: null,
         configExists: false,
       },
@@ -540,6 +542,65 @@ describe('getMcpClientStatuses — enforcement level', () => {
     fs.writeFileSync(settingsPath, '{ not json');
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
     expect(s.level).toBe('base');
+  });
+});
+
+// TRA-1698: `clients status` must report the PreToolUse redirect (guard hook)
+// per client — not just the MCP entry — so the app can stop calling a bare
+// entry "Connected" while agents keep reading files directly.
+describe('getMcpClientStatuses — redirect hook state', () => {
+  /** Write the guard-hook entry `setup-hooks --global` installs. */
+  function installRedirectHook(configDir: string): void {
+    const settingsPath = path.join(fakeHome, configDir, 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Read|Grep|Glob|Bash|Agent',
+              hooks: [
+                {
+                  type: 'command',
+                  command: path.join(fakeHome, configDir, 'hooks', 'trace-mcp-guard.sh'),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  }
+
+  it('reports `missing` for a configured Claude client without the hook', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('up_to_date');
+    expect(s.hook).toBe('missing');
+  });
+
+  it('reports `active` once the redirect hook is wired in', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    installRedirectHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.hook).toBe('active');
+  });
+
+  it('reads claw-code from its own ~/.claw settings', () => {
+    configureMcpClients(['claude-code', 'claw-code'], projectRoot, { scope: 'global' });
+    installRedirectHook('.claude');
+    const [cc, claw] = getMcpClientStatuses(projectRoot, 'global', ['claude-code', 'claw-code']);
+    expect(cc.hook).toBe('active');
+    expect(claw.hook).toBe('missing');
+  });
+
+  it("reports `na` for clients that don't run hooks", () => {
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    installRedirectHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(s.status).toBe('up_to_date');
+    expect(s.hook).toBe('na');
   });
 });
 

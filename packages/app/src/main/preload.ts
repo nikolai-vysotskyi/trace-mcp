@@ -54,10 +54,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       level?: 'base' | 'standard' | 'max' | null;
       /** Whether `configPath` exists on disk (TRA-479). */
       configExists?: boolean;
+      /** TRA-1698 PreToolUse redirect state; absent on older CLIs. */
+      hook?: 'active' | 'missing' | 'na' | null;
       /** TRA-1647 pickup code from `clients status --json`; absent on older CLIs. */
       pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
   }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
+  /** TRA-1698: install the PreToolUse redirect (guard hook) without a terminal. */
+  installRedirectHook: (): Promise<{ ok: boolean; error?: string; verified?: boolean }> =>
+    ipcRenderer.invoke('install-redirect-hook'),
   configureMcpClient: (
     clientName: string,
     level: string,

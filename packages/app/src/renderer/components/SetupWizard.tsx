@@ -40,6 +40,9 @@ const BASE = 'http://127.0.0.1:3741';
 
 export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   useTranslation('guard');
+  /* TRA-1698 redirect strings live in the clients catalogue — the wizard
+     borrows them instead of duplicating the copy in guard. */
+  const { t: tClients } = useTranslation('clients');
   const [step, setStep] = useState<WizardStep>(initialStep ?? 'daemon');
   const [daemonState, setDaemonState] = useState<{
     phase: 'idle' | 'installing' | 'ready' | 'failed';
@@ -49,6 +52,16 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   const [clients, setClients] = useState<ClientRowState[]>([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsConnecting, setClientsConnecting] = useState(false);
+  /**
+   * TRA-1698: the wizard used to finish with every row "Connected" while the
+   * value loop stayed open (no redirect hook — installable only by terminal).
+   * `missing` offers the same one-click fix as the Clients screen;
+   * `unknown` (older daemon, no Claude-family client) shows nothing rather
+   * than a claim we never checked.
+   */
+  const [redirectState, setRedirectState] = useState<'unknown' | 'active' | 'missing'>('unknown');
+  const [redirectBusy, setRedirectBusy] = useState(false);
+  const [redirectError, setRedirectError] = useState<string | null>(null);
 
   const [guessedProject, setGuessedProject] = useState<{ path: string; name: string } | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -139,7 +152,6 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
       try {
         const detected = (await window.electronAPI?.detectMcpClients()) ?? [];
         if (cancelled) return;
-
         // Group by unique name
         const unique = new Map<string, DetectedMcpClient>();
         for (const c of detected) {
@@ -155,6 +167,19 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
           connected: c.hasTraceMcp,
         }));
         setClients(rows);
+        // TRA-1698: read the redirect state alongside the entries, so the
+        // wizard never reports "Connected" while the loop is open.
+        try {
+          const rich = await window.electronAPI?.getMcpClientStatuses?.('global');
+          if (!cancelled && rich?.ok && rich.statuses) {
+            const hooks = rich.statuses.map((s) => s.hook);
+            if (hooks.includes('missing')) setRedirectState('missing');
+            else if (hooks.includes('active')) setRedirectState('active');
+            else setRedirectState('unknown');
+          }
+        } catch {
+          if (!cancelled) setRedirectState('unknown');
+        }
       } catch {
         if (!cancelled) setClients([]);
       } finally {
@@ -291,6 +316,45 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
       );
       setClientsConnecting(false);
       if (![...outcome.values()].some(Boolean)) setStep('project');
+    }
+  };
+
+  /* TRA-1698: the same one-click redirect fix as the Clients screen — the
+     wizard must not finish on "Connected" with the loop open. After the
+     install the state is re-derived from the probe, never assumed: an
+     unverified install that can't be re-read lands on `unknown` (shows
+     nothing) rather than a confirmation we never checked. */
+  const handleEnableRedirect = async () => {
+    const install = window.electronAPI?.installRedirectHook;
+    if (!install) {
+      setRedirectError(tClients('redirectFailed'));
+      return;
+    }
+    setRedirectBusy(true);
+    setRedirectError(null);
+    try {
+      const result = await install();
+      if (!result?.ok) {
+        setRedirectError(result?.error ?? tClients('redirectFailed'));
+        return;
+      }
+      try {
+        const rich = await window.electronAPI?.getMcpClientStatuses?.('global');
+        if (rich?.ok && rich.statuses) {
+          const hooks = rich.statuses.map((s) => s.hook);
+          if (hooks.includes('missing')) setRedirectState('missing');
+          else if (hooks.includes('active')) setRedirectState('active');
+          else setRedirectState('unknown');
+        } else {
+          setRedirectState('unknown');
+        }
+      } catch {
+        setRedirectState('unknown');
+      }
+    } catch (err) {
+      setRedirectError(err instanceof Error ? err.message : tClients('redirectFailed'));
+    } finally {
+      setRedirectBusy(false);
     }
   };
 
@@ -499,6 +563,40 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
           <p className="text-[12px] leading-4" style={{ color: 'var(--status-red)', margin: 0 }}>
             {t('guard:wizard.clients.failed')}
           </p>
+        )}
+
+        {/* TRA-1698: without the redirect, "Connected" above means the entry
+            is there while agents keep reading files directly. */}
+        {(redirectState === 'missing' || redirectError) && (
+          <Card>
+            <div className="flex items-center gap-2.5 p-3">
+              <StatusDot tone={redirectError ? 'red' : 'orange'} />
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+                  {tClients('hookMissing')}
+                </span>
+                <span
+                  className="text-[11px] leading-[14px]"
+                  style={{ color: redirectError ? 'var(--status-red)' : 'var(--label-secondary)' }}
+                >
+                  {redirectError ?? tClients('hookMissingHint')}
+                </span>
+              </div>
+              {redirectState === 'missing' && (
+                <Button size="small" disabled={redirectBusy} onClick={handleEnableRedirect}>
+                  {redirectBusy ? tClients('enablingRedirect') : tClients('enableRedirect')}
+                </Button>
+              )}
+            </div>
+          </Card>
+        )}
+        {redirectState === 'active' && (
+          <div className="flex items-center gap-1.5 px-1">
+            <StatusDot tone="green" />
+            <span className="text-[12px] leading-4" style={{ color: 'var(--label-secondary)' }}>
+              {tClients('hookActive')}
+            </span>
+          </div>
         )}
 
         <div className="lx-sheet-actions">
