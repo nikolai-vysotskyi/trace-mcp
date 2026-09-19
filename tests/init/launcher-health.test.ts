@@ -181,6 +181,17 @@ describe('checkRegisteredLaunchers', () => {
     expect(checks.map((c) => c.path)).toContain(cmd);
   });
 
+  it("reads Zed's context_servers bucket (TRA-1658)", () => {
+    const cmd = path.join(dir, 'zed-launcher');
+    const checks = checkRegisteredLaunchers(
+      raw(
+        'settings.json',
+        `{\n  "context_servers": { "trace": { "source": "custom", "command": ${JSON.stringify(cmd)} } }\n}\n`,
+      ),
+    );
+    expect(checks.map((c) => c.path)).toContain(cmd);
+  });
+
   it('always includes the installed launcher path, even with no client configured', () => {
     const checks = checkRegisteredLaunchers([]);
     expect(checks).toHaveLength(1);

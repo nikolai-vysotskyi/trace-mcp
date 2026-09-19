@@ -81,6 +81,7 @@ type ClientName =
   | 'antigravity'
   | 'gemini-cli'
   | 'minimax-code'
+  | 'zed'
   | 'kimi'
   | 'opencode';
 
@@ -104,6 +105,7 @@ const ALL_CLIENTS: { name: ClientName; label: string }[] = [
   { name: 'antigravity', label: 'Antigravity' }, // i18n-exempt
   { name: 'gemini-cli', label: 'Gemini CLI' }, // i18n-exempt
   { name: 'minimax-code', label: 'MiniMax Code' }, // i18n-exempt
+  { name: 'zed', label: 'Zed' }, // i18n-exempt
   { name: 'kimi', label: 'Kimi Code CLI' }, // i18n-exempt
   { name: 'opencode', label: 'OpenCode' }, // i18n-exempt
 ];

@@ -17,6 +17,7 @@ export type DetectedMcpClientName =
   | 'antigravity'
   | 'gemini-cli'
   | 'minimax-code'
+  | 'zed'
   | 'kimi'
   | 'opencode';
 
@@ -45,6 +46,7 @@ export const MCP_CLIENT_DISPLAY_NAMES: Record<DetectedMcpClientName, string> = {
   antigravity: 'Antigravity',
   'gemini-cli': 'Gemini CLI',
   'minimax-code': 'MiniMax Code',
+  zed: 'Zed',
   kimi: 'Kimi Code CLI',
   opencode: 'OpenCode',
 };
