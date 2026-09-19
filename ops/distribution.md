@@ -2575,3 +2575,45 @@ still noise, not signal; `docs/_data/competitors.yml` untouched
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-19 morning (TRA-1684): six hours after the evening pass, sweep clean, graft listing surface checked
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments: `eltociear#119` (`mergeable_state: clean`), `GetBindu#195`
+(clean), `yzfly#44` (clean), `tolkonepiu#384`, `ai-boost#240` (still dirty —
+not rebased per the ledger rule: rebase only close to a merge signal, and
+there is none). No ping due anywhere — eltociear/GetBindu/slopstop/hermes/nix
+unlock 20.09, yzfly/tolkonepiu 26.09. `awesome-claude-code#2871` (filed by
+Nikolai 18.09): OPEN, newest still the filing-moment bot validation, no
+maintainer reply — wait, do not ping. `hermes#395`, `nix#606`,
+`pi-extensions#1204`: OPEN, 0 comments. `Dokploy/mcp#81`: OPEN, 3 comments,
+newest still 09-05. `lastlight#372`: newest still our 18.09 identity answer
+(comment dates re-read), no cliftonc reply. `git-pkgs/outline#34`: OPEN,
+`updated_at` still 09-16T08:04Z, newest still our 09-15 provenance answer.
+`nanocoder#1197`: OPEN, 4 comments, newest still the third-party pitch of
+09-11. `slopstop#633`, `atlas#105`, `pr-agent#2499` (newest still our 09-14
+reply), `kilocode#13843`/`#12707`, `garrytan/gbrain#5001`, `Aspire#1575`,
+`harness#1284`, `pyrefly#4583`, `deslop#173` (closed 09-08): all unchanged.
+TRA-633 consolidated request stands fulfilled (Nikolai filed #2871); still
+awaiting triage, no new ping. trace-mcp 176★/21 forks — flat.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos
+outside the seen list.
+
+**Competitor deep-dive (the movement this pass): graft's listing surface.**
+`trailhq/Graft` is the fastest mover again (7,094 → 8,237 → **8,611** since
+the 09-11 baseline; README star badge still points at the pre-rename
+`NanoNets/Graft`). Full README read (42K chars): the only directory surface
+is auto-indexed trendshift.io (trending-tracker badge, not a submit-to
+catalog) — no awesome-list, marketplace, or submission catalog to follow
+them into. Do not re-check graft for addresses; the head-to-head and #310
+notes above stand. Other stars since baseline: codegraph 70,502 → 71,432;
+CBM 42,957 → 43,777; CRG 31,333 → 31,595; context-mode 22,146 → 23,553;
+serena 29,186 → 29,590; repomix 28,290 → 28,405; ripwire 1,892 → 2,256;
+GitNexus 47,245 → 47,440. `docs/_data/competitors.yml` untouched
+(Competitor Intelligence lane).
+
+**Catalogs:** moratorium holds, no submissions. Queued doors stand (aloth
+first, TensorBlock second).
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
