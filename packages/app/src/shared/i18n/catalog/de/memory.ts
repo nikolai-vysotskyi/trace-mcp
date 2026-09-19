@@ -49,6 +49,12 @@ export const memory = {
   noDecisionsSubtitle:
     'Eine Entscheidung ist eine Notiz darüber, warum diese Codebasis so ist, wie sie ist — ein Kompromiss, eine Konvention, die Ursache eines Fehlers. Assistenten lesen sie, bevor sie deinen Code ändern.',
   addFirstDecision: 'Erste Entscheidung hinzufügen',
+  mineSessions: 'Letzte Sitzungen auswerten',
+  mining: 'Wird ausgewertet…',
+  mineResult: '{{mined}} Sitzungen ausgewertet · {{added}} Entscheidungen hinzugefügt',
+  mineFailed: 'Auswertung fehlgeschlagen — erneut versuchen.',
+  autoMiningOff:
+    'Automatisches Auswerten ist aus — memory.background.enabled aktivieren, um dies automatisch zu füllen.',
 
   // ── Decision card ──────────────────────────────────────────────────────
   active: 'Aktiv',

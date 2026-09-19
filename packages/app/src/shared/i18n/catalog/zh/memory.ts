@@ -43,6 +43,12 @@ export const memory = {
   noDecisionsSubtitle:
     '决策是一条说明「这份代码为什么长这样」的记录——一次权衡、一条约定、一个缺陷的根因。助手在改动你的代码之前会先读它们。',
   addFirstDecision: '添加第一条决策',
+  mineSessions: '挖掘最近的会话',
+  mining: '挖掘中…',
+  mineResult: '已挖掘 {{mined}} 个会话 · 新增 {{added}} 条决策',
+  mineFailed: '挖掘失败 — 请重试。',
+  autoMiningOff:
+    '自动挖掘已关闭 — 启用 memory.background.enabled 可随时间自动填充。',
 
   active: '有效',
   expired: '已失效',
