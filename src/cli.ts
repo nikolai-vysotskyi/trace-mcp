@@ -80,7 +80,12 @@ import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
-import { countReindexingProjects, handleReindexFile } from './daemon/reindex-file-handler.js';
+import {
+  beginReindex,
+  countReindexingProjects,
+  handleReindexFile,
+  isProjectStopping,
+} from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
 import { getDroppedEventStats } from './indexer/watcher.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
@@ -2498,6 +2503,17 @@ program
           return;
         }
         const managed = resolution.managed;
+        // TRA-1674: refuse to start a full reindex against a project that is
+        // already tearing down (same 503-with-retry contract as the
+        // single-file handleReindexFile gate from TRA-1553) — otherwise the
+        // run below races stopProject()'s db.close() and dies with "The
+        // database connection is not open" (field: 2026-09-18, "Reindex
+        // failed" for a project the idle-unload sweep evicted mid-run).
+        if (isProjectStopping(projectRoot)) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'project is stopping', retryAfterSec: 5 }));
+          return;
+        }
         // R09 v2: lifecycle events around the reindex call.
         // started is fire-and-forget; completed/errored fire on the
         // async settlement of the pipeline promise.
@@ -2507,6 +2523,13 @@ program
           project: projectRoot,
           pipeline: 'index',
         });
+        // TRA-1674: register the full indexAll run as in-flight reindex work
+        // so stopProject()'s bounded drain (waitForReindexDrain) waits for it
+        // instead of closing the DB underneath it. The single-file paths
+        // (handleReindexFile, register_edit) already register via
+        // beginReindex; this endpoint was the one full-reindex path that did
+        // not, which is exactly the race the field log showed.
+        const endReindex = beginReindex(projectRoot);
         managed.pipeline
           .indexAll(true)
           .then((result) => {
@@ -2526,7 +2549,8 @@ program
               pipeline: 'index',
               message: err instanceof Error ? err.message : String(err),
             });
-          });
+          })
+          .finally(endReindex);
         res.writeHead(202, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'reindex_started', project: projectRoot }));
         return;
