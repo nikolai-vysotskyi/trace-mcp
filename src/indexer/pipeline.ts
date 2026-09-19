@@ -27,7 +27,7 @@ import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
 import { ExtractPool, resolveWorkerThreshold } from './extract-pool.js';
-import { collectFiles as collectFilesImpl } from './file-collector.js';
+import { collectFiles as collectFilesImpl, type CollectFilesResult } from './file-collector.js';
 import {
   type DiscoverIncrementalArgs,
   type DiscoveryResult,
@@ -85,6 +85,14 @@ export interface IndexingResult {
   /** Postprocess level the result was produced at — surfaced for callers. */
   postprocess?: PostprocessLevel;
   /**
+   * Set when the opening walk hit `security.max_files` and the file list was
+   * cut to the cap (TRA-1664). The index is permanently partial until the cap
+   * is raised and a full reindex runs — callers must surface this (stats →
+   * UI banner) instead of reporting a whole index. `found` is the pre-cap
+   * match count, `limit` the cap that was applied.
+   */
+  truncated?: { found: number; limit: number };
+  /**
    * Set when a full reindex shrunk the symbol or edge count by more than
    * SHRINK_THRESHOLD. graphify v0.5.0 hit this same hazard: an `--update`
    * could silently overwrite a healthy graph with a degenerate one because
@@ -117,6 +125,35 @@ const SHRINK_THRESHOLD = 0.5;
 /** Below this absolute symbol count the shrink check is skipped — empty /
  * tiny indexes naturally fluctuate. */
 const SHRINK_MIN_BASELINE = 200;
+
+/**
+ * Repo-metadata keys stamping the last full walk's `security.max_files`
+ * truncation (TRA-1664). `index_truncated` is `'1'` when the walk was cut to
+ * the cap, `'0'` after a walk that fit; the `found`/`limit` companions are
+ * only meaningful while it reads `'1'`. Persisted (not just returned on
+ * `IndexingResult`) so stats/UI keep reporting "index partial" across daemon
+ * restarts that take the incremental fast path and never re-walk the tree.
+ */
+export const META_INDEX_TRUNCATED = 'index_truncated';
+export const META_INDEX_TRUNCATED_FOUND = 'index_truncated_found';
+export const META_INDEX_TRUNCATED_LIMIT = 'index_truncated_limit';
+
+/**
+ * Read the persisted max_files truncation stamp. Returns null when the last
+ * full walk fit under the cap (or predates the stamp) — the index covers the
+ * whole tree as far as the walker knows.
+ */
+export function readIndexTruncation(store: Store): { found: number; limit: number } | null {
+  try {
+    if (store.getRepoMetadata(META_INDEX_TRUNCATED) !== '1') return null;
+    const found = Number.parseInt(store.getRepoMetadata(META_INDEX_TRUNCATED_FOUND) ?? '', 10);
+    const limit = Number.parseInt(store.getRepoMetadata(META_INDEX_TRUNCATED_LIMIT) ?? '', 10);
+    if (!Number.isFinite(found) || !Number.isFinite(limit) || found <= 0 || limit <= 0) return null;
+    return { found, limit };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Read the current git HEAD SHA for a repo. Returns null when the path isn't a
@@ -456,12 +493,13 @@ export class IndexingPipeline {
         const fast = await this.tryIncrementalDiscovery(start);
         if (fast) return fast;
       }
-      const filePaths = await this.collectFiles();
+      const collected = await this.collectFiles();
+      const filePaths = collected.files;
       // Reconcile before snapshotting: dropping rows the walk no longer owns is
       // the intended outcome here, not the parser regression `checkShrink`
       // hunts for. Repairing an index that was 93% stale would otherwise raise
       // a shrink warning on the very run that fixed it.
-      this.reconcileScope(filePaths);
+      this.reconcileScope(filePaths, collected.truncated);
       const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       // Bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for genuine
       // from-scratch indexes — never on a live daemon whose DB other
@@ -486,6 +524,14 @@ export class IndexingPipeline {
           }
         }
       }
+      // TRA-1664: the walk was cut at security.max_files — the index is
+      // partial by construction. Flag the result for immediate callers and
+      // stamp repo metadata so stats/UI keep reporting it after restarts
+      // that take the incremental fast path (which never re-walks the tree).
+      if (collected.truncated) {
+        r.truncated = { found: collected.found, limit: collected.limit };
+      }
+      this.stampTruncationMetadata(collected);
       if (before) this.checkShrink(before, r);
       // Non-bulk path: refresh planner statistics so subsequent queries pick
       // indices using real cardinality rather than fallback heuristics.
@@ -778,14 +824,14 @@ export class IndexingPipeline {
    * the daemon runs `indexAll` per project on start, so a stale index converges
    * without any explicit `trace-mcp doctor --fix` step.
    */
-  private reconcileScope(inScope: string[]): number {
-    const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
+  private reconcileScope(inScope: string[], truncated: boolean): number {
     const staleIds = selectOutOfScopeFiles({
       files: this.store.getAllFiles(),
       inScope,
-      // ponytail: collectFiles truncates silently, so infer it from the count
-      // rather than widening its return type for one boolean.
-      truncated: inScope.length >= maxFiles,
+      // Explicit from collectFiles (TRA-1664): inferring truncation from the
+      // count misfires exactly at the cap (a walk that found precisely
+      // maxFiles files is whole, not cut) and hides the pre-cap total.
+      truncated,
     });
     this._scopeRowsRemoved = staleIds.length;
     if (staleIds.length === 0) return 0;
@@ -797,6 +843,26 @@ export class IndexingPipeline {
       'Dropped index rows for files no longer in scope',
     );
     return staleIds.length;
+  }
+
+  /**
+   * Stamp the last full walk's max_files truncation into repo metadata
+   * (TRA-1664). A walk that fit clears the flag so a previously-partial
+   * index stops reporting partial after the cap is raised and a full reindex
+   * runs. Best-effort: a metadata write must never fail indexing.
+   */
+  private stampTruncationMetadata(collected: CollectFilesResult): void {
+    try {
+      if (collected.truncated) {
+        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '1');
+        this.store.setRepoMetadata(META_INDEX_TRUNCATED_FOUND, String(collected.found));
+        this.store.setRepoMetadata(META_INDEX_TRUNCATED_LIMIT, String(collected.limit));
+      } else {
+        this.store.setRepoMetadata(META_INDEX_TRUNCATED, '0');
+      }
+    } catch (err) {
+      logger.debug({ err }, 'Truncation metadata stamp skipped (non-fatal)');
+    }
   }
 
   deleteFiles(filePaths: string[]): void {
@@ -1405,7 +1471,7 @@ export class IndexingPipeline {
       ) {
         return;
       }
-      const onDisk = (await this.collectFiles()).length;
+      const onDisk = (await this.collectFiles()).files.length;
       if (this._disposed) return;
       const indexed = this.store.getStats().totalFiles;
       const gap = onDisk - indexed;
@@ -1684,7 +1750,7 @@ export class IndexingPipeline {
     return this._gitignore;
   }
 
-  private async collectFiles(): Promise<string[]> {
+  private async collectFiles(): Promise<CollectFilesResult> {
     // Built here rather than read from the field: on a first index
     // `runPipeline` has not run yet, so `_traceignore` was undefined and the
     // opening walk silently ignored .traceignore entirely.

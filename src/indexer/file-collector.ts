@@ -27,6 +27,23 @@ export interface FileCollectorParams {
 }
 
 /**
+ * What `collectFiles` resolved: the indexable paths plus whether the walk hit
+ * `security.max_files` and was cut short (TRA-1664). Callers must treat a
+ * truncated walk as partial — "not in scope" only means "past the cap" — and
+ * surface it (IndexingResult → stats → UI) instead of reporting a whole index.
+ */
+export interface CollectFilesResult {
+  /** Repo-relative file paths to index (at most `limit` entries). */
+  files: string[];
+  /** True when matches exceeded `maxFiles` and the list was cut to the cap. */
+  truncated: boolean;
+  /** Total matches before the cap (=== files.length when not truncated). */
+  found: number;
+  /** The `maxFiles` cap that was applied. */
+  limit: number;
+}
+
+/**
  * Resolves the set of repo-relative file paths to index for a run, given the
  * project's include/exclude globs, workspace layout, and .traceignore rules.
  *
@@ -34,7 +51,7 @@ export interface FileCollectorParams {
  * reduction pass) — behavior must stay byte-identical to the original
  * private method; only `this.*` field reads became explicit parameters.
  */
-export async function collectFiles(params: FileCollectorParams): Promise<string[]> {
+export async function collectFiles(params: FileCollectorParams): Promise<CollectFilesResult> {
   const { config, rootPath, workspaces, traceignore, gitignore, maxFiles } = params;
   const traceignoreIgnore = traceignore?.toFastGlobIgnore() ?? [];
   // Most-specific registered project owns a path: skip files that live under a
@@ -136,11 +153,16 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
 
   if (entries.length > maxFiles) {
     logger.warn(
-      { found: entries.length, limit: maxFiles },
+      { projectRoot: rootPath, found: entries.length, limit: maxFiles },
       'File count exceeds limit — truncating. Increase security.max_files to index more.',
     );
-    return entries.slice(0, maxFiles);
+    return {
+      files: entries.slice(0, maxFiles),
+      truncated: true,
+      found: entries.length,
+      limit: maxFiles,
+    };
   }
 
-  return entries;
+  return { files: entries, truncated: false, found: entries.length, limit: maxFiles };
 }

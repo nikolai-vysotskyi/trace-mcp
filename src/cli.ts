@@ -109,7 +109,7 @@ import {
 } from './global.js';
 import { DecisionStore } from './memory/decision-store.js';
 import { sweepOrphanedSessionDbs } from './daemon/router/session-db.js';
-import { IndexingPipeline } from './indexer/pipeline.js';
+import { IndexingPipeline, readIndexTruncation } from './indexer/pipeline.js';
 import {
   type GuardEnforceTier,
   installGuardHook,
@@ -2040,9 +2040,19 @@ program
           const lastRow = db.prepare('SELECT MAX(indexed_at) as t FROM files').get() as
             | { t: string | null }
             | undefined;
+          // TRA-1664: the last full walk may have hit security.max_files, in
+          // which case the index is partial and the UI must say so. The stamp
+          // survives restarts (incremental fast paths never re-walk the tree).
+          const truncated = readIndexTruncation(managed.store);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
-            JSON.stringify({ files, symbols, edges, lastIndexed: sqliteUtcToIso(lastRow?.t) }),
+            JSON.stringify({
+              files,
+              symbols,
+              edges,
+              lastIndexed: sqliteUtcToIso(lastRow?.t),
+              ...(truncated ? { truncated } : {}),
+            }),
           );
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });

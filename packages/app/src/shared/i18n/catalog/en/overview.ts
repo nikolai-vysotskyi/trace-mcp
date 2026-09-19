@@ -38,6 +38,11 @@ export const overview = {
      stated, and the two disagreed on screen when this reused the
      Workspace's "The daemon is busy" sentence for every stale reading. */
   staleNumbers: 'These are the last indexed numbers.',
+  /* TRA-1664: the last full walk found more files than security.max_files, so
+     the index is partial and search misses everything past the cap.
+     `found` is the pre-cap match count, `limit` the cap that was applied. */
+  truncatedWarning:
+    'Partial index — {{found}} files found, only {{limit}} indexed. Raise security.max_files and reindex to cover the rest.',
   rowStatus: 'Status',
   rowFiles: 'Files indexed',
   rowSymbols: 'Symbols',
