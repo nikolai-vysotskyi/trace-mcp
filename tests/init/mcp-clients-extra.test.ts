@@ -32,6 +32,9 @@ beforeEach(async () => {
   // os.homedir()` captures the sandbox path. Without this, every test that
   // exercises a writer leaks into the real user config.
   vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+  // Zed honors $XDG_CONFIG_HOME on Linux — pin it empty so the user path
+  // resolves to the sandbox default no matter what the CI host exports.
+  vi.stubEnv('XDG_CONFIG_HOME', '');
   // Force re-evaluation of module-level `const HOME = os.homedir()` against the spy.
   vi.resetModules();
   ({ detectMcpClients } = await import('../../src/init/detector.js'));
@@ -598,6 +601,127 @@ describe('MiniMax Code writer (standard mcpServers, TRA-1670)', () => {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
     expect(parsed.mcpServers.trace.args).toEqual(['serve']);
+  });
+});
+
+describe('Zed detection (TRA-1658)', () => {
+  function userFile(): string {
+    return path.join(fakeHome, '.config', 'zed', 'settings.json');
+  }
+
+  it('detects a context_servers trace entry stamped source:custom', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(
+      userFile(),
+      JSON.stringify({
+        context_servers: { trace: { source: 'custom', command: '/bin/true', args: ['serve'] } },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'zed')?.hasTraceMcp).toBe(true);
+  });
+
+  it('detects settings.json without trace-mcp', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(userFile(), JSON.stringify({ context_servers: {} }));
+    const clients = detectMcpClients(projectRoot);
+    const zed = clients.find((c) => c.name === 'zed');
+    expect(zed).toBeDefined();
+    expect(zed?.hasTraceMcp).toBe(false);
+  });
+
+  it('detects the project .zed/settings.json layer', () => {
+    const file = path.join(projectRoot, '.zed', 'settings.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ context_servers: { trace: { command: '/bin/true', args: [] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'zed')?.hasTraceMcp).toBe(true);
+  });
+
+  it('does not read mcpServers as a Zed entry', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(
+      userFile(),
+      JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'zed')?.hasTraceMcp).toBe(false);
+  });
+});
+
+describe('Zed writer (context_servers + source:custom, TRA-1658)', () => {
+  function userFile(): string {
+    return path.join(fakeHome, '.config', 'zed', 'settings.json');
+  }
+
+  it('creates settings.json with a source:custom trace entry', () => {
+    const results = configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const parsed = JSON.parse(fs.readFileSync(userFile(), 'utf-8'));
+    expect(parsed.context_servers['trace']).toMatchObject({
+      source: 'custom',
+      args: ['serve'],
+    });
+    expect(parsed.context_servers['trace'].alwaysLoad).toBeUndefined();
+    const second = configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    expect(second[0].action).toBe('already_configured');
+  });
+
+  it('preserves other editor settings, servers and comments', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(
+      userFile(),
+      [
+        '// editor theme',
+        '{"theme": "One Dark",',
+        ' "context_servers": {',
+        '  "linear": {"command": "npx", "args": ["@linear/mcp"]}',
+        ' }}',
+      ].join('\n'),
+    );
+    configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    const text = fs.readFileSync(userFile(), 'utf-8');
+    expect(text).toContain('// editor theme');
+    expect(text).toContain('"theme": "One Dark"');
+    const parsed = JSON.parse(text.replace('// editor theme\n', ''));
+    expect(parsed.context_servers.linear).toBeDefined();
+    expect(parsed.context_servers['trace'].source).toBe('custom');
+  });
+
+  it('writes project scope to .zed/settings.json with pinned cwd', () => {
+    const results = configureMcpClients(['zed'], projectRoot, { scope: 'project' });
+    expect(results[0].action).toBe('created');
+    const file = path.join(projectRoot, '.zed', 'settings.json');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.context_servers['trace'].cwd).toBe(projectRoot);
+  });
+
+  it('migrates a legacy "trace-mcp" entry to "trace" in place', () => {
+    fs.mkdirSync(path.dirname(userFile()), { recursive: true });
+    fs.writeFileSync(
+      userFile(),
+      JSON.stringify({
+        context_servers: { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } },
+      }),
+    );
+    configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(userFile(), 'utf-8'));
+    expect(parsed.context_servers['trace-mcp']).toBeUndefined();
+    expect(parsed.context_servers.trace.args).toEqual(['serve']);
+    expect(parsed.context_servers.trace.source).toBe('custom');
+  });
+
+  it('honors $XDG_CONFIG_HOME for the user file when exported', () => {
+    const xdg = path.join(sandbox, 'xdg');
+    vi.stubEnv('XDG_CONFIG_HOME', xdg);
+    const results = configureMcpClients(['zed'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const file = path.join(xdg, 'zed', 'settings.json');
+    expect(results[0].target).toBe(file);
+    expect(fs.existsSync(file)).toBe(true);
   });
 });
 

@@ -271,6 +271,38 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
   // (user scope; `gemini mcp add -s user` writes this same file).
   checkConfig('gemini-cli', path.join(HOME, '.gemini', 'settings.json'));
 
+  // Zed: `context_servers` (not `mcpServers`) in settings.json. Manual
+  // entries carry source:"custom"; either server key counts as configured.
+  // User file ~/.config/zed (macOS/Linux; $XDG_CONFIG_HOME honored), project
+  // .zed/settings.json. Source: https://zed.dev/docs/ai/mcp (TRA-1658).
+  {
+    const checkZed = (configPath: string) => {
+      try {
+        const content = readIfExists(configPath);
+        if (content === null) return;
+        const parsed = parseJsonc(content) as Record<string, unknown> | null;
+        const servers = parsed?.context_servers as Record<string, unknown> | undefined;
+        const hasTraceMcp = !!(servers?.['trace'] ?? servers?.['trace-mcp']);
+        clients.push({ name: 'zed', configPath, hasTraceMcp });
+      } catch {
+        clients.push({ name: 'zed', configPath, hasTraceMcp: false });
+      }
+    };
+    const xdg = process.env.XDG_CONFIG_HOME?.trim();
+    const zedUserPath =
+      platform === 'win32'
+        ? path.join(
+            process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'),
+            'Zed',
+            'settings.json',
+          )
+        : path.join(xdg ? xdg : path.join(HOME, '.config'), 'zed', 'settings.json');
+    checkZed(zedUserPath);
+    if (projectRoot && !clients.some((c) => c.name === 'zed')) {
+      checkZed(path.join(projectRoot, '.zed', 'settings.json'));
+    }
+  }
+
   // MiniMax Code: standard mcpServers JSON, global-only. Primary
   // ~/.minimax/mcp.json (also <dir>/mcp/mcp.json), legacy ~/.mavis
   // equivalents — first existing file wins, mirroring the writer
