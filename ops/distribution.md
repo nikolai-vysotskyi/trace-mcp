@@ -2617,3 +2617,61 @@ first, TensorBlock second).
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-19 evening (TRA-1697): nine hours after the morning pass, threads silent, sweep clean, two rival listing surfaces checked
+
+**Open threads — all unchanged, nothing owed.** All 5 catalog PRs still OPEN,
+0 comments: `eltociear#119` (`mergeable_state: clean`), `GetBindu#195`
+(clean), `yzfly#44` (clean), `tolkonepiu#384` (clean), `ai-boost#240` (still
+dirty — not rebased per the ledger rule: rebase only close to a merge signal,
+and there is none). `awesome-claude-code#2871`: OPEN, newest still the
+filing-moment bot validation, no maintainer reply — wait, do not ping.
+`hermes#395`, `nix#606`, `pi-extensions#1204`: OPEN, 0 comments.
+`Dokploy/mcp#81` (updated 09-05), `lastlight#372` (newest still our 09-18
+identity answer, comment dates re-read — no cliftonc reply),
+`git-pkgs/outline#34` (updated 09-16), `nanocoder#1197` (updated 09-17, newest
+still the third-party pitch of 09-11), `slopstop#633`, `atlas#105`,
+`pr-agent#2499` (newest still our 09-14 reply), `kilocode#12707`,
+`gbrain#5001`, `Aspire#1575`, `harness#1284`, `pyrefly#4583`, `deslop#173`
+(closed 09-08), `factory#1078`, `fullsend#297`, `stella#6461`, `redproof#50`,
+`cxpak#103`, `GitNexus#3127`, `FM-Agent#229` (closed 09-14),
+`headroom#1009`, `axisrow#4`/`#5`: all unchanged. No ping due anywhere —
+eltociear/GetBindu/slopstop/hermes/nix unlock 20.09 (tomorrow's run, not
+this one), yzfly/tolkonepiu 26.09. trace-mcp 177★/22 forks — flat since the
+morning's 176★/21.
+
+**One new comment, not addressed to us, no reply owed.**
+`Kilo-Org/kilocode#13843` gained a third-party repro on 09-19T09:24Z
+(`hongyuanzhi`: same `git rev-parse`/worktree Standby failure on Kylin Linux
+aarch64, no worktree involved — `--git-dir` equals `--git-common-dir`, any
+plain git repo triggers it). It predates the morning pass and asks us
+nothing; our 09-07 analysis stands. Piling on would be noise.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos
+outside the seen list.
+
+**Competitor listing surfaces (the movement this pass): ripwire and
+context-mode, the two fastest movers after graft.** Both read read-only via
+the README API — no code run, no clone.
+
+- `redhat-et/ripwire` (1,892 → 2,267 since the 09-11 baseline, pushed today):
+  the only directory surface in-repo is the auto-indexed trendshift.io badge
+  — the same shape as graft. No awesome-list, marketplace, or submission
+  catalog to follow them into. Do not re-check ripwire for addresses.
+- `mksglu/context-mode` (22,146 → 23,638, pushed today): zero directory
+  surfaces in-repo. Its `cursor.com/marketplace` link is aspirational, not a
+  listing — the section is titled "recommended **once published**" and says
+  "**After** Cursor lists context-mode", with the local-folder path as the
+  real install. What it does carry is a `Hacker News #1, 570+ points` badge.
+
+The pattern across all three checks (graft in the morning, ripwire and
+context-mode tonight) is the same: the category's fastest movers convert via
+HN/viral placement, not via submit-to catalogs — none of the three sits in a
+single catalog we could follow them into. That is the arrivals reading again,
+from the other side of the table. `docs/_data/competitors.yml` untouched
+(Competitor Intelligence lane).
+
+**Catalogs:** moratorium holds, no submissions. Queued doors stand (aloth
+first, TensorBlock second).
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
