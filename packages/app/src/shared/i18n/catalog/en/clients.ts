@@ -65,4 +65,14 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md and hooks',
   levelMax: 'Max',
   levelMaxHint: 'CLAUDE.md, hooks and tweakcc — recommended',
+  /* TRA-1698 PreToolUse redirect: the entry alone does not close the value
+     loop — without the hook agents keep reading files directly. */
+  hookActive: 'Hook active',
+  hookActiveHint: 'PreToolUse redirect is wired in — file reads go through trace-mcp',
+  hookMissing: 'No redirect hook',
+  hookMissingHint: 'Entry is configured but agents still read files directly',
+  enableRedirect: 'Enable redirect',
+  enablingRedirect: 'Enabling…',
+  redirectEnabled: 'PreToolUse redirect is on — file reads now go through trace-mcp',
+  redirectFailed: 'The redirect hook could not be installed.',
 } as const;

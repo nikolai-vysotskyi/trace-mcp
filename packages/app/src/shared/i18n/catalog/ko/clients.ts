@@ -53,4 +53,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md와 훅',
   levelMax: '최대',
   levelMaxHint: 'CLAUDE.md, 훅, tweakcc — 권장',
+  hookActive: '후크 활성',
+  hookActiveHint: 'PreToolUse 리디렉션이 켜져 있음 — 파일 읽기가 trace-mcp를 경유합니다',
+  hookMissing: '리디렉션 후크 없음',
+  hookMissingHint: '항목은 설정됐지만 에이전트가 파일을 직접 읽고 있습니다',
+  enableRedirect: '리디렉션 켜기',
+  enablingRedirect: '켜는 중…',
+  redirectEnabled: 'PreToolUse 리디렉션이 켜졌습니다 — 파일 읽기가 trace-mcp를 경유합니다',
+  redirectFailed: '리디렉션 후크를 설치하지 못했습니다.',
 } as const;

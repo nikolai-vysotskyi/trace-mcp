@@ -33,6 +33,7 @@ import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from './global.js';
+import { isGuardHookInstalled } from './init/hooks.js';
 import { loadPersistentSavings, type MeasuredSavings, type PersistentSavings } from './savings.js';
 
 /**
@@ -51,6 +52,19 @@ export const MIN_MEASURED_CALLS = 25;
 
 export const METHODOLOGY_URL = 'https://trace-mcp.com/perf/response-tokens/';
 
+/**
+ * Probe whether the PreToolUse redirect (guard hook) is wired into any
+ * Claude-family global settings. A probe failure reads as "no redirect",
+ * never as a report failure (TRA-1698).
+ */
+export function detectRedirectActive(): boolean {
+  try {
+    return isGuardHookInstalled('.claude') || isGuardHookInstalled('.claw');
+  } catch {
+    return false;
+  }
+}
+
 export interface DetectedModelInfo {
   model: string;
   price_per_mtok_usd: number;
@@ -61,6 +75,8 @@ export interface BuildSavingsReportOptions {
   modelInfo?: DetectedModelInfo;
   analyticsDbPath?: string;
   envModel?: string;
+  /** Override the PreToolUse-redirect probe (tests / daemon). Omit to probe disk. */
+  redirectActive?: boolean;
 }
 
 export interface SavingsReport {
@@ -88,6 +104,12 @@ export interface SavingsReport {
   since: string | null;
   /** Why the baseline is an estimate and the dollars are a floor. */
   methodology_url: string;
+  /**
+   * Whether the PreToolUse redirect (guard hook) is wired in. False means the
+   * figure counts only voluntary trace-mcp calls while agents still read files
+   * directly — a floor, not the loop's result (TRA-1698).
+   */
+  redirect_active: boolean;
   /** Set when `enough_data` is false — the sentence to show instead of a number. */
   reason?: string;
 }
@@ -259,6 +281,7 @@ export function buildSavingsReport(
   const priceModel = modelInfo.model;
   const pricePerMtok = modelInfo.price_per_mtok_usd;
   const modelSource = modelInfo.source;
+  const redirectActive = options?.redirectActive ?? detectRedirectActive();
 
   const base = {
     calls: measured.calls,
@@ -276,6 +299,7 @@ export function buildSavingsReport(
     model_source: modelSource,
     since: store?.first_session ?? null,
     methodology_url: METHODOLOGY_URL,
+    redirect_active: redirectActive,
   };
 
   if (measured.calls < MIN_MEASURED_CALLS) {
@@ -311,6 +335,9 @@ export function formatSavingsReport(r: SavingsReport): string {
     `  ${priceExplanation}; baseline is estimated, responses use chars/4 (~0.25 tokens/char; harness ratio spread 0.220–0.368).`,
     r.unmeasured_calls > 0
       ? `  ${fmt(r.unmeasured_calls)} calls are excluded — recorded before their responses were measured.`
+      : null,
+    !r.redirect_active
+      ? `  Without the PreToolUse redirect hook this is a floor: agents still read files directly. Run \`trace-mcp setup-hooks --global\` to close the loop.`
       : null,
     `  Method: ${r.methodology_url}`,
   ]

@@ -207,7 +207,8 @@ function printHumanReport(scope: string, statuses: McpClientStatus[]): void {
     const path = s.configPath ?? '—';
     const reason = s.staleReason ? `  (drift: ${s.staleReason})` : '';
     const level = s.level ? `  level: ${s.level}` : '';
-    console.log(`  ${pad}  ${tag}  ${path}${level}${reason}`);
+    const hook = s.hook && s.hook !== 'na' ? `  hook: ${s.hook}` : '';
+    console.log(`  ${pad}  ${tag}  ${path}${level}${hook}${reason}`);
   }
 }
 

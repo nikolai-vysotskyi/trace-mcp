@@ -16,6 +16,10 @@ export const savings = {
   sectionMethod: 'Método',
   methodBody: 'A metade devolvida é uma estimativa (caracteres/4) dos tokens que passaram pelo fio. A metade da base — o que as mesmas perguntas teriam custado lendo arquivos — ainda é uma estimativa, então este número é um piso, não uma manchete.',
   methodLink: 'Ler o método',
+  rowRedirect: 'Redirecionamento PreToolUse',
+  redirectOn: 'Ativo',
+  redirectOff: 'Inativo — este número é um piso',
+  redirectOffBody: 'O hook de redirecionamento não está instalado: os agentes continuam lendo arquivos diretamente e só chamadas voluntárias ao trace-mcp são contadas. Ative o redirecionamento em Clientes para fechar o ciclo.',
   notEnoughTitle: 'Ainda não há chamadas medidas suficientes',
   notEnoughSubtitle: 'Use o trace-mcp pelo seu agente por um tempo e volte aqui.',
 };

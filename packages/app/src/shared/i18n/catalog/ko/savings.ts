@@ -16,6 +16,10 @@ export const savings = {
   sectionMethod: '방법',
   methodBody: '돌려준 쪽은 실제로 전송된 토큰의 추정치(글자 수/4)입니다. 기준 쪽 — 같은 질문을 파일 읽기로 해결했을 때의 비용 — 은 아직 추정치이므로, 이 숫자는 헤드라인이 아니라 하한선입니다.',
   methodLink: '방법 읽기',
+  rowRedirect: 'PreToolUse 리디렉션',
+  redirectOn: '켬',
+  redirectOff: '끔 — 이 수치는 하한입니다',
+  redirectOffBody: '리디렉션 후크가 설치되지 않아 에이전트가 파일을 직접 읽고 있으며 자발적 trace-mcp 호출만 집계됩니다. Clients에서 리디렉션을 켜서 루프를 닫으세요.',
   notEnoughTitle: '아직 실측된 호출이 부족합니다',
   notEnoughSubtitle: '에이전트에서 trace-mcp를 얼마간 사용한 뒤 다시 확인해 주세요.',
 };

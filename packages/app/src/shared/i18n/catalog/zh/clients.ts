@@ -53,4 +53,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md 与 hooks',
   levelMax: '最高',
   levelMaxHint: 'CLAUDE.md、hooks 与 tweakcc — 推荐',
+  hookActive: '钩子已启用',
+  hookActiveHint: 'PreToolUse 重定向已生效 — 文件读取将经由 trace-mcp',
+  hookMissing: '无重定向钩子',
+  hookMissingHint: '条目已配置，但智能体仍在直接读取文件',
+  enableRedirect: '启用重定向',
+  enablingRedirect: '正在启用…',
+  redirectEnabled: 'PreToolUse 重定向已启用 — 文件读取现经由 trace-mcp',
+  redirectFailed: '无法安装重定向钩子。',
 } as const;

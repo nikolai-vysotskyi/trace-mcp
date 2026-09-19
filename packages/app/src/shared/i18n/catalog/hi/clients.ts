@@ -54,4 +54,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md और hooks',
   levelMax: 'Max',
   levelMaxHint: 'CLAUDE.md, hooks और tweakcc — अनुशंसित',
+  hookActive: 'हुक सक्रिय',
+  hookActiveHint: 'PreToolUse रीडायरेक्ट चालू है — फ़ाइल रीड trace-mcp से होते हैं',
+  hookMissing: 'रीडायरेक्ट हुक नहीं',
+  hookMissingHint: 'एंट्री मौजूद है, पर एजेंट अब भी फ़ाइलें सीधे पढ़ते हैं',
+  enableRedirect: 'रीडायरेक्ट चालू करें',
+  enablingRedirect: 'चालू हो रहा है…',
+  redirectEnabled: 'PreToolUse रीडायरेक्ट चालू है — फ़ाइल रीड अब trace-mcp से होते हैं',
+  redirectFailed: 'रीडायरेक्ट हुक इंस्टॉल नहीं हो सका।',
 } as const;

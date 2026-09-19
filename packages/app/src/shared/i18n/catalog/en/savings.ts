@@ -22,6 +22,10 @@ export const savings = {
   sectionMethod: 'Method',
   methodBody: 'The returned half is an estimate (chars/4) of the tokens that went over the wire. The baseline half — what the same questions would have cost as file reads — is still an estimate, so this figure is a floor, not a headline.',
   methodLink: 'Read the method',
+  rowRedirect: 'PreToolUse redirect',
+  redirectOn: 'On',
+  redirectOff: 'Off — this figure is a floor',
+  redirectOffBody: 'The redirect hook is not installed, so agents still read files directly and only voluntary trace-mcp calls are counted. Enable the redirect in Clients to close the loop.',
   notEnoughTitle: 'Not enough measured calls yet',
   notEnoughSubtitle: 'Use trace-mcp from your agent for a while, then check back.',
 };

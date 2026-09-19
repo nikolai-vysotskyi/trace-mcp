@@ -53,4 +53,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md とフック',
   levelMax: '最大',
   levelMaxHint: 'CLAUDE.md、フック、tweakcc — 推奨',
+  hookActive: 'フック有効',
+  hookActiveHint: 'PreToolUseリダイレクトが有効 — ファイル読み取りはtrace-mcp経由になります',
+  hookMissing: 'リダイレクトフックなし',
+  hookMissingHint: 'エントリは設定済みですが、エージェントはファイルを直接読み続けています',
+  enableRedirect: 'リダイレクトを有効化',
+  enablingRedirect: '有効化中…',
+  redirectEnabled: 'PreToolUseリダイレクトが有効になりました — ファイル読み取りはtrace-mcp経由です',
+  redirectFailed: 'リダイレクトフックをインストールできませんでした。',
 } as const;

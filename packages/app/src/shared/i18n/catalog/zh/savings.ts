@@ -16,6 +16,10 @@ export const savings = {
   sectionMethod: '方法',
   methodBody: '返回的一半是对实际传输 token 的估算（字符数/4）。基线的一半——同样的问题改用读取文件要花多少——仍是估算，所以这个数字是下限，不是标题。',
   methodLink: '查看方法',
+  rowRedirect: 'PreToolUse 重定向',
+  redirectOn: '已启用',
+  redirectOff: '未启用 — 该数字为下限',
+  redirectOffBody: '重定向钩子未安装：智能体仍在直接读取文件，仅统计了自发的 trace-mcp 调用。请在 Clients 中启用重定向以闭环。',
   notEnoughTitle: '实测调用还不够',
   notEnoughSubtitle: '先在智能体里用一段时间 trace-mcp，再回来看。',
 };

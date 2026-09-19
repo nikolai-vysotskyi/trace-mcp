@@ -55,4 +55,12 @@ export const clients = {
   levelStandardHint: 'CLAUDE.md und Hooks',
   levelMax: 'Maximal',
   levelMaxHint: 'CLAUDE.md, Hooks und tweakcc — empfohlen',
+  hookActive: 'Hook aktiv',
+  hookActiveHint: 'PreToolUse-Redirect ist eingerichtet — Dateizugriffe laufen über trace-mcp',
+  hookMissing: 'Kein Redirect-Hook',
+  hookMissingHint: 'Eintrag ist da, aber Agenten lesen Dateien weiter direkt',
+  enableRedirect: 'Redirect einschalten',
+  enablingRedirect: 'Wird eingeschaltet…',
+  redirectEnabled: 'PreToolUse-Redirect ist an — Dateizugriffe laufen jetzt über trace-mcp',
+  redirectFailed: 'Der Redirect-Hook konnte nicht installiert werden.',
 } as const;
