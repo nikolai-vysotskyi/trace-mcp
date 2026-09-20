@@ -3,7 +3,7 @@ layout: default
 title: Tool response token cost
 permalink: /perf/response-tokens/
 description: What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the ones that cost more than the reads they replace.
-updated: 2026-09-09
+updated: 2026-09-20
 ---
 
 # Tool response token cost
@@ -26,7 +26,7 @@ updated: 2026-09-09
 
 Measured 2026-09-05 on darwin 25.5.0 / arm64, trace-mcp
 {{ site.data.response_tokens.measured_build.version }}
-(`{{ site.data.response_tokens.measured_build.commit }}`) — the build stamp
+(`{{ site.data.response_tokens.measured_build.commit }}`){% if site.data.measurements.response_tokens.historical %} — a result from that build, not a claim about the current one{% endif %} — the build stamp
 travels with the figure to every surface that quotes it, and the
 [preregistration](./prereg-response-tokens.md) states the bar and the verdict
 (this run publishes as a **miss**, on the reduction half of the bar). Against
