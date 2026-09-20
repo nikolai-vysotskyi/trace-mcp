@@ -25,4 +25,4 @@ response_tokens:
   data: docs/_data/response_tokens.json
   prereg: docs/perf/prereg-response-tokens.md
   page: /perf/response-tokens/
-  historical: false
+  historical: true # measured at 3.23.2, stale since 3.30.0 (TRA-1723) — re-measure to clear
