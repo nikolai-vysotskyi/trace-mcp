@@ -829,8 +829,9 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
       max_per_file: z.number().int().min(1).optional().describe('Max errors per file'),
       max_files: z.number().int().min(1).optional().describe('Max files reported'),
       timeout_ms: z.number().int().min(1).optional().describe('Timeout in ms'),
+      reduce_output: z.boolean().optional().describe('Shrink long output to a receipt'),
     },
-    async ({ file_path, checker, max_per_file, max_files, timeout_ms }) => {
+    async ({ file_path, checker, max_per_file, max_files, timeout_ms, reduce_output }) => {
       if (file_path) {
         const blocked = ctx.guardPath(file_path);
         if (blocked) return blocked;
@@ -842,6 +843,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         maxPerFile: max_per_file,
         maxFiles: max_files,
         timeoutMs: timeout_ms,
+        reduceOutput: reduce_output,
       });
 
       if (result.isErr()) {

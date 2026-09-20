@@ -13,6 +13,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { Store } from '../../db/store.js';
 import { type TraceMcpResult, validationError } from '../../errors.js';
+import { type EvidenceReducer, reduceLongOutput } from './evidence-reducer.js';
 
 export type CheckerType = 'tsc' | 'mypy' | 'pyright';
 
@@ -55,6 +56,21 @@ export interface DiagnosticsResult {
   files_with_errors: number;
   truncated_errors: number;
   files: FileDiagnostics[];
+  /** Evidence-preserving reduction outcome (TRA-1702). Present only when requested. */
+  reduction?: DiagnosticsReduction;
+}
+
+/** Outcome of the opt-in evidence-preserving reduction of a long diagnostics output. */
+export interface DiagnosticsReduction {
+  applied: boolean;
+  /** Fallback reason when `applied` is false (original output kept untouched). */
+  reason?: string;
+  /** Verified receipt text replacing `files` when `applied` is true. */
+  receipt?: string;
+  receipt_bytes?: number;
+  source_bytes?: number;
+  evidence_count?: number;
+  uncertain?: boolean;
 }
 
 export interface ExecutionResult {
@@ -75,6 +91,12 @@ export interface GetDiagnosticsOptions {
     projectRoot: string,
     timeoutMs: number,
   ) => Promise<ExecutionResult>;
+  /** Shrink long output to a verified evidence receipt (TRA-1702, default false) */
+  reduceOutput?: boolean;
+  /** Reducer behind the interface (default: local extractive, zero spend) */
+  reducer?: EvidenceReducer;
+  /** Minimum output bytes before reduction is attempted (default 4096) */
+  reducerMinBytes?: number;
 }
 
 function stripLeadingSlashAndDot(str: string): string {
@@ -447,6 +469,24 @@ export function runCheckerCommand(
 }
 
 /**
+ * Renders every parsed diagnostic as one line for the evidence-preserving
+ * reducer (TRA-1702). Unlike the truncated `files` payload, this covers the
+ * full error list so evidence can surface errors past the display window.
+ */
+export function renderDiagnosticsBody(
+  rawDiagnostics: RawDiagnostic[],
+  store: Store | null,
+): string {
+  return rawDiagnostics
+    .map((d) => {
+      const head = `${d.file}:${d.line}:${d.column} ${d.severity}${d.code ? ` ${d.code}` : ''}: ${d.message}`;
+      const enclosing = store ? resolveEnclosingSymbol(store, d.file, d.line) : undefined;
+      return enclosing ? `${head} <- ${enclosing.kind} ${enclosing.name}` : head;
+    })
+    .join('\n');
+}
+
+/**
  * Main entry point for get_diagnostics.
  */
 export async function getDiagnostics(
@@ -461,6 +501,9 @@ export async function getDiagnostics(
     maxFiles = 15,
     timeoutMs = 180000,
     runCommand = runCheckerCommand,
+    reduceOutput = false,
+    reducer,
+    reducerMinBytes,
   } = options;
 
   const checker = forcedChecker ?? detectChecker(projectRoot);
@@ -576,6 +619,34 @@ export async function getDiagnostics(
   };
   if (total_errors === 0) {
     resultData.status = 'no_errors';
+  }
+
+  if (reduceOutput) {
+    const outcome = await reduceLongOutput({
+      body: renderDiagnosticsBody(filtered, store),
+      command: `get_diagnostics:${checker}`,
+      isError: total_errors > 0,
+      ...(reducer ? { reducer } : {}),
+      ...(reducerMinBytes !== undefined ? { minBytes: reducerMinBytes } : {}),
+    });
+    if (outcome.applied) {
+      return ok({
+        ...resultData,
+        files: [],
+        // No per-file diagnostics ship in the reduced shape; the receipt
+        // carries the evidence, so every error counts as truncated here.
+        truncated_errors: total_errors,
+        reduction: {
+          applied: true,
+          receipt: outcome.receipt,
+          receipt_bytes: outcome.receiptBytes,
+          source_bytes: outcome.sourceBytes,
+          evidence_count: outcome.evidenceCount,
+          uncertain: outcome.uncertain,
+        },
+      });
+    }
+    return ok({ ...resultData, reduction: { applied: false, reason: outcome.reason } });
   }
 
   return ok(resultData);
