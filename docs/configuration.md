@@ -1,10 +1,10 @@
 ---
-title: "Configuration Reference — all config options (works with none)"
-description: "How trace-mcp is configured in .trace.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. All optional: it works out of the box."
-updated: 2026-09-19
+title: "trace-mcp Configuration Guide — .trace.json Reference"
+description: "Set up trace-mcp with .trace.json — or skip it: every option is optional and it works out of the box. Indexing, AI providers, LSP, quality gates."
+updated: 2026-09-20
 ---
 
-# Configuration
+# trace-mcp Configuration
 
 <script type="application/ld+json">
 {
@@ -605,7 +605,9 @@ tool schemas itself — Claude Code's ToolSearch, which keeps only the 15
 exactly the first-five-minutes tools that stamp exists to protect. On a host
 without such a mechanism it saves ~6.2k per session, every session. Take it if
 your client has no tool deferral of its own, or if you are running many short
-sessions where the surface is most of what you pay.
+sessions where the surface is most of what you pay. For what other MCP
+servers charge for the same surface, see [how trace-mcp
+compares](/comparisons.html).
 
 ### Client profiles
 

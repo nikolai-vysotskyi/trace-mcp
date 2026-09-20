@@ -1,7 +1,7 @@
 ---
-title: "Serena, Repomix & 20+ Code Graph MCP Servers Compared"
-description: "trace-mcp vs Repomix, Serena, codebase-memory-mcp and 20+ MCP code-graph tools: capabilities, language support, GitHub stars. Last verified September 2026."
-updated: 2026-09-16
+title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
+description: "Serena, Repomix, codegraph and 20+ MCP code-graph tools compared side by side — capabilities, honest trade-offs, and which to pick. Verified September 2026."
+updated: 2026-09-20
 ---
 
 # Serena, Repomix and 20+ code graph MCP servers compared
@@ -86,7 +86,7 @@ Most MCP servers in this space do one of three things: pack a repository into a 
 
 ## trace-mcp vs the main alternatives
 
-The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ.
+The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ. Where the tables quote an advertised tool surface, that surface is a config knob as much as an architecture — [tool presets](/configuration.html) decide what a session pays up front.
 
 _Every star count, licence and tool-surface figure in this section was re-read from the GitHub API and from each project's own source on **September 3, 2026** (CodeGraphContext on **September 4, 2026**), not carried over from the head-to-head pages. These summaries are written for the hub and rewritten on each pass — never pasted from a spoke, so the hub and its deep-dive pages stay distinct documents rather than drifting into near-duplicates._
 
@@ -435,7 +435,7 @@ about: did the agent get it right.
 What that table means, project by project, in the places where the summary line
 is doing too much work:
 
-- **jCodeMunch is the most careful token benchmark in this field, and it says
+- **[jCodeMunch](/vs/jcodemunch.html) is the most careful token benchmark in this field, and it says
   so about its own limits first.** `benchmarks/METHODOLOGY.md` states in its
   scope section that the benchmark "does **not** measure answer quality,
   latency, or end-to-end task completion". Every modelling choice in its
