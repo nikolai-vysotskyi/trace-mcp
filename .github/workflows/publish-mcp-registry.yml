@@ -26,7 +26,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # TRA-1756: must exceed the wait loop below (60 × 30s = up to 30 min) plus
+    # the mcp-publisher steps. 20 min cancelled v3.30.1 deterministically
+    # because npm lands only after the mac/win builds + verify + publish in
+    # release.yml. 45 leaves ~15 min of headroom.
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write # OIDC authentication to the MCP Registry
