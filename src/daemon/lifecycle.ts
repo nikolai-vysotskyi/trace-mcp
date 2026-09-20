@@ -27,6 +27,7 @@ import { readIfExists } from '../utils/safe-fs.js';
 import { logger } from '../logger.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
 import { getDaemonHealth, isDaemonRunning } from './client.js';
+import { signalDaemons } from './process-inventory.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 // Bump when the plist contents (env vars, args, KeepAlive policy, throttle) change.
@@ -871,6 +872,32 @@ export function logPreviousExit(): void {
   );
 }
 
+/**
+ * PID the daemon.pid registration names right now, without a liveness probe
+ * and without unlinking anything (unlike readDaemonPid). For inventory
+ * displays (`doctor`) that want to name the keeper even when it is mid-exit.
+ * Null when the file is absent or unparseable. Never throws.
+ */
+export function readRegisteredDaemonPid(): number | null {
+  try {
+    const raw = readIfExists(getPidFilePath());
+    if (raw === null) return null;
+    const pid = parsePidFile(raw)?.pid ?? null;
+    return pid !== null && Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the launchd job is currently loaded. Null off macOS (no launchd).
+ * Exported for `doctor`'s orphan classification.
+ */
+export function isLaunchdJobLoaded(): boolean | null {
+  if (!isMac) return null;
+  return _isPlistLoaded();
+}
+
 function stopDaemonByPid(): void {
   const pid = readDaemonPid();
   if (pid === null) return;
@@ -992,14 +1019,29 @@ export async function ensureDaemon(opts?: { port?: number }): Promise<EnsureResu
 
 /**
  * Stop the daemon (best-effort).
+ *
+ * Kills *all* `serve-http` processes, not just the registered one (TRA-1607):
+ * the platform stop (launchd bootout / pid-file SIGTERM) only reaches the
+ * supervised instance, while manual spawns and bind-race leftovers keep
+ * serving — with their own watchers, ONNX arena and SQLite handles on the
+ * same files. The sweep is best-effort and never throws.
  */
-export function stopDaemon(): void {
+export function stopDaemon(): { swept: number[] } {
   // Record an explicit opt-out so the next stdio session doesn't silently
   // reinstall the daemon the user just removed (#202).
   disableDaemon('trace-mcp daemon stop');
   logLifecycleRequest('stop');
   if (isMac) stopDaemonMac();
   else stopDaemonByPid();
+  // Sweep strays the platform stop cannot see: a second daemon from a manual
+  // `serve-http`, a detached orphan, a bind-race survivor. launchd KeepAlive
+  // cannot resurrect these (the job is unloaded above); a detached stray has
+  // no supervisor at all. Never throws.
+  const swept = signalDaemons('SIGTERM');
+  if (swept.length > 0) {
+    logger.info({ swept }, 'daemon stop swept stray daemon processes');
+  }
+  return { swept };
 }
 
 /**
@@ -1035,12 +1077,32 @@ const SPAWN_LOCK_PATH = path.join(TRACE_MCP_HOME, 'daemon-spawn.lock');
 const SPAWN_LOCK_STALE_MS = 30_000;
 
 /**
+ * Path of the cross-surface daemon-spawn lock. Every spawn path — stdio
+ * auto-spawn, `daemon start`/`restart`, the desktop app's install — must hold
+ * this before deciding "no daemon is running" and starting one (TRA-1607).
+ * The desktop app cannot import this module (standalone Electron bundle), so
+ * it reimplements the same file + format against the same path; keep the
+ * format (`<pid>\n[<token>\n]`, stale after 30 s or a dead holder) in sync.
+ */
+export function getSpawnLockPath(): string {
+  return SPAWN_LOCK_PATH;
+}
+
+/** Stale age for the spawn lock, shared with the desktop reimplementation. */
+export function getSpawnLockStaleMs(): number {
+  return SPAWN_LOCK_STALE_MS;
+}
+
+/**
  * Acquires a PID-based advisory lock by atomic file creation. Caller MUST
  * call releaseSpawnLock() (even on error) to remove the lock. Returns false
  * if another process currently holds a fresh lock; true if we acquired it
  * (either because no one else held it or the previous holder is dead/stale).
+ *
+ * Exported (was private): `daemon start`/`restart` take the same lock so two
+ * concurrent starters serialize instead of double-spawning.
  */
-function acquireSpawnLock(): boolean {
+export function acquireSpawnLock(): boolean {
   if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
 
   const ownToken = captureProcessStartToken(process.pid);
@@ -1086,7 +1148,7 @@ function acquireSpawnLock(): boolean {
   }
 }
 
-function releaseSpawnLock(): void {
+export function releaseSpawnLock(): void {
   try {
     const parsed = parsePidFile(fs.readFileSync(SPAWN_LOCK_PATH, 'utf-8'));
     if (parsed !== null && parsed.pid === process.pid) {
