@@ -85,6 +85,7 @@ import {
   countReindexingProjects,
   handleReindexFile,
   isProjectStopping,
+  isReindexing,
   markProjectStopping,
 } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
@@ -3489,9 +3490,14 @@ program
           // TRA-1125: initial-load status alone under-reports. Incremental
           // reindex runs with the project still marked `ready`, so a busy
           // daemon logged itself idle — see countReindexingProjects().
+          // TRA-1763: the pipeline now marks its own runs too (indexAll /
+          // indexFiles / deferred reconciles), so a project in initial load
+          // is in BOTH sets — exclude marked roots from the status term so
+          // one busy project counts once, not twice.
           indexing:
-            loaded.filter((p) => p.status === 'indexing' || p.status === 'starting').length +
-            countReindexingProjects(),
+            loaded.filter(
+              (p) => (p.status === 'indexing' || p.status === 'starting') && !isReindexing(p.root),
+            ).length + countReindexingProjects(),
           // TRA-1625: sweep skip reasons, so a daemon holding far more than
           // maxLoaded while unloading nothing is diagnosable from the log.
           // TRA-1738: pass the ceiling too — without it `evictable` counts
