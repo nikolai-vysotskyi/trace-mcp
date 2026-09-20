@@ -90,4 +90,90 @@ describe('Session compaction economics (SoL-Pi online-context-compact 1:1 port)'
     expect(result.reason).toBe('deferred_carried_debt');
     expect(result.combinedBreakevenRequests).toBeGreaterThan(result.breakevenRequests ?? 0);
   });
+
+  // Branch coverage beyond the 1:1 upstream port (TRA-1700 follow-up): gates
+  // the ported suite never exercises — horizon window cap, variance damping,
+  // and the three remaining deferral reasons.
+  describe('deferral branches', () => {
+    it('caps the horizon at the window upper bound', () => {
+      const h = estimateRemainingRequests({
+        completedBoundaryRequestCounts: [5, 7, 6],
+        remainingBoundaries: 5,
+        scale: 1,
+        standardDeviationK: 0,
+        contextTokens: 90_000,
+        contextWindowTokens: 100_000,
+        averageContextTokenIncrement: 5_000,
+      });
+      expect(h.windowRequestUpperBound).toBe(2);
+      expect(h.expectedRemainingRequests).toBe(2);
+    });
+
+    it('damps small samples and applies sample variance on larger ones', () => {
+      const small = estimateRemainingRequests({
+        completedBoundaryRequestCounts: [10],
+        remainingBoundaries: 2,
+        scale: 1,
+        standardDeviationK: 2,
+        contextTokens: 0,
+        contextWindowTokens: null,
+        averageContextTokenIncrement: null,
+      });
+      expect(small.requestsPerBoundaryLowerBound).toBe(5);
+
+      const varied = estimateRemainingRequests({
+        completedBoundaryRequestCounts: [4, 6, 8, 6],
+        remainingBoundaries: 1,
+        scale: 1,
+        standardDeviationK: 1,
+        contextTokens: 0,
+        contextWindowTokens: null,
+        averageContextTokenIncrement: null,
+      });
+      expect(varied.requestsPerBoundaryLowerBound).toBeCloseTo(4.367, 2);
+    });
+
+    it('reports horizon_unavailable without boundary history or window pressure', () => {
+      expect(decision({ completedBoundaryRequestCounts: null })).toMatchObject({
+        compact: false,
+        reason: 'horizon_unavailable',
+      });
+    });
+
+    it('defers when breakeven exceeds the horizon', () => {
+      const d = decision({
+        cacheWriteReadRatio: 12.5,
+        writeTokens: 100_000,
+        completedBoundaryRequestCounts: [2],
+        remainingBoundaries: 1,
+      });
+      expect(d.breakevenRequests).toBeGreaterThan(d.effectiveHorizonRequests ?? 0);
+      expect(d).toMatchObject({ compact: false, reason: 'deferred_economic' });
+    });
+
+    it('holds subsequent compactions to the margin gate', () => {
+      const d = decision({
+        cacheWriteReadRatio: 12.5,
+        writeTokens: 51_304, // breakeven ~= 10
+        completedBoundaryRequestCounts: [11],
+        remainingBoundaries: 1,
+        priorCompactionCount: 1,
+      });
+      expect(d.breakevenRequests).toBeCloseTo(10, 0);
+      expect(d.expectedRemainingRequests).toBe(12);
+      expect(d).toMatchObject({ compact: false, reason: 'deferred_subsequent_margin' });
+    });
+
+    it('compacts again once margin and debt gates open', () => {
+      expect(
+        decision({
+          cacheWriteReadRatio: 12.5,
+          writeTokens: 51_304,
+          completedBoundaryRequestCounts: [20],
+          remainingBoundaries: 2,
+          priorCompactionCount: 1,
+        }),
+      ).toMatchObject({ compact: true, reason: 'economic' });
+    });
+  });
 });

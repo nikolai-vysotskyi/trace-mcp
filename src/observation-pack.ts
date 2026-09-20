@@ -3,7 +3,7 @@
  *
  * MIT attribution: paging/verify logic ported from NVlabs/SoL-Pi
  * `src/sol-pi/extensions/observation-pack/observation.ts` (ensureStored,
- * content-addressed id, O_NOFOLLOW + hash-verify on reuse, fail-open).
+ * content-addressed id, symlink refusal + hash-verify on reuse, fail-open).
  *
  * Harness-agnostic adaptation: Pi projects large results through `on("context")`
  * transparently; the MCP server is stateless per request, so we store the full
@@ -31,6 +31,21 @@ export function isObservationId(id: string): boolean {
   return OBSERVATION_ID_PATTERN.test(id);
 }
 
+/**
+ * Parse a recall handle with optional page cursor (`obs_<24hex>@25`).
+ * The whole string must match — trailing garbage (`@25@99`, `@abc`) is
+ * rejected rather than silently truncated. Throws `Unknown observation id`.
+ */
+export function parseBundleHandle(bundle: string): { id: string; offset: number } {
+  const match = /^(obs_[a-f0-9]{24})(?:@(\d+))?$/.exec(bundle);
+  const id = match?.[1] ?? '';
+  const offset = match?.[2] === undefined ? 0 : Number(match[2]);
+  if (!isObservationId(id) || !Number.isSafeInteger(offset)) {
+    throw new Error(`Unknown observation id: ${bundle}`);
+  }
+  return { id, offset };
+}
+
 export function observationPackRoot(home: string = TRACE_MCP_HOME): string {
   return path.join(home, 'observation-pack', 'objects');
 }
@@ -50,6 +65,28 @@ export function observationId(tool: string, queryKey: string, payloadJson: strin
 
 export function observationPath(root: string, id: string): string {
   return path.join(root, `${id}.json`);
+}
+
+/**
+ * Refuse symlinked (or non-file) objects before touching them. Node's
+ * `writeFileSync`/`readFileSync` follow links, so the check is an explicit
+ * `lstat` — same barrier SoL-Pi builds with `O_NOFOLLOW`. A missing path is
+ * fine (store path); anything present-but-not-a-file throws. TOCTOU between
+ * check and use is accepted: the pack dir is 0700 under TRACE_MCP_HOME, so a
+ * planter already owns the trust boundary, and a foreign target still fails
+ * the content-hash / JSON-shape checks below.
+ */
+function assertRegularFileOrAbsent(filePath: string, id: string): void {
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return;
+    throw error;
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    throw new Error(`Stored observation is not a regular file for ${id}`);
+  }
 }
 
 export interface StoredObservation {
@@ -81,10 +118,12 @@ export function storeObservation(
     throw new Error(`Observation directory is not a regular directory for ${id}`);
   }
   const filePath = observationPath(dir, id);
+  assertRegularFileOrAbsent(filePath, id);
   try {
     fs.writeFileSync(filePath, payloadJson, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') throw error;
+    assertRegularFileOrAbsent(filePath, id);
     const existing = fs.readFileSync(filePath, 'utf8');
     if (sha256Hex(existing) !== sha256Hex(payloadJson)) {
       throw new Error(`Content-addressed observation hash mismatch for ${id}`);
@@ -116,9 +155,17 @@ export function recallObservation<T = unknown>(
   if (!isObservationId(id)) throw new Error(`Unknown observation id: ${id}`);
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error(`Invalid offset: ${offset}`);
   const safeLimit = Math.min(Math.max(1, Math.floor(limit)), OBSERVATION_RECALL_MAX_ITEMS);
+  const filePath = observationPath(root, id);
+  try {
+    assertRegularFileOrAbsent(filePath, id);
+  } catch {
+    // Missing, symlinked, or otherwise unusable archive: nothing truthful to
+    // serve, so the caller re-runs the query instead of getting half a page.
+    throw new Error(`Unknown observation id: ${id}`);
+  }
   let raw: string;
   try {
-    raw = fs.readFileSync(observationPath(root, id), 'utf8');
+    raw = fs.readFileSync(filePath, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
       throw new Error(`Unknown observation id: ${id}`);

@@ -17,8 +17,8 @@ import { getRelatedSymbols } from '../../navigation/related.js';
 import {
   OBSERVATION_FIRST_PAGE_ITEMS,
   OBSERVATION_THRESHOLD_BYTES,
-  isObservationId,
   pageItems,
+  parseBundleHandle,
   recallObservation,
   storeObservation,
 } from '../../../observation-pack.js';
@@ -328,21 +328,29 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       // first page is served. Fail-open means failing LOUD here (re-run the
       // query) rather than fabricating.
       if (bundle) {
-        const [handle, cursor] = bundle.split('@');
-        const offset = cursor === undefined || cursor === '' ? 0 : Number(cursor);
-        if (!isObservationId(handle ?? '') || !Number.isSafeInteger(offset) || offset < 0) {
+        let handle: string;
+        let offset: number;
+        try {
+          ({ id: handle, offset } = parseBundleHandle(bundle));
+        } catch (error) {
           return {
             content: [
               {
                 type: 'text',
-                text: j(formatToolError(validationError(`Unknown observation id: ${bundle}`))),
+                text: j(
+                  formatToolError(
+                    validationError(
+                      error instanceof Error ? error.message : 'Observation recall failed',
+                    ),
+                  ),
+                ),
               },
             ],
             isError: true,
           };
         }
         try {
-          const page = recallObservation(handle as string, offset, OBSERVATION_FIRST_PAGE_ITEMS);
+          const page = recallObservation(handle, offset, OBSERVATION_FIRST_PAGE_ITEMS);
           return {
             content: [
               {
@@ -435,9 +443,11 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                 'Large result archived locally. Recall page N with get_change_impact {"bundle": "<id>@N"}.',
             };
           } else {
-            // Under the threshold there is nothing to page: restore the exact
-            // legacy 25-item slice so compact=true stays byte-identical to the
-            // default path on small results.
+            // Under the threshold there is nothing to page: serve the first
+            // 25 of the ranked list. Note this may order small results
+            // differently than the default path (which only sorts past 25) —
+            // same set, impact-ranked. Byte-parity is guaranteed for the
+            // default no-flags path only.
             payload.dependents = pageItems(
               result.value.dependents,
               0,
