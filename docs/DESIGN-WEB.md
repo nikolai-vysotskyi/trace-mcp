@@ -394,11 +394,18 @@ The stock GitHub Pages Primer stylesheet is **not** used and must not be
 re-linked. It shipped 76.5 KB, zero `prefers-color-scheme` rules, system
 fonts and zebra-striped tables — three of those are outright violations below.
 
-Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated`
+Order: sticky header (brand + theme toggle) → breadcrumb trail → `h1` → prose → `Last updated`
 → `See also` footer.
 
 - `h1` is the one display element on the page: `clamp(38px, 6vw, 56px)`,
   weight 500, `-0.03em`. One per page.
+- **The breadcrumb trail mirrors the BreadcrumbList JSON-LD, item for item**
+  (TRA-1731). GSC flagged "Unnamed item" on pages whose markup named every
+  item but painted no trail — the structured data must have a visible
+  counterpart. `nav.crumbs`, Space Mono 11px caps at `--text-secondary`
+  (`--text-disabled` for the separators and the current page), no underline
+  except on hover, no accent: it is navigation, not a prose link. `/vs/`
+  pages read Home → Comparisons → page; everything else Home → page.
 - `h2` owns its section break: 80px above, hairline `border-top`. When the
   Markdown writes `---` directly before a `##`, the `<hr>` keeps the rule and
   the `h2` drops its own — never two hairlines around an empty band.

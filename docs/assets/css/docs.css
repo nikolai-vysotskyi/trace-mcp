@@ -593,6 +593,27 @@ svg {
   color: var(--text-disabled);
   margin-top: 64px;
 }
+/* Breadcrumb trail (TRA-1731). Tertiary mono caps, same voice as
+   .page-updated — it is navigation, not prose, so no accent and no
+   underline. Separators are aria-hidden: the nav structure already
+   announces the trail. */
+.crumbs {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  margin-bottom: 32px;
+}
+.crumbs a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.crumbs a:hover {
+  color: var(--text-display);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   html {
