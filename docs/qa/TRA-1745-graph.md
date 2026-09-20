@@ -8,6 +8,8 @@ Tested on Nikolai's MacBook in the installed `trace-mcp.app` (3.30.0), then an i
 
 Screenshots and machine-readable results are attached to TRA-1745 rather than committing private project payloads into this public repository. Evidence includes baseline/updated overview, selected relationships, and group focus for all three projects, plus the installed tooltip overlap reproduction.
 
+The final installed interaction pass also verified actual GPU hover (not injected component state): the tooltip rectangle stayed inside the Graph pane, had zero overlap with the legend, used `pointer-events: none`, and stacked at z-index 80 above the legend's 30. Escape removed it. At 640×480, the inspector remained inside the 404×395.5 Graph pane as a 380×177.97 bottom panel. Light appearance and the retained-graph error/Retry flow were captured; unblocking the real endpoint and pressing Retry recovered successfully.
+
 ## Projects and count reconciliation
 
 | Real project | Structure | Baseline nodes / relationships / groups | Corrected snapshot nodes / relationships / groups |
@@ -50,6 +52,7 @@ Three frontend source paths remain stale in the captured indexes. Filed separate
 - Full desktop suite: **823 passed**. Includes behavioral connection navigation, tooltip placement/obstacle regression, and existing graph tests.
 - Root build/lint, renderer/main build, desktop typecheck and i18n checks.
 - Graph builder on real SQLite backups: approximately 237 ms assetfeed, 134 ms trace-mcp, 20 ms thestyle-bot in one measured run. These are builder timings, not GPU FPS benchmarks.
+- Installed assetfeed Symbols mode: **11,080 nodes / 25,489 indexed relationships / 534 groups**, with **20,000 drawn links** explicitly disclosed. No freeze/crash during granularity changes, selection or Fit. A paused two-second CDP `TaskDuration` sample measured **37.25 ms** of renderer task time; this is not a GPU FPS claim.
 
 Re-run the data audit with `pnpm exec tsx scripts/audit-graph-snapshot.ts <backup-folder>`. Provide `topology.db`, `<name>.db` files and `projects.json` containing `{name, root}` entries. Rewrite every topology `db_path` to a child backup inside that folder first; the script refuses references outside it. Private JSON graph payloads stay in that folder.
 
