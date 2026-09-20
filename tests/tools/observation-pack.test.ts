@@ -11,6 +11,7 @@ import {
   observationId,
   observationPackRoot,
   pageItems,
+  parseBundleHandle,
   recallObservation,
   storeObservation,
   OBSERVATION_RECALL_MAX_ITEMS,
@@ -69,11 +70,21 @@ describe('observation-pack core', () => {
       const first = storeObservation('get_change_impact', 'q', dependents, root);
       const second = storeObservation('get_change_impact', 'q', dependents, root);
       expect(second.id).toBe(first.id);
-      // A colliding id with different bytes must fail, never silently reuse.
-      const tampered = [{ path: 'evil.ts' }];
-      const collidingPath = path.join(root, `${first.id}.json`);
-      void tampered;
-      expect(fs.existsSync(collidingPath)).toBe(true);
+      // A colliding id with different bytes must fail, never silently reuse:
+      // overwrite the object with foreign bytes, then store again — the
+      // EEXIST verify must throw a hash mismatch.
+      fs.writeFileSync(
+        path.join(root, `${first.id}.json`),
+        JSON.stringify({
+          tool: 'get_change_impact',
+          queryKey: 'q',
+          dependents: [{ path: 'evil.ts' }],
+        }),
+        'utf8',
+      );
+      expect(() => storeObservation('get_change_impact', 'q', dependents, root)).toThrow(
+        /hash mismatch/,
+      );
     } finally {
       removeTmpDir(path.dirname(path.dirname(root)));
     }
@@ -126,6 +137,36 @@ describe('observation-pack core', () => {
       );
     } finally {
       removeTmpDir(base);
+    }
+  });
+
+  it('refuses a symlinked object file on store and recall', () => {
+    const base = createTmpDir('trace-mcp-obs-objlink-');
+    try {
+      const root = observationPackRoot(base);
+      const dependents = [{ path: 'a.ts' }];
+      const stored = storeObservation('get_change_impact', 'q', dependents, root);
+      const objectPath = path.join(root, `${stored.id}.json`);
+      const raw = fs.readFileSync(objectPath, 'utf8');
+      const outside = path.join(base, 'outside.json');
+      fs.writeFileSync(outside, raw, 'utf8');
+      fs.rmSync(objectPath);
+      fs.symlinkSync(outside, objectPath);
+      expect(() => storeObservation('get_change_impact', 'q', dependents, root)).toThrow(
+        /not a regular file/,
+      );
+      expect(() => recallObservation(stored.id, 0, 10, root)).toThrow(/Unknown observation id/);
+    } finally {
+      removeTmpDir(base);
+    }
+  });
+
+  it('parseBundleHandle accepts id and id@offset, rejects trailing garbage', () => {
+    const id = 'obs_aaaaaaaaaaaaaaaaaaaaaaaa';
+    expect(parseBundleHandle(id)).toEqual({ id, offset: 0 });
+    expect(parseBundleHandle(`${id}@25`)).toEqual({ id, offset: 25 });
+    for (const bad of [`${id}@25@99`, `${id}@abc`, `${id}@`, 'garbage', `${id}@-1`, '']) {
+      expect(() => parseBundleHandle(bad), bad).toThrow(/Unknown observation id/);
     }
   });
 });
