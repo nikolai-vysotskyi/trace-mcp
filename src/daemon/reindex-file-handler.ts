@@ -2,10 +2,20 @@ import { performance } from 'node:perf_hooks';
 import path from 'node:path';
 import { LOCKS_DIR, projectHash } from '../global.js';
 import type { IndexingPipeline, IndexingResult } from '../indexer/pipeline.js';
+import { beginReindex, isReindexing } from '../indexer/reindex-inflight.js';
 import { shouldSkipRecentReindex } from '../indexer/recent-reindex-cache.js';
 import { logger } from '../logger.js';
 import { withLock } from '../utils/pid-lock.js';
 import { getReindexStats } from './reindex-stats.js';
+
+// TRA-1763: the in-flight registry lives in `indexer/reindex-inflight.ts` so
+// the pipeline can mark its own runs without an indexer→daemon import.
+// Re-exported here so existing callers keep working unchanged.
+export {
+  beginReindex,
+  countReindexingProjects,
+  isReindexing,
+} from '../indexer/reindex-inflight.js';
 
 export interface ReindexFileRequest {
   project: string;
@@ -20,6 +30,9 @@ export type ReindexFileResult =
 /**
  * Projects with a single-file reindex in flight right now.
  *
+ * (Registry moved to `indexer/reindex-inflight.ts` in TRA-1763 — see the
+ * re-export above. The TRA-1125 history below still applies.)
+ *
  * TRA-1125: `projects_indexing` in the vitals line only ever counted projects
  * in the initial-load path — `project-manager.ts` sets `status = 'indexing'`
  * there. This handler *requires* status `ready` to proceed and never changes
@@ -28,8 +41,6 @@ export type ReindexFileResult =
  * while the daemon burned 99.3% CPU on a reindex burst, which made every
  * "idle RSS" figure in docs/perf a silent mix of idle and busy.
  */
-const inFlight = new Map<string, number>();
-
 /** How long `stopProject()` waits for in-flight single-file reindexes before
  *  closing the project DB anyway (TRA-1553). Single-file runs are typically
  *  tens of ms, so this binds only pathological cases; the daemon-wide
@@ -41,11 +52,6 @@ export const REINDEX_DRAIN_TIMEOUT_MS = 5_000;
  *  can differ in trailing slashes or relative segments for the same project. */
 function keyOf(project: string): string {
   return path.resolve(project);
-}
-
-/** Distinct projects with reindex work in flight. Feeds the vitals line. */
-export function countReindexingProjects(): number {
-  return inFlight.size;
 }
 
 /**
@@ -78,35 +84,13 @@ export function isProjectStopping(project: string): boolean {
  * close anyway — a hung reindex must not wedge shutdown past its deadline).
  */
 export async function waitForReindexDrain(project: string, timeoutMs: number): Promise<boolean> {
-  const key = keyOf(project);
-  if (!inFlight.has(key)) return true;
+  if (!isReindexing(project)) return true;
   const deadline = Date.now() + timeoutMs;
-  while (inFlight.has(key)) {
+  while (isReindexing(project)) {
     if (Date.now() >= deadline) return false;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return true;
-}
-
-/**
- * Mark a reindex as started; the returned function marks it finished and is
- * safe to call more than once. Both reindex paths must use this — the HTTP
- * handler below and `register_edit` in `src/tools/register/core.ts`, which
- * reindexes in-process on the daemon's own MCP server. `register_edit` is the
- * path CLAUDE.md tells every agent to call after every edit, so counting only
- * the HTTP one would still report most of a busy daemon's work as idle.
- */
-export function beginReindex(project: string): () => void {
-  const key = keyOf(project);
-  inFlight.set(key, (inFlight.get(key) ?? 0) + 1);
-  let released = false;
-  return () => {
-    if (released) return;
-    released = true;
-    const n = (inFlight.get(key) ?? 1) - 1;
-    if (n > 0) inFlight.set(key, n);
-    else inFlight.delete(key);
-  };
 }
 
 export interface ReindexFileDeps {

@@ -18,6 +18,7 @@ import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { invalidateTreeCacheFile } from '../parser/tree-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
+import { beginReindex } from './reindex-inflight.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
@@ -533,6 +534,13 @@ export class IndexingPipeline {
     force?: boolean,
     opts: { postprocess?: PostprocessLevel; discovery?: 'auto' | 'full-walk' } = {},
   ): Promise<IndexingResult> {
+    // TRA-1763: hold the in-flight mark from enqueue to settle (queue wait +
+    // work), so ready-state full walks (drops/storm full-walk, forced reindex)
+    // show up in `projects_indexing`. Released on settle either way; the
+    // release is idempotent and `_lock` never rejects, so this cannot leak.
+    // Nested marks (e.g. the `reindex` tool already holding one) only bump
+    // the per-project refcount, not the distinct-project count.
+    const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
       this._isIncremental = false;
       this._postprocessLevel = opts.postprocess ?? 'full';
@@ -639,6 +647,7 @@ export class IndexingPipeline {
       return r;
     });
     this._lock = result.catch(() => {});
+    void result.then(endReindex, endReindex);
     return result as Promise<IndexingResult>;
   }
 
@@ -1120,6 +1129,11 @@ export class IndexingPipeline {
       };
     }
 
+    // TRA-1763: same mark as indexAll — every watcher/hook batch (including
+    // the >200-file bulk full-pass fallback in buildChangeScope) runs at
+    // `status: ready` and was invisible to `projects_indexing`. Placed after
+    // the TRA-935 no-op early return so filtered-out batches stay uncounted.
+    const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
@@ -1159,6 +1173,7 @@ export class IndexingPipeline {
       return r;
     });
     this._lock = result.catch(() => {});
+    void result.then(endReindex, endReindex);
     return result as Promise<IndexingResult>;
   }
 
@@ -1543,6 +1558,11 @@ export class IndexingPipeline {
     // persisted (a manifest change in the meantime already forced a
     // re-detect+persist on its own run via the runPipeline gate).
     const scheduledAt = this._reconcileScheduledAt;
+    // TRA-1763: the deferred full pass runs after `status: ready` on the
+    // pipeline lock — outside every in-flight window TRA-1125 created. Hold
+    // the mark for the run so `projects_indexing` covers it. Released on
+    // settle; early returns (disposed, superseded) release the same way.
+    const endReindex = beginReindex(this.rootPath);
     const run = this._lock.then(async () => {
       if (this._disposed) return;
       // A full pass already ran after this was scheduled (forced reindex,
@@ -1557,6 +1577,7 @@ export class IndexingPipeline {
     this._lock = run.catch((e) => {
       logger.warn({ error: e }, 'Deferred edge reconcile failed');
     });
+    void run.then(endReindex, endReindex);
   }
 
   /**
@@ -1616,6 +1637,9 @@ export class IndexingPipeline {
   /** Timer body — walks the tree and reindexes only when coverage actually drifted. */
   private fireCoverageReconcile(): void {
     this._coverageTimer = null;
+    // TRA-1763: same mark as the edge reconcile — the drift walk and the
+    // `indexAll` it can trigger both run at `status: ready`.
+    const endReindex = beginReindex(this.rootPath);
     const run = (async () => {
       if (this._disposed) return;
       if (
@@ -1639,6 +1663,7 @@ export class IndexingPipeline {
     void run.catch((e) => {
       logger.warn({ error: e }, 'Deferred coverage reconcile failed');
     });
+    void run.then(endReindex, endReindex);
     this._coverageReconcileRun = run.catch(() => {});
   }
 
