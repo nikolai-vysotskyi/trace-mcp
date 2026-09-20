@@ -44,6 +44,14 @@ interface ExtractorContext {
   fileContentCache: Map<string, string>;
   buildProjectContext: () => ProjectContext;
   /**
+   * TRA-1543: workspace path → detected framework plugins, shared with the
+   * pipeline's per-run memo (populated by registerFrameworkEdgeTypes before
+   * extraction starts). When present, collectFrameworkExtracts skips its own
+   * per-workspace detection round. Workers construct their own extractor
+   * without it and keep the inline fallback below.
+   */
+  wsFrameworkPlugins?: Map<string, FrameworkPlugin[]>;
+  /**
    * Pre-loaded existing file rows for the current pipeline run, indexed by
    * relative path. Lets `extract()` skip the per-file `store.getFile()` lookup
    * (which is the dominant DB hit during incremental reindex of a large set).
@@ -380,17 +388,28 @@ export class FileExtractor {
     // Try workspace-level detection first
     const wsPath = this.resolveWorkspacePath(relPath);
     if (wsPath) {
-      let cached = this.wsPluginCache.get(wsPath);
-      if (cached === undefined) {
-        const wsRoot = path.join(this.ctx.rootPath, wsPath);
-        const wsCtx = buildProjectContext(wsRoot);
-        cached = this.ctx.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
-        this.wsPluginCache.set(wsPath, cached);
-      }
-      if (cached.length > 0) {
-        plugins = cached;
-        // Strip workspace prefix so NuxtPlugin sees "app/pages/index.vue" not "fair/fair-front/app/pages/index.vue"
-        extractPath = relPath.slice(wsPath.length + 1);
+      // TRA-1543: prefer the pipeline's per-run detection (already computed
+      // for edge-type registration). The local cache + inline detect below
+      // remain for worker-constructed extractors that never received it.
+      const shared = this.ctx.wsFrameworkPlugins?.get(wsPath);
+      if (shared !== undefined) {
+        if (shared.length > 0) {
+          plugins = shared;
+          extractPath = relPath.slice(wsPath.length + 1);
+        }
+      } else {
+        let cached = this.wsPluginCache.get(wsPath);
+        if (cached === undefined) {
+          const wsRoot = path.join(this.ctx.rootPath, wsPath);
+          const wsCtx = buildProjectContext(wsRoot);
+          cached = this.ctx.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
+          this.wsPluginCache.set(wsPath, cached);
+        }
+        if (cached.length > 0) {
+          plugins = cached;
+          // Strip workspace prefix so NuxtPlugin sees "app/pages/index.vue" not "fair/fair-front/app/pages/index.vue"
+          extractPath = relPath.slice(wsPath.length + 1);
+        }
       }
     }
 
