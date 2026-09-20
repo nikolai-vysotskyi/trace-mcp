@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.30.1...v3.31.0) (2026-09-20)
+
+
+### Features
+
+* **graph:** dependency navigation, safe tooltips, and monorepo deduplication (TRA-1745) ([#1303](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1303)) ([435169a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/435169a7d0e13ecebd9e7c80971cbec049b43fb4))
+
+
+### Bug Fixes
+
+* **observation-pack:** compact/legacy ranking parity under budget + bench depth args (TRA-1728) ([#1307](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1307)) ([441f6f0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/441f6f0782a394c02c938ded28b6de7ace79c5bb))
+
 ## [3.30.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.30.0...v3.30.1) (2026-09-20)
 
 
