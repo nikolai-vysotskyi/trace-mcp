@@ -10,6 +10,19 @@
  * is deterministic, and it is the thing that actually broke.
  */
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    fatal: vi.fn(),
+    trace: vi.fn(),
+  },
+}));
+
+import { logger } from '../../logger.js';
 import { ProjectManager } from '../project-manager.js';
 
 type Status = 'ready' | 'indexing' | 'starting';
@@ -102,6 +115,39 @@ describe('unloadIdleProjects — loaded-project ceiling', () => {
     ]);
 
     expect(await pm.unloadIdleProjects(0, 0)).toEqual([]);
+  });
+
+  it('warns (instead of staying silent) when over the ceiling but everything is busy or pinned (TRA-1738)', async () => {
+    const { pm } = harness([
+      { root: '/a', lastAccessedAt: now - 5_000, refCount: 1 },
+      { root: '/b', lastAccessedAt: now - 4_000, status: 'indexing' },
+      { root: '/c', lastAccessedAt: now - 3_000, refCount: 2 },
+    ]);
+
+    vi.mocked(logger.warn).mockClear();
+    expect(await pm.unloadIdleProjects(0, 1)).toEqual([]);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logger.warn).mock.calls[0][0]).toMatchObject({
+      loaded: 3,
+      maxLoaded: 1,
+      busy: 1,
+      pinned: 2,
+    });
+    // Same durable all-pinned state on the next tick: no second warn —
+    // one line per episode, not ~288/day (TRA-1738 review).
+    expect(await pm.unloadIdleProjects(0, 1)).toEqual([]);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn when the sweep brought the daemon back under the ceiling', async () => {
+    const { pm } = harness([
+      { root: '/a', lastAccessedAt: now - 5_000 },
+      { root: '/b', lastAccessedAt: now - 1_000 },
+    ]);
+
+    vi.mocked(logger.warn).mockClear();
+    expect(await pm.unloadIdleProjects(0, 1)).toEqual(['/a']);
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
   });
 });
 

@@ -3471,7 +3471,13 @@ program
             countReindexingProjects(),
           // TRA-1625: sweep skip reasons, so a daemon holding far more than
           // maxLoaded while unloading nothing is diagnosable from the log.
-          sweep: projectManager.sweepEligibility(configuredIdleUnloadMinutes * 60_000),
+          // TRA-1738: pass the ceiling too — without it `evictable` counts
+          // only TTL victims and hides LRU-ceiling victims the sweep would
+          // actually evict on this tick.
+          sweep: projectManager.sweepEligibility(
+            configuredIdleUnloadMinutes * 60_000,
+            configuredMaxLoadedProjects,
+          ),
           // TRA-1665: dropped-event / reconcile tally, so a per-minute
           // full-walk storm on a churn-heavy root is visible in the vitals.
           reconcile: getDroppedEventStats(),

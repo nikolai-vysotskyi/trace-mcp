@@ -95,6 +95,69 @@ describe('sweepEligibility', () => {
 
     expect(pm.sweepEligibility(30_000).evictable).toBe(1);
   });
+
+  it('counts LRU-ceiling victims as evictable even when they are still fresh (TRA-1738)', () => {
+    // 5 loaded against a ceiling of 3, nothing past the TTL: the sweep's
+    // maxLoaded path would evict the two least-recently-accessed. The old
+    // TTL-only count reported evictable: 0 here — the exact lie from the
+    // field report (14 loaded > maxLoaded 8, evictable 0).
+    const pm = harness([
+      { root: '/a', lastAccessedAt: now - 5_000 },
+      { root: '/b', lastAccessedAt: now - 4_000 },
+      { root: '/c', lastAccessedAt: now - 3_000 },
+      { root: '/d', lastAccessedAt: now - 2_000 },
+      { root: '/e', lastAccessedAt: now - 1_000 },
+    ]);
+
+    expect(pm.sweepEligibility(30_000, 3)).toEqual({
+      loaded: 5,
+      busy: 0,
+      pinned: 0,
+      fresh: 3,
+      evictable: 2,
+    });
+    // TTL-only view is unchanged (default maxLoaded = 0).
+    expect(pm.sweepEligibility(30_000)).toEqual({
+      loaded: 5,
+      busy: 0,
+      pinned: 0,
+      fresh: 5,
+      evictable: 0,
+    });
+  });
+
+  it('agrees with unloadIdleProjects on what the ceiling path would unload', async () => {
+    const specs = [
+      { root: '/a', lastAccessedAt: now - 5_000 },
+      { root: '/b', lastAccessedAt: now - 4_000 },
+      { root: '/c', lastAccessedAt: now - 3_000 },
+      { root: '/d', lastAccessedAt: now - 2_000 },
+      { root: '/e', lastAccessedAt: now - 1_000 },
+    ];
+    expect(harness(specs).sweepEligibility(0, 3).evictable).toBe(2);
+
+    const pm2 = harness(specs);
+    (pm2 as unknown as { stopProject(root: string): Promise<void> }).stopProject = async (root) => {
+      (pm2 as unknown as { projects: Map<string, unknown> }).projects.delete(root);
+    };
+    expect((await pm2.unloadIdleProjects(0, 3)).sort()).toEqual(['/a', '/b']);
+  });
+
+  it('reports evictable 0 with everything pinned when over the ceiling — the cap is best-effort (TRA-1738)', () => {
+    const pm = harness([
+      { root: '/a', lastAccessedAt: now - 100_000, refCount: 1 },
+      { root: '/b', lastAccessedAt: now - 100_000, refCount: 2 },
+      { root: '/c', lastAccessedAt: now - 100_000, status: 'indexing' as Status },
+    ]);
+
+    expect(pm.sweepEligibility(30_000, 1)).toEqual({
+      loaded: 3,
+      busy: 1,
+      pinned: 2,
+      fresh: 0,
+      evictable: 0,
+    });
+  });
 });
 
 describe('buildVitals with sweep breakdown', () => {
