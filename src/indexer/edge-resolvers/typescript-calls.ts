@@ -139,8 +139,14 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
     symbolsByFile.set(s.file_id, byFile);
   }
 
-  // per-file imports
-  const fileImportMap = buildFileImportMap(state);
+  // per-file imports, narrowed to the re-resolved source files when scoped:
+  // the map is only ever consulted via fileImportMap.get(sourceFileId), and
+  // every source sits in a changed file (see the scoped SELECT above).
+  // Targets stay global — resolution needs the full symbol set.
+  const fileImportMap = buildFileImportMap(
+    state,
+    scopedIds && scopedIds.length > 0 ? new Set(scopedIds) : undefined,
+  );
 
   // Pre-load node IDs for all symbols
   const symbolNodeMap = new Map<number, number>();
@@ -596,8 +602,16 @@ function resolveMethodOnClass(
 /**
  * Build per-file import map from stored `imports` edges (TS/JS).
  * Returns: source_file_id → Map<importedName, target_file_id[]>
+ *
+ * When `onlySourceFileIds` is given, only edges OUT of those files are read —
+ * callers consult the map solely for re-resolved source files, so the narrowed
+ * map is exactly equivalent on scoped runs and skips the full file→file edge
+ * scan (TRA-1729).
  */
-function buildFileImportMap(state: PipelineState): Map<number, Map<string, number[]>> {
+function buildFileImportMap(
+  state: PipelineState,
+  onlySourceFileIds?: ReadonlySet<number>,
+): Map<number, Map<string, number[]>> {
   const { store } = state;
   const result = new Map<number, Map<string, number[]>>();
 
@@ -606,6 +620,8 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
     .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
+  const scopedSourceIds =
+    onlySourceFileIds && onlySourceFileIds.size > 0 ? Array.from(onlySourceFileIds) : null;
   const importEdges = store.db
     .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
@@ -615,8 +631,9 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
      WHERE e.edge_type_id = ?
        AND ns.node_type = 'file'
        AND nt.node_type = 'file'
+       ${scopedSourceIds ? `AND ns.ref_id IN (${scopedSourceIds.map(() => '?').join(',')})` : ''}
   `)
-    .all(importEdgeType.id) as Array<{
+    .all(importEdgeType.id, ...(scopedSourceIds ?? [])) as Array<{
     source_node_id: number;
     target_node_id: number;
     metadata: string | null;
