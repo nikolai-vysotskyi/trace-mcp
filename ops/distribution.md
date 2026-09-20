@@ -2670,8 +2670,35 @@ single catalog we could follow them into. That is the arrivals reading again,
 from the other side of the table. `docs/_data/competitors.yml` untouched
 (Competitor Intelligence lane).
 
-**Catalogs:** moratorium holds, no submissions. Queued doors stand (aloth
-first, TensorBlock second).
+**Catalogs:** moratorium holds, no submissions. Queued doors stood (aloth
+first, TensorBlock second) — re-ranked by the 2026-09-20 pass below.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Delta recheck, 2026-09-20 morning (TRA-1720): four day-14 reminders posted, threads silent, sweep clean, StackMap evaluated
+
+**Open threads — audited via API. Four polite reminders posted (touch budget 4/5); everything else silent, nothing owed.**
+- Catalog PRs: `eltociear#119` (open, mergeable clean, head `a49344d` — reminder posted), `GetBindu#195` (open, clean — reminder posted), `yzfly#44` (open, clean, re-check 26.09), `tolkonepiu#384` (open, clean, no ping before 26.09), `ai-boost#240` (open, dirty again after the maintainer's daily self-add — not rebased per the ledger rule: rebase only close to a merge signal, and there is none).
+- `hermes#395`, `nix#606`: open, 0 comments before ours — one reminder each posted. The single allowed nix reminder is now used; do not ping nix again.
+- `awesome-claude-code#2871`: open, only the filing-moment bot validation, no maintainer reply — wait, do not ping.
+- Comment threads: `lastlight#372` (newest ours 09-18), `outline#34` (newest our 09-15 provenance answer), `nanocoder#1197` (newest the third-party pitch 09-11), `kilocode#13843` (third-party Kylin repro 09-19, not addressed to us — no reply), `kilocode#12707` (newest ours), `slopstop#633` (newest ours 09-06 — deliberately not pinged: nothing new to add since our failure-mode note, a bump would be noise), `atlas#105` (newest the maintainer's own 09-07 Tier-2 close-out), `pr-agent#2499` (newest ours 09-14; prototype TRA-1502 stays the next move), `gbrain#5001`, `harness#1284`, `pyrefly#4583` (newest ours), `ai-tooling#585` (no follow-up per TRA-857), `pi-extensions#1204`, `Dokploy/mcp#81` (3 comments, unchanged since 09-05). `deslop#173` closed 09-08, `FM-Agent#229` closed 09-14.
+- trace-mcp 177★/22 forks — flat.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** One transient pass-2 query failure on the first run, clean on the immediate re-run. No `mentions-seen.txt` change.
+
+**New door evaluated, held by the moratorium: StackMap ([stackmap.shipwithai.xyz](https://stackmap.shipwithai.xyz)).**
+Found via the trial-plan sweep (`redhat-et/ripwire#296` — the curator's outbound heads-up to ripwire, read not commented).
+392 repos, 1,042 typed human-reviewed edges, versioned daily (map v2026.09.19), `Code Intelligence` topic holds 18.
+Our whole consideration set is already mapped with alternatives/compare pages (`code-review-graph`, `codebase-memory-mcp`, `serena`, `ripwire`, `gortex`, `Graft`, `codegraph-mcp`, `code-graph-rag`, `cocoindex-code`, `tokensave`, `repowise`, `codeflow` — verified in their `llms.txt`); trace-mcp is absent (repo page 404, no `llms.txt` entry).
+Route: open suggest-a-repo form (repo URL + optional why; no login, no payment seen). Agent-queryable (MCP server, JSON API, `llms.txt`) — the consideration-set mechanism this ledger already tracks as a probe.
+Passes the authenticity check (daily editorial versions, changelog, outbound human curation, typed edges with the why written down — editorial work, not the dofollow-link shape).
+Two cautions: single operator (ShipWithAI, newsletter funnel, UTM-tagged outreach); the README badge is opt-in — do not add it to our repo (partner-badge pattern).
+Queued FIRST when the moratorium lifts, ahead of aloth (now second) and TensorBlock (now third): competitors-present plus agent-queryable beats a static README list.
+No submission today — the moratorium holds until `acquisition` reads.
+
+**Trial-plan sweep (one query, past week, 142 hits): mostly agent-written noise, per the established pattern.**
+Opened and classified: `gregoryfoster/skills#305` (1★ personal — skipped by the star filter), `SocratiCode#181` and `code-review-graph#1060` (competitor trackers — no comment per the standing rule), `ripwire#296` (competitor tracker — not commented; yielded StackMap above).
+Side confirmation: our own `awesome-claude-code#2871` is visible in the issue index — the submission is present.
+
+**Touch budget: 4 of 5 used** (four catalog reminders, each with a repo-specific fact, no claims). No new submissions (moratorium holds), no new threads opened.
 
