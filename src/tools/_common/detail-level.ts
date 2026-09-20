@@ -33,7 +33,7 @@ export const DetailLevelSchema = z
   .enum(['minimal', 'default', 'full'])
   .optional()
   .describe(
-    'Output verbosity. "minimal" returns ~40-60% fewer tokens (drops scores, fqn, signatures, summaries — keeps name/file/line). Use when you only need to pick a candidate before drilling in with get_symbol. Default: "default".',
+    'Output verbosity. "minimal" saves ~40-60% tokens (drops scores, fqn, signatures, summaries). Use to pick a candidate before get_symbol. Default: "default".',
   );
 
 export function isMinimal(level: DetailLevel | undefined): boolean {
