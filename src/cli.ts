@@ -85,6 +85,7 @@ import {
   countReindexingProjects,
   handleReindexFile,
   isProjectStopping,
+  markProjectStopping,
 } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
 import { getDroppedEventStats } from './indexer/watcher.js';
@@ -3325,10 +3326,25 @@ program
         {
           reason: reason ?? 'unknown',
           uptimeSec: Math.floor((Date.now() - startedAt) / 1000),
+          // TRA-1752: how much work is in flight at the moment of the signal
+          // — the next field log can tell a quiet shutdown from a loaded one.
+          projectsLoaded: projectManager.listProjects().length,
+          reindexInFlight: countReindexingProjects(),
           ...(isSignal ? describeStopContext() : {}),
         },
         'Daemon shutting down',
       );
+      // TRA-1752: refuse new per-project work synchronously, before the first
+      // await below. stopProject() marks each project as it gets to it, but
+      // Promise.all visits them in order — an HTTP reindex-file or
+      // register_edit landing in that window would start a pipeline run
+      // against a DB that closes moments later ("database connection is not
+      // open" from inside an async continuation). The mark makes those
+      // callers take the 503-with-retry path instead; stopProject() re-marks
+      // idempotently per project.
+      for (const managed of projectManager.listProjects()) {
+        markProjectStopping(managed.root);
+      }
       // Close SSE connections
       for (const res of sseConnections) {
         try {
@@ -3355,7 +3371,6 @@ program
       }
       sessionHandles.clear();
       sessionClients.clear();
-      activityStore?.close();
       // Close all session transports
       for (const transport of sessionTransports.values()) {
         await transport.close().catch(() => {});
@@ -3363,8 +3378,9 @@ program
       sessionTransports.clear();
       projectSessions.clear();
       projectRelay.dispose();
-      resourcePool.disposeAll();
       idleMonitor.stop();
+      // Drain scheduler stages while every DB is still open (stages read
+      // per-project stores and the shared scheduler state).
       await memoryScheduler.stop();
       clearInterval(activityPoker);
       clearInterval(rateBucketCleanup);
@@ -3377,6 +3393,13 @@ program
       const projectsStopStartedAt = Date.now();
       await projectManager.shutdown();
       logger.info({ elapsedMs: Date.now() - projectsStopStartedAt }, 'Projects stopped');
+      // TRA-1752: these close SQLite handles, so they run only after the
+      // per-project drain above. Closing them first (the old order) let
+      // still-draining work — session teardown recording activity, scheduler
+      // stages, pipeline tails — run against closed handles. activityStore
+      // stays open through the transport closes above for the same reason.
+      activityStore?.close();
+      resourcePool.disposeAll();
       // Drop our PID registration last: while it exists, clients treat the
       // daemon as alive-but-busy and refuse to restart it (TRA-421). Stop the
       // re-assert first — httpServer.close() below waits on live SSE sessions,

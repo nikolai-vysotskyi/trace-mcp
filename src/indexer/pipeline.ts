@@ -1524,6 +1524,11 @@ export class IndexingPipeline {
    * concurrently queued pipeline run and never overlaps a live transaction.
    */
   private scheduleEdgeReconcile(): void {
+    // TRA-1752: an in-flight run can reach its tail after dispose() cleared
+    // the timer — arming a fresh one here would fire post-stop against the
+    // closed DB ("Deferred edge reconcile failed / database connection is
+    // not open" in the shutdown window). Never schedule once disposed.
+    if (this._disposed) return;
     if (this._reconcileTimer) clearTimeout(this._reconcileTimer);
     this._reconcileScheduledAt = Date.now();
     this._reconcileTimer = setTimeout(() => this.fireEdgeReconcile(), this._reconcileDebounceMs);
@@ -1599,6 +1604,9 @@ export class IndexingPipeline {
    * one walk, not N.
    */
   private scheduleCoverageReconcile(): void {
+    // TRA-1752: same guard as scheduleEdgeReconcile — a run draining through
+    // dispose() must not arm a timer that fires against the closed DB.
+    if (this._disposed) return;
     if (this._coverageTimer) clearTimeout(this._coverageTimer);
     this._coverageTimer = setTimeout(() => this.fireCoverageReconcile(), this._coverageDebounceMs);
     // Never keep the process alive just for a pending coverage check.
@@ -2029,7 +2037,20 @@ export class IndexingPipeline {
    *  Also clears the TaskDag's idempotency cache when it is owned by this
    *  pipeline (in-memory default). Injected caches (e.g. `SqliteTaskCache`)
    *  belong to the caller and are left untouched — closing the underlying
-   *  database is the caller's responsibility. */
+   *  database is the caller's responsibility.
+   *
+   *  TRA-1752: drains in-flight pipeline work before returning. An
+   *  already-fired deferred reconcile (edge pass chained onto `_lock`, or a
+   *  coverage run on `_coverageReconcileRun`) may still be executing against
+   *  this store when dispose() is called — stopProject() closes the DB right
+   *  after dispose() returns, so returning early lets the run's next
+   *  statement throw "The database connection is not open" from inside an
+   *  async continuation. Both chains are non-rejecting by construction (every
+   *  assignment goes through `.catch`), so awaiting them cannot throw.
+   *  Queued-but-unstarted work bails via the `_disposed` checks instead of
+   *  starting new DB traffic. The daemon-wide shutdown deadline still bounds
+   *  a genuinely wedged run — this await never invents a new hang, it only
+   *  refuses to close the DB out from under live work. */
   async dispose(): Promise<void> {
     this._disposed = true;
     // Drop any pending deferred reconcile — it must never fire against a
@@ -2042,6 +2063,10 @@ export class IndexingPipeline {
       clearTimeout(this._coverageTimer);
       this._coverageTimer = null;
     }
+    // Drain what already fired: the coverage run first, since its tail can
+    // chain an indexAll() onto `_lock` that a `_lock`-only wait would miss.
+    await this._coverageReconcileRun;
+    await this._lock;
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }
