@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-19T06:37:46.307Z"
+updated: "2026-09-20T06:38:01.360Z"
 active_users:
-  day: 51
-  week: 117
-  month: 247
+  day: 30
+  week: 122
+  month: 256
   first_ping_date: "2026-08-29"
-  days_observed: 22
+  days_observed: 23
   month_window_full: false
-events_28d: 1544
+events_28d: 1589
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 1544
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 68120134
-  tokens_saved_raw: 86813105
-  usd_saved: 68.12
+  tokens_saved: 69170246
+  tokens_saved_raw: 88089507
+  usd_saved: 69.17
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 14
+  days: 15
   capped_days: 1
   raw_ratio: 1.27
   inflation_suspected: false
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 217
+  new_installs_28d: 226
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -159,14 +159,14 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 496
-  "upgrade": 445
+  "active": 512
+  "upgrade": 462
   "(not set)": 310
-  "new": 217
+  "new": 226
   "unknown": 54
   "downgrade": 22
 by_version:
@@ -174,27 +174,27 @@ by_version:
   "3.23.2": 54
   "3.24.0": 49
   "3.22.0": 38
+  "3.27.1": 37
   "(not set)": 36
   "3.26.0": 34
-  "3.27.1": 30
   "3.10.0": 29
+  "3.26.3": 29
   "3.17.1": 28
   "3.26.1": 28
-  "3.26.3": 28
   "3.15.0": 27
   "3.11.0": 25
   "3.8.0": 23
+  "3.28.0": 22
   "3.18.0": 19
   "3.14.0": 16
   "3.19.0": 8
   "3.20.0": 8
   "3.25.1": 7
-  "3.28.0": 7
   "3.26.2": 6
+  "3.29.0": 6
   "3.23.0": 3
   "3.21.0": 2
   "3.7.0": 2
-  "3.12.0": 1
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 468
+  at_or_above: 496
   below: 79
   unknown: 36
   pct: 86
@@ -259,20 +259,20 @@ daemon:
   active_users_28d: 0
 by_country:
   "(not set)": 87
-  "United Arab Emirates": 33
+  "United Arab Emirates": 36
   "United States": 22
-  "Russia": 16
+  "Russia": 17
+  "China": 8
+  "Thailand": 8
   "Chile": 7
-  "China": 7
-  "Thailand": 7
   "South Korea": 6
   "Brazil": 5
   "Italy": 5
   "Poland": 5
   "Sweden": 5
   "Denmark": 4
+  "Germany": 4
   "Australia": 3
-  "Germany": 3
   "Netherlands": 3
   "United Kingdom": 3
   "Austria": 2
@@ -283,11 +283,11 @@ by_country:
   "New Zealand": 2
   "Spain": 2
 by_client:
-  "unknown": 201
-  "claude-code": 64
+  "unknown": 210
+  "claude-code": 65
+  "codex-mcp-client": 37
   "(not set)": 36
-  "codex-mcp-client": 36
-  "antigravity-client": 10
+  "antigravity-client": 11
   "mcp": 10
   "opencode": 8
   "Visual Studio Code": 3
@@ -307,4 +307,3 @@ by_client:
   "grok-shell-trace": 1
   "kimi-code": 1
   "kiro": 1
-  "koskill": 1
