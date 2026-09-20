@@ -869,6 +869,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // fought by the auto-framing loop. Reset on each new renderGraph cycle
   // so the freshly-loaded graph gets its one initial fit.
   const userInteractedRef = useRef<boolean>(false);
+  // A user camera gesture owns the view until Cosmos emits its end event.
+  // Keep the solver and the label collision pass out of that gesture.
+  const cameraGestureRef = useRef(false);
   // Web Worker for off-main-thread edge dedup + top-K sort on big graphs.
   // Lazy — only instantiated when nCount > 3000.
   const workerRef = useRef<Worker | null>(null);
@@ -1496,6 +1499,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const layer = labelLayerRef.current;
     const nodes = nodesRef.current;
     if (!graph || !layer) return;
+    if (cameraGestureRef.current) return;
+    layer.style.visibility = '';
+    if (haloCanvasRef.current) haloCanvasRef.current.style.visibility = '';
 
     const zoom = graph.getZoomLevel();
     // Idle short-circuit (TRA-683). Point positions only move while the
@@ -1569,6 +1575,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       return node ? shortLabel(node) : '';
     };
     const tryPlace = (idx: number, allowOffscreen = false, allowOverlap = false): boolean => {
+      // The hover card already names this node. Apply this to ALL candidate
+      // paths, including community representatives and importance ranking.
+      if (hovered && !selected && nodes[idx]?.id === hovered.id) return false;
       if (indices.has(idx) || indices.size >= HARD_CAP) return false;
       const s = screenOf(idx);
       if (!s) return false;
@@ -1582,8 +1591,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     };
     if (showLabels) {
       if (zoom >= 0.5) {
-        // Hovered/selected: always shown, ignoring overlap — the user is
-        // explicitly interrogating these and expects to see the name.
+        // Selection hides the hover card, so retain canvas names in that mode.
         if (hovered) {
           const i = indexByIdRef.current.get(hovered.id);
           if (i != null) tryPlace(i, true, true);
@@ -1897,6 +1905,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       frozenRef.current = false;
       settleStartedRef.current = performance.now();
       userInteractedRef.current = false;
+      // Destroying the old instance mid-gesture can discard its end event.
+      cameraGestureRef.current = false;
       // Fresh data — force the next label pass to run even if the camera and
       // node count happen to match the previous render.
       lastLabelSigRef.current = '';
@@ -2017,7 +2027,27 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             }
           },
           onZoomStart: (_e: unknown, userDriven: boolean) => {
-            if (userDriven) userInteractedRef.current = true;
+            if (!userDriven) return;
+            userInteractedRef.current = true;
+            cameraGestureRef.current = true;
+            // Pause synchronously: waiting for the React effect permits more
+            // solver ticks, and an idle wake/breath must not restart it.
+            liveRef.current = false;
+            graphRef.current?.pause();
+            setLive(false);
+            setSimRunning(false);
+            setHovered(null);
+            // Screen-space overlays cannot stay attached while the camera
+            // moves without recomputing placement. Hide them until it settles.
+            if (labelLayerRef.current) labelLayerRef.current.style.visibility = 'hidden';
+            if (haloCanvasRef.current) haloCanvasRef.current.style.visibility = 'hidden';
+          },
+          onZoomEnd: () => {
+            if (!cameraGestureRef.current) return;
+            cameraGestureRef.current = false;
+            // One final pass at the new camera transform, even for a gesture
+            // that returned to its starting point. Live explicitly resumes.
+            lastLabelSigRef.current = '';
           },
           showFPSMonitor: false,
           hoveredPointCursor: 'pointer',
@@ -2042,6 +2072,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             highlightByModeRef.current(index);
           },
           onPointMouseOver: (index) => {
+            if (cameraGestureRef.current) return;
             // Cosmos can deliver a deferred GPU pick without a mouse event.
             setHoverAnchor(hoverAnchorRef.current);
             const node = nodesRef.current[index];
