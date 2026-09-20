@@ -238,6 +238,13 @@ export class ProjectManager {
   /** Idle-unload sweep timer — see startIdleUnloadSweep(). Null when not running
    *  (never started, or stopped via stopIdleUnloadSweep()/shutdown()). */
   private idleUnloadTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Latch for the over-ceiling warn in unloadIdleProjects(): a durable
+   * all-pinned state would otherwise log the same warn every 5-minute tick
+   * (~288 lines/day). Warn once per episode — reset as soon as a sweep ends
+   * back under the ceiling (TRA-1738 review).
+   */
+  private overCapWarned = false;
 
   constructor(opts?: { resourcePool?: ProjectResourcePool }) {
     this.resourcePool = opts?.resourcePool ?? null;
@@ -1338,12 +1345,18 @@ export class ProjectManager {
     // Post-sweep size still over the ceiling means the evictable pool ran
     // out: every remaining project is indexing or serving connected clients.
     // Say so loudly — silently holding 14 projects against a cap of 8 is
-    // what made the cap look broken (TRA-1738).
+    // what made the cap look broken (TRA-1738) — but once per episode, not
+    // every 5-minute tick for the whole durable all-pinned stretch.
     if (maxLoaded > 0 && this.projects.size > maxLoaded) {
-      logger.warn(
-        { loaded: this.projects.size, maxLoaded, busy, pinned },
-        'Idle-unload sweep over maxLoaded but nothing evictable — remainder is indexing or serving connected clients',
-      );
+      if (!this.overCapWarned) {
+        this.overCapWarned = true;
+        logger.warn(
+          { loaded: this.projects.size, maxLoaded, busy, pinned },
+          'Idle-unload sweep over maxLoaded but nothing evictable — remainder is indexing or serving connected clients',
+        );
+      }
+    } else {
+      this.overCapWarned = false;
     }
     return [...candidates];
   }

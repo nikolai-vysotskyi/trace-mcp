@@ -82,7 +82,10 @@ export function createDaemonProjectRelay(
       const direct = cache.get(abs);
       if (direct) {
         const live = projectManager.getProject(direct.root);
-        if (live && live === direct.managed) return direct.handle;
+        if (live && live === direct.managed) {
+          projectManager.touchActivity(direct.root);
+          return direct.handle;
+        }
         // Stale: the target was idle-unloaded (or removed) since we cached
         // the handle — drop it and fall through to resolve + reopen.
         dropEntry(direct.handle);
@@ -111,6 +114,7 @@ export function createDaemonProjectRelay(
       if (byRoot) {
         if (byRoot.managed === managed) {
           if (abs !== resolved.root) cache.set(abs, byRoot);
+          projectManager.touchActivity(resolved.root);
           return byRoot.handle;
         }
         dropEntry(byRoot.handle);
@@ -136,6 +140,11 @@ export function createDaemonProjectRelay(
         // TRA-951: shared server, never a client session's own surface.
         { ...deps, serveFullSurface: true, skipUsagePing: true },
       );
+      // A relay call is real use of the target: without this, a hot
+      // call_project_tool target would look idle to the sweep (its
+      // lastAccessedAt froze at load time) and churn through
+      // unload → full lazy reload on every TTL window (TRA-1738 review).
+      projectManager.touchActivity(resolved.root);
       const entry = { handle, managed, root: resolved.root };
       cache.set(resolved.root, entry);
       if (abs !== resolved.root) {

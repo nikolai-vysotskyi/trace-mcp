@@ -176,6 +176,7 @@ describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
     const mockProjectManager = {
       getProject: vi.fn().mockImplementation(() => live),
       addProject: vi.fn().mockImplementation(async () => live),
+      touchActivity: vi.fn(),
     };
 
     const mockResourcePool = {
@@ -204,7 +205,7 @@ describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
   }
 
   it('caches the handle across different subpaths of the same root without touching the session refcount (TRA-1738)', async () => {
-    const { relay, mockResourcePool, db } = await daemonHarness();
+    const { relay, mockResourcePool, mockProjectManager, db } = await daemonHarness();
 
     const subpath1 = join(projectA, 'sub1');
     const subpath2 = join(projectA, 'sub2');
@@ -219,6 +220,10 @@ describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
     // acquire() (which would pin the project resident until daemon shutdown
     // and defeat the idle-unload sweep) nor release() on dispose.
     expect(mockResourcePool.acquire).not.toHaveBeenCalled();
+    // But every served call marks activity, so a hot relay target does not
+    // look idle to the sweep on both the create and cache-hit paths.
+    expect(mockProjectManager.touchActivity).toHaveBeenCalledWith(projectA);
+    expect(mockProjectManager.touchActivity.mock.calls.length).toBeGreaterThanOrEqual(2);
 
     relay.dispose();
     expect(mockResourcePool.release).not.toHaveBeenCalled();

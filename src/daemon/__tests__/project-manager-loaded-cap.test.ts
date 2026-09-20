@@ -133,6 +133,10 @@ describe('unloadIdleProjects — loaded-project ceiling', () => {
       busy: 1,
       pinned: 2,
     });
+    // Same durable all-pinned state on the next tick: no second warn —
+    // one line per episode, not ~288/day (TRA-1738 review).
+    expect(await pm.unloadIdleProjects(0, 1)).toEqual([]);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
   });
 
   it('does not warn when the sweep brought the daemon back under the ceiling', async () => {
