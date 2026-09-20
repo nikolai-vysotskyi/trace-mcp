@@ -207,3 +207,14 @@
 .graph-explorer:has(.graph-selected) .cosmos-gpu-stats {
   max-width: calc(100% - 24px);
 }
+
+.graph-selected button { min-height: 24px; min-width: 24px; }
+@container graph-pane (max-width: 620px) {
+  .graph-explorer .graph-focus-status {
+    top: 12px;
+    bottom: auto;
+    left: 12px;
+    right: auto;
+    max-width: calc(100% - 24px);
+  }
+}
