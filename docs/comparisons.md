@@ -1,5 +1,5 @@
 ---
-title: "Serena, Repomix & 20+ Code Graph MCP Servers Compared"
+title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
 description: "Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 88 frameworks, GitHub stars. Pick the one that fits your stack."
 updated: 2026-09-20
 ---
@@ -80,13 +80,13 @@ updated: 2026-09-20
   ]
 }
 </script>
-Most MCP servers in this space do one of three things: pack a repository into a prompt (Repomix), proxy a live language server (Serena), or build a persistent [code graph MCP server](/code-graph-mcp.html) (codegraph, codebase-memory-mcp, trace-mcp). trace-mcp is in the third group, and adds framework-aware edges and code-linked memory on top of the graph. Licensing cuts across all three groups — jCodeMunch bars commercial use without a paid tier, the subject of the [jCodeMunch alternative](/vs/jcodemunch.html) head-to-head. This page is the whole field, tool by tool, with the evidence for each row and the date it was checked.
+Most MCP servers in this space do one of three things: pack a repository into a prompt (Repomix), proxy a live language server (Serena), or build a persistent [code graph MCP server](/code-graph-mcp.html) (codegraph, codebase-memory-mcp, trace-mcp). trace-mcp is in the third group, and adds framework-aware edges and code-linked memory on top of the graph. This page is the whole field, tool by tool, with the evidence for each row and the date it was checked.
 
 **Before the tables: a capability table is the cheapest kind of evidence.** Every ✓ below, ours included, is a feature claim. The one claim on this page that was measured rather than asserted is the token cost: [a median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context](/pr-context-benchmark.html), over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains. Cheaper context is only worth having if the review written from it holds up, so the same {{ site.data.pr_context_quality.pr_count }} pull requests were reviewed twice — once from each context — and scored blind by a judge against the PR's own diff: trace-mcp's arm understood the change {{ site.data.pr_context_quality.trace_understood }} of the time against naive file loading's {{ site.data.pr_context_quality.baseline_understood }}, at {{ site.data.pr_context_quality.trace_false_positives }} false positives per PR against {{ site.data.pr_context_quality.baseline_false_positives }} — parity on a corpus this size, and inside the [bar preregistered before the calls were made](/perf/prereg-pr-quality/). We publish that half because a saving quoted without it is the asymmetry this page exists to refuse. Two peers below publish token benchmarks of their own — codebase-memory-mcp's arXiv preprint (10× fewer tokens across 31 repos, which we have not reproduced) and codegraph's self-run August 2026 measurement (62% fewer tokens across seven repos, the most transparent self-benchmark in this field). What separates ours is not that it exists: it is that the base and head SHAs, the losing cases, and the single command that re-runs the whole thing all ship inside the repository.
 
 ## trace-mcp vs the main alternatives
 
-The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ.
+The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ. Where the tables quote an advertised tool surface, that surface is a config knob as much as an architecture — [tool presets](/configuration.html) decide what a session pays up front.
 
 _Every star count, licence and tool-surface figure in this section was re-read from the GitHub API and from each project's own source on **September 3, 2026** (CodeGraphContext on **September 4, 2026**), not carried over from the head-to-head pages. These summaries are written for the hub and rewritten on each pass — never pasted from a spoke, so the hub and its deep-dive pages stay distinct documents rather than drifting into near-duplicates._
 
@@ -435,7 +435,7 @@ about: did the agent get it right.
 What that table means, project by project, in the places where the summary line
 is doing too much work:
 
-- **jCodeMunch is the most careful token benchmark in this field, and it says
+- **[jCodeMunch alternative](/vs/jcodemunch.html) is the most careful token benchmark in this field, and it says
   so about its own limits first.** `benchmarks/METHODOLOGY.md` states in its
   scope section that the benchmark "does **not** measure answer quality,
   latency, or end-to-end task completion". Every modelling choice in its
