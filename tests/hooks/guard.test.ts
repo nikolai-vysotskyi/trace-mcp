@@ -305,6 +305,72 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(after.allowed).toBe(true);
   });
 
+  // TRA-1737: the server hashed the raw params.path while the hook hashed
+  // its own spelling — `./x` never matched a marker written for `x`, so a
+  // successful get_outline left the follow-up Read BLOCKED forever.
+  it('matches consultation markers across ./ spellings of the same file', () => {
+    const file = path.join(projectDir, 'spelled.ts');
+    fs.writeFileSync(file, 'export {};');
+    // Marker as a canonicalizing server writes it for `./spelled.ts`.
+    writeConsultationMarker(projectDir, 'spelled.ts');
+    const decision = runGuard('Read', { file_path: './spelled.ts' }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('matches consultation markers across project-dirname-prefixed spellings', () => {
+    const file = path.join(projectDir, 'prefixed.ts');
+    fs.writeFileSync(file, 'export {};');
+    // Agent CWD is the parent, so the path carries the root dir name.
+    writeConsultationMarker(projectDir, 'prefixed.ts');
+    const decision = runGuard(
+      'Read',
+      { file_path: `${path.basename(projectDir)}/prefixed.ts` },
+      sessionId,
+      projectDir,
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  // TRA-1737 case A: the server session root is a PARENT of the root the
+  // hook resolves (sentinel walk stops at the nearer claim). The marker dir
+  // then differs too, so the hook re-keys the file against ancestor roots.
+  it('finds consultation markers recorded under a parent session root', () => {
+    const parent = path.join(projectDir, 'parent-proj');
+    const child = path.join(parent, 'child-proj');
+    fs.mkdirSync(child, { recursive: true });
+    const file = path.join(child, 'app.ts');
+    fs.writeFileSync(file, 'export {};');
+    // Hook resolves its root from the nearest fresh sentinel: the child.
+    const childSentinel = setHeartbeatAlive(child);
+    // Server rooted at the parent marks the parent-relative spelling.
+    const realParent = fs.realpathSync(parent);
+    const parentMarkerDir = path.join(TMP_BASE, `trace-mcp-consulted-${projectHash(realParent)}`);
+    fs.mkdirSync(parentMarkerDir, { recursive: true });
+    fs.writeFileSync(path.join(parentMarkerDir, fileHash('child-proj/app.ts')), '');
+    try {
+      const decision = runGuard('Read', { file_path: file }, sessionId, child);
+      expect(decision.allowed).toBe(true);
+    } finally {
+      fs.rmSync(parentMarkerDir, { recursive: true, force: true });
+      fs.rmSync(childSentinel, { force: true });
+    }
+  });
+
+  // TRA-1737: from the third deny the message must diagnose (wrong root /
+  // empty index + list_projects) instead of repeating the get_outline hint.
+  it('diagnoses a probable root mismatch from the third deny without consultation', () => {
+    const file = path.join(projectDir, 'diag.ts');
+    fs.writeFileSync(file, 'export {};');
+    runGuard('Read', { file_path: file }, sessionId, projectDir);
+    runGuard('Read', { file_path: file }, sessionId, projectDir); // BLOCKED #2
+    const third = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(third.allowed).toBe(false);
+    expect(third.reason).toContain('attempt #3');
+    expect(third.reason).toContain(fs.realpathSync(projectDir));
+    expect(third.context).toContain('Diagnosis');
+    expect(third.context).toContain('list_projects');
+  });
+
   // ─── Read: heartbeat fallback ───────────────────────────────────
 
   it('allows Read with warning when heartbeat sentinel is missing', () => {

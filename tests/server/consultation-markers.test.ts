@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { projectHash, STATUS_DIR } from '../../src/global.js';
 import {
   __resetConsultationMarkersForTests,
+  canonicalMarkerKey,
   markToolConsultation,
 } from '../../src/server/consultation-markers.js';
 
@@ -125,6 +126,49 @@ describe('markToolConsultation', () => {
         const files = fs.readdirSync(dir);
         expect(files).toHaveLength(0);
       }
+    });
+  });
+
+  // TRA-1737: the server hashed the raw params.path while the guard hook
+  // hashed its own spelling — `./x`, absolute, and root-dirname-prefixed
+  // variants of one file never matched. Both sides now canonicalize.
+  describe('canonicalMarkerKey', () => {
+    const base = path.basename(TEST_ROOT);
+
+    it('folds ./, absolute, and root-dirname-prefixed spellings to one key', () => {
+      const canonical = canonicalMarkerKey('src/a.ts', TEST_ROOT);
+      expect(canonical).toBe('src/a.ts');
+      expect(canonicalMarkerKey('./src/a.ts', TEST_ROOT)).toBe(canonical);
+      expect(canonicalMarkerKey(path.join(TEST_ROOT, 'src/a.ts'), TEST_ROOT)).toBe(canonical);
+      expect(canonicalMarkerKey(`${base}/src/a.ts`, TEST_ROOT)).toBe(canonical);
+    });
+
+    it('leaves outside-root paths untouched for downstream guards', () => {
+      expect(canonicalMarkerKey('/other/x.ts', TEST_ROOT)).toBe('/other/x.ts');
+      expect(canonicalMarkerKey('../evil.ts', TEST_ROOT)).toBe('../evil.ts');
+    });
+
+    it('markToolConsultation writes the canonical key for an absolute path', () => {
+      markToolConsultation(TEST_ROOT, 'get_outline', {
+        path: path.join(TEST_ROOT, 'src/abs.ts'),
+      });
+
+      const dir = getMarkerDir();
+      expect(fs.existsSync(path.join(dir, fileHash('src/abs.ts')))).toBe(true);
+    });
+
+    it('markToolConsultation collapses the root-dirname prefix', () => {
+      markToolConsultation(TEST_ROOT, 'get_outline', { path: `${base}/src/prefixed.ts` });
+
+      const dir = getMarkerDir();
+      expect(fs.existsSync(path.join(dir, fileHash('src/prefixed.ts')))).toBe(true);
+    });
+
+    it('markToolConsultation strips ./ spellings', () => {
+      markToolConsultation(TEST_ROOT, 'get_outline', { path: './src/dotted.ts' });
+
+      const dir = getMarkerDir();
+      expect(fs.existsSync(path.join(dir, fileHash('src/dotted.ts')))).toBe(true);
     });
   });
 });

@@ -97,7 +97,17 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
             ? notFound(result.error.id, result.error.candidates, 'unknown_symbol')
             : result.error;
         return {
-          content: [{ type: 'text', text: j(formatToolError(error)) }],
+          content: [
+            {
+              type: 'text',
+              text: j(
+                formatToolError(error, {
+                  projectRoot,
+                  totalFiles: store.getStats().totalFiles,
+                }),
+              ),
+            },
+          ],
           isError: true,
         };
       }
@@ -204,7 +214,15 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
             content: [
               {
                 type: 'text',
-                text: j({ error: 'File not found or unreadable (index is empty)', path: filePath }),
+                text: j({
+                  error: 'File not found or unreadable (index is empty)',
+                  path: filePath,
+                  // TRA-1737: name the empty root so the caller sees the
+                  // session-CWD vs project-root mismatch instead of looping
+                  // get_outline → BLOCKED Read.
+                  projectRoot,
+                  indexFiles: 0,
+                }),
               },
             ],
             isError: true,
@@ -237,7 +255,12 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
               )
             : result.error;
         return {
-          content: [{ type: 'text', text: j(formatToolError(error)) }],
+          content: [
+            {
+              type: 'text',
+              text: j(formatToolError(error, { projectRoot, totalFiles: stats.totalFiles })),
+            },
+          ],
           isError: true,
         };
       }
