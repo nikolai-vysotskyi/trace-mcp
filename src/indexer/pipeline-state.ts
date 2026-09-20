@@ -9,6 +9,7 @@ import type { Store } from '../db/store.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type {
   FileParseResult,
+  FrameworkPlugin,
   RawComponent,
   RawEdge,
   RawMigration,
@@ -56,6 +57,16 @@ export interface PipelineState {
   readonly pendingImports: Map<number, { from: string; specifiers: string[]; relPath: string }[]>;
   readonly fileContentCache: Map<string, string>;
   readonly gitignore: GitignoreMatcher | undefined;
+  /**
+   * TRA-1543: workspace path → detected framework plugins, computed once and
+   * shared by registerFrameworkEdgeTypes(), FileExtractor and
+   * EdgeResolver.resolveEdges() (which used to detect every workspace three
+   * times per run). May be reused across incremental runs whose scope cannot
+   * change detection (no manifest touched — see canReuseWorkspacePlugins);
+   * force/full runs always re-detect. Optional — producers that predate it
+   * simply omit it and consumers fall back to detecting inline.
+   */
+  readonly wsFrameworkPlugins?: Map<string, FrameworkPlugin[]>;
 }
 
 /**
