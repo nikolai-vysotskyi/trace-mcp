@@ -365,6 +365,36 @@ and it means the bare name "Trace MCP" is not ours to claim on directories. Do n
 fold `mcp tracing` into that bucket: those impressions are our own observability
 intent, misrouted to the homepage (`ops/index-coverage.md`, TRA-974).
 
+### Alternative-query venues for one rival (TRA-1732, 2026-09-20)
+
+Query `jCodeMunch Alternative` top-30 (DataForSEO live 2026-09-20, per the
+issue): jcodemunch.com (official, 2.7K stars), reddit, github wiki, youtube,
+libhunt, skillsllm. trace-mcp.com absent. All six checked 2026-09-20 from
+read-only fetches. **Nothing submitted, nothing opened — touch budget 0 of 5,
+spend $0.** The standing catalog moratorium holds (zero attributable arrivals
+from directories across seven consecutive windows in `ops/arrivals.md`;
+acquisition must read first), so the one venue with an explicit
+alternatives path is held rather than filed.
+
+| Venue | What was checked 2026-09-20 | Decision |
+|---|---|---|
+| jcodemunch.com (official site) | Competitor's own domain; links its GitHub, PyPI and a "vs. Alternatives" page of its own | **Closed, not a door.** Same precedent as the `jgravelle/jcodemunch-mcp` NICHE.md row: a rival's own pages are not outreach targets |
+| `jgravelle/jcodemunch-mcp` wiki ("versus THE WORLD") | Rival-owned wiki page comparing jCodeMunch/jDocMunch against eight named alternatives; trace-mcp not among them | **Closed, not a door.** Wikis are editable by collaborators only, and asking a rival to add us to their competitive page is the message no maintainer is glad to get (NICHE.md precedent) |
+| reddit | Threads rank for the query, but Reddit is deprioritised since 2026-09-05 — posting there is Nikolai's call (`ops/user-signal.md` in the private repo) | **No action.** Not an agent submission venue |
+| youtube | Videos rank for the query | **Closed.** No submission path exists; video comments are spam and producing our own video is a production decision, not distribution work |
+| libhunt.com | The one venue that explicitly accepts what the issue asks: `/site/project_submit` says "Suggest the missing project as an alternative to an existing one" (find anchor project, "Suggest alternative", form needs only the new project's URL). But: neither trace-mcp nor jcodemunch-mcp surfaced on LibHunt via web search, and LibHunt's own search is JS-driven so presence is unverifiable from a run — there is no confirmed anchor to attach a suggestion to | **Held, not filed.** Explicit path but no confirmed anchor, plus the catalog moratorium covers new directory submissions. Re-evaluate when the moratorium lifts: first confirm an anchor project exists, then suggest |
+| skillsllm.com | Already listed and current: `/skill/trace-mcp` renders 88 frameworks / 81 languages, matching `docs/_data/counts.yml`; `/skill/jcodemunch-mcp` also present (2,702 stars). Both carry auto-generated "Compare with similar skills" links, but no trace-mcp-vs-jcodemunch pair exists — checked `/compare/trace-mcp-vs-jcodemunch-mcp`, which does not resolve — and the site offers no "suggest a comparison" path. Comments need GitHub sign-in (human-only login, same class as Smithery/LobeHub) | **Nothing to submit.** Compare pages are auto-generated with no submission form; copy is current so there is nothing to correct either |
+
+Two notes so they are not re-derived. First, on-page alone cannot close this
+gap: the official domain outranks us on its own brand plus "alternative"
+without off-page signals, which is the issue's confirmed problem statement —
+but arrivals says directory submissions are not the off-page signal that ever
+moved our numbers, so filing one here would spend the moratorium's exception
+on the channel with the weakest evidence. Second, skillsllm's compare graph
+is worth one re-read if it ever gains a suggestion path: both projects listed,
+categories adjacent (`AI Agents` vs `MCP Servers`), auto-generated pairs —
+the missing edge is exactly ours.
+
 ## macOS code signing and notarization
 
 **Signed and notarized from the first release after 2026-08-29** (TRA-436).
