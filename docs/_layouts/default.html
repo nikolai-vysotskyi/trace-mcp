@@ -198,6 +198,19 @@
 
     <main id="content">
       <div class="container prose">
+        {%- comment -%}
+          Visible trail matching the BreadcrumbList JSON-LD above (TRA-1731).
+          GSC reported "Unnamed item" on the inspected pages: the markup named
+          every item, but no trail was painted, so nothing on screen answered
+          for it. Tertiary mono caps, same voice as `Last updated`.
+        {%- endcomment -%}
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <a href="{{ '/' | relative_url }}">Home</a>
+          {%- if page.url contains '/vs/' -%}
+          <span aria-hidden="true"> / </span><a href="{{ '/comparisons.html' | relative_url }}">Comparisons</a>
+          {%- endif -%}
+          <span aria-hidden="true"> / </span><span aria-current="page">{{ page.title }}</span>
+        </nav>
         {{ content }}
 
         {%- comment -%}

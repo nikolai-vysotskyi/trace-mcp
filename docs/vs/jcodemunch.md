@@ -105,9 +105,14 @@ updated: 2026-09-20
 }
 </script>
 
-**TL;DR.** jCodeMunch is a Python AST code-exploration MCP server: symbol extraction across 70+ languages behind a 3-tool "Counter" front door (`order`, `menu`, `route`), plus agent config auditing and git provenance narratives. What decides it is licensing, semantic depth, and refactoring safety: jCodeMunch's Dual-Use License bars commercial use and redistribution, its framework routes are regex matches rather than graph edges, and its refactoring drafts text replacements instead of AST-verified transforms. trace-mcp is MIT-licensed, runs from `npx -y trace-mcp`, and pairs framework-aware edges with atomic refactoring and taint analysis.
+**TL;DR.** As a jCodeMunch alternative for commercial work, trace-mcp is MIT while jCodeMunch's commercial license bans for-profit use without a paid tier. jCodeMunch is a Python AST code-exploration MCP server: symbol extraction across 70+ languages behind a 3-tool "Counter" front door (`order`, `menu`, `route`), plus agent config auditing and git provenance narratives. What decides it is licensing, semantic depth, and refactoring safety: jCodeMunch's Dual-Use License bars commercial use and redistribution, its framework routes are regex matches rather than graph edges, and its refactoring drafts text replacements instead of AST-verified transforms. trace-mcp is MIT-licensed, runs from `npx -y trace-mcp`, and pairs framework-aware edges with atomic refactoring and taint analysis.
 
 Pick jCodeMunch for personal non-commercial projects where the 3-tool surface and git narratives matter. Pick trace-mcp for commercial licensing, framework-aware graphs, verified refactoring, and zero-setup npm distribution.
+
+> **Bottom line for `alternative` searchers:**
+> - Commercial use needs a paid jCodeMunch license; trace-mcp is MIT with zero fees.
+> - jCodeMunch matches framework routes with regex; trace-mcp traverses typed graph edges.
+> - jCodeMunch suggests text replacements; trace-mcp applies AST-verified edits.
 
 ## Head-to-head
 

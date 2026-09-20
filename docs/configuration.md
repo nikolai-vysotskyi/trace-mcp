@@ -1,6 +1,6 @@
 ---
 title: "trace-mcp Configuration Guide — .trace.json Reference"
-description: "Set up trace-mcp with .trace.json — or skip it: every option is optional and it works out of the box. Indexing, AI providers, LSP, quality gates."
+description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
 updated: 2026-09-20
 ---
 
