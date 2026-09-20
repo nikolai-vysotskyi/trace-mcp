@@ -1,0 +1,1855 @@
+{
+  "generated_at": "2026-09-20T18:34:36.938Z",
+  "measured_build": {
+    "version": "3.30.0",
+    "commit": "ca921710",
+    "dirty": true
+  },
+  "method": "paired get_change_impact legacy vs compact+recall; depth/maxDependents passed positionally; tokens via gpt-tokenizer; same 60-PR corpus as pr-context bench (identical 12 docs-only exclusions)",
+  "corpus": "benchmarks/pr-context/dataset.json (72 entries; 60 comparable, same 60 as benchmarks/pr-context/results.json)",
+  "threshold_bytes": 10240,
+  "first_page_items": 25,
+  "node": "v22.22.3",
+  "platform": "darwin-arm64",
+  "fail_open_probe": "ok on every chunk run (store->recall roundtrip byte-identical, unknown/corrupt ids error loud, stable id on re-store)",
+  "pr_count": 60,
+  "lossless_prs": 60,
+  "shapes": {
+    "bench(d2/m50)": {
+      "totals": {
+        "queries": 338,
+        "packed": 0,
+        "legacy": 163616,
+        "compact_first": 163617,
+        "recall": 163617
+      },
+      "per_pr": {
+        "legacy_median": 1667.0,
+        "compact_first_median": 1667.0,
+        "recall_median": 1667.0,
+        "delta_median": 0.0,
+        "delta_p90": 0
+      }
+    },
+    "mcp-default(d3/m200)": {
+      "totals": {
+        "queries": 338,
+        "packed": 13,
+        "legacy": 214509,
+        "compact_first": 215210,
+        "recall": 227390
+      },
+      "per_pr": {
+        "legacy_median": 1908.0,
+        "compact_first_median": 1908.0,
+        "recall_median": 1908.0,
+        "delta_median": 0.0,
+        "delta_p90": 53
+      }
+    }
+  },
+  "skipped": [
+    {
+      "repo": "expressjs/express",
+      "number": 7305,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7135,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7057,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6969,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5829,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5742,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5737,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5650,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5609,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5618,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7576,
+      "reason": "no comparable queries"
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7421,
+      "reason": "no comparable queries"
+    }
+  ],
+  "rows": [
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "url": "https://github.com/axios/axios/pull/11172",
+      "changed_symbols": 20,
+      "queries": 40,
+      "packed_queries": 0,
+      "legacy_tokens": 16089,
+      "compact_first_tokens": 16089,
+      "recall_total_tokens": 16089,
+      "lossless_all": true,
+      "index_ms": 685,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 20,
+          "packed": 0,
+          "legacy": 7866,
+          "compact_first": 7866,
+          "recall": 7866
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 20,
+          "packed": 0,
+          "legacy": 8223,
+          "compact_first": 8223,
+          "recall": 8223
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "url": "https://github.com/axios/axios/pull/11118",
+      "changed_symbols": 8,
+      "queries": 16,
+      "packed_queries": 0,
+      "legacy_tokens": 5908,
+      "compact_first_tokens": 5908,
+      "recall_total_tokens": 5908,
+      "lossless_all": true,
+      "index_ms": 1185,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 8,
+          "packed": 0,
+          "legacy": 2954,
+          "compact_first": 2954,
+          "recall": 2954
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 8,
+          "packed": 0,
+          "legacy": 2954,
+          "compact_first": 2954,
+          "recall": 2954
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11119,
+      "url": "https://github.com/axios/axios/pull/11119",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1260,
+      "compact_first_tokens": 1260,
+      "recall_total_tokens": 1260,
+      "lossless_all": true,
+      "index_ms": 1096,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 630,
+          "compact_first": 630,
+          "recall": 630
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 630,
+          "compact_first": 630,
+          "recall": 630
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "url": "https://github.com/axios/axios/pull/11096",
+      "changed_symbols": 13,
+      "queries": 26,
+      "packed_queries": 0,
+      "legacy_tokens": 11946,
+      "compact_first_tokens": 11946,
+      "recall_total_tokens": 11946,
+      "lossless_all": true,
+      "index_ms": 1038,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 13,
+          "packed": 0,
+          "legacy": 5912,
+          "compact_first": 5912,
+          "recall": 5912
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 13,
+          "packed": 0,
+          "legacy": 6034,
+          "compact_first": 6034,
+          "recall": 6034
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "url": "https://github.com/axios/axios/pull/11087",
+      "changed_symbols": 15,
+      "queries": 30,
+      "packed_queries": 0,
+      "legacy_tokens": 8688,
+      "compact_first_tokens": 8688,
+      "recall_total_tokens": 8688,
+      "lossless_all": true,
+      "index_ms": 1015,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 15,
+          "packed": 0,
+          "legacy": 4344,
+          "compact_first": 4344,
+          "recall": 4344
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 15,
+          "packed": 0,
+          "legacy": 4344,
+          "compact_first": 4344,
+          "recall": 4344
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "url": "https://github.com/axios/axios/pull/11121",
+      "changed_symbols": 21,
+      "queries": 42,
+      "packed_queries": 0,
+      "legacy_tokens": 14652,
+      "compact_first_tokens": 14652,
+      "recall_total_tokens": 14652,
+      "lossless_all": true,
+      "index_ms": 1476,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 21,
+          "packed": 0,
+          "legacy": 7226,
+          "compact_first": 7226,
+          "recall": 7226
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 21,
+          "packed": 0,
+          "legacy": 7426,
+          "compact_first": 7426,
+          "recall": 7426
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "url": "https://github.com/axios/axios/pull/11094",
+      "changed_symbols": 14,
+      "queries": 28,
+      "packed_queries": 0,
+      "legacy_tokens": 8332,
+      "compact_first_tokens": 8332,
+      "recall_total_tokens": 8332,
+      "lossless_all": true,
+      "index_ms": 1538,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 14,
+          "packed": 0,
+          "legacy": 3927,
+          "compact_first": 3927,
+          "recall": 3927
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 14,
+          "packed": 0,
+          "legacy": 4405,
+          "compact_first": 4405,
+          "recall": 4405
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "url": "https://github.com/axios/axios/pull/11109",
+      "changed_symbols": 6,
+      "queries": 12,
+      "packed_queries": 0,
+      "legacy_tokens": 4386,
+      "compact_first_tokens": 4386,
+      "recall_total_tokens": 4386,
+      "lossless_all": true,
+      "index_ms": 2547,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 2193,
+          "compact_first": 2193,
+          "recall": 2193
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 2193,
+          "compact_first": 2193,
+          "recall": 2193
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11078,
+      "url": "https://github.com/axios/axios/pull/11078",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1731,
+      "compact_first_tokens": 1731,
+      "recall_total_tokens": 1731,
+      "lossless_all": true,
+      "index_ms": 2156,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 804,
+          "compact_first": 804,
+          "recall": 804
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 927,
+          "compact_first": 927,
+          "recall": 927
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11039,
+      "url": "https://github.com/axios/axios/pull/11039",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2412,
+      "compact_first_tokens": 2412,
+      "recall_total_tokens": 2412,
+      "lossless_all": true,
+      "index_ms": 2336,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1133,
+          "compact_first": 1133,
+          "recall": 1133
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1279,
+          "compact_first": 1279,
+          "recall": 1279
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "url": "https://github.com/axios/axios/pull/11035",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 3246,
+      "compact_first_tokens": 3246,
+      "recall_total_tokens": 3246,
+      "lossless_all": true,
+      "index_ms": 2122,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1556,
+          "compact_first": 1556,
+          "recall": 1556
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1690,
+          "compact_first": 1690,
+          "recall": 1690
+        }
+      }
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11073,
+      "url": "https://github.com/axios/axios/pull/11073",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 788,
+      "compact_first_tokens": 788,
+      "recall_total_tokens": 788,
+      "lossless_all": true,
+      "index_ms": 1410,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 394,
+          "compact_first": 394,
+          "recall": 394
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 394,
+          "compact_first": 394,
+          "recall": 394
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7390,
+      "url": "https://github.com/expressjs/express/pull/7390",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 1670,
+      "compact_first_tokens": 1670,
+      "recall_total_tokens": 1670,
+      "lossless_all": true,
+      "index_ms": 2011,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 835,
+          "compact_first": 835,
+          "recall": 835
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 835,
+          "compact_first": 835,
+          "recall": 835
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7265,
+      "url": "https://github.com/expressjs/express/pull/7265",
+      "changed_symbols": 1,
+      "queries": 2,
+      "packed_queries": 0,
+      "legacy_tokens": 396,
+      "compact_first_tokens": 396,
+      "recall_total_tokens": 396,
+      "lossless_all": true,
+      "index_ms": 1057,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 198,
+          "compact_first": 198,
+          "recall": 198
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 198,
+          "compact_first": 198,
+          "recall": 198
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 5555,
+      "url": "https://github.com/expressjs/express/pull/5555",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 1186,
+      "compact_first_tokens": 1186,
+      "recall_total_tokens": 1186,
+      "lossless_all": true,
+      "index_ms": 1791,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 593,
+          "compact_first": 593,
+          "recall": 593
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 593,
+          "compact_first": 593,
+          "recall": 593
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "url": "https://github.com/expressjs/express/pull/4893",
+      "changed_symbols": 6,
+      "queries": 12,
+      "packed_queries": 0,
+      "legacy_tokens": 2794,
+      "compact_first_tokens": 2794,
+      "recall_total_tokens": 2794,
+      "lossless_all": true,
+      "index_ms": 1369,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 1397,
+          "compact_first": 1397,
+          "recall": 1397
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 1397,
+          "compact_first": 1397,
+          "recall": 1397
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7159,
+      "url": "https://github.com/expressjs/express/pull/7159",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1292,
+      "compact_first_tokens": 1292,
+      "recall_total_tokens": 1292,
+      "lossless_all": true,
+      "index_ms": 643,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 646,
+          "compact_first": 646,
+          "recall": 646
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 646,
+          "compact_first": 646,
+          "recall": 646
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7029,
+      "url": "https://github.com/expressjs/express/pull/7029",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1296,
+      "compact_first_tokens": 1296,
+      "recall_total_tokens": 1296,
+      "lossless_all": true,
+      "index_ms": 600,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 648,
+          "compact_first": 648,
+          "recall": 648
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 648,
+          "compact_first": 648,
+          "recall": 648
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6088,
+      "url": "https://github.com/expressjs/express/pull/6088",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 814,
+      "compact_first_tokens": 814,
+      "recall_total_tokens": 814,
+      "lossless_all": true,
+      "index_ms": 557,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 407,
+          "compact_first": 407,
+          "recall": 407
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 407,
+          "compact_first": 407,
+          "recall": 407
+        }
+      }
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6274,
+      "url": "https://github.com/expressjs/express/pull/6274",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1056,
+      "compact_first_tokens": 1056,
+      "recall_total_tokens": 1056,
+      "lossless_all": true,
+      "index_ms": 524,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 528,
+          "compact_first": 528,
+          "recall": 528
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 528,
+          "compact_first": 528,
+          "recall": 528
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "url": "https://github.com/sindresorhus/got/pull/2470",
+      "changed_symbols": 6,
+      "queries": 12,
+      "packed_queries": 0,
+      "legacy_tokens": 7738,
+      "compact_first_tokens": 7738,
+      "recall_total_tokens": 7738,
+      "lossless_all": true,
+      "index_ms": 528,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 3232,
+          "compact_first": 3232,
+          "recall": 3232
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 4506,
+          "compact_first": 4506,
+          "recall": 4506
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "url": "https://github.com/sindresorhus/got/pull/2471",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 7147,
+      "compact_first_tokens": 7147,
+      "recall_total_tokens": 7147,
+      "lossless_all": true,
+      "index_ms": 367,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 2901,
+          "compact_first": 2901,
+          "recall": 2901
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 4246,
+          "compact_first": 4246,
+          "recall": 4246
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "url": "https://github.com/sindresorhus/got/pull/2458",
+      "changed_symbols": 8,
+      "queries": 16,
+      "packed_queries": 3,
+      "legacy_tokens": 19238,
+      "compact_first_tokens": 19400,
+      "recall_total_tokens": 19400,
+      "lossless_all": true,
+      "index_ms": 354,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 8,
+          "packed": 0,
+          "legacy": 6482,
+          "compact_first": 6482,
+          "recall": 6482
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 8,
+          "packed": 3,
+          "legacy": 12756,
+          "compact_first": 12918,
+          "recall": 12918
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "url": "https://github.com/sindresorhus/got/pull/2454",
+      "changed_symbols": 5,
+      "queries": 10,
+      "packed_queries": 0,
+      "legacy_tokens": 10515,
+      "compact_first_tokens": 10515,
+      "recall_total_tokens": 10515,
+      "lossless_all": true,
+      "index_ms": 405,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 5,
+          "packed": 0,
+          "legacy": 4752,
+          "compact_first": 4752,
+          "recall": 4752
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 5,
+          "packed": 0,
+          "legacy": 5763,
+          "compact_first": 5763,
+          "recall": 5763
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "url": "https://github.com/sindresorhus/got/pull/2399",
+      "changed_symbols": 5,
+      "queries": 10,
+      "packed_queries": 0,
+      "legacy_tokens": 3583,
+      "compact_first_tokens": 3583,
+      "recall_total_tokens": 3583,
+      "lossless_all": true,
+      "index_ms": 419,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 5,
+          "packed": 0,
+          "legacy": 1745,
+          "compact_first": 1745,
+          "recall": 1745
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 5,
+          "packed": 0,
+          "legacy": 1838,
+          "compact_first": 1838,
+          "recall": 1838
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "url": "https://github.com/sindresorhus/got/pull/2388",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 5912,
+      "compact_first_tokens": 5912,
+      "recall_total_tokens": 5912,
+      "lossless_all": true,
+      "index_ms": 350,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 2445,
+          "compact_first": 2445,
+          "recall": 2445
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 3467,
+          "compact_first": 3467,
+          "recall": 3467
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2391,
+      "url": "https://github.com/sindresorhus/got/pull/2391",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 5514,
+      "compact_first_tokens": 5514,
+      "recall_total_tokens": 5514,
+      "lossless_all": true,
+      "index_ms": 289,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 2246,
+          "compact_first": 2246,
+          "recall": 2246
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 3268,
+          "compact_first": 3268,
+          "recall": 3268
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "url": "https://github.com/sindresorhus/got/pull/2380",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 6562,
+      "compact_first_tokens": 6562,
+      "recall_total_tokens": 6562,
+      "lossless_all": true,
+      "index_ms": 410,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 2698,
+          "compact_first": 2698,
+          "recall": 2698
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 3864,
+          "compact_first": 3864,
+          "recall": 3864
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2379,
+      "url": "https://github.com/sindresorhus/got/pull/2379",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 1,
+      "legacy_tokens": 8633,
+      "compact_first_tokens": 8688,
+      "recall_total_tokens": 8688,
+      "lossless_all": true,
+      "index_ms": 385,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 2817,
+          "compact_first": 2817,
+          "recall": 2817
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 1,
+          "legacy": 5816,
+          "compact_first": 5871,
+          "recall": 5871
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2362,
+      "url": "https://github.com/sindresorhus/got/pull/2362",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 3178,
+      "compact_first_tokens": 3178,
+      "recall_total_tokens": 3178,
+      "lossless_all": true,
+      "index_ms": 566,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1589,
+          "compact_first": 1589,
+          "recall": 1589
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1589,
+          "compact_first": 1589,
+          "recall": 1589
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2367,
+      "url": "https://github.com/sindresorhus/got/pull/2367",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 1040,
+      "compact_first_tokens": 1040,
+      "recall_total_tokens": 1040,
+      "lossless_all": true,
+      "index_ms": 474,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 520,
+          "compact_first": 520,
+          "recall": 520
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 520,
+          "compact_first": 520,
+          "recall": 520
+        }
+      }
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2266,
+      "url": "https://github.com/sindresorhus/got/pull/2266",
+      "changed_symbols": 1,
+      "queries": 2,
+      "packed_queries": 0,
+      "legacy_tokens": 738,
+      "compact_first_tokens": 738,
+      "recall_total_tokens": 738,
+      "lossless_all": true,
+      "index_ms": 397,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 369,
+          "compact_first": 369,
+          "recall": 369
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 369,
+          "compact_first": 369,
+          "recall": 369
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5291,
+      "url": "https://github.com/honojs/hono/pull/5291",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2746,
+      "compact_first_tokens": 2746,
+      "recall_total_tokens": 2746,
+      "lossless_all": true,
+      "index_ms": 4475,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1373,
+          "compact_first": 1373,
+          "recall": 1373
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1373,
+          "compact_first": 1373,
+          "recall": 1373
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "url": "https://github.com/honojs/hono/pull/5283",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 7808,
+      "compact_first_tokens": 7808,
+      "recall_total_tokens": 7808,
+      "lossless_all": true,
+      "index_ms": 2700,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 3823,
+          "compact_first": 3823,
+          "recall": 3823
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 3985,
+          "compact_first": 3985,
+          "recall": 3985
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "url": "https://github.com/honojs/hono/pull/5239",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 2886,
+      "compact_first_tokens": 2886,
+      "recall_total_tokens": 2886,
+      "lossless_all": true,
+      "index_ms": 1814,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1443,
+          "compact_first": 1443,
+          "recall": 1443
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1443,
+          "compact_first": 1443,
+          "recall": 1443
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5288,
+      "url": "https://github.com/honojs/hono/pull/5288",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2058,
+      "compact_first_tokens": 2058,
+      "recall_total_tokens": 2058,
+      "lossless_all": true,
+      "index_ms": 1851,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 987,
+          "compact_first": 987,
+          "recall": 987
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1071,
+          "compact_first": 1071,
+          "recall": 1071
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "url": "https://github.com/honojs/hono/pull/5268",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 1,
+      "legacy_tokens": 11488,
+      "compact_first_tokens": 11542,
+      "recall_total_tokens": 17771,
+      "lossless_all": true,
+      "index_ms": 1729,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 4331,
+          "compact_first": 4331,
+          "recall": 4331
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 1,
+          "legacy": 7157,
+          "compact_first": 7211,
+          "recall": 13440
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5215,
+      "url": "https://github.com/honojs/hono/pull/5215",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2995,
+      "compact_first_tokens": 2995,
+      "recall_total_tokens": 2995,
+      "lossless_all": true,
+      "index_ms": 2324,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1457,
+          "compact_first": 1457,
+          "recall": 1457
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1538,
+          "compact_first": 1538,
+          "recall": 1538
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "url": "https://github.com/honojs/hono/pull/5236",
+      "changed_symbols": 9,
+      "queries": 18,
+      "packed_queries": 0,
+      "legacy_tokens": 11603,
+      "compact_first_tokens": 11603,
+      "recall_total_tokens": 11603,
+      "lossless_all": true,
+      "index_ms": 4024,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 9,
+          "packed": 0,
+          "legacy": 5706,
+          "compact_first": 5706,
+          "recall": 5706
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 9,
+          "packed": 0,
+          "legacy": 5897,
+          "compact_first": 5897,
+          "recall": 5897
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5282,
+      "url": "https://github.com/honojs/hono/pull/5282",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2058,
+      "compact_first_tokens": 2058,
+      "recall_total_tokens": 2058,
+      "lossless_all": true,
+      "index_ms": 4140,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 987,
+          "compact_first": 987,
+          "recall": 987
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1071,
+          "compact_first": 1071,
+          "recall": 1071
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5244,
+      "url": "https://github.com/honojs/hono/pull/5244",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2995,
+      "compact_first_tokens": 2995,
+      "recall_total_tokens": 2995,
+      "lossless_all": true,
+      "index_ms": 5106,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1457,
+          "compact_first": 1457,
+          "recall": 1457
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1538,
+          "compact_first": 1538,
+          "recall": 1538
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5202,
+      "url": "https://github.com/honojs/hono/pull/5202",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2995,
+      "compact_first_tokens": 2995,
+      "recall_total_tokens": 2995,
+      "lossless_all": true,
+      "index_ms": 5174,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1457,
+          "compact_first": 1457,
+          "recall": 1457
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1538,
+          "compact_first": 1538,
+          "recall": 1538
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5250,
+      "url": "https://github.com/honojs/hono/pull/5250",
+      "changed_symbols": 1,
+      "queries": 2,
+      "packed_queries": 0,
+      "legacy_tokens": 422,
+      "compact_first_tokens": 422,
+      "recall_total_tokens": 422,
+      "lossless_all": true,
+      "index_ms": 4066,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 211,
+          "compact_first": 211,
+          "recall": 211
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 1,
+          "packed": 0,
+          "legacy": 211,
+          "compact_first": 211,
+          "recall": 211
+        }
+      }
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5280,
+      "url": "https://github.com/honojs/hono/pull/5280",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 0,
+      "legacy_tokens": 2995,
+      "compact_first_tokens": 2995,
+      "recall_total_tokens": 2995,
+      "lossless_all": true,
+      "index_ms": 2935,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1457,
+          "compact_first": 1457,
+          "recall": 1457
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1538,
+          "compact_first": 1538,
+          "recall": 1538
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "url": "https://github.com/pallets/flask/pull/6096",
+      "changed_symbols": 10,
+      "queries": 20,
+      "packed_queries": 2,
+      "legacy_tokens": 14878,
+      "compact_first_tokens": 14989,
+      "recall_total_tokens": 15579,
+      "lossless_all": true,
+      "index_ms": 481,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 10,
+          "packed": 0,
+          "legacy": 4865,
+          "compact_first": 4865,
+          "recall": 4865
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 10,
+          "packed": 2,
+          "legacy": 10013,
+          "compact_first": 10124,
+          "recall": 10714
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "url": "https://github.com/pallets/flask/pull/5917",
+      "changed_symbols": 26,
+      "queries": 52,
+      "packed_queries": 1,
+      "legacy_tokens": 19698,
+      "compact_first_tokens": 19751,
+      "recall_total_tokens": 20113,
+      "lossless_all": true,
+      "index_ms": 410,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 26,
+          "packed": 0,
+          "legacy": 8167,
+          "compact_first": 8167,
+          "recall": 8167
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 26,
+          "packed": 1,
+          "legacy": 11531,
+          "compact_first": 11584,
+          "recall": 11946
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5808,
+      "url": "https://github.com/pallets/flask/pull/5808",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 1,
+      "legacy_tokens": 5743,
+      "compact_first_tokens": 5796,
+      "recall_total_tokens": 6079,
+      "lossless_all": true,
+      "index_ms": 400,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1173,
+          "compact_first": 1173,
+          "recall": 1173
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 1,
+          "legacy": 4570,
+          "compact_first": 4623,
+          "recall": 4906
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5647,
+      "url": "https://github.com/pallets/flask/pull/5647",
+      "changed_symbols": 2,
+      "queries": 4,
+      "packed_queries": 1,
+      "legacy_tokens": 7066,
+      "compact_first_tokens": 7120,
+      "recall_total_tokens": 7772,
+      "lossless_all": true,
+      "index_ms": 309,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 2,
+          "packed": 0,
+          "legacy": 1918,
+          "compact_first": 1918,
+          "recall": 1918
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 2,
+          "packed": 1,
+          "legacy": 5148,
+          "compact_first": 5202,
+          "recall": 5854
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "url": "https://github.com/pallets/flask/pull/5620",
+      "changed_symbols": 27,
+      "queries": 54,
+      "packed_queries": 3,
+      "legacy_tokens": 49722,
+      "compact_first_tokens": 49882,
+      "recall_total_tokens": 53946,
+      "lossless_all": true,
+      "index_ms": 331,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 27,
+          "packed": 0,
+          "legacy": 19466,
+          "compact_first": 19467,
+          "recall": 19467
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 27,
+          "packed": 3,
+          "legacy": 30256,
+          "compact_first": 30415,
+          "recall": 34479
+        }
+      }
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5627,
+      "url": "https://github.com/pallets/flask/pull/5627",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 2118,
+      "compact_first_tokens": 2118,
+      "recall_total_tokens": 2118,
+      "lossless_all": true,
+      "index_ms": 278,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1059,
+          "compact_first": 1059,
+          "recall": 1059
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1059,
+          "compact_first": 1059,
+          "recall": 1059
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6806,
+      "url": "https://github.com/psf/requests/pull/6806",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 3860,
+      "compact_first_tokens": 3860,
+      "recall_total_tokens": 3860,
+      "lossless_all": true,
+      "index_ms": 223,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1750,
+          "compact_first": 1750,
+          "recall": 1750
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 2110,
+          "compact_first": 2110,
+          "recall": 2110
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6951,
+      "url": "https://github.com/psf/requests/pull/6951",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 1168,
+      "compact_first_tokens": 1168,
+      "recall_total_tokens": 1168,
+      "lossless_all": true,
+      "index_ms": 208,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 584,
+          "compact_first": 584,
+          "recall": 584
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 584,
+          "compact_first": 584,
+          "recall": 584
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "url": "https://github.com/psf/requests/pull/7431",
+      "changed_symbols": 7,
+      "queries": 14,
+      "packed_queries": 0,
+      "legacy_tokens": 9596,
+      "compact_first_tokens": 9596,
+      "recall_total_tokens": 9596,
+      "lossless_all": true,
+      "index_ms": 218,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 7,
+          "packed": 0,
+          "legacy": 4583,
+          "compact_first": 4583,
+          "recall": 4583
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 7,
+          "packed": 0,
+          "legacy": 5013,
+          "compact_first": 5013,
+          "recall": 5013
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "url": "https://github.com/psf/requests/pull/6963",
+      "changed_symbols": 9,
+      "queries": 18,
+      "packed_queries": 0,
+      "legacy_tokens": 10726,
+      "compact_first_tokens": 10726,
+      "recall_total_tokens": 10726,
+      "lossless_all": true,
+      "index_ms": 243,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 9,
+          "packed": 0,
+          "legacy": 5361,
+          "compact_first": 5361,
+          "recall": 5361
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 9,
+          "packed": 0,
+          "legacy": 5365,
+          "compact_first": 5365,
+          "recall": 5365
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "url": "https://github.com/psf/requests/pull/7502",
+      "changed_symbols": 8,
+      "queries": 16,
+      "packed_queries": 0,
+      "legacy_tokens": 8234,
+      "compact_first_tokens": 8234,
+      "recall_total_tokens": 8234,
+      "lossless_all": true,
+      "index_ms": 218,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 8,
+          "packed": 0,
+          "legacy": 3503,
+          "compact_first": 3503,
+          "recall": 3503
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 8,
+          "packed": 0,
+          "legacy": 4731,
+          "compact_first": 4731,
+          "recall": 4731
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7425,
+      "url": "https://github.com/psf/requests/pull/7425",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 3956,
+      "compact_first_tokens": 3956,
+      "recall_total_tokens": 3956,
+      "lossless_all": true,
+      "index_ms": 274,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1978,
+          "compact_first": 1978,
+          "recall": 1978
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 1978,
+          "compact_first": 1978,
+          "recall": 1978
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "url": "https://github.com/psf/requests/pull/7395",
+      "changed_symbols": 6,
+      "queries": 12,
+      "packed_queries": 0,
+      "legacy_tokens": 5484,
+      "compact_first_tokens": 5484,
+      "recall_total_tokens": 5484,
+      "lossless_all": true,
+      "index_ms": 194,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 2560,
+          "compact_first": 2560,
+          "recall": 2560
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 6,
+          "packed": 0,
+          "legacy": 2924,
+          "compact_first": 2924,
+          "recall": 2924
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "url": "https://github.com/psf/requests/pull/7371",
+      "changed_symbols": 4,
+      "queries": 8,
+      "packed_queries": 0,
+      "legacy_tokens": 2232,
+      "compact_first_tokens": 2232,
+      "recall_total_tokens": 2232,
+      "lossless_all": true,
+      "index_ms": 244,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1114,
+          "compact_first": 1114,
+          "recall": 1114
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 4,
+          "packed": 0,
+          "legacy": 1118,
+          "compact_first": 1118,
+          "recall": 1118
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "url": "https://github.com/psf/requests/pull/7433",
+      "changed_symbols": 7,
+      "queries": 14,
+      "packed_queries": 0,
+      "legacy_tokens": 8925,
+      "compact_first_tokens": 8925,
+      "recall_total_tokens": 8925,
+      "lossless_all": true,
+      "index_ms": 274,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 7,
+          "packed": 0,
+          "legacy": 3894,
+          "compact_first": 3894,
+          "recall": 3894
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 7,
+          "packed": 0,
+          "legacy": 5031,
+          "compact_first": 5031,
+          "recall": 5031
+        }
+      }
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7306,
+      "url": "https://github.com/psf/requests/pull/7306",
+      "changed_symbols": 3,
+      "queries": 6,
+      "packed_queries": 0,
+      "legacy_tokens": 1930,
+      "compact_first_tokens": 1930,
+      "recall_total_tokens": 1930,
+      "lossless_all": true,
+      "index_ms": 243,
+      "shapes": {
+        "bench(d2/m50)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 965,
+          "compact_first": 965,
+          "recall": 965
+        },
+        "mcp-default(d3/m200)": {
+          "queries": 3,
+          "packed": 0,
+          "legacy": 965,
+          "compact_first": 965,
+          "recall": 965
+        }
+      }
+    }
+  ]
+}
