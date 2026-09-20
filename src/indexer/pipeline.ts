@@ -1770,7 +1770,12 @@ export class IndexingPipeline {
       this.buildResolveContext(scope),
       scope,
     );
-    const stages: Array<() => void> = [
+    // TRA-1764: the heaviest stages (esm-imports, the three call resolvers,
+    // test_covers, file-projection) are async — they commit in chunks with a
+    // fair yield between transactions so a full pass no longer holds the
+    // event loop (/health with it) for seconds. runInOwnTurn's pre-yield
+    // still applies; the outer await adopts the stage promise.
+    const stages: Array<() => void | Promise<void>> = [
       // TRA-1780: purge stale electron removal edges right after the
       // framework emission above (fresh virtuals in place) and before the
       // domain resolvers + file projection below.

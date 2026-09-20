@@ -7,6 +7,7 @@ import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
 import { ESM_IMPORT_LANGUAGES } from './import-capable-languages.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
+import { commitInChunks } from '../resolver-budget.js';
 
 /**
  * Derive a package-bucket name from an npm specifier. Scoped packages
@@ -27,7 +28,10 @@ function npmBucketFor(specifier: string): string | null {
   return specifier.split('/')[0];
 }
 
-export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope): void {
+export async function resolveEsmImportEdges(
+  state: PipelineState,
+  _scope?: ChangeScope,
+): Promise<void> {
   // WHY: ESM imports are driven entirely by `state.pendingImports`, which is
   // already populated only for re-extracted files. Scope is accepted for API
   // symmetry but adds nothing.
@@ -126,8 +130,12 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
      DO UPDATE SET metadata = excluded.metadata`,
   );
 
-  store.db.transaction(() => {
-    for (const [fileId, imports] of state.pendingImports) {
+  // TRA-1764: one transaction per chunk with a fair yield between chunks —
+  // bulk watcher batches (2713+ files) used to resolve 6k+ import edges in a
+  // single synchronous transaction, starving /health on the same thread.
+  const pendingEntries = Array.from(state.pendingImports);
+  await commitInChunks(store.db, pendingEntries, (chunk) => {
+    for (const [fileId, imports] of chunk) {
       const file = fileMap.get(fileId);
       if (!file) continue;
       // Skip non-JS/TS files — PHP/Python imports are handled by their own
@@ -218,7 +226,7 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
         phantomEdges++;
       }
     }
-  })();
+  });
 
   if (created > 0 || phantomEdges > 0) {
     logger.info({ edges: created, phantomEdges }, 'ES module import edges resolved');

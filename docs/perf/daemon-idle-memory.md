@@ -218,3 +218,28 @@ work this issue explicitly scopes out, tracked separately. Until then, a
 `/health` latency spike during a reconcile storm is expected, and
 `projects_indexing > 0` during the same window now says what it is: busy, not
 idle.
+
+---
+
+## 2026-09-21 — reconcile passes time-slice (TRA-1764)
+
+Follow-up to the TRA-1763 section above: the "Still open" health defect is
+narrowed here, not closed. The fair yields (TRA-1127) bound the wait
+*between* stages; this change bounds the stages themselves. The six heaviest
+write passes (`esm-imports`, `ts/py/php-calls`, `test_covers`, file
+projection) commit in chunks (`src/indexer/resolver-budget.ts`: 250 rows /
+2000 id-span per transaction) with a fair yield between transactions, so the
+longest synchronous span a health check can observe is one chunk, not the
+whole pass. Guarded by `tests/indexer/resolver-budget.test.ts`, which asserts
+a queued probe runs mid-pass, and by the unchanged full-vs-incremental edge
+snapshot test (`tests/indexer/incremental-edge-resolution.test.ts`).
+
+Field-style check (synthetic, not the 14-project original): 6000 src files +
+300 test files, 30k edges, file-backed DB — worst event-loop block 71 ms
+(bulk index), 12 ms (churn batch), 29 ms (deferred reconcile flush), all
+under the 1 s health budget.
+
+Residual: framework-plugin edges, `storeRawEdges`, FTS rebuilds, and the
+smaller single-transaction resolvers still run whole-pass transactions — a
+pathological single stage can still exceed 1 s on a very large repo. Moving
+reconcile off the main thread remains the real fix, in its own issue.

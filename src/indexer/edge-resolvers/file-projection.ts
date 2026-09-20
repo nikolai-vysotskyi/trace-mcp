@@ -22,9 +22,14 @@
 
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
+import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { PROJECTION_ID_CHUNK } from '../resolver-budget.js';
 
-export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolveFileProjectionEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   // WHY (TRA-1729): projection is INSERT-only and idempotent, so it only needs
   // to see edges that could be NEW in this run. Every resolver running before
   // this pass inserts edges with at least one endpoint in a changed file:
@@ -75,6 +80,16 @@ export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeS
   // a UNION of two single-side branches rather than one `OR` filter: each
   // branch drives from its file-id IN list through idx_symbols_file, while
   // the OR form plans as a full join enumeration.
+  //
+  // TRA-1764: the UNSCOPED full pass below scans the whole edges table in one
+  // synchronous transaction — the longest single span of a full reconcile
+  // pass. RANGE_FILTER partitions the driving table by edges.id so each
+  // transaction covers at most PROJECTION_ID_CHUNK source rows with a fair
+  // yield between them. INSERT OR IGNORE is idempotent across ranges, and
+  // ranges partition the source rows, so the chunked pass writes exactly
+  // what the single pass did. Scoped runs stay single-transaction: they are
+  // bounded by the changed-file set by construction.
+  const RANGE_FILTER = `AND e.id >= ? AND e.id < ?`;
   const filePh = scopedIds ? scopedIds.map(() => '?').join(',') : '';
   const excludedPh = [...excludedSet].map(() => '?').join(',') || 'SELECT -1';
   const symSymJoins = `
@@ -117,7 +132,7 @@ export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeS
     ${
       scopedIds
         ? `${symSymBranch('ss.file_id')} UNION ${symSymBranch('ts.file_id')}`
-        : `${symSymSelect} ${symSymJoins} ${symSymBase} AND e.edge_type_id NOT IN (${excludedPh})`
+        : `${symSymSelect} ${symSymJoins} ${symSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
     }
   `);
 
@@ -161,7 +176,7 @@ export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeS
     ${
       scopedIds
         ? `${fileSymBranch('src_file.id')} UNION ${fileSymBranch('tgt_file.id')}`
-        : `${fileSymSelect} ${fileSymJoins} ${fileSymBase} AND e.edge_type_id NOT IN (${excludedPh})`
+        : `${fileSymSelect} ${fileSymJoins} ${fileSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
     }
   `);
 
@@ -170,19 +185,37 @@ export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeS
       .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
       .get(importsType.id) as { c: number }
   ).c;
-  // Scoped params: one changed-id list per UNION branch, in placeholder order
-  // (edge_type, branch-1 ids, branch-1 excluded, edge_type, branch-2 ids,
-  // branch-2 excluded). Unscoped keeps the historical single-pass order.
-  const scopedBranchParams = scopedIds ? [...scopedIds, ...excludedSet] : [...excludedSet];
-  store.db.transaction(() => {
-    if (scopedIds) {
+  if (scopedIds) {
+    // Scoped params: one changed-id list per UNION branch, in placeholder order
+    // (edge_type, branch-1 ids, branch-1 excluded, edge_type, branch-2 ids,
+    // branch-2 excluded). Scoped runs stay single-transaction: they are
+    // bounded by the changed-file set by construction.
+    const scopedBranchParams = [...scopedIds, ...excludedSet];
+    store.db.transaction(() => {
       stmt.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
       stmtFileSym.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
-    } else {
-      stmt.run(importsType.id, ...excludedSet);
-      stmtFileSym.run(importsType.id, ...excludedSet);
+    })();
+  } else {
+    // Unscoped full pass: one transaction per id range with a fair yield
+    // between them (TRA-1764). Unscoped placeholder order is (edge_type,
+    // excluded..., lo, hi).
+    const bounds = store.db.prepare(`SELECT MIN(id) AS lo, MAX(id) AS hi FROM edges`).get() as {
+      lo: number | null;
+      hi: number | null;
+    };
+    const runRange = store.db.transaction((lo: number, hi: number) => {
+      stmt.run(importsType.id, ...excludedSet, lo, hi);
+      stmtFileSym.run(importsType.id, ...excludedSet, lo, hi);
+    });
+    if (bounds.lo != null && bounds.hi != null) {
+      let first = true;
+      for (let lo = bounds.lo; lo <= bounds.hi; lo += PROJECTION_ID_CHUNK) {
+        if (!first) await yieldToEventLoopFair();
+        first = false;
+        runRange(lo, lo + PROJECTION_ID_CHUNK);
+      }
     }
-  })();
+  }
   const after = (
     store.db
       .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)

@@ -74,6 +74,23 @@ function timed<T>(name: string, fn: () => T): T {
   }
 }
 
+/**
+ * Async variant of `timed` for the TRA-1764 chunked resolvers, whose passes
+ * yield to the event loop between transactions. The reported ms is
+ * wall-clock including yields — a chunked pass legitimately reads slower
+ * than its old synchronous span.
+ */
+async function timedAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  if (!logger.isLevelEnabled?.('debug')) return fn();
+  const t0 = performance.now();
+  try {
+    return await fn();
+  } finally {
+    const ms = performance.now() - t0;
+    logger.debug({ resolver: name, ms }, 'edge resolver complete');
+  }
+}
+
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
@@ -193,8 +210,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2d: ES module import edges. */
-  resolveEsmImportEdges(scope?: ChangeScope): void {
-    timed('esm-imports', () => _resolveImports(this.state, scope));
+  resolveEsmImportEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('esm-imports', () => _resolveImports(this.state, scope));
   }
 
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
@@ -258,8 +275,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2g: Python call edges (function/method calls → definitions). */
-  resolvePythonCallEdges(scope?: ChangeScope): void {
-    timed('py-calls', () => _resolvePyCalls(this.state, scope));
+  resolvePythonCallEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('py-calls', () => _resolvePyCalls(this.state, scope));
   }
 
   /** Pass 2g1b: Python type-reference edges (param/return/attribute annotations → class symbols). */
@@ -275,13 +292,13 @@ export class EdgeResolver {
   }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
-  resolvePhpCallEdges(scope?: ChangeScope): void {
-    timed('php-calls', () => _resolvePhpCalls(this.state, scope));
+  resolvePhpCallEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('php-calls', () => _resolvePhpCalls(this.state, scope));
   }
 
   /** Pass 2g3: TypeScript/JavaScript call edges (function/method calls → definitions). */
-  resolveTypeScriptCallEdges(scope?: ChangeScope): void {
-    timed('ts-calls', () => _resolveTsCalls(this.state, scope));
+  resolveTypeScriptCallEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('ts-calls', () => _resolveTsCalls(this.state, scope));
   }
 
   /** Pass 2g4: TypeScript/JavaScript type-reference edges (types used in annotations). */
@@ -295,13 +312,13 @@ export class EdgeResolver {
   }
 
   /** Pass 2h: test_covers edges. */
-  resolveTestCoversEdges(scope?: ChangeScope): void {
-    timed('tests', () => _resolveTests(this.state, scope));
+  resolveTestCoversEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('tests', () => _resolveTests(this.state, scope));
   }
 
   /** Pass 2j: file-level projection of cross-file symbol edges. */
-  resolveFileProjectionEdges(scope?: ChangeScope): void {
-    timed('file-projection', () => _resolveFileProjection(this.state, scope));
+  resolveFileProjectionEdges(scope?: ChangeScope): Promise<void> {
+    return timedAsync('file-projection', () => _resolveFileProjection(this.state, scope));
   }
 
   /**
