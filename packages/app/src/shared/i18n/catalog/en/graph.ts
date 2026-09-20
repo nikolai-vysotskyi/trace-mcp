@@ -11,6 +11,33 @@
      string of ours. */
 
 export const graph = {
+  nodeScope: "{{source}} source nodes · {{external}} external · {{drawn}} drawn links",
+
+  external: "External dependency",
+  copyId: "Copy ID",
+
+  connections: "Connections",
+  back: "Back",
+  allNodes: "All nodes",
+  uniqueNeighbors: "{{total}} connected nodes",
+  connectionDirection: "Relationship direction",
+  both: "All",
+  incoming: "Incoming",
+  outgoing: "Outgoing",
+  neighborhood: "Neighborhood",
+  hops: "{{total}} hop(s)",
+  filterConnections: "Find a connected file or symbol…",
+  noConnections: "No matching connections in this graph.",
+  connectionScope: "{{shown}} of {{total}} direct neighbors in the loaded graph. Arrows follow indexed relationships.",
+  mostConnected: "Most connected",
+  exploreHint: "Start with a hub, or search for a file.",
+  degreeHint: "Source nodes ranked by distinct neighbors, including external dependencies.",
+  otherHint: "Other combines all categories outside the four largest. Click to focus these nodes.",
+  legendHint: "Click a group to focus. Click again to reset.",
+  focusStatus: "{{total}} of {{all}} nodes in focus",
+  emptyGraph: "No nodes in this view",
+  emptyGraphHint: "Try showing unconnected nodes or changing the graph filters.",
+
   // ── Failure ────────────────────────────────────────────────────────────
   daemonUnreachable: "Can't reach the trace-mcp daemon.",
   serverError: 'Server error ({{status}})',

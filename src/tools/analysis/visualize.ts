@@ -1,3 +1,4 @@
+import { canonicalRepoNodeId, deduplicateGraph } from './visualize-federation.js';
 /**
  * Graph Visualization — generates self-contained HTML with embedded D3.js
  * and Mermaid diagram output for inline chat use.
@@ -307,14 +308,14 @@ function buildSubprojectGraph(
       );
 
       for (const n of fedResult.nodes) {
-        n.id = `${repoPrefix}:${n.id}`;
+        n.id = canonicalRepoNodeId(projectRoot, repo.repo_root, repoPrefix, n.id);
         n.repo = repoPrefix;
         allNodes.push(n);
       }
       for (const e of fedResult.edges) {
         allEdges.push({
-          source: `${repoPrefix}:${e.source}`,
-          target: `${repoPrefix}:${e.target}`,
+          source: canonicalRepoNodeId(projectRoot, repo.repo_root, repoPrefix, e.source),
+          target: canonicalRepoNodeId(projectRoot, repo.repo_root, repoPrefix, e.target),
           type: e.type,
           weight: e.weight,
         });
@@ -351,7 +352,8 @@ function buildSubprojectGraph(
 
   if (allNodes.length === 0) return null;
 
-  return finalize(allNodes, allEdges, opts.hideIsolated === true);
+  const unique = deduplicateGraph(allNodes, allEdges);
+  return finalize(unique.nodes, unique.edges, opts.hideIsolated === true);
 }
 
 /**
