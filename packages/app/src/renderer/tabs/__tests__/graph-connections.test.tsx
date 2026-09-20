@@ -27,6 +27,28 @@ const index = buildConnections(nodes, [
   { source: nodes[2].id, target: nodes[0].id, type: 'calls' },
 ]);
 describe('connection inspector', () => {
+  it('shows only relationship types for the selected direction on reciprocal neighbors', () => {
+    const reciprocal = buildConnections(nodes, [
+      { source: nodes[0].id, target: nodes[1].id, type: 'imports' },
+      { source: nodes[1].id, target: nodes[0].id, type: 'calls' },
+    ]);
+    const props = {
+      selected: nodes[0], nodes: map, index: reciprocal,
+      direction: 'outgoing' as const, onDirection: vi.fn(),
+      depth: 1, onDepth: vi.fn(), onSelect: vi.fn(), onClear: vi.fn(),
+    };
+    const { rerender } = render(<GraphConnections {...props} />);
+    expect(screen.getByText('imports')).toBeTruthy();
+    expect(screen.queryByText(/calls/)).toBeNull();
+    expect(screen.getByText('→ service.ts')).toBeTruthy();
+    rerender(<GraphConnections {...props} direction="incoming" />);
+    expect(screen.getByText('calls')).toBeTruthy();
+    expect(screen.queryByText(/imports/)).toBeNull();
+    expect(screen.getByText('← service.ts')).toBeTruthy();
+    rerender(<GraphConnections {...props} direction="both" />);
+    expect(screen.getByText('↔ service.ts')).toBeTruthy();
+    expect(screen.getByText('calls · imports')).toBeTruthy();
+  });
   it('navigates real IDs and filters incoming versus outgoing neighbors', () => {
     const onSelect = vi.fn();
     const props = {

@@ -36,9 +36,11 @@ export function GraphConnections({
   const [query, setQuery] = useState('');
   const incoming = index.incoming.get(selected.id) ?? new Map<string, Set<string>>();
   const outgoing = index.outgoing.get(selected.id) ?? new Map<string, Set<string>>();
+  const shownIncoming = direction === 'outgoing' ? new Map<string, Set<string>>() : incoming;
+  const shownOutgoing = direction === 'incoming' ? new Map<string, Set<string>>() : outgoing;
   const ids = new Set([
-    ...(direction !== 'outgoing' ? incoming.keys() : []),
-    ...(direction !== 'incoming' ? outgoing.keys() : []),
+    ...shownIncoming.keys(),
+    ...shownOutgoing.keys(),
   ]);
   const rows = [...ids]
     .filter((id) => `${id}\n${nodes.get(id)?.label}`.toLowerCase().includes(query.toLowerCase()))
@@ -107,13 +109,13 @@ export function GraphConnections({
             }}
           >
             <span className="graph-connection-name">
-              {incoming.has(id) && outgoing.has(id) ? '↔' : outgoing.has(id) ? '→' : '←'}{' '}
+              {shownIncoming.has(id) && shownOutgoing.has(id) ? '↔' : shownOutgoing.has(id) ? '→' : '←'}{' '}
               {nodes.get(id)?.label ?? id}
               {isExternalNode(id) ? ` · ${t('external')}` : ''}
             </span>
             <span className="graph-secondary graph-connection-path">{id}</span>
             <span className="graph-secondary">
-              {[...new Set([...(incoming.get(id) ?? []), ...(outgoing.get(id) ?? [])])].join(' · ')}
+              {[...new Set([...(shownIncoming.get(id) ?? []), ...(shownOutgoing.get(id) ?? [])])].join(' · ')}
             </span>
           </button>
         ))}
