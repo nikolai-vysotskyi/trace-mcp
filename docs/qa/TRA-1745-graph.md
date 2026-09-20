@@ -1,3 +1,7 @@
+---
+noindex: true
+---
+
 # TRA-1745 — Graph exploration and data audit
 
 The Graph now has a useful starting point (source hubs), an incoming/outgoing relationship inspector, navigable neighbors with Back, one/two-hop focus, and an interactive category legend. Selection reserves space for the inspector; on narrow panes it becomes a bottom panel. Hover details are measured, avoid the legend, stay inside the pane, do not intercept the pointer, and dismiss on Escape, blur, pointer exit, selection, or reload.
@@ -59,3 +63,18 @@ Re-run the data audit with `pnpm exec tsx scripts/audit-graph-snapshot.ts <backu
 ## Compatibility note
 
 No database schema, stored file/symbol IDs, or MCP tool argument/response fields changed. Visualization IDs for a contained child repository change from `child:relative/path` to `child/relative/path`, matching the existing parent node. Consumers retaining transient visualization IDs should re-export the graph. Unrelated external repositories retain their namespaced IDs. The output gets smaller when duplicate representations are removed; no extra MCP response fields or token overhead were introduced.
+
+## Independent SQL relationship reconciliation
+
+
+Joined edge endpoints through file nodes and symbols.file_id in every captured project/child database, normalized contained repo paths, and compared distinct directed pairs independently of the graph builder.
+
+| Project | Raw index edge rows examined | SQL file pairs | Graph file pairs | Unsupported / missing pairs |
+| --- | --- | --- | --- | --- |
+| assetfeed | 32,750 | 9,004 | 9,012 | 8 / 0 |
+| trace-mcp | 64,944 | 7,650 | 7,650 | 0 / 0 |
+| thestyle-bot | 7,318 | 742 | 742 | 0 / 0 |
+
+Filed **TRA-1748**: service topology attaches repository-level relationships to the first file in each repository. Those eight file endpoints are unsupported by indexed code relationships. The PR fixes duplicate identities; this separate topology semantic issue and the three stale files in TRA-1746 remain open and must not be mistaken for verified source dependencies.
+
+Latest native repeat: the narrow focus indicator is above the bottom inspector without overlap; hover, symbols and Retry checks passed again. Paused renderer TaskDuration was 39.012 ms in a two-second repeat. PR: https://github.com/nikolai-vysotskyi/trace-mcp/pull/1303, head 492c7fbefdc03abdd6b44f5ed6bd962c700a3c67.
