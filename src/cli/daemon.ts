@@ -3,11 +3,13 @@ import fs from 'node:fs';
 import { Command } from 'commander';
 import { getDaemonHealth } from '../daemon/client.js';
 import {
+  acquireSpawnLock,
   enableDaemon,
   ensureDaemon,
   formatLaunchdLastExit,
   getLaunchdLastExit,
   isDaemonDisabled,
+  releaseSpawnLock,
   restartDaemon,
   stopDaemon,
   waitForDaemonUp,
@@ -73,18 +75,43 @@ daemonCommand
       enableDaemon();
     }
 
-    const result = await ensureDaemon({ port });
-    if (!result.ok) {
-      console.error(`Failed to start daemon: ${result.error ?? 'unknown'}`);
+    // Single-instance (TRA-1607): the same lock tryAutoSpawnDaemon holds.
+    // Two concurrent `daemon start` runs used to both pass the "already
+    // running" check above and spawn — the loser then died on EADDRINUSE, but
+    // only after a cold start's worth of wasted indexing. Losing the lock
+    // means a sibling starter is in flight: wait for its daemon instead.
+    if (!acquireSpawnLock()) {
+      const up = await waitForDaemonUp(port, 10_000);
+      if (up) {
+        console.log(`Daemon is already running on port ${port} (started concurrently).`);
+        return;
+      }
+      console.error('Another process is starting the daemon but it did not respond in time.');
       process.exit(1);
     }
-    const up = await waitForDaemonUp(port, 10_000);
-    if (!up) {
-      console.error(`Daemon start issued but /health did not respond on port ${port} within 10s.`);
-      console.error(`Check logs: trace-mcp daemon logs`);
-      process.exit(1);
+    try {
+      // Recheck under the lock — the winner may have finished while we queued.
+      if (await getDaemonHealth(port)) {
+        console.log(`Daemon is already running on port ${port}.`);
+        return;
+      }
+      const result = await ensureDaemon({ port });
+      if (!result.ok) {
+        console.error(`Failed to start daemon: ${result.error ?? 'unknown'}`);
+        process.exit(1);
+      }
+      const up = await waitForDaemonUp(port, 10_000);
+      if (!up) {
+        console.error(
+          `Daemon start issued but /health did not respond on port ${port} within 10s.`,
+        );
+        console.error(`Check logs: trace-mcp daemon logs`);
+        process.exit(1);
+      }
+      console.log(`Daemon started on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
+    } finally {
+      releaseSpawnLock();
     }
-    console.log(`Daemon started on port ${port} (strategy: ${result.strategy ?? 'unknown'}).`);
     if (process.platform === 'darwin') {
       console.log(`  Plist: ${LAUNCHD_PLIST_PATH}`);
     }
@@ -95,8 +122,14 @@ daemonCommand
   .command('stop')
   .description('Stop the daemon')
   .action(async () => {
-    stopDaemon();
-    console.log('Daemon stopped.');
+    const { swept } = stopDaemon();
+    if (swept.length > 0) {
+      console.log(
+        `Daemon stopped (${swept.length} stray daemon(s) also terminated: ${swept.join(', ')}).`,
+      );
+    } else {
+      console.log('Daemon stopped.');
+    }
     console.log(
       'Auto-spawn is now disabled — stdio sessions will run local-only and will not ' +
         'reinstall the daemon. Re-enable with `trace-mcp daemon start`.',
@@ -109,7 +142,26 @@ daemonCommand
   .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_DAEMON_PORT))
   .action(async (opts: { port: string }) => {
     const port = parseInt(opts.port, 10);
-    const result = restartDaemon({ port });
+    // Same single-instance lock as `start` (TRA-1607): a restart kills the
+    // running daemon first, so a concurrent starter racing it would spawn
+    // into the gap and either double-serve or lose the bind race. Serialize.
+    if (!acquireSpawnLock()) {
+      const up = await waitForDaemonUp(port, 10_000);
+      if (up) {
+        console.log(
+          `Another process is (re)starting the daemon — it is now responding on port ${port}.`,
+        );
+        return;
+      }
+      console.error('Another process holds the daemon spawn lock but no daemon came up.');
+      process.exit(1);
+    }
+    let result: { ok: boolean; error?: string; strategy?: string };
+    try {
+      result = restartDaemon({ port });
+    } finally {
+      releaseSpawnLock();
+    }
     if (!result.ok) {
       console.error(`Failed to restart daemon: ${result.error ?? 'unknown'}`);
       process.exit(1);
