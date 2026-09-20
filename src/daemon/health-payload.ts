@@ -47,6 +47,21 @@ export interface BuildHealthPayloadInput {
 }
 
 /**
+ * Overlay `missing` onto a loaded project list for roots that no longer
+ * exist on disk (TRA-1715: deleted task workdir, unmounted volume). No
+ * FSEvents drop may ever fire for such a root, so the rescan guard may
+ * never run — the existence check here is the backstop that keeps /health
+ * from advertising `ready` for a dead root. Pure: the filesystem predicate
+ * is injected (production passes `fs.existsSync`), so this stays unit-
+ * testable. Same `missing` vocabulary as the dashboard project health.
+ */
+export function withMissingRoots(
+  projects: HealthProject[],
+  exists: (root: string) => boolean,
+): HealthProject[] {
+  return projects.map((p) => (exists(p.root) ? p : { ...p, status: 'missing' }));
+}
+/**
  * Build the `/health` payload. Pure — no I/O, fully unit-testable.
  *
  * `projectsReady` counts projects whose status is `ready`; anything else

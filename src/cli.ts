@@ -74,7 +74,7 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
-import { buildHealthPayload } from './daemon/health-payload.js';
+import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
@@ -1655,13 +1655,18 @@ program
       // Health endpoint — includes project status
       if (req.method === 'GET' && url.pathname === '/health') {
         const loadedRoots = new Set<string>();
-        const projects: Array<{
+        const loaded: Array<{
           root: string;
-          status: ManagedProject['status'] | 'unloaded';
+          status: ManagedProject['status'] | 'unloaded' | 'missing';
         }> = projectManager.listProjects().map((p) => {
           loadedRoots.add(p.root);
           return { root: p.root, status: p.status };
         });
+        // TRA-1715: a loaded project whose root vanished (deleted task
+        // workdir, unmounted volume) must never keep advertising its last
+        // live status — no FSEvents drop may ever fire to trigger the
+        // rescan guard, so overlay here on every poll (one stat per root).
+        const projects = withMissingRoots(loaded, fs.existsSync);
         // Registered projects idle-unloaded by the sweep (project_idle_unload_minutes)
         // are absent from listProjects() — surface them as 'unloaded' rather than
         // silently dropping them, so /health still reflects every registered root.
