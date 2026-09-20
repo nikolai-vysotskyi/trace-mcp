@@ -12,6 +12,7 @@ import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import {
   OBSERVATION_FIRST_PAGE_ITEMS,
+  observationPackRoot,
   pageItems,
   recallObservation,
   storeObservation,
@@ -109,22 +110,27 @@ describe('change_impact compact loop', () => {
       3,
       500,
     )._unsafeUnwrap();
+    // Explicit tmp root: never touch the real TRACE_MCP_HOME from tests.
+    const packBase = createTmpDir('trace-mcp-impact-pack-');
+    const packRoot = observationPackRoot(packBase);
     const stored = storeObservation(
       'get_change_impact',
       'src/hub.ts::hub#function',
       full.dependents,
+      packRoot,
     );
     expect(stored.totalItems).toBe(full.dependents.length);
 
     const seen: unknown[] = [];
     let offset = 0;
     for (let i = 0; i < 10; i++) {
-      const page = recallObservation(stored.id, offset, OBSERVATION_FIRST_PAGE_ITEMS);
+      const page = recallObservation(stored.id, offset, OBSERVATION_FIRST_PAGE_ITEMS, packRoot);
       seen.push(...page.items);
       offset = page.nextOffset;
       if (page.eof) break;
     }
     expect(seen).toEqual(full.dependents);
+    removeTmpDir(packBase);
   });
 
   it('cleanup', () => {
