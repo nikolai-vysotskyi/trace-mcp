@@ -80,7 +80,7 @@ updated: 2026-09-20
           "name": "Is trace-mcp a drop-in replacement for jCodeMunch?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Installation differs (npx trace-mcp versus uv tool install), the tool surface differs (29 direct tools with presets versus the 3-tool Counter dispatch), and jCodeMunch-only features like audit_agent_config and get_symbol_provenance have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index."
+            "text": "No. Installation differs (npx trace-mcp versus uv tool install), the tool surface differs (29 default-preset tools versus the 3-tool Counter dispatch), and jCodeMunch-only features like audit_agent_config and get_symbol_provenance have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index."
           }
         },
         {
@@ -225,7 +225,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 
 ### Is trace-mcp a drop-in replacement for jCodeMunch?
 
-No — and it does not pretend to be. Installation differs (`npx -y trace-mcp` vs `uv tool install`), the tool surface differs (29 direct tools with presets vs the 3-tool Counter dispatch), and jCodeMunch-only features like `audit_agent_config` and `get_symbol_provenance` have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index.
+No — and it does not pretend to be. Installation differs (`npx -y trace-mcp` vs `uv tool install`), the tool surface differs (29 default-preset tools vs the 3-tool Counter dispatch), and jCodeMunch-only features like `audit_agent_config` and `get_symbol_provenance` have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index.
 
 ### Can I use jCodeMunch for commercial work?
 
