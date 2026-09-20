@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.30.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.30.0...v3.30.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **daemon:** drain in-flight pipeline work before closing DBs on SIGTERM (TRA-1752) ([#1306](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1306)) ([d5244f2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5244f2791b6192d4f90a1717e4fa665be56782f))
+* **daemon:** stop relay pinning projects + honest sweep accounting (TRA-1738) ([#1301](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1301)) ([994349c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/994349c7de687216fd3a2461ba698f08c5a2920e))
+* **graph:** auto-fit frames point cloud, not simulation space (TRA-1741) ([#1299](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1299)) ([6c1c4b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c1c4b851437c634aa19a2894df243a285ac8c86))
+* **guard:** canonicalize consultation marker keys + root-aware errors (TRA-1737) ([#1305](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1305)) ([51e664c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/51e664c1480c0ec00fdf28aebcb57962a03483f2))
+* **observation-pack:** Reviewer C follow-ups from [#1285](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1285) + economics branch coverage (TRA-1700, TRA-1703) ([#1296](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1296)) ([bc5d250](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bc5d250f52fed2ac7808c00f8482ccbe9fe03800))
+
+
+### Performance
+
+* **indexer:** share workspace plugin detection + throttle ANALYZE (TRA-1543) ([#1304](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1304)) ([276ac7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/276ac7fbfc56ffad6a86044ad507a2dd29672316))
+
+
+### Documentation
+
+* **distribution:** record TRA-1732 alternative-query venue checks (no submissions) ([#1295](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1295)) ([ca92171](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca9217101b028960f0b0c829038ea7f64bd6132a))
+* **seo:** jcodemunch on-page + CTR descriptions + internal links + visible breadcrumbs (TRA-1731) ([#1298](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1298)) ([05fee6e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/05fee6ef01f3c4d92155866d2255d40d649458a0))
+* **seo:** on-page + CTR for comparisons, configuration, vs/jcodemunch (TRA-1734) ([#1297](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1297)) ([a36de17](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a36de1721c541c644f2eeb9f2a6fc3eac465928f))
+
 ## [3.30.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.29.0...v3.30.0) (2026-09-20)
 
 
