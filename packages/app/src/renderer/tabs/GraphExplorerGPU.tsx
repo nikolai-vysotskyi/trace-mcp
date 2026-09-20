@@ -488,6 +488,24 @@ function initialZoomFromSpaceSize(spaceSize: number, container: HTMLElement): nu
 }
 
 /**
+ * Frame the actual point cloud, not the simulation space.
+ *
+ * fitView() frames cosmos.gl's [0, spaceSize] square, so a cloud that settled
+ * in a fraction of it renders as a tiny central blob (TRA-1741). Fitting over
+ * every point index frames the real bounding box and fills the viewport.
+ * Falls back to fitView for the empty-graph case.
+ */
+function fitAllPoints(graph: Graph, count: number, duration: number, padding: number): void {
+  if (count <= 0) {
+    graph.fitView(duration, padding);
+    return;
+  }
+  const all = new Array<number>(count);
+  for (let i = 0; i < count; i++) all[i] = i;
+  graph.fitViewByPointIndices(all, duration, padding);
+}
+
+/**
  * Lightweight RAF-based FPS meter. Refreshes display twice a second so the
  * digit doesn't flicker on every frame. Tier drives the accent color —
  * "good" green, "ok" amber, "bad" red — readable at a glance without
@@ -1891,7 +1909,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               // One-shot final fit when the initial settle is "done enough".
               if (!frozenRef.current && alpha < 0.15) {
                 frozenRef.current = true;
-                if (!userInteractedRef.current) g.fitView(800, 0.2);
+                if (!userInteractedRef.current)
+                  fitAllPoints(g, nodesRef.current.length, 800, 0.2);
               }
               if (frozenRef.current) return;
               // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
@@ -1901,7 +1920,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               const now = performance.now();
               if (now - lastTickFitRef.current < 500) return;
               lastTickFitRef.current = now;
-              g.fitView(0, 0.2);
+              fitAllPoints(g, nodesRef.current.length, 0, 0.2);
             } catch (err) {
               // eslint-disable-next-line no-console
               console.warn('[graph:onSimulationTick] tick handler skipped', err);
@@ -2216,12 +2235,15 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // Immediate fit so the user sees the layout framed from the first
         // frame — especially valuable on re-renders with carry-over positions
         // where the cloud is already spread. Deferred one frame so cosmos.gl
-        // has the freshly-set positions in the FBO when fitView computes the
+        // has the freshly-set positions in the FBO when the fit computes the
         // bounding box. onSimulationTick (throttled to 500 ms, re-armed below)
         // takes over from here to track the cloud as it expands during settle.
+        // Frames the point bbox (fitAllPoints), not the simulation space —
+        // fitView() on the whole space renders as a tiny central blob (TRA-1741).
         requestAnimationFrame(() => {
           const gg = graphRef.current;
-          if (gg) gg.fitView(500, 0.2);
+          if (gg && !userInteractedRef.current)
+            fitAllPoints(gg, nodesRef.current.length, 500, 0.2);
         });
         // Arm onSimulationTick to fit on the first tick (throttle starts at 0).
         lastTickFitRef.current = 0;
@@ -3139,14 +3161,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const g = graphRef.current;
     if (!g) return;
     g.pause();
-    const n = nodesRef.current.length;
-    if (n === 0) {
-      g.fitView(500, 0.15);
-      return;
-    }
-    const all = new Array<number>(n);
-    for (let i = 0; i < n; i++) all[i] = i;
-    g.fitViewByPointIndices(all, 500, 0.15);
+    fitAllPoints(g, nodesRef.current.length, 500, 0.15);
   }, []);
 
   // ── Keyboard shortcuts ────────────────────────────────────────
