@@ -409,7 +409,10 @@ function buildTrace(
   parts.push('\n## Impact — call sites this change can break\n\n');
   const listed = new Set<string>();
   for (const id of symbolIds) {
-    const impact = getChangeImpact(store, { symbolId: id, depth: 2, maxDependents: 50 });
+    // TRA-1728: depth/maxDependents are positional params of getChangeImpact,
+    // not opts fields — passing them inside opts silently used the defaults
+    // (depth 3 instead of the intended 2 here).
+    const impact = getChangeImpact(store, { symbolId: id }, 2, 50);
     if (impact.isErr()) continue;
     for (const dep of impact.value.dependents ?? []) {
       for (const s of dep.symbols ?? []) {
@@ -497,7 +500,9 @@ async function runOne(entry: PrEntry): Promise<PrResult | null> {
 
     const dependentIds = new Set<string>();
     for (const id of symbolIds) {
-      const impact = getChangeImpact(store, { symbolId: id, depth: 1, maxDependents: 200 });
+      // TRA-1728: same positional-args fix — ground truth is depth-1
+      // dependents, not the depth-3 default the opts form silently used.
+      const impact = getChangeImpact(store, { symbolId: id }, 1, 200);
       if (impact.isErr()) continue;
       for (const dep of impact.value.dependents ?? []) {
         for (const s of dep.symbols ?? []) dependentIds.add(s.symbolId);
