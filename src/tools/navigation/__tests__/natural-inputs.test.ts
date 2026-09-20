@@ -289,3 +289,28 @@ describe('unknown_symbol help (TRA-1660)', () => {
     expect(text).toContain('path/to/file.ts::Name#kind');
   });
 });
+
+// ─── NOT_FOUND root context (TRA-1737) ─────────────────────────────────
+// A bare "'x' is not in the index" leaves the model retrying blind when the
+// session CWD and the project root differ. Naming the resolved root plus its
+// index size turns the miss into "you asked root X with N files".
+
+describe('NOT_FOUND root context (TRA-1737)', () => {
+  it('adds projectRoot and indexFiles when context is provided', () => {
+    const text = JSON.stringify(
+      formatToolError(notFound('src/missing.ts', undefined, 'not_found'), {
+        projectRoot: '/proj/root',
+        totalFiles: 1234,
+      }),
+    );
+    expect(text).toContain('/proj/root');
+    expect(text).toContain('1234');
+    expect(text).toContain("'src/missing.ts' is not in the index");
+  });
+
+  it('omits the fields when no context is provided (1:1 behavior)', () => {
+    const text = JSON.stringify(formatToolError(notFound('src/missing.ts')));
+    expect(text).not.toContain('projectRoot');
+    expect(text).not.toContain('indexFiles');
+  });
+});
