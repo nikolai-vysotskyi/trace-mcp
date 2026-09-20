@@ -24,13 +24,20 @@ import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
-export function resolveFileProjectionEdges(state: PipelineState, _scope?: ChangeScope): void {
-  // WHY: file projection is a SQL-side INSERT OR IGNORE from the edges table.
-  // Scoping the inserted source set to changed files alone is unsafe because
-  // a new symbol→symbol edge inserted in this run from an UNCHANGED file
-  // (e.g. heritage rebound to a new class) still needs a file projection.
-  // The SQL is idempotent and cheap enough to run full-pass.
-  void _scope;
+export function resolveFileProjectionEdges(state: PipelineState, scope?: ChangeScope): void {
+  // WHY (TRA-1729): projection is INSERT-only and idempotent, so it only needs
+  // to see edges that could be NEW in this run. Every resolver running before
+  // this pass inserts edges with at least one endpoint in a changed file:
+  // scoped symbol resolvers anchor new edges at changed files, and Pass-2
+  // framework edges are deterministic functions of file content — an edge
+  // between two unchanged files is byte-identical to the previous run and was
+  // already projected then. Filtering to edges touching a changed file on
+  // EITHER side therefore inserts exactly the same set as a full pass (the
+  // either-side form matters: a scoped cross-file edge can anchor in an
+  // unchanged file while targeting a changed one). No scope (cold / force /
+  // reconcile) keeps the full pass.
+  const scopedIds =
+    scope && scope.changedFileIds.size > 0 ? Array.from(scope.changedFileIds) : null;
   const { store } = state;
 
   const importsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('imports') as
@@ -62,16 +69,15 @@ export function resolveFileProjectionEdges(state: PipelineState, _scope?: Change
   // symbol edges that DO exist come from FQN-based resolvers that don't
   // filter by workspace (Laravel ORM, etc.) — projecting them to file edges
   // would visually merge independent projects. Drop them here.
-  const stmt = store.db.prepare(`
-    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
-    SELECT DISTINCT
-      src_file_node.id AS source_node_id,
-      tgt_file_node.id AS target_node_id,
-      ? AS edge_type_id,
-      1,
-      '{"projected":true}',
-      0,
-      'ast_inferred'
+  //
+  // Scoped runs additionally restrict to edges touching a changed file on
+  // either side (see the WHY note above). The either-side form is written as
+  // a UNION of two single-side branches rather than one `OR` filter: each
+  // branch drives from its file-id IN list through idx_symbols_file, while
+  // the OR form plans as a full join enumeration.
+  const filePh = scopedIds ? scopedIds.map(() => '?').join(',') : '';
+  const excludedPh = [...excludedSet].map(() => '?').join(',') || 'SELECT -1';
+  const symSymJoins = `
     FROM edges e
     JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'symbol'
     JOIN symbols ss ON ss.id = sn.ref_id
@@ -81,18 +87,59 @@ export function resolveFileProjectionEdges(state: PipelineState, _scope?: Change
     JOIN symbols ts ON ts.id = tn.ref_id
     JOIN files tgt_file ON tgt_file.id = ts.file_id
     JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+  `;
+  const symSymBase = `
     WHERE ss.file_id <> ts.file_id
       AND (
         src_file.workspace IS NULL OR tgt_file.workspace IS NULL
         OR src_file.workspace = tgt_file.workspace
       )
-      AND e.edge_type_id NOT IN (${[...excludedSet].map(() => '?').join(',') || 'SELECT -1'})
+  `;
+  const symSymSelect = `
+    SELECT DISTINCT
+      src_file_node.id AS source_node_id,
+      tgt_file_node.id AS target_node_id,
+      ? AS edge_type_id,
+      1,
+      '{"projected":true}',
+      0,
+      'ast_inferred'
+  `;
+  const symSymBranch = (side: string): string => `
+    ${symSymSelect}
+    ${symSymJoins}
+    ${symSymBase}
+      AND ${side} IN (${filePh})
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+  const stmt = store.db.prepare(`
+    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
+    ${
+      scopedIds
+        ? `${symSymBranch('ss.file_id')} UNION ${symSymBranch('ts.file_id')}`
+        : `${symSymSelect} ${symSymJoins} ${symSymBase} AND e.edge_type_id NOT IN (${excludedPh})`
+    }
   `);
 
   // Also project file→symbol edges (e.g. nuxt_entry_point, references_component)
   // so the source file reaches the target symbol's file.
-  const stmtFileSym = store.db.prepare(`
-    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
+  const fileSymJoins = `
+    FROM edges e
+    JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
+    JOIN files src_file ON src_file.id = sn.ref_id
+    JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    JOIN symbols ts ON ts.id = tn.ref_id
+    JOIN files tgt_file ON tgt_file.id = ts.file_id
+    JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+  `;
+  const fileSymBase = `
+    WHERE src_file.id <> tgt_file.id
+      AND (
+        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
+        OR src_file.workspace = tgt_file.workspace
+      )
+  `;
+  const fileSymSelect = `
     SELECT DISTINCT
       sn.id AS source_node_id,
       tgt_file_node.id AS target_node_id,
@@ -101,19 +148,21 @@ export function resolveFileProjectionEdges(state: PipelineState, _scope?: Change
       '{"projected":true}',
       0,
       'ast_inferred'
-    FROM edges e
-    JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
-    JOIN files src_file ON src_file.id = sn.ref_id
-    JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
-    JOIN symbols ts ON ts.id = tn.ref_id
-    JOIN files tgt_file ON tgt_file.id = ts.file_id
-    JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
-    WHERE src_file.id <> tgt_file.id
-      AND (
-        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
-        OR src_file.workspace = tgt_file.workspace
-      )
-      AND e.edge_type_id NOT IN (${[...excludedSet].map(() => '?').join(',') || 'SELECT -1'})
+  `;
+  const fileSymBranch = (side: string): string => `
+    ${fileSymSelect}
+    ${fileSymJoins}
+    ${fileSymBase}
+      AND ${side} IN (${filePh})
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+  const stmtFileSym = store.db.prepare(`
+    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
+    ${
+      scopedIds
+        ? `${fileSymBranch('src_file.id')} UNION ${fileSymBranch('tgt_file.id')}`
+        : `${fileSymSelect} ${fileSymJoins} ${fileSymBase} AND e.edge_type_id NOT IN (${excludedPh})`
+    }
   `);
 
   const before = (
@@ -121,9 +170,18 @@ export function resolveFileProjectionEdges(state: PipelineState, _scope?: Change
       .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
       .get(importsType.id) as { c: number }
   ).c;
+  // Scoped params: one changed-id list per UNION branch, in placeholder order
+  // (edge_type, branch-1 ids, branch-1 excluded, edge_type, branch-2 ids,
+  // branch-2 excluded). Unscoped keeps the historical single-pass order.
+  const scopedBranchParams = scopedIds ? [...scopedIds, ...excludedSet] : [...excludedSet];
   store.db.transaction(() => {
-    stmt.run(importsType.id, ...excludedSet);
-    stmtFileSym.run(importsType.id, ...excludedSet);
+    if (scopedIds) {
+      stmt.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
+      stmtFileSym.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
+    } else {
+      stmt.run(importsType.id, ...excludedSet);
+      stmtFileSym.run(importsType.id, ...excludedSet);
+    }
   })();
   const after = (
     store.db

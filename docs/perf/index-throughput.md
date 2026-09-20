@@ -302,6 +302,81 @@ remain. True per-file scoping (re-resolve only changed files) needs
 per-plugin cross-file map handling (electron's channel→file maps are built
 from the scan being skipped) and is a follow-up, not this PR.
 
+## Run 2026-09-20 — TRA-1729 scope-aware Pass 2 remainder (F6)
+
+Follows up TRA-1602 directly: per-file scoping for the three remainder
+buckets above. Same harness corpus (`fc47c10f`, 1903 files), M-series Mac
+(darwin, 18 logical CPUs, Node v22.22.3) — but a watcher-shaped harness, not
+`scripts/bench-index-throughput.ts`: one cold `indexAll`, then N single-file
+`indexAll` passes (1-file touch each, 1.2 s spacing so the snapshot
+discovery's 1 s timestamp granularity sees every touch), per-resolver timing
+via method-level patching. The official harness could not run in this
+environment — the shared fixture's worktree registration is gone
+(`git checkout -- .` fails with "not a git repository"), which breaks its
+`revertFixture`/`pickHundredFiles`/git-status-second-opinion steps for any
+agent, on either arm. The resolvers under test are identical on both paths;
+edge-stage (`resolveAllEdges`) medians below are directly comparable to §"Run
+2026-09-17"'s 283→189 ms. n=5/arm, sequential arms. `docs/perf/index-
+throughput.json` intentionally untouched — it is the official harness's
+machine-readable record; these numbers live here until the harness runs
+again somewhere with a healthy fixture.
+
+Step 1 re-measurement on fresh master confirmed the §2026-09-17 split still
+holds (edge stage 179 ms, of which electron 77 ms, ts-calls 29 ms, ts-types
+14 ms, file-projection 22 ms — indexAll path medians).
+
+Fixes (all scoped paths fall back to the full pass when scope is absent —
+cold, force, and the debounced full reconcile are byte-identical):
+
+- **Electron** (`tooling/electron`, 2.1.0→2.2.0): per-process channel-role
+  cache (handle/listen/push + renderer-side invoke/send/on per channel,
+  paths as keys, LRU-capped at 50 roots, file ids resolved per call from
+  `getAllFiles` so delete+re-add rowid recycling can't misattribute).
+  Scoped runs scan changed files only; cross-file maps resolve through the
+  cache in live file order (last wins — the same rule as the full scan's
+  `Map.set` overwrite). Counterpart reconciliation covers edges anchored in
+  unchanged files (a new handler pulls cached invokers, a new listener pulls
+  cached senders, a new pusher links cached listeners), each gated on the
+  changed file being the same pick the full scan would make. Cold cache
+  (fresh process) does one full scan that rebuilds it. First scope-aware
+  framework plugin via the `ResolveContext.changeScope` contract.
+- **file-projection**: either-side changed-file filter — a new symbol edge
+  inserted this run always touches a changed file on at least one side
+  (scoped resolvers anchor at changed files; framework edges are
+  deterministic functions of content, so unchanged↔unchanged edges are
+  already projected). Written as a UNION of two single-side branches: each
+  drives from its file-id IN list through `idx_symbols_file`, while the
+  single-statement `OR` form planned as a full join enumeration (measured:
+  OR 15 ms vs UNION 0.8 ms).
+- **ts-calls / ts-types**: `buildFileImportMap` narrowed to re-resolved
+  source files (the only consulted keys; targets stay global). The remaining
+  universe build (all-symbols SELECT + name index, ~15 ms in ts-calls) is a
+  measured floor: call targets can live in any file, so the name index
+  cannot be scoped without changing resolution semantics.
+
+| incremental-1, indexAll path (median, n=5) | before (master) | after | Δ |
+|---|---|---|---|
+| Wall | 289 ms | 160 ms | **−45%** |
+| Edge stage (`resolveAllEdges`) | 179 ms | 47 ms | **−74%** |
+| — electron | 77 ms | 0.6 ms | −99% |
+| — file-projection | 22 ms | 0.8 ms | −96% |
+| — ts-calls | 29 ms | 16 ms | −45% |
+| — ts-types | 14 ms | 3.2 ms | −77% |
+| Zero-change `indexAll` | — | 26 ms, indexed 0 | untouched (skip path, no resolvers) |
+| `replay:check` | — | Δ=0.0000 all metrics | no drift |
+
+Gates: new parity test `tests/integration/electron-scoped-parity.test.ts`
+(scoped runs == forced full reindex as sets, all three IPC directions plus
+comment-only stability, plus a pass counter proving the scoped path
+engages); full suite 1033 files / 11616 tests green; tsc/biome clean.
+
+Residual: ts-calls universe (~16 ms: global name index + node-id batches —
+the floor above), non-electron framework plugins (~19 ms across ~50
+root+workspace plugin executions — each small, none individually scoped),
+`storeRawEdges` batching (~4 ms). Further work means per-plugin relevance
+gating (skipping plugins whose trigger files didn't change), which needs
+per-plugin file-relevance metadata that doesn't exist today.
+
 ## Caveats
 
 - **One sample per configuration for the headline tables**, not a median of

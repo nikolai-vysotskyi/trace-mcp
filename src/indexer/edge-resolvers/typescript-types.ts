@@ -110,8 +110,12 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
     }
   }
 
-  // Build per-file imports (reuse pattern from typescript-calls)
-  const fileImportMap = buildFileImportMap(state);
+  // Build per-file imports, narrowed to re-resolved sources when scoped
+  // (TRA-1729 — same equivalence argument as typescript-calls).
+  const fileImportMap = buildFileImportMap(
+    state,
+    scopedIds && scopedIds.length > 0 ? new Set(scopedIds) : undefined,
+  );
 
   const insertStmt = store.db.prepare(
     `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
@@ -207,7 +211,10 @@ function resolveTypeRef(
   return null;
 }
 
-function buildFileImportMap(state: PipelineState): Map<number, Map<string, number[]>> {
+function buildFileImportMap(
+  state: PipelineState,
+  onlySourceFileIds?: ReadonlySet<number>,
+): Map<number, Map<string, number[]>> {
   const { store } = state;
   const result = new Map<number, Map<string, number[]>>();
 
@@ -216,6 +223,11 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
     .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
+  // Narrowed to re-resolved source files when scoped (TRA-1729): the map is
+  // only consulted for source files, so the narrowed map is exactly
+  // equivalent — and skips the full file→file edge scan.
+  const scopedSourceIds =
+    onlySourceFileIds && onlySourceFileIds.size > 0 ? Array.from(onlySourceFileIds) : null;
   const rows = store.db
     .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
@@ -225,8 +237,9 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
      WHERE e.edge_type_id = ?
        AND ns.node_type = 'file'
        AND nt.node_type = 'file'
+       ${scopedSourceIds ? `AND ns.ref_id IN (${scopedSourceIds.map(() => '?').join(',')})` : ''}
   `)
-    .all(importEdgeType.id) as Array<{
+    .all(importEdgeType.id, ...(scopedSourceIds ?? [])) as Array<{
     source_node_id: number;
     target_node_id: number;
     metadata: string | null;
