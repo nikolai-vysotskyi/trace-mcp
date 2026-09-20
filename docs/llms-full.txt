@@ -881,7 +881,7 @@ and local storage policies, see [configuration](configuration.md), the
 Source: https://trace-mcp.com/comparisons.html
 
 
-Most MCP servers in this space do one of three things: pack a repository into a prompt (Repomix), proxy a live language server (Serena), or build a persistent [code graph MCP server](/code-graph-mcp.html) (codegraph, codebase-memory-mcp, trace-mcp). trace-mcp is in the third group, and adds framework-aware edges and code-linked memory on top of the graph. This page is the whole field, tool by tool, with the evidence for each row and the date it was checked.
+Most MCP servers in this space do one of three things: pack a repository into a prompt (Repomix), proxy a live language server (Serena), or build a persistent [code graph MCP server](/code-graph-mcp.html) (codegraph, codebase-memory-mcp, trace-mcp). trace-mcp is in the third group, and adds framework-aware edges and code-linked memory on top of the graph. Licensing cuts across all three groups — jCodeMunch bars commercial use without a paid tier, the subject of the [jCodeMunch alternative](/vs/jcodemunch.html) head-to-head. This page is the whole field, tool by tool, with the evidence for each row and the date it was checked.
 
 **Before the tables: a capability table is the cheapest kind of evidence.** Every ✓ below, ours included, is a feature claim. The one claim on this page that was measured rather than asserted is the token cost: [a median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context](/pr-context-benchmark.html), over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains. Cheaper context is only worth having if the review written from it holds up, so the same {{ site.data.pr_context_quality.pr_count }} pull requests were reviewed twice — once from each context — and scored blind by a judge against the PR's own diff: trace-mcp's arm understood the change {{ site.data.pr_context_quality.trace_understood }} of the time against naive file loading's {{ site.data.pr_context_quality.baseline_understood }}, at {{ site.data.pr_context_quality.trace_false_positives }} false positives per PR against {{ site.data.pr_context_quality.baseline_false_positives }} — parity on a corpus this size, and inside the [bar preregistered before the calls were made](/perf/prereg-pr-quality/). We publish that half because a saving quoted without it is the asymmetry this page exists to refuse. Two peers below publish token benchmarks of their own — codebase-memory-mcp's arXiv preprint (10× fewer tokens across 31 repos, which we have not reproduced) and codegraph's self-run August 2026 measurement (62% fewer tokens across seven repos, the most transparent self-benchmark in this field). What separates ours is not that it exists: it is that the base and head SHAs, the losing cases, and the single command that re-runs the whole thing all ship inside the repository.
 
@@ -1659,6 +1659,7 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
 - The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - Comparing Repomix against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — packing against indexing, on their own terms.
+- Shopping on license rather than packing? The [jCodeMunch alternative](/vs/jcodemunch.html) head-to-head compares MIT against a non-commercial-only license.
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.
 
@@ -2064,11 +2065,16 @@ Source: https://trace-mcp.com/vs/jcodemunch.html
 
 
 
-**TL;DR.** jCodeMunch is an AST code exploration MCP server written in Python that focuses on reducing AI token consumption during repository navigation. It features structural symbol extraction across 70+ languages, an adaptive 3-tool "Counter" front door (`order`, `menu`, `route`) to mitigate prompt schema bloat, agent config auditing (`audit_agent_config`), and git commit archaeology (`get_symbol_provenance`).
+**TL;DR.** As a jCodeMunch alternative for commercial work, trace-mcp is MIT while jCodeMunch's commercial license bans for-profit use without a paid tier. jCodeMunch is an AST code exploration MCP server written in Python that focuses on reducing AI token consumption during repository navigation. It features structural symbol extraction across 70+ languages, an adaptive 3-tool "Counter" front door (`order`, `menu`, `route`) to mitigate prompt schema bloat, agent config auditing (`audit_agent_config`), and git commit archaeology (`get_symbol_provenance`).
 
 The critical differences lie in licensing, semantic depth, and refactoring safety. jCodeMunch is released under a restrictive Dual-Use License that explicitly prohibits commercial use without a paid license and bars redistribution to public package registries. Its framework route detection relies on text regex patterns rather than compiler-grade graph edges, and its refactoring tool generates text replacement suggestions rather than performing AST-verified code modifications. trace-mcp is 100% open-source under the permissive MIT License, requires zero infrastructure (`npx -y trace-mcp`), connects {{ site.data.counts.frameworks }} frameworks with deep architectural edges, provides atomic AST refactoring write tools, and includes OWASP Top-10 taint analysis.
 
 Pick jCodeMunch if you are an individual working on personal non-commercial projects who wants a 3-tool meta-dispatch surface and git provenance narratives. Pick trace-mcp if you need enterprise-safe commercial licensing, true framework-aware call graphs, AST-verified refactoring, and zero-setup distribution via npm.
+
+> **Bottom line for `alternative` searchers:**
+> - Commercial use needs a paid jCodeMunch license; trace-mcp is MIT with zero fees.
+> - jCodeMunch matches framework routes with regex; trace-mcp traverses typed graph edges.
+> - jCodeMunch suggests text replacements; trace-mcp applies AST-verified edits.
 
 ## Head-to-head
 
