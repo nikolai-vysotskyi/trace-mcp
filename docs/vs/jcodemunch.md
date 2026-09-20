@@ -1,7 +1,7 @@
 ---
 title: "jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents"
-description: "jCodeMunch offers Python AST exploration under non-commercial license. trace-mcp is permissive MIT with 81 languages, framework edges, and refactoring."
-updated: 2026-09-16
+description: "Looking for a jCodeMunch alternative you can use commercially? Honest trace-mcp vs jCodeMunch comparison: license, framework edges, refactoring."
+updated: 2026-09-20
 ---
 
 # jCodeMunch alternative: trace-mcp vs jCodeMunch
@@ -74,6 +74,30 @@ updated: 2026-09-16
             "@type": "Answer",
             "text": "jCodeMunch provides plan_refactoring, which generates text-based find-and-replace candidate blocks using regex import patterns. trace-mcp provides native AST refactoring write tools (refactor_rename, refactor_extract, refactor_move, codemods) that validate syntax and AST invariants before applying changes."
           }
+        },
+        {
+          "@type": "Question",
+          "name": "Is trace-mcp a drop-in replacement for jCodeMunch?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Installation differs (npx trace-mcp versus uv tool install), the tool surface differs (29 direct tools with presets versus the 3-tool Counter dispatch), and jCodeMunch-only features like audit_agent_config and get_symbol_provenance have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use jCodeMunch for commercial work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not on the default license. jCodeMunch's Dual-Use License v1.1 permits non-commercial, personal, and academic use only; any revenue-generating workflow inside a for-profit organisation needs a separate paid license from the author, and redistribution via public registries is barred. trace-mcp is MIT-licensed with no such restriction."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which jCodeMunch alternative fits a framework-heavy codebase?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "If the codebase is Next.js, Django, Rails, or similar and the agent's questions are structural — which endpoints break if this middleware signature changes — trace-mcp's typed route-to-handler-to-template-to-table edges answer them directly, where jCodeMunch's regex route providers match declared route strings but compute no edges. For a small personal Python project where that question never arises, jCodeMunch's lighter surface is the honest pick."
+          }
         }
       ]
     }
@@ -81,11 +105,9 @@ updated: 2026-09-16
 }
 </script>
 
-**TL;DR.** jCodeMunch is an AST code exploration MCP server written in Python that focuses on reducing AI token consumption during repository navigation. It features structural symbol extraction across 70+ languages, an adaptive 3-tool "Counter" front door (`order`, `menu`, `route`) to mitigate prompt schema bloat, agent config auditing (`audit_agent_config`), and git commit archaeology (`get_symbol_provenance`).
+**TL;DR.** jCodeMunch is a Python AST code-exploration MCP server: symbol extraction across 70+ languages behind a 3-tool "Counter" front door (`order`, `menu`, `route`), plus agent config auditing and git provenance narratives. What decides it is licensing, semantic depth, and refactoring safety: jCodeMunch's Dual-Use License bars commercial use and redistribution, its framework routes are regex matches rather than graph edges, and its refactoring drafts text replacements instead of AST-verified transforms. trace-mcp is MIT-licensed, runs from `npx -y trace-mcp`, and pairs framework-aware edges with atomic refactoring and taint analysis.
 
-The critical differences lie in licensing, semantic depth, and refactoring safety. jCodeMunch is released under a restrictive Dual-Use License that explicitly prohibits commercial use without a paid license and bars redistribution to public package registries. Its framework route detection relies on text regex patterns rather than compiler-grade graph edges, and its refactoring tool generates text replacement suggestions rather than performing AST-verified code modifications. trace-mcp is 100% open-source under the permissive MIT License, requires zero infrastructure (`npx -y trace-mcp`), connects {{ site.data.counts.frameworks }} frameworks with deep architectural edges, provides atomic AST refactoring write tools, and includes OWASP Top-10 taint analysis.
-
-Pick jCodeMunch if you are an individual working on personal non-commercial projects who wants a 3-tool meta-dispatch surface and git provenance narratives. Pick trace-mcp if you need enterprise-safe commercial licensing, true framework-aware call graphs, AST-verified refactoring, and zero-setup distribution via npm.
+Pick jCodeMunch for personal non-commercial projects where the 3-tool surface and git narratives matter. Pick trace-mcp for commercial licensing, framework-aware graphs, verified refactoring, and zero-setup npm distribution.
 
 ## Head-to-head
 
@@ -199,6 +221,20 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 - **Integrated security auditing**: You want OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting built directly into your MCP workflow.
 - **Zero infrastructure setup**: You want immediate execution via `npx -y trace-mcp` with no Python virtual environment, uv, or local compilation required.
 
+## FAQ — jCodeMunch alternatives
+
+### Is trace-mcp a drop-in replacement for jCodeMunch?
+
+No — and it does not pretend to be. Installation differs (`npx -y trace-mcp` vs `uv tool install`), the tool surface differs (29 direct tools with presets vs the 3-tool Counter dispatch), and jCodeMunch-only features like `audit_agent_config` and `get_symbol_provenance` have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index.
+
+### Can I use jCodeMunch for commercial work?
+
+Not on the default license. jCodeMunch's Dual-Use License v1.1 permits non-commercial, personal, and academic use only; any revenue-generating workflow inside a for-profit organisation needs a separate paid license from the author, and redistribution via public registries is barred. trace-mcp is MIT-licensed with no such restriction — that is the whole of the licensing section above in one paragraph.
+
+### Which alternative fits a framework-heavy codebase?
+
+If the codebase is Next.js, Django, Rails, or similar and the agent's questions are structural ("which endpoints break if this middleware signature changes?"), trace-mcp's typed route → handler → template → table edges answer them directly; jCodeMunch's regex route providers match declared route strings but compute no edges. For a small personal Python project where that question never arises, jCodeMunch's lighter surface is the honest pick.
+
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
@@ -207,4 +243,5 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- Every knob is optional — [configuration](/configuration.html) works with none, reference when needed.
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.

@@ -887,7 +887,7 @@ Most MCP servers in this space do one of three things: pack a repository into a 
 
 ## trace-mcp vs the main alternatives
 
-The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ.
+The tables further down cover the whole field. This section covers the projects people actually evaluate against trace-mcp, in enough depth to decide from. Each major peer has a dedicated head-to-head page with a focused table, an honest "when to pick theirs" section, and an FAQ. Where the tables quote an advertised tool surface, that surface is a config knob as much as an architecture — [tool presets](/configuration.html) decide what a session pays up front.
 
 _Every star count, licence and tool-surface figure in this section was re-read from the GitHub API and from each project's own source on **September 3, 2026** (CodeGraphContext on **September 4, 2026**), not carried over from the head-to-head pages. These summaries are written for the hub and rewritten on each pass — never pasted from a spoke, so the hub and its deep-dive pages stay distinct documents rather than drifting into near-duplicates._
 
@@ -1236,7 +1236,7 @@ about: did the agent get it right.
 What that table means, project by project, in the places where the summary line
 is doing too much work:
 
-- **jCodeMunch is the most careful token benchmark in this field, and it says
+- **[jCodeMunch](/vs/jcodemunch.html) is the most careful token benchmark in this field, and it says
   so about its own limits first.** `benchmarks/METHODOLOGY.md` states in its
   scope section that the benchmark "does **not** measure answer quality,
   latency, or end-to-end task completion". Every modelling choice in its
@@ -2064,11 +2064,9 @@ Source: https://trace-mcp.com/vs/jcodemunch.html
 
 
 
-**TL;DR.** jCodeMunch is an AST code exploration MCP server written in Python that focuses on reducing AI token consumption during repository navigation. It features structural symbol extraction across 70+ languages, an adaptive 3-tool "Counter" front door (`order`, `menu`, `route`) to mitigate prompt schema bloat, agent config auditing (`audit_agent_config`), and git commit archaeology (`get_symbol_provenance`).
+**TL;DR.** jCodeMunch is a Python AST code-exploration MCP server: symbol extraction across 70+ languages behind a 3-tool "Counter" front door (`order`, `menu`, `route`), plus agent config auditing and git provenance narratives. What decides it is licensing, semantic depth, and refactoring safety: jCodeMunch's Dual-Use License bars commercial use and redistribution, its framework routes are regex matches rather than graph edges, and its refactoring drafts text replacements instead of AST-verified transforms. trace-mcp is MIT-licensed, runs from `npx -y trace-mcp`, and pairs framework-aware edges with atomic refactoring and taint analysis.
 
-The critical differences lie in licensing, semantic depth, and refactoring safety. jCodeMunch is released under a restrictive Dual-Use License that explicitly prohibits commercial use without a paid license and bars redistribution to public package registries. Its framework route detection relies on text regex patterns rather than compiler-grade graph edges, and its refactoring tool generates text replacement suggestions rather than performing AST-verified code modifications. trace-mcp is 100% open-source under the permissive MIT License, requires zero infrastructure (`npx -y trace-mcp`), connects {{ site.data.counts.frameworks }} frameworks with deep architectural edges, provides atomic AST refactoring write tools, and includes OWASP Top-10 taint analysis.
-
-Pick jCodeMunch if you are an individual working on personal non-commercial projects who wants a 3-tool meta-dispatch surface and git provenance narratives. Pick trace-mcp if you need enterprise-safe commercial licensing, true framework-aware call graphs, AST-verified refactoring, and zero-setup distribution via npm.
+Pick jCodeMunch for personal non-commercial projects where the 3-tool surface and git narratives matter. Pick trace-mcp for commercial licensing, framework-aware graphs, verified refactoring, and zero-setup npm distribution.
 
 ## Head-to-head
 
@@ -2182,6 +2180,20 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 - **Integrated security auditing**: You want OWASP Top-10 taint tracking and SARIF 2.1.0 vulnerability reporting built directly into your MCP workflow.
 - **Zero infrastructure setup**: You want immediate execution via `npx -y trace-mcp` with no Python virtual environment, uv, or local compilation required.
 
+## FAQ — jCodeMunch alternatives
+
+### Is trace-mcp a drop-in replacement for jCodeMunch?
+
+No — and it does not pretend to be. Installation differs (`npx -y trace-mcp` vs `uv tool install`), the tool surface differs (29 direct tools with presets vs the 3-tool Counter dispatch), and jCodeMunch-only features like `audit_agent_config` and `get_symbol_provenance` have no one-to-one counterpart. What transfers directly is the codebase itself: point trace-mcp at the same repository and re-index.
+
+### Can I use jCodeMunch for commercial work?
+
+Not on the default license. jCodeMunch's Dual-Use License v1.1 permits non-commercial, personal, and academic use only; any revenue-generating workflow inside a for-profit organisation needs a separate paid license from the author, and redistribution via public registries is barred. trace-mcp is MIT-licensed with no such restriction — that is the whole of the licensing section above in one paragraph.
+
+### Which alternative fits a framework-heavy codebase?
+
+If the codebase is Next.js, Django, Rails, or similar and the agent's questions are structural ("which endpoints break if this middleware signature changes?"), trace-mcp's typed route → handler → template → table edges answer them directly; jCodeMunch's regex route providers match declared route strings but compute no edges. For a small personal Python project where that question never arises, jCodeMunch's lighter surface is the honest pick.
+
 ## Next steps
 
 - Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
@@ -2190,6 +2202,7 @@ trace-mcp provides a complete suite of **AST-native refactoring write tools**:
 - Explore measured token savings and quality results across 60 open-source pull requests: [PR context benchmark](/pr-context-benchmark.html).
 - Explore all MCP tools in the [tools reference](/tools-reference.html).
 - Read the [architecture](/architecture.html) guide to see how embedded SQLite and tree-sitter WASM work together.
+- Every knob is optional — [configuration](/configuration.html) works with none, reference when needed.
 - Install trace-mcp in seconds: `npx -y trace-mcp@latest init`.
 
 ---
@@ -3306,7 +3319,7 @@ No — clearing forces re-derivation, which usually costs more. Compact, or hand
 
 ---
 
-# Configuration
+# trace-mcp Configuration
 
 Source: https://trace-mcp.com/configuration.html
 
@@ -3885,7 +3898,9 @@ tool schemas itself — Claude Code's ToolSearch, which keeps only the 15
 exactly the first-five-minutes tools that stamp exists to protect. On a host
 without such a mechanism it saves ~6.2k per session, every session. Take it if
 your client has no tool deferral of its own, or if you are running many short
-sessions where the surface is most of what you pay.
+sessions where the surface is most of what you pay. For what other MCP
+servers charge for the same surface, see [how trace-mcp
+compares](/comparisons.html).
 
 ### Client profiles
 
