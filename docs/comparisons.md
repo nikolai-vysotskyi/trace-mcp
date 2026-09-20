@@ -1,6 +1,6 @@
 ---
 title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
-description: "Serena, Repomix, codegraph and 20+ MCP code-graph tools compared side by side — capabilities, honest trade-offs, and which to pick. Verified September 2026."
+description: "Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 88 frameworks, GitHub stars. Pick the one that fits your stack."
 updated: 2026-09-20
 ---
 
@@ -435,7 +435,7 @@ about: did the agent get it right.
 What that table means, project by project, in the places where the summary line
 is doing too much work:
 
-- **[jCodeMunch](/vs/jcodemunch.html) is the most careful token benchmark in this field, and it says
+- **[jCodeMunch alternative](/vs/jcodemunch.html) is the most careful token benchmark in this field, and it says
   so about its own limits first.** `benchmarks/METHODOLOGY.md` states in its
   scope section that the benchmark "does **not** measure answer quality,
   latency, or end-to-end task completion". Every modelling choice in its
