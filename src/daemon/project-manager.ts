@@ -66,6 +66,42 @@ import type { ProjectResourcePool } from './resource-pool.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
 
+/**
+ * Canonical in-memory key for the managed-projects map (TRA-1608).
+ *
+ * The map used to be keyed by the raw caller string, so the same filesystem
+ * root added as `/tmp/ws/` and `/tmp/ws` (or via a relative path) produced
+ * TWO managed projects — two pipelines, two DB handles and, worst of all,
+ * two live `@parcel/watcher` subscriptions on one root. `path.resolve`
+ * collapses trailing slashes / `.` / relative spellings to one key, so one
+ * filesystem root always means one managed project and one subscription.
+ * This mirrors the registry, whose keys are already `path.resolve`d
+ * (setupProject), and the `normRoot` convention in subproject-search.
+ * (Symlink aliases still resolve to different keys — same as the registry.)
+ */
+export function managerKey(root: string): string {
+  return path.resolve(root);
+}
+
+/**
+ * Actual map key for `root`, tolerating entries stored under a raw spelling
+ * (TRA-1608 follow-up — Windows CI, PR #1286).
+ *
+ * `addProject()` always inserts under `managerKey()`, but behavioural tests
+ * inject fake `ManagedProject`s directly into the map under POSIX fixture
+ * strings like `/tmp/proj-a`. On Windows `path.resolve('/tmp/proj-a')` is
+ * `D:\tmp\proj-a`, so a normalized-only lookup misses those entries and
+ * `stopProject()`/`removeProject()`/`shutdown()` silently no-op — 25 red
+ * lifecycle tests on windows-latest, green everywhere else. Prefer the
+ * canonical key, fall back to the raw string.
+ */
+function managedMapKey(projects: Map<string, ManagedProject>, root: string): string | undefined {
+  const key = managerKey(root);
+  if (projects.has(key)) return key;
+  if (projects.has(root)) return root;
+  return undefined;
+}
+
 export interface ManagedProject {
   root: string;
   config: TraceMcpConfig;
@@ -231,6 +267,10 @@ export class ProjectManager {
     projectRoot: string,
     opts?: { watch?: boolean; persist?: boolean },
   ): Promise<ManagedProject> {
+    // TRA-1608: canonicalize first — every downstream use (map key,
+    // managed.root, pipeline/watcher roots, registry lookups) then refers to
+    // one filesystem root by one string. See managerKey().
+    projectRoot = managerKey(projectRoot);
     const existing = this.projects.get(projectRoot);
     if (existing) return existing;
 
@@ -927,8 +967,17 @@ export class ProjectManager {
    * daemon restart) and `removeProject()` (explicit user removal).
    */
   private async stopProject(root: string): Promise<void> {
-    const managed = this.projects.get(root);
-    if (!managed) return;
+    // TRA-1608: the map is keyed by managerKey() for addProject() entries, but
+    // tolerate raw-spelling keys too (see managedMapKey). Teardown below uses
+    // the STORED managed.root spelling so collaborators (registry unregister,
+    // sharedPool.dropProject, resourcePool.disposeProject — all mocked with
+    // exact-string assertions in lifecycle tests) observe the string the entry
+    // was registered under. In production managed.root IS the normalized key,
+    // so this is identical there.
+    const mapKey = managedMapKey(this.projects, root);
+    if (!mapKey) return;
+    const managed = this.projects.get(mapKey)!;
+    root = managed.root;
     // TRA-1553: refuse new single-file reindex work from this point on. This
     // runs synchronously before the first await, so no interleaving can slip
     // a fresh handleReindexFile/register_edit pipeline run in after the mark.
@@ -1018,7 +1067,7 @@ export class ProjectManager {
     // TRA-304: we no longer hold this DB, so a sibling checkout of the same
     // git remote is free to share it again on its next registration.
     releaseDbHoldersForRoot(root);
-    this.projects.delete(root);
+    this.projects.delete(mapKey);
     clearProjectStopping(root);
     clearProjectReindexCache(root);
     // Evict per-project caches living inside the shared worker pool
@@ -1072,13 +1121,18 @@ export class ProjectManager {
     root: string,
     options?: RemoveArtifactsOptions,
   ): Promise<RemoveArtifactsResult> {
+    // TRA-1608: resolve the effective root BEFORE stopProject() deletes the
+    // entry — the stored spelling when loaded (keeps registry/artifact calls
+    // pass-through for raw-spelling entries), the caller string when never
+    // loaded. stopProject() itself tolerates both spellings (managedMapKey).
+    const effective = this.projects.get(managedMapKey(this.projects, root) ?? root)?.root ?? root;
     await this.stopProject(root);
     let artifacts: RemoveArtifactsResult;
     try {
-      artifacts = removeProjectArtifacts(root, options);
+      artifacts = removeProjectArtifacts(effective, options);
     } catch (err) {
       // Cleanup is best-effort — never block unregister on a stray fs error.
-      logger.warn({ err, projectRoot: root }, 'removeProjectArtifacts threw (non-fatal)');
+      logger.warn({ err, projectRoot: effective }, 'removeProjectArtifacts threw (non-fatal)');
       artifacts = {
         deleted: [],
         kept: [],
@@ -1088,15 +1142,15 @@ export class ProjectManager {
         failures: [{ tier: 'artifacts', error: String(err) }],
       };
     }
-    unregisterProject(root);
+    unregisterProject(effective);
     // Mirror addProject(): a managed ancestor's watcher ignore list may have
     // been scoped around this now-unregistered root and would otherwise stay
     // stale (harmlessly over-excluding) until the next daemon restart.
     // Recompute so the ancestor resumes owning these now-orphaned files.
-    await this.restartManagedAncestorWatchers(root);
+    await this.restartManagedAncestorWatchers(effective);
     logger.info(
       {
-        projectRoot: root,
+        projectRoot: effective,
         deletedFiles: artifacts.deleted.length,
         freedBytes: artifacts.freedBytes,
         failures: artifacts.failures,
@@ -1130,7 +1184,8 @@ export class ProjectManager {
   async sweepEphemeralProjects(ttlHours = 72): Promise<string[]> {
     const removed: string[] = [];
     for (const candidate of findEphemeralProjects(ttlHours)) {
-      const managed = this.projects.get(candidate.root);
+      const managed =
+        this.projects.get(managerKey(candidate.root)) ?? this.projects.get(candidate.root);
       if (managed && (managed.status === 'starting' || managed.status === 'indexing')) continue;
       if ((this.resourcePool?.getRefCount(candidate.root) ?? 0) > 0) continue;
       logger.info(
@@ -1145,7 +1200,7 @@ export class ProjectManager {
 
   /** Get a managed project by root path. */
   getProject(root: string): ManagedProject | undefined {
-    return this.projects.get(root);
+    return this.projects.get(managerKey(root)) ?? this.projects.get(root);
   }
 
   /** Get all managed projects. */
@@ -1161,7 +1216,7 @@ export class ProjectManager {
    * isn't currently loaded.
    */
   touchActivity(root: string): void {
-    const managed = this.projects.get(root);
+    const managed = this.projects.get(managerKey(root)) ?? this.projects.get(root);
     if (managed) managed.lastAccessedAt = Date.now();
   }
 

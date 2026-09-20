@@ -1,0 +1,48 @@
+{
+  "commit": "23db2d8f",
+  "corpus": "synthetic code-ish texts, Xenova/all-MiniLM-L6-v2 dtype q8 via @huggingface/transformers 4.2.0 (onnxruntime-node 1.24.3)",
+  "longWorkload": {
+    "batchTexts": 20,
+    "charsPerText": 6812,
+    "note": "~1200 tokens/text; peak RSS dominated by activations, both modes converge",
+    "samples": {
+      "default": [
+        { "batchMs": 360, "msPerText": 18, "rssPeakMb": 1140, "rssWarmedMb": 303 },
+        { "batchMs": 366, "msPerText": 18.3, "rssPeakMb": 1128, "rssWarmedMb": 290 },
+        { "batchMs": 365, "msPerText": 18.25, "rssPeakMb": 1129, "rssWarmedMb": 292 }
+      ],
+      "tuned": [
+        { "batchMs": 354, "msPerText": 17.7, "rssPeakMb": 1130, "rssWarmedMb": 292 },
+        { "batchMs": 359, "msPerText": 17.95, "rssPeakMb": 1128, "rssWarmedMb": 290 },
+        { "batchMs": 359, "msPerText": 17.95, "rssPeakMb": 1128, "rssWarmedMb": 291 }
+      ]
+    }
+  },
+  "machine": "darwin 27.0 arm64, node v22.22.3, fresh process per sample",
+  "method": "bench-onnx-arena.ts (short) / bench-onnx-arena-long.ts (long); RSS = process.memoryUsage().rss; first download run excluded",
+  "modes": {
+    "default": "TRACE_MCP_ONNX_ARENA=default, stock ORT session (no session_options)",
+    "tuned": "default, session_options { enableMemPattern: false }"
+  },
+  "shortWorkload": {
+    "batchTexts": 50,
+    "charsPerText": 82,
+    "samples": {
+      "default": [
+        { "loadMs": 209, "msPerText": 0.78, "rssAfterBatchMb": 308, "rssLoadedMb": 290 },
+        { "loadMs": 207, "msPerText": 0.74, "rssAfterBatchMb": 307, "rssLoadedMb": 290 },
+        { "loadMs": 190, "msPerText": 0.74, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 205, "msPerText": 0.74, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 207, "msPerText": 0.76, "rssAfterBatchMb": 310, "rssLoadedMb": 292 }
+      ],
+      "tuned": [
+        { "loadMs": 211, "msPerText": 0.74, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 198, "msPerText": 0.76, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 211, "msPerText": 0.74, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 203, "msPerText": 0.74, "rssAfterBatchMb": 310, "rssLoadedMb": 292 },
+        { "loadMs": 201, "msPerText": 0.76, "rssAfterBatchMb": 309, "rssLoadedMb": 291 }
+      ]
+    }
+  },
+  "verdict": "NO measurable RSS delta on MiniLM-q8 in either workload (short: 292 vs 292 MB loaded, 310 vs 310 MB after batch; long: ~1129 vs ~1129 MB peak). Latency within noise (short 0.75 vs 0.75 ms/text; long 18.1 vs 17.9 ms/text) -- inside the 10% acceptance budget. The 200-300MB arena figure from external research does not reproduce on a 23MB model: the arena never grows past its initial chunk here."
+}

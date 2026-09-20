@@ -1,0 +1,14 @@
+{
+  "after": { "distinctRoots": 5, "managedProjects": 5, "subscriptions": 5 },
+  "before": {
+    "distinctRootsNote": "raw-string distinctness; repo-c and repo-c/ are one filesystem root counted twice",
+    "managedProjects": 6,
+    "roots": ["umbrella", "umbrella/child-repo", "repo-a", "repo-b", "repo-c/", "repo-c"],
+    "subscriptions": 6
+  },
+  "commit": "23db2d8f + TRA-1608 changes (after) vs 23db2d8f (before, via git stash)",
+  "machine": "darwin 27.0 arm64, node v22.22.3",
+  "method": "bench-watcher-stand.ts: real ProjectManager + real @parcel/watcher on 5 tiny tmp projects (umbrella + registered child + 3 singles); repo-c added twice, once as '<root>/' once as '<root>'. managedProjects == native subscriptions by construction (one FileWatcher per managed project).",
+  "umbrellaChildNote": "umbrella + child remain 2 subscriptions for 2 distinct roots by design; descendant-exclude (TRA-209) already prevents double-indexing, and the per-event guard drops descendant events in the ancestor callback. Cross-root demux was deliberately not built: it would require routing per-project pipelines/debounces through one shared subscription.",
+  "verdict": "Subscriptions == distinct filesystem roots after the fix (5/5). The duplicate came from one root added under two spellings, which previously created a second full managed project (pipeline + DB handle + subscription)."
+}

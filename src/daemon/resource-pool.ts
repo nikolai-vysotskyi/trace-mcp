@@ -46,6 +46,18 @@ export class ProjectResourcePool {
   /** Per-project session refcount — see getRefCount(). Unrelated to `shared`. */
   private entries = new Map<string, { refCount: number }>();
 
+  /**
+   * Canonical entry key (TRA-1608). Callers arrive with raw client spellings
+   * (`?project=` query strings, relative paths); ProjectManager reads back
+   * with its normalized `managed.root`. Without this, one root parks its
+   * refcount under two keys and the idle-unload guard reads 0 for a project
+   * that has connected clients. Same `path.resolve` convention as the
+   * registry and ProjectManager.managerKey().
+   */
+  private static key(projectRoot: string): string {
+    return path.resolve(projectRoot);
+  }
+
   /** The daemon-wide singleton. Null until the first acquire()/getSharedDeps(). */
   private shared: SharedResources | null = null;
 
@@ -115,9 +127,10 @@ export class ProjectResourcePool {
    */
   acquire(projectRoot: string, config: TraceMcpConfig): ServerDeps {
     const deps = this.getSharedDeps(config);
-    const entry = this.entries.get(projectRoot) ?? { refCount: 0 };
+    const key = ProjectResourcePool.key(projectRoot);
+    const entry = this.entries.get(key) ?? { refCount: 0 };
     entry.refCount++;
-    this.entries.set(projectRoot, entry);
+    this.entries.set(key, entry);
     logger.debug({ projectRoot, refCount: entry.refCount }, 'Resource pool: acquired');
     return deps;
   }
@@ -126,7 +139,7 @@ export class ProjectResourcePool {
    *  regardless — other projects, or a future reload of this one, still need
    *  them; they only close in disposeAll(). */
   release(projectRoot: string): void {
-    const entry = this.entries.get(projectRoot);
+    const entry = this.entries.get(ProjectResourcePool.key(projectRoot));
     if (!entry) return;
     entry.refCount = Math.max(0, entry.refCount - 1);
     logger.debug({ projectRoot, refCount: entry.refCount }, 'Resource pool: released');
@@ -135,7 +148,7 @@ export class ProjectResourcePool {
   /** Forget a stopped project's own refcount bookkeeping. Idempotent. Does
    *  not close the shared resources — see class doc. */
   disposeProject(projectRoot: string): void {
-    this.entries.delete(projectRoot);
+    this.entries.delete(ProjectResourcePool.key(projectRoot));
   }
 
   /** Close the daemon-wide shared resources. Call once, at daemon shutdown. */
@@ -164,6 +177,6 @@ export class ProjectResourcePool {
   /** Current session count for a project — used to gate idle-unload /
    *  ephemeral-sweep eviction, not the shared resources' lifecycle. */
   getRefCount(projectRoot: string): number {
-    return this.entries.get(projectRoot)?.refCount ?? 0;
+    return this.entries.get(ProjectResourcePool.key(projectRoot))?.refCount ?? 0;
   }
 }
