@@ -105,6 +105,7 @@ import {
   DECISIONS_DB_PATH,
   DEFAULT_DAEMON_PORT,
   ensureGlobalDirs,
+  EPHEMERAL_INDEX_DIR,
   GLOBAL_CONFIG_PATH,
   INDEX_DIR,
   TOPOLOGY_DB_PATH,
@@ -3737,12 +3738,28 @@ program
             logger.warn({ err }, 'sweepEphemeralProjects failed (non-fatal)');
           }
           try {
+            // TRA-1714: count first so the sweep stays visible in daemon.log
+            // even when there is nothing to delete — the hourly silence made
+            // a healthy 24h TTL indistinguishable from a sweep that never runs.
+            let scanned = 0;
+            try {
+              scanned = fs.readdirSync(EPHEMERAL_INDEX_DIR).filter((f) => f.endsWith('.db')).length;
+            } catch {
+              /* dir not created yet — no ephemeral checkout has run here */
+            }
             const removedDbs = sweepEphemeralDbs();
             if (removedDbs.length > 0) {
               logger.info(
                 { removedDbs },
                 `Deleted ${removedDbs.length} abandoned one-shot workdir index DB(s)`,
               );
+            } else if (scanned > 0) {
+              logger.info(
+                { ephemeralDbs: scanned },
+                `Ephemeral index sweep: ${scanned} one-shot workdir DB(s) within TTL, nothing to delete`,
+              );
+            } else {
+              logger.debug('Ephemeral index sweep: no one-shot workdir DBs present');
             }
           } catch (err) {
             logger.warn({ err }, 'sweepEphemeralDbs failed (non-fatal)');

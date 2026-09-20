@@ -234,6 +234,14 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
   const candidates: DbCandidate[] = [];
 
   for (const file of files) {
+    // TRA-1714: the `ephemeral/` subdirectory holds per-run one-shot workdir
+    // DBs that are never in registry.json by design (TRA-396) — a "file vs
+    // registry" reconciliation would class every one of them, live ones
+    // included, as `orphan_unregistered`. `sweepEphemeralDbs` owns that
+    // directory by age instead, so this scan must never descend into it.
+    // (Non-recursive today, so the `.db` filter below already skips the
+    // directory entry — this guard pins the intent against a future refactor.)
+    if (file === 'ephemeral') continue;
     // Skip sidecars — we walk each base DB once and aggregate companions.
     if (/(-wal|-shm|-journal)$/.test(file)) continue;
     if (!file.endsWith('.db')) continue;
