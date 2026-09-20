@@ -38,6 +38,25 @@ const KNOWN_DTYPES = new Set(['fp32', 'fp16', 'q8', 'int8', 'uint8', 'q4', 'q4f1
 export type OnnxDtype = 'fp32' | 'fp16' | 'q8' | 'int8' | 'uint8' | 'q4' | 'q4f16' | 'bnb4';
 
 /**
+ * ORT session-arena mode (TRA-1608). `tuned` disables the memory-pattern
+ * planner (`enableMemPattern: false`), which otherwise reserves a large
+ * upfront chunk sized from the first batch shapes — pure overhead for an
+ * embedding service whose batch/sequence shapes vary every call. The CPU
+ * arena itself stays enabled, so per-op malloc churn does not regress.
+ *
+ * Deliberately NOT passing `arena_extend_strategy`: it is an OrtArenaCfg /
+ * execution-provider option (CUDA/ROCM EPs, `CreateArenaCfg`), not a generic
+ * session config entry — the JS `SessionOptions` surface has no field for it
+ * and an `extra.session` entry would be silently ignored. Roll back with
+ * `TRACE_MCP_ONNX_ARENA=default` (or the constructor `arena` option).
+ */
+export type OnnxArenaMode = 'tuned' | 'default';
+const KNOWN_ARENA_MODES: ReadonlySet<string> = new Set(['tuned', 'default']);
+
+/** Extra ORT session options, passed through as `session_options` by transformers.js. */
+export type OnnxSessionOptions = Record<string, unknown>;
+
+/**
  * True for E5-family embedding models, which require `query:` / `passage:`
  * prefixes (matched case-insensitively against the model id so both
  * `intfloat/multilingual-e5-small` and `Xenova/multilingual-e5-small` hit).
@@ -72,11 +91,32 @@ type FeatureExtractionPipeline = (
 export type OnnxPipelineFactory = (
   model: string,
   dtype: OnnxDtype,
+  sessionOptions?: OnnxSessionOptions,
 ) => Promise<FeatureExtractionPipeline>;
 
-// Lazy singletons — loaded once per model+dtype on first embed call
+// Lazy singletons — loaded once per model+dtype+arena on first embed call
 let pipelineInstance: FeatureExtractionPipeline | null = null;
 let pipelineKey: string | null = null;
+
+export function resolveOnnxArenaMode(explicit?: string): OnnxArenaMode {
+  if (explicit && KNOWN_ARENA_MODES.has(explicit)) return explicit as OnnxArenaMode;
+  const env = process.env.TRACE_MCP_ONNX_ARENA;
+  if (env && KNOWN_ARENA_MODES.has(env)) return env as OnnxArenaMode;
+  if (env) logger.warn({ env }, 'Unknown TRACE_MCP_ONNX_ARENA — falling back to tuned');
+  return 'tuned';
+}
+
+/**
+ * Session options for the ORT inference session behind the pipeline.
+ * Returns undefined in `default` mode so transformers.js gets stock ORT
+ * behaviour (the rollback path). The mode is part of the pipeline cache key
+ * in {@link getPipeline}, so flipping the flag reloads the session.
+ */
+export function resolveOnnxSessionOptions(explicit?: string): OnnxSessionOptions | undefined {
+  const mode = resolveOnnxArenaMode(explicit);
+  if (mode === 'default') return undefined;
+  return { enableMemPattern: false };
+}
 
 export function resolveOnnxDtype(explicit?: string): OnnxDtype {
   if (explicit && KNOWN_DTYPES.has(explicit)) return explicit as OnnxDtype;
@@ -94,8 +134,12 @@ async function getTransformers(): Promise<Transformers | null> {
   }
 }
 
-async function getPipeline(model: string, dtype: OnnxDtype): Promise<FeatureExtractionPipeline> {
-  const key = `${model}::${dtype}`;
+async function getPipeline(
+  model: string,
+  dtype: OnnxDtype,
+  sessionOptions: OnnxSessionOptions | undefined = resolveOnnxSessionOptions(),
+): Promise<FeatureExtractionPipeline> {
+  const key = `${model}::${dtype}::${sessionOptions ? JSON.stringify(sessionOptions) : 'stock'}`;
   if (pipelineInstance && pipelineKey === key) return pipelineInstance;
 
   const transformers = await getTransformers();
@@ -104,6 +148,7 @@ async function getPipeline(model: string, dtype: OnnxDtype): Promise<FeatureExtr
   logger.info({ model, dtype }, 'Loading ONNX embedding model (first run downloads ~23 MB)…');
   pipelineInstance = (await transformers.pipeline('feature-extraction', model, {
     dtype,
+    ...(sessionOptions ? { session_options: sessionOptions } : {}),
   })) as unknown as FeatureExtractionPipeline;
   pipelineKey = key;
   logger.info({ model, dtype }, 'ONNX embedding model loaded');
@@ -140,6 +185,7 @@ class OnnxEmbeddingService implements EmbeddingService {
     private readonly dims: number,
     private readonly dtype: OnnxDtype,
     private readonly pipelineFactory: OnnxPipelineFactory = getPipeline,
+    private readonly sessionOptions?: OnnxSessionOptions,
   ) {}
 
   async embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
@@ -156,7 +202,11 @@ class OnnxEmbeddingService implements EmbeddingService {
     signal?: AbortSignal,
   ): Promise<number[][]> {
     if (texts.length === 0 || signal?.aborted) return [];
-    const pipe = await this.pipelineFactory(this.model, this.dtype);
+    const pipe = await this.pipelineFactory(
+      this.model,
+      this.dtype,
+      this.sessionOptions ?? resolveOnnxSessionOptions(),
+    );
     // E5-family models need query:/passage: prefixes (see applyE5Prefix);
     // every other model embeds the raw text exactly as before.
     const prefixed = texts.map((t) => applyE5Prefix(this.model, t, task));
@@ -205,11 +255,13 @@ export class OnnxProvider implements AIProvider {
   private readonly model: string;
   private readonly dims: number;
   private readonly dtype: OnnxDtype;
+  private readonly sessionOptions: OnnxSessionOptions | undefined;
 
-  constructor(config?: { model?: string; dimensions?: number; dtype?: string }) {
+  constructor(config?: { model?: string; dimensions?: number; dtype?: string; arena?: string }) {
     this.model = config?.model ?? DEFAULT_MODEL;
     this.dims = config?.dimensions ?? DEFAULT_DIMENSIONS;
     this.dtype = resolveOnnxDtype(config?.dtype);
+    this.sessionOptions = resolveOnnxSessionOptions(config?.arena);
   }
 
   async isAvailable(): Promise<boolean> {
@@ -218,7 +270,13 @@ export class OnnxProvider implements AIProvider {
   }
 
   embedding(): EmbeddingService {
-    return new OnnxEmbeddingService(this.model, this.dims, this.dtype);
+    return new OnnxEmbeddingService(
+      this.model,
+      this.dims,
+      this.dtype,
+      getPipeline,
+      this.sessionOptions,
+    );
   }
 
   inference(): InferenceService {

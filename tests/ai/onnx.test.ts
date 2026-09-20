@@ -213,6 +213,76 @@ describe('OnnxProvider', () => {
     });
   });
 
+  describe('ORT arena tuning — mem-pattern off by default, stock rollback (TRA-1608)', () => {
+    const OLD_ENV = process.env.TRACE_MCP_ONNX_ARENA;
+
+    afterEach(() => {
+      if (OLD_ENV === undefined) delete process.env.TRACE_MCP_ONNX_ARENA;
+      else process.env.TRACE_MCP_ONNX_ARENA = OLD_ENV;
+    });
+
+    async function embedWithMockedPipeline() {
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider().embedding().embed('hello');
+      return vi.mocked(pipeline).mock.calls[0]?.[2] as Record<string, unknown>;
+    }
+
+    function mockPipeline() {
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+    }
+
+    it('passes tuned session_options (mem-pattern off) by default', async () => {
+      delete process.env.TRACE_MCP_ONNX_ARENA;
+      mockPipeline();
+      const opts = await embedWithMockedPipeline();
+      expect(opts).toMatchObject({
+        dtype: 'q8',
+        session_options: { enableMemPattern: false },
+      });
+    });
+
+    it('TRACE_MCP_ONNX_ARENA=default omits session_options (stock ORT rollback)', async () => {
+      process.env.TRACE_MCP_ONNX_ARENA = 'default';
+      mockPipeline();
+      const opts = await embedWithMockedPipeline();
+      expect(opts).toMatchObject({ dtype: 'q8' });
+      expect(opts).not.toHaveProperty('session_options');
+    });
+
+    it('explicit constructor arena wins over the env var', async () => {
+      process.env.TRACE_MCP_ONNX_ARENA = 'default';
+      vi.doMock('@huggingface/transformers', () => ({
+        pipeline: vi.fn(async () => async () => ({ data: Float32Array.from([1]), dims: [1, 1] })),
+      }));
+      const { OnnxProvider } = await import('../../src/ai/onnx.js');
+      const { pipeline } = await import('@huggingface/transformers');
+      await new OnnxProvider({ arena: 'tuned' }).embedding().embed('hello');
+      expect(vi.mocked(pipeline).mock.calls[0]?.[2]).toMatchObject({
+        session_options: { enableMemPattern: false },
+      });
+    });
+
+    it('unknown env arena falls back to tuned instead of crashing model load', async () => {
+      process.env.TRACE_MCP_ONNX_ARENA = 'kSameAsRequested-plz';
+      mockPipeline();
+      const opts = await embedWithMockedPipeline();
+      expect(opts).toMatchObject({ session_options: { enableMemPattern: false } });
+    });
+
+    it('resolveOnnxSessionOptions returns undefined in default mode', async () => {
+      const { resolveOnnxSessionOptions, resolveOnnxArenaMode } = await import(
+        '../../src/ai/onnx.js'
+      );
+      delete process.env.TRACE_MCP_ONNX_ARENA;
+      expect(resolveOnnxArenaMode()).toBe('tuned');
+      expect(resolveOnnxSessionOptions()).toEqual({ enableMemPattern: false });
+      expect(resolveOnnxSessionOptions('default')).toBeUndefined();
+    });
+  });
+
   describe('E5 prefixes — query:/passage: plumbing (TRA-1539)', () => {
     beforeEach(() => {
       vi.resetModules();
