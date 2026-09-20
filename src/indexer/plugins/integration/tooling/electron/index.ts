@@ -174,12 +174,208 @@ function forEachMatch(source: string, re: RegExp, emit: (index: number) => void)
   }
 }
 
+// ── scope-aware channel-role cache (TRA-1729) ─────────────────────────
+
+/**
+ * Cross-file IPC roles a file plays per channel. Mirrors exactly the maps the
+ * full scan builds (handle/listen/push) plus the renderer-side roles needed
+ * to reconcile the reverse direction when a main-side file changes:
+ * cached invokers/senders let a newly-appearing handler find the renderer
+ * files that already invoke its channel without re-scanning the corpus.
+ */
+type ElectronRole = 'handle' | 'listen' | 'push' | 'invoke' | 'send' | 'on';
+
+interface FileChannelRoles {
+  handles: string[];
+  listens: string[];
+  pushes: string[];
+  invokes: string[];
+  sends: string[];
+  ons: string[];
+}
+
+interface ElectronChannelCache {
+  /** role → channel → paths of files playing it (paths as seen by this ctx). */
+  byChannel: Record<ElectronRole, Map<string, Set<string>>>;
+  /** path → roles it contributes (for eviction when the file changes). */
+  byFile: Map<string, FileChannelRoles>;
+}
+
+function emptyCache(): ElectronChannelCache {
+  return {
+    byChannel: {
+      handle: new Map(),
+      listen: new Map(),
+      push: new Map(),
+      invoke: new Map(),
+      send: new Map(),
+      on: new Map(),
+    },
+    byFile: new Map(),
+  };
+}
+
+/** Per-process cache keyed by ctx.rootPath. Entries are paths + channel
+ * strings (small); file ids are resolved per call from getAllFiles so a
+ * delete+re-add (which recycles rowids) can never misattribute an edge. */
+const channelRoleCache = new Map<string, ElectronChannelCache>();
+const MAX_CACHED_ROOTS = 50;
+
+function getChannelCache(rootPath: string): ElectronChannelCache | undefined {
+  const hit = channelRoleCache.get(rootPath);
+  if (hit) {
+    // LRU refresh.
+    channelRoleCache.delete(rootPath);
+    channelRoleCache.set(rootPath, hit);
+  }
+  return hit;
+}
+
+function setChannelCache(rootPath: string, cache: ElectronChannelCache): void {
+  channelRoleCache.delete(rootPath);
+  channelRoleCache.set(rootPath, cache);
+  while (channelRoleCache.size > MAX_CACHED_ROOTS) {
+    const oldest = channelRoleCache.keys().next();
+    if (oldest.done) break;
+    channelRoleCache.delete(oldest.value);
+  }
+}
+
+function cacheAdd(
+  cache: ElectronChannelCache,
+  role: ElectronRole,
+  channel: string,
+  p: string,
+): void {
+  let set = cache.byChannel[role].get(channel);
+  if (!set) {
+    set = new Set();
+    cache.byChannel[role].set(channel, set);
+  }
+  set.add(p);
+}
+
+function cacheAddFileRoles(cache: ElectronChannelCache, p: string, roles: FileChannelRoles): void {
+  cache.byFile.set(p, roles);
+  for (const c of roles.handles) cacheAdd(cache, 'handle', c, p);
+  for (const c of roles.listens) cacheAdd(cache, 'listen', c, p);
+  for (const c of roles.pushes) cacheAdd(cache, 'push', c, p);
+  for (const c of roles.invokes) cacheAdd(cache, 'invoke', c, p);
+  for (const c of roles.sends) cacheAdd(cache, 'send', c, p);
+  for (const c of roles.ons) cacheAdd(cache, 'on', c, p);
+}
+
+function cacheEvictFile(cache: ElectronChannelCache, p: string): void {
+  const roles = cache.byFile.get(p);
+  if (!roles) return;
+  cache.byFile.delete(p);
+  const drop = (role: ElectronRole, channels: string[]) => {
+    for (const c of channels) {
+      const set = cache.byChannel[role].get(c);
+      if (!set) continue;
+      set.delete(p);
+      if (set.size === 0) cache.byChannel[role].delete(c);
+    }
+  };
+  drop('handle', roles.handles);
+  drop('listen', roles.listens);
+  drop('push', roles.pushes);
+  drop('invoke', roles.invokes);
+  drop('send', roles.sends);
+  drop('on', roles.ons);
+}
+
+/** Drop entries for paths no longer indexed (deleted files). The pipeline
+ * deletes a removed file's rows, but the file never appears in
+ * changeScope.changedFileIds, so eviction-by-change would miss it. */
+function cachePruneStalePaths(cache: ElectronChannelCache, live: Set<string>): void {
+  for (const p of Array.from(cache.byFile.keys())) {
+    if (!live.has(p)) cacheEvictFile(cache, p);
+  }
+}
+
+/**
+ * Scan one file's source for the channel roles the full pass maps. Gated on
+ * the electron import exactly like the full pass's first scan, so cached
+ * roles equal what a full scan would map — no more, no less.
+ */
+function scanChannelRoles(source: string): FileChannelRoles {
+  const empty: FileChannelRoles = {
+    handles: [],
+    listens: [],
+    pushes: [],
+    invokes: [],
+    sends: [],
+    ons: [],
+  };
+  if (!ELECTRON_IMPORT_RE.test(source)) return empty;
+  return {
+    handles: [
+      ...extractChannels(source, IPC_MAIN_HANDLE_RE),
+      ...extractChannels(source, IPC_MAIN_HANDLE_ONCE_RE),
+    ],
+    listens: [
+      ...extractChannels(source, IPC_MAIN_ON_RE),
+      ...extractChannels(source, IPC_MAIN_ONCE_RE),
+    ],
+    pushes: [
+      ...extractChannels(source, WEBCONTENTS_SEND_RE),
+      ...extractChannels(source, EVENT_SENDER_SEND_RE),
+    ],
+    invokes: extractChannels(source, IPC_RENDERER_INVOKE_RE),
+    sends: [
+      ...extractChannels(source, IPC_RENDERER_SEND_RE),
+      ...extractChannels(source, IPC_RENDERER_SEND_SYNC_RE),
+    ],
+    ons: [
+      ...extractChannels(source, IPC_RENDERER_ON_RE),
+      ...extractChannels(source, IPC_RENDERER_ONCE_RE),
+    ],
+  };
+}
+
+/**
+ * Last path in `order` wins — mirrors the full scan's `Map.set` overwrite
+ * while iterating the same getAllFiles() array. Order is the live array, so
+ * scoped and full runs pick the same file for a channel handled twice.
+ */
+function pickLastPath(
+  paths: Set<string> | undefined,
+  order: Map<string, number>,
+): string | undefined {
+  if (!paths || paths.size === 0) return undefined;
+  let best: string | undefined;
+  let bestIdx = -1;
+  for (const p of paths) {
+    const idx = order.get(p) ?? -1;
+    if (idx >= bestIdx) {
+      best = p;
+      bestIdx = idx;
+    }
+  }
+  return best;
+}
+
+function isTsJsFile(file: { language: string | null }): boolean {
+  return !!file.language && ['typescript', 'javascript'].includes(file.language);
+}
+
+/**
+ * Test-only pass counters (TRA-1729): how many times the full vs scoped pass
+ * ran in this process. Lets the parity test prove the scoped path actually
+ * engages instead of silently falling back to full scans.
+ */
+const passStats = { scoped: 0, full: 0 };
+export function __getElectronPassStats(): { scoped: number; full: number } {
+  return { ...passStats };
+}
+
 // ── plugin ──────────────────────────────────────────────────────
 
 export class ElectronPlugin implements FrameworkPlugin {
   manifest: PluginManifest = {
     name: 'electron',
-    version: '2.1.0',
+    version: '2.2.0',
     priority: 30,
     category: 'tooling',
     dependencies: [],
@@ -401,8 +597,31 @@ export class ElectronPlugin implements FrameworkPlugin {
    * Pass 2: emit all electron edges. Every edge carries a resolver-recognized
    * source (enclosing symbol, else file node) and target (virtual `electron-*::`
    * symbol id for non-code targets, or a real file node for cross-file IPC).
+   *
+   * Scope-aware (TRA-1729): when the pipeline passes a non-empty changeScope
+   * and this process has a warm channel-role cache for the root, only changed
+   * files are scanned — cross-file maps come from the cache instead of a full
+   * corpus scan. Unchanged files' edges persist untouched in the DB (the
+   * pipeline deletes outgoing edges for changed files only), so re-emitting
+   * just the changed files plus their cross-file counterparts yields the same
+   * edge set as a full scan. Cold cache (fresh process) falls through to the
+   * full pass, which rebuilds it.
    */
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+    const scope = ctx.changeScope;
+    if (scope && scope.changedFileIds.size > 0) {
+      const cached = getChannelCache(ctx.rootPath);
+      if (cached) {
+        passStats.scoped += 1;
+        return ok(this.resolveEdgesScoped(ctx, scope, cached));
+      }
+    }
+    passStats.full += 1;
+    return this.resolveEdgesFull(ctx);
+  }
+
+  /** Full-corpus pass: the historical behavior, unchanged. */
+  private resolveEdgesFull(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
     const edges: RawEdge[] = [];
 
     // Maps: channel → file that handles/listens/pushes (main process endpoints).
@@ -411,36 +630,50 @@ export class ElectronPlugin implements FrameworkPlugin {
     const mainPushers = new Map<string, { fileId: number; path: string }>();
 
     const files = ctx.getAllFiles();
+    const cache = emptyCache();
 
     // First pass: collect all main-process IPC endpoints for cross-file resolution.
     for (const file of files) {
-      if (!file.language || !['typescript', 'javascript'].includes(file.language)) continue;
+      if (!isTsJsFile(file)) continue;
       const source = ctx.readFile(file.path);
       if (!source || !ELECTRON_IMPORT_RE.test(source)) continue;
 
-      for (const channel of [
-        ...extractChannels(source, IPC_MAIN_HANDLE_RE),
-        ...extractChannels(source, IPC_MAIN_HANDLE_ONCE_RE),
-      ]) {
+      // Single role scan feeds both the cross-file maps and the role cache —
+      // same channels, same regexes as the historical per-map extraction.
+      const roles = scanChannelRoles(source);
+      for (const channel of roles.handles) {
         mainHandlers.set(channel, { fileId: file.id, path: file.path });
       }
-      for (const channel of [
-        ...extractChannels(source, IPC_MAIN_ON_RE),
-        ...extractChannels(source, IPC_MAIN_ONCE_RE),
-      ]) {
+      for (const channel of roles.listens) {
         mainListeners.set(channel, { fileId: file.id, path: file.path });
       }
-      for (const channel of [
-        ...extractChannels(source, WEBCONTENTS_SEND_RE),
-        ...extractChannels(source, EVENT_SENDER_SEND_RE),
-      ]) {
+      for (const channel of roles.pushes) {
         mainPushers.set(channel, { fileId: file.id, path: file.path });
       }
+      cacheAddFileRoles(cache, file.path, roles);
     }
+    setChannelCache(ctx.rootPath, cache);
+
+    const maps = { handlers: mainHandlers, listeners: mainListeners, pushers: mainPushers };
 
     // Second pass: emit per-file edges (source-anchored) + cross-file IPC edges.
+    this.emitFileEdges(ctx, files, maps, edges);
+
+    return ok(edges);
+  }
+
+  /**
+   * Second-pass emission shared verbatim by the full and scoped passes:
+   * per-file virtual edges plus cross-file IPC resolution through `maps`.
+   */
+  private emitFileEdges(
+    ctx: ResolveContext,
+    files: ResolvedFile[],
+    maps: ElectronEndpointMaps,
+    edges: RawEdge[],
+  ): void {
     for (const file of files) {
-      if (!file.language || !['typescript', 'javascript'].includes(file.language)) continue;
+      if (!isTsJsFile(file)) continue;
       const source = ctx.readFile(file.path);
       if (!source) continue;
       const hasElectronImport = ELECTRON_IMPORT_RE.test(source);
@@ -639,7 +872,7 @@ export class ElectronPlugin implements FrameworkPlugin {
       if (hasElectronImport) {
         // Renderer invoke → main handle
         forEachNamedMatch(source, IPC_RENDERER_INVOKE_RE, (channel, idx) => {
-          const handler = mainHandlers.get(channel);
+          const handler = maps.handlers.get(channel);
           if (!handler) return;
           const { fields, line } = edgeSource(file, symbols, source, idx);
           edges.push({
@@ -661,7 +894,7 @@ export class ElectronPlugin implements FrameworkPlugin {
         // Renderer send / sendSync → main on
         for (const re of [IPC_RENDERER_SEND_RE, IPC_RENDERER_SEND_SYNC_RE]) {
           forEachNamedMatch(source, re, (channel, idx) => {
-            const listener = mainListeners.get(channel);
+            const listener = maps.listeners.get(channel);
             if (!listener) return;
             const { fields, line } = edgeSource(file, symbols, source, idx);
             edges.push({
@@ -685,7 +918,7 @@ export class ElectronPlugin implements FrameworkPlugin {
         // Source anchored in the PUSHER file, target = this renderer file.
         for (const re of [IPC_RENDERER_ON_RE, IPC_RENDERER_ONCE_RE]) {
           forEachNamedMatch(source, re, (channel) => {
-            const pusher = mainPushers.get(channel);
+            const pusher = maps.pushers.get(channel);
             if (!pusher) return;
             // Anchor the source at the pusher's webContents.send match line.
             const pusherSource = ctx.readFile(pusher.path);
@@ -729,7 +962,259 @@ export class ElectronPlugin implements FrameworkPlugin {
         }
       }
     }
-
-    return ok(edges);
   }
+
+  /**
+   * Scoped pass (TRA-1729): re-emit only changed files plus the cross-file
+   * counterparts a full scan would newly link to them. Unchanged files are
+   * never read; their edges persist in the DB.
+   *
+   * Three phases: (1) evict changed files' stale roles and fresh-scan them
+   * into the cache; (2) emit changed files exactly like the full pass, with
+   * cross-file maps resolved through the cache in live file order (last
+   * wins — the same rule as the full scan's Map.set overwrite); (3) reconcile
+   * counterparts anchored in unchanged files: a changed handler/listener
+   * pulls in the cached renderer files invoking/sending its channels, and a
+   * changed pusher links the cached renderer files listening to its channels.
+   * Each reconciliation is gated on this file being the same pick the full
+   * scan would make, so the emitted set matches a full scan exactly.
+   */
+  private resolveEdgesScoped(
+    ctx: ResolveContext,
+    scope: { changedFileIds: ReadonlySet<number> },
+    cache: ElectronChannelCache,
+  ): RawEdge[] {
+    const edges: RawEdge[] = [];
+    const files = ctx.getAllFiles();
+    const order = new Map<string, number>();
+    const byPath = new Map<string, ResolvedFile>();
+    files.forEach((f, i) => {
+      order.set(f.path, i);
+      byPath.set(f.path, f);
+    });
+    cachePruneStalePaths(cache, new Set(byPath.keys()));
+
+    const changed = files.filter((f) => scope.changedFileIds.has(f.id) && isTsJsFile(f));
+    if (changed.length === 0) return edges;
+
+    // Phase 1: evict + fresh-scan changed files into the cache.
+    const fresh = new Map<string, { roles: FileChannelRoles; source: string }>();
+    for (const f of changed) {
+      cacheEvictFile(cache, f.path);
+      const source = ctx.readFile(f.path);
+      if (!source) continue;
+      const roles = scanChannelRoles(source);
+      cacheAddFileRoles(cache, f.path, roles);
+      fresh.set(f.path, { roles, source });
+    }
+
+    // Singleton cross-file maps through the cache (last in file order wins).
+    const pick = (
+      role: ElectronRole,
+      channel: string,
+    ): { fileId: number; path: string } | undefined => {
+      const p = pickLastPath(cache.byChannel[role].get(channel), order);
+      if (!p) return undefined;
+      const f = byPath.get(p);
+      return f ? { fileId: f.id, path: p } : undefined;
+    };
+    const maps: ElectronEndpointMaps = {
+      handlers: new Map(),
+      listeners: new Map(),
+      pushers: new Map(),
+    };
+    const fill = (role: ElectronRole, out: Map<string, { fileId: number; path: string }>): void => {
+      for (const channel of cache.byChannel[role].keys()) {
+        const entry = pick(role, channel);
+        if (entry) out.set(channel, entry);
+      }
+    };
+    fill('handle', maps.handlers);
+    fill('listen', maps.listeners);
+    fill('push', maps.pushers);
+
+    // Phase 2: changed files emit exactly like the full pass.
+    this.emitFileEdges(ctx, changed, maps, edges);
+
+    // Phase 3: counterparts anchored in unchanged files.
+    const symbolsCache = new Map<number, FileSymbol[]>();
+    const symbolsOf = (fileId: number): FileSymbol[] => {
+      let s = symbolsCache.get(fileId);
+      if (!s) {
+        s = ctx.getSymbolsByFile(fileId) as FileSymbol[];
+        symbolsCache.set(fileId, s);
+      }
+      return s;
+    };
+    for (const f of changed) {
+      const fr = fresh.get(f.path);
+      if (!fr) continue;
+      // Changed handler → cached renderer files invoking its channels.
+      for (const channel of new Set(fr.roles.handles)) {
+        const handler = pick('handle', channel);
+        if (!handler || handler.path !== f.path) continue;
+        for (const rPath of cache.byChannel.invoke.get(channel) ?? []) {
+          if (rPath === f.path || fresh.has(rPath)) continue;
+          const rFile = byPath.get(rPath);
+          const rSource = rFile && ctx.readFile(rPath);
+          if (!rFile || !rSource) continue;
+          emitInvokeToHandler(ctx, rFile, rSource, symbolsOf(rFile.id), channel, handler, edges);
+        }
+      }
+      // Changed listener → cached renderer files sending its channels.
+      for (const channel of new Set(fr.roles.listens)) {
+        const listener = pick('listen', channel);
+        if (!listener || listener.path !== f.path) continue;
+        for (const rPath of cache.byChannel.send.get(channel) ?? []) {
+          if (rPath === f.path || fresh.has(rPath)) continue;
+          const rFile = byPath.get(rPath);
+          const rSource = rFile && ctx.readFile(rPath);
+          if (!rFile || !rSource) continue;
+          emitSendToListener(ctx, rFile, rSource, symbolsOf(rFile.id), channel, listener, edges);
+        }
+      }
+      // Changed pusher → cached renderer files listening to its channels,
+      // anchored at this file (its source is in hand).
+      for (const channel of new Set(fr.roles.pushes)) {
+        const pusher = pick('push', channel);
+        if (!pusher || pusher.path !== f.path) continue;
+        for (const rPath of cache.byChannel.on.get(channel) ?? []) {
+          if (rPath === f.path || fresh.has(rPath)) continue;
+          const rFile = byPath.get(rPath);
+          if (!rFile) continue;
+          emitPushToRenderer(ctx, f, fr.source, symbolsOf(f.id), rFile, channel, edges);
+        }
+      }
+    }
+    return edges;
+  }
+}
+
+// ── scoped-pass reconciliation helpers (TRA-1729) ────────────────────
+
+/** channel → { fileId, path } for the three main-process endpoint kinds. */
+interface ElectronEndpointMaps {
+  handlers: Map<string, { fileId: number; path: string }>;
+  listeners: Map<string, { fileId: number; path: string }>;
+  pushers: Map<string, { fileId: number; path: string }>;
+}
+
+function escapeChannel(channel: string): string {
+  return channel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Emit renderer-invoke(channel) → handler edges for one unchanged renderer
+ * file, filtered to a single channel. Mirrors the full pass's invoke block
+ * (same edge type, metadata, anchoring) — only the channel filter is new.
+ */
+function emitInvokeToHandler(
+  _ctx: ResolveContext,
+  rFile: ResolvedFile,
+  rSource: string,
+  rSymbols: FileSymbol[],
+  channel: string,
+  handler: { fileId: number; path: string },
+  edges: RawEdge[],
+): void {
+  void _ctx;
+  forEachNamedMatch(rSource, IPC_RENDERER_INVOKE_RE, (c, idx) => {
+    if (c !== channel) return;
+    const { fields, line } = edgeSource(rFile, rSymbols, rSource, idx);
+    edges.push({
+      edgeType: 'electron_ipc_invoke',
+      ...fields,
+      targetNodeType: 'file',
+      targetRefId: handler.fileId,
+      metadata: {
+        channel,
+        resolution: 'cross_file',
+        line,
+        file: rFile.path,
+        targetFile: handler.path,
+      },
+      resolution: 'ast_resolved',
+    });
+  });
+}
+
+/**
+ * Emit renderer-send/sendSync(channel) → listener edges for one unchanged
+ * renderer file, filtered to a single channel. Mirrors the full pass's
+ * send block.
+ */
+function emitSendToListener(
+  _ctx: ResolveContext,
+  rFile: ResolvedFile,
+  rSource: string,
+  rSymbols: FileSymbol[],
+  channel: string,
+  listener: { fileId: number; path: string },
+  edges: RawEdge[],
+): void {
+  void _ctx;
+  for (const re of [IPC_RENDERER_SEND_RE, IPC_RENDERER_SEND_SYNC_RE]) {
+    forEachNamedMatch(rSource, re, (c, idx) => {
+      if (c !== channel) return;
+      const { fields, line } = edgeSource(rFile, rSymbols, rSource, idx);
+      edges.push({
+        edgeType: 'electron_ipc_send',
+        ...fields,
+        targetNodeType: 'file',
+        targetRefId: listener.fileId,
+        metadata: {
+          channel,
+          resolution: 'cross_file',
+          line,
+          file: rFile.path,
+          targetFile: listener.path,
+        },
+        resolution: 'ast_resolved',
+      });
+    });
+  }
+}
+
+/**
+ * Emit a pusher-anchored webContents.send(channel) → renderer-file edge.
+ * Mirrors the full pass's reverse block, including its anchoring quirk (the
+ * line is resolved through a `.webContents.send(` re-match; pushes via other
+ * APIs fall back to a file-anchored source with no line).
+ */
+function emitPushToRenderer(
+  _ctx: ResolveContext,
+  pFile: ResolvedFile,
+  pSource: string,
+  pSymbols: FileSymbol[],
+  rFile: ResolvedFile,
+  channel: string,
+  edges: RawEdge[],
+): void {
+  void _ctx;
+  let srcFields: Pick<RawEdge, 'sourceNodeType' | 'sourceRefId'> = {
+    sourceNodeType: 'file',
+    sourceRefId: pFile.id,
+  };
+  let srcLine: number | undefined;
+  const pushRe = new RegExp(`\\.webContents\\.send\\(\\s*['"]${escapeChannel(channel)}['"]`);
+  const pm = pushRe.exec(pSource);
+  if (pm) {
+    const s = edgeSource(pFile, pSymbols, pSource, pm.index);
+    srcFields = s.fields;
+    srcLine = s.line;
+  }
+  edges.push({
+    edgeType: 'electron_webcontents_send',
+    ...srcFields,
+    targetNodeType: 'file',
+    targetRefId: rFile.id,
+    metadata: {
+      channel,
+      resolution: 'cross_file',
+      line: srcLine,
+      file: pFile.path,
+      targetFile: rFile.path,
+    },
+    resolution: 'ast_resolved',
+  });
 }
