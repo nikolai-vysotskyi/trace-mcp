@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from '../_zod-helpers.js';
-import { formatToolError, notFound } from '../../../errors.js';
+import { formatToolError, notFound, validationError } from '../../../errors.js';
 import { LOCKS_DIR, projectHash } from '../../../global.js';
 import { IndexingPipeline } from '../../../indexer/pipeline.js';
 import { decisionsForImpact } from '../../../memory/enrichment.js';
@@ -14,6 +14,14 @@ import { withLock } from '../../../utils/pid-lock.js';
 import { getChangeImpact } from '../../analysis/impact.js';
 import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
 import { getRelatedSymbols } from '../../navigation/related.js';
+import {
+  OBSERVATION_FIRST_PAGE_ITEMS,
+  OBSERVATION_THRESHOLD_BYTES,
+  isObservationId,
+  pageItems,
+  recallObservation,
+  storeObservation,
+} from '../../../observation-pack.js';
 import { emptyIndexHint, fallbackOutline } from '../../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
 import { buildEmptyResultNote } from '../../shared/empty-note.js';
@@ -270,7 +278,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Pass symbol_ids to scope analysis to changed symbols only. Use before modifying code to understand blast radius. For a quick risk score alone use assess_change_risk; for who-calls-what use get_call_graph. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Pass symbol_ids to scope to changed symbols. Use before modifying code. For a quick risk score alone use assess_change_risk; for who-calls-what use get_call_graph. compact pages results; bundle recalls. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
       file_path: optionalNonEmptyString(512).describe('Relative file path to analyze'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to analyze'),
@@ -301,8 +309,73 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         .max(5000)
         .optional()
         .describe('Cap on returned dependents (default 200)'),
+      compact: z.boolean().optional().describe('Paged recall (opt-in).'),
+      bundle: z.string().optional().describe('Handle; @N = page N.'),
     },
-    async ({ file_path, symbol_id, fqn, symbol_ids, decorator_filter, depth, max_dependents }) => {
+    async ({
+      file_path,
+      symbol_id,
+      fqn,
+      symbol_ids,
+      decorator_filter,
+      depth,
+      max_dependents,
+      compact,
+      bundle,
+    }) => {
+      // Recall path: serve an exact page from the local archive. The handle
+      // carries an optional cursor suffix (`obs_<24hex>@25`); without it the
+      // first page is served. Fail-open means failing LOUD here (re-run the
+      // query) rather than fabricating.
+      if (bundle) {
+        const [handle, cursor] = bundle.split('@');
+        const offset = cursor === undefined || cursor === '' ? 0 : Number(cursor);
+        if (!isObservationId(handle ?? '') || !Number.isSafeInteger(offset) || offset < 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j(formatToolError(validationError(`Unknown observation id: ${bundle}`))),
+              },
+            ],
+            isError: true,
+          };
+        }
+        try {
+          const page = recallObservation(handle as string, offset, OBSERVATION_FIRST_PAGE_ITEMS);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: jh('get_change_impact', {
+                  bundle: handle,
+                  dependents: page.items,
+                  bundle_offset: page.offset,
+                  next_offset: page.nextOffset,
+                  eof: page.eof,
+                  total_dependents: page.total,
+                }),
+              },
+            ],
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j(
+                  formatToolError(
+                    validationError(
+                      error instanceof Error ? error.message : 'Observation recall failed',
+                    ),
+                  ),
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
@@ -315,6 +388,9 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
           fqn,
           symbolIds: symbol_ids,
           decoratorFilter: decorator_filter,
+          // Compact needs the full ranked list to archive; the default path
+          // keeps the 25-item budget slice 1:1.
+          emitAllDependents: compact === true,
         },
         depth ?? 3,
         max_dependents ?? 200,
@@ -333,6 +409,46 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       const payload: Record<string, unknown> = includeMethodology
         ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY }
         : { ...result.value };
+      // TRA-1700 compact: archive the full dependents list and serve the first
+      // page + handle. Under the threshold (or on any archive failure) the
+      // response stays the legacy shape — fail-open, never lose evidence.
+      if (compact === true && result.value.totalAffected > 0) {
+        try {
+          const fullJson = JSON.stringify(result.value.dependents);
+          if (Buffer.byteLength(fullJson, 'utf8') > OBSERVATION_THRESHOLD_BYTES) {
+            const queryKey =
+              symbol_id ?? fqn ?? file_path ?? (symbol_ids ?? []).join(',') ?? 'unknown';
+            const stored = storeObservation('get_change_impact', queryKey, result.value.dependents);
+            const { page, nextOffset, eof } = pageItems(
+              result.value.dependents,
+              0,
+              OBSERVATION_FIRST_PAGE_ITEMS,
+            );
+            payload.dependents = page;
+            payload.observation = {
+              id: stored.id,
+              tool: 'get_change_impact',
+              total_dependents: stored.totalItems,
+              next_offset: nextOffset,
+              eof,
+              recall:
+                'Large result archived locally. Recall page N with get_change_impact {"bundle": "<id>@N"}.',
+            };
+          } else {
+            // Under the threshold there is nothing to page: restore the exact
+            // legacy 25-item slice so compact=true stays byte-identical to the
+            // default path on small results.
+            payload.dependents = pageItems(
+              result.value.dependents,
+              0,
+              OBSERVATION_FIRST_PAGE_ITEMS,
+            ).page;
+          }
+        } catch {
+          // Fail-open: archive failure keeps the full ranked list in `payload`
+          // as computed above — the agent loses nothing.
+        }
+      }
       if (result.value.totalAffected === 0) {
         const note = buildEmptyResultNote(store, projectRoot, result.value.target.path);
         if (note) payload.empty_result_note = note;
