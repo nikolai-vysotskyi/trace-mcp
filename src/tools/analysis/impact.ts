@@ -171,6 +171,27 @@ function dependentWeight(d: EnrichedDependent): number {
 
 /**
  * Rank dependents by proximity (shallower depth = more directly impacted) then
+ * by impact weight — but only when the list exceeds the emission budget.
+ * Under the budget both the legacy slice and the ObservationPack archive keep
+ * discovery order, so the compact first page is identical to the legacy
+ * response (TRA-1728: an unconditional archive sort diverged by one token on
+ * pallets/flask#5620). Shared by both paths so they cannot drift apart again.
+ */
+function rankDependents(deps: EnrichedDependent[]): EnrichedDependent[] {
+  if (deps.length <= MAX_EMITTED_DEPENDENTS) return deps;
+  return [...deps].sort((a, b) => {
+    if (a.depth !== b.depth) return a.depth - b.depth;
+    return dependentWeight(b) - dependentWeight(a);
+  });
+}
+
+function trimDependentSymbols(d: EnrichedDependent): EnrichedDependent {
+  if (!d.symbols || d.symbols.length <= MAX_SYMBOLS_PER_DEPENDENT) return d;
+  return { ...d, symbols: d.symbols.slice(0, MAX_SYMBOLS_PER_DEPENDENT) };
+}
+
+/**
+ * Rank dependents by proximity (shallower depth = more directly impacted) then
  * by impact weight, cap the list, and trim each dependent's symbol detail.
  * Returns whether anything was dropped so the caller can flag truncation.
  */
@@ -182,10 +203,7 @@ function capEmittedDependents(deps: EnrichedDependent[]): {
   let ranked = deps;
   if (deps.length > MAX_EMITTED_DEPENDENTS) {
     truncated = true;
-    ranked = [...deps].sort((a, b) => {
-      if (a.depth !== b.depth) return a.depth - b.depth;
-      return dependentWeight(b) - dependentWeight(a);
-    });
+    ranked = rankDependents(deps);
   }
   const emitted = ranked.slice(0, MAX_EMITTED_DEPENDENTS).map((d) => {
     if (!d.symbols || d.symbols.length <= MAX_SYMBOLS_PER_DEPENDENT) return d;
@@ -772,20 +790,11 @@ export function getChangeImpact(
   // TRA-1700 (ObservationPack): the compact path needs the full ranked list to
   // archive it and serve exact pages. Symbol detail stays trimmed per dependent
   // (the per-item bound is about row width, not list length); the traversal
-  // cap (maxDependents) still bounds the worst case.
+  // cap (maxDependents) still bounds the worst case. Ranking mirrors the
+  // legacy conditional sort via rankDependents, so the archived first page is
+  // exactly the legacy slice at any list length (TRA-1728 parity fix).
   const fullRankedDependents =
-    opts.emitAllDependents === true
-      ? [...dependents]
-          .sort((a, b) => {
-            if (a.depth !== b.depth) return a.depth - b.depth;
-            return dependentWeight(b) - dependentWeight(a);
-          })
-          .map((d) =>
-            !d.symbols || d.symbols.length <= MAX_SYMBOLS_PER_DEPENDENT
-              ? d
-              : { ...d, symbols: d.symbols.slice(0, MAX_SYMBOLS_PER_DEPENDENT) },
-          )
-      : null;
+    opts.emitAllDependents === true ? rankDependents(dependents).map(trimDependentSymbols) : null;
 
   const result: ChangeImpactResult = {
     target: {
