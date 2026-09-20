@@ -139,6 +139,93 @@ describe('deferred edge reconcile', () => {
     expect(scopes()[0]).toBeDefined();
   });
 
+  it('dispose() drains in-flight pipeline work before returning (TRA-1752)', async () => {
+    // stopProject() closes the project DB the moment dispose() returns — if
+    // dispose() does not wait out the lock chain, the run's next statement
+    // throws "The database connection is not open" from an async continuation.
+    await pipeline.indexAll();
+
+    fs.writeFileSync(path.join(rootDir, 'src', 'h.ts'), 'export function hhh() { return 1; }\n');
+    let finished = false;
+    const run = pipeline.indexFiles(['src/h.ts']).then((r) => {
+      finished = true;
+      return r;
+    });
+    await pipeline.dispose();
+    // The .then above was registered before dispose()'s lock wait, so this
+    // is only true when dispose() actually awaited the in-flight run.
+    expect(finished).toBe(true);
+    await run;
+  });
+
+  it('dispose() waits for an already-fired reconcile instead of closing under it (TRA-1752)', async () => {
+    await pipeline.indexAll();
+    resolveSpy.mockClear();
+
+    fs.writeFileSync(path.join(rootDir, 'src', 'i.ts'), 'export function iii() { return 1; }\n');
+    await pipeline.indexFiles(['src/i.ts']); // schedules reconcile
+
+    // Hold the full pass open so it is provably still running when dispose()
+    // lands — without the gate the tiny test DB could finish first and the
+    // test would pass vacuously.
+    resolveSpy.mockRestore();
+    const origResolveEdges = EdgeResolver.prototype.resolveEdges;
+    let releaseFull!: () => void;
+    const gate = new Promise<void>((r) => {
+      releaseFull = r;
+    });
+    let fullEntered = false;
+    resolveSpy = vi
+      .spyOn(EdgeResolver.prototype, 'resolveEdges')
+      .mockImplementation(async function (this: EdgeResolver, ...args: never[]) {
+        if ((args as unknown[])[2] === undefined) {
+          fullEntered = true;
+          await gate;
+        }
+        return (origResolveEdges as (...a: never[]) => Promise<void>).apply(this, args);
+      });
+
+    // Fire without awaiting: the full pass is now in flight, held at the gate.
+    const flushP = pipeline.__flushEdgeReconcileForTests();
+    await vi.waitFor(() => expect(fullEntered).toBe(true));
+
+    let disposeReturned = false;
+    const disposeP = pipeline.dispose().then(() => {
+      disposeReturned = true;
+    });
+    // The gate is still closed — dispose() must still be draining.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(disposeReturned).toBe(false);
+
+    releaseFull();
+    await disposeP;
+    await flushP;
+    expect(disposeReturned).toBe(true);
+    expect(fullPasses()).toBe(1);
+  });
+
+  it('scheduling reconciles after dispose() arms no timer (TRA-1752)', async () => {
+    await pipeline.indexAll();
+    resolveSpy.mockClear();
+    await pipeline.dispose();
+
+    // An in-flight run reaching its tail after dispose() must not arm a timer
+    // that later fires against the closed DB.
+    const internals = pipeline as unknown as {
+      scheduleEdgeReconcile(): void;
+      scheduleCoverageReconcile(): void;
+      _reconcileTimer: unknown;
+      _coverageTimer: unknown;
+    };
+    internals.scheduleEdgeReconcile();
+    internals.scheduleCoverageReconcile();
+    expect(internals._reconcileTimer).toBeNull();
+    expect(internals._coverageTimer).toBeNull();
+
+    await pipeline.__flushEdgeReconcileForTests(); // nothing pending — no-op
+    expect(fullPasses()).toBe(0);
+  });
+
   it('content-only edits do not schedule a reconcile', async () => {
     await pipeline.indexAll();
     resolveSpy.mockClear();
