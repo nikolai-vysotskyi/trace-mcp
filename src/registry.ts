@@ -930,6 +930,15 @@ export function markAllProjectsPendingReindex(version: string): number {
   const reg = loadRegistry();
   let count = 0;
   for (const entry of Object.values(reg.projects)) {
+    // TRA-1768: never stamp a forced post-update rebuild on an ephemeral
+    // one-shot root. Legacy rows (written before `<tmp>/multica-task-<id>`
+    // checkouts were classified ephemeral, or deliberate `add`/`init` of a
+    // tmp path) would otherwise make the transit daemon full-rebuild a
+    // foreign smoke tree — hundreds of doomed parses whose identical
+    // failures flood the shared daemon.log. The row itself is left alone
+    // (missing-root sweeps own deletion); only the forced-rebuild stamp is
+    // withheld, so the next open falls back to the cheap incremental path.
+    if (isEphemeralProjectRoot(entry.root)) continue;
     if (entry.pendingReindexForVersion !== version) {
       entry.pendingReindexForVersion = version;
       delete entry.pendingReindexAttempts;
