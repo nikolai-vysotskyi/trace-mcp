@@ -35,6 +35,15 @@ import {
 } from '../lattice/ui';
 import { userFacingError } from './graph-error';
 import { breathAction } from './graph-idle';
+import {
+  buildConnections,
+  neighborhood,
+  isExternalNode,
+  type Direction,
+} from './graph-exploration';
+import { GraphHover } from './GraphHover';
+import { GraphConnections, GraphHubs } from './GraphConnections';
+import './graph-exploration.css';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -54,11 +63,7 @@ import {
   type GraphGPUSettings,
 } from './graph-types';
 
-export {
-  DEFAULT_GRAPH_GPU_SETTINGS,
-  type GraphExplorerGPUHandle,
-  type GraphGPUSettings,
-};
+export { DEFAULT_GRAPH_GPU_SETTINGS, type GraphExplorerGPUHandle, type GraphGPUSettings };
 
 const COLOR_BY_OPTIONS: { value: GraphGPUSettings['colorBy']; labelKey: string }[] = [
   { value: 'community', labelKey: 'colourByCommunity' },
@@ -469,7 +474,9 @@ function extractFilePath(node: VizNode): string {
 function isRealFileId(node: VizNode): boolean {
   const id = node.id ?? '';
   if (!id) return false;
-  if (id.endsWith('.synthetic')) return false;
+  if (isExternalNode(id)) return false;
+  // Federated IDs are namespaced, not paths relative to the current project.
+  if (extractFilePath(node).includes(':')) return false;
   if (id.startsWith('node:')) return false;
   return true;
 }
@@ -502,7 +509,7 @@ function fitAllPoints(graph: Graph, count: number, duration: number, padding: nu
   }
   const all = new Array<number>(count);
   for (let i = 0; i < count; i++) all[i] = i;
-  graph.fitViewByPointIndices(all, duration, padding);
+  graph.fitViewByPointIndices(all, duration, padding, false);
 }
 
 /**
@@ -744,7 +751,11 @@ function GraphLegend({
   entries,
   palette,
   title,
+  activeKey,
+  onSelect,
 }: {
+  activeKey: string | null;
+  onSelect: (key: string) => void;
   entries: ColorKeyEntry[];
   palette: VizPalette;
   title: string;
@@ -756,18 +767,27 @@ function GraphLegend({
       <ul className="cosmos-gpu-legend-list">
         {entries.map((e) => (
           <li key={e.key} className="t-caption cosmos-gpu-legend-row">
-            <span
-              className="cosmos-gpu-legend-dot"
-              style={{ background: slotHex(e.slot, palette) }}
-              aria-hidden="true"
-            />
-            <span className="cosmos-gpu-legend-label" title={e.label}>
-              {e.label}
-            </span>
-            <span className="cosmos-gpu-legend-count">{formatNumber(e.count)}</span>
+            <button
+              type="button"
+              className="graph-legend-button"
+              aria-pressed={activeKey === e.key}
+              onClick={() => onSelect(e.key)}
+              title={e.slot === -1 ? t('graph:otherHint') : e.label}
+            >
+              <span
+                className="cosmos-gpu-legend-dot"
+                style={{ background: slotHex(e.slot, palette) }}
+                aria-hidden="true"
+              />
+              <span className="cosmos-gpu-legend-label" title={e.label}>
+                {e.label}
+              </span>
+              <span className="cosmos-gpu-legend-count">{formatNumber(e.count)}</span>
+            </button>
           </li>
         ))}
       </ul>
+      <div className="graph-secondary t-caption graph-legend-hint">{t('graph:legendHint')}</div>
     </div>
   );
 }
@@ -865,6 +885,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     null,
   );
   // The categorical colour key currently painted on the canvas — legend data.
+  const [drawnLinks, setDrawnLinks] = useState(0);
   const [colorKey, setColorKey] = useState<ColorKeyEntry[]>([]);
 
   /* Nodes on the canvas, or a stated failure. Not the layout settling. */
@@ -881,6 +902,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   const [vizPalette, setVizPalette] = useState<VizPalette>(readVizPalette);
   const vizPaletteRef = useRef<VizPalette>(vizPalette);
   vizPaletteRef.current = vizPalette;
+  const [hoverAnchor, setHoverAnchor] = useState({ x: 0, y: 0 });
+  const hoverAnchorRef = useRef({ x: 0, y: 0 });
+  const settleStartedRef = useRef(0);
+  const [direction, setDirection] = useState<Direction>('both');
+  const directionRef = useRef(direction);
+  directionRef.current = direction;
+  const connectionsRef = useRef(buildConnections([], []));
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [focusCount, setFocusCount] = useState<number | null>(null);
+  const [trail, setTrail] = useState<string[]>([]);
+  const requestRef = useRef(0);
   const [hovered, setHovered] = useState<VizNode | null>(null);
   const [selected, setSelected] = useState<VizNode | null>(null);
   // When the user clicks a specific edge row in the hotspots sidebar we also
@@ -1028,6 +1060,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // FilterBar depth stepper — `null` (∞) maps to a generous 6-hop ceiling so
   // we don't risk infinite traversal on dense graphs but still feel "open".
   const HIGHLIGHT_DEPTH = filter.depth ?? 6;
+  const depthRef = useRef(HIGHLIGHT_DEPTH);
+  depthRef.current = HIGHLIGHT_DEPTH;
   // Mirror `showLabels` into a ref so the RAF tick reads the latest value
   // directly without relying on useCallback dep propagation. Belt-and-suspenders
   // against any stale-closure scenarios in the label loop.
@@ -1254,7 +1288,22 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         return false;
       }
       pendingFocusRef.current = null;
-      graph.fitViewByPointIndices([idx], 500, 0.3);
+      userInteractedRef.current = true;
+      setLive(false);
+      setHovered(null);
+      setActiveCategory(null);
+      selectedIndicesRef.current = null;
+      const ids = neighborhood(
+        connectionsRef.current,
+        [id],
+        depthRef.current,
+        directionRef.current,
+      );
+      const indices = [...ids.keys()].flatMap((key) => {
+        const i = indexByIdRef.current.get(key);
+        return i == null ? [] : [i];
+      });
+      graph.fitViewByPointIndices(indices.length ? indices : [idx], 500, 0.15, false);
       const node = nodesRef.current[idx];
       if (node) setSelected(node);
       setSelectedEdge(null);
@@ -1280,28 +1329,19 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     const orig = origColorsRef.current;
     if (!graph || !orig || seeds.length === 0) return;
-    const depth = HIGHLIGHT_DEPTH;
-
-    // BFS with per-node depth tracking. `depthMap` records the shortest hop
-    // distance we reached this node from any seed — that's what the color
-    // gradient visualizes.
+    const depth = depthRef.current;
+    const ids = neighborhood(
+      connectionsRef.current,
+      seeds.map((i) => nodesRef.current[i].id),
+      depth,
+      directionRef.current,
+    );
     const depthMap = new Map<number, number>();
-    for (const s of seeds) depthMap.set(s, 0);
-    let frontier = [...seeds];
-    for (let d = 1; d <= depth && frontier.length > 0; d++) {
-      const next: number[] = [];
-      for (const idx of frontier) {
-        const adj = graph.getNeighboringPointIndices(idx);
-        if (!adj) continue;
-        for (const n of adj) {
-          if (!depthMap.has(n)) {
-            depthMap.set(n, d);
-            next.push(n);
-          }
-        }
-      }
-      frontier = next;
+    for (const [id, hop] of ids) {
+      const index = indexByIdRef.current.get(id);
+      if (index != null) depthMap.set(index, hop);
     }
+    setFocusCount(depthMap.size);
 
     // Rewrite the color buffer: leave originals intact for non-highlighted
     // nodes (cosmos.gl will grey them), overwrite RGBA per-hop for the rest.
@@ -1333,7 +1373,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         const t = linkPairs[i * 2 + 1] | 0;
         const sd = depthMap.get(s);
         const td = depthMap.get(t);
-        const isTreeEdge = sd != null && td != null && sd !== td && Math.max(sd, td) <= depth;
+        const isTreeEdge =
+          sd != null &&
+          td != null &&
+          sd !== td &&
+          Math.max(sd, td) <= depth &&
+          (directionRef.current === 'both' ||
+            (directionRef.current === 'outgoing' ? sd < td : sd > td));
         if (isTreeEdge) {
           linkColors[i * 4] = hr;
           linkColors[i * 4 + 1] = hg;
@@ -1359,6 +1405,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // to "virtually infinite" so all highlighted links stay fully opaque; our
     // per-link alphas already handle dimming the non-highlighted ones.
     graph.setConfigPartial({ linkVisibilityDistanceRange: [100000, 200000] });
+    requestAnimationFrame(() => {
+      if (graphRef.current === graph) graph.fitViewByPointIndices(highlighted, 350, 0.15, false);
+    });
   }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: themeSpec kept as dep so the callback re-creates after a theme switch — keeps cosmos.gl color buffers consistent with the new palette without an explicit re-render path.
@@ -1384,7 +1433,41 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     selectedIndicesRef.current = null;
     setSelected(null);
     setSelectedEdge(null);
+    setHovered(null);
+    setActiveCategory(null);
+    setFocusCount(null);
+    setTrail([]);
   }, [themeSpec]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setTrail((previous) =>
+      previous.at(-1) === selected.id ? previous : [...previous.slice(-19), selected.id],
+    );
+    const index = indexByIdRef.current.get(selected.id);
+    if (index != null && !settings.bottlenecks && !settings.stressTest)
+      highlightNeighborhood([index]);
+  }, [
+    selected,
+    direction,
+    HIGHLIGHT_DEPTH,
+    highlightNeighborhood,
+    settings.bottlenecks,
+    settings.stressTest,
+  ]);
+
+  useEffect(() => {
+    const dismiss = () => setHovered(null);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss();
+    };
+    window.addEventListener('blur', dismiss);
+    document.addEventListener('keydown', escape, true);
+    return () => {
+      window.removeEventListener('blur', dismiss);
+      document.removeEventListener('keydown', escape, true);
+    };
+  }, []);
 
   // Mode-aware highlight picker used by the cosmos.gl onClick callback.
   // That callback is captured once at Graph() construction and can't see
@@ -1693,8 +1776,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // ── Fetch + render ────────────────────────────────────────────
   // biome-ignore lint/correctness/useExhaustiveDependencies: renderGraph is declared further below (TDZ); we capture it via closure at call time. Adding it would force a forward reference that breaks the TS block-scope check.
   const loadGraph = useCallback(async () => {
+    const request = ++requestRef.current;
     setLoading(true);
     setError(null);
+    setHovered(null);
 
     const params = new URLSearchParams({
       project: root,
@@ -1729,6 +1814,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           throw new Error(body.error ?? tr('serverError', { status: resp.status }));
         }
         const data = (await resp.json()) as GraphPayload;
+        if (request !== requestRef.current) return;
+        clearHighlight();
         payloadRef.current = data;
         try {
           renderGraph(data);
@@ -1740,7 +1827,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         setStats({
           nodes: data.nodes.length,
           edges: data.edges.length,
-          communities: data.communities.length,
+          communities: new Set(data.nodes.map((node) => node.community)).size,
         });
         setLoading(false);
         return;
@@ -1753,6 +1840,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         break;
       }
     }
+    if (request !== requestRef.current) return;
     setError(userFacingError(lastErr));
     setLoading(false);
   }, [
@@ -1807,6 +1895,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // stale from the previous render, the freshly-built graph would skip
       // its one initial fit-view pass.
       frozenRef.current = false;
+      settleStartedRef.current = performance.now();
       userInteractedRef.current = false;
       // Fresh data — force the next label pass to run even if the camera and
       // node count happen to match the previous render.
@@ -1893,7 +1982,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           //      before the view is framed on the actual layout.
           //   2. Fit-and-mark at alpha < 0.15 (frozenRef flips true) — one
           //      smooth final fit once the cloud has mostly settled. The
-          //      simulation keeps running; frozenRef just gates further fits.
+          //      simulation pauses so the final framing remains stable.
           // Continuous motion is handled in a separate wall-clock interval
           // (see the breathing useEffect below) — not here — because
           // onSimulationTick stops firing once cosmos.gl considers the sim
@@ -1907,16 +1996,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               const g = graphRef.current;
               if (!g) return;
               // One-shot final fit when the initial settle is "done enough".
-              if (!frozenRef.current && alpha < 0.15) {
+              if (!frozenRef.current && alpha < 0.2 && performance.now() - settleStartedRef.current >= 6000) {
                 frozenRef.current = true;
-                if (!userInteractedRef.current)
-                  fitAllPoints(g, nodesRef.current.length, 800, 0.2);
+                g.pause();
+                setLive(false);
+                setSimRunning(false);
+                if (!userInteractedRef.current) fitAllPoints(g, nodesRef.current.length, 800, 0.2);
               }
               if (frozenRef.current) return;
               // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
               // isn't clobbered by the next throttled refit.
               if (userInteractedRef.current) return;
-              if (alpha < 0.25) return;
               const now = performance.now();
               if (now - lastTickFitRef.current < 500) return;
               lastTickFitRef.current = now;
@@ -1939,6 +2029,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             }
             const node = nodesRef.current[index];
             if (node) setSelected(node);
+            setHovered(null);
+            setActiveCategory(null);
+            selectedIndicesRef.current = null;
+            setLive(false);
+            userInteractedRef.current = true;
             setSelectedEdge(null);
             // Route through the mode-aware highlight picker. Bottleneck mode
             // shows only hot adjacent edges; normal mode shows the full 1-hop
@@ -1946,7 +2041,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             // every time the mode flips — cosmos.gl resolves it lazily here.
             highlightByModeRef.current(index);
           },
-          onPointMouseOver: (index: number) => {
+          onPointMouseOver: (index) => {
+            // Cosmos can deliver a deferred GPU pick without a mouse event.
+            setHoverAnchor(hoverAnchorRef.current);
             const node = nodesRef.current[index];
             if (node) setHovered(node);
           },
@@ -1958,6 +2055,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // Build indexes
       const nodes = data.nodes;
       nodesRef.current = nodes;
+      connectionsRef.current = buildConnections(nodes, data.edges);
       const indexById = new Map<string, number>();
       nodes.forEach((n, i) => {
         indexById.set(n.id, i);
@@ -1967,10 +2065,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // Categorical colour key — top-N categories by node count get a palette
       // slot, the rest fold into "Other". Drives BOTH the point colours and
       // the on-canvas legend, so the two can never disagree.
-      const { commLabels: colorCommLabels, key: nextColorKey, slotByKey } = colorKeyFor(
-        data,
-        colorBy,
-      );
+      const {
+        commLabels: colorCommLabels,
+        key: nextColorKey,
+        slotByKey,
+      } = colorKeyFor(data, colorBy);
       setColorKey(nextColorKey);
       const palette = vizPaletteRef.current;
 
@@ -2190,6 +2289,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // the 1-hop subgraph. Copy because cosmos.gl may retain the underlying
         // buffer for GPU upload.
         linkPairsRef.current = new Float32Array(links);
+        setDrawnLinks(links.length / 2);
         // Compute & push per-link tints (shade of source node's color). Falls
         // back silently to linkDefaultColor if point colors aren't ready yet.
         // When bottleneck mode is active, colors come from the bottleneck
@@ -2242,8 +2342,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         // fitView() on the whole space renders as a tiny central blob (TRA-1741).
         requestAnimationFrame(() => {
           const gg = graphRef.current;
-          if (gg && !userInteractedRef.current)
-            fitAllPoints(gg, nodesRef.current.length, 500, 0.2);
+          if (gg && !userInteractedRef.current) fitAllPoints(gg, nodesRef.current.length, 500, 0.2);
         });
         // Arm onSimulationTick to fit on the first tick (throttle starts at 0).
         lastTickFitRef.current = 0;
@@ -2376,10 +2475,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const data = payloadRef.current;
     if (!graph || !data) return;
     const useBottleneckColors = settings.bottlenecks || settings.stressTest;
-    const { commLabels: colorCommLabels, key: nextColorKey, slotByKey } = colorKeyFor(
-      data,
-      colorBy,
-    );
+    const {
+      commLabels: colorCommLabels,
+      key: nextColorKey,
+      slotByKey,
+    } = colorKeyFor(data, colorBy);
     setColorKey(nextColorKey);
     const nodeScores = useBottleneckColors
       ? computeNodeBottleneckScores(data.nodes, data.edges)
@@ -2872,6 +2972,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   useEffect(() => {
     return () => {
       try {
+        requestRef.current++;
         graphRef.current?.destroy?.();
       } catch {
         /* ignore */
@@ -2883,6 +2984,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       }
     };
   }, []);
+
+  // The stats object changes for every newly accepted payload, even at equal counts.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the payload revision.
+  const nodesById = useMemo(
+    () => new Map(nodesRef.current.map((node) => [node.id, node])),
+    [stats],
+  );
 
   // ── Search: collect ALL matches; cap preview list at 8 ───────
   // Honors FilterBar semantics: match accepts substring or /regex/i; the
@@ -3111,6 +3219,47 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     setSearchQuery('');
   }, [filter.match, filter.exclude, HIGHLIGHT_DEPTH, clearHighlight, setSearchQuery]);
 
+  const selectCategory = (key: string) => {
+    if (activeCategory === key) {
+      clearHighlight();
+      return;
+    }
+    clearHighlight();
+    const data = payloadRef.current;
+    const graph = graphRef.current;
+    const orig = origColorsRef.current;
+    if (!data || !graph || !orig) return;
+    const labels = new Map(data.communities.map((c) => [c.id, c.label]));
+    const named = new Set(colorKey.filter((entry) => entry.slot >= 0).map((entry) => entry.key));
+    const indices = nodesRef.current.flatMap((node, index) => {
+      const category = categoryOf(node, colorBy, labels).key;
+      return (key === OTHER_KEY ? !named.has(category) : category === key) ? [index] : [];
+    });
+    const colors = new Float32Array(orig);
+    dimNonHighlighted(colors, indices);
+    graph.setPointColors(colors);
+    selectedIndicesRef.current = new Set(indices);
+    const links = linkPairsRef.current;
+    const base = defaultLinkColorsRef.current;
+    if (links && base) {
+      const colors = new Float32Array(base);
+      for (let i = 0; i < links.length / 2; i++) {
+        if (
+          !selectedIndicesRef.current.has(links[i * 2]) ||
+          !selectedIndicesRef.current.has(links[i * 2 + 1])
+        )
+          colors[i * 4 + 3] = 0;
+      }
+      graph.setLinkColors(colors);
+    }
+    userInteractedRef.current = true;
+    setLive(false);
+    if (indices.length) graph.fitViewByPointIndices(indices, 500, 0.15, false);
+    graph.render();
+    setActiveCategory(key);
+    setFocusCount(indices.length);
+  };
+
   // ── Workspace/group list (for "highlight group" dropdown) ────
   // biome-ignore lint/correctness/useExhaustiveDependencies: stats is the proxy that signals nodesRef.current was replaced after a new payload load.
   const workspaceList = useMemo(() => {
@@ -3243,13 +3392,36 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // alongside the sidebar — NO bleeding into sidebar zone.
     <div
       ref={paneRef}
-      className="relative w-full h-full overflow-hidden"
+      className="graph-explorer relative w-full h-full overflow-hidden"
+      onPointerMove={event => {
+        if (event.target instanceof Element && event.target.tagName.toLowerCase() === 'canvas') {
+          hoverAnchorRef.current = { x: event.clientX, y: event.clientY };
+          if (hovered) setHoverAnchor(hoverAnchorRef.current);
+        } else setHovered(null);
+      }}
+      onPointerLeave={() => setHovered(null)}
       style={{ ...cardStyle, fontFamily: sysFont }}
     >
       {/* WebGL canvas — the graph surface */}
-      <div ref={containerRef} className="absolute inset-0" />
+      <div
+        ref={containerRef}
+        className="graph-canvas absolute inset-0"
+        data-selected={!!selected && !bottlenecks && !stressTest}
+      />
 
       <FpsBadge show={showFPS} />
+      {stats && stats.nodes > 0 && !selected && !bottlenecks && !stressTest && !activeCategory && (
+        <GraphHubs nodes={nodesById} index={connectionsRef.current} onSelect={focusNode} />
+      )}
+      {focusCount != null && (
+        <button type="button" className="graph-focus-status t-caption" onClick={clearHighlight}>
+          {tr('focusStatus', {
+            total: formatNumber(focusCount),
+            all: formatNumber(stats?.nodes ?? 0),
+          })}{' '}
+          ×
+        </button>
+      )}
 
       {/* Bottleneck hotspots panel — legend + Top-20 edges with click-to-focus.
           Anchored top-left so it doesn't collide with the Stress Test HUD or
@@ -4023,10 +4195,7 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                   <div className="t-body" style={{ fontFamily: 'var(--font-mono)' }}>
                     {shortLabel(n)}
                   </div>
-                  <div
-                    className="t-caption truncate"
-                    style={{ color: 'var(--label-secondary)' }}
-                  >
+                  <div className="t-caption truncate" style={{ color: 'var(--label-secondary)' }}>
                     {n.id}
                   </div>
                 </li>
@@ -4237,9 +4406,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
 
       {/* Colour legend — bottom-left. Without it the four node hues are an
           unexplained rainbow (TRA-296). */}
-      {!bottlenecks && !stressTest && (
+      {!selected && !bottlenecks && !stressTest && (
         <GraphLegend
           entries={colorKey}
+          activeKey={activeCategory}
+          onSelect={selectCategory}
           palette={vizPalette}
           title={(() => {
             const key = COLOR_BY_OPTIONS.find((o) => o.value === colorBy)?.labelKey;
@@ -4261,12 +4432,25 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                 edges: formatNumber(stats.edges),
                 communities: formatNumber(stats.communities),
               })}
+          {!loading && (
+            <div className="graph-secondary t-caption">
+              {tr('nodeScope', {
+                source: formatNumber(
+                  nodesRef.current.filter((node) => !isExternalNode(node.id)).length,
+                ),
+                external: formatNumber(
+                  nodesRef.current.filter((node) => isExternalNode(node.id)).length,
+                ),
+                drawn: formatNumber(drawnLinks),
+              })}
+            </div>
+          )}
         </div>
       )}
 
       {/* Nothing on the canvas yet — the PANE carries the state. Once a graph
           is drawn `stats` stays set, so this never covers one. */}
-      {!stats && (
+      {(!stats || stats.nodes === 0) && (
         <div className="cosmos-gpu-pane-state">
           {error ? (
             <EmptyState
@@ -4283,8 +4467,8 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           ) : (
             <EmptyState
               icon="hub"
-              title={tr('building')}
-              subtitle={tr('buildingSubtitle')}
+              title={tr(stats && !loading ? 'emptyGraph' : 'building')}
+              subtitle={tr(stats && !loading ? 'emptyGraphHint' : 'buildingSubtitle')}
             />
           )}
         </div>
@@ -4303,25 +4487,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         </div>
       )}
 
-      {/* Hover info (left) */}
       {hovered && !selected && (
-        <div
-          className="absolute bottom-3 left-3 z-20 px-3 py-2 text-[11px] max-w-md"
-          style={{ ...pillStyle, borderRadius: 12 }}
-        >
-          <div className="font-mono break-all">{hovered.label}</div>
-          <div style={{ opacity: 0.6 }} className="text-[10px]">
-            {tr('nodeMeta', {
-              type: hovered.type,
-              language: hovered.language ?? '—',
-              community: formatNumber(hovered.community),
-              importance: formatNumber(hovered.importance, {
-                minimumFractionDigits: 3,
-                maximumFractionDigits: 3,
-              }),
+        <GraphHover anchor={hoverAnchor} boundsRef={paneRef}>
+          <div className="font-mono">{hovered.label}</div>
+          <div className="graph-secondary">{extractFilePath(hovered)}</div>
+          <div className="graph-secondary">
+            {isExternalNode(hovered.id) ? tr('external') : (hovered.language ?? hovered.type)} ·{' '}
+            {tr('uniqueNeighbors', {
+              total: formatNumber(connectionsRef.current.degree.get(hovered.id) ?? 0),
             })}
           </div>
-        </div>
+        </GraphHover>
       )}
 
       {/* Selected info (right) — anchors below toolbar (measured), shows full
@@ -4330,13 +4506,16 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
         (() => {
           const relPath = extractFilePath(selected);
           const rootClean = (root ?? '').replace(/\/+$/, '');
-          const absPath = relPath
-            ? relPath.startsWith('/')
+          const absPath =
+            isExternalNode(selected.id) || relPath.includes(':')
               ? relPath
-              : rootClean
-                ? `${rootClean}/${relPath}`
-                : relPath
-            : '';
+              : relPath
+                ? relPath.startsWith('/')
+                  ? relPath
+                  : rootClean
+                    ? `${rootClean}/${relPath}`
+                    : relPath
+                : '';
           const canOpen = isRealFileId(selected) && !!absPath;
           // Last-used IDE sorts to the front so the primary button is the one
           // the user keeps reaching for; others follow for quick switch.
@@ -4351,22 +4530,17 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
           // popup below the HUD when both are visible instead of overlapping.
           // Measured via ResizeObserver so the popup slots right under the HUD
           // regardless of its current height (chart + metrics + controls vary).
-          const topOffset =
-            stressTest && stressHudHeight > 0
-              ? stressHudHeight + 30
-              : 18;
+          const topOffset = stressTest && stressHudHeight > 0 ? stressHudHeight + 30 : 18;
           return (
             <div
-              className="absolute right-3 z-20 px-3 py-2 text-[11px]"
+              className="absolute right-3 z-20 graph-inspector graph-selected t-caption"
               style={{
-                ...pillStyle,
-                borderRadius: 12,
                 top: topOffset,
                 // Wider when an AI prompt is shown below — the monospace block
                 // needs room to breathe or the prompt wraps into an unreadable
                 // column. Normal selection stays compact.
-                width: prompt ? 420 : undefined,
-                maxWidth: prompt ? 'calc(100% - 24px)' : 384,
+                width: prompt ? 420 : 320,
+                maxWidth: 'calc(100% - 24px)',
                 maxHeight: `calc(100% - ${topOffset + 18}px)`,
                 display: 'flex',
                 flexDirection: 'column',
@@ -4375,47 +4549,29 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="font-mono break-all font-semibold">{selected.label}</div>
-                  {relPath &&
-                    (() => {
-                      // Truncate from the LEFT so the filename at the tail stays
-                      // visible. CSS `direction: rtl` + `text-overflow: ellipsis`
-                      // did not clip the start reliably for pure-LTR ASCII paths
-                      // in this Electron build, so we slice in JS.
-                      const full = absPath || relPath;
-                      const maxChars = 52;
-                      const shown =
-                        full.length > maxChars ? `…${full.slice(-(maxChars - 1))}` : full;
-                      return (
-                        <div
-                          className="mt-1 font-mono text-[10px]"
-                          style={{
-                            opacity: 0.75,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                          }}
-                          title={full}
-                        >
-                          {shown}
-                        </div>
-                      );
-                    })()}
-                  <div style={{ opacity: 0.6 }} className="mt-1 text-[10px]">
-                    {tr('nodeMeta', {
-                      type: selected.type,
-                      language: selected.language ?? '—',
-                      community: formatNumber(selected.community),
-                      importance: formatNumber(selected.importance, {
-                        minimumFractionDigits: 3,
-                        maximumFractionDigits: 3,
-                      }),
-                    })}
+                  {relPath && (
+                    <div className="graph-node-path graph-secondary" title={absPath}>
+                      {relPath}
+                    </div>
+                  )}
+                  <div className="graph-secondary">
+                    {isExternalNode(selected.id)
+                      ? tr('external')
+                      : (selected.language ?? selected.type)}{' '}
+                    ·{' '}
+                    {payloadRef.current?.communities.find((c) => c.id === selected.community)
+                      ?.label ?? tr('other')}
                   </div>
                   {relPath && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       <button
                         type="button"
                         className="cosmos-gpu-pill-btn"
-                        title={tr('copyPathTitle')}
+                        title={tr(
+                          isExternalNode(selected.id) || relPath.includes(':')
+                            ? 'copyId'
+                            : 'copyPathTitle',
+                        )}
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(absPath || relPath);
@@ -4426,7 +4582,13 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                           }
                         }}
                       >
-                        {copied ? tr('copied') : tr('copyPath')}
+                        {copied
+                          ? tr('copied')
+                          : tr(
+                              isExternalNode(selected.id) || relPath.includes(':')
+                                ? 'copyId'
+                                : 'copyPath',
+                            )}
                       </button>
                       {canOpen &&
                         orderedIdes.map((ide) => (
@@ -4453,6 +4615,30 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
                           </button>
                         ))}
                     </div>
+                  )}
+
+                  {!bottleneckActive && (
+                    <GraphConnections
+                      key={selected.id}
+                      selected={selected}
+                      nodes={nodesById}
+                      index={connectionsRef.current}
+                      direction={direction}
+                      onDirection={setDirection}
+                      depth={HIGHLIGHT_DEPTH}
+                      onDepth={(depth) => setFilter((value) => ({ ...value, depth }))}
+                      onSelect={focusNode}
+                      onClear={clearHighlight}
+                      onBack={
+                        trail.length > 1
+                          ? () => {
+                              const previous = trail[trail.length - 2];
+                              setTrail(trail.slice(0, -1));
+                              focusNode(previous);
+                            }
+                          : undefined
+                      }
+                    />
                   )}
 
                   {/* Inline AI prompt — shown in bottleneck mode when the node

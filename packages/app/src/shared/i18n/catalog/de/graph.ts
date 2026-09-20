@@ -1,4 +1,31 @@
 export const graph = {
+  nodeScope: "{{source}} Quellknoten · {{external}} extern · {{drawn}} gezeichnete Verbindungen",
+
+  external: "Externe Abhängigkeit",
+  copyId: "ID kopieren",
+
+  connections: "Verbindungen",
+  back: "Zurück",
+  allNodes: "Alle Knoten",
+  uniqueNeighbors: "{{total}} verbundene Knoten",
+  connectionDirection: "Richtung der Beziehungen",
+  both: "Alle",
+  incoming: "Eingehend",
+  outgoing: "Ausgehend",
+  neighborhood: "Nachbarschaft",
+  hops: "{{total}} Schritte",
+  filterConnections: "Verbundene Datei oder Symbol suchen…",
+  noConnections: "Keine passenden Verbindungen in diesem Graphen.",
+  connectionScope: "{{shown}} von {{total}} direkten Nachbarn im geladenen Graphen. Pfeile folgen den indizierten Beziehungen.",
+  mostConnected: "Meiste Verbindungen",
+  exploreHint: "Mit einem Knoten beginnen oder eine Datei suchen.",
+  degreeHint: "Nach Anzahl verschiedener Nachbarn.",
+  otherHint: "Andere umfasst alle Kategorien außer den vier größten. Klicken, um diese Knoten hervorzuheben.",
+  legendHint: "Gruppe zum Fokussieren anklicken. Erneut klicken zum Zurücksetzen.",
+  focusStatus: "{{total}} von {{all}} Knoten im Fokus",
+  emptyGraph: "Keine Knoten in dieser Ansicht",
+  emptyGraphHint: "Unverbundene Knoten einblenden oder Filter ändern.",
+
   // ── Failure ────────────────────────────────────────────────────────────
   daemonUnreachable: 'Der trace-mcp-Daemon ist nicht erreichbar.',
   serverError: 'Serverfehler ({{status}})',
