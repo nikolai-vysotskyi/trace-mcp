@@ -28,7 +28,7 @@ import { ProgressState } from '../progress.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from '../registry.js';
 import { createServer, type ServerHandle } from '../server/server.js';
 import type { ProjectRelay } from '../server/types.js';
-import type { ProjectManager } from './project-manager.js';
+import type { ManagedProject, ProjectManager } from './project-manager.js';
 import type { ProjectResourcePool } from './resource-pool.js';
 
 /** Resolve a requested root to its exact registered entry — direct match, or
@@ -51,8 +51,27 @@ export function createDaemonProjectRelay(
   projectManager: ProjectManager,
   resourcePool: ProjectResourcePool,
 ): ProjectRelay {
-  const cache = new Map<string, ServerHandle>();
-  const acquiredRoots = new Set<string>();
+  /**
+   * Cached handles paired with the exact ManagedProject instance they were
+   * built on. The idle-unload sweep (project_idle_unload_minutes /
+   * daemon_eager_load_projects) closes a project's DB out from under any
+   * cached handle via stopProject() while the project stays registered, so
+   * identity against `projectManager.getProject()` is the liveness check: a
+   * cache entry whose instance is no longer managed is stale and must be
+   * dropped + reopened, never served (TRA-1738).
+   */
+  const cache = new Map<string, { handle: ServerHandle; managed: ManagedProject; root: string }>();
+
+  const dropEntry = (handle: ServerHandle): void => {
+    for (const [key, entry] of cache) {
+      if (entry.handle === handle) cache.delete(key);
+    }
+    try {
+      handle.dispose();
+    } catch {
+      /* best-effort */
+    }
+  };
 
   return {
     listRelayTargets() {
@@ -60,17 +79,17 @@ export function createDaemonProjectRelay(
     },
     async openProject(targetRoot) {
       const abs = path.resolve(targetRoot);
-      const cached = cache.get(abs);
-      if (cached) return cached;
+      const direct = cache.get(abs);
+      if (direct) {
+        const live = projectManager.getProject(direct.root);
+        if (live && live === direct.managed) return direct.handle;
+        // Stale: the target was idle-unloaded (or removed) since we cached
+        // the handle — drop it and fall through to resolve + reopen.
+        dropEntry(direct.handle);
+      }
 
       const resolved = resolveRegisteredRoot(abs);
       if (!resolved) return null;
-
-      const cachedRoot = cache.get(resolved.root);
-      if (cachedRoot) {
-        cache.set(abs, cachedRoot);
-        return cachedRoot;
-      }
 
       let managed = projectManager.getProject(resolved.root);
       if (!managed) {
@@ -88,8 +107,26 @@ export function createDaemonProjectRelay(
         }
       }
 
-      const deps = resourcePool.acquire(resolved.root, managed.config);
-      acquiredRoots.add(resolved.root);
+      const byRoot = cache.get(resolved.root);
+      if (byRoot) {
+        if (byRoot.managed === managed) {
+          if (abs !== resolved.root) cache.set(abs, byRoot);
+          return byRoot.handle;
+        }
+        dropEntry(byRoot.handle);
+      }
+
+      // TRA-1738: deliberately getSharedDeps(), NOT acquire(). The relay's
+      // cached handle is not a client session, but acquire() bumps the
+      // per-project refcount that gates the idle-unload sweep — and nothing
+      // ever released it until daemon shutdown, so every project ever touched
+      // via call_project_tool was pinned resident forever (the field case:
+      // 12 pinned + 0 evictable with RSS stuck at 5.1 GB). The shared
+      // TopologyStore/DecisionStore/StateEngine are daemon-wide singletons
+      // that never close per-project, so there is no lifecycle to refcount
+      // here — getSharedDeps() returns the same instances without touching
+      // the sweep's "connected clients" signal (see resource-pool.ts).
+      const deps = resourcePool.getSharedDeps(managed.config);
       const handle = createServer(
         managed.store,
         managed.registry,
@@ -99,25 +136,25 @@ export function createDaemonProjectRelay(
         // TRA-951: shared server, never a client session's own surface.
         { ...deps, serveFullSurface: true, skipUsagePing: true },
       );
-      cache.set(resolved.root, handle);
+      const entry = { handle, managed, root: resolved.root };
+      cache.set(resolved.root, entry);
       if (abs !== resolved.root) {
-        cache.set(abs, handle);
+        cache.set(abs, entry);
       }
       return handle;
     },
     dispose() {
-      for (const handle of cache.values()) {
+      const seen = new Set<ServerHandle>();
+      for (const entry of cache.values()) {
+        if (seen.has(entry.handle)) continue;
+        seen.add(entry.handle);
         try {
-          handle.dispose();
+          entry.handle.dispose();
         } catch {
           /* best-effort */
         }
       }
       cache.clear();
-      for (const root of acquiredRoots) {
-        resourcePool.release(root);
-      }
-      acquiredRoots.clear();
     },
   };
 }

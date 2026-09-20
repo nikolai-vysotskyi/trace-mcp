@@ -17,6 +17,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ServerHandle } from '../../server/server.js';
 
 let tmpHome: string;
 let projectA: string;
@@ -145,7 +146,7 @@ describe('createLightweightProjectRelay (stdio path, TRA-93)', () => {
 });
 
 describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
-  it('deduplicates acquire calls and caches handle across different subpaths of the same root', async () => {
+  async function daemonHarness() {
     const { registerProject } = await import('../../registry.js');
     const { createDaemonProjectRelay } = await import('../project-relay.js');
     const { initializeDatabase } = await import('../../db/schema.js');
@@ -163,23 +164,47 @@ describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
     const configResult = await loadConfig(projectA);
     if (configResult.isErr()) throw new Error('loadConfig failed');
 
+    const managed = {
+      root: projectA,
+      store,
+      registry,
+      config: configResult.value,
+      progress,
+    };
+    let live: typeof managed | undefined = managed;
+
     const mockProjectManager = {
-      getProject: vi.fn().mockReturnValue({
-        root: projectA,
-        store,
-        registry,
-        config: configResult.value,
-        progress,
-      }),
-      addProject: vi.fn(),
+      getProject: vi.fn().mockImplementation(() => live),
+      addProject: vi.fn().mockImplementation(async () => live),
     };
 
     const mockResourcePool = {
+      getSharedDeps: vi.fn().mockReturnValue({}),
       acquire: vi.fn().mockReturnValue({}),
       release: vi.fn(),
     };
 
     const relay = createDaemonProjectRelay(mockProjectManager as any, mockResourcePool as any);
+    return {
+      relay,
+      mockProjectManager,
+      mockResourcePool,
+      managed,
+      db,
+      setLive: (m: typeof managed | undefined) => {
+        live = m;
+      },
+      replaceLive: () => {
+        // Simulate the idle-unload sweep: stopProject() closed the old
+        // instance and a lazy reload created a NEW one for the same root.
+        live = { ...managed };
+        return live;
+      },
+    };
+  }
+
+  it('caches the handle across different subpaths of the same root without touching the session refcount (TRA-1738)', async () => {
+    const { relay, mockResourcePool, db } = await daemonHarness();
 
     const subpath1 = join(projectA, 'sub1');
     const subpath2 = join(projectA, 'sub2');
@@ -189,12 +214,61 @@ describe('createDaemonProjectRelay (daemon path, TRA-1233)', () => {
 
     expect(handle1).not.toBeNull();
     expect(handle2).toBe(handle1);
-    expect(mockResourcePool.acquire).toHaveBeenCalledTimes(1);
-    expect(mockResourcePool.acquire).toHaveBeenCalledWith(projectA, configResult.value);
+    expect(mockResourcePool.getSharedDeps).toHaveBeenCalledTimes(1);
+    // The relay's cached handle is not a client session: it must never
+    // acquire() (which would pin the project resident until daemon shutdown
+    // and defeat the idle-unload sweep) nor release() on dispose.
+    expect(mockResourcePool.acquire).not.toHaveBeenCalled();
 
     relay.dispose();
-    expect(mockResourcePool.release).toHaveBeenCalledTimes(1);
-    expect(mockResourcePool.release).toHaveBeenCalledWith(projectA);
+    expect(mockResourcePool.release).not.toHaveBeenCalled();
+    db.close();
+  });
+
+  it('drops the cached handle and reopens after the sweep unloads the target (TRA-1738)', async () => {
+    const { relay, replaceLive, db } = await daemonHarness();
+
+    const handle1 = await relay.openProject(projectA);
+    expect(handle1).not.toBeNull();
+    // Same instance still managed → cache hit, no reopen.
+    expect(await relay.openProject(projectA)).toBe(handle1);
+
+    // The relay interface only exposes toolHandlers, so reach the full
+    // ServerHandle (function-valued dispose — not spyOn-able as a method)
+    // via a cast and count disposal with a wrapping assignment.
+    const { dispose: origDispose } = handle1 as unknown as ServerHandle;
+    let disposeCalls = 0;
+    (handle1 as unknown as ServerHandle).dispose = () => {
+      disposeCalls++;
+      origDispose();
+    };
+    replaceLive();
+
+    const handle2 = await relay.openProject(projectA);
+    expect(handle2).not.toBeNull();
+    expect(handle2).not.toBe(handle1);
+    // The stale handle (built on the closed DB) is disposed, not leaked.
+    expect(disposeCalls).toBe(1);
+    // And the fresh handle is now cached.
+    expect(await relay.openProject(projectA)).toBe(handle2);
+
+    relay.dispose();
+    db.close();
+  });
+
+  it('returns null (instead of the stale handle) when the target was removed from the registry', async () => {
+    const { relay, setLive, db } = await daemonHarness();
+    const { unregisterProject } = await import('../../registry.js');
+
+    const handle1 = await relay.openProject(projectA);
+    expect(handle1).not.toBeNull();
+
+    unregisterProject(projectA);
+    setLive(undefined);
+
+    expect(await relay.openProject(projectA)).toBeNull();
+
+    relay.dispose();
     db.close();
   });
 });

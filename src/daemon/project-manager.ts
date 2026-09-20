@@ -1223,13 +1223,18 @@ export class ProjectManager {
   /**
    * Classify every loaded project with the exact exemptions
    * `unloadIdleProjects` applies. Read-only: never unloads anything.
-   * `evictable` is what the TTL path of `unloadIdleProjects(idleMs, 0)`
-   * would unload on this tick. With `idleMs <= 0` the TTL rule is off, so
-   * everything neither busy nor pinned counts as `fresh`.
+   * `evictable` is what `unloadIdleProjects(idleMs, maxLoaded)` would unload
+   * on this tick — the TTL victims plus the LRU-ceiling victims, mirroring
+   * that method's selection exactly (TRA-1738: the old TTL-only count
+   * reported `evictable: 0` on a daemon 6 projects over its ceiling, hiding
+   * the fact that the ceiling path would have evicted fresh projects).
+   * With `idleMs <= 0` and `maxLoaded <= 0` everything neither busy nor
+   * pinned counts as `fresh`.
    */
-  sweepEligibility(idleMs: number): SweepEligibility {
+  sweepEligibility(idleMs: number, maxLoaded = 0): SweepEligibility {
     const out: SweepEligibility = { loaded: 0, busy: 0, pinned: 0, fresh: 0, evictable: 0 };
     const now = Date.now();
+    const evictableList: ManagedProject[] = [];
     for (const managed of this.projects.values()) {
       out.loaded++;
       if (managed.status === 'starting' || managed.status === 'indexing') {
@@ -1240,12 +1245,27 @@ export class ProjectManager {
         out.pinned++;
         continue;
       }
-      if (idleMs > 0 && now - managed.lastAccessedAt >= idleMs) {
-        out.evictable++;
-      } else {
-        out.fresh++;
+      evictableList.push(managed);
+    }
+    // Same selection as unloadIdleProjects below: TTL first (uncapped —
+    // every idle project goes regardless of the ceiling), then LRU-first
+    // fill up to `overBy` total.
+    const candidates = new Set<ManagedProject>();
+    if (idleMs > 0) {
+      for (const managed of evictableList) {
+        if (now - managed.lastAccessedAt >= idleMs) candidates.add(managed);
       }
     }
+    if (maxLoaded > 0 && out.loaded > maxLoaded) {
+      const overBy = out.loaded - maxLoaded;
+      const lruFirst = [...evictableList].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+      for (const managed of lruFirst) {
+        if (candidates.size >= overBy) break;
+        candidates.add(managed);
+      }
+    }
+    out.evictable = candidates.size;
+    out.fresh = evictableList.length - candidates.size;
     return out;
   }
 
@@ -1270,7 +1290,10 @@ export class ProjectManager {
    * eager-8 daemon sat at 11 loaded projects three minutes after boot, and at
    * a measured ~100 MB resident per loaded project that is ~300 MB nobody
    * capped). Same exemptions as the TTL path apply, so a busy or indexing
-   * project is never evicted just to satisfy the ceiling.
+   * project is never evicted just to satisfy the ceiling — the ceiling is
+   * best-effort: when every project over the cap is busy or serving connected
+   * clients the sweep stays over cap and says so loudly (warn below) instead
+   * of silently holding 14 projects against a cap of 8 (TRA-1738).
    *
    * Returns the roots that were unloaded (mainly for tests/telemetry).
    */
@@ -1278,9 +1301,17 @@ export class ProjectManager {
     if (idleMs <= 0 && maxLoaded <= 0) return [];
     const now = Date.now();
     const evictable: ManagedProject[] = [];
+    let busy = 0;
+    let pinned = 0;
     for (const managed of this.projects.values()) {
-      if (managed.status === 'starting' || managed.status === 'indexing') continue;
-      if ((this.resourcePool?.getRefCount(managed.root) ?? 0) > 0) continue;
+      if (managed.status === 'starting' || managed.status === 'indexing') {
+        busy++;
+        continue;
+      }
+      if ((this.resourcePool?.getRefCount(managed.root) ?? 0) > 0) {
+        pinned++;
+        continue;
+      }
       evictable.push(managed);
     }
     const candidates = new Set<string>();
@@ -1303,6 +1334,16 @@ export class ProjectManager {
         'Unloading idle project (stays registered)',
       );
       await this.stopProject(root);
+    }
+    // Post-sweep size still over the ceiling means the evictable pool ran
+    // out: every remaining project is indexing or serving connected clients.
+    // Say so loudly — silently holding 14 projects against a cap of 8 is
+    // what made the cap look broken (TRA-1738).
+    if (maxLoaded > 0 && this.projects.size > maxLoaded) {
+      logger.warn(
+        { loaded: this.projects.size, maxLoaded, busy, pinned },
+        'Idle-unload sweep over maxLoaded but nothing evictable — remainder is indexing or serving connected clients',
+      );
     }
     return [...candidates];
   }
