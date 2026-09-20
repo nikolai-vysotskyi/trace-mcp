@@ -1870,7 +1870,7 @@ export class IndexingPipeline {
     return this.workspaces
       .map((w) => w.path)
       .sort()
-      .join('');
+      .join('\0');
   }
 
   /**
@@ -1882,7 +1882,9 @@ export class IndexingPipeline {
    * reuse can only over-detect (a removed framework's plugin scans but
    * matches nothing framework-specific — wasted ms, never lost edges);
    * under-detection needs a manifest change, which fails this gate by
-   * construction.
+   * construction. Blind spot (benign, same direction): manifests in the
+   * `deleted` set never reach relPaths, so a lone manifest *deletion* reuses
+   * the map — over-detect until the next verification full walk.
    */
   private canReuseWorkspacePlugins(relPaths: string[]): boolean {
     for (const p of relPaths) {
