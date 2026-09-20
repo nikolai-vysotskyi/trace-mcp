@@ -300,6 +300,22 @@ file_sha256() {
   echo -n "$1" | sha256sum 2>/dev/null | cut -d' ' -f1 || echo -n "$1" | shasum -a 256 2>/dev/null | cut -d' ' -f1
 }
 
+# Canonical consultation-marker key (TRA-1737) — shell mirror of
+# canonicalMarkerKey in src/server/consultation-markers.ts. $1 is the path
+# already stripped of the PROJECT_ROOT prefix ($2 is PROJECT_ROOT).
+# The server used to hash the raw params.path while this hook hashed its own
+# spelling, so `./x` vs `x`, absolute vs relative, or a path carrying the
+# project dir-name prefix (agent CWD is the parent, e.g.
+# `thewed-laravel/nova/...` under session root `thewed/`) never matched a
+# successful consultation and the follow-up Read stayed BLOCKED forever.
+canonical_marker_key() {
+  local rel="$1" root="$2" base
+  while [[ "$rel" == ./* ]]; do rel="${rel#./}"; done
+  base="${root##*/}"
+  if [[ -n "$base" && "$rel" == "$base"/* ]]; then rel="${rel#"$base"/}"; fi
+  printf '%s' "$rel"
+}
+
 # Portable mtime (Linux: stat -c %Y; macOS/BSD: stat -f %m).
 file_mtime() {
   stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
@@ -954,11 +970,47 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
 
     # Consultation marker check — server-side flag that the agent has called
     # a trace-mcp tool that touches this file. If present, Read is allowed.
-    REL_PATH_FOR_HASH="$REL_PATH"
+    # The key is canonicalized (TRA-1737) the same way the server
+    # canonicalizes it, so spelling variants of one file share one marker.
+    REL_PATH_FOR_HASH=$(canonical_marker_key "$REL_PATH" "$PROJECT_ROOT")
     CONSULTED_HASH=$(file_sha256 "$REL_PATH_FOR_HASH")
     HAS_MARKER=0
     if [[ -n "$PROJECT_HASH" ]] && consulted_marker_exists "$CONSULTED_HASH"; then
       HAS_MARKER=1
+    fi
+
+    # Ancestor-root fallback (TRA-1737): the server hashes its marker dir by
+    # the session root it was launched with, which may be a PARENT of the
+    # root this hook resolved (the sentinel walk stops at the nearest claimed
+    # ancestor, usually the more specific one). When the primary lookup
+    # misses, re-key the file against each ancestor root up to a bounded
+    # depth and check that root's marker dir — a consultation recorded under
+    # the parent then still unlocks the Read instead of deadlocking.
+    if (( HAS_MARKER == 0 )) && [[ -n "$PROJECT_HASH" ]]; then
+      case "$FILE_PATH" in
+        /*) ABS_FILE="$FILE_PATH" ;;
+        *) ABS_FILE="$(pwd)/$FILE_PATH" ;;
+      esac
+      ANCESTOR_DIR="$PROJECT_ROOT"
+      ANCESTOR_DEPTH=0
+      while (( ANCESTOR_DEPTH < 5 )); do
+        ANCESTOR_DIR=$(dirname "$ANCESTOR_DIR")
+        [[ "$ANCESTOR_DIR" == "/" ]] && break
+        if is_shared_ancestor "$ANCESTOR_DIR"; then break; fi
+        case "$ABS_FILE" in
+          "$ANCESTOR_DIR"/*)
+            ANCESTOR_REL="${ABS_FILE#"$ANCESTOR_DIR"/}"
+            ANCESTOR_KEY=$(canonical_marker_key "$ANCESTOR_REL" "$ANCESTOR_DIR")
+            ANCESTOR_HASH=$(project_hash_of "$ANCESTOR_DIR")
+            ANCESTOR_MARKER=$(file_sha256 "$ANCESTOR_KEY")
+            if [[ -n "$ANCESTOR_HASH" ]] && [[ -f "$STATUS_HOME/trace-mcp-consulted-${ANCESTOR_HASH}/${ANCESTOR_MARKER}" || -f "$TMP_HOME/trace-mcp-consulted-${ANCESTOR_HASH}/${ANCESTOR_MARKER}" ]]; then
+              HAS_MARKER=1
+              break
+            fi
+            ;;
+        esac
+        ANCESTOR_DEPTH=$((ANCESTOR_DEPTH + 1))
+      done
     fi
 
     if (( HAS_MARKER == 1 )); then
@@ -993,6 +1045,17 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     fi
     DENY_COUNT=$((DENY_COUNT + 1))
     echo "$DENY_COUNT" > "$DENY_STATE"
+
+    if (( DENY_COUNT >= 3 )); then
+      backoff_hit "read-escalated"
+      # Escalated diagnosis (TRA-1737), not a repeated hint: by the third
+      # deny the get_outline calls so far are landing in a different root or
+      # an empty index — say so and point at list_projects instead of
+      # repeating the call that already failed to record a marker.
+      deny \
+        "BLOCKED (attempt #${DENY_COUNT}). Read of ${REL_PATH} requires a prior trace-mcp consultation — none recorded under ${PROJECT_ROOT}." \
+        "Diagnosis: ${DENY_COUNT}x blocked Reads and still no consultation marker for ${REL_PATH}. The get_outline calls so far are landing in a different project root (session CWD vs project-root mismatch) or the index for ${PROJECT_ROOT} is empty — retrying the same call will not help.\\nNext: list_projects to find the project that owns this file, then get_outline { \\\"path\\\": \\\"...\\\" } with the path relative to THAT root (or call_project_tool). After one successful consultation, Read is allowed automatically.\\nIf trace-mcp is unreachable, fall back to native tools (Read/Grep) — the guard will auto-degrade after ${AUTO_DEGRADE_DENY_THRESHOLD} consecutive denies with no consultation marker."
+    fi
 
     if (( DENY_COUNT >= 2 )); then
       backoff_hit "read-escalated"

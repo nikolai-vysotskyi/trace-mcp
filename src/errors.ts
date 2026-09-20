@@ -48,7 +48,14 @@ export function validationError(message: string, details?: unknown): TraceMcpErr
   return { code: 'VALIDATION_ERROR', message, details };
 }
 
-export function formatToolError(error: TraceMcpError): object {
+export interface ToolErrorContext {
+  /** Resolved session project root the lookup ran against. */
+  projectRoot?: string;
+  /** Number of files in that root's index (0 = empty/different-root hint). */
+  totalFiles?: number;
+}
+
+export function formatToolError(error: TraceMcpError, ctx?: ToolErrorContext): object {
   const base: Record<string, unknown> = {
     code: error.code,
     message: 'message' in error ? error.message : 'detail' in error ? error.detail : error.code,
@@ -56,6 +63,11 @@ export function formatToolError(error: TraceMcpError): object {
 
   if (error.code === 'NOT_FOUND') {
     base.message = `'${error.id}' is not in the index`;
+    // TRA-1737: name the resolved root (+ its index size) so the caller can
+    // see a session-CWD vs project-root mismatch instead of retrying blind:
+    // "you asked root X with N files, the file lives in Y".
+    if (ctx?.projectRoot) base.projectRoot = ctx.projectRoot;
+    if (ctx?.totalFiles !== undefined) base.indexFiles = ctx.totalFiles;
     if (error.reason) base.reason = error.reason;
     if (error.candidates?.length) {
       base.suggestions = error.candidates;

@@ -17,10 +17,33 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { projectHash, STATUS_DIR } from '../global.js';
+import { normalizeToProjectRelative } from '../utils/security.js';
 import { ensureTmpDirSync, writeTmpFileSync } from '../utils/safe-fs.js';
 
 function fileHash(filePath: string): string {
   return crypto.createHash('sha256').update(filePath).digest('hex');
+}
+
+/**
+ * Canonical marker key for a consulted file (TRA-1737).
+ *
+ * The server used to hash the raw `params.path` string while the guard hook
+ * hashes its own normalized spelling — `./x` vs `x`, an absolute path vs a
+ * relative one, or a path carrying the project dir-name prefix (agent CWD is
+ * the parent, e.g. `thewed-laravel/nova/...` under session root `thewed/`)
+ * produced different hashes for the same file, so a successful get_outline
+ * never unlocked the follow-up Read. Both sides now canonicalize with this
+ * rule (the hook mirrors it in `canonical_marker_key`): fold to
+ * project-relative, strip `./` segments, collapse a leading
+ * `<basename(projectRoot)>/` segment.
+ */
+export function canonicalMarkerKey(filePath: string, projectRoot: string): string {
+  const normalized = normalizeToProjectRelative(filePath, projectRoot);
+  let rel = normalized.split('\\').join('/');
+  while (rel.startsWith('./')) rel = rel.slice(2);
+  const base = projectRoot.split(/[\\/]/).filter(Boolean).pop() ?? '';
+  if (base && rel.startsWith(`${base}/`)) rel = rel.slice(base.length + 1);
+  return rel || normalized;
 }
 
 function markerDirs(projectRoot: string): string[] {
@@ -121,6 +144,6 @@ export function markToolConsultation(
 ): void {
   const files = extractConsultedFiles(toolName, params);
   for (const f of files) {
-    markConsulted(projectRoot, f);
+    markConsulted(projectRoot, canonicalMarkerKey(f, projectRoot));
   }
 }
