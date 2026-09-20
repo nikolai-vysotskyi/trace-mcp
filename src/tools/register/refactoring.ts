@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { resolve } from 'node:path';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import type { ServerContext } from '../../server/types.js';
@@ -11,6 +12,11 @@ import {
   extractFunction,
   removeDeadCode,
 } from '../refactoring/refactor.js';
+import {
+  executeMutationThenValidate,
+  symbolFileAbs,
+  THEN_VALIDATE_DESCRIPTION,
+} from '../refactoring/then-validate.js';
 
 export function registerRefactoringTools(server: McpServer, ctx: ServerContext): void {
   const { store, projectRoot, guardPath, j } = ctx;
@@ -22,19 +28,22 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Dry-run by default — preview the plan, then re-call with dry_run: false to apply. Returns the list of edits applied. Modifies source files when dry_run is false. Use check_rename first to verify safety; use plan_refactoring with type="rename" to preview edits. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to rename (from search or outline)'),
-      new_name: z.string().min(1).max(256).describe('New name for the symbol'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Preview changes without applying (default: true). Set to false to apply.'),
-      confirm_large: z
-        .boolean()
-        .optional()
-        .describe('Required when >20 files would be modified. Acknowledges large-scale change.'),
+      new_name: z.string().min(1).max(256).describe('New symbol name'),
+      dry_run: z.boolean().default(true).describe('Preview; set false to apply.'),
+      confirm_large: z.boolean().optional().describe('Required when >20 files change.'),
+      then_validate: z.boolean().optional().describe(THEN_VALIDATE_DESCRIPTION),
     },
-    async ({ symbol_id, new_name, dry_run, confirm_large }) => {
-      const result = applyRename(store, projectRoot, symbol_id, new_name, dry_run, {
-        confirmLarge: confirm_large,
+    async ({ symbol_id, new_name, dry_run, confirm_large, then_validate }) => {
+      const result = await executeMutationThenValidate({
+        store,
+        projectRoot,
+        queueKey: symbolFileAbs(store, projectRoot, symbol_id),
+        thenValidate: then_validate,
+        dryRun: dry_run,
+        mutate: () =>
+          applyRename(store, projectRoot, symbol_id, new_name, dry_run, {
+            confirmLarge: confirm_large,
+          }),
       });
       if (!result.success) {
         return { content: [{ type: 'text', text: j(result) }], isError: true };
@@ -70,23 +79,29 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),
       end_line: z.number().int().min(1).describe('Last line to extract (1-indexed, inclusive)'),
       function_name: z.string().min(1).max(256).describe('Name for the extracted function'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Preview changes without applying (default: true). Set to false to apply.'),
+      dry_run: z.boolean().default(true).describe('Preview; set false to apply.'),
+      then_validate: z.boolean().optional().describe(THEN_VALIDATE_DESCRIPTION),
     },
-    async ({ file_path, start_line, end_line, function_name, dry_run }) => {
+    async ({ file_path, start_line, end_line, function_name, dry_run, then_validate }) => {
       const blocked = guardPath(file_path);
       if (blocked) return blocked;
-      const result = extractFunction(
+      const result = await executeMutationThenValidate({
         store,
         projectRoot,
-        file_path,
-        start_line,
-        end_line,
-        function_name,
-        dry_run,
-      );
+        queueKey: resolve(projectRoot, file_path),
+        thenValidate: then_validate,
+        dryRun: dry_run,
+        mutate: () =>
+          extractFunction(
+            store,
+            projectRoot,
+            file_path,
+            start_line,
+            end_line,
+            function_name,
+            dry_run,
+          ),
+      });
       if (!result.success) {
         return { content: [{ type: 'text', text: j(result) }], isError: true };
       }
@@ -169,28 +184,30 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     'Move a symbol to a different file or rename/move a file, updating all import paths across the codebase. Dry-run by default (safe preview). Modifies source files. Use plan_refactoring with type="move" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to move (mode: symbol)'),
-      target_file: z
-        .string()
-        .max(512)
-        .optional()
-        .describe('Target file path for the symbol (mode: symbol)'),
+      target_file: z.string().max(512).optional().describe('Target file (mode: symbol)'),
       source_file: optionalNonEmptyString(512).describe('File to move/rename (mode: file)'),
       new_path: optionalNonEmptyString(512).describe('New file path (mode: file)'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Preview changes without applying (default: true)'),
+      dry_run: z.boolean().default(true).describe('Preview; set false to apply.'),
+      then_validate: z.boolean().optional().describe(THEN_VALIDATE_DESCRIPTION),
     },
-    async ({ symbol_id, target_file, source_file, new_path, dry_run }) => {
+    async ({ symbol_id, target_file, source_file, new_path, dry_run, then_validate }) => {
       // Determine mode
       if (symbol_id && target_file) {
         const blocked = guardPath(target_file);
         if (blocked) return blocked;
-        const result = applyMove(store, projectRoot, {
-          mode: 'symbol',
-          symbol_id,
-          target_file,
-          dry_run,
+        const result = await executeMutationThenValidate({
+          store,
+          projectRoot,
+          queueKey: symbolFileAbs(store, projectRoot, symbol_id),
+          thenValidate: then_validate,
+          dryRun: dry_run,
+          mutate: () =>
+            applyMove(store, projectRoot, {
+              mode: 'symbol',
+              symbol_id,
+              target_file,
+              dry_run,
+            }),
         });
         if (!result.success) {
           return { content: [{ type: 'text', text: j(result) }], isError: true };
@@ -201,11 +218,19 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       if (source_file && new_path) {
         const blocked = guardPath(new_path);
         if (blocked) return blocked;
-        const result = applyMove(store, projectRoot, {
-          mode: 'file',
-          source_file,
-          new_path,
-          dry_run,
+        const result = await executeMutationThenValidate({
+          store,
+          projectRoot,
+          queueKey: resolve(projectRoot, source_file),
+          thenValidate: then_validate,
+          dryRun: dry_run,
+          mutate: () =>
+            applyMove(store, projectRoot, {
+              mode: 'file',
+              source_file,
+              new_path,
+              dry_run,
+            }),
         });
         if (!result.success) {
           return { content: [{ type: 'text', text: j(result) }], isError: true };
@@ -258,19 +283,19 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
     {
       symbol_id: z.string().max(512).describe('Symbol ID of the function/method to modify'),
       changes: z.array(signatureChangeSchema).min(1).max(20).describe('Array of changes to apply'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Preview changes without applying (default: true)'),
+      dry_run: z.boolean().default(true).describe('Preview; set false to apply.'),
+      then_validate: z.boolean().optional().describe(THEN_VALIDATE_DESCRIPTION),
     },
-    async ({ symbol_id, changes: rawChanges, dry_run }) => {
-      const result = changeSignature(
+    async ({ symbol_id, changes: rawChanges, dry_run, then_validate }) => {
+      const result = await executeMutationThenValidate({
         store,
         projectRoot,
-        symbol_id,
-        rawChanges as SignatureChange[],
-        dry_run,
-      );
+        queueKey: symbolFileAbs(store, projectRoot, symbol_id),
+        thenValidate: then_validate,
+        dryRun: dry_run,
+        mutate: () =>
+          changeSignature(store, projectRoot, symbol_id, rawChanges as SignatureChange[], dry_run),
+      });
       if (!result.success) {
         return { content: [{ type: 'text', text: j(result) }], isError: true };
       }

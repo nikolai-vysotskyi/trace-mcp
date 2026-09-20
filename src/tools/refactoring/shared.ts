@@ -24,6 +24,34 @@ export interface NonCodeMention {
   suggestion: string;
 }
 
+/**
+ * Fused post-mutation validation report (TRA-1701, `then_validate`).
+ * Present only when the caller opted in. A failed validation never rolls
+ * back the mutation — it is reported here and via a warning instead.
+ */
+export interface ThenValidation {
+  /** '[then_validate:succeeded]' | '[then_validate:failed]' | '[then_validate:skipped]' */
+  marker: string;
+  /** Type-checker that ran (tsc | mypy | pyright); absent when skipped. */
+  checker?: string;
+  /** Error count inside the modified files (0 when clean); absent when skipped. */
+  total_errors?: number;
+  /** Per-file diagnostics, limited to the modified files. */
+  files?: Array<{
+    file: string;
+    total_file_errors: number;
+    diagnostics: Array<{
+      line: number;
+      column: number;
+      severity: string;
+      message: string;
+      code?: string;
+    }>;
+  }>;
+  /** Why validation was skipped, or what failed — short, one line. */
+  reason?: string;
+}
+
 export interface RefactorResult {
   success: boolean;
   tool: string;
@@ -47,6 +75,11 @@ export interface RefactorResult {
    * available; 'low' when the analysis fell back to a coarser scope heuristic.
    */
   confidence?: 'high' | 'low';
+  /**
+   * then_validate report (TRA-1701). Set only when the caller passed
+   * then_validate: true; absent otherwise so default responses are byte-identical.
+   */
+  validation?: ThenValidation;
 }
 
 // ════════════════════════════════════════════════════════════════════════
