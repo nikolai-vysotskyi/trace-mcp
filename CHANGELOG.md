@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.30.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.29.0...v3.30.0) (2026-09-20)
+
+
+### Features
+
+* **clients:** Zed writer, detect, status and UI row (TRA-1658) ([#1277](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1277)) ([04842a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/04842a288f731c32abd283fbd9541374ed819125))
+* **daemon:** single-daemon audit, doctor process inventory, stop sweep (TRA-1607) ([#1284](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1284)) ([6e48b7b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6e48b7b90b497ac423abfc7b0601a7f0fb6a814f))
+* **diagnostics:** evidence-preserving reducer for long outputs (TRA-1702) ([#1291](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1291)) ([09aa341](https://github.com/nikolai-vysotskyi/trace-mcp/commit/09aa34101633e6449fe030b20191984131977a6f))
+* **observation-pack:** paged recall for get_change_impact (TRA-1700) ([#1285](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1285)) ([74b1105](https://github.com/nikolai-vysotskyi/trace-mcp/commit/74b11055eab517f6718e8d144b47262d0c88fda8))
+* **refactoring:** then_validate fused validation for mutating tools (TRA-1701) ([#1288](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1288)) ([25948cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25948cf6ccb2a10135247cb270018ebc14c6a532))
+* **session:** economic compaction gate for session memory (TRA-1703) ([#1292](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1292)) ([bb75381](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bb753811301fe426a6ffeccacf4b671193ad5c3e))
+
+
+### Performance
+
+* **onnx,daemon:** ORT mem-pattern tuning + watcher dedup by root (TRA-1608) ([#1286](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1286)) ([db376d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db376d7723841cf866374a942772722534f23309))
+
+
+### Documentation
+
+* **measurements:** mark response_tokens historical — measured at 3.23.2, stale since 3.30.0 (TRA-1723) ([#1294](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1294)) ([778b68c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/778b68c687e0d963c855fa55e388b281e744b8d6))
+
 ## [3.29.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.28.0...v3.29.0) (2026-09-19)
 
 
