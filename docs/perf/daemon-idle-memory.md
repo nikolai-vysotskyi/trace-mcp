@@ -173,8 +173,48 @@ every edit. Covering only the HTTP path (as the first revision of this change di
 have left the dominant share of a busy daemon's work still reporting idle. Guarded by
 `src/daemon/__tests__/reindex-in-flight-vitals.test.ts`.
 
-### Still open
+### Still open (2026-09-07)
 
 `/health` returning nothing for 5 s while the main thread sits in synchronous SQLite is a
 separate defect from the counter that hid it — a health endpoint starved by the work it
-reports on. Not fixed here; filed separately.
+reports on. Not fixed here; filed separately as TRA-1763.
+
+---
+
+## 2026-09-21 — the counter covers the deferred paths too (TRA-1763)
+
+TRA-1125 fixed the counter on the single-file paths only (HTTP handler +
+`register_edit`). Field datum on daemon v3.31.0: a full storm window logged
+`projects_indexing: 0` at 99% CPU and 926→1629 MB RSS — the deferred full
+edge-reconcile (`fireEdgeReconcile` in `src/indexer/pipeline.ts`, timer +
+`_lock`, outside every in-flight window) and the inline full-pass resolvers of
+bulk indexes did the work, invisibly, after `status: ready`.
+
+Fixed here: the pipeline holds a `beginReindex` mark for `indexAll`,
+`indexFiles` (watcher batches included, so the >200-file bulk full-pass
+fallback is covered), the deferred edge reconcile, and the deferred coverage
+check. The registry moved to `src/indexer/reindex-inflight.ts` so the
+pipeline can mark its own runs without an indexer→daemon import;
+`daemon/reindex-file-handler.ts` re-exports it for the existing callers.
+`getCounts` in `cli.ts` excludes marked roots from the status-based term, so
+the initial load counts once, not twice. Guarded by
+`src/indexer/__tests__/reconcile-in-flight-vitals.test.ts`.
+
+> **Ceiling validity note:** `idle_rss_mb ≤ 250 + 75 × projects_loaded` is only
+> meaningful on builds that include this fix. Any `projects_indexing == 0`
+> sample taken on an older build can still mix idle and reconcile-busy, the
+> same way pre-TRA-1125 samples mixed idle and reindex-busy.
+
+### Still open: `/health` under a reconcile storm
+
+The fair yields (TRA-1127) bound the wait *between* resolver stages to the
+largest single synchronous span — but the spans themselves are whole SQLite
+transactions on the main thread (the file-projection multi-JOIN
+`INSERT…SELECT`, FTS rebuilds, `storeRawEdges` batches), each seconds long on
+a large repo, back to back across a dozen projects. No handler-side change can
+fix that: the loop is starved, not the handler. Honest options are a health
+signal off the main thread or moving reconcile passes to a worker — the large
+work this issue explicitly scopes out, tracked separately. Until then, a
+`/health` latency spike during a reconcile storm is expected, and
+`projects_indexing > 0` during the same window now says what it is: busy, not
+idle.
