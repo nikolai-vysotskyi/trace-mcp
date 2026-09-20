@@ -139,6 +139,71 @@ export const META_INDEX_TRUNCATED_FOUND = 'index_truncated_found';
 export const META_INDEX_TRUNCATED_LIMIT = 'index_truncated_limit';
 
 /**
+ * TRA-1543: repo_metadata key stamping the last completed ANALYZE, backing
+ * the throttle on the indexAll walk path (see `maybeAnalyze`). Advisory
+ * planner statistics — staleness risks a worse plan, never wrong results.
+ */
+export const META_LAST_ANALYZE_MS = 'last_analyze_ms';
+/** Minimum gap between two ANALYZE runs on the indexAll walk path. */
+export const ANALYZE_THROTTLE_MS = 10 * 60_000;
+
+/**
+ * TRA-1543: repo_metadata key persisting the workspace→plugin detection
+ * (`{ fingerprint, map }` JSON). Fresh pipeline instances (CLI one-shots,
+ * the bench harness, daemon restarts) reload it instead of re-detecting
+ * ~44 workspaces × ~100 plugins; the manifest gate in runPipeline decides
+ * whether the persisted answer is still valid.
+ */
+export const META_WS_PLUGINS = 'ws_framework_plugins';
+
+/**
+ * TRA-1543: file basenames whose creation, deletion or modification can
+ * change framework detection (workspace markers from monorepo.ts plus the
+ * manifests plugin `detect()` implementations read). An incremental run
+ * whose scope touches none of these cannot change the detection outcome, so
+ * the previous run's workspace→plugin map is reused instead of re-detecting
+ * ~44 workspaces × ~100 plugins. Over-approximated on purpose: an unknown
+ * manifest fails the gate (re-detect, a few ms wasted), never skips it.
+ */
+const FRAMEWORK_MANIFEST_BASENAMES: ReadonlySet<string> = new Set([
+  'package.json',
+  'package-lock.json',
+  'pnpm-workspace.yaml',
+  'yarn.lock',
+  'composer.json',
+  'go.mod',
+  'go.sum',
+  'cargo.toml',
+  'cargo.lock',
+  'pyproject.toml',
+  'setup.py',
+  'setup.cfg',
+  'gemfile',
+  'gemfile.lock',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  'mix.exs',
+  'pubspec.yaml',
+  'package.swift',
+  'cmakelists.txt',
+  'dockerfile',
+  'docker-compose.yml',
+  'compose.yml',
+]);
+
+/** Case-insensitive basename check against the manifest set above. */
+export function isFrameworkManifestBasename(base: string): boolean {
+  const lower = base.toLowerCase();
+  if (FRAMEWORK_MANIFEST_BASENAMES.has(lower)) return true;
+  // requirements.txt / requirements-dev.txt / Dockerfile.* / docker-compose.*.yml
+  if (lower === 'requirements.txt' || lower.startsWith('requirements-')) return true;
+  if (lower.startsWith('dockerfile.')) return true;
+  if (lower.startsWith('docker-compose.') || lower.startsWith('compose.')) return true;
+  return false;
+}
+
+/**
  * Read the persisted max_files truncation stamp. Returns null when the last
  * full walk fit under the cap (or predates the stamp) — the index covers the
  * whole tree as far as the walker knows.
@@ -370,6 +435,20 @@ export class IndexingPipeline {
   private workspaces: WorkspaceInfo[] = [];
   private _lock: Promise<unknown> = Promise.resolve();
   private _projectContext: ProjectContext | undefined;
+  /**
+   * TRA-1543: workspace→plugin detection, shared by registration, extraction
+   * and resolution within a run (was detected 3× per run) and reused across
+   * incremental runs whose scope cannot change it (see canReuseWorkspacePlugins).
+   * Keyed by workspace signature; force/full runs always re-detect.
+   */
+  private _wsFrameworkPlugins: Map<string, FrameworkPlugin[]> | null = null;
+  private _wsFrameworkPluginsKey: string | null = null;
+  /**
+   * Set when the runPipeline gate fails (manifest in scope / force / full
+   * run): the next getWorkspaceFrameworkPlugins must detect fresh and
+   * re-persist, NOT reload the persisted map the gate just invalidated.
+   */
+  private _wsPluginsForceRedetect = false;
   private _fileContentCache = new Map<string, string>();
   private _pendingImports = new Map<
     number,
@@ -446,6 +525,7 @@ export class IndexingPipeline {
       pendingImports: this._pendingImports,
       fileContentCache: this._fileContentCache,
       gitignore: this._gitignore,
+      wsFrameworkPlugins: this.getWorkspaceFrameworkPlugins(),
     };
   }
 
@@ -535,15 +615,19 @@ export class IndexingPipeline {
       if (before) this.checkShrink(before, r);
       // Non-bulk path: refresh planner statistics so subsequent queries pick
       // indices using real cardinality rather than fallback heuristics.
-      // ANALYZE is sub-second on graphs in our typical size range and runs at
-      // most once per full reindex. Skipped on the bulk path because
-      // disableBulkMode already ran ANALYZE.
+      // Skipped on the bulk path because disableBulkMode already ran ANALYZE.
+      //
+      // TRA-1543: throttled — ANALYZE is advisory (stale stats only risk a
+      // worse query plan, never wrong results) and cost ~24 ms on every
+      // full-walk indexAll, including zero-change verification walks. The
+      // incremental fast path never paid it (runDiscovered bypasses this
+      // block); now the walk path pays it at most once per ANALYZE_THROTTLE_MS
+      // instead of once per run. Bulk-index stamp (below) joins the same
+      // budget so a fresh index doesn't re-ANALYZE on the next walk.
       if (!isFromScratch) {
-        try {
-          this.store.db.exec('ANALYZE');
-        } catch (err) {
-          logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
-        }
+        this.maybeAnalyze();
+      } else {
+        this.stampAnalyzeComplete();
       }
       // TRA-1576: a full walk re-verified the whole tree — reset the
       // periodic-verification counters and refresh the watcher snapshot so
@@ -736,6 +820,44 @@ export class IndexingPipeline {
       /* best-effort — a metadata miss just means "verify soon" */
     }
     return { runsSinceFull, lastFullMs };
+  }
+
+  /**
+   * TRA-1543: run ANALYZE unless one completed within ANALYZE_THROTTLE_MS.
+   * The indexAll walk path used to pay ~24 ms per run; planner statistics go
+   * stale gracefully, so a 10-minute budget is plenty. Non-fatal by contract.
+   */
+  private maybeAnalyze(): void {
+    let last: number | null = null;
+    try {
+      const raw = this.store.getRepoMetadata(META_LAST_ANALYZE_MS);
+      if (raw != null) {
+        const t = Number.parseInt(raw, 10);
+        if (Number.isFinite(t) && t > 0) last = t;
+      }
+    } catch {
+      /* best-effort — a metadata miss just means "analyze now" */
+    }
+    if (last != null && Date.now() - last < ANALYZE_THROTTLE_MS) {
+      logger.debug({ lastAnalyzeMs: last }, 'ANALYZE throttled — recent enough');
+      return;
+    }
+    try {
+      this.store.db.exec('ANALYZE');
+    } catch (err) {
+      logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
+      return;
+    }
+    this.stampAnalyzeComplete();
+  }
+
+  /** Record a completed ANALYZE (bulk or throttled-walk path) for the throttle. */
+  private stampAnalyzeComplete(): void {
+    try {
+      this.store.setRepoMetadata(META_LAST_ANALYZE_MS, String(Date.now()));
+    } catch {
+      /* best-effort */
+    }
   }
 
   /** TRA-1576: bookkeeping after a verifying full walk. */
@@ -1077,6 +1199,14 @@ export class IndexingPipeline {
     });
 
     this._projectContext = undefined;
+    // TRA-1543: drop the workspace-plugin detection unless the current scope
+    // provably cannot change it (incremental run, same workspaces, no
+    // manifest touched — see canReuseWorkspacePlugins). A dropped map is
+    // reloaded from repo_metadata when still valid, else detected fresh.
+    if (!this._isIncremental || force || !this.canReuseWorkspacePlugins(relPaths)) {
+      this._wsFrameworkPlugins = null;
+      this._wsPluginsForceRedetect = true;
+    }
     this.registry.clearCaches();
     this._changedFileIds.clear();
     this._gitignore = new GitignoreMatcher(this.rootPath);
@@ -1100,19 +1230,31 @@ export class IndexingPipeline {
       // graph is already correct. Skip the whole postprocess so a daemon
       // restart doesn't re-resolve every project's full graph from scratch —
       // see canSkipFullPostprocess() for why this breaks the OOM-restart loop.
-      const skipPostprocess =
+      //
+      // TRA-1543: canSkipFullPostprocess() returns false unless indexed === 0
+      // && errors === 0, so don't pay for the git HEAD spawn + getStats +
+      // metadata read on every real-change run — check the cheap integers
+      // first. Outcome-identical: the delegated call sees the same values.
+      let skipPostprocess = false;
+      if (
         this._postprocessLevel !== 'none' &&
-        canSkipFullPostprocess({
+        !force &&
+        this._scopeRowsRemoved === 0 &&
+        result.indexed === 0 &&
+        result.errors === 0
+      ) {
+        skipPostprocess = canSkipFullPostprocess({
           // A scope reconcile just deleted files (and their edges): HEAD may be
           // unchanged and extraction may have hash-skipped everything, but the
           // graph is not the one we stamped. Re-resolve.
-          force: force || this._scopeRowsRemoved > 0,
-          indexed: result.indexed,
-          errors: result.errors,
+          force: false,
+          indexed: 0,
+          errors: 0,
           totalEdges: this.store.getStats().totalEdges,
           currentHead: readGitHeadSha(this.rootPath),
           storedHead: this.store.getRepoMetadata('index_head_sha'),
         });
+      }
       if (skipPostprocess) {
         logger.info(
           { root: this.rootPath, postprocess: this._postprocessLevel },
@@ -1392,6 +1534,9 @@ export class IndexingPipeline {
   /** Timer body for the deferred reconcile — chains the full pass onto the pipeline lock. */
   private fireEdgeReconcile(): void {
     this._reconcileTimer = null;
+    // No detection reset here: the reconcile reuses whatever the latest run
+    // persisted (a manifest change in the meantime already forced a
+    // re-detect+persist on its own run via the runPipeline gate).
     const scheduledAt = this._reconcileScheduledAt;
     const run = this._lock.then(async () => {
       if (this._disposed) return;
@@ -1559,12 +1704,22 @@ export class IndexingPipeline {
   }
 
   private registerFrameworkEdgeTypes(): void {
+    // TRA-1543: collect every (name, category, description) first, then write
+    // them in ONE transaction. This used to be one autocommit WAL transaction
+    // per edge type (root actives + every workspace's plugins — hundreds on a
+    // monorepo fixture), all for rows that already exist (INSERT OR IGNORE).
+    // Same statements, same order, one commit — output-identical.
+    const pending: Array<{ name: string; category: string; description: string }> = [];
     const registerSchema = (plugins: FrameworkPlugin[]) => {
       for (const plugin of plugins) {
         const schema = plugin.registerSchema();
         if (schema.edgeTypes) {
           for (const et of schema.edgeTypes) {
-            this.store.ensureEdgeType(et.name, et.category, et.description ?? '');
+            pending.push({
+              name: et.name,
+              category: et.category,
+              description: et.description ?? '',
+            });
           }
         }
       }
@@ -1576,12 +1731,167 @@ export class IndexingPipeline {
     if (activeResult.isOk()) registerSchema(activeResult.value);
 
     // Workspace-level plugins (may detect frameworks not visible at root)
+    const wsPluginsByPath = this.getWorkspaceFrameworkPlugins();
+    for (const ws of this.workspaces) {
+      registerSchema(wsPluginsByPath.get(ws.path) ?? []);
+    }
+
+    if (pending.length === 0) return;
+    const insert = this.store.db.prepare(
+      'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
+    );
+    this.store.db.transaction(() => {
+      for (const et of pending) insert.run(et.name, et.category, et.description);
+    })();
+  }
+
+  /**
+   * TRA-1543: detect framework plugins per workspace, shared across the
+   * phases of a run (registration, extraction, resolution — which used to
+   * detect the same ~44 workspaces × ~100 plugins three times) and reloaded
+   * from repo_metadata by fresh instances when the runPipeline gate holds
+   * (bench harness, CLI one-shots and daemon restarts all construct a new
+   * pipeline per run — an instance-only memo would never hit for them).
+   * The workspace signature check heals structural drift even when the gate
+   * misfires; manifest drift fails the gate itself. A newly added framework
+   * therefore surfaces no later than the run that carries its manifest — and
+   * failing that, at the next periodic verification full walk.
+   */
+  private getWorkspaceFrameworkPlugins(): Map<string, FrameworkPlugin[]> {
+    const sig = this.workspaceSignature();
+    if (this._wsFrameworkPlugins && this._wsFrameworkPluginsKey === sig) {
+      return this._wsFrameworkPlugins;
+    }
+    if (!this._wsPluginsForceRedetect) {
+      const persisted = this.loadPersistedWorkspacePlugins(sig);
+      if (persisted) {
+        this._wsFrameworkPlugins = persisted;
+        this._wsFrameworkPluginsKey = sig;
+        return persisted;
+      }
+    }
+    this._wsPluginsForceRedetect = false;
+    const m = new Map<string, FrameworkPlugin[]>();
     for (const ws of this.workspaces) {
       const wsRoot = path.join(this.rootPath, ws.path);
       const wsCtx = buildProjectContext(wsRoot);
-      const wsPlugins = this.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx));
-      registerSchema(wsPlugins);
+      m.set(
+        ws.path,
+        this.registry.getAllFrameworkPlugins().filter((p) => p.detect(wsCtx)),
+      );
     }
+    this._wsFrameworkPlugins = m;
+    this._wsFrameworkPluginsKey = sig;
+    this.persistWorkspacePlugins(m);
+    return m;
+  }
+
+  /**
+   * Fingerprint of the registered framework plugin set (names + versions).
+   * Any plugin added, removed or bumped invalidates the persisted detection —
+   * code updates must never silently reuse a stale plugin map (post-update
+   * passes run with force=true and re-detect anyway; this is the backstop).
+   */
+  private frameworkPluginFingerprint(): string {
+    return this.registry
+      .getAllFrameworkPlugins()
+      .map((p) => `${p.manifest.name}@${p.manifest.version}`)
+      .sort()
+      .join(',');
+  }
+
+  /** Resolve persisted plugin names to live instances, preserving registry order. */
+  private loadPersistedWorkspacePlugins(sig: string): Map<string, FrameworkPlugin[]> | null {
+    try {
+      const raw = this.store.getRepoMetadata(META_WS_PLUGINS);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        fingerprint?: unknown;
+        workspaces?: unknown;
+        map?: unknown;
+      };
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        parsed.fingerprint !== this.frameworkPluginFingerprint() ||
+        parsed.workspaces !== sig ||
+        typeof parsed.map !== 'object' ||
+        parsed.map === null
+      ) {
+        return null;
+      }
+      const byName = new Map(
+        this.registry.getAllFrameworkPlugins().map((p) => [p.manifest.name, p] as const),
+      );
+      const out = new Map<string, FrameworkPlugin[]>();
+      for (const [wsPath, names] of Object.entries(parsed.map as Record<string, unknown>)) {
+        if (!Array.isArray(names)) return null;
+        const plugins: FrameworkPlugin[] = [];
+        for (const n of names) {
+          const p = typeof n === 'string' ? byName.get(n) : undefined;
+          if (!p) return null;
+          plugins.push(p);
+        }
+        out.set(wsPath, plugins);
+      }
+      // Every current workspace must be covered — a partially-matching map
+      // means structural drift the signature check should have caught; fail
+      // closed (re-detect) rather than resolve with a subset.
+      for (const ws of this.workspaces) {
+        if (!out.has(ws.path)) return null;
+      }
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Best-effort persist of the detection map (names only — instances don't serialize). */
+  private persistWorkspacePlugins(m: Map<string, FrameworkPlugin[]>): void {
+    try {
+      const map: Record<string, string[]> = {};
+      for (const [wsPath, plugins] of m) {
+        map[wsPath] = plugins.map((p) => p.manifest.name);
+      }
+      this.store.setRepoMetadata(
+        META_WS_PLUGINS,
+        JSON.stringify({
+          fingerprint: this.frameworkPluginFingerprint(),
+          workspaces: this.workspaceSignature(),
+          map,
+        }),
+      );
+    } catch {
+      /* best-effort — a missed write just means "detect again next run" */
+    }
+  }
+
+  private workspaceSignature(): string {
+    return this.workspaces
+      .map((w) => w.path)
+      .sort()
+      .join('\0');
+  }
+
+  /**
+   * Whether the workspace→plugin map may be reused (from the instance memo
+   * or repo_metadata) for a run over `relPaths` (POSIX repo-relative). True
+   * only with positive proof nothing relevant changed: no path in scope is a
+   * framework manifest. Structural drift is caught independently by the
+   * workspace-signature check, plugin-set drift by the fingerprint. Stale
+   * reuse can only over-detect (a removed framework's plugin scans but
+   * matches nothing framework-specific — wasted ms, never lost edges);
+   * under-detection needs a manifest change, which fails this gate by
+   * construction. Blind spot (benign, same direction): manifests in the
+   * `deleted` set never reach relPaths, so a lone manifest *deletion* reuses
+   * the map — over-detect until the next verification full walk.
+   */
+  private canReuseWorkspacePlugins(relPaths: string[]): boolean {
+    for (const p of relPaths) {
+      const base = p.slice(p.lastIndexOf('/') + 1);
+      if (isFrameworkManifestBasename(base)) return false;
+    }
+    return true;
   }
 
   private buildResolveContext(scope?: ChangeScope): ResolveContext {

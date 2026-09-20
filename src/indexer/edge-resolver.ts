@@ -7,7 +7,13 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { logger } from '../logger.js';
 import { executeFrameworkResolveEdges } from '../plugin-api/executor.js';
-import type { ChangeScope, ProjectContext, RawEdge, ResolveContext } from '../plugin-api/types.js';
+import type {
+  ChangeScope,
+  FrameworkPlugin,
+  ProjectContext,
+  RawEdge,
+  ResolveContext,
+} from '../plugin-api/types.js';
 import {
   purgeForbiddenCrossWorkspaceEdges as _purgeCrossWs,
   resolveFileProjectionEdges as _resolveFileProjection,
@@ -94,10 +100,20 @@ export class EdgeResolver {
 
     for (const ws of this.state.workspaces) {
       const wsRoot = path.join(this.state.rootPath, ws.path);
-      const wsCtx = buildProjectContext(wsRoot);
-      const wsPlugins = this.state.registry
-        .getAllFrameworkPlugins()
-        .filter((p) => !seen.has(p.manifest.name) && p.detect(wsCtx));
+      // TRA-1543: reuse the pipeline's per-run detection when available (the
+      // pipeline already detected these for edge-type registration — detecting
+      // again here doubled the manifest reads). Producers that predate the
+      // shared map fall back to detecting inline: same set, same order.
+      const shared = this.state.wsFrameworkPlugins?.get(ws.path);
+      let wsPlugins: FrameworkPlugin[];
+      if (shared) {
+        wsPlugins = shared.filter((p) => !seen.has(p.manifest.name));
+      } else {
+        const wsCtx = buildProjectContext(wsRoot);
+        wsPlugins = this.state.registry
+          .getAllFrameworkPlugins()
+          .filter((p) => !seen.has(p.manifest.name) && p.detect(wsCtx));
+      }
       if (wsPlugins.length === 0) continue;
 
       // Create a scoped resolve context: paths are workspace-relative,

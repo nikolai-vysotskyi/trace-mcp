@@ -158,6 +158,9 @@ export async function extractAndPersist(
     buildProjectContext,
     existingFiles,
     forceIncludePaths,
+    // TRA-1543: share the pipeline's per-run workspace detection so
+    // extraction doesn't re-detect what registration already did.
+    wsFrameworkPlugins: getPipelineState().wsFrameworkPlugins,
   });
 
   // Cluster same-language files so each worker hits its parser cache instead
