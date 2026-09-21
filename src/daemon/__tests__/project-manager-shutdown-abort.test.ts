@@ -142,7 +142,7 @@ describe('ProjectManager.stopProject aborts the initial index (TRA-1017)', () =>
 
   it('bounds the wait when the index ignores the abort', async () => {
     hangForever = true;
-    const { STOP_PROJECT_INDEX_WAIT_MS } = await import('../project-manager.js');
+    const { STOP_PROJECT_TEARDOWN_BUDGET_MS } = await import('../project-manager.js');
     const { pm } = await addOneProject();
 
     const startedAt = Date.now();
@@ -152,8 +152,8 @@ describe('ProjectManager.stopProject aborts the initial index (TRA-1017)', () =>
     // The full budget was honored (we wait — not skip), but shutdown cannot
     // outlast it: pre-fix this awaited forever and the daemon died to the
     // 20s forced exit instead.
-    expect(elapsedMs).toBeGreaterThanOrEqual(STOP_PROJECT_INDEX_WAIT_MS);
-    expect(elapsedMs).toBeLessThan(STOP_PROJECT_INDEX_WAIT_MS + 10_000);
+    expect(elapsedMs).toBeGreaterThanOrEqual(STOP_PROJECT_TEARDOWN_BUDGET_MS);
+    expect(elapsedMs).toBeLessThan(STOP_PROJECT_TEARDOWN_BUDGET_MS + 10_000);
     expect(capturedSignal!.aborted).toBe(true);
     expect(events).toContain('dispose');
   }, 30_000);

@@ -21,9 +21,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initializeDatabase } from '../../db/schema.js';
+import { TraceMcpConfigSchema } from '../../config.js';
 import { FileWatcher } from '../../indexer/watcher.js';
 import { ProjectManager } from '../project-manager.js';
-import { STOP_PROJECT_INDEX_WAIT_MS } from '../project-manager.js';
+import { STOP_PROJECT_TEARDOWN_BUDGET_MS } from '../project-manager.js';
+
+vi.mock('@parcel/watcher', () => ({
+  subscribe: vi.fn(async () => ({ unsubscribe: vi.fn(async () => {}) })),
+}));
 
 let tmpRoot: string;
 let db: Database.Database;
@@ -92,10 +97,70 @@ describe('ProjectManager.stopProject watcher/index shared budget (TRA-1017)', ()
     }
   }, 30_000);
 
-  it('STOP_PROJECT_INDEX_WAIT_MS fits the shutdown deadline with the other phases', () => {
-    // 5s reindex drain + shared drain + 5s dispose drain + synchronous
-    // closes must stay inside DAEMON_SHUTDOWN_DEADLINE_MS (20s). If any of
-    // the three budgets moves, this names the arithmetic to re-check.
-    expect(5_000 + STOP_PROJECT_INDEX_WAIT_MS + 5_000).toBeLessThan(20_000);
+  it('STOP_PROJECT_TEARDOWN_BUDGET_MS fits the shutdown deadline with the other phases', () => {
+    // The shared teardown budget plus the bounded dispose() drain plus the
+    // synchronous closes must stay inside DAEMON_SHUTDOWN_DEADLINE_MS (20s).
+    // If any of the budgets moves, this names the arithmetic to re-check.
+    expect(STOP_PROJECT_TEARDOWN_BUDGET_MS + 5_000).toBeLessThan(20_000);
   });
+
+  it('stays reachable when a watcher exclude restart is queued ahead of it', async () => {
+    // `restartWithExcludes()` (fired when descendant registration changes)
+    // runs a full stop+drain+start on the op queue. Queued ahead of the
+    // terminal unsubscribe with a handler behind a hung index, it holds the
+    // queue indefinitely — the stop budget must cover queue acquisition too,
+    // and the restart must not resubscribe after the terminal stop.
+    const root = mkdtempSync(join(tmpdir(), 'trace-mcp-watcher-restart-'));
+    const restartDb = initializeDatabase(join(root, 'index.db'));
+    const watcher = new FileWatcher();
+    await watcher.start(root, TraceMcpConfigSchema.parse({}), async () => {});
+    let releaseIndex!: () => void;
+    const initial = new Promise<void>((resolve) => {
+      releaseIndex = resolve;
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: reaching into watcher internals for the test
+    (watcher as any).activeHandlers.add(initial);
+    // Production restartManagedAncestorWatchers invokes this after descendant
+    // registration/removal.
+    const restarting = watcher.restartWithExcludes(['child/**']);
+    const pm = new ProjectManager();
+    const controller = new AbortController();
+    // biome-ignore lint/suspicious/noExplicitAny: bypassing private state for behavioural test
+    (pm as any).projects.set(root, {
+      root,
+      db: restartDb,
+      watcher,
+      initialIndexPromise: initial,
+      indexAbortController: controller,
+      serverHandle: { dispose() {} },
+      server: {
+        async close() {},
+      },
+      pipeline: {
+        async dispose() {},
+      },
+    });
+    vi.useFakeTimers();
+    let settled = false;
+    // biome-ignore lint/suspicious/noExplicitAny: stopProject is private
+    const stopped = (pm as any).stopProject(root).then(() => {
+      settled = true;
+    });
+    try {
+      // Past the whole shutdown deadline, let alone the teardown budget: the
+      // stop must have given up waiting and torn down anyway.
+      await vi.advanceTimersByTimeAsync(20_001);
+      expect(controller.signal.aborted).toBe(true);
+      expect(settled).toBe(true);
+      expect(restartDb.open).toBe(false);
+    } finally {
+      releaseIndex();
+      await restarting;
+      await stopped;
+      await watcher.stop();
+      if (restartDb.open) restartDb.close();
+      vi.useRealTimers();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

@@ -55,6 +55,20 @@ export interface ExtractAndPersistParams {
    * (never inside) persist transactions.
    */
   signal?: AbortSignal;
+  /**
+   * Per-file force (TRA-1017): members are extracted even when their stored
+   * hash says "current". Repair runs pass the files an interrupted run
+   * persisted without resolving, so their extraction state (`pendingImports`)
+   * is rebuilt and the next resolution restores their edges.
+   */
+  forcePaths?: Set<string>;
+  /**
+   * Called after each batch's persist transaction commits, with that batch's
+   * extraction rel-paths (TRA-1017). The pipeline records them durably as
+   * repair scope, so an abort between batches still knows exactly which
+   * files were rewritten without resolution.
+   */
+  onPersisted?: (relPaths: string[]) => void;
 }
 
 /** Result of a run: the persister's per-batch symbol-name churn, exposed so the
@@ -145,6 +159,7 @@ export async function extractAndPersist(
     relPaths,
     existingFiles,
     force,
+    params.forcePaths,
   );
   result.skipped += prefiltered;
   if (prefiltered > 0) {
@@ -228,6 +243,11 @@ export async function extractAndPersist(
       throwIfIndexAborted(params.signal, rootPath);
       const batch = candidates.slice(i, i + BATCH_SIZE);
       const extractions: FileExtraction[] = [];
+      // TRA-1017: per-file force for repair scope — a dirty file's stored
+      // hash says "current", so both the prefilter above and the extractor's
+      // own content gate would skip rebuilding its extraction state.
+      const fileForce = (relPath: string): boolean =>
+        force || (params.forcePaths?.has(relPath) ?? false);
 
       if (pool) {
         // Continuous dispatch: spawn `pool.size` consumers that each pull
@@ -246,7 +266,7 @@ export async function extractAndPersist(
               const r = await pool.extract({
                 relPath,
                 rootPath,
-                force,
+                force: fileForce(relPath),
                 existing,
                 gitignored,
                 workspaces,
@@ -284,7 +304,7 @@ export async function extractAndPersist(
           await yieldToEventLoopFair();
           const chunk = batch.slice(c, c + CONCURRENCY);
           const results = await Promise.all(
-            chunk.map((relPath) => extractor.extract(relPath, force)),
+            chunk.map((relPath) => extractor.extract(relPath, fileForce(relPath))),
           );
           for (const ext of results) {
             if (ext.kind === 'skipped') {
@@ -316,6 +336,10 @@ export async function extractAndPersist(
         // own bounds that window at negligible cost.
         await runInOwnTurn(() => persister.persistBatch(extractions));
         result.indexed += extractions.length;
+        // TRA-1017: record exactly what this transaction rewrote, durably and
+        // now — an abort at the next boundary must still know this batch's
+        // files were persisted without resolution.
+        params.onPersisted?.(extractions.map((ext) => ext.relPath));
       } else {
         // Nothing to persist, but the batch still did work — keep the
         // once-per-batch boundary the old unconditional yield gave.

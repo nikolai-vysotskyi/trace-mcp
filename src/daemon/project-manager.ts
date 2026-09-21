@@ -67,19 +67,22 @@ import type { ProjectResourcePool } from './resource-pool.js';
 const AI_COALESCE_WAIT_MS = 5_000;
 
 /**
- * Bound for `stopProject()`'s shared drain of the in-flight watcher handlers
- * and the initial index (TRA-1017). Field logs showed a full index taking
- * 188s against a 20s shutdown deadline — an unbounded await there overruns
- * the deadline on every cold-project stop. The two waits share ONE budget
- * because both queue on the same pipeline lock: handlers drained by
- * `watcher.drain()` settle only when the aborted index bails, so bounding
- * either one alone still wedges. Sized so the worst sequential path (5s
- * reindex drain + this + 5s dispose drain) stays inside the 20s
- * `DAEMON_SHUTDOWN_DEADLINE_MS` with margin left for the synchronous closes
- * and `httpServer.close()`. `shutdown()` stops projects concurrently, so one
- * slow project cannot eat another's budget.
+ * Total budget for one project's teardown waits in `stopProject()` (TRA-1017).
+ * Field logs showed a full index taking 188s against a 20s shutdown
+ * deadline — unbounded awaits overrun it on every cold-project stop.
+ *
+ * The three waits share ONE deadline instead of three separate caps because
+ * they queue on the same two locks: the watcher's op queue (a restart queued
+ * ahead of the unsubscribe holds it draining a hung handler) and the
+ * pipeline lock (handlers drained by `watcher.drain()` settle only when the
+ * aborted index bails). Bounding any one of them alone still wedges behind
+ * the others. Worst sequential path (this budget + the 5s bounded
+ * `dispose()` drain) is 18s, inside the 20s `DAEMON_SHUTDOWN_DEADLINE_MS`
+ * with margin left for the synchronous closes and `httpServer.close()`.
+ * `shutdown()` stops projects concurrently, so one slow project cannot eat
+ * another's budget.
  */
-export const STOP_PROJECT_INDEX_WAIT_MS = 8_000;
+export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 13_000;
 
 /**
  * Canonical in-memory key for the managed-projects map (TRA-1608).
@@ -191,7 +194,8 @@ export interface ManagedProject {
    * its own errors into `managed.status = 'error'` (an abort lands in the
    * `IndexAbortedError` branch instead and leaves the status alone).
    * `stopProject()` aborts the run via `indexAbortController` and then awaits
-   * this bounded by `STOP_PROJECT_INDEX_WAIT_MS` before closing `managed.db`.
+   * this inside the shared `STOP_PROJECT_TEARDOWN_BUDGET_MS` teardown budget
+   * (together with the watcher drain) before closing `managed.db`.
    * Unbounded waiting here overran
    * the 20s shutdown deadline on every cold-project stop (TRA-1017); the
    * bound keeps teardown inside it while the abort keeps the common case
@@ -1154,17 +1158,32 @@ export class ProjectManager {
     // 12 "database connection is not open" failures after "Daemon shutting
     // down", one project logging five over 27s). The drain joins the shared
     // bounded wait below, after every producer has been cancelled.
-    await managed.watcher.unsubscribe();
+    // The acquisition itself is bounded: a watcher restart queued ahead of
+    // this holds the op queue draining that same hung handler, so even the
+    // unsubscribe cannot be awaited bare.
+    const teardownDeadline = Date.now() + STOP_PROJECT_TEARDOWN_BUDGET_MS;
+    const remainingMs = (): number => Math.max(0, teardownDeadline - Date.now());
+    const unsubscribed = await waitWithTimeout(managed.watcher.unsubscribe(), remainingMs());
+    if (!unsubscribed) {
+      logger.warn(
+        { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
+        'stopProject: watcher unsubscribe still queued — continuing teardown without it',
+      );
+    }
     // TRA-1553: single-file reindexes (HTTP handleReindexFile, MCP
     // register_edit) are not part of initialIndexPromise and nothing below
     // awaits them, yet they run transactions against this project's DB across
-    // awaits. Drain what started before the mark above — bounded, so a hung
-    // reindex still cannot wedge shutdown past its deadline — before the DB
-    // closes. Without this, the next synchronous transaction after the close
-    // throws "The database connection is not open" from inside an async
-    // continuation as an unhandled rejection (seen on overlapping postinstall
-    // respawns, where a ~20 s old instance was SIGTERM'd mid-index).
-    const drained = await waitForReindexDrain(root, REINDEX_DRAIN_TIMEOUT_MS);
+    // awaits. Drain what started before the mark above — bounded by the
+    // shared budget, so a hung reindex still cannot wedge shutdown past its
+    // deadline — before the DB closes. Without this, the next synchronous
+    // transaction after the close throws "The database connection is not
+    // open" from inside an async continuation as an unhandled rejection
+    // (seen on overlapping postinstall respawns, where a ~20 s old instance
+    // was SIGTERM'd mid-index).
+    const drained = await waitForReindexDrain(
+      root,
+      Math.min(REINDEX_DRAIN_TIMEOUT_MS, remainingMs()),
+    );
     if (!drained) {
       logger.warn(
         { projectRoot: root, drainTimeoutMs: REINDEX_DRAIN_TIMEOUT_MS },
@@ -1174,24 +1193,25 @@ export class ProjectManager {
     // Wait for the background initial-index chain (indexAll → summarize/embed →
     // subproject auto-sync) to finish so its topology.db handle is closed
     // before we tear down this project — see initialIndexPromise's doc comment.
-    // TRA-1017: bounded, and SHARED with the watcher drain. The abort above
-    // makes a cooperative run settle at its next boundary, but a run wedged
-    // inside a synchronous phase (a multi-second edge-resolution pass holds
-    // the event loop and cannot observe the abort) would otherwise ride out
-    // the whole phase and overrun the shutdown deadline — and the watcher
-    // drain waits on handlers queued on that same pipeline lock, so bounding
-    // the index without the drain (or vice versa) still wedges. Awaiting both
-    // together bounds the lock once, not twice. On timeout the teardown below
-    // proceeds anyway — the chain never rejects (every branch catches into
-    // status), so nothing is lost by detaching; its next DB statement after
-    // the close lands in its own error handling.
+    // TRA-1017: bounded by whatever is left of the shared teardown budget,
+    // and SHARED with the watcher drain. The abort above makes a cooperative
+    // run settle at its next boundary, but a run wedged inside a synchronous
+    // phase (a multi-second edge-resolution pass holds the event loop and
+    // cannot observe the abort) would otherwise ride out the whole phase and
+    // overrun the shutdown deadline — and the watcher drain waits on handlers
+    // queued on that same pipeline lock, so bounding the index without the
+    // drain (or vice versa) still wedges. Awaiting both together bounds the
+    // lock once, not twice. On timeout the teardown below proceeds anyway —
+    // the chain never rejects (every branch catches into status), so nothing
+    // is lost by detaching; its next DB statement after the close lands in
+    // its own error handling.
     {
       const drains: Array<Promise<unknown>> = [managed.watcher.drain()];
       if (managed.initialIndexPromise) drains.push(managed.initialIndexPromise);
-      const settled = await waitWithTimeout(Promise.all(drains), STOP_PROJECT_INDEX_WAIT_MS);
+      const settled = await waitWithTimeout(Promise.all(drains), remainingMs());
       if (!settled) {
         logger.warn(
-          { projectRoot: root, drainWaitMs: STOP_PROJECT_INDEX_WAIT_MS },
+          { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
           'stopProject: index/watcher drain still running after abort — continuing teardown without it',
         );
       }
