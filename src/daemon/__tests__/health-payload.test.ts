@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildHealthPayload } from '../health-payload.js';
+import { buildHealthPayload, withMissingRoots } from '../health-payload.js';
 
 // Issue #237: the daemon binds /health BEFORE startup indexing, so it answers
 // from the first millisecond — but while the initial reindex runs it must
@@ -44,5 +44,32 @@ describe('buildHealthPayload', () => {
     const ready = buildHealthPayload({ ...base, startupComplete: true });
     expect(starting.projects).toHaveLength(3);
     expect(ready.projects).toHaveLength(3);
+  });
+});
+
+describe('withMissingRoots (TRA-1715)', () => {
+  const projects = [
+    { root: '/live', status: 'ready' },
+    { root: '/gone', status: 'ready' },
+    { root: '/also-gone', status: 'indexing' },
+  ];
+
+  it('marks vanished roots missing without touching live ones', () => {
+    const out = withMissingRoots(projects, (root) => root === '/live');
+    expect(out).toEqual([
+      { root: '/live', status: 'ready' },
+      { root: '/gone', status: 'missing' },
+      { root: '/also-gone', status: 'missing' },
+    ]);
+  });
+
+  it('leaves every status intact when all roots exist', () => {
+    expect(withMissingRoots(projects, () => true)).toEqual(projects);
+  });
+
+  it('does not mutate the input list', () => {
+    const input = [{ root: '/gone', status: 'ready' }];
+    withMissingRoots(input, () => false);
+    expect(input).toEqual([{ root: '/gone', status: 'ready' }]);
   });
 });

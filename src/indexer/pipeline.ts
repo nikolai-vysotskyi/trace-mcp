@@ -545,6 +545,30 @@ export class IndexingPipeline {
       this._isIncremental = false;
       this._postprocessLevel = opts.postprocess ?? 'full';
       const start = Date.now();
+      // TRA-1715: the root may have vanished since this run was scheduled
+      // (a finished task's workdir removed, a volume unmounted). A full
+      // walk of a missing root resolves to zero files, and reconcileScope
+      // would then drop EVERY indexed row — destroying a healthy index for
+      // what may be a transient condition — while the extractor logs one
+      // `Cannot read file` per previously-known file. Bail out before any
+      // of that: the stored index stays as-is until the root comes back or
+      // the project is deregistered/unloaded. Inside the lock so concurrent
+      // runs still serialize on this verdict.
+      if (!fs.existsSync(this.rootPath)) {
+        logger.warn(
+          { root: this.rootPath },
+          'Skipping index — project root no longer exists on disk',
+        );
+        return {
+          totalFiles: 0,
+          indexed: 0,
+          skipped: 0,
+          errors: 0,
+          durationMs: Date.now() - start,
+          incremental: false,
+          postprocess: this._postprocessLevel,
+        } satisfies IndexingResult;
+      }
       // Snapshot the existing index size so runPipeline can detect a
       // catastrophic shrink (e.g. parser regression dropping half the files
       // silently). Skip when:
