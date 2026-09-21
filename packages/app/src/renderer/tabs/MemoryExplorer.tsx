@@ -85,6 +85,9 @@ interface MinedSession {
   session_path: string;
   mined_at: string;
   decisions_found: number;
+  /** Basename of the session file without .jsonl (TRA-1065). Optional so an
+      older daemon that does not send it yet still renders via fallback. */
+  session_id?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1756,6 +1759,15 @@ function SessionsView({
           {!loading &&
             sessions.map((s, i) => {
               const isLast = i === sessions.length - 1;
+              // TRA-1065: the row names the session (id + owning project +
+              // mined date), not an interior-truncated .jsonl path whose
+              // visible middle carries no identity. Full path stays in the
+              // tooltip. The list is project-scoped server-side, so the
+              // project label is constant here — it self-identifies the row
+              // if scoping ever regresses.
+              const sessionId =
+                s.session_id ?? s.session_path.split(/[\\/]/).pop()?.replace(/\.jsonl$/, '') ?? s.session_path;
+              const projectName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
               return (
                 <div
                   key={s.session_path}
@@ -1769,13 +1781,14 @@ function SessionsView({
                         style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
                         title={s.session_path}
                       >
-                        {shortPath(s.session_path)}
+                        {sessionId}
                       </div>
                       <div
-                        className="text-[11px] leading-[13px] tabular-nums"
+                        className="text-[11px] leading-[13px] tabular-nums truncate"
                         style={{ color: 'var(--label-secondary)' }}
+                        title={s.session_path}
                       >
-                        {formatDate(s.mined_at)}
+                        {projectName} · {formatDate(s.mined_at)}
                       </div>
                     </div>
                     {/* A count is the signal, so it is a number and a noun —

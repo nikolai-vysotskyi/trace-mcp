@@ -17,6 +17,7 @@ import Database from 'better-sqlite3';
 import { escapeFtsQuery } from '../db/fts.js';
 import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
 import { ensureGlobalDirs } from '../global.js';
+import { encodeDirName, listAllSessions } from '../analytics/log-parser.js';
 import { loadConfig } from '../config.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
@@ -735,7 +736,7 @@ export function handleListCorpora(res: http.ServerResponse, url: URL): void {
   }
 }
 
-/** GET /api/projects/sessions — list mined sessions from decisions.db. */
+/** GET /api/projects/sessions — list mined sessions from decisions.db, scoped to one project. */
 export function handleListSessions(res: http.ServerResponse, url: URL): void {
   const projectRoot = url.searchParams.get('project');
   if (!projectRoot) {
@@ -752,14 +753,64 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
   }
 
   try {
-    // mined_sessions has no project_root column — return all sessions,
-    // ordered newest-first, up to limit. The UI can display all or filter
-    // by path prefix if needed.
-    const sessions = db
+    // mined_sessions has no project_root column, so attribute each row by
+    // its session key instead (TRA-1065). A row belongs to this project when:
+    //   1. its file is one of listAllSessions(projectRoot) — the same
+    //      discovery the miner itself uses (Claude's
+    //      ~/.claude/projects/<encoded> + the project's git worktrees +
+    //      <project>/.claw/sessions); or
+    //   2. its path still carries this project's encoded dir / root prefix
+    //      (covers rows whose session files have since been deleted); or
+    //   3. the decisions table attributes its session key to this project
+    //      (covers synthetic provider keys like "hermes:<id>", which are
+    //      not filesystem paths at all — provider mining records
+    //      project_root on every extracted decision).
+    // Rows matching none of these belong to other projects and are dropped:
+    // a project with no mined sessions gets [], not another project's list.
+    let projectPaths = new Set<string>();
+    try {
+      projectPaths = new Set(listAllSessions(projectRoot).map((s) => s.filePath));
+    } catch {
+      /* discovery failed — fall back to prefix + decisions attribution */
+    }
+    const resolvedRoot = path.resolve(projectRoot);
+    const claudeNeedle = `${path.sep}${encodeDirName(resolvedRoot)}${path.sep}`;
+    const clawPrefix = resolvedRoot + path.sep;
+
+    let attributedIds = new Set<string>();
+    try {
+      const idRows = db
+        .prepare(
+          'SELECT DISTINCT session_id FROM decisions WHERE project_root = ? AND session_id IS NOT NULL',
+        )
+        .all(projectRoot) as Array<{ session_id: string }>;
+      attributedIds = new Set(idRows.map((r) => r.session_id));
+    } catch {
+      /* decisions table may predate session_id — path attribution still applies */
+    }
+
+    // The table is a mining log (hundreds of rows, not millions), so read
+    // all rows newest-first, filter in JS, then apply the limit. Filtering
+    // in SQL would need a dynamic IN-list over the project's session files.
+    const rows = db
       .prepare(
-        'SELECT session_path, mined_at, decisions_found FROM mined_sessions ORDER BY mined_at DESC LIMIT ?',
+        'SELECT session_path, mined_at, decisions_found FROM mined_sessions ORDER BY mined_at DESC',
       )
-      .all(limit) as MinedSessionRow[];
+      .all() as MinedSessionRow[];
+
+    const sessions = rows
+      .filter(
+        (r) =>
+          projectPaths.has(r.session_path) ||
+          r.session_path.includes(claudeNeedle) ||
+          r.session_path.startsWith(clawPrefix) ||
+          attributedIds.has(r.session_path),
+      )
+      .slice(0, limit)
+      .map((r) => ({
+        ...r,
+        session_id: path.basename(r.session_path, '.jsonl'),
+      }));
 
     sendJson(res, 200, { sessions });
   } catch (e) {
