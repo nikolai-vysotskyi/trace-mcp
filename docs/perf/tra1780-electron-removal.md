@@ -1,3 +1,11 @@
+---
+layout: default
+title: Electron removal-purge cost (TRA-1780)
+permalink: /perf/tra1780-electron-removal/
+description: Internal working document. Measured cost of the TRA-1780 electron removal purge.
+noindex: true
+---
+
 # TRA-1780 — electron removal-purge cost
 
 Measurement-only (no public-surface claim, no preregistration bar): how much
