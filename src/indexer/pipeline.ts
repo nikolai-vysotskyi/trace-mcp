@@ -1925,6 +1925,17 @@ export class IndexingPipeline {
             new Set(repairPaths),
           );
           repairErrors = repairResult.errors;
+          logger.info(
+            {
+              root: this.rootPath,
+              repairPaths,
+              indexed: repairResult.indexed,
+              skipped: repairResult.skipped,
+              errors: repairResult.errors,
+              pendingImports: this._pendingImports.size,
+            },
+            'TRA-1017 deferred repair extraction done',
+          );
         }
         await this.runEdgeResolvers(undefined);
         // The mark clears only after a repair whose extraction reported no
