@@ -154,9 +154,14 @@ their next client update.
 **The one place that boundary is under strain is `tweakcc`** (`docs/tweakcc.md`,
 `src/init/tweakcc.ts`). It patches Claude Code's system prompts, which is the far
 side of the line as written — and the Max tier of `trace init` invokes it for the
-user: non-interactive `init` against a Claude-Code-family client defaults to Max
-(`src/cli/init.ts`), which writes prompt files into `~/.tweakcc/system-prompts/`
-and runs `npx tweakcc --apply` itself (`src/init/tweakcc.ts`). "The user installs
+user when the pairing can run: non-interactive `init` against a
+Claude-Code-family client defaults to Max (`src/cli/init.ts`), which writes
+prompt files into the tweakcc system-prompts directory (default
+`~/.tweakcc/system-prompts/`, an existing alternate config directory respected)
+and runs `npx -y tweakcc@4.3.3 --apply` itself (`src/init/tweakcc.ts`). If no
+tweakcc config exists yet and no tweakcc executable is on `PATH`,
+`resolveOrBootstrapPromptsDir` returns null and Max writes nothing and runs
+nothing ("tweakcc package not available"). "The user installs
 and runs it themselves" describes a flow that is not the default one, so the copy
 has to draw the narrower, true distinction every time the two appear together:
 **the patching code is a third-party tool's, not ours — but the decision to run it
