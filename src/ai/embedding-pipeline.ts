@@ -6,6 +6,7 @@ import type Database from 'better-sqlite3';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
+import { hostUnreachableCode, isHostUnreachableError } from '../utils/retry.js';
 import { warnIfCloudEmbeddingProvider } from './cloud-warning.js';
 import type { EmbeddingService, VectorStore } from './interfaces.js';
 import { DimensionMismatchError, ProviderMismatchError } from './vector-store.js';
@@ -111,6 +112,21 @@ export class EmbeddingPipeline {
   private sawNonMismatchFailure = false;
   /** Once-per-process latch for the "breaker still open" skip log. */
   private skipNotified = false;
+  /**
+   * Set once any batch succeeds in this process. Distinguishes "the provider
+   * was never reachable" (expected environment state — LM Studio not running)
+   * from "the provider died mid-service" (a real regression, TRA-1798).
+   */
+  private succeededThisProcess = false;
+  /**
+   * Once-per-process latch for the "embeddings unavailable, FTS-only" summary.
+   * Deliberately NOT reset by resetCircuitBreaker(): an explicit embed_repo
+   * already surfaces full failure detail to its caller, so the daemon log
+   * keeps exactly one summary line per process.
+   */
+  private unreachableNotified = false;
+  /** Per-run latch: set once a failure arrives that deserves an L50. */
+  private sawActionableFailure = false;
 
   /**
    * Forget any open cooldown so the next run actually calls the provider.
@@ -294,6 +310,7 @@ export class EmbeddingPipeline {
       dimensionMismatch: false,
     };
     this.sawNonMismatchFailure = false;
+    this.sawActionableFailure = false;
     try {
       await this.ensureConsistent();
       const totalToEmbed = this.store.countUnembeddedSymbols();
@@ -327,12 +344,24 @@ export class EmbeddingPipeline {
         // completion. Reporting it as one made a two-day outage read as
         // "embedding completed: 0 items in 2s" at info level (TRA-812).
         if (totalIndexed === 0 && this.diagnostics.failedBatches > 0) {
-          this.progress?.update('embedding', {
-            phase: 'error',
-            processed: 0,
-            completedAt: Date.now(),
-            error: this.diagnostics.lastError ?? 'all embedding batches failed',
-          });
+          if (this.sawActionableFailure) {
+            this.progress?.update('embedding', {
+              phase: 'error',
+              processed: 0,
+              completedAt: Date.now(),
+              error: this.diagnostics.lastError ?? 'all embedding batches failed',
+            });
+          } else {
+            // Every failure was "provider unreachable from the start" — already
+            // summarized as a single warn by embedBatch. Report 'skipped' so
+            // ProgressState doesn't emit a second L50 ("embedding failed",
+            // TRA-1798). Diagnostics still carry the failure for embed_repo.
+            this.progress?.update('embedding', {
+              phase: 'skipped',
+              completedAt: Date.now(),
+              error: this.diagnostics.lastError ?? 'embedding provider unreachable',
+            });
+          }
         } else {
           this.progress?.update('embedding', {
             phase: 'completed',
@@ -384,6 +413,8 @@ export class EmbeddingPipeline {
 
     try {
       const embeddings = await this.embeddingService.embedBatch(texts, undefined, signal);
+      // The provider answered — reachable, regardless of how many vectors came back.
+      this.succeededThisProcess = true;
       for (let i = 0; i < embeddings.length; i++) {
         if (embeddings[i].length > 0) {
           this.vectorStore.insert(unembedded[i].id, embeddings[i]);
@@ -402,35 +433,61 @@ export class EmbeddingPipeline {
         this.clearBreakerState();
       }
     } catch (e) {
-      logger.error({ error: e }, 'Embedding batch failed');
       // Record the failure so embed_repo can surface it instead of reporting a
       // silent "completed with 0 embedded".
       this.diagnostics.failedBatches++;
       this.diagnostics.lastError = e instanceof Error ? e.message : String(e);
-      // dimensionMismatch means "every failure this run was a dimension
-      // mismatch" — a single non-mismatch failure clears it permanently.
-      if (e instanceof DimensionMismatchError) {
-        if (!this.sawNonMismatchFailure) this.diagnostics.dimensionMismatch = true;
-      } else {
-        this.sawNonMismatchFailure = true;
-        this.diagnostics.dimensionMismatch = false;
-      }
-      this.consecutiveFailures++;
-      if (this.consecutiveFailures >= FAILURE_THRESHOLD && !this.breakerNotified) {
+      if (isHostUnreachableError(e) && !this.succeededThisProcess) {
+        // The provider never answered in this process (LM Studio / Ollama not
+        // running): expected environment state, not a regression. Exactly one
+        // warn summary per process — no stack, no L50 — naming the FTS-only
+        // degradation, and the breaker trips immediately so the backlog isn't
+        // re-probed until the cooldown ends (TRA-1798). An explicit embed_repo
+        // still retries right away (resetCircuitBreaker) with full detail.
+        if (!this.unreachableNotified) {
+          this.unreachableNotified = true;
+          logger.warn(
+            {
+              reason: hostUnreachableCode(e) ?? (e instanceof Error ? e.message : String(e)),
+              queued: this.store.countUnembeddedSymbols(),
+              cooldownMinutes: COOLDOWN_MS / 60_000,
+            },
+            'Embeddings unavailable — background embedding paused, search is FTS-only until the provider is reachable',
+          );
+        }
         this.diagnostics.breakerTripped = true;
+        this.consecutiveFailures = Math.max(this.consecutiveFailures + 1, FAILURE_THRESHOLD);
         this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+        // Already announced by the summary above — don't re-log the trip.
         this.breakerNotified = true;
-        logger.warn(
-          {
-            consecutiveFailures: this.consecutiveFailures,
-            cooldownMinutes: COOLDOWN_MS / 60_000,
-          },
-          'Embedding service unreachable — pausing background embedding',
-        );
-      } else if (this.breakerNotified) {
-        // Already tripped; just extend the cooldown so a still-broken service
-        // doesn't get probed the moment the previous window ends.
-        this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+      } else {
+        this.sawActionableFailure = true;
+        logger.error({ error: e }, 'Embedding batch failed');
+        // dimensionMismatch means "every failure this run was a dimension
+        // mismatch" — a single non-mismatch failure clears it permanently.
+        if (e instanceof DimensionMismatchError) {
+          if (!this.sawNonMismatchFailure) this.diagnostics.dimensionMismatch = true;
+        } else {
+          this.sawNonMismatchFailure = true;
+          this.diagnostics.dimensionMismatch = false;
+        }
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures >= FAILURE_THRESHOLD && !this.breakerNotified) {
+          this.diagnostics.breakerTripped = true;
+          this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+          this.breakerNotified = true;
+          logger.warn(
+            {
+              consecutiveFailures: this.consecutiveFailures,
+              cooldownMinutes: COOLDOWN_MS / 60_000,
+            },
+            'Embedding service unreachable — pausing background embedding',
+          );
+        } else if (this.breakerNotified) {
+          // Already tripped; just extend the cooldown so a still-broken service
+          // doesn't get probed the moment the previous window ends.
+          this.disabledUntilMs = Date.now() + COOLDOWN_MS;
+        }
       }
       // Record the failure (and any cooldown) for the next process and for
       // get_index_health to surface.

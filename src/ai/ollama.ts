@@ -3,7 +3,7 @@
  */
 
 import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
+import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import { combineAbortSignals } from './abort.js';
 import type {
@@ -87,7 +87,7 @@ class OllamaEmbeddingService implements EmbeddingService {
         const data = (await resp.json()) as { embeddings: number[][] };
         return data.embeddings;
       },
-      { label: 'Ollama embeddings' },
+      { label: 'Ollama embeddings', isRetryable: isRetryableEmbeddingError },
     );
     this.adoptDimension(embeddings[0]?.length);
     return embeddings;

@@ -405,11 +405,16 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 
-> **When the embedding endpoint is unreachable:** background embedding trips a
-> circuit breaker after 2 consecutive failed batches and then pauses for 10
-> minutes. The pause is stored in the project DB, so it survives a daemon
-> restart instead of re-attempting the whole backlog on every start. While it is
-> open, `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
+> **When the embedding endpoint is unreachable:** connection-level failures
+> (`ECONNREFUSED`/`ENOTFOUND` — e.g. LM Studio or Ollama not running) fail fast
+> without retries and log exactly one warn summary per daemon process
+> ("Embeddings unavailable — …, search is FTS-only"). The circuit breaker trips
+> on the first such failure and then pauses for 10 minutes. Other failures
+> (HTTP 5xx, timeouts, mid-run disconnects after successful batches) keep the
+> retry + `Embedding batch failed` error path — those are real regressions. The
+> pause is stored in the project DB, so it survives a daemon restart instead of
+> re-attempting the whole backlog on every start. While it is open,
+> `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
 > and adds a warning — semantic and hybrid search results are incomplete until
 > the provider is reachable. `embed_repo` ignores the pause and retries
 > immediately.

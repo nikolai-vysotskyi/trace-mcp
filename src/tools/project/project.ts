@@ -135,6 +135,16 @@ export function getIndexHealth(
           `(${breaker.lastError ?? 'unknown error'}). Semantic and hybrid search results are ` +
           `incomplete until the embedding provider is reachable; call embed_repo to retry now.`,
       );
+    } else if (breaker?.lastError && queued > 0) {
+      // Cooldown expired but no batch has succeeded since: the provider is
+      // still unreachable and search is still FTS-only. Without this the
+      // degradation goes quiet between cooldown windows (TRA-1798).
+      if (status === 'ok') status = 'degraded';
+      warnings.push(
+        `${queued} symbols are queued for embedding but the last background attempt failed ` +
+          `(${breaker.lastError}). Search is FTS-only until the embedding provider is reachable; ` +
+          `call embed_repo to retry now.`,
+      );
     }
   }
 

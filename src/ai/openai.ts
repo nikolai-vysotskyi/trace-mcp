@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
+import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import { combineAbortSignals } from './abort.js';
 import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
@@ -143,7 +143,11 @@ class OpenAIEmbeddingService implements EmbeddingService {
         }
         return result;
       },
-      { label: this.label },
+      // Fail fast when the host is down (LM Studio not running) — retrying a
+      // dead endpoint only delays the pipeline and logs retry warns per
+      // daemon start. The embedding pipeline's circuit breaker owns the
+      // pause-and-retry-later policy (TRA-1798).
+      { label: this.label, isRetryable: isRetryableEmbeddingError },
     );
   }
 

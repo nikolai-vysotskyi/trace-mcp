@@ -12,7 +12,7 @@
  */
 
 import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
+import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { combineAbortSignals } from './abort.js';
 import type {
   AIProvider,
@@ -89,7 +89,7 @@ class VertexAIEmbeddingService implements EmbeddingService {
         };
         return data.predictions.map((p) => p.embeddings.values);
       },
-      { label: 'Vertex embeddings' },
+      { label: 'Vertex embeddings', isRetryable: isRetryableEmbeddingError },
     );
   }
 
