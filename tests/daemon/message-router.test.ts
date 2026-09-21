@@ -156,10 +156,12 @@ describe('MessageRouter', () => {
     const start = Date.now();
     await router.swap(b, { drainTimeoutMs: 500 });
     const elapsed = Date.now() - start;
-    // TRA-1579: no pending work means the swap resolves on the microtask
-    // queue — locally ~0ms. The bound only guards "does not wait out the
-    // 500ms drain", so it scales with OS scheduling slop on loaded runners.
-    expect(elapsed).toBeLessThan(process.platform === 'win32' ? 450 : 100);
+    // TRA-1579/TRA-1146: no pending work means the swap resolves on the
+    // microtask queue — locally ~0ms. The property is "did not wait out
+    // the drain", so the bound is the drain itself: anything under 500ms
+    // proves it, with the full 500ms as scheduling-slop margin on loaded
+    // runners (the previous win32 bound of 450ms left only 50ms of margin).
+    expect(elapsed).toBeLessThan(500);
   });
 
   it('buffers messages when there is no active backend, flushed by flushPending', async () => {
