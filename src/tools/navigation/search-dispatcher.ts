@@ -71,8 +71,8 @@ export async function runFlatSearch(
   const fileIds = [...new Set(ftsResults.map((r) => r.fileId))];
   const fileMap = store.getFilesByIds(fileIds);
 
-  // Reduce, never spread: ftsResults is bounded by the index, not by `limit`
-  // (#957 — every `search` on a 152k-symbol index threw RangeError here).
+  // Reduce, never spread: ftsResults is bounded by `limit` (LIMIT ? in SQL),
+  // not by the index (#957 — every `search` on a 152k-symbol index threw RangeError here).
   const { min: minRank, max: maxRank } = minMax(ftsResults.map((r) => r.rank));
   const rankSpread = maxRank - minRank || 1;
 
