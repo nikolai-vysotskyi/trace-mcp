@@ -1,4 +1,5 @@
 /** Pass 2d: Resolve ES module import specifiers to file→file graph edges. */
+import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
@@ -95,6 +96,29 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
     .get('imports') as { id: number } | undefined;
   if (!importsEdgeType) return;
 
+  // oxc-resolver realpaths symlinks in its output (/var → /private/var,
+  // /tmp → /private/tmp on macOS) while rootPath may keep the unresolved
+  // spelling (os.tmpdir() differs per machine/env). Comparing the raw pair
+  // then yields `..`-paths for files that ARE in the project, and every
+  // relative import is silently skipped (TRA-1017: an entire CI platform
+  // lost all ESM edges this way with zero errors logged). Resolve the root
+  // once per pass (best-effort — a vanished root falls back to the raw
+  // string, i.e. today's behaviour) and accept whichever base keeps the
+  // target in-root, so resolved and unresolved spellings both work.
+  let realRoot: string;
+  try {
+    realRoot = fs.realpathSync(state.rootPath);
+  } catch {
+    realRoot = state.rootPath;
+  }
+  const toInRootRel = (abs: string): string | null => {
+    for (const base of [realRoot, state.rootPath]) {
+      const rel = path.relative(base, abs);
+      if (rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel;
+    }
+    return null;
+  };
+
   const insertStmt = store.db.prepare(
     `INSERT INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws)
      VALUES (?, ?, ?, 1, ?, 0)
@@ -105,31 +129,16 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
       const file = fileMap.get(fileId);
-      if (!file) {
-        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
-        logger.warn({ fileId, root: state.rootPath }, 'TMPDBG esm-skip no-file-row');
-        continue;
-      }
+      if (!file) continue;
       // Skip non-JS/TS files — PHP/Python imports are handled by their own
       // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
       // `App\Actions\Foo`) get run through npm bucketing and pollute the
       // phantom graph.
-      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) {
-        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
-        logger.warn(
-          { fileId, path: file.path, language: file.language },
-          'TMPDBG esm-skip language-guard',
-        );
-        continue;
-      }
+      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) continue;
 
       const absSource = path.resolve(state.rootPath, file.path);
       const sourceNodeId = fileNodeMap.get(fileId);
-      if (sourceNodeId == null) {
-        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
-        logger.warn({ fileId, path: file.path }, 'TMPDBG esm-skip no-source-node');
-        continue;
-      }
+      if (sourceNodeId == null) continue;
 
       const consolidated = new Map<string, string[]>();
       for (const { from, specifiers } of imports) {
@@ -164,11 +173,11 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
         // back to npm phantom when resolution lands outside the project root.
         const resolved = resolver.resolve(from, absSource);
         if (resolved) {
-          const relTarget = path.relative(state.rootPath, resolved);
+          const relTarget = toInRootRel(resolved);
           // `path.relative` returns something starting with `..` when the
           // target is outside rootPath — those are real npm deps under
           // node_modules, handled by the bucket fallback below.
-          if (!relTarget.startsWith('..') && !path.isAbsolute(relTarget)) {
+          if (relTarget !== null) {
             const target = resolveTargetFile(relTarget);
             if (target) {
               insertStmt.run(
@@ -180,12 +189,7 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
               created++;
               continue;
             }
-            // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
-            logger.warn({ from, relTarget, file: file.path }, 'TMPDBG esm-skip no-target-row');
           }
-        } else {
-          // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
-          logger.warn({ from, absSource }, 'TMPDBG esm-skip unresolved');
         }
 
         if (isRelative) {

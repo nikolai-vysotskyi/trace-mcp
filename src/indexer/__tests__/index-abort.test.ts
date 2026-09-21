@@ -475,19 +475,6 @@ describe('indexAll with AbortSignal (TRA-1017)', () => {
       expect(deferredStore.getRepoMetadata('postprocess_incomplete')).toBe('1');
       await p.__flushEdgeReconcileForTests();
       expect(deferredStore.getRepoMetadata('postprocess_incomplete')).toBeFalsy();
-      // TMP-CI-DEBUG (TRA-1017): macOS CI restores 1 import instead of 2.
-      // Remove after diagnosing.
-      console.log(
-        'TMPDBG deferred-flush',
-        JSON.stringify({
-          marker: deferredStore.getRepoMetadata('postprocess_incomplete'),
-          files: deferredStore.getRepoMetadata('postprocess_incomplete_files'),
-          imports: esmImportCount(),
-          edges: deferredDb.prepare('SELECT * FROM edges ORDER BY id').all(),
-          dbFiles: deferredDb.prepare('SELECT id, path FROM files ORDER BY id').all(),
-          symbols: deferredDb.prepare('SELECT id, name, file_id FROM symbols ORDER BY id').all(),
-        }),
-      );
       expect(esmImportCount()).toBe(healthyImports);
     } finally {
       await p.dispose();
@@ -554,17 +541,6 @@ describe('indexAll with AbortSignal (TRA-1017)', () => {
       );
       await p.indexFiles(['c.ts']);
       await p.__flushEdgeReconcileForTests();
-      // TMP-CI-DEBUG (TRA-1017): macOS CI sees 1 import instead of 2.
-      // Remove after diagnosing.
-      console.log(
-        'TMPDBG stale-flush',
-        JSON.stringify({
-          imports: importCount(),
-          edges: staleDb.prepare('SELECT * FROM edges ORDER BY id').all(),
-          dbFiles: staleDb.prepare('SELECT id, path FROM files ORDER BY id').all(),
-          symbols: staleDb.prepare('SELECT id, name, file_id FROM symbols ORDER BY id').all(),
-        }),
-      );
       expect(importCount()).toBe(2);
       // Now remove b.ts's last import: incremental and forced rebuild must
       // converge to the same graph.
