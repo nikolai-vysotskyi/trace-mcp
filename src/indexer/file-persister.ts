@@ -124,8 +124,17 @@ export class FilePersister {
         // Workspace may change between indexing runs (e.g., after monorepo
         // detection logic was fixed). Update even on fast path.
         if (ext.workspace) store.updateFileWorkspace(fileId, ext.workspace);
+        // TRA-1780: symbols are structurally identical but the content hash
+        // changed, so Pass-2 edges anchored in this file may reference
+        // removed constructs (a deleted top-level `ipcMain.handle` owns no
+        // symbol; a removed import leaves importEdges empty). Drop all
+        // outgoing edges — the resolve pass re-emits the current set, which
+        // is row-identical when nothing semantic changed (e.g. comment-only
+        // edits). This subsumes the old import-only cleanup (imports are a
+        // subset of outgoing); pendingImports still drives re-resolution
+        // when the file keeps imports.
+        store.deleteOutgoingEdgesForFileNodes(fileId);
         if (ext.importEdges.length > 0) {
-          store.deleteOutgoingImportEdges(fileId);
           this.state.pendingImports.set(fileId, ext.importEdges);
         }
         return;

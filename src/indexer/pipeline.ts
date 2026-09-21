@@ -1476,6 +1476,10 @@ export class IndexingPipeline {
       scope,
     );
     const stages: Array<() => void> = [
+      // TRA-1780: purge stale electron removal edges right after the
+      // framework emission above (fresh virtuals in place) and before the
+      // domain resolvers + file projection below.
+      () => edgeResolver.resolveElectronRemovalEdges(scope),
       () => edgeResolver.resolveOrmAssociationEdges(scope),
       () => edgeResolver.resolveTypeScriptHeritageEdges(scope),
       () => edgeResolver.resolveEsmImportEdges(scope),
