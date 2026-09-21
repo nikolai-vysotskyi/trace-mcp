@@ -1,9 +1,8 @@
 {
-  "measured_at": "2026-09-08T16:38:07.874Z",
+  "measured_at": "2026-09-21T00:51:24.233Z",
   "measured_build": {
-    "version": "3.23.2",
-    "commit": "fd3cafc6",
-    "dirty": true
+    "version": "3.31.0",
+    "commit": "76996eb9"
   },
   "target": "self",
   "runs": 3,
@@ -13,12 +12,12 @@
       "advanced",
       "nestjs",
       "Error",
-      "ServiceInfo",
+      "SearchFilters",
       "ToolResultEvent",
       "handshakeDiagnosticLine",
       "AdminRegistration",
       "ZodSchema",
-      "extractRuneProps",
+      "getFullSignature",
       "ExportOptions",
       "symbolAtLine",
       "Community",
@@ -50,12 +49,12 @@
     ],
     "usage_symbols": [
       "Error",
-      "ServiceInfo",
+      "SearchFilters",
       "ToolResultEvent",
       "handshakeDiagnosticLine",
       "AdminRegistration",
       "ZodSchema",
-      "extractRuneProps",
+      "getFullSignature",
       "ExportOptions",
       "symbolAtLine",
       "Community",
@@ -67,68 +66,68 @@
     {
       "tool": "get_symbol",
       "ok": true,
-      "chars": 1029,
-      "est": 296,
-      "real": 264,
+      "chars": 1044,
+      "est": 301,
+      "real": 268,
       "ms": 1,
       "runs": 3,
-      "real_min": 264,
-      "real_max": 264
+      "real_min": 268,
+      "real_max": 268
     },
     {
       "tool": "get_project_map",
       "ok": true,
-      "chars": 1963,
-      "est": 565,
-      "real": 518,
+      "chars": 1969,
+      "est": 567,
+      "real": 520,
       "ms": 5,
       "runs": 3,
-      "real_min": 518,
-      "real_max": 518
+      "real_min": 520,
+      "real_max": 520
     },
     {
       "tool": "get_index_health",
       "ok": true,
-      "chars": 1135,
-      "est": 327,
-      "real": 337,
-      "ms": 3,
+      "chars": 1239,
+      "est": 357,
+      "real": 386,
+      "ms": 2,
       "runs": 3,
-      "real_min": 335,
-      "real_max": 338
+      "real_min": 385,
+      "real_max": 388
     },
     {
       "tool": "get_tests_for",
       "ok": true,
-      "chars": 494,
-      "est": 143,
-      "real": 115,
+      "chars": 380,
+      "est": 110,
+      "real": 90,
       "ms": 4,
       "runs": 3,
-      "real_min": 115,
-      "real_max": 115
+      "real_min": 90,
+      "real_max": 90
     },
     {
       "tool": "get_context_bundle",
       "ok": true,
-      "chars": 470,
-      "est": 136,
-      "real": 131,
+      "chars": 483,
+      "est": 139,
+      "real": 134,
       "ms": 1,
       "runs": 3,
-      "real_min": 131,
-      "real_max": 131
+      "real_min": 134,
+      "real_max": 134
     },
     {
       "tool": "get_task_context",
       "ok": true,
-      "chars": 14548,
-      "est": 4183,
-      "real": 4074,
-      "ms": 4,
+      "chars": 18967,
+      "est": 5454,
+      "real": 5280,
+      "ms": 6,
       "runs": 3,
-      "real_min": 4074,
-      "real_max": 4075
+      "real_min": 5277,
+      "real_max": 5283
     },
     {
       "tool": "get_call_graph",
@@ -144,35 +143,35 @@
     {
       "tool": "get_complexity_report",
       "ok": true,
-      "chars": 6821,
-      "est": 1962,
-      "real": 1812,
-      "ms": 3,
+      "chars": 6844,
+      "est": 1968,
+      "real": 1814,
+      "ms": 2,
       "runs": 3,
-      "real_min": 1812,
-      "real_max": 1812
+      "real_min": 1814,
+      "real_max": 1814
     },
     {
       "tool": "reindex",
       "ok": true,
-      "chars": 227,
-      "est": 66,
-      "real": 59,
-      "ms": 544,
+      "chars": 219,
+      "est": 63,
+      "real": 57,
+      "ms": 91,
       "runs": 3,
-      "real_min": 59,
-      "real_max": 59
+      "real_min": 57,
+      "real_max": 57
     },
     {
       "tool": "get_feature_context",
       "ok": true,
-      "chars": 9764,
-      "est": 2808,
-      "real": 2809,
+      "chars": 11146,
+      "est": 3205,
+      "real": 3136,
       "ms": 5,
       "runs": 3,
-      "real_min": 2809,
-      "real_max": 2809
+      "real_min": 3135,
+      "real_max": 3138
     },
     {
       "tool": "get_env_vars",
@@ -188,24 +187,24 @@
     {
       "tool": "get_dead_code",
       "ok": true,
-      "chars": 11133,
-      "est": 3201,
-      "real": 2725,
-      "ms": 57,
+      "chars": 11323,
+      "est": 3256,
+      "real": 2808,
+      "ms": 42,
       "runs": 3,
-      "real_min": 2725,
-      "real_max": 2725
+      "real_min": 2808,
+      "real_max": 2808
     },
     {
       "tool": "get_changed_symbols",
       "ok": true,
-      "chars": 1495,
-      "est": 430,
-      "real": 394,
-      "ms": 86,
+      "chars": 179,
+      "est": 52,
+      "real": 63,
+      "ms": 54,
       "runs": 3,
-      "real_min": 394,
-      "real_max": 394
+      "real_min": 63,
+      "real_max": 63
     },
     {
       "tool": "check_quality_gates",
@@ -213,7 +212,7 @@
       "chars": 443,
       "est": 128,
       "real": 121,
-      "ms": 418,
+      "ms": 358,
       "runs": 3,
       "real_min": 121,
       "real_max": 121
@@ -221,10 +220,10 @@
     {
       "tool": "get_circular_imports",
       "ok": true,
-      "chars": 318,
+      "chars": 317,
       "est": 92,
       "real": 76,
-      "ms": 4,
+      "ms": 3,
       "runs": 3,
       "real_min": 76,
       "real_max": 76
@@ -243,101 +242,101 @@
     {
       "tool": "check_claudemd_drift",
       "ok": true,
-      "chars": 4437,
-      "est": 1276,
-      "real": 1099,
-      "ms": 16,
+      "chars": 79,
+      "est": 23,
+      "real": 22,
+      "ms": 15,
       "runs": 3,
-      "real_min": 1099,
-      "real_max": 1099
+      "real_min": 22,
+      "real_max": 22
     },
     {
       "tool": "scan_security",
       "ok": true,
-      "chars": 120,
-      "est": 35,
-      "real": 38,
-      "ms": 579,
+      "chars": 118,
+      "est": 34,
+      "real": 37,
+      "ms": 474,
       "runs": 3,
-      "real_min": 38,
-      "real_max": 38
+      "real_min": 37,
+      "real_max": 37
     },
     {
       "tool": "list_projects",
       "ok": true,
-      "chars": 2781,
-      "est": 800,
-      "real": 994,
+      "chars": 8437,
+      "est": 2426,
+      "real": 3303,
       "ms": 3,
       "runs": 3,
-      "real_min": 994,
-      "real_max": 994
+      "real_min": 3303,
+      "real_max": 3303
     },
     {
       "tool": "get_plugin_registry",
       "ok": true,
-      "chars": 16796,
-      "est": 4829,
-      "real": 5045,
+      "chars": 16915,
+      "est": 4864,
+      "real": 5081,
       "ms": 2,
       "runs": 3,
-      "real_min": 5045,
-      "real_max": 5045
+      "real_min": 5081,
+      "real_max": 5081
     },
     {
       "tool": "search_text",
       "ok": true,
-      "chars": 2213,
-      "est": 637,
-      "real": 608,
-      "ms": 66,
+      "chars": 2280,
+      "est": 656,
+      "real": 625,
+      "ms": 57,
       "runs": 3,
-      "real_min": 608,
-      "real_max": 608
+      "real_min": 625,
+      "real_max": 625
     },
     {
       "tool": "get_outline",
       "ok": true,
-      "chars": 1702,
-      "est": 490,
-      "real": 419,
-      "ms": 2,
+      "chars": 1698,
+      "est": 489,
+      "real": 418,
+      "ms": 16,
       "runs": 3,
-      "real_min": 419,
-      "real_max": 419
+      "real_min": 418,
+      "real_max": 418
     },
     {
       "tool": "search",
       "ok": true,
-      "chars": 1512,
-      "est": 435,
-      "real": 420,
-      "ms": 26,
+      "chars": 1489,
+      "est": 429,
+      "real": 413,
+      "ms": 27,
       "runs": 3,
-      "real_min": 420,
-      "real_max": 420
+      "real_min": 413,
+      "real_max": 413
     },
     {
       "tool": "find_usages",
       "ok": true,
-      "chars": 2588,
-      "est": 745,
-      "real": 660,
+      "chars": 2916,
+      "est": 839,
+      "real": 733,
       "ms": 2,
       "runs": 3,
-      "real_min": 660,
-      "real_max": 660
+      "real_min": 733,
+      "real_max": 733
     },
     {
       "tool": "register_edit",
       "ok": true,
-      "chars": 854,
-      "est": 246,
-      "real": 219,
-      "ms": 86,
+      "chars": 749,
+      "est": 216,
+      "real": 191,
+      "ms": 90,
       "runs": 3,
-      "real_min": 219,
-      "real_max": 219
+      "real_min": 191,
+      "real_max": 191
     }
   ],
   "items": [
@@ -370,12 +369,12 @@
     },
     {
       "tool": "search_text",
-      "item": "ServiceInfo",
-      "real": 224,
-      "real_min": 224,
-      "real_max": 224,
-      "chars": 775,
-      "hits": 5
+      "item": "SearchFilters",
+      "real": 314,
+      "real_min": 314,
+      "real_max": 314,
+      "chars": 1178,
+      "hits": 8
     },
     {
       "tool": "search_text",
@@ -415,12 +414,12 @@
     },
     {
       "tool": "search_text",
-      "item": "extractRuneProps",
-      "real": 135,
-      "real_min": 135,
-      "real_max": 135,
-      "chars": 495,
-      "hits": 2
+      "item": "getFullSignature",
+      "real": 347,
+      "real_min": 347,
+      "real_max": 347,
+      "chars": 1321,
+      "hits": 9
     },
     {
       "tool": "search_text",
@@ -443,10 +442,10 @@
     {
       "tool": "search_text",
       "item": "Community",
-      "real": 1736,
-      "real_min": 1736,
-      "real_max": 1736,
-      "chars": 6590,
+      "real": 1763,
+      "real_min": 1763,
+      "real_max": 1763,
+      "chars": 6699,
       "hits": 50
     },
     {
@@ -482,7 +481,7 @@
       "real": 86,
       "real_min": 86,
       "real_max": 86,
-      "chars": 330,
+      "chars": 329,
       "hits": 0
     },
     {
@@ -491,7 +490,7 @@
       "real": 86,
       "real_min": 86,
       "real_max": 86,
-      "chars": 330,
+      "chars": 329,
       "hits": 0
     },
     {
@@ -500,7 +499,7 @@
       "real": 86,
       "real_min": 86,
       "real_max": 86,
-      "chars": 330,
+      "chars": 329,
       "hits": 0
     },
     {
@@ -524,122 +523,122 @@
     {
       "tool": "get_outline",
       "item": "src/ai/abort.ts",
-      "real": 129,
-      "real_min": 129,
-      "real_max": 129,
-      "chars": 468
+      "real": 132,
+      "real_min": 132,
+      "real_max": 132,
+      "chars": 481
     },
     {
       "tool": "get_outline",
       "item": "src/bundles.ts",
-      "real": 794,
-      "real_min": 794,
-      "real_max": 794,
-      "chars": 3190
+      "real": 797,
+      "real_min": 797,
+      "real_max": 797,
+      "chars": 3203
     },
     {
       "tool": "get_outline",
       "item": "src/daemon/project-relay.ts",
-      "real": 237,
-      "real_min": 237,
-      "real_max": 237,
-      "chars": 972
+      "real": 244,
+      "real_min": 244,
+      "real_max": 244,
+      "chars": 993
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/edge-resolvers/imports.ts",
-      "real": 210,
-      "real_min": 210,
-      "real_max": 210,
-      "chars": 782
+      "real": 213,
+      "real_min": 213,
+      "real_max": 213,
+      "chars": 795
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/plugins/integration/framework/laravel/broadcasting.ts",
-      "real": 794,
-      "real_min": 794,
-      "real_max": 794,
-      "chars": 3449
+      "real": 797,
+      "real_min": 797,
+      "real_max": 797,
+      "chars": 3462
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/plugins/integration/tooling/commander/index.ts",
-      "real": 517,
-      "real_min": 517,
-      "real_max": 517,
-      "chars": 2147
+      "real": 520,
+      "real_min": 520,
+      "real_max": 520,
+      "chars": 2160
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/plugins/language/assembly/index.ts",
-      "real": 199,
-      "real_min": 199,
-      "real_max": 199,
-      "chars": 794
+      "real": 202,
+      "real_min": 202,
+      "real_max": 202,
+      "chars": 807
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/plugins/language/kotlin/index.ts",
-      "real": 606,
-      "real_min": 606,
-      "real_max": 606,
-      "chars": 2542
+      "real": 609,
+      "real_min": 609,
+      "real_max": 609,
+      "chars": 2555
     },
     {
       "tool": "get_outline",
       "item": "src/indexer/plugins/language/xml/index.ts",
-      "real": 718,
-      "real_min": 718,
-      "real_max": 718,
-      "chars": 2889
+      "real": 721,
+      "real_min": 721,
+      "real_max": 721,
+      "chars": 2902
     },
     {
       "tool": "get_outline",
       "item": "src/memory/decision-consolidator.ts",
-      "real": 888,
-      "real_min": 888,
-      "real_max": 888,
-      "chars": 3603
+      "real": 891,
+      "real_min": 891,
+      "real_max": 891,
+      "chars": 3616
     },
     {
       "tool": "get_outline",
       "item": "src/retrieval/index.ts",
-      "real": 85,
-      "real_min": 85,
-      "real_max": 85,
-      "chars": 289
+      "real": 88,
+      "real_min": 88,
+      "real_max": 88,
+      "chars": 302
     },
     {
       "tool": "get_outline",
       "item": "src/server/parent-death-watch.ts",
-      "real": 185,
-      "real_min": 185,
-      "real_max": 185,
-      "chars": 726
+      "real": 188,
+      "real_min": 188,
+      "real_max": 188,
+      "chars": 739
     },
     {
       "tool": "get_outline",
       "item": "src/tools/advanced/subproject-clone.ts",
-      "real": 395,
-      "real_min": 395,
-      "real_max": 395,
-      "chars": 1553
+      "real": 398,
+      "real_min": 398,
+      "real_max": 398,
+      "chars": 1566
     },
     {
       "tool": "get_outline",
       "item": "src/tools/navigation/related.ts",
-      "real": 318,
-      "real_min": 318,
-      "real_max": 318,
-      "chars": 1287
+      "real": 321,
+      "real_min": 321,
+      "real_max": 321,
+      "chars": 1300
     },
     {
       "tool": "get_outline",
       "item": "src/tools/register/navigation/lookup-tools.ts",
-      "real": 207,
-      "real_min": 207,
-      "real_max": 207,
-      "chars": 838
+      "real": 148,
+      "real_min": 148,
+      "real_max": 148,
+      "chars": 586
     },
     {
       "tool": "search",
@@ -662,109 +661,109 @@
     {
       "tool": "search",
       "item": "Error",
-      "real": 1598,
-      "real_min": 1598,
-      "real_max": 1598,
-      "chars": 6104,
-      "hits": 40
+      "real": 1637,
+      "real_min": 1637,
+      "real_max": 1637,
+      "chars": 6157,
+      "hits": 30
     },
     {
       "tool": "search",
-      "item": "ServiceInfo",
-      "real": 299,
-      "real_min": 299,
-      "real_max": 299,
-      "chars": 1041,
+      "item": "SearchFilters",
+      "real": 276,
+      "real_min": 276,
+      "real_max": 276,
+      "chars": 1002,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ToolResultEvent",
-      "real": 281,
-      "real_min": 281,
-      "real_max": 281,
-      "chars": 975,
+      "real": 286,
+      "real_min": 286,
+      "real_max": 286,
+      "chars": 990,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "handshakeDiagnosticLine",
-      "real": 307,
-      "real_min": 307,
-      "real_max": 307,
-      "chars": 1085,
+      "real": 312,
+      "real_min": 312,
+      "real_max": 312,
+      "chars": 1100,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "AdminRegistration",
-      "real": 455,
-      "real_min": 455,
-      "real_max": 455,
-      "chars": 1838,
+      "real": 464,
+      "real_min": 464,
+      "real_max": 464,
+      "chars": 1873,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "ZodSchema",
-      "real": 390,
-      "real_min": 390,
-      "real_max": 390,
-      "chars": 1390,
+      "real": 396,
+      "real_min": 396,
+      "real_max": 396,
+      "chars": 1415,
       "hits": 2
     },
     {
       "tool": "search",
-      "item": "extractRuneProps",
+      "item": "getFullSignature",
       "real": 308,
       "real_min": 308,
       "real_max": 308,
-      "chars": 1083,
+      "chars": 1105,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "ExportOptions",
-      "real": 360,
-      "real_min": 360,
-      "real_max": 360,
-      "chars": 1271,
+      "real": 366,
+      "real_min": 366,
+      "real_max": 366,
+      "chars": 1294,
       "hits": 2
     },
     {
       "tool": "search",
       "item": "symbolAtLine",
-      "real": 300,
-      "real_min": 300,
-      "real_max": 300,
-      "chars": 975,
+      "real": 305,
+      "real_min": 305,
+      "real_max": 305,
+      "chars": 990,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "Community",
-      "real": 419,
-      "real_min": 419,
-      "real_max": 419,
-      "chars": 1519,
+      "real": 428,
+      "real_min": 428,
+      "real_max": 428,
+      "chars": 1555,
       "hits": 3
     },
     {
       "tool": "search",
       "item": "checkSymbol",
-      "real": 324,
-      "real_min": 324,
-      "real_max": 324,
-      "chars": 1149,
+      "real": 329,
+      "real_min": 329,
+      "real_max": 329,
+      "chars": 1164,
       "hits": 1
     },
     {
       "tool": "search",
       "item": "matchesV4Cidr",
-      "real": 315,
-      "real_min": 315,
-      "real_max": 315,
-      "chars": 997,
+      "real": 320,
+      "real_min": 320,
+      "real_max": 320,
+      "chars": 1012,
       "hits": 1
     },
     {
@@ -779,11 +778,11 @@
     {
       "tool": "search",
       "item": "min session bytes",
-      "real": 292,
-      "real_min": 292,
-      "real_max": 292,
-      "chars": 1008,
-      "hits": 1
+      "real": 78,
+      "real_min": 78,
+      "real_max": 78,
+      "chars": 320,
+      "hits": 0
     },
     {
       "tool": "search",
@@ -791,7 +790,7 @@
       "real": 78,
       "real_min": 78,
       "real_max": 78,
-      "chars": 321,
+      "chars": 320,
       "hits": 0
     },
     {
@@ -800,7 +799,7 @@
       "real": 78,
       "real_min": 78,
       "real_max": 78,
-      "chars": 321,
+      "chars": 320,
       "hits": 0
     },
     {
@@ -815,118 +814,118 @@
     {
       "tool": "search",
       "item": "json parse",
-      "real": 284,
-      "real_min": 284,
-      "real_max": 284,
-      "chars": 966,
-      "hits": 1
-    },
-    {
-      "tool": "find_usages",
-      "item": "Error",
-      "real": 4037,
-      "real_min": 4037,
-      "real_max": 4037,
-      "chars": 16116,
-      "hits": 266
-    },
-    {
-      "tool": "find_usages",
-      "item": "ServiceInfo",
-      "real": 281,
-      "real_min": 281,
-      "real_max": 281,
-      "chars": 1064,
-      "hits": 1
-    },
-    {
-      "tool": "find_usages",
-      "item": "ToolResultEvent",
-      "real": 409,
-      "real_min": 409,
-      "real_max": 409,
-      "chars": 1642,
-      "hits": 3
-    },
-    {
-      "tool": "find_usages",
-      "item": "handshakeDiagnosticLine",
-      "real": 383,
-      "real_min": 383,
-      "real_max": 383,
-      "chars": 1458,
-      "hits": 2
-    },
-    {
-      "tool": "find_usages",
-      "item": "AdminRegistration",
-      "real": 377,
-      "real_min": 377,
-      "real_max": 377,
-      "chars": 1589,
-      "hits": 2
-    },
-    {
-      "tool": "find_usages",
-      "item": "ZodSchema",
-      "real": 296,
-      "real_min": 296,
-      "real_max": 296,
-      "chars": 1115,
-      "hits": 1
-    },
-    {
-      "tool": "find_usages",
-      "item": "extractRuneProps",
-      "real": 294,
-      "real_min": 294,
-      "real_max": 294,
-      "chars": 1105,
-      "hits": 1
-    },
-    {
-      "tool": "find_usages",
-      "item": "ExportOptions",
-      "real": 438,
-      "real_min": 438,
-      "real_max": 438,
-      "chars": 1697,
-      "hits": 3
-    },
-    {
-      "tool": "find_usages",
-      "item": "symbolAtLine",
-      "real": 285,
-      "real_min": 285,
-      "real_max": 285,
-      "chars": 979,
-      "hits": 1
-    },
-    {
-      "tool": "find_usages",
-      "item": "Community",
-      "real": 569,
-      "real_min": 569,
-      "real_max": 569,
-      "chars": 2340,
-      "hits": 5
-    },
-    {
-      "tool": "find_usages",
-      "item": "checkSymbol",
-      "real": 265,
-      "real_min": 265,
-      "real_max": 265,
+      "real": 287,
+      "real_min": 287,
+      "real_max": 287,
       "chars": 978,
       "hits": 1
     },
     {
       "tool": "find_usages",
+      "item": "Error",
+      "real": 4187,
+      "real_min": 4187,
+      "real_max": 4187,
+      "chars": 16764,
+      "hits": 221
+    },
+    {
+      "tool": "find_usages",
+      "item": "SearchFilters",
+      "real": 468,
+      "real_min": 468,
+      "real_max": 468,
+      "chars": 1965,
+      "hits": 4
+    },
+    {
+      "tool": "find_usages",
+      "item": "ToolResultEvent",
+      "real": 418,
+      "real_min": 418,
+      "real_max": 418,
+      "chars": 1679,
+      "hits": 3
+    },
+    {
+      "tool": "find_usages",
+      "item": "handshakeDiagnosticLine",
+      "real": 389,
+      "real_min": 389,
+      "real_max": 389,
+      "chars": 1482,
+      "hits": 2
+    },
+    {
+      "tool": "find_usages",
+      "item": "AdminRegistration",
+      "real": 383,
+      "real_min": 383,
+      "real_max": 383,
+      "chars": 1613,
+      "hits": 2
+    },
+    {
+      "tool": "find_usages",
+      "item": "ZodSchema",
+      "real": 299,
+      "real_min": 299,
+      "real_max": 299,
+      "chars": 1128,
+      "hits": 1
+    },
+    {
+      "tool": "find_usages",
+      "item": "getFullSignature",
+      "real": 782,
+      "real_min": 782,
+      "real_max": 782,
+      "chars": 3249,
+      "hits": 6
+    },
+    {
+      "tool": "find_usages",
+      "item": "ExportOptions",
+      "real": 447,
+      "real_min": 447,
+      "real_max": 447,
+      "chars": 1734,
+      "hits": 3
+    },
+    {
+      "tool": "find_usages",
+      "item": "symbolAtLine",
+      "real": 288,
+      "real_min": 288,
+      "real_max": 288,
+      "chars": 992,
+      "hits": 1
+    },
+    {
+      "tool": "find_usages",
+      "item": "Community",
+      "real": 584,
+      "real_min": 584,
+      "real_max": 584,
+      "chars": 2403,
+      "hits": 5
+    },
+    {
+      "tool": "find_usages",
+      "item": "checkSymbol",
+      "real": 268,
+      "real_min": 268,
+      "real_max": 268,
+      "chars": 991,
+      "hits": 1
+    },
+    {
+      "tool": "find_usages",
       "item": "matchesV4Cidr",
-      "real": 283,
-      "real_min": 283,
-      "real_max": 283,
-      "chars": 974,
+      "real": 286,
+      "real_min": 286,
+      "real_max": 286,
+      "chars": 987,
       "hits": 1
     },
     {
@@ -940,10 +939,10 @@
     {
       "tool": "register_edit",
       "item": "src/bundles.ts",
-      "real": 119,
-      "real_min": 119,
-      "real_max": 119,
-      "chars": 446
+      "real": 53,
+      "real_min": 53,
+      "real_max": 53,
+      "chars": 177
     },
     {
       "tool": "register_edit",
@@ -956,26 +955,26 @@
     {
       "tool": "register_edit",
       "item": "src/indexer/edge-resolvers/imports.ts",
-      "real": 453,
-      "real_min": 453,
-      "real_max": 453,
-      "chars": 1700
+      "real": 225,
+      "real_min": 225,
+      "real_max": 225,
+      "chars": 829
     },
     {
       "tool": "register_edit",
       "item": "src/indexer/plugins/integration/framework/laravel/broadcasting.ts",
-      "real": 452,
-      "real_min": 452,
-      "real_max": 452,
-      "chars": 1865
+      "real": 455,
+      "real_min": 455,
+      "real_max": 455,
+      "chars": 1870
     },
     {
       "tool": "register_edit",
       "item": "src/indexer/plugins/integration/tooling/commander/index.ts",
-      "real": 418,
-      "real_min": 418,
-      "real_max": 418,
-      "chars": 1721
+      "real": 408,
+      "real_min": 408,
+      "real_max": 408,
+      "chars": 1720
     },
     {
       "tool": "register_edit",
@@ -988,26 +987,26 @@
     {
       "tool": "register_edit",
       "item": "src/indexer/plugins/language/kotlin/index.ts",
-      "real": 402,
-      "real_min": 402,
-      "real_max": 402,
-      "chars": 1692
+      "real": 408,
+      "real_min": 408,
+      "real_max": 408,
+      "chars": 1715
     },
     {
       "tool": "register_edit",
       "item": "src/indexer/plugins/language/xml/index.ts",
-      "real": 400,
-      "real_min": 400,
-      "real_max": 400,
-      "chars": 1593
+      "real": 405,
+      "real_min": 405,
+      "real_max": 405,
+      "chars": 1610
     },
     {
       "tool": "register_edit",
       "item": "src/memory/decision-consolidator.ts",
-      "real": 309,
-      "real_min": 309,
-      "real_max": 309,
-      "chars": 1186
+      "real": 238,
+      "real_min": 238,
+      "real_max": 238,
+      "chars": 900
     },
     {
       "tool": "register_edit",
@@ -1036,18 +1035,18 @@
     {
       "tool": "register_edit",
       "item": "src/tools/navigation/related.ts",
-      "real": 245,
-      "real_min": 245,
-      "real_max": 245,
-      "chars": 909
+      "real": 186,
+      "real_min": 186,
+      "real_max": 186,
+      "chars": 689
     },
     {
       "tool": "register_edit",
       "item": "src/tools/register/navigation/lookup-tools.ts",
-      "real": 50,
-      "real_min": 50,
-      "real_max": 50,
-      "chars": 186
+      "real": 56,
+      "real_min": 56,
+      "real_max": 56,
+      "chars": 209
     }
   ]
 }
