@@ -130,6 +130,23 @@ describe('OpenAIProvider', () => {
       );
     });
 
+    // TRA-1798: LM Studio down must fail fast — no retries with backoff
+    // against a dead endpoint, no retry warns per daemon start.
+    it('embedBatch() does not retry ECONNREFUSED (single fetch attempt)', async () => {
+      const conn = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1234'), {
+        code: 'ECONNREFUSED',
+      });
+      const aggregate = Object.assign(new AggregateError([conn], 'fetch failed'), {
+        code: 'ECONNREFUSED',
+      });
+      (globalThis.fetch as any).mockRejectedValue(
+        new TypeError('fetch failed', { cause: aggregate }),
+      );
+      const provider = new OpenAIProvider({ ...baseConfig, providerLabel: 'lmstudio' });
+      await expect(provider.embedding().embedBatch(['a'])).rejects.toThrow('fetch failed');
+      expect((globalThis.fetch as any).mock.calls).toHaveLength(1);
+    });
+
     it('keeps userinfo and query credentials out of the logged base URL', () => {
       expect(redactBaseUrlForLogs('https://user:s3cret@gw.example.com/v1?key=abc123')).toBe(
         'https://gw.example.com/v1',

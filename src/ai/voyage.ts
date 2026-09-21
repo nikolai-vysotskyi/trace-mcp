@@ -7,7 +7,7 @@
  */
 
 import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
+import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
 import { combineAbortSignals } from './abort.js';
 import { FallbackInferenceService } from './fallback.js';
@@ -88,7 +88,7 @@ class VoyageEmbeddingService implements EmbeddingService {
         }
         return result;
       },
-      { label: 'Voyage embeddings' },
+      { label: 'Voyage embeddings', isRetryable: isRetryableEmbeddingError },
     );
   }
 

@@ -44,6 +44,89 @@ export function isTransientError(error: unknown): boolean {
 }
 
 /**
+ * Node error codes meaning "the host itself is unreachable" — nothing is
+ * listening (ECONNREFUSED, e.g. LM Studio / Ollama not running), DNS doesn't
+ * resolve (ENOTFOUND), or the network path is down (EHOSTUNREACH/ENETUNREACH).
+ * Unlike timeouts or 5xx, these never resolve within a retry backoff: the
+ * environment is missing, not slow. Deliberately narrow — EAI_AGAIN (transient
+ * DNS), ECONNRESET (mid-stream reset) and bare "fetch failed" stay retryable.
+ */
+const HOST_UNREACHABLE_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+]);
+
+/**
+ * Short machine-readable reason for an unreachable-host failure (e.g.
+ * 'ECONNREFUSED'), or null when the error isn't in that class. Walks the
+ * `cause` chain because undici surfaces connection failures as
+ * `TypeError: fetch failed` with the real code nested in
+ * `cause: AggregateError [ECONNREFUSED]` (TRA-1798).
+ *
+ * Two boundaries keep this narrow (Code Review on PR #1341):
+ * - An HTTP response — even a 503 — proves the host answered, so a message
+ *   shaped like a provider HTTP error (`… failed: 503 …`) is never treated
+ *   as a system code, no matter what the response body mentions.
+ * - An AggregateError counts only when EVERY nested attempt is
+ *   unreachable-class; a single timeout/reset keeps the ordinary retry path.
+ */
+export function hostUnreachableCode(error: unknown): string | null {
+  return findUnreachableCode(error, new Set());
+}
+
+/** `<label> failed: <status>` — the shape every provider uses for HTTP errors. */
+const HTTP_ERROR_SHAPE = /failed:\s*\d{3}/i;
+
+function findUnreachableCode(node: unknown, seen: Set<unknown>): string | null {
+  if (!node || typeof node !== 'object' || seen.has(node)) return null;
+  seen.add(node);
+  const rec = node as { code?: unknown; message?: unknown; cause?: unknown; errors?: unknown };
+  // Aggregate children before the aggregate's own code: undici stamps the
+  // aggregate with its first attempt's code, which must not win when a later
+  // attempt failed differently (e.g. ENETUNREACH + ETIMEDOUT).
+  if (Array.isArray(rec.errors) && rec.errors.length > 0) {
+    const codes: string[] = [];
+    for (const child of rec.errors) {
+      const code = findUnreachableCode(child, seen);
+      // Mixed attempt outcomes — fall through to the cause below, if any.
+      if (code === null) return findUnreachableCode(rec.cause, seen);
+      codes.push(code);
+    }
+    return codes[0] ?? null;
+  }
+  if (typeof rec.code === 'string' && HOST_UNREACHABLE_CODES.has(rec.code)) {
+    return rec.code;
+  }
+  if (typeof rec.message === 'string' && !HTTP_ERROR_SHAPE.test(rec.message)) {
+    const msg = rec.message.toLowerCase();
+    for (const code of HOST_UNREACHABLE_CODES) {
+      if (msg.includes(code.toLowerCase())) return code;
+    }
+  }
+  return findUnreachableCode(rec.cause, seen);
+}
+
+/** True when the error means the remote host is unreachable (see above). */
+export function isHostUnreachableError(error: unknown): boolean {
+  return hostUnreachableCode(error) !== null;
+}
+
+/**
+ * Retry predicate for background embedding calls. Identical to
+ * {@link isTransientError} except host-unreachable failures fail fast: when
+ * LM Studio / Ollama isn't running, three attempts with backoff only delay
+ * the pipeline by ~1.5s and log two L40 retry warns per daemon start for an
+ * endpoint that cannot answer. The embedding pipeline's circuit breaker owns
+ * the pause-and-retry-later policy instead (TRA-1798). Inference (user-facing)
+ * keeps the default predicate — a retry there can still save a query.
+ */
+export function isRetryableEmbeddingError(error: unknown): boolean {
+  return isTransientError(error) && !isHostUnreachableError(error);
+}
+
+/**
  * Execute `fn` with retry on transient failures.
  *
  * @example
