@@ -723,6 +723,70 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
   });
 
+  // ─── Unresolvable-session fallback (TRA-1791) ────────────────
+  // Daemon alive + fresh heartbeat, but this session can never earn a marker
+  // because /mcp never routes (client with ?project=/ after cwd=/, or plain
+  // ambiguous across N projects). The daemon records those in
+  // <state home>/status/trace-mcp-unresolvable.json; with N recent and zero
+  // markers the guard allows-with-warning instead of denying forever.
+
+  function writeUnresolvable(total: number, lastAt: string | null): void {
+    if (!stateStatusDir) throw new Error('test setup must isolate TRACE_MCP_DATA_DIR');
+    fs.mkdirSync(stateStatusDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateStatusDir, 'trace-mcp-unresolvable.json'),
+      JSON.stringify({
+        schema: 1,
+        total,
+        ambiguous: total,
+        no_projects: 0,
+        dangerous_hint_dropped: total,
+        last_at: lastAt,
+        last_kind: 'ambiguous',
+        last_hint: '/',
+        last_reason: 'filesystem root',
+        last_via: 'query',
+      }),
+    );
+  }
+
+  it('unresolvable-session: fresh heartbeat + recent unresolvable + 0 markers allows Read with warning', () => {
+    writeUnresolvable(5, new Date().toISOString());
+    const file = path.join(projectDir, 'unresolvable.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('cannot resolve a project');
+  });
+
+  it('unresolvable-session: a consultation marker restores strict (healthy session untouched)', () => {
+    writeUnresolvable(9, new Date().toISOString());
+    writeConsultationMarker(projectDir, 'healthy.ts');
+    const file = path.join(projectDir, 'other.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('unresolvable-session: stale last_at does NOT trigger the fallback', () => {
+    writeUnresolvable(9, new Date(Date.now() - 3600_000).toISOString());
+    const file = path.join(projectDir, 'stale-unresolvable.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('unresolvable-session: below-threshold total does NOT trigger the fallback', () => {
+    writeUnresolvable(1, new Date().toISOString());
+    const file = path.join(projectDir, 'below-threshold.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('unresolvable-session: missing counter file keeps strict', () => {
+    const file = path.join(projectDir, 'no-counter.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
   // ─── Manual override ────────────────────────────────────────────
 
   it('TRACE_MCP_GUARD_OFF=1 fully bypasses the guard', () => {

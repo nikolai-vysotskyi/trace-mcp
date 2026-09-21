@@ -246,6 +246,14 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         }
       }
       if (result.isErr()) {
+        // TRA-1791 miss-marker: the file exists on disk but is not indexed
+        // (new/renamed file, cold start). The tool-gate already wrote a
+        // consultation marker pre-execution, but the legacy explored-tracker
+        // only marked on success — mark the miss too so a follow-up Read of a
+        // just-created file is not BLOCKED while the index catches up.
+        if (result.error.code === 'NOT_FOUND' && existsOnDisk) {
+          markExplored(normalizedPath);
+        }
         const error =
           result.error.code === 'NOT_FOUND' && !result.error.reason
             ? notFound(

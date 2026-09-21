@@ -151,6 +151,7 @@ import {
   extractRpcId,
 } from './daemon/mcp-error-response.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
+import { recordUnresolvableResolution } from './daemon/unresolvable-counter.js';
 import {
   collectIdleSessions,
   dropSessionBookkeeping,
@@ -1434,6 +1435,11 @@ program
           );
         }
         if (resolution.kind === 'no-projects' || resolution.kind === 'ambiguous') {
+          // TRA-1791: expose the unroutable session to the guard hook. These
+          // requests never reach a per-project session, so no consultation
+          // marker can ever be earned — without this counter the guard sees a
+          // fresh heartbeat and denies every code Read forever.
+          recordUnresolvableResolution(resolution);
           const { status, body } = buildResolutionFailureError(resolution, rpcId);
           res.writeHead(status, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(body));

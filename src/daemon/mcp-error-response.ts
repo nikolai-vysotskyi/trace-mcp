@@ -109,7 +109,10 @@ export function buildAmbiguousProjectError(
       message:
         'Multiple projects registered — pass ?project=<absolute-path> on /mcp, ' +
         'set the X-Trace-Project header, or include params._meta["traceMcp/projectRoot"] in the MCP initialize body. ' +
-        `Registered roots: ${registered.join(', ')}`,
+        `Registered roots: ${registered.join(', ')}. ` +
+        "If your MCP client connected with project root '/' (for example a session spawned with cwd=/), " +
+        'that root can never be served — reconnect the client with the real project directory ' +
+        '(the folder containing package.json / pyproject.toml / go.mod / .git) instead of / or $HOME.',
       data: { reason: 'ambiguous_project', registered: [...registered] },
     },
   };

@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.18
+# trace-mcp-guard v0.19
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.19 changes (TRA-1791 — session-aware fallback for unresolvable MCP sessions):
+#   - Reads the daemon-wide unresolvable-session counter
+#     (<state home>/status/trace-mcp-unresolvable.json), written by the daemon
+#     on every `no-projects` / `ambiguous` /mcp resolution (notably clients
+#     that connect with `?project=/` after inheriting cwd=/ — TRA-286).
+#     Those requests never reach a per-project session, so no consultation
+#     marker can ever be earned; without this the guard saw a fresh heartbeat
+#     and denied every code Read forever (only auto-degrade after 5 denies
+#     let it through, and the next session restarted the cycle).
+#   - When N unresolvable resolutions landed recently (default >=3 in 600s)
+#     AND this project has zero consultation markers, the channel is treated
+#     like heartbeat-dead: allow-with-warning instead of hard-deny. A single
+#     successful consultation restores strict immediately (markers short-
+#     circuit the check), so healthy sessions are untouched.
 #
 # v0.18 changes (TRA-1088 — find the sentinel from a subdirectory):
 #   - Resolves the project root by walking up from the cwd to the nearest
@@ -771,6 +786,34 @@ if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]] && [[ -f "$PROJECT_ROOT/
   if [[ -n "$STATUS_TRANSPORT" ]] && [[ -n "$EXPECTED_TRANSPORT" ]] && [[ "$STATUS_TRANSPORT" != "$EXPECTED_TRANSPORT" ]]; then
     HEARTBEAT_DEAD=1
     HEARTBEAT_REASON="trace-mcp heartbeat is from a '${STATUS_TRANSPORT}' process but .mcp.json configures trace-mcp as '${EXPECTED_TRANSPORT}' — the transport your client actually connects over is not running"
+  fi
+fi
+
+# Session-unresolvable fallback (TRA-1791): the daemon is alive (heartbeat
+# fresh) but THIS session can never earn a consultation marker because its
+# /mcp requests never route to a project — `no-projects` / `ambiguous`,
+# notably a client that connected with `?project=/` after inheriting cwd=/
+# (TRA-286). The daemon records those in a daemon-wide counter file; when N
+# landed recently and this project has zero markers, treat the channel like
+# heartbeat-dead (allow-with-warning). One successful consultation restores
+# strict immediately — the marker check below short-circuits — so healthy
+# sessions never see this branch.
+UNRESOLVABLE_MIN=${TRACE_MCP_GUARD_UNRESOLVABLE_MIN:-3}
+UNRESOLVABLE_WINDOW_SEC=${TRACE_MCP_GUARD_UNRESOLVABLE_WINDOW:-600}
+[[ "$UNRESOLVABLE_MIN" =~ ^[0-9]+$ ]] || UNRESOLVABLE_MIN=3
+[[ "$UNRESOLVABLE_WINDOW_SEC" =~ ^[0-9]+$ ]] || UNRESOLVABLE_WINDOW_SEC=600
+UNRESOLVABLE_FILE="$STATUS_HOME/trace-mcp-unresolvable.json"
+if (( HEARTBEAT_DEAD == 0 )) && (( UNRESOLVABLE_MIN > 0 )) && [[ -f "$UNRESOLVABLE_FILE" ]]; then
+  if ! any_consultation_markers; then
+    UNRES_TOTAL=$(jq -r '.total // 0' "$UNRESOLVABLE_FILE" 2>/dev/null || echo 0)
+    UNRES_LAST=$(jq -r '.last_at // empty' "$UNRESOLVABLE_FILE" 2>/dev/null || echo "")
+    if [[ "$UNRES_TOTAL" =~ ^[0-9]+$ ]] && (( UNRES_TOTAL >= UNRESOLVABLE_MIN )) && [[ -n "$UNRES_LAST" ]]; then
+      UNRES_EPOCH=$(iso_to_epoch "$UNRES_LAST")
+      if (( UNRES_EPOCH > 0 )) && (( NOW - UNRES_EPOCH <= UNRESOLVABLE_WINDOW_SEC )); then
+        HEARTBEAT_DEAD=1
+        HEARTBEAT_REASON="trace-mcp MCP session cannot resolve a project (${UNRES_TOTAL} unresolvable requests, last ${UNRES_LAST}) — your MCP client likely connected with root '/' (cwd=/); reconnect it with the real project directory. Allowing native tools as fallback"
+      fi
+    fi
   fi
 fi
 

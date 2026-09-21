@@ -61,6 +61,15 @@ describe('buildAmbiguousProjectError', () => {
     expect(body.error.data.reason).toBe('ambiguous_project');
     expect(body.error.data.registered).toEqual(['/a', '/b']);
   });
+
+  it('names the cwd=/ trap explicitly (TRA-1791)', () => {
+    // Agents summarised the ambiguous error as "root / with 0 files" and went
+    // to fix the wrong thing. The message must say outright that a client
+    // arriving with root '/' can never be served.
+    const body = buildAmbiguousProjectError(['/a', '/b'], 1);
+    expect(body.error.message).toMatch(/cwd=\//);
+    expect(body.error.message).toMatch(/can never be served|reconnect/i);
+  });
 });
 
 // TRA-720: `claude mcp list` reported trace-mcp as "Failed to connect" on a
