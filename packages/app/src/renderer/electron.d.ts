@@ -36,6 +36,8 @@ declare global {
       retryDaemonSetup?: () => Promise<DaemonSetupState>;
       onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
+      /** TRA-1109: absolute launcher shim path for the manual-setup rows. */
+      getLauncherShimPath?: () => Promise<string>;
       guessFirstProject: () => Promise<{ path: string; name: string } | null>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',

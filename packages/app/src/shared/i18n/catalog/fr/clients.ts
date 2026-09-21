@@ -47,6 +47,8 @@ export const clients = {
   blockedDismiss: 'Compris',
   setUpManually: 'Configurer manuellement…',
   hideSteps: 'Masquer les étapes',
+  copyShimPath: 'Copier le chemin du shim',
+  copyWarpSnippet: 'Copier l’extrait JSON',
 
   enforcementLevel: 'Niveau d’application',
   levelBase: 'Base',

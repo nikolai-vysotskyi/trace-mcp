@@ -45,6 +45,8 @@ export const clients = {
   blockedDismiss: 'OK',
   setUpManually: '手動で設定…',
   hideSteps: '手順を隠す',
+  copyShimPath: 'シムのパスをコピー',
+  copyWarpSnippet: 'JSONスニペットをコピー',
 
   enforcementLevel: '適用レベル',
   levelBase: 'ベース',
