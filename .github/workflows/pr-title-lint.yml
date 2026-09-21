@@ -1,12 +1,22 @@
-name: PR Title Lint
+name: PR Lint
 
-# release-please (see release.yml) reads Conventional Commits from the
-# squash-merge commit subject, which GitHub derives from the PR title.
-# A PR title that doesn't match "type(scope): description" produces a
-# commit release-please can't classify, so it never bumps the version
-# or opens a release PR — merged fixes then sit unreleased indefinitely
-# (see TRA-104: a50aee2/b678ff4/8149659 all merged with non-conventional
-# titles and produced zero release PRs across 7+ merged commits).
+# Two gates for the same silent-release failure class:
+#
+# - lint-pr-title: release-please reads Conventional Commits from the
+#   squash-merge commit subject, which GitHub derives from the PR title.
+#   A PR title that doesn't match "type(scope): description" produces a
+#   commit release-please can't classify, so it never bumps the version
+#   or opens a release PR — merged fixes then sit unreleased indefinitely
+#   (see TRA-104: a50aee2/b678ff4/8149659 all merged with non-conventional
+#   titles and produced zero release PRs across 7+ merged commits).
+# - lint-squash-message: the title gate above cannot see the PR BODY, but
+#   release-please parses the whole squash commit (title + body) with
+#   @conventional-commits/parser — and a commit it cannot parse is silently
+#   SKIPPED in a green run, losing its changelog line (TRA-1039: 23d71442
+#   shipped in the v3.22.0 binaries with no changelog entry because
+#   `Math.round(1024 / (824/1024))` in the body reads as a malformed footer).
+#   This job rebuilds that future squash message and parses it with the same
+#   parser, failing loudly on what would otherwise vanish quietly.
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
@@ -33,3 +43,32 @@ jobs:
             ci
             build
             revert
+
+  # TRA-1039: fail the PR when its future squash-merge commit would not parse.
+  # scripts/lint-squash-message.mjs rebuilds `<title> (#<number>)` + body and
+  # runs it through the same @conventional-commits/parser release-please uses
+  # (kept in sync with the release-please-action pin in release.yml) — plus
+  # release-please's own message-splitting and BEGIN_COMMIT_OVERRIDE handling,
+  # so this job's verdict matches what release-please will do on master.
+  lint-squash-message:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint the future squash-merge message
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/lint-squash-message.mjs
