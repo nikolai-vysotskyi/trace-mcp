@@ -139,25 +139,42 @@ function labels() {
   return [...document.querySelectorAll('.cosmos-gpu-label')].map((el) => el.textContent);
 }
 
-it('pauses immediately on user zoom, skips label passes throughout the gesture, and stays stable afterwards', async () => {
+it('keeps Live on through a user zoom gesture and resumes motion on release (TRA-1783)', async () => {
   await mount();
   act(() => mock.config.onZoomStart({}, true));
-  expect(mock.graph.isSimulationRunning).toBe(false);
+  // A drag/pan/zoom must NOT flip the Live toggle to Paused ...
+  expect(screen.queryByTitle('resumeSimulation')).toBeNull();
+  expect(screen.getByTitle('pauseSimulation')).toBeTruthy();
   mock.graph.getPointPositions.mockClear();
   for (let zoom = 21; zoom < 25; zoom++) {
     mock.graph.getZoomLevel.mockReturnValue(zoom);
     frame();
   }
+  // ... label passes stay skipped throughout the gesture ...
   expect(mock.graph.getPointPositions).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(3000));
-  expect(mock.graph.isSimulationRunning).toBe(false);
+  // ... and mouse-up continues the motion instead of staying paused.
   act(() => mock.config.onZoomEnd({}, true));
-  frame();
-  expect(mock.graph.getPointPositions).toHaveBeenCalledTimes(1);
-  frame();
-  expect(mock.graph.getPointPositions).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByTitle('resumeSimulation'));
   expect(mock.graph.isSimulationRunning).toBe(true);
+  expect(screen.queryByTitle('resumeSimulation')).toBeNull();
+  frame();
+  expect(mock.graph.getPointPositions).toHaveBeenCalledTimes(1);
+  frame();
+  // Solver is running again, so the label pass keeps tracking (no idle
+  // short-circuit while isSimulationRunning).
+  expect(mock.graph.getPointPositions).toHaveBeenCalledTimes(2);
+});
+
+it('stays paused through a gesture when the user explicitly paused (TRA-1783)', async () => {
+  await mount();
+  fireEvent.click(screen.getByTitle('pauseSimulation'));
+  expect(screen.getByTitle('resumeSimulation')).toBeTruthy();
+  mock.graph.isSimulationRunning = false;
+  act(() => mock.config.onZoomStart({}, true));
+  act(() => mock.config.onZoomEnd({}, true));
+  // Manual Paused toggle is respected — a drag must not auto-resume it.
+  expect(mock.graph.isSimulationRunning).toBe(false);
+  expect(screen.getByTitle('resumeSimulation')).toBeTruthy();
 });
 
 it('does not pause the initial programmatic camera fit', async () => {
