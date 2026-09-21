@@ -392,8 +392,12 @@ export function parseSessionFile(filePath: string, projectPath: string): ParsedS
  * Claude encodes `/` as `-`, so `-Users-username-Projects-trace-mcp` could be
  * `/Users/username/Projects/trace-mcp` or `/Users/username/Projects/trace/mcp`.
  * We resolve ambiguity by checking which path exists on disk.
+ *
+ * Exported for the Memory Sessions endpoint (TRA-1065), which maps a mined
+ * session file back to its owning project. Lossy by nature — callers must
+ * confirm the owner via the decisions table, never trust the decode alone.
  */
-function decodeDirName(dirName: string): string {
+export function decodeDirName(dirName: string): string {
   // Claude Code encodes "/" as "-" in directory names.
   // `/Users/username/Projects/trace-mcp` → `-Users-username-Projects-trace-mcp`
   // We decode by checking which intermediate paths are real directories.

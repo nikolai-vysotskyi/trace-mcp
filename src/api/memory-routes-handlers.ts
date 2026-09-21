@@ -15,9 +15,9 @@ import path from 'node:path';
 import type http from 'node:http';
 import Database from 'better-sqlite3';
 import { escapeFtsQuery } from '../db/fts.js';
-import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
+import { DECISIONS_DB_PATH, CORPORA_DIR, CLAUDE_PROJECTS_DIR } from '../shared/paths.js';
 import { ensureGlobalDirs } from '../global.js';
-import { encodeDirName, listAllSessions } from '../analytics/log-parser.js';
+import { decodeDirName, listAllSessions } from '../analytics/log-parser.js';
 import { loadConfig } from '../config.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
@@ -31,6 +31,9 @@ interface MinedSessionRow {
   session_path: string;
   mined_at: string;
   decisions_found: number;
+  /** File mtime (ms) at the last mining pass; 0 on legacy rows. The
+      session's own date — unlike mined_at, it does not move on re-mining. */
+  last_modified_ms: number;
 }
 
 interface CorpusManifest {
@@ -758,58 +761,92 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
     //   1. its file is one of listAllSessions(projectRoot) — the same
     //      discovery the miner itself uses (Claude's
     //      ~/.claude/projects/<encoded> + the project's git worktrees +
-    //      <project>/.claw/sessions); or
-    //   2. its path still carries this project's encoded dir / root prefix
-    //      (covers rows whose session files have since been deleted); or
-    //   3. the decisions table attributes its session key to this project
-    //      (covers synthetic provider keys like "hermes:<id>", which are
-    //      not filesystem paths at all — provider mining records
-    //      project_root on every extracted decision).
+    //      <project>/.claw/sessions). Live files are always attributable;
+    //      note the shared-dir caveat below.
+    //   2. the decisions table attributes its session key to this project
+    //      (file decisions store session_id = basename, provider decisions
+    //      store the full synthetic key like "hermes:<id>" — check both).
+    //      When decisions attribute the key to a DIFFERENT project, that
+    //      vetoes every path-based fallback: an ambiguous path never
+    //      outranks recorded ownership.
+    //   3. otherwise, strict path fallbacks for rows whose files have since
+    //      been deleted: Claw requires exactly <root>/.claw/sessions/ (never
+    //      the whole root tree, so a nested independent repo is not claimed
+    //      by its parent); Claude requires the session dir to decode to
+    //      exactly this root — a substring needle is not enough because
+    //      encodeDirName is lossy ("/a-b" and "/a/b" collide).
     // Rows matching none of these belong to other projects and are dropped:
     // a project with no mined sessions gets [], not another project's list.
+    // Caveat: two projects whose Claude sessions physically share one
+    // ~/.claude/projects/<encoded> dir (the collision above, both alive)
+    // are indistinguishable on disk — Claude Code itself conflates them —
+    // so live files there are listed under both. Deleted or decided rows
+    // are still attributed correctly via rules 2–3.
     let projectPaths = new Set<string>();
     try {
       projectPaths = new Set(listAllSessions(projectRoot).map((s) => s.filePath));
     } catch {
-      /* discovery failed — fall back to prefix + decisions attribution */
+      /* discovery failed — decisions + strict path fallbacks still apply */
     }
     const resolvedRoot = path.resolve(projectRoot);
-    const claudeNeedle = `${path.sep}${encodeDirName(resolvedRoot)}${path.sep}`;
-    const clawPrefix = resolvedRoot + path.sep;
+    const clawSessionsPrefix = path.join(resolvedRoot, '.claw', 'sessions') + path.sep;
 
-    let attributedIds = new Set<string>();
+    let ownerStmt: Database.Statement | null = null;
     try {
-      const idRows = db
-        .prepare(
-          'SELECT DISTINCT session_id FROM decisions WHERE project_root = ? AND session_id IS NOT NULL',
-        )
-        .all(projectRoot) as Array<{ session_id: string }>;
-      attributedIds = new Set(idRows.map((r) => r.session_id));
+      ownerStmt = db.prepare(
+        'SELECT DISTINCT project_root FROM decisions WHERE session_id IN (?, ?)',
+      );
     } catch {
-      /* decisions table may predate session_id — path attribution still applies */
+      /* decisions table may predate session_id — path rules still apply */
     }
+    const ownersOf = (sessionPath: string): string[] => {
+      if (!ownerStmt) return [];
+      try {
+        const rows = ownerStmt.all(path.basename(sessionPath, '.jsonl'), sessionPath) as Array<{
+          project_root: string;
+        }>;
+        return rows.map((r) => r.project_root);
+      } catch {
+        return [];
+      }
+    };
+
+    const belongsToProject = (row: MinedSessionRow): boolean => {
+      if (projectPaths.has(row.session_path)) return true;
+      const owners = ownersOf(row.session_path);
+      if (owners.length > 0) {
+        return owners.includes(projectRoot) || owners.includes(resolvedRoot);
+      }
+      if (row.session_path.startsWith(clawSessionsPrefix)) return true;
+      const dir = path.dirname(row.session_path);
+      if (path.dirname(dir) === CLAUDE_PROJECTS_DIR) {
+        try {
+          if (decodeDirName(path.basename(dir)) === resolvedRoot) return true;
+        } catch {
+          /* undecodable — exclude */
+        }
+      }
+      return false;
+    };
 
     // The table is a mining log (hundreds of rows, not millions), so read
     // all rows newest-first, filter in JS, then apply the limit. Filtering
     // in SQL would need a dynamic IN-list over the project's session files.
     const rows = db
       .prepare(
-        'SELECT session_path, mined_at, decisions_found FROM mined_sessions ORDER BY mined_at DESC',
+        'SELECT session_path, mined_at, decisions_found, last_modified_ms FROM mined_sessions ORDER BY mined_at DESC',
       )
       .all() as MinedSessionRow[];
 
     const sessions = rows
-      .filter(
-        (r) =>
-          projectPaths.has(r.session_path) ||
-          r.session_path.includes(claudeNeedle) ||
-          r.session_path.startsWith(clawPrefix) ||
-          attributedIds.has(r.session_path),
-      )
+      .filter(belongsToProject)
       .slice(0, limit)
       .map((r) => ({
-        ...r,
+        session_path: r.session_path,
+        mined_at: r.mined_at,
+        decisions_found: r.decisions_found,
         session_id: path.basename(r.session_path, '.jsonl'),
+        session_mtime_ms: r.last_modified_ms ?? 0,
       }));
 
     sendJson(res, 200, { sessions });

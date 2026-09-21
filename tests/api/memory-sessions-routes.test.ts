@@ -30,6 +30,7 @@ interface SessionsBody {
     mined_at: string;
     decisions_found: number;
     session_id: string;
+    session_mtime_ms: number;
   }>;
 }
 
@@ -133,6 +134,8 @@ describe('GET /api/projects/sessions scoping (TRA-1065)', () => {
     const own = body.sessions.find((s) => s.session_path === ownSessionPath);
     expect(own?.session_id).toBe(ownSessionId);
     expect(own?.decisions_found).toBe(2);
+    // The session's own date (file mtime at mining), not the processing date.
+    expect(own?.session_mtime_ms).toBeGreaterThan(0);
   });
 
   it('returns [] for a project with no mined sessions (not the global list)', async () => {
@@ -143,5 +146,69 @@ describe('GET /api/projects/sessions scoping (TRA-1065)', () => {
   it('respects limit after scoping', async () => {
     const body = await getSessions(projectA, '1');
     expect(body.sessions).toHaveLength(1);
+  });
+
+  it('excludes a separate nested Claw project (review)', async () => {
+    // A nested independent repo's sessions live under the parent's root
+    // tree — the parent must not claim them (exact .claw/sessions dir only).
+    const nestedRoot = path.join(projectA, 'independent-repo');
+    const nestedSession = path.join(nestedRoot, '.claw', 'sessions', 'nested-session.jsonl');
+    fs.mkdirSync(path.dirname(nestedSession), { recursive: true });
+    fs.writeFileSync(nestedSession, '{"type":"session","id":"nested"}\n');
+    const store = new DecisionStore(DECISIONS_DB_PATH);
+    try {
+      store.markSessionMined(nestedSession, 1);
+      store.addDecision({
+        title: 'nested project only',
+        content: 'belongs to nested project',
+        type: 'preference',
+        project_root: nestedRoot,
+        session_id: 'nested-session',
+        source: 'mined',
+        git_branch: null,
+      });
+    } finally {
+      store.close();
+    }
+    const body = await getSessions(projectA);
+    expect(body.sessions.map((s) => s.session_path)).not.toContain(nestedSession);
+    // …while the nested project itself still sees its own session.
+    const nested = await getSessions(nestedRoot);
+    expect(nested.sessions.map((s) => s.session_path)).toContain(nestedSession);
+  });
+
+  it('excludes Claude sessions with a colliding encoded project path (review)', async () => {
+    // encodeDirName is lossy: "/a-b" and "/a/b" collide. Recorded ownership
+    // (decisions) must veto the path fallback, not the other way round.
+    const ownerRoot = path.join(projectA, 'a-b');
+    const requestedRoot = path.join(projectA, 'a', 'b');
+    fs.mkdirSync(ownerRoot, { recursive: true });
+    fs.mkdirSync(requestedRoot, { recursive: true });
+    const encodedOwner = ownerRoot.replace(/[\\/:]+/g, '-');
+    expect(requestedRoot.replace(/[\\/:]+/g, '-')).toBe(encodedOwner);
+    const collidingSession = path.join(
+      os.homedir(),
+      '.claude',
+      'projects',
+      encodedOwner,
+      'collision-session.jsonl',
+    );
+    const store = new DecisionStore(DECISIONS_DB_PATH);
+    try {
+      store.markSessionMined(collidingSession, 1);
+      store.addDecision({
+        title: 'different owner',
+        content: 'belongs to hyphenated project',
+        type: 'preference',
+        project_root: ownerRoot,
+        session_id: 'collision-session',
+        source: 'mined',
+        git_branch: null,
+      });
+    } finally {
+      store.close();
+    }
+    const body = await getSessions(requestedRoot);
+    expect(body.sessions).toEqual([]);
   });
 });
