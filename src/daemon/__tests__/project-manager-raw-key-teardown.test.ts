@@ -53,11 +53,18 @@ function makeFakeManaged(root: string) {
     registry: {},
     progress: {},
     pipeline: { dispose: vi.fn(async () => undefined) },
-    watcher: { stop: vi.fn(async () => undefined) },
+    watcher: {
+      stop: vi.fn(async () => undefined),
+      unsubscribe: vi.fn(async () => undefined),
+      drain: vi.fn(async () => undefined),
+    },
     server: { close: vi.fn(async () => undefined) },
     serverHandle: { dispose: vi.fn() },
     status: 'ready' as const,
     lastAccessedAt: Date.now(),
+    // TRA-1017: entries injected without this skip the cooperative abort and
+    // rely on the timeout bound; with it they take the fast path.
+    indexAbortController: new AbortController(),
   };
 }
 
@@ -86,7 +93,7 @@ describe('ProjectManager raw-key teardown tolerance (TRA-1608)', () => {
 
     await pm.removeProject('relative-proj-raw');
 
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     expect(a.db.close).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledWith('relative-proj-raw');
@@ -101,8 +108,8 @@ describe('ProjectManager raw-key teardown tolerance (TRA-1608)', () => {
 
     await pm.shutdown();
 
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
-    expect(b.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(b.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     expect(a.db.close).toHaveBeenCalledTimes(1);
     expect(b.db.close).toHaveBeenCalledTimes(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection

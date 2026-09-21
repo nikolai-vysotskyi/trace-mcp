@@ -58,6 +58,8 @@ vi.mock('../../indexer/watcher.js', () => {
       watcherRestartCalls.push({ root: this.root, descendantExcludeGlobs });
     }
     async stop() {}
+    async unsubscribe() {}
+    async drain() {}
   }
   return { FileWatcher: FakeWatcher };
 });

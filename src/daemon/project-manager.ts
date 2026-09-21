@@ -17,7 +17,7 @@ import { Store } from '../db/store.js';
 import { announceDbHolder, releaseDbHoldersForRoot } from '../db-holders.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
 import { ExtractPool } from '../indexer/extract-pool.js';
-import { IndexingPipeline } from '../indexer/pipeline.js';
+import { IndexAbortedError, IndexingPipeline } from '../indexer/pipeline.js';
 import { dropTreeCacheScope } from '../parser/tree-cache.js';
 import {
   clearProjectReindexCache,
@@ -67,6 +67,24 @@ import type { ProjectResourcePool } from './resource-pool.js';
 const AI_COALESCE_WAIT_MS = 5_000;
 
 /**
+ * Total budget for one project's teardown waits in `stopProject()` (TRA-1017).
+ * Field logs showed a full index taking 188s against a 20s shutdown
+ * deadline — unbounded awaits overrun it on every cold-project stop.
+ *
+ * The three waits share ONE deadline instead of three separate caps because
+ * they queue on the same two locks: the watcher's op queue (a restart queued
+ * ahead of the unsubscribe holds it draining a hung handler) and the
+ * pipeline lock (handlers drained by `watcher.drain()` settle only when the
+ * aborted index bails). Bounding any one of them alone still wedges behind
+ * the others. Worst sequential path (this budget + the 5s bounded
+ * `dispose()` drain) is 18s, inside the 20s `DAEMON_SHUTDOWN_DEADLINE_MS`
+ * with margin left for the synchronous closes and `httpServer.close()`.
+ * `shutdown()` stops projects concurrently, so one slow project cannot eat
+ * another's budget.
+ */
+export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 13_000;
+
+/**
  * Canonical in-memory key for the managed-projects map (TRA-1608).
  *
  * The map used to be keyed by the raw caller string, so the same filesystem
@@ -102,6 +120,30 @@ function managedMapKey(projects: Map<string, ManagedProject>, root: string): str
   return undefined;
 }
 
+/**
+ * Await `promise`, giving up after `timeoutMs` (TRA-1017). Returns true when
+ * the promise settled in time, false on timeout. A rejection counts as
+ * settled — `initialIndexPromise` never rejects by contract (every branch
+ * catches into status), and the chain logs its own errors, so there is
+ * nothing to re-log here. The timer is always cleared: a fast settle must
+ * not hold the event loop open for the remainder of the timeout.
+ */
+async function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const settled = promise.then(
+      () => true,
+      () => true,
+    );
+    const timeout = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+    });
+    return await Promise.race([settled, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export interface ManagedProject {
   root: string;
   config: TraceMcpConfig;
@@ -122,6 +164,17 @@ export interface ManagedProject {
    *  running to completion against a now-disposed Store. */
   aiAbortController?: AbortController;
   /**
+   * Aborted during stopProject() so the in-flight initial `indexAll()` stops
+   * at its next batch/phase boundary instead of riding a minutes-long run to
+   * completion past the daemon's shutdown deadline (TRA-1017). Wired into
+   * every `pipeline.indexAll()` this manager starts for the project. Optional
+   * like `aiAbortController` — entries that predate it (and behavioural-test
+   * fakes injected without one) simply skip the cooperative fast path; the
+   * `STOP_PROJECT_INDEX_WAIT_MS` bound below is the guarantee, the abort is
+   * the accelerator.
+   */
+  indexAbortController?: AbortController;
+  /**
    * Phase 3 background LSP enricher — runs LSP enrichment scoped to a
    * watcher burst's changed files N seconds after the burst ends. Null
    * when LSP is disabled in config (the construction is gated on
@@ -138,11 +191,17 @@ export interface ManagedProject {
    * The fire-and-forget initial `indexAll()` chain (indexing → summarization →
    * embeddings → subproject auto-sync, incl. any FK-recovery retries) kicked
    * off by `addProject()`. Never rejects — every branch of the chain catches
-   * its own errors into `managed.status = 'error'`. `stopProject()` awaits
-   * this before closing `managed.db` so a still-open topology.db handle from
-   * `runSubprojectAutoSync()` can't outlive teardown (Windows holds file
-   * handles exclusively, so a stale handle blocks the caller's subsequent
-   * directory cleanup with EBUSY).
+   * its own errors into `managed.status = 'error'` (an abort lands in the
+   * `IndexAbortedError` branch instead and leaves the status alone).
+   * `stopProject()` aborts the run via `indexAbortController` and then awaits
+   * this inside the shared `STOP_PROJECT_TEARDOWN_BUDGET_MS` teardown budget
+   * (together with the watcher drain) before closing `managed.db`.
+   * Unbounded waiting here overran
+   * the 20s shutdown deadline on every cold-project stop (TRA-1017); the
+   * bound keeps teardown inside it while the abort keeps the common case
+   * fast. A still-open topology.db handle from `runSubprojectAutoSync()` on
+   * the timeout path is tolerated: on Windows it can only delay the caller's
+   * directory cleanup, and the daemon-wide forced exit remains the backstop.
    */
   initialIndexPromise?: Promise<void>;
 }
@@ -442,6 +501,13 @@ export class ProjectManager {
     // fetches bail out instead of running to completion holding references
     // into a Store/ProjectContext the daemon has already disposed.
     const aiAbortController = new AbortController();
+    // TRA-1017: separate controller for the indexing pipeline. Aborted by
+    // stopProject() alongside the AI one so a minutes-long initial index
+    // stops at its next batch/phase boundary instead of outlasting the
+    // shutdown deadline. Separate from aiAbortController because the AI
+    // pipelines merge per-invocation debounce signals with it, while the
+    // index signal is passed to pipeline.indexAll() calls below.
+    const indexAbortController = new AbortController();
 
     const runEmbeddings = (signal?: AbortSignal) => {
       const p = getEmbeddingPipeline();
@@ -520,6 +586,7 @@ export class ProjectManager {
       serverHandle,
       status: 'starting',
       aiAbortController,
+      indexAbortController,
       lspEnricher,
       lastAccessedAt: Date.now(),
       cancelDebouncedAI: () => {
@@ -582,7 +649,9 @@ export class ProjectManager {
         );
       }
     }
-    managed.initialIndexPromise = this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
+    managed.initialIndexPromise = this.indexAllLimit!(() =>
+      pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal }),
+    )
       .then(async () => {
         managed.status = 'ready';
         updateLastIndexed(projectRoot);
@@ -602,6 +671,14 @@ export class ProjectManager {
         logger.info({ projectRoot }, 'Project indexing complete');
       })
       .catch(async (err) => {
+        // TRA-1017: asked to stop mid-index (daemon shutdown, project removal,
+        // idle unload) — not a failure. The teardown already in progress owns
+        // the DB from here; just note it and leave the status alone so a
+        // half-torn-down project is never advertised as errored/ready.
+        if (err instanceof IndexAbortedError) {
+          logger.info({ projectRoot }, 'Initial indexing aborted by project stop (non-fatal)');
+          return;
+        }
         if (isForeignKeyError(err)) {
           logger.warn(
             { projectRoot, error: String(err) },
@@ -623,7 +700,9 @@ export class ProjectManager {
             logger.info({ projectRoot }, `Project indexing complete (${via})`);
           };
           try {
-            await this.indexAllLimit!(() => pipeline.indexAll(true));
+            await this.indexAllLimit!(() =>
+              pipeline.indexAll(true, { signal: indexAbortController.signal }),
+            );
             await finishRecovery('force-reindex recovery');
             return;
           } catch (retryErr) {
@@ -637,7 +716,16 @@ export class ProjectManager {
             // file, but without closing the shared handle. Any non-FK failure,
             // or a failure that survives the hard reset, is terminal: we set an
             // error status and stop. There is no third attempt, so recovery can
-            // never loop.
+            // never loop. (An abort during the retry is a stop, not a failure:
+            // handled like the outer IndexAbortedError branch — the promise
+            // must never reject, so return instead of rethrowing.)
+            if (retryErr instanceof IndexAbortedError) {
+              logger.info(
+                { projectRoot },
+                'Force-reindex recovery aborted by project stop (non-fatal)',
+              );
+              return;
+            }
             if (!isForeignKeyError(retryErr)) {
               managed.status = 'error';
               managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
@@ -653,10 +741,19 @@ export class ProjectManager {
             );
             try {
               this.hardResetIndexTables(store);
-              await this.indexAllLimit!(() => pipeline.indexAll(true));
+              await this.indexAllLimit!(() =>
+                pipeline.indexAll(true, { signal: indexAbortController.signal }),
+              );
               await finishRecovery('force-reindex recovery after hard reset');
               return;
             } catch (hardErr) {
+              if (hardErr instanceof IndexAbortedError) {
+                logger.info(
+                  { projectRoot },
+                  'Force-reindex recovery aborted by project stop (non-fatal)',
+                );
+                return;
+              }
               managed.status = 'error';
               managed.error = `Index rebuild after FK hard reset still failed: ${String(hardErr)}`;
               logger.error(
@@ -739,7 +836,10 @@ export class ProjectManager {
             | undefined;
           let watchErr: unknown;
           try {
-            result = await pipeline.indexFiles(toIndex);
+            // TRA-1017: the stop signal — a batch queued before the stop must
+            // not start persisting after it. An abort mid-batch leaves the
+            // incomplete-postprocess mark for the next run to repair.
+            result = await pipeline.indexFiles(toIndex, { signal: indexAbortController.signal });
           } catch (err) {
             watchErr = err;
             throw err;
@@ -828,8 +928,8 @@ export class ProjectManager {
           // drops events in EVERY registered project at once, and N full
           // re-walks is exactly the load `parallel_initial_index` bounds.
           // The null branch is belt-and-braces, not a live race: shutdown()
-          // clears the limiter only after watcher.stop() has drained the
-          // in-flight rescan (TRA-834), and stop() unsubscribes before
+          // clears the limiter only after the bounded watcher/index drain in
+          // stopProject (TRA-834), and stopProject unsubscribes before
           // draining, so this read cannot observe null today. It stays so a
           // regression in that ordering degrades to an ungated re-walk
           // instead of a TypeError inside a watcher callback.
@@ -869,7 +969,13 @@ export class ProjectManager {
             // TRA-1576: force the full walk. The watcher since-query shares
             // the FSEvents backend that just reported dropped events, so its
             // historical answer is suspect for exactly this window.
-            const run = () => pipeline.indexAll(false, { discovery: 'full-walk' });
+            // TRA-1017: same stop signal as the initial index — a rescan
+            // racing a shutdown must not start an uncancellable run.
+            const run = () =>
+              pipeline.indexAll(false, {
+                discovery: 'full-walk',
+                signal: indexAbortController.signal,
+              });
             const limit = this.indexAllLimit;
             await (limit ? limit(run) : run());
           },
@@ -1027,6 +1133,11 @@ export class ProjectManager {
     // cancel the LSP enricher so its run aborts via its AbortSignal. These are
     // non-blocking, so nothing below can starve them.
     managed.aiAbortController?.abort();
+    // TRA-1017: stop the initial index at its next batch/phase boundary. A
+    // full index of a large cold project measured 188s in the field against
+    // a 20s shutdown deadline — without this the await below rides the whole
+    // run and the shutdown always overruns.
+    managed.indexAbortController?.abort();
     managed.cancelDebouncedAI?.();
     try {
       managed.lspEnricher?.cancel();
@@ -1036,40 +1147,43 @@ export class ProjectManager {
         'lspEnricher.cancel() failed during stopProject (non-fatal)',
       );
     }
-    // Then unsubscribe the file watcher and drain its in-flight handler BEFORE
-    // the waits below (TRA-834). `await managed.initialIndexPromise` can run
-    // for tens of seconds on a cold project, and a still-subscribed watcher
-    // keeps firing debounced `onChanges` handlers throughout it — each one
-    // starting a fresh indexing run against a Store that a sibling
-    // stopProject() is closing. Field logs showed 12 "The database connection
-    // is not open" failures, every one of them after "Daemon shutting down",
-    // one project logging five of them over 27 seconds. Stopping the source of
-    // new work first is what makes the teardown below finite.
-    await managed.watcher.stop();
-    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
-    // scheduling LSP enrichment (see the onChanges tail in addProject), and
-    // `trailingDebounce` mints a fresh AbortController when it is scheduled
-    // after a cancel — so the cancels above no longer cover those timers. Cancel
-    // once more now that no handler is left to arm another one.
-    managed.cancelDebouncedAI?.();
-    try {
-      managed.lspEnricher?.cancel();
-    } catch (err) {
+    // Unsubscribe the file watcher BEFORE the waits below, but WITHOUT
+    // draining its in-flight handlers yet (TRA-834 + TRA-1017). Draining here
+    // is what wedged shutdown: an in-flight handler queued on the pipeline
+    // lock behind the minutes-long initial index settles only when that index
+    // does — awaiting it first defeats the abort + timeout below. Unsubscribe
+    // stops new work at the source — a still-subscribed watcher keeps firing
+    // debounced `onChanges` handlers, each starting a fresh indexing run
+    // against a Store a sibling stopProject() is closing (field logs showed
+    // 12 "database connection is not open" failures after "Daemon shutting
+    // down", one project logging five over 27s). The drain joins the shared
+    // bounded wait below, after every producer has been cancelled.
+    // The acquisition itself is bounded: a watcher restart queued ahead of
+    // this holds the op queue draining that same hung handler, so even the
+    // unsubscribe cannot be awaited bare.
+    const teardownDeadline = Date.now() + STOP_PROJECT_TEARDOWN_BUDGET_MS;
+    const remainingMs = (): number => Math.max(0, teardownDeadline - Date.now());
+    const unsubscribed = await waitWithTimeout(managed.watcher.unsubscribe(), remainingMs());
+    if (!unsubscribed) {
       logger.warn(
-        { error: err, projectRoot: root },
-        'lspEnricher.cancel() failed during stopProject (non-fatal)',
+        { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
+        'stopProject: watcher unsubscribe still queued — continuing teardown without it',
       );
     }
     // TRA-1553: single-file reindexes (HTTP handleReindexFile, MCP
     // register_edit) are not part of initialIndexPromise and nothing below
     // awaits them, yet they run transactions against this project's DB across
-    // awaits. Drain what started before the mark above — bounded, so a hung
-    // reindex still cannot wedge shutdown past its deadline — before the DB
-    // closes. Without this, the next synchronous transaction after the close
-    // throws "The database connection is not open" from inside an async
-    // continuation as an unhandled rejection (seen on overlapping postinstall
-    // respawns, where a ~20 s old instance was SIGTERM'd mid-index).
-    const drained = await waitForReindexDrain(root, REINDEX_DRAIN_TIMEOUT_MS);
+    // awaits. Drain what started before the mark above — bounded by the
+    // shared budget, so a hung reindex still cannot wedge shutdown past its
+    // deadline — before the DB closes. Without this, the next synchronous
+    // transaction after the close throws "The database connection is not
+    // open" from inside an async continuation as an unhandled rejection
+    // (seen on overlapping postinstall respawns, where a ~20 s old instance
+    // was SIGTERM'd mid-index).
+    const drained = await waitForReindexDrain(
+      root,
+      Math.min(REINDEX_DRAIN_TIMEOUT_MS, remainingMs()),
+    );
     if (!drained) {
       logger.warn(
         { projectRoot: root, drainTimeoutMs: REINDEX_DRAIN_TIMEOUT_MS },
@@ -1079,12 +1193,43 @@ export class ProjectManager {
     // Wait for the background initial-index chain (indexAll → summarize/embed →
     // subproject auto-sync) to finish so its topology.db handle is closed
     // before we tear down this project — see initialIndexPromise's doc comment.
+    // TRA-1017: bounded by whatever is left of the shared teardown budget,
+    // and SHARED with the watcher drain. The abort above makes a cooperative
+    // run settle at its next boundary, but a run wedged inside a synchronous
+    // phase (a multi-second edge-resolution pass holds the event loop and
+    // cannot observe the abort) would otherwise ride out the whole phase and
+    // overrun the shutdown deadline — and the watcher drain waits on handlers
+    // queued on that same pipeline lock, so bounding the index without the
+    // drain (or vice versa) still wedges. Awaiting both together bounds the
+    // lock once, not twice. On timeout the teardown below proceeds anyway —
+    // the chain never rejects (every branch catches into status), so nothing
+    // is lost by detaching; its next DB statement after the close lands in
+    // its own error handling.
+    {
+      const drains: Array<Promise<unknown>> = [managed.watcher.drain()];
+      if (managed.initialIndexPromise) drains.push(managed.initialIndexPromise);
+      const settled = await waitWithTimeout(Promise.all(drains), remainingMs());
+      if (!settled) {
+        logger.warn(
+          { projectRoot: root, teardownBudgetMs: STOP_PROJECT_TEARDOWN_BUDGET_MS },
+          'stopProject: index/watcher drain still running after abort — continuing teardown without it',
+        );
+      }
+    }
+    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
+    // scheduling LSP enrichment (see the onChanges tail in addProject), and
+    // `trailingDebounce` mints a fresh AbortController when it is scheduled
+    // after a cancel — so the pre-drain cancels above no longer cover those
+    // timers. Cancel once more now that no handler is left to arm another one
+    // (TRA-834 — preserved across the TRA-1017 reorder: the drain moved after
+    // the unsubscribe, so the second cancel moved after the drain with it).
+    managed.cancelDebouncedAI?.();
     try {
-      await managed.initialIndexPromise;
+      managed.lspEnricher?.cancel();
     } catch (err) {
       logger.warn(
         { error: err, projectRoot: root },
-        'initialIndexPromise rejected during stopProject (non-fatal)',
+        'lspEnricher.cancel() failed during stopProject (non-fatal)',
       );
     }
     clearServerPid(managed.db);

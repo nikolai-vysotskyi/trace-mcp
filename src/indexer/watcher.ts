@@ -158,6 +158,17 @@ interface StartOpts {
 
 export class FileWatcher {
   private subscription: parcelWatcher.AsyncSubscription | null = null;
+  /**
+   * Set by `unsubscribe()` at call time (TRA-1017). `unsubscribe()` is
+   * terminal-only — its sole caller is `ProjectManager.stopProject()`, and a
+   * project that is stopping is never re-watched on the same instance
+   * (`addProject()` builds a fresh watcher). `startLocked()` bails when set,
+   * so a restart queued after the terminal unsubscribe can neither
+   * resubscribe nor re-drain — without this, `restartWithExcludes()` racing
+   * teardown would undo the unsubscribe and hold the op queue draining again.
+   * Plain `stop()` stays re-startable and does not set it.
+   */
+  private unsubscribed = false;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPaths: Set<string> = new Set();
   /** Args from the most recent start() call, kept so restartWithExcludes()
@@ -275,6 +286,13 @@ export class FileWatcher {
     onDeletes: ((paths: string[]) => Promise<void>) | undefined,
     opts: StartOpts | undefined,
   ): Promise<void> {
+    // TRA-1017: terminally unsubscribed (teardown won the queue race) — a
+    // restart arriving now must not resubscribe or re-drain. Checked after
+    // acquiring the queue, so ordering with unsubscribeLocked() is exact.
+    if (this.unsubscribed) {
+      logger.debug({ rootPath }, 'Watcher start skipped — terminally unsubscribed');
+      return;
+    }
     this.lastStartArgs = {
       rootPath,
       config,
@@ -537,7 +555,49 @@ export class FileWatcher {
     return run;
   }
 
+  /**
+   * Drop the native subscription and all pending (not yet started) work
+   * WITHOUT waiting for in-flight handlers/rescans (TRA-1017). Stops new
+   * work at the source in milliseconds; pair with `drain()` once every
+   * producer that could still touch the DB has been cancelled, and bound
+   * that wait — `stop()`'s combined unsubscribe+drain can outlast a shutdown
+   * budget when a handler is queued behind a minutes-long pipeline run.
+   *
+   * Terminal: the sole caller is `ProjectManager.stopProject()`, and a
+   * stopping project is never re-watched on the same instance. Sets the
+   * `unsubscribed` flag so a restart queued after this bails instead of
+   * resubscribing (plain `stop()` stays re-startable and does not set it).
+   */
+  async unsubscribe(): Promise<void> {
+    // Terminal from the moment it is requested (not when the queued op runs):
+    // a restart queuing behind this call must bail instead of resubscribing,
+    // even if this op itself waits behind an in-progress restart's drain.
+    this.unsubscribed = true;
+    const run = this.opQueue.then(() => this.unsubscribeLocked());
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Wait out the in-flight rescan/handlers `unsubscribe()` deliberately left
+   * running (TRA-1017). Ordered after `unsubscribe()` through the same op
+   * queue. The caller must have cancelled the underlying pipeline work first
+   * (its abort makes these settle at their next boundary) and must bound
+   * this wait — a handler queued on a wedged pipeline lock settles only via
+   * that cancellation or not at all.
+   */
+  async drain(): Promise<void> {
+    const run = this.opQueue.then(() => this.drainLocked());
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
   private async stopLocked(): Promise<void> {
+    await this.unsubscribeLocked();
+    await this.drainLocked();
+  }
+
+  private async unsubscribeLocked(): Promise<void> {
     // Order matters: unsubscribe FIRST so parcel stops invoking our callback,
     // THEN drop the debounce timer. The opposite order leaves a window where
     // an in-flight parcel callback can schedule a new timer after we cleared
@@ -574,6 +634,10 @@ export class FileWatcher {
     this.stormQuietUntilMs = 0;
     this.stormCoalesced = 0;
     this.dropTimestamps = [];
+    // (Drain half — see drainLocked().)
+  }
+
+  private async drainLocked(): Promise<void> {
     // A reconcile pass holds the caller's pipeline, and callers dispose it as
     // soon as stop() returns. Drop any queued follow-up (cleared first, so the
     // in-flight pass's `finally` doesn't start one) and wait out the active

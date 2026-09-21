@@ -38,6 +38,8 @@ vi.mock('../../indexer/watcher.js', () => {
     async start() {}
     async restartWithExcludes() {}
     async stop() {}
+    async unsubscribe() {}
+    async drain() {}
   }
   return { FileWatcher: FakeWatcher };
 });
