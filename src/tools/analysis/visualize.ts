@@ -237,8 +237,8 @@ function buildSingleProjectGraph(
 }
 
 /**
- * Subproject-aware graph: only include repos that are directly connected
- * to the current project via cross-service edges in topology.
+ * Subproject-aware graph: merge indexed dependencies from registered subprojects.
+ * Service topology selects repositories, not file/symbol dependency endpoints.
  */
 function buildSubprojectGraph(
   mainStore: Store,
@@ -327,28 +327,9 @@ function buildSubprojectGraph(
     }
   }
 
-  // Add cross-service edges from topology
-  try {
-    const crossEdges = topoStore.getAllCrossServiceEdges();
-    for (const ce of crossEdges) {
-      const srcPrefix = repos.find((r) => r.name === ce.source_name)?.name ?? mainPrefix;
-      const tgtPrefix = repos.find((r) => r.name === ce.target_name)?.name ?? mainPrefix;
-      if (srcPrefix === tgtPrefix) continue;
-
-      const srcNodes = allNodes.filter((n) => n.repo === srcPrefix);
-      const tgtNodes = allNodes.filter((n) => n.repo === tgtPrefix);
-      if (srcNodes.length > 0 && tgtNodes.length > 0) {
-        allEdges.push({
-          source: srcNodes[0].id,
-          target: tgtNodes[0].id,
-          type: ce.edge_type ?? 'cross_service',
-          weight: 1,
-        });
-      }
-    }
-  } catch {
-    /* cross-service edges are best-effort */
-  }
+  // Service relationships have no verified file/symbol endpoints. Keep them in
+  // topology rather than inventing dependencies between arbitrary repo nodes.
+  // Indexed cross-file relationships above remain part of this graph.
 
   if (allNodes.length === 0) return null;
 
