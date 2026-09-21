@@ -15,8 +15,9 @@ import path from 'node:path';
 import type http from 'node:http';
 import Database from 'better-sqlite3';
 import { escapeFtsQuery } from '../db/fts.js';
-import { DECISIONS_DB_PATH, CORPORA_DIR } from '../shared/paths.js';
+import { DECISIONS_DB_PATH, CORPORA_DIR, CLAUDE_PROJECTS_DIR } from '../shared/paths.js';
 import { ensureGlobalDirs } from '../global.js';
+import { listAllSessions, listGitWorktrees } from '../analytics/log-parser.js';
 import { loadConfig } from '../config.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
@@ -30,6 +31,42 @@ interface MinedSessionRow {
   session_path: string;
   mined_at: string;
   decisions_found: number;
+}
+
+/**
+ * Owner recorded inside a Claude Code session transcript: the `cwd` of its
+ * first entries. Read from a 64 KB head so multi-MB transcripts never load
+ * fully. Null when the file is missing, truncated, or carries no cwd —
+ * callers treat that as "unverifiable", never as "belongs here".
+ */
+function readSessionCwd(sessionPath: string): string | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(sessionPath, 'r');
+    const buf = Buffer.alloc(64 * 1024);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    for (const line of buf.subarray(0, n).toString('utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{')) continue;
+      try {
+        const obj = JSON.parse(trimmed) as { cwd?: unknown };
+        if (typeof obj.cwd === 'string' && obj.cwd) return obj.cwd;
+      } catch {
+        /* not JSON — keep scanning */
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
 }
 
 interface CorpusManifest {
@@ -735,7 +772,7 @@ export function handleListCorpora(res: http.ServerResponse, url: URL): void {
   }
 }
 
-/** GET /api/projects/sessions — list mined sessions from decisions.db. */
+/** GET /api/projects/sessions — list mined sessions from decisions.db, scoped to one project. */
 export function handleListSessions(res: http.ServerResponse, url: URL): void {
   const projectRoot = url.searchParams.get('project');
   if (!projectRoot) {
@@ -752,14 +789,123 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
   }
 
   try {
-    // mined_sessions has no project_root column — return all sessions,
-    // ordered newest-first, up to limit. The UI can display all or filter
-    // by path prefix if needed.
-    const sessions = db
+    // mined_sessions has no project_root column, so attribute each row by
+    // its session key instead (TRA-1065). Recorded ownership outranks every
+    // path heuristic — it is checked FIRST, even for live files, because
+    // discovery over-approximates when two projects share one encoded
+    // Claude dir (encodeDirName is lossy: "/a-b" and "/a/b" collide).
+    //
+    //   1. decisions attribute the key to (one of) the related roots — the
+    //      requested root plus its git worktrees (the miner adopts worktree
+    //      sessions to the parent, so either may be recorded). File
+    //      decisions store session_id = basename, provider decisions store
+    //      the full synthetic key like "hermes:<id>" — check both. A key
+    //      attributed to a different project is vetoed, never shown.
+    //   2. live file, no recorded owner: Claw locations are exact per root,
+    //      so discovery alone attributes them. Claude files carry their
+    //      owner in the transcript `cwd` — verify it; an unreadable or
+    //      foreign cwd excludes the row. Ambiguity never auto-shows a
+    //      session under two projects.
+    //   3. deleted file, no recorded owner: Claw requires exactly
+    //      <root>/.claw/sessions/ (never the whole root tree, so a nested
+    //      independent repo is not claimed by its parent) — an absolute
+    //      path, so it cannot collide. A deleted Claude transcript with no
+    //      recorded owner is EXCLUDED everywhere: decodeDirName() is lossy
+    //      and after deletion greedily resolves to whatever colliding
+    //      project still exists, so the row would migrate to a foreign
+    //      project. Preserving that history needs a stored owner
+    //      (project_root on mined_sessions), not lossy-path decoding.
+    // Rows matching none of these belong to other projects and are dropped:
+    // a project with no mined sessions gets [], not another project's list.
+    let projectPaths = new Set<string>();
+    try {
+      projectPaths = new Set(listAllSessions(projectRoot).map((s) => s.filePath));
+    } catch {
+      /* discovery failed — decisions + strict path fallbacks still apply */
+    }
+    const resolvedRoot = path.resolve(projectRoot);
+    const related = new Set<string>([projectRoot, resolvedRoot]);
+    for (const w of listGitWorktrees(resolvedRoot)) {
+      related.add(w);
+      related.add(path.resolve(w));
+    }
+    const clawSessionsPrefix = path.join(resolvedRoot, '.claw', 'sessions') + path.sep;
+
+    let ownerStmt: Database.Statement | null = null;
+    try {
+      ownerStmt = db.prepare(
+        'SELECT DISTINCT project_root FROM decisions WHERE session_id IN (?, ?)',
+      );
+    } catch {
+      /* decisions table may predate session_id — path rules still apply */
+    }
+    const ownersOf = (sessionPath: string): string[] => {
+      if (!ownerStmt) return [];
+      try {
+        const rows = ownerStmt.all(path.basename(sessionPath, '.jsonl'), sessionPath) as Array<{
+          project_root: string;
+        }>;
+        return rows.map((r) => r.project_root);
+      } catch {
+        return [];
+      }
+    };
+    const isOwnedHere = (owners: string[]): boolean => owners.some((o) => related.has(o));
+
+    const isClaudeSessionPath = (sessionPath: string): boolean =>
+      path.dirname(path.dirname(sessionPath)) === CLAUDE_PROJECTS_DIR;
+
+    const belongsToProject = (row: MinedSessionRow): boolean => {
+      const owners = ownersOf(row.session_path);
+      if (owners.length > 0) return isOwnedHere(owners);
+      if (!projectPaths.has(row.session_path)) {
+        // Deleted file, no recorded owner: only the unambiguous Claw
+        // location still attributes. See rule 3 above.
+        return row.session_path.startsWith(clawSessionsPrefix);
+      }
+      // Live file, no recorded owner.
+      if (!isClaudeSessionPath(row.session_path)) return true;
+      const cwd = readSessionCwd(row.session_path);
+      if (cwd == null) return false;
+      try {
+        return related.has(path.resolve(cwd));
+      } catch {
+        return false;
+      }
+    };
+
+    // The table is a mining log (hundreds of rows, not millions), so read
+    // all rows newest-first, filter in JS, then apply the limit. Filtering
+    // in SQL would need a dynamic IN-list over the project's session files.
+    const rows = db
       .prepare(
-        'SELECT session_path, mined_at, decisions_found FROM mined_sessions ORDER BY mined_at DESC LIMIT ?',
+        'SELECT session_path, mined_at, decisions_found FROM mined_sessions ORDER BY mined_at DESC',
       )
-      .all(limit) as MinedSessionRow[];
+      .all() as MinedSessionRow[];
+
+    const sessions = rows
+      .filter(belongsToProject)
+      .slice(0, limit)
+      .map((r) => {
+        // The session's own date is the live file's mtime — never the
+        // mined_sessions bookkeeping column: markSessionMined() stamps
+        // Date.now() there, so a legacy/provider row would otherwise report
+        // the processing date as the session date. Missing file → unknown
+        // (0); the UI then shows no date rather than a wrong one.
+        let sessionMtimeMs = 0;
+        try {
+          sessionMtimeMs = fs.statSync(r.session_path).mtimeMs;
+        } catch {
+          /* deleted file or synthetic key — unknown */
+        }
+        return {
+          session_path: r.session_path,
+          mined_at: r.mined_at,
+          decisions_found: r.decisions_found,
+          session_id: path.basename(r.session_path, '.jsonl'),
+          session_mtime_ms: sessionMtimeMs,
+        };
+      });
 
     sendJson(res, 200, { sessions });
   } catch (e) {

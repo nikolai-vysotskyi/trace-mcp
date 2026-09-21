@@ -85,6 +85,13 @@ interface MinedSession {
   session_path: string;
   mined_at: string;
   decisions_found: number;
+  /** Basename of the session file without .jsonl (TRA-1065). Optional so an
+      older daemon that does not send it yet still renders via fallback. */
+  session_id?: string;
+  /** File mtime (ms) at the last mining pass; 0/absent on legacy rows.
+      The session's own date — unlike mined_at, it does not move on
+      re-mining, so the row shows this when available. */
+  session_mtime_ms?: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1756,6 +1763,23 @@ function SessionsView({
           {!loading &&
             sessions.map((s, i) => {
               const isLast = i === sessions.length - 1;
+              // TRA-1065: the row names the session (id + owning project +
+              // mined date), not an interior-truncated .jsonl path whose
+              // visible middle carries no identity. Full path stays in the
+              // tooltip. The list is project-scoped server-side, so the
+              // project label is constant here — it self-identifies the row
+              // if scoping ever regresses.
+              const sessionId =
+                s.session_id ?? s.session_path.split(/[\\/]/).pop()?.replace(/\.jsonl$/, '') ?? s.session_path;
+              const projectName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+              // TRA-1065 review: the row carries the session's own date
+              // (live file mtime), not the processing date — an August
+              // session mined in September must read August. When the file
+              // is gone the date is unknown and NO date is shown: a mined_at
+              // fallback would read as the session date. The tooltip then
+              // keeps the raw mined_at ISO (language-neutral, no new
+              // strings) instead.
+              const hasSessionDate = !!s.session_mtime_ms && s.session_mtime_ms > 0;
               return (
                 <div
                   key={s.session_path}
@@ -1769,13 +1793,16 @@ function SessionsView({
                         style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
                         title={s.session_path}
                       >
-                        {shortPath(s.session_path)}
+                        {sessionId}
                       </div>
                       <div
-                        className="text-[11px] leading-[13px] tabular-nums"
+                        className="text-[11px] leading-[13px] tabular-nums truncate"
                         style={{ color: 'var(--label-secondary)' }}
+                        title={hasSessionDate ? s.session_path : `${s.session_path}\n${s.mined_at}`}
                       >
-                        {formatDate(s.mined_at)}
+                        {hasSessionDate
+                          ? `${projectName} · ${formatDate(new Date(s.session_mtime_ms ?? 0).toISOString())}`
+                          : projectName}
                       </div>
                     </div>
                     {/* A count is the signal, so it is a number and a noun —
