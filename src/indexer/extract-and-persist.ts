@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext } from '../plugin-api/types.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
+import { throwIfIndexAborted } from './index-abort.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
@@ -48,6 +49,12 @@ export interface ExtractAndPersistParams {
   progress?: { update: (phase: 'indexing', patch: Record<string, unknown>) => void };
   /** In-place sort so files of the same extension cluster together (parser-cache locality). */
   sortByExtension: (relPaths: string[]) => string[];
+  /**
+   * Cooperative cancellation (TRA-1017). Checked at batch boundaries — the
+   * run throws `IndexAbortedError` at the next boundary after abort, between
+   * (never inside) persist transactions.
+   */
+  signal?: AbortSignal;
 }
 
 /** Result of a run: the persister's per-batch symbol-name churn, exposed so the
@@ -93,6 +100,10 @@ export async function extractAndPersist(
     progress,
     sortByExtension,
   } = params;
+
+  // TRA-1017: a stop request aborts the run at the next batch boundary, never
+  // mid-transaction.
+  throwIfIndexAborted(params.signal, rootPath);
 
   // TRA-1537 §3 (review fix): reset the per-plugin timing map at run start
   // when profiling is on — otherwise a long-lived daemon dumps totals since
@@ -212,6 +223,9 @@ export async function extractAndPersist(
   // running it on the error path also re-syncs FTS to the partial state.
   try {
     for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+      // TRA-1017: cooperative cancellation — stop between batches, where the
+      // persisted state is consistent, not inside a batch's transaction.
+      throwIfIndexAborted(params.signal, rootPath);
       const batch = candidates.slice(i, i + BATCH_SIZE);
       const extractions: FileExtraction[] = [];
 
@@ -222,6 +236,9 @@ export async function extractAndPersist(
         await Promise.all(
           Array.from({ length: pool.size }, async () => {
             while (queue.length > 0) {
+              // TRA-1017: a batch is up to 500 files of pure IPC awaits —
+              // check per file so the abort lands inside the batch, not after.
+              throwIfIndexAborted(params.signal, rootPath);
               const relPath = queue.shift();
               if (!relPath) return;
               const existing = existingFiles.get(relPath) ?? null;
@@ -256,6 +273,10 @@ export async function extractAndPersist(
         );
       } else {
         for (let c = 0; c < batch.length; c += CONCURRENCY) {
+          // TRA-1017: the in-process path parses on the main thread, so a
+          // large batch without a pool is the longest stretch without a
+          // boundary — check per chunk as well.
+          throwIfIndexAborted(params.signal, rootPath);
           // In-process extraction (no worker pool: dev mode, tests, sub-100
           // file batches) parses on the main thread, so a chunk is a synchronous
           // unit like any other and has to take its turn — otherwise every

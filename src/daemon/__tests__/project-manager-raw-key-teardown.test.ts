@@ -58,6 +58,9 @@ function makeFakeManaged(root: string) {
     serverHandle: { dispose: vi.fn() },
     status: 'ready' as const,
     lastAccessedAt: Date.now(),
+    // TRA-1017: entries injected without this skip the cooperative abort and
+    // rely on the timeout bound; with it they take the fast path.
+    indexAbortController: new AbortController(),
   };
 }
 

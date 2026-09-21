@@ -119,6 +119,38 @@ export interface IndexingResult {
   changedFileIds?: number[];
 }
 
+/**
+ * Thrown when an indexing run observes its `AbortSignal` at a phase/batch
+ * boundary and stops early (TRA-1017). Re-exported here so callers can keep
+ * importing it from the pipeline module; defined in `./index-abort.js` to
+ * avoid a circular import with `extract-and-persist.ts`.
+ */
+import { IndexAbortedError, throwIfIndexAborted } from './index-abort.js';
+export { IndexAbortedError, throwIfIndexAborted };
+
+/** Options for `IndexingPipeline.indexAll`. */
+export interface IndexAllOptions {
+  postprocess?: PostprocessLevel;
+  discovery?: 'auto' | 'full-walk';
+  /**
+   * Cooperative cancellation (TRA-1017). Checked at batch and phase
+   * boundaries — a run stops at the next boundary after abort, never
+   * mid-transaction. Aborting rejects with `IndexAbortedError`.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Bound for `dispose()`'s drain of in-flight pipeline work (TRA-1017).
+ *
+ * Sized against the daemon's 20s shutdown deadline (`DAEMON_SHUTDOWN_DEADLINE_MS`):
+ * `stopProject()` already spends up to `REINDEX_DRAIN_TIMEOUT_MS` (5s) on the
+ * reindex drain plus up to `STOP_PROJECT_INDEX_WAIT_MS` (8s) on the initial
+ * index, so 5s here keeps the worst sequential path at 18s with margin left
+ * for the synchronous closes and `httpServer.close()`.
+ */
+export const PIPELINE_DISPOSE_DRAIN_MS = 5_000;
+
 /** A full rebuild that drops more than this fraction of symbols or edges
  * triggers a shrink warning. Tuned to catch real regressions without firing
  * on legitimate large refactors. */
@@ -530,10 +562,7 @@ export class IndexingPipeline {
     };
   }
 
-  async indexAll(
-    force?: boolean,
-    opts: { postprocess?: PostprocessLevel; discovery?: 'auto' | 'full-walk' } = {},
-  ): Promise<IndexingResult> {
+  async indexAll(force?: boolean, opts: IndexAllOptions = {}): Promise<IndexingResult> {
     // TRA-1763: hold the in-flight mark from enqueue to settle (queue wait +
     // work), so ready-state full walks (drops/storm full-walk, forced reindex)
     // show up in `projects_indexing`. Released on settle either way; the
@@ -606,6 +635,10 @@ export class IndexingPipeline {
         if (fast) return fast;
       }
       const collected = await this.collectFiles();
+      // TRA-1017: bail before touching the index when a stop arrived during
+      // the walk — reconcileScope below deletes rows, so aborting after it
+      // would leave a half-reconciled tree for the next run to repair.
+      throwIfIndexAborted(opts.signal, this.rootPath);
       const filePaths = collected.files;
       // Reconcile before snapshotting: dropping rows the walk no longer owns is
       // the intended outcome here, not the parser regression `checkShrink`
@@ -622,7 +655,7 @@ export class IndexingPipeline {
       }
       let r: IndexingResult;
       try {
-        r = await this.runPipeline(filePaths, force ?? false, start);
+        r = await this.runPipeline(filePaths, force ?? false, start, opts.signal);
       } finally {
         // Always restore production-safe pragmas — a crash with
         // synchronous=OFF on disk would leave the daemon unsafe. disableBulkMode
@@ -1215,7 +1248,13 @@ export class IndexingPipeline {
     relPaths: string[],
     force: boolean,
     startMs: number,
+    signal?: AbortSignal,
   ): Promise<IndexingResult> {
+    // TRA-1017: cooperative cancellation — every phase below ends at an
+    // awaited boundary, so a stop request lands at the next one instead of
+    // riding a 188s run to completion. The abort is checked BEFORE each
+    // phase's work, never mid-transaction.
+    throwIfIndexAborted(signal, this.rootPath);
     // Sync the xxhash-wasm module before any extract() runs so the
     // content-hash gate is non-blocking on the hot path.
     await initContentHasher();
@@ -1256,7 +1295,8 @@ export class IndexingPipeline {
     await this.registerFrameworkEdgeTypes();
 
     try {
-      await this.extractAndPersist(relPaths, force, result);
+      await this.extractAndPersist(relPaths, force, result, signal);
+      throwIfIndexAborted(signal, this.rootPath);
       // Postprocess-level gating: 'none' stops after raw symbol extraction;
       // 'minimal' resolves edges but skips LSP + env scan; 'full' runs all.
       // P02 Task DAG: resolve-edges + lsp-enrichment are scheduled via
@@ -1300,11 +1340,13 @@ export class IndexingPipeline {
           'Index unchanged since last run (HEAD + content match) — skipping edge resolution + postprocess',
         );
       } else {
+        throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel !== 'none') {
           await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
             runResolveAllEdges: () => this.resolveAllEdges(),
           });
         }
+        throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel === 'full') {
           await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
             runLspEnrichment: () => this.runLspEnrichment(),
@@ -1333,6 +1375,9 @@ export class IndexingPipeline {
     }
 
     if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
+      // TRA-1017: the snapshot phase is pure telemetry — never worth holding
+      // a shutdown for.
+      throwIfIndexAborted(signal, this.rootPath);
       // #237: yield before the (synchronous, potentially multi-second) graph
       // snapshot capture so /health can be serviced between edge resolution and
       // snapshotting on a full reindex.
@@ -1379,6 +1424,7 @@ export class IndexingPipeline {
     relPaths: string[],
     force: boolean,
     result: IndexingResult,
+    signal?: AbortSignal,
   ): Promise<void> {
     // Phase 4 phantom-rebind: reset prior-run snapshot before the batch runs;
     // extractAndPersistImpl returns the persister's fresh diff maps below.
@@ -1399,6 +1445,7 @@ export class IndexingPipeline {
         ftsRebuildThreshold: IndexingPipeline.FTS_REBUILD_THRESHOLD,
         progress: this.progress,
         sortByExtension,
+        signal,
       },
       relPaths,
       force,
@@ -2096,6 +2143,29 @@ export class IndexingPipeline {
     return this._extractPool.available ? this._extractPool : null;
   }
 
+  /**
+   * Wait for in-flight locked work (`_coverageReconcileRun`, then `_lock`),
+   * bounded by `timeoutMs` (TRA-1017). Returns true when the drain completed,
+   * false on timeout. The timer is always cleared before returning so a fast
+   * drain never holds the event loop open for the remainder of the timeout.
+   */
+  private async drainLockedWork(timeoutMs: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const drain = (async (): Promise<true> => {
+        await this._coverageReconcileRun;
+        await this._lock;
+        return true;
+      })();
+      const timeout = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      return await Promise.race([drain, timeout]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   /** Shut down the worker pool. Safe to call repeatedly. Pools that were
    *  injected (daemon-shared) are NOT terminated here — the daemon owns them.
    *
@@ -2113,9 +2183,17 @@ export class IndexingPipeline {
    *  async continuation. Both chains are non-rejecting by construction (every
    *  assignment goes through `.catch`), so awaiting them cannot throw.
    *  Queued-but-unstarted work bails via the `_disposed` checks instead of
-   *  starting new DB traffic. The daemon-wide shutdown deadline still bounds
-   *  a genuinely wedged run — this await never invents a new hang, it only
-   *  refuses to close the DB out from under live work. */
+   *  starting new DB traffic.
+   *
+   *  TRA-1017: the drain is bounded by `PIPELINE_DISPOSE_DRAIN_MS`. An
+   *  in-flight `indexAll` that was asked to stop (via its `AbortSignal`)
+   *  bails at its next batch/phase boundary, so the drain is normally
+   *  instant — but a run wedged inside a synchronous phase (a multi-second
+   *  edge-resolution pass holds the event loop and cannot observe the
+   *  abort) would otherwise wedge disposal past the daemon's 20s shutdown
+   *  deadline. On timeout dispose() logs and returns anyway: the detached
+   *  run's next DB statement throws inside its own error handling, and the
+   *  daemon-wide forced exit remains the ultimate backstop. */
   async dispose(): Promise<void> {
     this._disposed = true;
     // Drop any pending deferred reconcile — it must never fire against a
@@ -2130,8 +2208,14 @@ export class IndexingPipeline {
     }
     // Drain what already fired: the coverage run first, since its tail can
     // chain an indexAll() onto `_lock` that a `_lock`-only wait would miss.
-    await this._coverageReconcileRun;
-    await this._lock;
+    // TRA-1017: bounded — see the doc comment above.
+    const drained = await this.drainLockedWork(PIPELINE_DISPOSE_DRAIN_MS);
+    if (!drained) {
+      logger.warn(
+        { root: this.rootPath, drainTimeoutMs: PIPELINE_DISPOSE_DRAIN_MS },
+        'pipeline.dispose: drain timed out — continuing teardown with indexing work still in flight',
+      );
+    }
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }
