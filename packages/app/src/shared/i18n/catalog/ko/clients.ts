@@ -45,6 +45,8 @@ export const clients = {
   blockedDismiss: '확인',
   setUpManually: '수동으로 설정…',
   hideSteps: '단계 숨기기',
+  copyShimPath: '심 경로 복사',
+  copyWarpSnippet: 'JSON 스니펫 복사',
 
   enforcementLevel: '적용 수준',
   levelBase: '기본',

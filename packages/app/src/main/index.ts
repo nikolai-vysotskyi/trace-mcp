@@ -6,7 +6,7 @@ import fs from 'fs';
 import { resolveAutoUpdaterExport } from './autoupdater-interop';
 import { t } from './i18n';
 import { currentHelpUrl, registerAppMenu } from './menu';
-import { getLauncherDir } from './trace-home';
+import { getLauncherDir, getLauncherShimPath } from './trace-home';
 import { appendUpdateLog, updateLogPath } from './update-log';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
 import { updateChannelFor } from './update-channel';
@@ -338,6 +338,14 @@ ipcMain.handle('ollama:start', async (_e, baseUrl?: string) => ollamaStart(baseU
 ipcMain.handle('ollama:stop', async (_e, baseUrl?: string) => ollamaStop(baseUrl));
 
 // IPC: detect which MCP clients are installed and configured
+// TRA-1109: the manual-setup rows name the same absolute launcher shim the
+// automatic writes use — a bare `trace-mcp` resolves from PATH and can be a
+// different (stale npm) binary. The renderer cannot compute the path itself
+// (it has no fs/homedir), so the main process answers it here.
+ipcMain.handle('get-launcher-shim-path', async () => {
+  return getLauncherShimPath();
+});
+
 ipcMain.handle('detect-mcp-clients', async () => {
   return detectMcpClients();
 });

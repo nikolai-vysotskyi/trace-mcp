@@ -1,7 +1,7 @@
 /* The menu window's "MCP clients" surface.
 
    Client names (Claude Code, Cursor, Warp…) are product names and stay in the
-   component, untranslated. So do MANUAL_HINTS: those are the literal menu path
+   component, untranslated. So are the manual-setup hints: those are the literal menu path
    a user clicks inside somebody else's app, and a translated path sends them
    looking for a menu that is not there. */
 
@@ -57,6 +57,11 @@ export const clients = {
   blockedDismiss: 'Got it',
   setUpManually: 'Set up manually…',
   hideSteps: 'Hide steps',
+  /* TRA-1109: the manual rows name the absolute launcher shim and offer it on
+     the clipboard — the path is long and typed by hand (JetBrains) or the
+     snippet is pasted (Warp). */
+  copyShimPath: 'Copy shim path',
+  copyWarpSnippet: 'Copy JSON snippet',
 
   enforcementLevel: 'Enforcement level',
   levelBase: 'Base',

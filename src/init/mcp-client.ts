@@ -119,14 +119,17 @@ export function configureMcpClients(
   for (const name of clientNames) {
     // JetBrains AI Assistant: config stored in IDE XML (llm.mcpServers.xml), not editable as JSON.
     // If Claude Desktop is also selected, user can "Import from Claude" in the IDE.
+    // TRA-1109: name the absolute launcher shim, not a bare binary from PATH —
+    // that can resolve to a stale install while auto-configured clients use the shim.
     if (name === 'jetbrains-ai') {
       const hasClaudeDesktop = clientNames.includes('claude-desktop');
+      const launcher = getLauncherPath();
       results.push({
         target: 'JetBrains AI Assistant',
         action: 'skipped',
         detail: hasClaudeDesktop
           ? 'Use "Import from Claude" in Settings → Tools → AI Assistant → MCP'
-          : 'Add via Settings → Tools → AI Assistant → MCP → Add → Command: trace, Args: serve',
+          : `Add via Settings → Tools → AI Assistant → MCP → Add → Command: ${launcher}, Args: serve`,
       });
       continue;
     }
