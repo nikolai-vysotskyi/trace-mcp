@@ -177,7 +177,22 @@ export class FileExtractor {
         logger.debug({ file: relPath }, 'Directory skipped (not a file)');
         return { kind: 'skipped' };
       }
-      logger.warn({ file: relPath }, 'Cannot read file');
+      // TRA-1715: the bare `{ file }` record was undiagnosable — 3317 of them
+      // with no root and no cause. Carry the root plus the errno code and
+      // message (ENOENT vs EACCES decides the response) so the daemon log
+      // alone answers which project lost which file and why. Strings, not
+      // the raw Error: a stack per unreadable file would flood the log when
+      // a whole root vanishes mid-run.
+      const errno = err as NodeJS.ErrnoException;
+      logger.warn(
+        {
+          file: relPath,
+          rootPath,
+          code: errno?.code,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        'Cannot read file',
+      );
       return { kind: 'error' };
     }
 

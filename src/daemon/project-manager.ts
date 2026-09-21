@@ -834,6 +834,38 @@ export class ProjectManager {
           // regression in that ordering degrades to an ungated re-walk
           // instead of a TypeError inside a watcher callback.
           onRescan: async () => {
+            // TRA-1715: the root may be gone entirely (a finished task's
+            // workdir removed, a volume unmounted) — re-walking it is pure
+            // waste, and the project must stop advertising `ready`. Skip the
+            // walk, mark the failure so /health tells the truth immediately,
+            // and unload the project (the watcher stops with it) so no dead
+            // root is re-walked on every subsequent drop. Deferred via
+            // setImmediate: stopProject() drains FileWatcher.activeRescan,
+            // which IS this run — awaiting it here would deadlock. By the
+            // next macrotask the rescan promise has settled and the drain
+            // is a no-op. The registry row survives, so /health reports the
+            // root as `unloaded` (lazy reload on next request, same as the
+            // idle-unload path) until arrival/deletion is confirmed.
+            if (!fs.existsSync(projectRoot)) {
+              logger.warn(
+                { projectRoot },
+                'Skipping rescan — project root no longer exists on disk',
+              );
+              const gone = this.projects.get(projectRoot);
+              if (gone) {
+                gone.status = 'error';
+                gone.error = `Project root no longer exists: ${projectRoot}`;
+              }
+              setImmediate(() => {
+                this.stopProject(projectRoot).catch((err) => {
+                  logger.warn(
+                    { error: serializeError(err), projectRoot },
+                    'Unload of missing-root project failed (non-fatal)',
+                  );
+                });
+              });
+              return;
+            }
             // TRA-1576: force the full walk. The watcher since-query shares
             // the FSEvents backend that just reported dropped events, so its
             // historical answer is suspect for exactly this window.
