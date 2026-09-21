@@ -185,7 +185,12 @@ function forEachMatch(source: string, re: RegExp, emit: (index: number) => void)
  */
 type ElectronRole = 'handle' | 'listen' | 'push' | 'invoke' | 'send' | 'on';
 
-interface FileChannelRoles {
+/**
+ * Cross-file IPC roles a file plays per channel. Exported for TRA-1780
+ * (the pipeline-level removal purge reuses the exact same role scan so its
+ * validity verdicts match what the full pass would emit — no drift).
+ */
+export interface FileChannelRoles {
   handles: string[];
   listens: string[];
   pushes: string[];
@@ -297,9 +302,10 @@ function cachePruneStalePaths(cache: ElectronChannelCache, live: Set<string>): v
 /**
  * Scan one file's source for the channel roles the full pass maps. Gated on
  * the electron import exactly like the full pass's first scan, so cached
- * roles equal what a full scan would map — no more, no less.
+ * roles equal what a full scan would map — no more, no less. Exported for
+ * TRA-1780 (the removal purge must apply the identical gate).
  */
-function scanChannelRoles(source: string): FileChannelRoles {
+export function scanChannelRoles(source: string): FileChannelRoles {
   const empty: FileChannelRoles = {
     handles: [],
     listens: [],
@@ -1058,7 +1064,7 @@ export class ElectronPlugin implements FrameworkPlugin {
           const rFile = byPath.get(rPath);
           const rSource = rFile && ctx.readFile(rPath);
           if (!rFile || !rSource) continue;
-          emitInvokeToHandler(ctx, rFile, rSource, symbolsOf(rFile.id), channel, handler, edges);
+          emitInvokeToHandler(rFile, rSource, symbolsOf(rFile.id), channel, handler, edges);
         }
       }
       // Changed listener → cached renderer files sending its channels.
@@ -1070,7 +1076,7 @@ export class ElectronPlugin implements FrameworkPlugin {
           const rFile = byPath.get(rPath);
           const rSource = rFile && ctx.readFile(rPath);
           if (!rFile || !rSource) continue;
-          emitSendToListener(ctx, rFile, rSource, symbolsOf(rFile.id), channel, listener, edges);
+          emitSendToListener(rFile, rSource, symbolsOf(rFile.id), channel, listener, edges);
         }
       }
       // Changed pusher → cached renderer files listening to its channels,
@@ -1082,7 +1088,7 @@ export class ElectronPlugin implements FrameworkPlugin {
           if (rPath === f.path || fresh.has(rPath)) continue;
           const rFile = byPath.get(rPath);
           if (!rFile) continue;
-          emitPushToRenderer(ctx, f, fr.source, symbolsOf(f.id), rFile, channel, edges);
+          emitPushToRenderer(f, fr.source, symbolsOf(f.id), rFile, channel, edges);
         }
       }
     }
@@ -1092,8 +1098,12 @@ export class ElectronPlugin implements FrameworkPlugin {
 
 // ── scoped-pass reconciliation helpers (TRA-1729) ────────────────────
 
-/** channel → { fileId, path } for the three main-process endpoint kinds. */
-interface ElectronEndpointMaps {
+/**
+ * channel → { fileId, path } for the three main-process endpoint kinds.
+ * Exported for TRA-1780 (the removal purge re-targets through the same map
+ * shape).
+ */
+export interface ElectronEndpointMaps {
   handlers: Map<string, { fileId: number; path: string }>;
   listeners: Map<string, { fileId: number; path: string }>;
   pushers: Map<string, { fileId: number; path: string }>;
@@ -1107,9 +1117,10 @@ function escapeChannel(channel: string): string {
  * Emit renderer-invoke(channel) → handler edges for one unchanged renderer
  * file, filtered to a single channel. Mirrors the full pass's invoke block
  * (same edge type, metadata, anchoring) — only the channel filter is new.
+ * Exported for TRA-1780 (the removal purge re-targets through these exact
+ * emitters so replacement edges are byte-identical to a full scan's).
  */
-function emitInvokeToHandler(
-  _ctx: ResolveContext,
+export function emitInvokeToHandler(
   rFile: ResolvedFile,
   rSource: string,
   rSymbols: FileSymbol[],
@@ -1117,7 +1128,6 @@ function emitInvokeToHandler(
   handler: { fileId: number; path: string },
   edges: RawEdge[],
 ): void {
-  void _ctx;
   forEachNamedMatch(rSource, IPC_RENDERER_INVOKE_RE, (c, idx) => {
     if (c !== channel) return;
     const { fields, line } = edgeSource(rFile, rSymbols, rSource, idx);
@@ -1141,10 +1151,9 @@ function emitInvokeToHandler(
 /**
  * Emit renderer-send/sendSync(channel) → listener edges for one unchanged
  * renderer file, filtered to a single channel. Mirrors the full pass's
- * send block.
+ * send block. Exported for TRA-1780 (same re-target reuse as above).
  */
-function emitSendToListener(
-  _ctx: ResolveContext,
+export function emitSendToListener(
   rFile: ResolvedFile,
   rSource: string,
   rSymbols: FileSymbol[],
@@ -1152,7 +1161,6 @@ function emitSendToListener(
   listener: { fileId: number; path: string },
   edges: RawEdge[],
 ): void {
-  void _ctx;
   for (const re of [IPC_RENDERER_SEND_RE, IPC_RENDERER_SEND_SYNC_RE]) {
     forEachNamedMatch(rSource, re, (c, idx) => {
       if (c !== channel) return;
@@ -1179,10 +1187,10 @@ function emitSendToListener(
  * Emit a pusher-anchored webContents.send(channel) → renderer-file edge.
  * Mirrors the full pass's reverse block, including its anchoring quirk (the
  * line is resolved through a `.webContents.send(` re-match; pushes via other
- * APIs fall back to a file-anchored source with no line).
+ * APIs fall back to a file-anchored source with no line). Exported for
+ * TRA-1780 (same re-target reuse as above).
  */
-function emitPushToRenderer(
-  _ctx: ResolveContext,
+export function emitPushToRenderer(
   pFile: ResolvedFile,
   pSource: string,
   pSymbols: FileSymbol[],
@@ -1190,7 +1198,6 @@ function emitPushToRenderer(
   channel: string,
   edges: RawEdge[],
 ): void {
-  void _ctx;
   let srcFields: Pick<RawEdge, 'sourceNodeType' | 'sourceRefId'> = {
     sourceNodeType: 'file',
     sourceRefId: pFile.id,

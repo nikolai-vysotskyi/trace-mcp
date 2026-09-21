@@ -20,6 +20,7 @@ import {
 } from './edge-resolvers/file-projection.js';
 import { resolveCImportEdges as _resolveCImports } from './edge-resolvers/c-imports.js';
 import { resolveCSharpImportEdges as _resolveCSharpImports } from './edge-resolvers/csharp-imports.js';
+import { purgeStaleElectronEdges as _purgeElectron } from './edge-resolvers/electron-removals.js';
 import { resolveElixirImportEdges as _resolveElixirImports } from './edge-resolvers/elixir-imports.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/iac-imports.js';
@@ -166,6 +167,19 @@ export class EdgeResolver {
       if (result.isErr()) return;
       this.storeRawEdges(result.value);
     });
+  }
+
+  /**
+   * TRA-1780: purge stale file-anchored electron cross-file edges (removal
+   * direction). Runs right after the framework Pass-2 emission so fresh
+   * virtuals are already in place, and before file projection (which only
+   * reads symbol→symbol edges, but ordering here keeps the invariant
+   * "purge sees post-emit state" explicit).
+   */
+  resolveElectronRemovalEdges(scope?: ChangeScope): void {
+    timed('electron-removals', () =>
+      _purgeElectron(this.state, scope, (edges) => this.storeRawEdges(edges)),
+    );
   }
 
   /** Pass 2b: ORM association edges. */
