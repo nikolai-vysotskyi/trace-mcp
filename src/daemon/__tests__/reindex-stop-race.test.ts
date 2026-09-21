@@ -175,7 +175,11 @@ interface FakeManaged {
   registry: unknown;
   progress: unknown;
   pipeline: { dispose: ReturnType<typeof vi.fn> };
-  watcher: { stop: ReturnType<typeof vi.fn> };
+  watcher: {
+    stop: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    drain: ReturnType<typeof vi.fn>;
+  };
   server: { close: ReturnType<typeof vi.fn> };
   serverHandle: { dispose: ReturnType<typeof vi.fn> };
   status: 'ready';
@@ -195,8 +199,14 @@ function injectProject(pm: ProjectManager, root: string, events: string[]): Fake
     progress: {},
     pipeline: { dispose: vi.fn(async () => undefined) },
     watcher: {
-      stop: vi.fn(async () => {
-        events.push('watcher-stop');
+      stop: vi.fn(async () => undefined),
+      // TRA-1017: stopProject() unsubscribes up front, then drains inside
+      // the shared bounded wait with the index.
+      unsubscribe: vi.fn(async () => {
+        events.push('watcher-unsub');
+      }),
+      drain: vi.fn(async () => {
+        events.push('watcher-drain');
       }),
     },
     server: { close: vi.fn(async () => undefined) },
@@ -213,8 +223,8 @@ describe('ProjectManager.shutdown reindex drain (TRA-1553)', () => {
     const events: string[] = [];
     const pm = new ProjectManager();
     const fake = injectProject(pm, PROJECT, events);
-    fake.watcher.stop = vi.fn(async () => {
-      events.push('watcher-stop');
+    fake.watcher.unsubscribe = vi.fn(async () => {
+      events.push('watcher-unsub');
       // The gate must already be up while teardown is still early.
       expect(isProjectStopping(PROJECT)).toBe(true);
     });
@@ -230,7 +240,7 @@ describe('ProjectManager.shutdown reindex drain (TRA-1553)', () => {
     await shutdown;
 
     expect(fake.db.close).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(['watcher-stop', 'reindex-end', 'db-close']);
+    expect(events).toEqual(['watcher-unsub', 'reindex-end', 'watcher-drain', 'db-close']);
     // The mark is cleared with the project — a later re-add is servable.
     expect(isProjectStopping(PROJECT)).toBe(false);
   });
@@ -245,7 +255,7 @@ describe('ProjectManager.shutdown reindex drain (TRA-1553)', () => {
     } finally {
       end();
     }
-    expect(events).toEqual(['watcher-stop', 'db-close']);
+    expect(events).toEqual(['watcher-unsub', 'watcher-drain', 'db-close']);
   }, 15_000);
 });
 

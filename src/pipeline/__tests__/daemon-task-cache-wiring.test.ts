@@ -56,6 +56,8 @@ vi.mock('../../indexer/watcher.js', () => {
   class FakeWatcher {
     async start() {}
     async stop() {}
+    async unsubscribe() {}
+    async drain() {}
   }
   return { FileWatcher: FakeWatcher };
 });

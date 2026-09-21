@@ -50,6 +50,8 @@ vi.mock('../../indexer/watcher.js', () => {
     }
     async restartWithExcludes() {}
     async stop() {}
+    async unsubscribe() {}
+    async drain() {}
   }
   return { FileWatcher: FakeWatcher };
 });

@@ -119,6 +119,61 @@ export interface IndexingResult {
   changedFileIds?: number[];
 }
 
+/**
+ * Thrown when an indexing run observes its `AbortSignal` at a phase/batch
+ * boundary and stops early (TRA-1017). Re-exported here so callers can keep
+ * importing it from the pipeline module; defined in `./index-abort.js` to
+ * avoid a circular import with `extract-and-persist.ts`.
+ */
+import { classifyRepairStat, IndexAbortedError, throwIfIndexAborted } from './index-abort.js';
+export { IndexAbortedError, throwIfIndexAborted };
+
+/** Options for `IndexingPipeline.indexAll`. */
+export interface IndexAllOptions {
+  postprocess?: PostprocessLevel;
+  discovery?: 'auto' | 'full-walk';
+  /**
+   * Cooperative cancellation (TRA-1017). Checked at batch and phase
+   * boundaries — a run stops at the next boundary after abort, never
+   * mid-transaction. Aborting rejects with `IndexAbortedError`.
+   */
+  signal?: AbortSignal;
+}
+
+/**
+ * Bound for `dispose()`'s drain of in-flight pipeline work (TRA-1017).
+ *
+ * Sized against the daemon's 20s shutdown deadline (`DAEMON_SHUTDOWN_DEADLINE_MS`):
+ * `stopProject()` already spends up to `REINDEX_DRAIN_TIMEOUT_MS` (5s) on the
+ * reindex drain plus up to `STOP_PROJECT_INDEX_WAIT_MS` (8s) on the initial
+ * index, so 5s here keeps the worst sequential path at 18s with margin left
+ * for the synchronous closes and `httpServer.close()`.
+ */
+export const PIPELINE_DISPOSE_DRAIN_MS = 5_000;
+
+/**
+ * `repo_metadata` key marking a run that mutated the index without completing
+ * edge resolution (TRA-1017).
+ *
+ * File persistence updates content hashes and drops the files' old edges
+ * BEFORE edge resolution runs. A run cancelled (or crashed) in between leaves
+ * an index whose hashes say "current" but whose graph is missing edges — and
+ * the next run's zero-change shortcuts (`tryIncrementalDiscovery`,
+ * `canSkipFullPostprocess`) would then bless that incomplete graph as
+ * up-to-date forever. While this marker is set, `indexAll()` forces a full
+ * walk with full-scope resolution instead of trusting the shortcuts; the
+ * marker is cleared only after a resolution actually completes.
+ */
+const POSTPROCESS_INCOMPLETE_KEY = 'postprocess_incomplete';
+/**
+ * Repair scope for the marker above (TRA-1017): rel-posix paths persisted
+ * without a subsequent completed resolution, as a JSON array. A repair run
+ * force-extracts exactly these (rebuilding the `pendingImports` extraction
+ * state a bare re-resolution cannot reconstruct) before resolving with full
+ * scope. Lives and dies with the marker — cleared together, never alone.
+ */
+const POSTPROCESS_INCOMPLETE_FILES_KEY = 'postprocess_incomplete_files';
+
 /** A full rebuild that drops more than this fraction of symbols or edges
  * triggers a shrink warning. Tuned to catch real regressions without firing
  * on legitimate large refactors. */
@@ -530,10 +585,7 @@ export class IndexingPipeline {
     };
   }
 
-  async indexAll(
-    force?: boolean,
-    opts: { postprocess?: PostprocessLevel; discovery?: 'auto' | 'full-walk' } = {},
-  ): Promise<IndexingResult> {
+  async indexAll(force?: boolean, opts: IndexAllOptions = {}): Promise<IndexingResult> {
     // TRA-1763: hold the in-flight mark from enqueue to settle (queue wait +
     // work), so ready-state full walks (drops/storm full-walk, forced reindex)
     // show up in `projects_indexing`. Released on settle either way; the
@@ -542,6 +594,10 @@ export class IndexingPipeline {
     // the per-project refcount, not the distinct-project count.
     const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
+      // TRA-1017: observe a stop request before doing any work — the warm
+      // incremental-discovery fast path below would otherwise persist
+      // discovered changes after the stop was asked for.
+      throwIfIndexAborted(opts.signal, this.rootPath);
       this._isIncremental = false;
       this._postprocessLevel = opts.postprocess ?? 'full';
       const start = Date.now();
@@ -601,11 +657,37 @@ export class IndexingPipeline {
       // full walk below. From-scratch, force, and dropped-events reconcile
       // (`discovery: 'full-walk'`) always walk: only a full walk reconciles
       // scope and (for scratch) engages bulk-load mode.
-      if (!force && opts.discovery !== 'full-walk' && !isFromScratch) {
-        const fast = await this.tryIncrementalDiscovery(start);
+      // TRA-1017: a previous run that mutated without resolving leaves the
+      // marker behind — its hashes say "current" while edges are missing, so
+      // the fast path's zero-change verdict cannot be trusted. Walk and
+      // re-resolve instead; runPipeline clears the marker once it does.
+      if (
+        !force &&
+        opts.discovery !== 'full-walk' &&
+        !isFromScratch &&
+        !this.isPostprocessIncomplete()
+      ) {
+        const fast = await this.tryIncrementalDiscovery(start, opts.signal);
         if (fast) return fast;
       }
       const collected = await this.collectFiles();
+      // TRA-1017: bail before touching the index when a stop arrived during
+      // the walk — reconcileScope below deletes rows, so aborting after it
+      // would leave a half-reconciled tree for the next run to repair.
+      throwIfIndexAborted(opts.signal, this.rootPath);
+      // TRA-1017: mark before the first mutation. reconcileScope deletes
+      // out-of-scope rows and extractAndPersist rewrites hashes/edges; if the
+      // run never reaches resolution, this marker forces the next run to
+      // re-resolve instead of trusting the shortcuts. Cleared by runPipeline
+      // only after a resolution actually completes. Skipped for
+      // postprocess='none' runs: their unresolved graph is the caller's
+      // explicit contract (`reindex` tool), not an interruption to repair.
+      // The pre-existing state is captured FIRST and carried into runPipeline:
+      // reading the marker there would see this run's own mark and wrongly
+      // disable the no-change shortcut on every healthy full walk.
+      const prevIncomplete =
+        this._postprocessLevel === 'none' ? undefined : this.isPostprocessIncomplete();
+      if (this._postprocessLevel !== 'none') this.markPostprocessIncomplete();
       const filePaths = collected.files;
       // Reconcile before snapshotting: dropping rows the walk no longer owns is
       // the intended outcome here, not the parser regression `checkShrink`
@@ -622,7 +704,7 @@ export class IndexingPipeline {
       }
       let r: IndexingResult;
       try {
-        r = await this.runPipeline(filePaths, force ?? false, start);
+        r = await this.runPipeline(filePaths, force ?? false, start, opts.signal, prevIncomplete);
       } finally {
         // Always restore production-safe pragmas — a crash with
         // synchronous=OFF on disk would leave the daemon unsafe. disableBulkMode
@@ -691,7 +773,10 @@ export class IndexingPipeline {
    * (no PageRank/search-cache invalidation — the TRA-935 early-return
    * philosophy applied to `indexAll`).
    */
-  private async tryIncrementalDiscovery(startMs: number): Promise<IndexingResult | null> {
+  private async tryIncrementalDiscovery(
+    startMs: number,
+    signal?: AbortSignal,
+  ): Promise<IndexingResult | null> {
     const { runsSinceFull, lastFullMs } = this.readDiscoveryCounters();
     if (shouldForceFullWalk({ runsSinceFull, lastFullMs })) {
       logger.debug({ runsSinceFull, lastFullMs }, 'Incremental discovery: periodic full walk due');
@@ -713,8 +798,13 @@ export class IndexingPipeline {
       logger.debug({ err }, 'Incremental discovery threw — full walk');
       return null;
     }
+    // TRA-1017: the discovery answer arrived after awaits — a stop may have
+    // been asked for while it was computed. Applying it would persist changes
+    // past the stop; fall through to the full walk (which checks again)
+    // instead. The walk also re-verifies, so nothing is lost.
+    throwIfIndexAborted(signal, this.rootPath);
     if (discovery.source === 'full-walk') return null;
-    return this.runDiscovered(discovery, startMs, snapshotPath);
+    return this.runDiscovered(discovery, startMs, snapshotPath, signal);
   }
 
   /**
@@ -727,7 +817,10 @@ export class IndexingPipeline {
     discovery: DiscoveryResult,
     startMs: number,
     snapshotPath: string | null,
+    signal?: AbortSignal,
   ): Promise<IndexingResult> {
+    // TRA-1017: never apply a discovery answer past a stop request.
+    throwIfIndexAborted(signal, this.rootPath);
     const injected = this._incrementalDiscovery;
     // The source speaks in tree paths; the pipeline speaks in
     // include-matched, exclude-filtered rel-posix paths. `discover` already
@@ -773,6 +866,7 @@ export class IndexingPipeline {
             { source: 'git-status', changed: second.changed, deleted: second.deleted },
             startMs,
             snapshotPath,
+            signal,
           );
         }
       }
@@ -802,8 +896,13 @@ export class IndexingPipeline {
     // A prior indexAll left this set; fast runs never reconcile scope, so a
     // stale count would wrongly force edge resolution in runPipeline.
     this._scopeRowsRemoved = 0;
+    // TRA-1017: deletes mutate the index — never apply them past a stop
+    // request. (The run marks itself incomplete at runPipeline's entry; no
+    // await runs between the deletes and that mark, so no abort can land in
+    // the gap.)
+    throwIfIndexAborted(signal, this.rootPath);
     if (deleted.length > 0) this.deleteFiles(deleted);
-    const r = await this.runPipeline(changed, false, startMs);
+    const r = await this.runPipeline(changed, false, startMs, signal);
     await this.afterDiscoveryRun(snapshotPath);
     logger.info(
       { source: discovery.source, changed: changed.length, deleted: deleted.length },
@@ -1129,7 +1228,7 @@ export class IndexingPipeline {
 
   async indexFiles(
     filePaths: string[],
-    opts: { postprocess?: PostprocessLevel } = {},
+    opts: { postprocess?: PostprocessLevel; signal?: AbortSignal } = {},
   ): Promise<IndexingResult> {
     const enqueuedAt = Date.now();
     const relPaths = this.filterIndexablePaths(filePaths);
@@ -1159,6 +1258,9 @@ export class IndexingPipeline {
     // the TRA-935 no-op early return so filtered-out batches stay uncounted.
     const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
+      // TRA-1017: a watcher batch queued before the stop must not start
+      // persisting after it — the abort is observed here, at lock entry.
+      throwIfIndexAborted(opts.signal, this.rootPath);
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
       // indexAll left behind so it can't force a postprocess here.
@@ -1174,7 +1276,7 @@ export class IndexingPipeline {
       // wall-clock to get the queue time instead of reporting the two summed
       // as reindex latency.
       const start = Date.now();
-      const r = await this.runPipeline(relPaths, false, start);
+      const r = await this.runPipeline(relPaths, false, start, opts.signal);
       // The watcher/hook path only ever sees the events it was handed. Kick a
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
@@ -1211,11 +1313,154 @@ export class IndexingPipeline {
     return this._excludeMatcher;
   }
 
+  /**
+   * Whether a previous run mutated the index without completing edge
+   * resolution (TRA-1017). Best-effort read: a closed/unreadable DB reports
+   * clean so teardown-time checks can never throw.
+   */
+  private isPostprocessIncomplete(): boolean {
+    try {
+      return this.store.getRepoMetadata(POSTPROCESS_INCOMPLETE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Mark the index as mutated-but-unresolved (TRA-1017). Best-effort. */
+  private markPostprocessIncomplete(): void {
+    try {
+      this.store.setRepoMetadata(POSTPROCESS_INCOMPLETE_KEY, '1');
+    } catch (err) {
+      logger.debug({ err }, 'markPostprocessIncomplete failed (non-fatal)');
+    }
+  }
+
+  /** Clear the mutated-but-unresolved mark after a resolution completes (TRA-1017). Best-effort. */
+  private clearPostprocessIncomplete(): void {
+    try {
+      this.store.deleteRepoMetadata(POSTPROCESS_INCOMPLETE_KEY);
+      this.store.deleteRepoMetadata(POSTPROCESS_INCOMPLETE_FILES_KEY);
+    } catch (err) {
+      logger.debug({ err }, 'clearPostprocessIncomplete failed (non-fatal)');
+    }
+  }
+
+  /**
+   * Files persisted without a subsequent completed resolution (TRA-1017).
+   * Empty when the graph is whole. Best-effort read — a closed/unreadable DB
+   * reports no scope rather than throwing.
+   */
+  private readIncompleteFiles(): string[] {
+    try {
+      const raw = this.store.getRepoMetadata(POSTPROCESS_INCOMPLETE_FILES_KEY);
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((p): p is string => typeof p === 'string');
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Union `relPaths` into the durable repair scope (TRA-1017). Called after
+   * every persist-batch commit, so an abort at the next boundary still knows
+   * exactly what was rewritten. Best-effort; read-modify-write over a tiny
+   * single-row value.
+   */
+  private noteIncompleteFiles(relPaths: string[]): void {
+    if (relPaths.length === 0) return;
+    try {
+      const union = new Set(this.readIncompleteFiles());
+      for (const p of relPaths) union.add(p);
+      this.store.setRepoMetadata(POSTPROCESS_INCOMPLETE_FILES_KEY, JSON.stringify([...union]));
+    } catch (err) {
+      logger.debug({ err }, 'noteIncompleteFiles failed (non-fatal)');
+    }
+  }
+
+  /**
+   * Split the durable repair scope into files to re-extract and rows to
+   * retire (TRA-1017). Every dirty stored file must be successfully
+   * reconstructed and resolved, or deliberately removed from the index,
+   * before the incomplete mark clears — merely filtering a path out of
+   * extraction satisfies neither condition, so classification runs on the
+   * stat outcome (deleted vs inaccessible), never on `existsSync`.
+   *
+   * Confirmed deletions (and paths that were never files) are reconciled via
+   * `deleteFiles` here — safe (closed-DB guard, no-op on missing rows) and
+   * required for the deferred path, which never runs `reconcileScope`.
+   * Inaccessible paths stay in the returned scope: the repair extract errors
+   * on them and the errors gate retains the marker.
+   */
+  private partitionRepairPaths(relPaths: string[]): string[] {
+    const repairable: string[] = [];
+    for (const rel of relPaths) {
+      let disposition;
+      try {
+        const st = fs.statSync(path.resolve(this.rootPath, rel));
+        disposition = classifyRepairStat({ ok: true, isFile: st.isFile() });
+      } catch (err) {
+        disposition = classifyRepairStat({
+          ok: false,
+          code: (err as NodeJS.ErrnoException)?.code,
+        });
+      }
+      if (disposition === 'retire-row') {
+        try {
+          this.deleteFiles([rel]);
+        } catch (err) {
+          logger.debug({ err, rel }, 'retire-row deleteFiles failed (non-fatal)');
+        }
+        continue;
+      }
+      repairable.push(rel);
+    }
+    return repairable;
+  }
+
   private async runPipeline(
     relPaths: string[],
     force: boolean,
     startMs: number,
+    signal?: AbortSignal,
+    /**
+     * Pre-existing incomplete state captured by the caller BEFORE this run's
+     * own mark (TRA-1017). `indexAll` marks before reconciling, so reading
+     * the marker here would always see the current run and wrongly disable
+     * the no-change shortcut on healthy indexes. Callers that never pre-mark
+     * (indexFiles, discovery fast path, deferred reconciles) leave it
+     * undefined and the entry read below applies.
+     */
+    prevIncomplete?: boolean,
   ): Promise<IndexingResult> {
+    // TRA-1017: cooperative cancellation — every phase below ends at an
+    // awaited boundary, so a stop request lands at the next one instead of
+    // riding a 188s run to completion. The abort is checked BEFORE each
+    // phase's work, never mid-transaction.
+    throwIfIndexAborted(signal, this.rootPath);
+    // TRA-1017: remember whether a previous run left the graph unresolved,
+    // then mark this run the same way — extractAndPersist rewrites hashes and
+    // drops old edges before resolution runs, so any failure/abort from here
+    // on must force the next run to re-resolve. The mark is cleared below
+    // only after a resolution actually completes; a run that throws keeps it.
+    // postprocess='none' runs opt out both ways (see the indexAll call site).
+    const wasIncomplete =
+      prevIncomplete ??
+      (this._postprocessLevel === 'none' ? false : this.isPostprocessIncomplete());
+    if (this._postprocessLevel !== 'none') this.markPostprocessIncomplete();
+    // TRA-1017: repair scope — files a previous run persisted without
+    // resolving. Force-extracted below so their `pendingImports` extraction
+    // state is rebuilt; a bare re-resolution cannot reconstruct it (the ESM
+    // import pass reads only that state). Empty on healthy indexes.
+    // Partitioned (not merely existence-filtered): confirmed deletions
+    // retire their rows here, inaccessible paths stay scoped so the errors
+    // gate retains them — `existsSync` conflates the two and would clear
+    // either wrongly.
+    const repairPaths =
+      wasIncomplete && this._postprocessLevel !== 'none'
+        ? this.partitionRepairPaths(this.readIncompleteFiles())
+        : [];
     // Sync the xxhash-wasm module before any extract() runs so the
     // content-hash gate is non-blocking on the hot path.
     await initContentHasher();
@@ -1256,7 +1501,14 @@ export class IndexingPipeline {
     await this.registerFrameworkEdgeTypes();
 
     try {
-      await this.extractAndPersist(relPaths, force, result);
+      await this.extractAndPersist(
+        relPaths,
+        force,
+        result,
+        signal,
+        repairPaths.length > 0 ? new Set(repairPaths) : undefined,
+      );
+      throwIfIndexAborted(signal, this.rootPath);
       // Postprocess-level gating: 'none' stops after raw symbol extraction;
       // 'minimal' resolves edges but skips LSP + env scan; 'full' runs all.
       // P02 Task DAG: resolve-edges + lsp-enrichment are scheduled via
@@ -1280,7 +1532,12 @@ export class IndexingPipeline {
         !force &&
         this._scopeRowsRemoved === 0 &&
         result.indexed === 0 &&
-        result.errors === 0
+        result.errors === 0 &&
+        // TRA-1017: a run that died after persisting but before resolving
+        // leaves hashes saying "current" with edges missing — HEAD + content
+        // still match, so this shortcut would bless the incomplete graph
+        // forever. Re-resolve instead; the marker clears below once it does.
+        !wasIncomplete
       ) {
         skipPostprocess = canSkipFullPostprocess({
           // A scope reconcile just deleted files (and their edges): HEAD may be
@@ -1299,12 +1556,31 @@ export class IndexingPipeline {
           { root: this.rootPath, postprocess: this._postprocessLevel },
           'Index unchanged since last run (HEAD + content match) — skipping edge resolution + postprocess',
         );
+        // TRA-1017: the entry mark is stale — nothing changed and the graph
+        // was complete before this run (the gate above only passes when the
+        // previous run resolved). Unreachable when wasIncomplete.
+        this.clearPostprocessIncomplete();
       } else {
+        throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel !== 'none') {
           await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
             runResolveAllEdges: () => this.resolveAllEdges(),
           });
+          // TRA-1017: resolution completed — the graph is whole again. A
+          // scoped run only repairs its own scope, so it clears a previous
+          // interruption only when there was none; a full-scope run
+          // (`!_isIncremental`) rebuilds every edge and always clears —
+          // but only when the repair extraction itself reported no errors.
+          // A file that failed to re-extract (EACCES, crash) still misses
+          // its edges, and clearing would bless that state: the scope
+          // survives for the next repair. Clean runs keep the pre-existing
+          // error semantics (hash-gate retries), so the gate applies only
+          // when there was something to repair.
+          if (!wasIncomplete || (!this._isIncremental && result.errors === 0)) {
+            this.clearPostprocessIncomplete();
+          }
         }
+        throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel === 'full') {
           await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
             runLspEnrichment: () => this.runLspEnrichment(),
@@ -1333,6 +1609,9 @@ export class IndexingPipeline {
     }
 
     if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
+      // TRA-1017: the snapshot phase is pure telemetry — never worth holding
+      // a shutdown for.
+      throwIfIndexAborted(signal, this.rootPath);
       // #237: yield before the (synchronous, potentially multi-second) graph
       // snapshot capture so /health can be serviced between edge resolution and
       // snapshotting on a full reindex.
@@ -1379,6 +1658,14 @@ export class IndexingPipeline {
     relPaths: string[],
     force: boolean,
     result: IndexingResult,
+    signal?: AbortSignal,
+    /**
+     * Repair scope (TRA-1017): paths force-extracted even when their stored
+     * hash says "current", so an interrupted run's files regain the
+     * extraction state the next resolution needs. The per-batch persist
+     * callback records what this run rewrites, unioned into the same scope.
+     */
+    forcePaths?: Set<string>,
   ): Promise<void> {
     // Phase 4 phantom-rebind: reset prior-run snapshot before the batch runs;
     // extractAndPersistImpl returns the persister's fresh diff maps below.
@@ -1399,6 +1686,14 @@ export class IndexingPipeline {
         ftsRebuildThreshold: IndexingPipeline.FTS_REBUILD_THRESHOLD,
         progress: this.progress,
         sortByExtension,
+        signal,
+        forcePaths,
+        // TRA-1017: record every committed batch durably as repair scope.
+        // Gated on postprocess level alongside the marker itself: 'none'
+        // runs leave neither, by explicit caller contract.
+        onPersisted: (persisted) => {
+          if (this._postprocessLevel !== 'none') this.noteIncompleteFiles(persisted);
+        },
       },
       relPaths,
       force,
@@ -1596,10 +1891,77 @@ export class IndexingPipeline {
       // large-batch fallback) — the graph is already reconciled.
       if (this._lastFullResolveMs >= scheduledAt) return;
       const start = Date.now();
-      await this.runEdgeResolvers(undefined);
-      invalidatePageRankCache();
-      invalidateSearchCache(this.store.db);
-      logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
+      // TRA-1017: a prior run may have persisted files without resolving
+      // them. A bare re-resolution cannot restore those edges — the import
+      // pass reads only `pendingImports`, which died with the interrupted
+      // run. Re-extract exactly the repair scope first so this pass actually
+      // restores the graph; only then is the mark safe to clear. Clearing it
+      // without the re-extract blessed permanently missing edges (the
+      // zero-change shortcuts trust hashes that say "current"). Partitioned
+      // (not merely existence-filtered) for the same reason as in
+      // runPipeline: confirmed deletions retire their rows here — this path
+      // never runs reconcileScope — while inaccessible paths stay scoped.
+      const needsRepair = this.isPostprocessIncomplete();
+      const repairPaths = needsRepair ? this.partitionRepairPaths(this.readIncompleteFiles()) : [];
+      let repairErrors = 0;
+      try {
+        if (repairPaths.length > 0) {
+          // The repair extract mutates, so it marks first: an abort inside it
+          // must leave marker + scope behind for the next repair, not an
+          // unmarked half-extract no shortcut will revisit.
+          this.markPostprocessIncomplete();
+          const repairResult: IndexingResult = {
+            totalFiles: repairPaths.length,
+            indexed: 0,
+            skipped: 0,
+            errors: 0,
+            durationMs: 0,
+          };
+          await this.extractAndPersist(
+            repairPaths,
+            false,
+            repairResult,
+            undefined,
+            new Set(repairPaths),
+          );
+          repairErrors = repairResult.errors;
+          logger.info(
+            {
+              root: this.rootPath,
+              repairPaths,
+              indexed: repairResult.indexed,
+              skipped: repairResult.skipped,
+              errors: repairResult.errors,
+              pendingImports: this._pendingImports.size,
+              pendingImportEntries: [...this._pendingImports.entries()].map(([id, list]) => ({
+                fileId: id,
+                froms: list.map((e) => e.from),
+              })),
+            },
+            'TRA-1017 deferred repair extraction done',
+          );
+        }
+        await this.runEdgeResolvers(undefined);
+        // The mark clears only after a repair whose extraction reported no
+        // errors: a file that failed to re-extract still misses its edges,
+        // and successful resolver completion must not be equated with
+        // successful repair extraction. A scoped discovery/indexFiles run
+        // that lands while dirty keeps the mark — only a full repair lifts it.
+        if (needsRepair && repairErrors === 0) this.clearPostprocessIncomplete();
+        invalidatePageRankCache();
+        invalidateSearchCache(this.store.db);
+        logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
+      } finally {
+        // TRA-1017: the repair extraction populates the same per-run maps
+        // runPipeline clears in its finally (`pendingImports`, content cache,
+        // changed-file set). Without this, a repaired file's stale imports
+        // leak into the NEXT run's resolvers — and since the persister only
+        // replaces a pending-import entry when the new file HAS imports,
+        // removing the last import would resurrect the deleted edge.
+        this._pendingImports.clear();
+        this._fileContentCache.clear();
+        this._changedFileIds.clear();
+      }
     });
     this._lock = run.catch((e) => {
       logger.warn({ error: e }, 'Deferred edge reconcile failed');
@@ -2096,6 +2458,29 @@ export class IndexingPipeline {
     return this._extractPool.available ? this._extractPool : null;
   }
 
+  /**
+   * Wait for in-flight locked work (`_coverageReconcileRun`, then `_lock`),
+   * bounded by `timeoutMs` (TRA-1017). Returns true when the drain completed,
+   * false on timeout. The timer is always cleared before returning so a fast
+   * drain never holds the event loop open for the remainder of the timeout.
+   */
+  private async drainLockedWork(timeoutMs: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const drain = (async (): Promise<true> => {
+        await this._coverageReconcileRun;
+        await this._lock;
+        return true;
+      })();
+      const timeout = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      return await Promise.race([drain, timeout]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  }
+
   /** Shut down the worker pool. Safe to call repeatedly. Pools that were
    *  injected (daemon-shared) are NOT terminated here — the daemon owns them.
    *
@@ -2113,9 +2498,17 @@ export class IndexingPipeline {
    *  async continuation. Both chains are non-rejecting by construction (every
    *  assignment goes through `.catch`), so awaiting them cannot throw.
    *  Queued-but-unstarted work bails via the `_disposed` checks instead of
-   *  starting new DB traffic. The daemon-wide shutdown deadline still bounds
-   *  a genuinely wedged run — this await never invents a new hang, it only
-   *  refuses to close the DB out from under live work. */
+   *  starting new DB traffic.
+   *
+   *  TRA-1017: the drain is bounded by `PIPELINE_DISPOSE_DRAIN_MS`. An
+   *  in-flight `indexAll` that was asked to stop (via its `AbortSignal`)
+   *  bails at its next batch/phase boundary, so the drain is normally
+   *  instant — but a run wedged inside a synchronous phase (a multi-second
+   *  edge-resolution pass holds the event loop and cannot observe the
+   *  abort) would otherwise wedge disposal past the daemon's 20s shutdown
+   *  deadline. On timeout dispose() logs and returns anyway: the detached
+   *  run's next DB statement throws inside its own error handling, and the
+   *  daemon-wide forced exit remains the ultimate backstop. */
   async dispose(): Promise<void> {
     this._disposed = true;
     // Drop any pending deferred reconcile — it must never fire against a
@@ -2130,8 +2523,14 @@ export class IndexingPipeline {
     }
     // Drain what already fired: the coverage run first, since its tail can
     // chain an indexAll() onto `_lock` that a `_lock`-only wait would miss.
-    await this._coverageReconcileRun;
-    await this._lock;
+    // TRA-1017: bounded — see the doc comment above.
+    const drained = await this.drainLockedWork(PIPELINE_DISPOSE_DRAIN_MS);
+    if (!drained) {
+      logger.warn(
+        { root: this.rootPath, drainTimeoutMs: PIPELINE_DISPOSE_DRAIN_MS },
+        'pipeline.dispose: drain timed out — continuing teardown with indexing work still in flight',
+      );
+    }
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }

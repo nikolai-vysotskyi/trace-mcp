@@ -43,7 +43,11 @@ interface FakeManaged {
   registry: unknown;
   progress: unknown;
   pipeline: { dispose: ReturnType<typeof vi.fn> };
-  watcher: { stop: ReturnType<typeof vi.fn> };
+  watcher: {
+    stop: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    drain: ReturnType<typeof vi.fn>;
+  };
   server: { close: ReturnType<typeof vi.fn> };
   serverHandle: { dispose: ReturnType<typeof vi.fn> };
   status: 'ready';
@@ -68,6 +72,14 @@ function makeFakeManaged(root: string, callOrder: string[]): FakeManaged {
     watcher: {
       stop: vi.fn(async () => {
         callOrder.push('watcher.stop');
+      }),
+      // TRA-1017: stopProject() unsubscribes up front and drains inside the
+      // shared bounded wait with the index.
+      unsubscribe: vi.fn(async () => {
+        callOrder.push('watcher.unsub');
+      }),
+      drain: vi.fn(async () => {
+        callOrder.push('watcher.drain');
       }),
     },
     server: {
@@ -195,14 +207,15 @@ describe('ProjectManager.stopProject — AbortSignal teardown', () => {
  * timers. They would fire ~1s later, against a closed DB.
  */
 describe('ProjectManager.stopProject — cancels background AI again after the watcher drain', () => {
-  it('cancels debounced AI and the LSP enricher after watcher.stop() resolves', async () => {
+  it('cancels debounced AI and the LSP enricher after the watcher drain resolves', async () => {
     const pm = new ProjectManager();
     const callOrder: string[] = [];
     const fake = makeFakeManaged('/tmp/proj-rearm', callOrder);
-    // A watcher whose stop() drains a handler that re-arms the AI debounces,
-    // exactly as the real onChanges tail does.
-    fake.watcher.stop = vi.fn(async () => {
-      callOrder.push('watcher.stop');
+    // A watcher whose drain completes a handler that re-arms the AI debounces,
+    // exactly as the real onChanges tail does. (TRA-1017: the drain, not the
+    // up-front unsubscribe, is what runs handlers to completion.)
+    fake.watcher.drain = vi.fn(async () => {
+      callOrder.push('watcher.drain');
       callOrder.push('handler-rearms-ai');
     });
     // biome-ignore lint/suspicious/noExplicitAny: fake ManagedProject shape

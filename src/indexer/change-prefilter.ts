@@ -52,6 +52,13 @@ export function selectChangedFiles(
   relPaths: string[],
   existingFiles: Map<string, FileRow>,
   force: boolean,
+  /**
+   * Per-file force (TRA-1017): members bypass the stat gate even when
+   * `force` is false. Used to re-extract files persisted by an interrupted
+   * run — their hashes say "current" but their edges were never resolved,
+   * so the gate would wrongly skip the repair.
+   */
+  forcePaths?: Set<string>,
 ): ChangePrefilterResult {
   // force=true means "re-extract everything" — the predicate is bypassed
   // entirely, same as extract()'s own `force` handling.
@@ -59,7 +66,10 @@ export function selectChangedFiles(
   const candidates: string[] = [];
   let skipped = 0;
   for (const relPath of relPaths) {
-    if (isUnchangedByStat(rootPath, relPath, existingFiles.get(relPath))) {
+    if (
+      !forcePaths?.has(relPath) &&
+      isUnchangedByStat(rootPath, relPath, existingFiles.get(relPath))
+    ) {
       skipped++;
     } else {
       candidates.push(relPath);

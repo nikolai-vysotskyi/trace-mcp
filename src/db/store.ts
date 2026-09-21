@@ -527,6 +527,15 @@ export class Store {
       .run(key, value);
   }
 
+  /**
+   * Delete a repo-metadata row (TRA-1017). No-op when the key is absent.
+   * Used for transient run-state markers like `postprocess_incomplete` —
+   * clearing must not depend on the value a crashed run left behind.
+   */
+  deleteRepoMetadata(key: string): void {
+    this.db.prepare('DELETE FROM repo_metadata WHERE key = ?').run(key);
+  }
+
   getStats(): IndexStats {
     return this.analytics.getStats();
   }

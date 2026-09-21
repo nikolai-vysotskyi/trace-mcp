@@ -114,12 +114,13 @@ describe('ProjectManager watcher lifecycle', () => {
   // don't want in a unit test. Instead, mirror the shutdown-test pattern of
   // injecting a fake ManagedProject and assert lifecycle hooks. These tests
   // are the structural backstop for project-manager.ts ever silently dropping
-  // the `await managed.watcher.stop()` in either stopProject or shutdown.
+  // the watcher teardown (unsubscribe up front, bounded drain with the index)
+  // in either stopProject or shutdown.
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('removeProject awaits watcher.stop() before db.close()', async () => {
+  it('removeProject unsubscribes and drains the watcher before db.close()', async () => {
     vi.doMock('../../src/registry.js', () => ({
       listProjects: vi.fn(() => []),
       unregisterProject: vi.fn(),
@@ -145,11 +146,16 @@ describe('ProjectManager watcher lifecycle', () => {
     // Track lifecycle event ordering so we can assert that the watcher
     // really is shut down BEFORE the SQLite handle closes. Closing the DB
     // while the watcher is still firing change events is SQLITE_MISUSE.
+    // TRA-1017: unsubscribe stops new events up front; the in-flight drain
+    // joins the shared bounded wait with the index — both precede db.close.
     const events: string[] = [];
-    const watcherStop = vi.fn(async () => {
+    const watcherUnsub = vi.fn(async () => {
       // Simulate a delayed unsubscribe (real parcel-watcher hits the kernel).
       await new Promise((r) => setTimeout(r, 5));
-      events.push('watcher.stop');
+      events.push('watcher.unsub');
+    });
+    const watcherDrain = vi.fn(async () => {
+      events.push('watcher.drain');
     });
     const dbClose = vi.fn(() => {
       events.push('db.close');
@@ -163,7 +169,11 @@ describe('ProjectManager watcher lifecycle', () => {
       registry: {},
       progress: {},
       pipeline: { dispose: vi.fn(async () => undefined) },
-      watcher: { stop: watcherStop },
+      watcher: {
+        stop: vi.fn(async () => undefined),
+        unsubscribe: watcherUnsub,
+        drain: watcherDrain,
+      },
       server: { close: vi.fn(async () => undefined) },
       serverHandle: { dispose: vi.fn() },
       status: 'ready',
@@ -175,9 +185,10 @@ describe('ProjectManager watcher lifecycle', () => {
 
     await pm.removeProject(fake.root);
 
-    expect(watcherStop).toHaveBeenCalledOnce();
+    expect(watcherUnsub).toHaveBeenCalledOnce();
+    expect(watcherDrain).toHaveBeenCalledOnce();
     expect(dbClose).toHaveBeenCalledOnce();
-    expect(events).toEqual(['watcher.stop', 'db.close']);
+    expect(events).toEqual(['watcher.unsub', 'watcher.drain', 'db.close']);
   });
 
   it('shutdown stops every projects watcher in parallel before closing the pool', async () => {
@@ -211,7 +222,11 @@ describe('ProjectManager watcher lifecycle', () => {
       registry: {},
       progress: {},
       pipeline: { dispose: vi.fn(async () => undefined) },
-      watcher: { stop: vi.fn(async () => undefined) },
+      watcher: {
+        stop: vi.fn(async () => undefined),
+        unsubscribe: vi.fn(async () => undefined),
+        drain: vi.fn(async () => undefined),
+      },
       server: { close: vi.fn(async () => undefined) },
       serverHandle: { dispose: vi.fn() },
       status: 'ready' as const,
@@ -231,9 +246,12 @@ describe('ProjectManager watcher lifecycle', () => {
 
     await pm.shutdown();
 
-    expect(a.watcher.stop).toHaveBeenCalledOnce();
-    expect(b.watcher.stop).toHaveBeenCalledOnce();
-    expect(c.watcher.stop).toHaveBeenCalledOnce();
+    expect(a.watcher.unsubscribe).toHaveBeenCalledOnce();
+    expect(b.watcher.unsubscribe).toHaveBeenCalledOnce();
+    expect(c.watcher.unsubscribe).toHaveBeenCalledOnce();
+    expect(a.watcher.drain).toHaveBeenCalledOnce();
+    expect(b.watcher.drain).toHaveBeenCalledOnce();
+    expect(c.watcher.drain).toHaveBeenCalledOnce();
     expect(a.db.close).toHaveBeenCalledOnce();
     expect(b.db.close).toHaveBeenCalledOnce();
     expect(c.db.close).toHaveBeenCalledOnce();

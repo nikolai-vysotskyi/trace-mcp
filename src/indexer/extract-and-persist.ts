@@ -5,6 +5,7 @@ import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext } from '../plugin-api/types.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
+import { throwIfIndexAborted } from './index-abort.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
@@ -48,6 +49,26 @@ export interface ExtractAndPersistParams {
   progress?: { update: (phase: 'indexing', patch: Record<string, unknown>) => void };
   /** In-place sort so files of the same extension cluster together (parser-cache locality). */
   sortByExtension: (relPaths: string[]) => string[];
+  /**
+   * Cooperative cancellation (TRA-1017). Checked at batch boundaries — the
+   * run throws `IndexAbortedError` at the next boundary after abort, between
+   * (never inside) persist transactions.
+   */
+  signal?: AbortSignal;
+  /**
+   * Per-file force (TRA-1017): members are extracted even when their stored
+   * hash says "current". Repair runs pass the files an interrupted run
+   * persisted without resolving, so their extraction state (`pendingImports`)
+   * is rebuilt and the next resolution restores their edges.
+   */
+  forcePaths?: Set<string>;
+  /**
+   * Called after each batch's persist transaction commits, with that batch's
+   * extraction rel-paths (TRA-1017). The pipeline records them durably as
+   * repair scope, so an abort between batches still knows exactly which
+   * files were rewritten without resolution.
+   */
+  onPersisted?: (relPaths: string[]) => void;
 }
 
 /** Result of a run: the persister's per-batch symbol-name churn, exposed so the
@@ -94,6 +115,10 @@ export async function extractAndPersist(
     sortByExtension,
   } = params;
 
+  // TRA-1017: a stop request aborts the run at the next batch boundary, never
+  // mid-transaction.
+  throwIfIndexAborted(params.signal, rootPath);
+
   // TRA-1537 §3 (review fix): reset the per-plugin timing map at run start
   // when profiling is on — otherwise a long-lived daemon dumps totals since
   // process start instead of per-run numbers.
@@ -134,6 +159,7 @@ export async function extractAndPersist(
     relPaths,
     existingFiles,
     force,
+    params.forcePaths,
   );
   result.skipped += prefiltered;
   if (prefiltered > 0) {
@@ -212,8 +238,16 @@ export async function extractAndPersist(
   // running it on the error path also re-syncs FTS to the partial state.
   try {
     for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+      // TRA-1017: cooperative cancellation — stop between batches, where the
+      // persisted state is consistent, not inside a batch's transaction.
+      throwIfIndexAborted(params.signal, rootPath);
       const batch = candidates.slice(i, i + BATCH_SIZE);
       const extractions: FileExtraction[] = [];
+      // TRA-1017: per-file force for repair scope — a dirty file's stored
+      // hash says "current", so both the prefilter above and the extractor's
+      // own content gate would skip rebuilding its extraction state.
+      const fileForce = (relPath: string): boolean =>
+        force || (params.forcePaths?.has(relPath) ?? false);
 
       if (pool) {
         // Continuous dispatch: spawn `pool.size` consumers that each pull
@@ -222,6 +256,9 @@ export async function extractAndPersist(
         await Promise.all(
           Array.from({ length: pool.size }, async () => {
             while (queue.length > 0) {
+              // TRA-1017: a batch is up to 500 files of pure IPC awaits —
+              // check per file so the abort lands inside the batch, not after.
+              throwIfIndexAborted(params.signal, rootPath);
               const relPath = queue.shift();
               if (!relPath) return;
               const existing = existingFiles.get(relPath) ?? null;
@@ -229,7 +266,7 @@ export async function extractAndPersist(
               const r = await pool.extract({
                 relPath,
                 rootPath,
-                force,
+                force: fileForce(relPath),
                 existing,
                 gitignored,
                 workspaces,
@@ -256,6 +293,10 @@ export async function extractAndPersist(
         );
       } else {
         for (let c = 0; c < batch.length; c += CONCURRENCY) {
+          // TRA-1017: the in-process path parses on the main thread, so a
+          // large batch without a pool is the longest stretch without a
+          // boundary — check per chunk as well.
+          throwIfIndexAborted(params.signal, rootPath);
           // In-process extraction (no worker pool: dev mode, tests, sub-100
           // file batches) parses on the main thread, so a chunk is a synchronous
           // unit like any other and has to take its turn — otherwise every
@@ -263,7 +304,7 @@ export async function extractAndPersist(
           await yieldToEventLoopFair();
           const chunk = batch.slice(c, c + CONCURRENCY);
           const results = await Promise.all(
-            chunk.map((relPath) => extractor.extract(relPath, force)),
+            chunk.map((relPath) => extractor.extract(relPath, fileForce(relPath))),
           );
           for (const ext of results) {
             if (ext.kind === 'skipped') {
@@ -295,6 +336,10 @@ export async function extractAndPersist(
         // own bounds that window at negligible cost.
         await runInOwnTurn(() => persister.persistBatch(extractions));
         result.indexed += extractions.length;
+        // TRA-1017: record exactly what this transaction rewrote, durably and
+        // now — an abort at the next boundary must still know this batch's
+        // files were persisted without resolution.
+        params.onPersisted?.(extractions.map((ext) => ext.relPath));
       } else {
         // Nothing to persist, but the batch still did work — keep the
         // once-per-batch boundary the old unconditional yield gave.

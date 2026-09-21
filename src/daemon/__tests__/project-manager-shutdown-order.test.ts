@@ -51,6 +51,14 @@ vi.mock('../../indexer/watcher.js', () => {
     async stop() {
       events.push('watcher-stop');
     }
+    // TRA-1017: stopProject() unsubscribes first (no drain), then drains
+    // inside the shared bounded wait. Both are pinned in order below.
+    async unsubscribe() {
+      events.push('watcher-unsub');
+    }
+    async drain() {
+      events.push('watcher-drain');
+    }
   }
   return { FileWatcher: FakeWatcher };
 });
@@ -101,8 +109,12 @@ describe('ProjectManager.shutdown teardown order (TRA-834)', () => {
     releaseIndex();
     await shutdown;
 
-    expect(events).toContain('watcher-stop');
+    expect(events).toContain('watcher-unsub');
+    expect(events).toContain('watcher-drain');
     expect(events).toContain('index-done');
-    expect(events.indexOf('watcher-stop')).toBeLessThan(events.indexOf('index-done'));
+    // The source of new work stops before the in-flight index finishes, and
+    // the drain joins the same bounded wait as the index itself.
+    expect(events.indexOf('watcher-unsub')).toBeLessThan(events.indexOf('index-done'));
+    expect(events.indexOf('watcher-unsub')).toBeLessThan(events.indexOf('watcher-drain'));
   }, 30_000);
 });
