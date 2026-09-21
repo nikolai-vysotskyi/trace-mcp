@@ -55,9 +55,14 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
 
   let sources: SymbolRow[];
   if (scopedIds && scopedIds.length > 0) {
-    const ph = scopedIds.map(() => '?').join(',');
-    sources = store.db
-      .prepare(`
+    // TRA-1005: chunk the scope (SQLITE_MAX_VARIABLE_NUMBER + V8 arg ceiling).
+    sources = [];
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(`
       SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.metadata, f.workspace
         FROM symbols s
         JOIN files f ON s.file_id = f.id
@@ -66,7 +71,9 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
          AND json_extract(s.metadata, '$.typeRefs') IS NOT NULL
          AND s.file_id IN (${ph})
     `)
-      .all(...scopedIds) as SymbolRow[];
+        .all(...chunk) as SymbolRow[];
+      for (const row of rows) sources.push(row);
+    }
   } else {
     sources = store.db
       .prepare(`
@@ -228,8 +235,19 @@ function buildFileImportMap(
   // equivalent — and skips the full file→file edge scan.
   const scopedSourceIds =
     onlySourceFileIds && onlySourceFileIds.size > 0 ? Array.from(onlySourceFileIds) : null;
-  const rows = store.db
-    .prepare(`
+  // TRA-1005: chunk the scope — same SQLITE_MAX_VARIABLE_NUMBER / V8 ceiling
+  // as the source SELECT above; rows accumulate with a loop (never push(...)).
+  const rows: Array<{
+    source_node_id: number;
+    target_node_id: number;
+    metadata: string | null;
+  }> = [];
+  if (scopedSourceIds) {
+    const CHUNK = 900;
+    for (let i = 0; i < scopedSourceIds.length; i += CHUNK) {
+      const chunk = scopedSourceIds.slice(i, i + CHUNK);
+      const chunkRows = store.db
+        .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
       FROM edges e
       JOIN nodes ns ON ns.id = e.source_node_id
@@ -237,13 +255,33 @@ function buildFileImportMap(
      WHERE e.edge_type_id = ?
        AND ns.node_type = 'file'
        AND nt.node_type = 'file'
-       ${scopedSourceIds ? `AND ns.ref_id IN (${scopedSourceIds.map(() => '?').join(',')})` : ''}
+       AND ns.ref_id IN (${chunk.map(() => '?').join(',')})
   `)
-    .all(importEdgeType.id, ...(scopedSourceIds ?? [])) as Array<{
-    source_node_id: number;
-    target_node_id: number;
-    metadata: string | null;
-  }>;
+        .all(importEdgeType.id, ...chunk) as Array<{
+        source_node_id: number;
+        target_node_id: number;
+        metadata: string | null;
+      }>;
+      for (const r of chunkRows) rows.push(r);
+    }
+  } else {
+    const fullRows = store.db
+      .prepare(`
+    SELECT e.source_node_id, e.target_node_id, e.metadata
+      FROM edges e
+      JOIN nodes ns ON ns.id = e.source_node_id
+      JOIN nodes nt ON nt.id = e.target_node_id
+     WHERE e.edge_type_id = ?
+       AND ns.node_type = 'file'
+       AND nt.node_type = 'file'
+  `)
+      .all(importEdgeType.id) as Array<{
+      source_node_id: number;
+      target_node_id: number;
+      metadata: string | null;
+    }>;
+    for (const r of fullRows) rows.push(r);
+  }
 
   if (rows.length === 0) return result;
 

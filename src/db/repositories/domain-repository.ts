@@ -241,21 +241,31 @@ export class DomainRepository {
 
   getAllOrmAssociations(fileIds?: number[]): OrmAssociationRow[] {
     if (fileIds && fileIds.length > 0) {
-      const ph = fileIds.map(() => '?').join(',');
-      // Associations declared elsewhere can *target* a model in a changed file
-      // — reindexing that file drops the model node and its edges, so the
-      // scoped resolver has to see those rows too or the edge stays lost until
-      // the next full index. They are unresolved by construction:
-      // deleteEntitiesByFile nulls target_model_id when the target is deleted.
-      return this.db
-        .prepare(
-          `SELECT * FROM orm_associations
-           WHERE file_id IN (${ph})
-              OR (target_model_id IS NULL
-                  AND target_model_name IN
-                      (SELECT name FROM orm_models WHERE file_id IN (${ph})))`,
-        )
-        .all(...fileIds, ...fileIds) as OrmAssociationRow[];
+      // TRA-1005: chunk — fileIds feed TWO `IN` lists (2× placeholders) and
+      // are spread twice into `.all(...)`, so the ceiling hits at ~16k files.
+      // CHUNK = 500 → 1000 vars / 1000 args per chunk, far under both limits.
+      const out: OrmAssociationRow[] = [];
+      const CHUNK = 500;
+      for (let i = 0; i < fileIds.length; i += CHUNK) {
+        const chunk = fileIds.slice(i, i + CHUNK);
+        const ph = chunk.map(() => '?').join(',');
+        // Associations declared elsewhere can *target* a model in a changed file
+        // — reindexing that file drops the model node and its edges, so the
+        // scoped resolver has to see those rows too or the edge stays lost until
+        // the next full index. They are unresolved by construction:
+        // deleteEntitiesByFile nulls target_model_id when the target is deleted.
+        const rows = this.db
+          .prepare(
+            `SELECT * FROM orm_associations
+             WHERE file_id IN (${ph})
+                OR (target_model_id IS NULL
+                    AND target_model_name IN
+                        (SELECT name FROM orm_models WHERE file_id IN (${ph})))`,
+          )
+          .all(...chunk, ...chunk) as OrmAssociationRow[];
+        for (const row of rows) out.push(row);
+      }
+      return out;
     }
     return this.db.prepare('SELECT * FROM orm_associations').all() as OrmAssociationRow[];
   }
