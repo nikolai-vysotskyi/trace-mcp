@@ -2008,10 +2008,19 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               // One-shot final fit when the initial settle is "done enough".
               if (!frozenRef.current && alpha < 0.2 && performance.now() - settleStartedRef.current >= 6000) {
                 frozenRef.current = true;
-                g.pause();
-                setLive(false);
-                setSimRunning(false);
-                if (!userInteractedRef.current) fitAllPoints(g, nodesRef.current.length, 800, 0.2);
+                // TRA-1783 (second-model review): after any user interaction
+                // the initial-settle marker must NOT flip the Live toggle. A
+                // drag released past the 6 s settle window would otherwise
+                // auto-pause on the first tick after onZoomEnd re-heated the
+                // solver — mouse-up must keep the motion going, pause is
+                // manual-toggle-only. The untouched auto-settle path below
+                // still pauses + fits once, as before.
+                if (!userInteractedRef.current) {
+                  g.pause();
+                  setLive(false);
+                  setSimRunning(false);
+                  fitAllPoints(g, nodesRef.current.length, 800, 0.2);
+                }
               }
               if (frozenRef.current) return;
               // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
@@ -2030,12 +2039,11 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             if (!userDriven) return;
             userInteractedRef.current = true;
             cameraGestureRef.current = true;
-            // Pause synchronously: waiting for the React effect permits more
-            // solver ticks, and an idle wake/breath must not restart it.
-            liveRef.current = false;
-            graphRef.current?.pause();
-            setLive(false);
-            setSimRunning(false);
+            // TRA-1783: a camera gesture (pan / zoom / drag) must NOT flip
+            // the Live toggle. The solver keeps its state — the gesture only
+            // owns the camera + hides screen-space overlays until it settles.
+            // (Previously this did pause() + setLive(false) with no resume in
+            // onZoomEnd, so every drag left the graph permanently Paused.)
             setHovered(null);
             // Screen-space overlays cannot stay attached while the camera
             // moves without recomputing placement. Hide them until it settles.
@@ -2046,8 +2054,28 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             if (!cameraGestureRef.current) return;
             cameraGestureRef.current = false;
             // One final pass at the new camera transform, even for a gesture
-            // that returned to its starting point. Live explicitly resumes.
+            // that returned to its starting point.
             lastLabelSigRef.current = '';
+            // TRA-1783: mouse-up after a drag continues the motion — if Live
+            // was on before the gesture, make sure the solver is running
+            // again. A manual Paused toggle (live === false) stays paused.
+            // Second-model review: never re-heat a hidden panel — a deferred
+            // onZoomEnd racing a visibilitychange would otherwise leave the
+            // solver running offscreen. The visibility effect resumes it
+            // (while Live is still on) as soon as the pane is visible again,
+            // mirroring the idle-wake guard.
+            if (liveRef.current && !offscreenPausedRef.current) {
+              try {
+                const g = graphRef.current;
+                if (g) {
+                  if (!g.isSimulationRunning) g.start(0.15);
+                  else g.unpause();
+                  setSimRunning(true);
+                }
+              } catch {
+                /* graph destroyed mid-gesture — the interval will re-arm */
+              }
+            }
           },
           showFPSMonitor: false,
           hoveredPointCursor: 'pointer',
@@ -3437,7 +3465,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       <div
         ref={containerRef}
         className="graph-canvas absolute inset-0"
-        data-selected={!!selected && !bottlenecks && !stressTest}
       />
 
       <FpsBadge show={showFPS} />
