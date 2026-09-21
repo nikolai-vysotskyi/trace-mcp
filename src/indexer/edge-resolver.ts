@@ -46,6 +46,7 @@ import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
+import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
 
 /**
  * Edge types whose targets live in metadata and are resolved later by a
@@ -75,7 +76,19 @@ function timed<T>(name: string, fn: () => T): T {
 export class EdgeResolver {
   constructor(private state: PipelineState) {}
 
-  /** Pass 2: resolve framework plugin edges (root + per-workspace). */
+  /**
+   * Pass 2: resolve framework plugin edges (root + per-workspace).
+   *
+   * Every plugin pass runs in a turn of its own (TRA-922). These passes are
+   * fully synchronous (better-sqlite3 + in-memory scans), and on a daemon
+   * with several registered projects their sum held the event loop long
+   * enough that the TCP accept queue on :3741 never drained — sessions hung
+   * in SYN_SENT and each fell back to indexing locally. The fair yield
+   * between passes bounds the stall window to the largest single plugin
+   * pass, and the per-workspace yield splits the per-project passes the
+   * same way. Order is unchanged: the awaits stay sequential, only
+   * macrotask boundaries move.
+   */
   async resolveEdges(
     projectContext: ProjectContext,
     resolveContext: ResolveContext,
@@ -85,9 +98,7 @@ export class EdgeResolver {
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
     if (activeResult.isOk()) {
       for (const plugin of activeResult.value) {
-        const result = await executeFrameworkResolveEdges(plugin, resolveContext);
-        if (result.isErr()) continue;
-        this.storeRawEdges(result.value);
+        await this.resolvePluginEdges(plugin, resolveContext);
       }
     }
 
@@ -99,6 +110,9 @@ export class EdgeResolver {
     }
 
     for (const ws of this.state.workspaces) {
+      // Per-project boundary: let pending I/O (/health, MCP requests) run
+      // between workspaces rather than after all of them.
+      await yieldToEventLoopFair();
       const wsRoot = path.join(this.state.rootPath, ws.path);
       // TRA-1543: reuse the pipeline's per-run detection when available (the
       // pipeline already detected these for edge-type registration — detecting
@@ -134,11 +148,24 @@ export class EdgeResolver {
       };
 
       for (const plugin of wsPlugins) {
-        const result = await executeFrameworkResolveEdges(plugin, scopedCtx);
-        if (result.isErr()) continue;
-        this.storeRawEdges(result.value);
+        await this.resolvePluginEdges(plugin, scopedCtx);
       }
     }
+  }
+
+  /**
+   * One framework plugin's resolve + store as a single fair turn. The
+   * closure is async so a plugin that genuinely awaits I/O still resolves
+   * before its edges are stored; for the usual synchronous plugin the whole
+   * pass (resolve + SQLite store) completes inside the one turn, and the
+   * next plugin cannot start until this one finished — order preserved.
+   */
+  private async resolvePluginEdges(plugin: FrameworkPlugin, ctx: ResolveContext): Promise<void> {
+    await runInOwnTurn(async () => {
+      const result = await executeFrameworkResolveEdges(plugin, ctx);
+      if (result.isErr()) return;
+      this.storeRawEdges(result.value);
+    });
   }
 
   /** Pass 2b: ORM association edges. */
