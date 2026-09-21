@@ -64,6 +64,31 @@ describe('hostUnreachableCode', () => {
     expect(hostUnreachableCode(null)).toBeNull();
     expect(hostUnreachableCode('ECONNREFUSED')).toBeNull();
   });
+
+  // Code Review on PR #1341: an HTTP response proves the host answered, so a
+  // provider error whose BODY mentions a system code must not classify.
+  it('ignores system codes mentioned in an HTTP error body', () => {
+    const http = new Error(
+      'lmstudio embeddings @ http://localhost:1234/v1 failed: 503 Service Unavailable — upstream connect ECONNREFUSED 127.0.0.1:8000',
+    );
+    expect(hostUnreachableCode(http)).toBeNull();
+    expect(isHostUnreachableError(http)).toBe(false);
+    // …while the same failure shape without the HTTP status still classifies.
+    expect(isRetryableEmbeddingError(http)).toBe(true);
+  });
+
+  it('counts an aggregate only when every nested attempt is unreachable', () => {
+    const unreachable = (code: string) => Object.assign(new Error(`connect ${code}`), { code });
+    const homogeneous = new TypeError('fetch failed', {
+      cause: new AggregateError([unreachable('ECONNREFUSED'), unreachable('ENOTFOUND')]),
+    });
+    expect(hostUnreachableCode(homogeneous)).toBe('ECONNREFUSED');
+    const mixed = new TypeError('fetch failed', {
+      cause: new AggregateError([unreachable('ENETUNREACH'), unreachable('ETIMEDOUT')]),
+    });
+    expect(hostUnreachableCode(mixed)).toBeNull();
+    expect(isHostUnreachableError(mixed)).toBe(false);
+  });
 });
 
 describe('isHostUnreachableError', () => {

@@ -64,29 +64,48 @@ const HOST_UNREACHABLE_CODES = new Set([
  * `cause` chain because undici surfaces connection failures as
  * `TypeError: fetch failed` with the real code nested in
  * `cause: AggregateError [ECONNREFUSED]` (TRA-1798).
+ *
+ * Two boundaries keep this narrow (Code Review on PR #1341):
+ * - An HTTP response — even a 503 — proves the host answered, so a message
+ *   shaped like a provider HTTP error (`… failed: 503 …`) is never treated
+ *   as a system code, no matter what the response body mentions.
+ * - An AggregateError counts only when EVERY nested attempt is
+ *   unreachable-class; a single timeout/reset keeps the ordinary retry path.
  */
 export function hostUnreachableCode(error: unknown): string | null {
-  const seen = new Set<unknown>();
-  const stack: unknown[] = [error];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!current || typeof current !== 'object' || seen.has(current)) continue;
-    seen.add(current);
-    const rec = current as { code?: unknown; message?: unknown; cause?: unknown; errors?: unknown };
-    if (typeof rec.code === 'string' && HOST_UNREACHABLE_CODES.has(rec.code)) {
-      return rec.code;
+  return findUnreachableCode(error, new Set());
+}
+
+/** `<label> failed: <status>` — the shape every provider uses for HTTP errors. */
+const HTTP_ERROR_SHAPE = /failed:\s*\d{3}/i;
+
+function findUnreachableCode(node: unknown, seen: Set<unknown>): string | null {
+  if (!node || typeof node !== 'object' || seen.has(node)) return null;
+  seen.add(node);
+  const rec = node as { code?: unknown; message?: unknown; cause?: unknown; errors?: unknown };
+  // Aggregate children before the aggregate's own code: undici stamps the
+  // aggregate with its first attempt's code, which must not win when a later
+  // attempt failed differently (e.g. ENETUNREACH + ETIMEDOUT).
+  if (Array.isArray(rec.errors) && rec.errors.length > 0) {
+    const codes: string[] = [];
+    for (const child of rec.errors) {
+      const code = findUnreachableCode(child, seen);
+      // Mixed attempt outcomes — fall through to the cause below, if any.
+      if (code === null) return findUnreachableCode(rec.cause, seen);
+      codes.push(code);
     }
-    if (typeof rec.message === 'string') {
-      const msg = rec.message.toLowerCase();
-      for (const code of HOST_UNREACHABLE_CODES) {
-        if (msg.includes(code.toLowerCase())) return code;
-      }
-    }
-    // AggregateError from undici nests one error per resolved address.
-    if (Array.isArray(rec.errors)) stack.push(...rec.errors);
-    if (rec.cause !== undefined) stack.push(rec.cause);
+    return codes[0] ?? null;
   }
-  return null;
+  if (typeof rec.code === 'string' && HOST_UNREACHABLE_CODES.has(rec.code)) {
+    return rec.code;
+  }
+  if (typeof rec.message === 'string' && !HTTP_ERROR_SHAPE.test(rec.message)) {
+    const msg = rec.message.toLowerCase();
+    for (const code of HOST_UNREACHABLE_CODES) {
+      if (msg.includes(code.toLowerCase())) return code;
+    }
+  }
+  return findUnreachableCode(rec.cause, seen);
 }
 
 /** True when the error means the remote host is unreachable (see above). */
