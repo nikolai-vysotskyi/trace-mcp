@@ -18,6 +18,7 @@ import { TraceMcpConfigSchema } from '../../config.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
+import { FileExtractor } from '../file-extractor.js';
 import { IndexAbortedError, throwIfIndexAborted } from '../index-abort.js';
 import { IndexingPipeline } from '../pipeline.js';
 
@@ -462,4 +463,180 @@ describe('indexAll with AbortSignal (TRA-1017)', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('clears extraction state after deferred repair so a later removed import stays removed', async () => {
+    // The deferred repair extract populates the same per-run maps the normal
+    // pipeline clears in its finally. Without that cleanup, a file whose
+    // last import was later removed keeps its stale pending-import entry
+    // (the persister only replaces entries for files that HAVE imports) and
+    // the resolver resurrects the deleted edge.
+    const root = mkdtempSync(join(tmpdir(), 'index-abort-stale-'));
+    const staleDb = initializeDatabase(join(root, 'index.db'));
+    const staleStore = new Store(staleDb);
+    writeFileSync(join(root, 'a.ts'), 'export function foo() { return 1; }\n');
+    writeFileSync(
+      join(root, 'b.ts'),
+      "import { foo } from './a';\nexport function bar() { return foo(); }\n",
+    );
+    writeFileSync(
+      join(root, 'c.ts'),
+      "import { foo } from './a';\nexport function keep() { return foo(); }\n",
+    );
+    const p = new IndexingPipeline(
+      staleStore,
+      PluginRegistry.createWithDefaults(),
+      TraceMcpConfigSchema.parse({}),
+      root,
+    );
+    const importCount = (): number =>
+      (
+        staleDb
+          .prepare(
+            `SELECT COUNT(*) AS n FROM edges
+             WHERE edge_type_id = (SELECT id FROM edge_types WHERE name = 'imports')`,
+          )
+          .get() as { n: number }
+      ).n;
+    try {
+      await p.indexAll(true);
+      expect(importCount()).toBe(2);
+      writeFileSync(join(root, 'b.ts'), "import './a';\nexport function bar() { return 2; }\n");
+      const controller = new AbortController();
+      // biome-ignore lint/suspicious/noExplicitAny: spying on the private phase boundary
+      const internal = p as any;
+      const extract = internal.extractAndPersist.bind(p);
+      const spy = vi
+        .spyOn(internal, 'extractAndPersist')
+        // biome-ignore lint/suspicious/noExplicitAny: passthrough args
+        .mockImplementation(async (...args: any[]) => {
+          await extract(...args);
+          controller.abort();
+        });
+      await expect(p.indexFiles(['b.ts'], { signal: controller.signal })).rejects.toBeInstanceOf(
+        IndexAbortedError,
+      );
+      spy.mockRestore();
+      writeFileSync(
+        join(root, 'c.ts'),
+        "import { foo } from './a';\nexport function keep() { return foo(); }\nexport function added() { return 7; }\n",
+      );
+      await p.indexFiles(['c.ts']);
+      await p.__flushEdgeReconcileForTests();
+      expect(importCount()).toBe(2);
+      // Now remove b.ts's last import: incremental and forced rebuild must
+      // converge to the same graph.
+      writeFileSync(join(root, 'b.ts'), 'export function bar() { return 2; }\n');
+      await p.indexFiles(['b.ts']);
+      const afterEdit = importCount();
+      await p.indexAll(true);
+      expect(afterEdit).toBe(importCount());
+    } finally {
+      await p.dispose();
+      staleDb.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['full-walk', 'deferred'])(
+    'keeps the repair scope when a %s repair cannot read a dirty file',
+    async (mode) => {
+      // A repair that fails to re-extract (here an unreadable file, injected
+      // portably instead of chmod so Windows/root CI behaves identically)
+      // must retain marker + scope — clearing would bless the still-missing
+      // edges, and the hash gate would skip the file on every later run.
+      const root = mkdtempSync(join(tmpdir(), `index-abort-unreadable-${mode}-`));
+      const unreadDb = initializeDatabase(join(root, 'index.db'));
+      const unreadStore = new Store(unreadDb);
+      writeFileSync(join(root, 'a.ts'), 'export function foo() { return 1; }\n');
+      writeFileSync(
+        join(root, 'b.ts'),
+        "import { foo } from './a';\nexport function bar() { return foo(); }\n",
+      );
+      writeFileSync(
+        join(root, 'c.ts'),
+        "import { foo } from './a';\nexport function keep() { return foo(); }\n",
+      );
+      const p = new IndexingPipeline(
+        unreadStore,
+        PluginRegistry.createWithDefaults(),
+        TraceMcpConfigSchema.parse({}),
+        root,
+      );
+      const importCount = (): number =>
+        (
+          unreadDb
+            .prepare(
+              `SELECT COUNT(*) AS n FROM edges
+               WHERE edge_type_id = (SELECT id FROM edge_types WHERE name = 'imports')`,
+            )
+            .get() as { n: number }
+        ).n;
+      // Portable EACCES: fail reads of b.ts inside the in-process extractor
+      // (3-file fixtures never reach the worker-pool threshold). Installed
+      // only for the repair phase — the baseline index must be healthy.
+      const realExtract = FileExtractor.prototype.extract;
+      // biome-ignore lint/suspicious/noExplicitAny: mock handle type
+      let readFailureSpy: any = null;
+      const armReadFailure = (): void => {
+        readFailureSpy = vi.spyOn(FileExtractor.prototype, 'extract').mockImplementation(
+          // biome-ignore lint/suspicious/noExplicitAny: passthrough args
+          async function (this: unknown, ...args: any[]) {
+            if (typeof args[0] === 'string' && args[0].endsWith('b.ts')) return { kind: 'error' };
+            return realExtract.apply(this, args as never as Parameters<typeof realExtract>);
+          },
+        );
+      };
+      const disarmReadFailure = (): void => {
+        readFailureSpy?.mockRestore();
+        readFailureSpy = null;
+      };
+      try {
+        await p.indexAll(true);
+        expect(importCount()).toBe(2);
+        writeFileSync(join(root, 'b.ts'), "import './a';\nexport function bar() { return 2; }\n");
+        const controller = new AbortController();
+        // biome-ignore lint/suspicious/noExplicitAny: spying on the private phase boundary
+        const internal = p as any;
+        const extract = internal.extractAndPersist.bind(p);
+        const abortSpy = vi
+          .spyOn(internal, 'extractAndPersist')
+          // biome-ignore lint/suspicious/noExplicitAny: passthrough args
+          .mockImplementation(async (...args: any[]) => {
+            await extract(...args);
+            controller.abort();
+          });
+        await expect(p.indexFiles(['b.ts'], { signal: controller.signal })).rejects.toBeInstanceOf(
+          IndexAbortedError,
+        );
+        abortSpy.mockRestore();
+        expect(unreadStore.getRepoMetadata('postprocess_incomplete')).toBe('1');
+        armReadFailure();
+        if (mode === 'full-walk') {
+          const r = await p.indexAll(false, { discovery: 'full-walk' });
+          expect(r.errors).toBe(1);
+        } else {
+          writeFileSync(
+            join(root, 'c.ts'),
+            "import { foo } from './a';\nexport function keep() { return foo(); }\nexport function added() { return 7; }\n",
+          );
+          await p.indexFiles(['c.ts']);
+          await p.__flushEdgeReconcileForTests();
+        }
+        // The failed repair must not have cleared the scope...
+        const marker = unreadStore.getRepoMetadata('postprocess_incomplete');
+        // ...so once the file is readable again, a normal walk repairs and
+        // converges with a forced rebuild.
+        disarmReadFailure();
+        await p.indexAll(false, { discovery: 'full-walk' });
+        const afterRetry = importCount();
+        await p.indexAll(true);
+        expect({ marker, afterRetry }).toEqual({ marker: '1', afterRetry: importCount() });
+      } finally {
+        disarmReadFailure();
+        await p.dispose();
+        unreadDb.close();
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 });

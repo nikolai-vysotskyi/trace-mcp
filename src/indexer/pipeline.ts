@@ -1412,9 +1412,19 @@ export class IndexingPipeline {
     // TRA-1017: repair scope — files a previous run persisted without
     // resolving. Force-extracted below so their `pendingImports` extraction
     // state is rebuilt; a bare re-resolution cannot reconstruct it (the ESM
-    // import pass reads only that state). Empty on healthy indexes.
+    // import pass reads only that state). Empty on healthy indexes. Entries
+    // deleted from disk since are dropped: their rows are reconcileScope's
+    // domain, and an unextractable path must never wedge the scope.
     const repairPaths =
-      wasIncomplete && this._postprocessLevel !== 'none' ? this.readIncompleteFiles() : [];
+      wasIncomplete && this._postprocessLevel !== 'none'
+        ? this.readIncompleteFiles().filter((p) => {
+            try {
+              return fs.existsSync(path.resolve(this.rootPath, p));
+            } catch {
+              return false;
+            }
+          })
+        : [];
     // Sync the xxhash-wasm module before any extract() runs so the
     // content-hash gate is non-blocking on the hot path.
     await initContentHasher();
@@ -1523,8 +1533,16 @@ export class IndexingPipeline {
           // TRA-1017: resolution completed — the graph is whole again. A
           // scoped run only repairs its own scope, so it clears a previous
           // interruption only when there was none; a full-scope run
-          // (`!_isIncremental`) rebuilds every edge and always clears.
-          if (!wasIncomplete || !this._isIncremental) this.clearPostprocessIncomplete();
+          // (`!_isIncremental`) rebuilds every edge and always clears —
+          // but only when the repair extraction itself reported no errors.
+          // A file that failed to re-extract (EACCES, crash) still misses
+          // its edges, and clearing would bless that state: the scope
+          // survives for the next repair. Clean runs keep the pre-existing
+          // error semantics (hash-gate retries), so the gate applies only
+          // when there was something to repair.
+          if (!wasIncomplete || (!this._isIncremental && result.errors === 0)) {
+            this.clearPostprocessIncomplete();
+          }
         }
         throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel === 'full') {
@@ -1843,38 +1861,64 @@ export class IndexingPipeline {
       // run. Re-extract exactly the repair scope first so this pass actually
       // restores the graph; only then is the mark safe to clear. Clearing it
       // without the re-extract blessed permanently missing edges (the
-      // zero-change shortcuts trust hashes that say "current").
+      // zero-change shortcuts trust hashes that say "current"). Paths deleted
+      // from disk since are dropped from the scope — their rows are
+      // reconcileScope's domain, and an unextractable path must never wedge
+      // the repair.
       const needsRepair = this.isPostprocessIncomplete();
-      const repairPaths = needsRepair ? this.readIncompleteFiles() : [];
-      if (repairPaths.length > 0) {
-        // The repair extract mutates, so it marks first: an abort inside it
-        // must leave marker + scope behind for the next repair, not an
-        // unmarked half-extract no shortcut will revisit.
-        this.markPostprocessIncomplete();
-        const repairResult: IndexingResult = {
-          totalFiles: repairPaths.length,
-          indexed: 0,
-          skipped: 0,
-          errors: 0,
-          durationMs: 0,
-        };
-        await this.extractAndPersist(
-          repairPaths,
-          false,
-          repairResult,
-          undefined,
-          new Set(repairPaths),
-        );
+      const repairPaths = needsRepair
+        ? this.readIncompleteFiles().filter((p) => {
+            try {
+              return fs.existsSync(path.resolve(this.rootPath, p));
+            } catch {
+              return false;
+            }
+          })
+        : [];
+      let repairErrors = 0;
+      try {
+        if (repairPaths.length > 0) {
+          // The repair extract mutates, so it marks first: an abort inside it
+          // must leave marker + scope behind for the next repair, not an
+          // unmarked half-extract no shortcut will revisit.
+          this.markPostprocessIncomplete();
+          const repairResult: IndexingResult = {
+            totalFiles: repairPaths.length,
+            indexed: 0,
+            skipped: 0,
+            errors: 0,
+            durationMs: 0,
+          };
+          await this.extractAndPersist(
+            repairPaths,
+            false,
+            repairResult,
+            undefined,
+            new Set(repairPaths),
+          );
+          repairErrors = repairResult.errors;
+        }
+        await this.runEdgeResolvers(undefined);
+        // The mark clears only after a repair whose extraction reported no
+        // errors: a file that failed to re-extract still misses its edges,
+        // and successful resolver completion must not be equated with
+        // successful repair extraction. A scoped discovery/indexFiles run
+        // that lands while dirty keeps the mark — only a full repair lifts it.
+        if (needsRepair && repairErrors === 0) this.clearPostprocessIncomplete();
+        invalidatePageRankCache();
+        invalidateSearchCache(this.store.db);
+        logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
+      } finally {
+        // TRA-1017: the repair extraction populates the same per-run maps
+        // runPipeline clears in its finally (`pendingImports`, content cache,
+        // changed-file set). Without this, a repaired file's stale imports
+        // leak into the NEXT run's resolvers — and since the persister only
+        // replaces a pending-import entry when the new file HAS imports,
+        // removing the last import would resurrect the deleted edge.
+        this._pendingImports.clear();
+        this._fileContentCache.clear();
+        this._changedFileIds.clear();
       }
-      await this.runEdgeResolvers(undefined);
-      // The mark clears only now: extraction state reconstructed (or there
-      // was nothing interrupted to repair) plus a full-scope resolution. A
-      // scoped discovery/indexFiles run that lands while dirty keeps the mark —
-      // only a full repair lifts it.
-      if (needsRepair) this.clearPostprocessIncomplete();
-      invalidatePageRankCache();
-      invalidateSearchCache(this.store.db);
-      logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
     });
     this._lock = run.catch((e) => {
       logger.warn({ error: e }, 'Deferred edge reconcile failed');
