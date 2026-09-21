@@ -1253,7 +1253,7 @@ export class IndexingPipeline {
     // it just before calling us and the postprocess gate below reads it. It is
     // reset by `indexFiles`, which never reconciles.
     this._traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
-    this.registerFrameworkEdgeTypes();
+    await this.registerFrameworkEdgeTypes();
 
     try {
       await this.extractAndPersist(relPaths, force, result);
@@ -1466,10 +1466,9 @@ export class IndexingPipeline {
     // only processed once it finished — i.e. this phase starves the event loop
     // and /health. Yield before the first (heaviest, cross-file) resolver pass
     // so the loop can service a health check between extraction and resolution.
-    // Not wrapped in runInOwnTurn: resolveEdges is async, so only its first
-    // synchronous span is covered by the yield. That is enough while every
-    // FrameworkPlugin.resolveEdges is synchronous (plugin-api/types.ts); a
-    // plugin that genuinely awaits I/O would need its own boundary.
+    // The framework pass itself yields per plugin and per workspace inside
+    // EdgeResolver.resolveEdges (TRA-922), so this pre-yield only covers the
+    // boundary before it starts.
     await yieldToEventLoopFair();
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
@@ -1760,7 +1759,17 @@ export class IndexingPipeline {
     return this._projectContext;
   }
 
-  private registerFrameworkEdgeTypes(): void {
+  /**
+   * Register every active framework plugin's edge types in the store.
+   *
+   * Async with a fair yield before the bulk write (TRA-922): workspace
+   * detection above (`getWorkspaceFrameworkPlugins`) plus the SQLite write
+   * below would otherwise form one span on a many-workspace root. Per-plugin
+   * and per-workspace breathing during the heavier edge-resolution pass
+   * lives in EdgeResolver.resolveEdges; this yield covers the registration
+   * half of the same wedge.
+   */
+  private async registerFrameworkEdgeTypes(): Promise<void> {
     // TRA-1543: collect every (name, category, description) first, then write
     // them in ONE transaction. This used to be one autocommit WAL transaction
     // per edge type (root actives + every workspace's plugins — hundreds on a
@@ -1794,6 +1803,9 @@ export class IndexingPipeline {
     }
 
     if (pending.length === 0) return;
+    // TRA-922: separate the detection span above from the write span below
+    // so pending I/O gets a turn between them on many-workspace roots.
+    await yieldToEventLoopFair();
     const insert = this.store.db.prepare(
       'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
     );
