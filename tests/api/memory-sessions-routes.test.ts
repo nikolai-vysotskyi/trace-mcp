@@ -276,6 +276,62 @@ describe('GET /api/projects/sessions scoping (TRA-1065)', () => {
     expect((await getSessions(requestedRoot)).sessions).toEqual([]);
   });
 
+  it('deleted zero-decision Claude session cannot move to its collider (review round 3)', async () => {
+    // While the transcript exists, transcript cwd attributes it. Once the
+    // file is gone there is no verifiable owner (0 decisions → no decisions
+    // rows), and lossy decode would hand it to the surviving collider — so
+    // it must disappear everywhere instead of migrating.
+    const ownerRoot = path.join(projectA, 'a-b');
+    const requestedRoot = path.join(projectA, 'a', 'b');
+    fs.mkdirSync(ownerRoot, { recursive: true });
+    fs.mkdirSync(requestedRoot, { recursive: true });
+    const encoded = ownerRoot.replace(/[\\/:]+/g, '-');
+    expect(requestedRoot.replace(/[\\/:]+/g, '-')).toBe(encoded);
+    const sessionPath = path.join(CLAUDE_PROJECTS_DIR, encoded, 'deleted-zero.jsonl');
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, JSON.stringify({ type: 'user', cwd: ownerRoot }) + '\n');
+    seedMined(sessionPath, 0);
+    expect((await getSessions(ownerRoot)).sessions.map((s) => s.session_path)).toContain(
+      sessionPath,
+    );
+    expect((await getSessions(requestedRoot)).sessions).toEqual([]);
+    fs.unlinkSync(sessionPath);
+    expect((await getSessions(requestedRoot)).sessions).toEqual([]);
+  });
+
+  it('live zero-decision Claude session uses cwd and rejects absent cwd (review round 3)', async () => {
+    const ownerRoot = path.join(projectA, 'c-d');
+    const requestedRoot = path.join(projectA, 'c', 'd');
+    fs.mkdirSync(ownerRoot, { recursive: true });
+    fs.mkdirSync(requestedRoot, { recursive: true });
+    const sessionPath = path.join(
+      CLAUDE_PROJECTS_DIR,
+      ownerRoot.replace(/[\\/:]+/g, '-'),
+      'live-zero.jsonl',
+    );
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, JSON.stringify({ type: 'user', cwd: ownerRoot }) + '\n');
+    seedMined(sessionPath, 0);
+    expect((await getSessions(ownerRoot)).sessions.map((s) => s.session_path)).toContain(
+      sessionPath,
+    );
+    expect((await getSessions(requestedRoot)).sessions).toEqual([]);
+    // Transcript without cwd is unverifiable — shown under neither project.
+    fs.writeFileSync(sessionPath, '{"type":"user"}\n');
+    expect((await getSessions(ownerRoot)).sessions).toEqual([]);
+    expect((await getSessions(requestedRoot)).sessions).toEqual([]);
+  });
+
+  it('missing Claw file keeps its row with unknown date (review round 3)', async () => {
+    // Exact-dir attribution survives deletion; only the date is unknown.
+    fs.unlinkSync(ownSessionPath);
+    const own = (await getSessions(projectA)).sessions.find(
+      (s) => s.session_path === ownSessionPath,
+    );
+    expect(own).toBeDefined();
+    expect(own?.session_mtime_ms).toBe(0);
+  });
+
   it('legacy mining never reports processing time as file mtime (review round 2)', async () => {
     // markSessionMined() stamps Date.now() into last_modified_ms — the API
     // must not surface that as the session date. Unknown (0) is acceptable;

@@ -17,7 +17,7 @@ import Database from 'better-sqlite3';
 import { escapeFtsQuery } from '../db/fts.js';
 import { DECISIONS_DB_PATH, CORPORA_DIR, CLAUDE_PROJECTS_DIR } from '../shared/paths.js';
 import { ensureGlobalDirs } from '../global.js';
-import { decodeDirName, listAllSessions, listGitWorktrees } from '../analytics/log-parser.js';
+import { listAllSessions, listGitWorktrees } from '../analytics/log-parser.js';
 import { loadConfig } from '../config.js';
 import type { DecisionRow, DecisionTimelineEntry } from '../memory/decision-store.js';
 import { DecisionStore } from '../memory/decision-store.js';
@@ -808,8 +808,13 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
     //      session under two projects.
     //   3. deleted file, no recorded owner: Claw requires exactly
     //      <root>/.claw/sessions/ (never the whole root tree, so a nested
-    //      independent repo is not claimed by its parent); Claude requires
-    //      the session dir to decode to exactly this root.
+    //      independent repo is not claimed by its parent) — an absolute
+    //      path, so it cannot collide. A deleted Claude transcript with no
+    //      recorded owner is EXCLUDED everywhere: decodeDirName() is lossy
+    //      and after deletion greedily resolves to whatever colliding
+    //      project still exists, so the row would migrate to a foreign
+    //      project. Preserving that history needs a stored owner
+    //      (project_root on mined_sessions), not lossy-path decoding.
     // Rows matching none of these belong to other projects and are dropped:
     // a project with no mined sessions gets [], not another project's list.
     let projectPaths = new Set<string>();
@@ -854,17 +859,9 @@ export function handleListSessions(res: http.ServerResponse, url: URL): void {
       const owners = ownersOf(row.session_path);
       if (owners.length > 0) return isOwnedHere(owners);
       if (!projectPaths.has(row.session_path)) {
-        // Deleted file, no recorded owner — strict path fallbacks only.
-        if (row.session_path.startsWith(clawSessionsPrefix)) return true;
-        if (isClaudeSessionPath(row.session_path)) {
-          try {
-            const dir = path.dirname(row.session_path);
-            if (decodeDirName(path.basename(dir)) === resolvedRoot) return true;
-          } catch {
-            /* undecodable — exclude */
-          }
-        }
-        return false;
+        // Deleted file, no recorded owner: only the unambiguous Claw
+        // location still attributes. See rule 3 above.
+        return row.session_path.startsWith(clawSessionsPrefix);
       }
       // Live file, no recorded owner.
       if (!isClaudeSessionPath(row.session_path)) return true;
