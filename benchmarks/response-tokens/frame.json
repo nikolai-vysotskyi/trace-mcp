@@ -23,6 +23,20 @@
     "file": "indexed non-test .ts files under src/, path-sorted, every Nth",
     "identifier_sql": "SELECT name FROM symbols\n          WHERE name NOT GLOB '__module__*' AND length(name) > 3 AND kind != 'namespace'\n            AND name GLOB '[A-Za-z_]*' AND name NOT GLOB '*[^A-Za-z0-9_]*'\n          ORDER BY symbol_id"
   },
+  "patches": [
+    {
+      "issue": "TRA-1774",
+      "replaces": "ServiceInfo",
+      "with": "SearchFilters",
+      "reason": "ServiceInfo is defined only under packages/app/, outside the served index scope (src/, tests/ per .trace-mcp.json include). The bench resolves each usage-basket identifier via search limit:1 and prices the captured symbol_id with find_usages; ServiceInfo resolves zero symbols (text fallback only) so the bench throws instead of measuring. SearchFilters is an exported interface defined in src/tools/navigation/navigation.ts, resolving on the bench index with 4 usages."
+    },
+    {
+      "issue": "TRA-1774",
+      "replaces": "extractRuneProps",
+      "with": "getFullSignature",
+      "reason": "The bench's search limit:1 resolves zero symbols for extractRuneProps on the current build (text fallback only, find_usages throws), while its defining file is indexed ok and the current extractor emits the symbol — the rows are missing downstream of extraction. Replaced to unblock the re-measure; the missing-rows question is tracked separately (see TRA-1774) and is not fixed here. getFullSignature is an exported function defined in src/indexer/plugins/language/typescript/helpers.ts, resolving on the bench index with 6 usages."
+    }
+  ],
   "queries": [
     {
       "q": "advanced",
@@ -37,7 +51,7 @@
       "stratum": "identifier"
     },
     {
-      "q": "ServiceInfo",
+      "q": "SearchFilters",
       "stratum": "identifier"
     },
     {
@@ -57,7 +71,7 @@
       "stratum": "identifier"
     },
     {
-      "q": "extractRuneProps",
+      "q": "getFullSignature",
       "stratum": "identifier"
     },
     {
