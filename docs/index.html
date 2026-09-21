@@ -686,6 +686,15 @@ updated: 2026-09-20
     .hero-evidence { color: var(--text-primary); }
     .hero-evidence .accent-text { color: var(--text-display); }
     .hero-boundary { color: var(--text-secondary); }
+    /* The one declinable exception to the boundary gets the same quiet link
+       treatment as .hero-alt below (TRA-979): monochrome underline, never the
+       accent — the scope note is not an action. */
+    .hero-boundary a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .hero-boundary a:hover { color: var(--text-display); border-color: var(--text-display); }
     /* The three mono caps rows of the hero — eyebrow above the headline, the
        alternative platforms under the button, the trust line at the fold — are one
        treatment at three opacities, not three components. Only the distance from the
@@ -2346,9 +2355,12 @@ updated: 2026-09-20
       </p>
 
       <!-- The honesty boundary travels with the claim, not as a footnote further down
-           the page (ops/positioning.md &sect; The boundary, carried with the claim). -->
+           the page (ops/positioning.md &sect; The boundary, carried with the claim).
+           TRA-979: the boundary alone overclaims for Max-tier users — `trace init`
+           runs a third-party patcher for them — so the one declinable exception
+           travels with it, linked to the audited tier table. -->
       <p class="hero-boundary">
-        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files.
+        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
       </p>
 
       <div class="hero-cta">

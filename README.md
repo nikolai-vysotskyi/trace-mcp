@@ -44,14 +44,15 @@
      so search and screen readers get the same claim. Keep the two in sync, and keep
      both verbatim with the hero on trace-mcp.com and with docs/_config.yml —
      ops/positioning.md holds the sentence. The boundary line under it is not a
-     footnote: it travels with the claim wherever the claim goes. -->
+     footnote: it travels with the claim wherever the claim goes, including the one
+     declinable exception (TRA-979) — keep that clause verbatim with the hero too. -->
 <p align="center">
   <strong>trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.</strong><br />
   <strong>72.7% fewer input tokens</strong> to review a pull request &mdash; median over 60 merged pull requests in open-source repos we don't own.
 </p>
 
 <p align="center">
-  <sub>We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files.</sub>
+  <sub>We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="https://trace-mcp.com/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing</a> runs a third-party patcher for you.</sub>
 </p>
 
 <p align="center">
