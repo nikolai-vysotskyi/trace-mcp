@@ -537,7 +537,40 @@ export class FileWatcher {
     return run;
   }
 
+  /**
+   * Drop the native subscription and all pending (not yet started) work
+   * WITHOUT waiting for in-flight handlers/rescans (TRA-1017). Stops new
+   * work at the source in milliseconds; pair with `drain()` once every
+   * producer that could still touch the DB has been cancelled, and bound
+   * that wait — `stop()`'s combined unsubscribe+drain can outlast a shutdown
+   * budget when a handler is queued behind a minutes-long pipeline run.
+   */
+  async unsubscribe(): Promise<void> {
+    const run = this.opQueue.then(() => this.unsubscribeLocked());
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
+  /**
+   * Wait out the in-flight rescan/handlers `unsubscribe()` deliberately left
+   * running (TRA-1017). Ordered after `unsubscribe()` through the same op
+   * queue. The caller must have cancelled the underlying pipeline work first
+   * (its abort makes these settle at their next boundary) and must bound
+   * this wait — a handler queued on a wedged pipeline lock settles only via
+   * that cancellation or not at all.
+   */
+  async drain(): Promise<void> {
+    const run = this.opQueue.then(() => this.drainLocked());
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
   private async stopLocked(): Promise<void> {
+    await this.unsubscribeLocked();
+    await this.drainLocked();
+  }
+
+  private async unsubscribeLocked(): Promise<void> {
     // Order matters: unsubscribe FIRST so parcel stops invoking our callback,
     // THEN drop the debounce timer. The opposite order leaves a window where
     // an in-flight parcel callback can schedule a new timer after we cleared
@@ -574,6 +607,10 @@ export class FileWatcher {
     this.stormQuietUntilMs = 0;
     this.stormCoalesced = 0;
     this.dropTimestamps = [];
+    // (Drain half — see drainLocked().)
+  }
+
+  private async drainLocked(): Promise<void> {
     // A reconcile pass holds the caller's pipeline, and callers dispose it as
     // soon as stop() returns. Drop any queued follow-up (cleared first, so the
     // in-flight pass's `finally` doesn't start one) and wait out the active

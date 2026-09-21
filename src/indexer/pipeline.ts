@@ -151,6 +151,21 @@ export interface IndexAllOptions {
  */
 export const PIPELINE_DISPOSE_DRAIN_MS = 5_000;
 
+/**
+ * `repo_metadata` key marking a run that mutated the index without completing
+ * edge resolution (TRA-1017).
+ *
+ * File persistence updates content hashes and drops the files' old edges
+ * BEFORE edge resolution runs. A run cancelled (or crashed) in between leaves
+ * an index whose hashes say "current" but whose graph is missing edges — and
+ * the next run's zero-change shortcuts (`tryIncrementalDiscovery`,
+ * `canSkipFullPostprocess`) would then bless that incomplete graph as
+ * up-to-date forever. While this marker is set, `indexAll()` forces a full
+ * walk with full-scope resolution instead of trusting the shortcuts; the
+ * marker is cleared only after a resolution actually completes.
+ */
+const POSTPROCESS_INCOMPLETE_KEY = 'postprocess_incomplete';
+
 /** A full rebuild that drops more than this fraction of symbols or edges
  * triggers a shrink warning. Tuned to catch real regressions without firing
  * on legitimate large refactors. */
@@ -571,6 +586,10 @@ export class IndexingPipeline {
     // the per-project refcount, not the distinct-project count.
     const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
+      // TRA-1017: observe a stop request before doing any work — the warm
+      // incremental-discovery fast path below would otherwise persist
+      // discovered changes after the stop was asked for.
+      throwIfIndexAborted(opts.signal, this.rootPath);
       this._isIncremental = false;
       this._postprocessLevel = opts.postprocess ?? 'full';
       const start = Date.now();
@@ -630,8 +649,17 @@ export class IndexingPipeline {
       // full walk below. From-scratch, force, and dropped-events reconcile
       // (`discovery: 'full-walk'`) always walk: only a full walk reconciles
       // scope and (for scratch) engages bulk-load mode.
-      if (!force && opts.discovery !== 'full-walk' && !isFromScratch) {
-        const fast = await this.tryIncrementalDiscovery(start);
+      // TRA-1017: a previous run that mutated without resolving leaves the
+      // marker behind — its hashes say "current" while edges are missing, so
+      // the fast path's zero-change verdict cannot be trusted. Walk and
+      // re-resolve instead; runPipeline clears the marker once it does.
+      if (
+        !force &&
+        opts.discovery !== 'full-walk' &&
+        !isFromScratch &&
+        !this.isPostprocessIncomplete()
+      ) {
+        const fast = await this.tryIncrementalDiscovery(start, opts.signal);
         if (fast) return fast;
       }
       const collected = await this.collectFiles();
@@ -639,6 +667,14 @@ export class IndexingPipeline {
       // the walk — reconcileScope below deletes rows, so aborting after it
       // would leave a half-reconciled tree for the next run to repair.
       throwIfIndexAborted(opts.signal, this.rootPath);
+      // TRA-1017: mark before the first mutation. reconcileScope deletes
+      // out-of-scope rows and extractAndPersist rewrites hashes/edges; if the
+      // run never reaches resolution, this marker forces the next run to
+      // re-resolve instead of trusting the shortcuts. Cleared by runPipeline
+      // only after a resolution actually completes. Skipped for
+      // postprocess='none' runs: their unresolved graph is the caller's
+      // explicit contract (`reindex` tool), not an interruption to repair.
+      if (this._postprocessLevel !== 'none') this.markPostprocessIncomplete();
       const filePaths = collected.files;
       // Reconcile before snapshotting: dropping rows the walk no longer owns is
       // the intended outcome here, not the parser regression `checkShrink`
@@ -724,7 +760,10 @@ export class IndexingPipeline {
    * (no PageRank/search-cache invalidation — the TRA-935 early-return
    * philosophy applied to `indexAll`).
    */
-  private async tryIncrementalDiscovery(startMs: number): Promise<IndexingResult | null> {
+  private async tryIncrementalDiscovery(
+    startMs: number,
+    signal?: AbortSignal,
+  ): Promise<IndexingResult | null> {
     const { runsSinceFull, lastFullMs } = this.readDiscoveryCounters();
     if (shouldForceFullWalk({ runsSinceFull, lastFullMs })) {
       logger.debug({ runsSinceFull, lastFullMs }, 'Incremental discovery: periodic full walk due');
@@ -746,8 +785,13 @@ export class IndexingPipeline {
       logger.debug({ err }, 'Incremental discovery threw — full walk');
       return null;
     }
+    // TRA-1017: the discovery answer arrived after awaits — a stop may have
+    // been asked for while it was computed. Applying it would persist changes
+    // past the stop; fall through to the full walk (which checks again)
+    // instead. The walk also re-verifies, so nothing is lost.
+    throwIfIndexAborted(signal, this.rootPath);
     if (discovery.source === 'full-walk') return null;
-    return this.runDiscovered(discovery, startMs, snapshotPath);
+    return this.runDiscovered(discovery, startMs, snapshotPath, signal);
   }
 
   /**
@@ -760,7 +804,10 @@ export class IndexingPipeline {
     discovery: DiscoveryResult,
     startMs: number,
     snapshotPath: string | null,
+    signal?: AbortSignal,
   ): Promise<IndexingResult> {
+    // TRA-1017: never apply a discovery answer past a stop request.
+    throwIfIndexAborted(signal, this.rootPath);
     const injected = this._incrementalDiscovery;
     // The source speaks in tree paths; the pipeline speaks in
     // include-matched, exclude-filtered rel-posix paths. `discover` already
@@ -806,6 +853,7 @@ export class IndexingPipeline {
             { source: 'git-status', changed: second.changed, deleted: second.deleted },
             startMs,
             snapshotPath,
+            signal,
           );
         }
       }
@@ -835,8 +883,15 @@ export class IndexingPipeline {
     // A prior indexAll left this set; fast runs never reconcile scope, so a
     // stale count would wrongly force edge resolution in runPipeline.
     this._scopeRowsRemoved = 0;
-    if (deleted.length > 0) this.deleteFiles(deleted);
-    const r = await this.runPipeline(changed, false, startMs);
+    // TRA-1017: deletes mutate the index — check before them, and mark the
+    // run incomplete first so an abort between the deletes and runPipeline's
+    // own entry mark still forces a repair pass next time.
+    throwIfIndexAborted(signal, this.rootPath);
+    if (deleted.length > 0) {
+      this.markPostprocessIncomplete();
+      this.deleteFiles(deleted);
+    }
+    const r = await this.runPipeline(changed, false, startMs, signal);
     await this.afterDiscoveryRun(snapshotPath);
     logger.info(
       { source: discovery.source, changed: changed.length, deleted: deleted.length },
@@ -1162,7 +1217,7 @@ export class IndexingPipeline {
 
   async indexFiles(
     filePaths: string[],
-    opts: { postprocess?: PostprocessLevel } = {},
+    opts: { postprocess?: PostprocessLevel; signal?: AbortSignal } = {},
   ): Promise<IndexingResult> {
     const enqueuedAt = Date.now();
     const relPaths = this.filterIndexablePaths(filePaths);
@@ -1192,6 +1247,9 @@ export class IndexingPipeline {
     // the TRA-935 no-op early return so filtered-out batches stay uncounted.
     const endReindex = beginReindex(this.rootPath);
     const result = this._lock.then(async () => {
+      // TRA-1017: a watcher batch queued before the stop must not start
+      // persisting after it — the abort is observed here, at lock entry.
+      throwIfIndexAborted(opts.signal, this.rootPath);
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
       // indexAll left behind so it can't force a postprocess here.
@@ -1207,7 +1265,7 @@ export class IndexingPipeline {
       // wall-clock to get the queue time instead of reporting the two summed
       // as reindex latency.
       const start = Date.now();
-      const r = await this.runPipeline(relPaths, false, start);
+      const r = await this.runPipeline(relPaths, false, start, opts.signal);
       // The watcher/hook path only ever sees the events it was handed. Kick a
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
@@ -1244,6 +1302,37 @@ export class IndexingPipeline {
     return this._excludeMatcher;
   }
 
+  /**
+   * Whether a previous run mutated the index without completing edge
+   * resolution (TRA-1017). Best-effort read: a closed/unreadable DB reports
+   * clean so teardown-time checks can never throw.
+   */
+  private isPostprocessIncomplete(): boolean {
+    try {
+      return this.store.getRepoMetadata(POSTPROCESS_INCOMPLETE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Mark the index as mutated-but-unresolved (TRA-1017). Best-effort. */
+  private markPostprocessIncomplete(): void {
+    try {
+      this.store.setRepoMetadata(POSTPROCESS_INCOMPLETE_KEY, '1');
+    } catch (err) {
+      logger.debug({ err }, 'markPostprocessIncomplete failed (non-fatal)');
+    }
+  }
+
+  /** Clear the mutated-but-unresolved mark after a resolution completes (TRA-1017). Best-effort. */
+  private clearPostprocessIncomplete(): void {
+    try {
+      this.store.deleteRepoMetadata(POSTPROCESS_INCOMPLETE_KEY);
+    } catch (err) {
+      logger.debug({ err }, 'clearPostprocessIncomplete failed (non-fatal)');
+    }
+  }
+
   private async runPipeline(
     relPaths: string[],
     force: boolean,
@@ -1255,6 +1344,15 @@ export class IndexingPipeline {
     // riding a 188s run to completion. The abort is checked BEFORE each
     // phase's work, never mid-transaction.
     throwIfIndexAborted(signal, this.rootPath);
+    // TRA-1017: remember whether a previous run left the graph unresolved,
+    // then mark this run the same way — extractAndPersist rewrites hashes and
+    // drops old edges before resolution runs, so any failure/abort from here
+    // on must force the next run to re-resolve. The mark is cleared below
+    // only after a resolution actually completes; a run that throws keeps it.
+    // postprocess='none' runs opt out both ways (see the indexAll call site).
+    const wasIncomplete =
+      this._postprocessLevel === 'none' ? false : this.isPostprocessIncomplete();
+    if (this._postprocessLevel !== 'none') this.markPostprocessIncomplete();
     // Sync the xxhash-wasm module before any extract() runs so the
     // content-hash gate is non-blocking on the hot path.
     await initContentHasher();
@@ -1320,7 +1418,12 @@ export class IndexingPipeline {
         !force &&
         this._scopeRowsRemoved === 0 &&
         result.indexed === 0 &&
-        result.errors === 0
+        result.errors === 0 &&
+        // TRA-1017: a run that died after persisting but before resolving
+        // leaves hashes saying "current" with edges missing — HEAD + content
+        // still match, so this shortcut would bless the incomplete graph
+        // forever. Re-resolve instead; the marker clears below once it does.
+        !wasIncomplete
       ) {
         skipPostprocess = canSkipFullPostprocess({
           // A scope reconcile just deleted files (and their edges): HEAD may be
@@ -1339,12 +1442,21 @@ export class IndexingPipeline {
           { root: this.rootPath, postprocess: this._postprocessLevel },
           'Index unchanged since last run (HEAD + content match) — skipping edge resolution + postprocess',
         );
+        // TRA-1017: the entry mark is stale — nothing changed and the graph
+        // was complete before this run (the gate above only passes when the
+        // previous run resolved). Unreachable when wasIncomplete.
+        this.clearPostprocessIncomplete();
       } else {
         throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel !== 'none') {
           await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
             runResolveAllEdges: () => this.resolveAllEdges(),
           });
+          // TRA-1017: resolution completed — the graph is whole again. A
+          // scoped run only repairs its own scope, so it clears a previous
+          // interruption only when there was none; a full-scope run
+          // (`!_isIncremental`) rebuilds every edge and always clears.
+          if (!wasIncomplete || !this._isIncremental) this.clearPostprocessIncomplete();
         }
         throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel === 'full') {
@@ -1644,6 +1756,10 @@ export class IndexingPipeline {
       if (this._lastFullResolveMs >= scheduledAt) return;
       const start = Date.now();
       await this.runEdgeResolvers(undefined);
+      // TRA-1017: a full-scope resolve rebuilds every edge, which is exactly
+      // what clears an interrupted run's incomplete mark — even though this
+      // path never went through runPipeline's entry marking.
+      this.clearPostprocessIncomplete();
       invalidatePageRankCache();
       invalidateSearchCache(this.store.db);
       logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');

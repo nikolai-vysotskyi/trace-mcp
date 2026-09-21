@@ -35,7 +35,11 @@ interface FakeManaged {
   registry: unknown;
   progress: unknown;
   pipeline: { dispose: ReturnType<typeof vi.fn> };
-  watcher: { stop: ReturnType<typeof vi.fn> };
+  watcher: {
+    stop: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    drain: ReturnType<typeof vi.fn>;
+  };
   server: { close: ReturnType<typeof vi.fn> };
   serverHandle: { dispose: ReturnType<typeof vi.fn> };
   status: 'ready';
@@ -50,7 +54,11 @@ function makeFakeManaged(root: string): FakeManaged {
     registry: {},
     progress: {},
     pipeline: { dispose: vi.fn(async () => undefined) },
-    watcher: { stop: vi.fn(async () => undefined) },
+    watcher: {
+      stop: vi.fn(async () => undefined),
+      unsubscribe: vi.fn(async () => undefined),
+      drain: vi.fn(async () => undefined),
+    },
     server: { close: vi.fn(async () => undefined) },
     serverHandle: { dispose: vi.fn() },
     status: 'ready',
@@ -77,8 +85,8 @@ describe('ProjectManager.shutdown', () => {
     await pm.shutdown();
 
     expect(mockUnregister).not.toHaveBeenCalled();
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
-    expect(b.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(b.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     expect(a.server.close).toHaveBeenCalledTimes(1);
     expect(b.server.close).toHaveBeenCalledTimes(1);
     expect(a.serverHandle.dispose).toHaveBeenCalledTimes(1);
@@ -107,7 +115,7 @@ describe('ProjectManager.removeProject', () => {
 
     expect(mockUnregister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-a');
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     expect(a.server.close).toHaveBeenCalledTimes(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.size).toBe(0);
@@ -130,8 +138,8 @@ describe('ProjectManager.removeProject', () => {
 
     expect(mockUnregister).toHaveBeenCalledTimes(1);
     expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-a');
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
-    expect(b.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(b.watcher.unsubscribe).not.toHaveBeenCalled();
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.size).toBe(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
@@ -169,7 +177,7 @@ describe('ProjectManager.removeProject', () => {
 
     // Removal still completes — pool error is non-fatal.
     expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-c');
-    expect(a.watcher.stop).toHaveBeenCalledOnce();
+    expect(a.watcher.unsubscribe).toHaveBeenCalledOnce();
     expect(dropProject).toHaveBeenCalledOnce();
   });
 });

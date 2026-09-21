@@ -67,11 +67,14 @@ import type { ProjectResourcePool } from './resource-pool.js';
 const AI_COALESCE_WAIT_MS = 5_000;
 
 /**
- * Bound for `stopProject()`'s wait on the project's in-flight initial index
- * (TRA-1017). Field logs showed a full index taking 188s against a 20s
- * shutdown deadline — an unbounded await there overruns the deadline on
- * every cold-project stop. Sized so the worst sequential path (5s reindex
- * drain + this + 5s dispose drain) stays inside the 20s
+ * Bound for `stopProject()`'s shared drain of the in-flight watcher handlers
+ * and the initial index (TRA-1017). Field logs showed a full index taking
+ * 188s against a 20s shutdown deadline — an unbounded await there overruns
+ * the deadline on every cold-project stop. The two waits share ONE budget
+ * because both queue on the same pipeline lock: handlers drained by
+ * `watcher.drain()` settle only when the aborted index bails, so bounding
+ * either one alone still wedges. Sized so the worst sequential path (5s
+ * reindex drain + this + 5s dispose drain) stays inside the 20s
  * `DAEMON_SHUTDOWN_DEADLINE_MS` with margin left for the synchronous closes
  * and `httpServer.close()`. `shutdown()` stops projects concurrently, so one
  * slow project cannot eat another's budget.
@@ -829,7 +832,10 @@ export class ProjectManager {
             | undefined;
           let watchErr: unknown;
           try {
-            result = await pipeline.indexFiles(toIndex);
+            // TRA-1017: the stop signal — a batch queued before the stop must
+            // not start persisting after it. An abort mid-batch leaves the
+            // incomplete-postprocess mark for the next run to repair.
+            result = await pipeline.indexFiles(toIndex, { signal: indexAbortController.signal });
           } catch (err) {
             watchErr = err;
             throw err;
@@ -918,8 +924,8 @@ export class ProjectManager {
           // drops events in EVERY registered project at once, and N full
           // re-walks is exactly the load `parallel_initial_index` bounds.
           // The null branch is belt-and-braces, not a live race: shutdown()
-          // clears the limiter only after watcher.stop() has drained the
-          // in-flight rescan (TRA-834), and stop() unsubscribes before
+          // clears the limiter only after the bounded watcher/index drain in
+          // stopProject (TRA-834), and stopProject unsubscribes before
           // draining, so this read cannot observe null today. It stays so a
           // regression in that ordering degrades to an ungated re-walk
           // instead of a TypeError inside a watcher callback.
@@ -1137,30 +1143,18 @@ export class ProjectManager {
         'lspEnricher.cancel() failed during stopProject (non-fatal)',
       );
     }
-    // Then unsubscribe the file watcher and drain its in-flight handler BEFORE
-    // the waits below (TRA-834). `await managed.initialIndexPromise` can run
-    // for tens of seconds on a cold project, and a still-subscribed watcher
-    // keeps firing debounced `onChanges` handlers throughout it — each one
-    // starting a fresh indexing run against a Store that a sibling
-    // stopProject() is closing. Field logs showed 12 "The database connection
-    // is not open" failures, every one of them after "Daemon shutting down",
-    // one project logging five of them over 27 seconds. Stopping the source of
-    // new work first is what makes the teardown below finite.
-    await managed.watcher.stop();
-    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
-    // scheduling LSP enrichment (see the onChanges tail in addProject), and
-    // `trailingDebounce` mints a fresh AbortController when it is scheduled
-    // after a cancel — so the cancels above no longer cover those timers. Cancel
-    // once more now that no handler is left to arm another one.
-    managed.cancelDebouncedAI?.();
-    try {
-      managed.lspEnricher?.cancel();
-    } catch (err) {
-      logger.warn(
-        { error: err, projectRoot: root },
-        'lspEnricher.cancel() failed during stopProject (non-fatal)',
-      );
-    }
+    // Unsubscribe the file watcher BEFORE the waits below, but WITHOUT
+    // draining its in-flight handlers yet (TRA-834 + TRA-1017). Draining here
+    // is what wedged shutdown: an in-flight handler queued on the pipeline
+    // lock behind the minutes-long initial index settles only when that index
+    // does — awaiting it first defeats the abort + timeout below. Unsubscribe
+    // stops new work at the source — a still-subscribed watcher keeps firing
+    // debounced `onChanges` handlers, each starting a fresh indexing run
+    // against a Store a sibling stopProject() is closing (field logs showed
+    // 12 "database connection is not open" failures after "Daemon shutting
+    // down", one project logging five over 27s). The drain joins the shared
+    // bounded wait below, after every producer has been cancelled.
+    await managed.watcher.unsubscribe();
     // TRA-1553: single-file reindexes (HTTP handleReindexFile, MCP
     // register_edit) are not part of initialIndexPromise and nothing below
     // awaits them, yet they run transactions against this project's DB across
@@ -1180,25 +1174,43 @@ export class ProjectManager {
     // Wait for the background initial-index chain (indexAll → summarize/embed →
     // subproject auto-sync) to finish so its topology.db handle is closed
     // before we tear down this project — see initialIndexPromise's doc comment.
-    // TRA-1017: bounded. The abort above makes a cooperative run settle at its
-    // next boundary, but a run wedged inside a synchronous phase (a
-    // multi-second edge-resolution pass holds the event loop and cannot
-    // observe the abort) would otherwise ride out the whole phase and overrun
-    // the shutdown deadline. On timeout the teardown below proceeds anyway —
-    // the chain never rejects (every branch catches into status), so nothing
-    // is lost by detaching; its next DB statement after the close lands in
-    // its own error handling.
-    if (managed.initialIndexPromise) {
-      const indexDone = await waitWithTimeout(
-        managed.initialIndexPromise,
-        STOP_PROJECT_INDEX_WAIT_MS,
-      );
-      if (!indexDone) {
+    // TRA-1017: bounded, and SHARED with the watcher drain. The abort above
+    // makes a cooperative run settle at its next boundary, but a run wedged
+    // inside a synchronous phase (a multi-second edge-resolution pass holds
+    // the event loop and cannot observe the abort) would otherwise ride out
+    // the whole phase and overrun the shutdown deadline — and the watcher
+    // drain waits on handlers queued on that same pipeline lock, so bounding
+    // the index without the drain (or vice versa) still wedges. Awaiting both
+    // together bounds the lock once, not twice. On timeout the teardown below
+    // proceeds anyway — the chain never rejects (every branch catches into
+    // status), so nothing is lost by detaching; its next DB statement after
+    // the close lands in its own error handling.
+    {
+      const drains: Array<Promise<unknown>> = [managed.watcher.drain()];
+      if (managed.initialIndexPromise) drains.push(managed.initialIndexPromise);
+      const settled = await waitWithTimeout(Promise.all(drains), STOP_PROJECT_INDEX_WAIT_MS);
+      if (!settled) {
         logger.warn(
-          { projectRoot: root, indexWaitMs: STOP_PROJECT_INDEX_WAIT_MS },
-          'stopProject: initial index still running after abort — continuing teardown without it',
+          { projectRoot: root, drainWaitMs: STOP_PROJECT_INDEX_WAIT_MS },
+          'stopProject: index/watcher drain still running after abort — continuing teardown without it',
         );
       }
+    }
+    // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
+    // scheduling LSP enrichment (see the onChanges tail in addProject), and
+    // `trailingDebounce` mints a fresh AbortController when it is scheduled
+    // after a cancel — so the pre-drain cancels above no longer cover those
+    // timers. Cancel once more now that no handler is left to arm another one
+    // (TRA-834 — preserved across the TRA-1017 reorder: the drain moved after
+    // the unsubscribe, so the second cancel moved after the drain with it).
+    managed.cancelDebouncedAI?.();
+    try {
+      managed.lspEnricher?.cancel();
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'lspEnricher.cancel() failed during stopProject (non-fatal)',
+      );
     }
     clearServerPid(managed.db);
     managed.serverHandle.dispose();

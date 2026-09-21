@@ -38,7 +38,11 @@ interface FakeManaged {
   registry: unknown;
   progress: unknown;
   pipeline: { dispose: ReturnType<typeof vi.fn> };
-  watcher: { stop: ReturnType<typeof vi.fn> };
+  watcher: {
+    stop: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    drain: ReturnType<typeof vi.fn>;
+  };
   server: { close: ReturnType<typeof vi.fn> };
   serverHandle: { dispose: ReturnType<typeof vi.fn> };
   status: 'starting' | 'indexing' | 'ready' | 'error';
@@ -54,7 +58,11 @@ function makeFakeManaged(root: string, opts?: Partial<FakeManaged>): FakeManaged
     registry: {},
     progress: {},
     pipeline: { dispose: vi.fn(async () => undefined) },
-    watcher: { stop: vi.fn(async () => undefined) },
+    watcher: {
+      stop: vi.fn(async () => undefined),
+      unsubscribe: vi.fn(async () => undefined),
+      drain: vi.fn(async () => undefined),
+    },
     server: { close: vi.fn(async () => undefined) },
     serverHandle: { dispose: vi.fn() },
     status: 'ready',
@@ -95,7 +103,7 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual(['/tmp/proj-a']);
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     expect(a.db.close).toHaveBeenCalledTimes(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.has('/tmp/proj-a')).toBe(false);
@@ -108,7 +116,7 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual([]);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.has('/tmp/proj-a')).toBe(true);
   });
@@ -123,7 +131,7 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual([]);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('never unloads a project that is still starting, even if idle', async () => {
@@ -136,7 +144,7 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual([]);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('never unloads a project with connected clients (resourcePool refCount > 0)', async () => {
@@ -155,8 +163,8 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual(['/tmp/proj-idle']);
-    expect(busy.watcher.stop).not.toHaveBeenCalled();
-    expect(idle.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(busy.watcher.unsubscribe).not.toHaveBeenCalled();
+    expect(idle.watcher.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
   it('idleMs <= 0 disables the sweep entirely (no-op, does not touch any project)', async () => {
@@ -166,7 +174,7 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(0);
 
     expect(unloaded).toEqual([]);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('leaves sibling projects untouched when only one is idle', async () => {
@@ -177,8 +185,8 @@ describe('ProjectManager.unloadIdleProjects', () => {
     const unloaded = await pm.unloadIdleProjects(30_000);
 
     expect(unloaded).toEqual(['/tmp/proj-idle']);
-    expect(idle.watcher.stop).toHaveBeenCalledTimes(1);
-    expect(fresh.watcher.stop).not.toHaveBeenCalled();
+    expect(idle.watcher.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(fresh.watcher.unsubscribe).not.toHaveBeenCalled();
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.has('/tmp/proj-fresh')).toBe(true);
   });
@@ -200,7 +208,7 @@ describe('ProjectManager.startIdleUnloadSweep / stopIdleUnloadSweep', () => {
     pm.startIdleUnloadSweep(30_000, { intervalMs: 5 * 60_000 });
     await vi.advanceTimersByTimeAsync(5 * 60_000);
 
-    expect(a.watcher.stop).toHaveBeenCalledTimes(1);
+    expect(a.watcher.unsubscribe).toHaveBeenCalledTimes(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.has('/tmp/proj-a')).toBe(false);
 
@@ -236,7 +244,7 @@ describe('ProjectManager.startIdleUnloadSweep / stopIdleUnloadSweep', () => {
     pm.startIdleUnloadSweep(0, { intervalMs: 5 * 60_000 });
     await vi.advanceTimersByTimeAsync(60 * 60_000);
 
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('a touchActivity() call between ticks saves the project from the next sweep', async () => {
@@ -251,7 +259,7 @@ describe('ProjectManager.startIdleUnloadSweep / stopIdleUnloadSweep', () => {
     pm.startIdleUnloadSweep(idleMs, { intervalMs: sweepIntervalMs });
     // First tick (+5 min): well within the 20 min idle window.
     await vi.advanceTimersByTimeAsync(sweepIntervalMs);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
 
     // Touch resets the clock just before the next tick would push elapsed
     // time (10 min since last touch) close to the threshold.
@@ -261,7 +269,7 @@ describe('ProjectManager.startIdleUnloadSweep / stopIdleUnloadSweep', () => {
     // Two more ticks (+10 min since the touch) — still well under 20 min
     // from the touch, so the project must survive.
     await vi.advanceTimersByTimeAsync(sweepIntervalMs * 2);
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
 
     pm.stopIdleUnloadSweep();
   });
@@ -274,7 +282,7 @@ describe('ProjectManager.startIdleUnloadSweep / stopIdleUnloadSweep', () => {
     pm.stopIdleUnloadSweep();
     await vi.advanceTimersByTimeAsync(60 * 60_000);
 
-    expect(a.watcher.stop).not.toHaveBeenCalled();
+    expect(a.watcher.unsubscribe).not.toHaveBeenCalled();
   });
 
   it('shutdown() stops the sweep so no post-shutdown tick can fire', async () => {
