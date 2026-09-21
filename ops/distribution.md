@@ -2755,3 +2755,23 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — the yzfly merge is inbound.
 
+### Delta recheck, 2026-09-21 evening (TRA-1789): four hours after the morning pass, all threads silent, sweep re-read one hit as a competitor
+
+**Open-thread delta since ~10:10 UTC (all via GitHub API, `gh pr/issue view`).**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, review still `CHANGES_REQUESTED` (2026-09-21T01:18Z), our in-thread reply plus the README push closing points 1–3 (updated 10:10Z) is the latest activity — no reviewer reaction yet. The remainder (point 4 plus safety smoke tests) is TRA-1705's work, not this lane's.
+- `eltociear/awesome-AI-driven-development#119`, `GetBindu/awesome-claude-code-and-skills#195`: OPEN, both `CLEAN`/`MERGEABLE` (no rebase needed), our 09-20 reminders last, no replies.
+- `0xNyk/awesome-hermes-agent#395`, `natsukium/mcp-servers-nix#606`: OPEN, our 09-20 reminders last.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, `CLEAN`/`MERGEABLE`, zero comments. No ping until 2026-09-26, standing rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, still `DIRTY`/`CONFLICTING`. Rebase only on a merge signal, standing rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN, bot validation only, no maintainer triage.
+- `iansmith/slopstop#633`, `sosalejandro/atlas#105` (9 comments, silent since 09-07), `Kilo-Org/kilocode#13843` (reporter iterating 09-20, nothing owed), `Kilo-Org/kilocode#12707`, `narumiruna/pi-extensions#1204` (our issue, zero comments), `Nano-Collective/nanocoder#1197` (the 09-17 `updated_at` is assign/cross-reference churn, no reply to us), `Ivy-Apps/deslop#173` (CLOSED 09-08, already known), `facebook/pyrefly#4583`, `abhigyanpatwari/GitNexus#3127`, `watt-mind/factory#1078`, `The-PR-Agent/pr-agent#2499`, `CommunityToolkit/Aspire#1575`, `mattbutlerengineering/ai-tooling#585` (zero comments, do-not-follow-up per TRA-857): all silent, nothing owed, no pings due.
+
+**Mention-sweep delta (`scripts/mention-sweep.sh`, both passes): two hits, both already triaged this morning — but one was mislabelled.**
+- `yzfly/awesome-context-engineering`: our merged listing (row above). Flagged only because it was never added to `ops/mentions-seen.txt`; added now.
+- `mrchatam/Trace` (12★, 0 forks, created 2026-08-15, pushed 2026-09-20, Apache-2.0, Go): the morning pass filed this as a name collision and moved on. Read at source, it is a **direct category competitor**, not a random collision. "Local-first project knowledge graph + progressive planning for AI coding agents (CLI, MCP, optional GUI)", versioned SQLite graph under `.trace/`, tree-sitter analyzers — and it ships a binary literally named `trace-mcp` (`go build -o bin/trace-mcp ./cmd/trace-mcp`, installed to `~/.local/bin`) plus a `trace init` / `trace add` / `trace index` / `trace search` / `trace context` CLI surface overlapping ours command for command. Zero links to us, zero attribution. Not outreach — the competitor-isolation rule covers it exactly — so no message, no issue, just this record plus the seen-list line so sweeps stay quiet.
+- **Flag for the rename work (not done here):** a second, independently-built program called `trace-mcp` installable onto PATH is live evidence for TRA-644. The MiniMax reviewer's point 1 (unpinned bare `trace-mcp` on PATH) and this repo are the same hazard from opposite sides.
+
+Catalog moratorium holds (acquisition still unreadable): no submissions, no new doors evaluated this run — the pass was threads plus the sweep re-read.
+
+**Touch budget: 0 of 5 used.** No outgoing messages. Stars 178 / forks 21, unchanged since the morning pass.
+

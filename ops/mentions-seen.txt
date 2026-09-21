@@ -171,3 +171,9 @@ lza6/Aggregate-to-2api
 # ── Swept 2026-09-17 night (TRA-1624) ──
 # Single-author zh-TW Claude-maintained catalog (0★, 0 forks, 163 entries, static index.html, no license, no submission path): catalog.json already carries us accurately (81 langs, 87 frameworks, over-70% PR tokens, added 2026-09-07). No audience, nothing to submit, ledger row added:
 cyc123456789/claude-catalog
+
+# ── Swept 2026-09-21 evening (TRA-1789) ──
+# Direct category competitor, not a collision (12★, Go, Apache-2.0, created 2026-08-15, pushed 2026-09-20): local-first project knowledge graph + MCP for coding agents, SQLite under .trace/, tree-sitter analyzers. Ships its own binary named trace-mcp plus trace init/add/index/search/context CLI surface. Zero links to us. Competitor-isolation rule: no message. Pass note in ops/distribution.md; PATH-collision evidence flagged for TRA-644:
+mrchatam/Trace
+# Our merged listing (row in ops/distribution.md since 2026-09-20): flagged only because it was never added here:
+yzfly/awesome-context-engineering
