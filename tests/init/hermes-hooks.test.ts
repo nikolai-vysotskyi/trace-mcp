@@ -270,6 +270,19 @@ describe.skipIf(!hasGuardRuntime)('guard script decisions', () => {
     ['rg foo> result.txt', 'block'],
     ['rg foo >result.txt', 'block'],
     ['rg foo; echo done', 'block'],
+    // Empty quoted patterns are still operands, not missing args.
+    ['rg "" src/', 'pass'],
+    ["grep -r '' src/", 'pass'],
+    ['rg -e "" src/', 'pass'],
+    ['rg ""', 'block'],
+    // Command substitution cannot be parsed statically — fail open.
+    ['rg $(printf foo) src/', 'pass'],
+    ['rg `printf foo` src/', 'pass'],
+    // ag/ack -r is a valueless recurse flag (rg -r takes a replacement value).
+    ['ag -r foo src/', 'pass'],
+    ['ack -r foo src/', 'pass'],
+    ['rg -r bar foo src/', 'pass'],
+    ['rg -r foo src/', 'block'],
     // Not recursive at all — passes.
     ['grep foo', 'pass'],
     ['grep -n foo bar.ts', 'pass'],

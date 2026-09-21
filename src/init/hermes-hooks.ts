@@ -22,7 +22,7 @@ import { atomicWriteJson } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
-const HERMES_GUARD_VERSION = '0.1.3';
+const HERMES_GUARD_VERSION = '0.1.4';
 
 function hermesHome(): string {
   return process.env.HERMES_HOME ?? path.join(os.homedir(), '.hermes');
@@ -79,22 +79,33 @@ case "$first" in
 import sys
 cmd = sys.stdin.read()
 try:
+    # Narrow guard: command substitution is out of scope for static parsing
+    # (the tokenizer cannot know what $(...) expands to). Fail open rather
+    # than risk vetoing a scoped search whose shape we cannot see.
+    # (Backtick is chr(96): a literal backtick here would close the TS
+    # template literal that embeds this script.)
+    if "$(" in cmd or chr(96) in cmd:
+        print("pass")
+        sys.exit(0)
     SQ = chr(39)
     DQ = chr(34)
     BS = chr(92)
     toks = []
     buf = []
+    started = False
     i = 0
     n = len(cmd)
     while i < n:
         c = cmd[i]
         if c == SQ:
+            started = True
             i += 1
             while i < n and cmd[i] != SQ:
                 buf.append(cmd[i])
                 i += 1
             i += 1
         elif c == DQ:
+            started = True
             i += 1
             while i < n and cmd[i] != DQ:
                 if cmd[i] == BS and i + 1 < n:
@@ -105,23 +116,27 @@ try:
                     i += 1
             i += 1
         elif c == BS and i + 1 < n:
+            started = True
             buf.append(cmd[i + 1])
             i += 2
         elif c.isspace():
-            if buf:
+            if started:
                 toks.append(("word", "".join(buf)))
                 del buf[:]
+                started = False
             i += 1
         elif c == ";" or c == "(" or c == ")":
-            if buf:
+            if started:
                 toks.append(("word", "".join(buf)))
                 del buf[:]
+                started = False
             toks.append(("sep", c))
             i += 1
         elif c == "&":
-            if buf:
+            if started:
                 toks.append(("word", "".join(buf)))
                 del buf[:]
+                started = False
             if cmd[i+1:i+2] == "&":
                 toks.append(("sep", "&&"))
                 i += 2
@@ -136,9 +151,10 @@ try:
                 toks.append(("sep", "&"))
                 i += 1
         elif c == "|":
-            if buf:
+            if started:
                 toks.append(("word", "".join(buf)))
                 del buf[:]
+                started = False
             if cmd[i+1:i+2] == "|":
                 toks.append(("sep", "||"))
                 i += 2
@@ -147,13 +163,17 @@ try:
                 i += 1
         elif c == "<" or c == ">":
             pre = "".join(buf)
+            was_started = started
             del buf[:]
+            started = False
             fd = ""
             if pre:
                 if pre.isdigit():
                     fd = pre
                 else:
                     toks.append(("word", pre))
+            elif was_started:
+                toks.append(("word", pre))
             op = c
             j = i + 1
             if cmd[j:j+1] == c:
@@ -169,9 +189,10 @@ try:
             toks.append(("redir", fd + op))
             i = j
         else:
+            started = True
             buf.append(c)
             i += 1
-    if buf:
+    if started:
         toks.append(("word", "".join(buf)))
     words = []
     k = 0
@@ -203,7 +224,7 @@ try:
     scoping_short = {"grep": "", "rg": "gt", "ack": "", "ag": "G"}[tool]
     help_short = {"grep": "V", "rg": "hV", "ack": "V", "ag": "V"}[tool]
     value_long = ("--regexp", "--file", "--max-count", "--after-context", "--before-context", "--context", "--replace", "--devices", "--directories", "--glob", "--iglob", "--ignore", "--ignore-dir", "--ignore-file", "--type", "--type-add", "--type-not", "--include", "--exclude", "--exclude-dir", "--exclude-from", "--max-columns", "--threads", "--max-filesize", "--dfa-size-limit", "--colors", "--hyperlink-format", "--path-separator", "--label")
-    value_short = "efmABCdDgtjM" if tool == "grep" else "efmABCdDgtrjM"
+    value_short = {"grep": "efmABCdDgtjM", "rg": "efmABCdDgtrjM", "ack": "efmABCdDgtjM", "ag": "efmABCdDgtjM"}[tool]
     recursive = False
     pattern_via_flag = False
     operands = []
