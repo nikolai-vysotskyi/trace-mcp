@@ -22,7 +22,7 @@ import { atomicWriteJson } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
-const HERMES_GUARD_VERSION = '0.1.1';
+const HERMES_GUARD_VERSION = '0.1.2';
 
 function hermesHome(): string {
   return process.env.HERMES_HOME ?? path.join(os.homedir(), '.hermes');
@@ -65,11 +65,95 @@ cmd=$(printf '%s' "$payload" | python3 -c 'import json,sys; d=json.load(sys.stdi
 first=$(printf '%s' "$cmd" | sed -E 's/^[[:space:]]+//' | awk '{print $1}')
 
 case "$first" in
-  grep|rg|ack|ag)
-    # Allow greps that scope themselves with --include= or explicit file args.
-    # We only block the unconstrained "find me this string anywhere" shape.
-    if printf '%s' "$cmd" | grep -qE '(-r|--recursive|\\s-R\\b)'; then
-      block "Use trace-mcp instead: 'search' (for symbols) or 'search_text' (for raw text). These are faster, ranked, and understand the dependency graph. If you truly need a recursive grep, narrow the scope with --include or a specific subdirectory."
+  grep|*/grep|rg|*/rg|ack|*/ack|ag|*/ag)
+    # Block only the unconstrained "find me this string anywhere" shape.
+    # grep recurses only with -r/-R/--recursive; rg/ag/ack recurse by default.
+    # A search scoped with --include/--exclude/--glob/--ignore/--type (or
+    # -g/-G/-t) or with an explicit path operand passes through.
+    # Token parsing lives in python3 (already required above for JSON); when
+    # it is unavailable the decision is empty and we fail open to pass.
+    decision=$(printf '%s' "$cmd" | python3 -c '
+import shlex
+import sys
+cmd = sys.stdin.read()
+try:
+    toks = shlex.split(cmd)
+except Exception:
+    print("pass")
+    sys.exit(0)
+head = []
+for t in toks:
+    if t in ("|", ";", "&&", "||", "&", "(", ")"):
+        break
+    head.append(t)
+toks = head
+if not toks:
+    print("pass")
+    sys.exit(0)
+tool = toks[0].rsplit("/", 1)[-1]
+args = toks[1:]
+for a in args:
+    if a in ("-h", "--help", "-V", "--version"):
+        print("pass")
+        sys.exit(0)
+for a in args:
+    if a.startswith("--include") or a.startswith("--exclude") or a.startswith("--glob") or a.startswith("--iglob") or a.startswith("--ignore") or a.startswith("--type") or a in ("-g", "-G", "-t"):
+        print("pass")
+        sys.exit(0)
+takes_value = ("-e", "-f", "-m", "-A", "-B", "-C", "-D", "-d", "-g", "-t", "-j", "-M", "--regexp", "--file", "--max-count", "--after-context", "--before-context", "--context", "--devices", "--directories", "--glob", "--iglob", "--ignore", "--type", "--type-add", "--max-columns", "--threads", "--max-filesize", "--dfa-size-limit", "--colors", "--hyperlink-format", "--path-separator")
+recursive = False
+pattern_via_flag = False
+operands = []
+i = 0
+opts_done = False
+skip_next = False
+while i < len(args):
+    a = args[i]
+    skip_next = False
+    if not opts_done and a == "--":
+        opts_done = True
+    elif not opts_done and a.startswith("--"):
+        if a == "--recursive" or a == "--dereference-recursive":
+            recursive = True
+        elif a == "--no-recursive":
+            print("pass")
+            sys.exit(0)
+        elif a == "--regexp" or a == "--file":
+            pattern_via_flag = True
+        if "=" not in a and a in takes_value:
+            skip_next = True
+    elif not opts_done and a.startswith("-") and len(a) > 1:
+        j = 1
+        while j < len(a):
+            c = a[j]
+            if c == "r" or c == "R":
+                recursive = True
+            if c == "e" or c == "f":
+                pattern_via_flag = True
+            if c in ("e", "f", "m", "A", "B", "C", "D", "d", "g", "t", "j", "M"):
+                if j == len(a) - 1:
+                    skip_next = True
+                break
+            j = j + 1
+    elif a == "<" or a == ">" or a == ">>" or a == "<<" or a == "2>" or a == "1>" or a == "2>>" or a == "&>" or a == "&>>":
+        i = i + 1
+    elif a.startswith("<") or a.startswith(">") or (len(a) > 2 and a[0].isdigit() and a[1] == ">"):
+        pass
+    else:
+        operands.append(a)
+    if skip_next:
+        i = i + 1
+    i = i + 1
+if tool == "grep" and not recursive:
+    print("pass")
+    sys.exit(0)
+if pattern_via_flag:
+    print("pass" if len(operands) >= 1 else "block")
+else:
+    print("pass" if len(operands) >= 2 else "block")
+' 2>/dev/null || true)
+    if [ "$decision" = "block" ]; then
+      block "Use trace-mcp instead: 'search' (for symbols) or 'search_text' (for raw text). These are faster, ranked, and understand the dependency graph. If you truly need a recursive grep, narrow the scope with --include/--glob or a specific subdirectory."
     fi
     ;;
   find)
