@@ -1773,13 +1773,13 @@ function SessionsView({
                 s.session_id ?? s.session_path.split(/[\\/]/).pop()?.replace(/\.jsonl$/, '') ?? s.session_path;
               const projectName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
               // TRA-1065 review: the row carries the session's own date
-              // (file mtime at the last mining pass), not the processing
-              // date — an August session mined in September must read
-              // August. mined_at stays in the API payload.
-              const sessionDateIso =
-                s.session_mtime_ms && s.session_mtime_ms > 0
-                  ? new Date(s.session_mtime_ms).toISOString()
-                  : s.mined_at;
+              // (live file mtime), not the processing date — an August
+              // session mined in September must read August. When the file
+              // is gone the date is unknown and NO date is shown: a mined_at
+              // fallback would read as the session date. The tooltip then
+              // keeps the raw mined_at ISO (language-neutral, no new
+              // strings) instead.
+              const hasSessionDate = !!s.session_mtime_ms && s.session_mtime_ms > 0;
               return (
                 <div
                   key={s.session_path}
@@ -1798,9 +1798,11 @@ function SessionsView({
                       <div
                         className="text-[11px] leading-[13px] tabular-nums truncate"
                         style={{ color: 'var(--label-secondary)' }}
-                        title={s.session_path}
+                        title={hasSessionDate ? s.session_path : `${s.session_path}\n${s.mined_at}`}
                       >
-                        {projectName} · {formatDate(sessionDateIso)}
+                        {hasSessionDate
+                          ? `${projectName} · ${formatDate(new Date(s.session_mtime_ms ?? 0).toISOString())}`
+                          : projectName}
                       </div>
                     </div>
                     {/* A count is the signal, so it is a number and a noun —

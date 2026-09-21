@@ -489,8 +489,10 @@ export function encodeDirName(projectPath: string): string {
  * Best-effort list of git worktree paths sharing `root`'s repo (main root +
  * every linked worktree), via `git worktree list`. Empty on any failure
  * (not a repo, git missing, timeout) — callers treat that as "just `root`".
+ * Exported for the Memory Sessions endpoint (TRA-1065), which treats a
+ * worktree and its parent as the same owner.
  */
-function listGitWorktrees(root: string): string[] {
+export function listGitWorktrees(root: string): string[] {
   try {
     // root is the trace-mcp memory CLI's own --project flag (path.resolve'd
     // at the CLI boundary in cli/memory.ts and again by the caller below),
