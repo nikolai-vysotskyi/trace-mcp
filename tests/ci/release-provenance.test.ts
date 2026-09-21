@@ -36,5 +36,12 @@ describe('release provenance', () => {
     const steps = JSON.stringify(jobs.sbom?.steps ?? []);
     expect(steps).toContain('dependency-graph/sbom');
     expect(steps).toContain('.spdx.json');
+    // TRA-908: the synchronous .../dependency-graph/sbom endpoint sunsets
+    // 2026-11-13. The job must use the async generate-report + fetch-report
+    // flow, never the deprecated one-call form (`.../sbom"` with the closing
+    // quote directly after `sbom`).
+    expect(steps).toContain('sbom/generate-report');
+    expect(steps).toContain('sbom/fetch-report');
+    expect(steps).not.toContain('dependency-graph/sbom"');
   });
 });
