@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.0...v3.31.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ci:** raise MCP-registry publish timeout above npm wait loop (TRA-1756) ([#1308](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1308)) ([6c839c0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c839c0f1f801a072a5adb0611cc11308abe58f2))
+* **daemon:** count deferred reconcile + bulk indexing in projects_indexing (TRA-1763) ([#1311](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1311)) ([09db9e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/09db9e7921f705b2032c6cce07ae1fff4b7e6960))
+* **daemon:** stop rescanning deleted roots, report missing in health (TRA-1715) ([#1290](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1290)) ([52b38c0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52b38c01c7c2c5b84c78d6f7bf58c90105c223fd))
+* **gc:** sweep ephemeral watcher snapshots, log ephemeral sweep (TRA-1714) ([#1289](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1289)) ([0d63b18](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0d63b18363adcc39bdfa3fe2bdefff537012cf8c))
+* **graph:** stabilize zoom gestures and deduplicate hover labels (TRA-1767) ([#1314](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1314)) ([483441e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/483441ee7460b75bb9bad7fe97bfa973c3ff3f03))
+* **indexer,daemon:** dedup identical language-plugin failures, skip ephemeral roots on update reindex (TRA-1768) ([#1315](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1315)) ([f232fce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f232fced9ec0e39178dfc99282513b5135e0977a))
+* **indexer:** purge stale electron cross-file edges on handler/listener removal (TRA-1780) ([#1318](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1318)) ([5dcec54](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5dcec545e932105389273384dd187e38d9249cf9))
+* **indexer:** yield between framework edge passes so /health stays answerable (TRA-922) ([#1302](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1302)) ([56f4d09](https://github.com/nikolai-vysotskyi/trace-mcp/commit/56f4d09417be38c60716ce05ccd2e76d319efb93))
+
+
+### Performance
+
+* **indexer:** scope-aware Pass 2 remainder — electron channel cache, file-projection UNION, ts import-map narrowing (TRA-1729) ([#1313](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1313)) ([1a5e97a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1a5e97a340132fe63d7286c0324c1422ab3441f1))
+
 ## [3.31.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.30.1...v3.31.0) (2026-09-20)
 
 
