@@ -153,12 +153,23 @@ their next client update.
 
 **The one place that boundary is under strain is `tweakcc`** (`docs/tweakcc.md`,
 `src/init/tweakcc.ts`). It patches Claude Code's system prompts, which is the far
-side of the line as written. It stays defensible only on a distinction the copy
-has to make explicitly, every time it is mentioned: **`tweakcc` is a third-party
-tool the user installs and runs themselves, and we document a pairing with it —
-trace-mcp does not patch anything.** Anyone writing public copy that puts the
-boundary sentence and `tweakcc` on the same page owes the reader that sentence
-too. If the distinction ever stops being drawn, the honest move is to drop the
+side of the line as written — and the Max tier of `trace init` invokes it for the
+user when the pairing can run: non-interactive `init` against a
+Claude-Code-family client defaults to Max (`src/cli/init.ts`), which writes
+prompt files into the tweakcc system-prompts directory (default
+`~/.tweakcc/system-prompts/`, an existing alternate config directory respected)
+and runs `npx -y tweakcc@4.3.3 --apply` itself (`src/init/tweakcc.ts`). If no
+tweakcc config exists yet and no tweakcc executable is on `PATH`,
+`resolveOrBootstrapPromptsDir` returns null and Max writes nothing and runs
+nothing ("tweakcc package not available"). "The user installs
+and runs it themselves" describes a flow that is not the default one, so the copy
+has to draw the narrower, true distinction every time the two appear together:
+**the patching code is a third-party tool's, not ours — but the decision to run it
+at the Max tier is ours, and it is declinable (`--skip-hooks`, or Base/Standard).**
+Anyone writing public copy that puts the boundary sentence and `tweakcc` on the
+same page owes the reader that sentence too. (`docs/what-trace-init-installs.md`
+carries this version since TRA-919; TRA-979 corrected this paragraph to match the
+code.) If the distinction ever stops being drawn, the honest move is to drop the
 pairing from the public surfaces, not to soften the boundary: the boundary is
 load-bearing for the whole claim and `tweakcc` is an optional amplifier on one
 client.
