@@ -1933,6 +1933,10 @@ export class IndexingPipeline {
               skipped: repairResult.skipped,
               errors: repairResult.errors,
               pendingImports: this._pendingImports.size,
+              pendingImportEntries: [...this._pendingImports.entries()].map(([id, list]) => ({
+                fileId: id,
+                froms: list.map((e) => e.from),
+              })),
             },
             'TRA-1017 deferred repair extraction done',
           );
