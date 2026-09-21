@@ -105,16 +105,31 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
       const file = fileMap.get(fileId);
-      if (!file) continue;
+      if (!file) {
+        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
+        logger.warn({ fileId, root: state.rootPath }, 'TMPDBG esm-skip no-file-row');
+        continue;
+      }
       // Skip non-JS/TS files — PHP/Python imports are handled by their own
       // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
       // `App\Actions\Foo`) get run through npm bucketing and pollute the
       // phantom graph.
-      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) continue;
+      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) {
+        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
+        logger.warn(
+          { fileId, path: file.path, language: file.language },
+          'TMPDBG esm-skip language-guard',
+        );
+        continue;
+      }
 
       const absSource = path.resolve(state.rootPath, file.path);
       const sourceNodeId = fileNodeMap.get(fileId);
-      if (sourceNodeId == null) continue;
+      if (sourceNodeId == null) {
+        // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
+        logger.warn({ fileId, path: file.path }, 'TMPDBG esm-skip no-source-node');
+        continue;
+      }
 
       const consolidated = new Map<string, string[]>();
       for (const { from, specifiers } of imports) {
@@ -129,8 +144,7 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
       const sourceWs = fileWorkspace.get(fileId) ?? null;
 
       for (const [from, specifiers] of consolidated) {
-        if (!from) continue;
-        // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
+        if (!from) continue; // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
         if (
           from.startsWith('http://') ||
           from.startsWith('https://') ||
@@ -166,7 +180,12 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
               created++;
               continue;
             }
+            // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
+            logger.warn({ from, relTarget, file: file.path }, 'TMPDBG esm-skip no-target-row');
           }
+        } else {
+          // TMP-CI-DEBUG (TRA-1017): remove after diagnosing.
+          logger.warn({ from, absSource }, 'TMPDBG esm-skip unresolved');
         }
 
         if (isRelative) {
