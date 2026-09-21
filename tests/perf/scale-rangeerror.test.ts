@@ -41,6 +41,23 @@ describe('tools above V8 argument limit (#957)', () => {
     expect(result.items.length).toBeGreaterThan(0);
   });
 
+  it('search() with fusion enabled ranks the same index (fusion maxPr path)', async () => {
+    const result = await search(
+      store,
+      'module0',
+      undefined,
+      20,
+      0,
+      undefined,
+      undefined,
+      undefined,
+      {
+        fusion: true,
+      },
+    );
+    expect(result.items.length).toBeGreaterThan(0);
+  });
+
   it('runFlatSearch() survives the same index', async () => {
     const result = await runFlatSearch(store, 'module0', {}, 20, 0);
     expect(result.items.length).toBeGreaterThan(0);

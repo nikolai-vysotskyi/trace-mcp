@@ -14,7 +14,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const SPREAD_INTO_MATH = /Math\.(?:min|max)\(\s*\.\.\./;
+const SPREAD_INTO_MATH = /Math\.(?:min|max)\([^()\n]*\.\.\./;
 
 describe('no spread into Math.min/Math.max in src/', () => {
   it('every min/max over a collection reduces instead of spreading', () => {

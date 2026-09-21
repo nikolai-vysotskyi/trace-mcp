@@ -20,6 +20,7 @@ import type { TopologyStore } from '../../topology/topology-db.js';
 import { writeTmpFileSync } from '../../utils/safe-fs.js';
 import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 import { labelCommunities } from './communities.js';
+import { minMax } from '../../util/minmax.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -830,7 +831,7 @@ function finalize(
     degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
     degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
   }
-  const maxDegree = Math.max(1, ...degree.values());
+  const maxDegree = Math.max(1, minMax(degree.values()).max);
   for (const node of vizNodes) {
     node.importance = Math.round(((degree.get(node.id) ?? 0) / maxDegree) * 100) / 100;
   }

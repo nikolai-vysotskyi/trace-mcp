@@ -31,6 +31,7 @@ import {
 } from '../init/mcp-client.js';
 import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
+import { minMax } from '../util/minmax.js';
 
 export const clientsCommand = new Command('clients').description(
   'Inspect MCP client configurations',
@@ -200,7 +201,7 @@ function formatClientDisplayName(name: string): string {
 
 function printHumanReport(scope: string, statuses: McpClientStatus[]): void {
   console.log(`MCP client configurations (scope: ${scope})\n`);
-  const widthName = Math.max(6, ...statuses.map((s) => s.client.length));
+  const widthName = Math.max(6, minMax(statuses.map((s) => s.client.length)).max);
   for (const s of statuses) {
     const pad = s.client.padEnd(widthName);
     const tag = formatStatusTag(s);
