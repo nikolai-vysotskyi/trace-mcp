@@ -125,7 +125,7 @@ export interface IndexingResult {
  * importing it from the pipeline module; defined in `./index-abort.js` to
  * avoid a circular import with `extract-and-persist.ts`.
  */
-import { IndexAbortedError, throwIfIndexAborted } from './index-abort.js';
+import { classifyRepairStat, IndexAbortedError, throwIfIndexAborted } from './index-abort.js';
 export { IndexAbortedError, throwIfIndexAborted };
 
 /** Options for `IndexingPipeline.indexAll`. */
@@ -1379,6 +1379,46 @@ export class IndexingPipeline {
     }
   }
 
+  /**
+   * Split the durable repair scope into files to re-extract and rows to
+   * retire (TRA-1017). Every dirty stored file must be successfully
+   * reconstructed and resolved, or deliberately removed from the index,
+   * before the incomplete mark clears — merely filtering a path out of
+   * extraction satisfies neither condition, so classification runs on the
+   * stat outcome (deleted vs inaccessible), never on `existsSync`.
+   *
+   * Confirmed deletions (and paths that were never files) are reconciled via
+   * `deleteFiles` here — safe (closed-DB guard, no-op on missing rows) and
+   * required for the deferred path, which never runs `reconcileScope`.
+   * Inaccessible paths stay in the returned scope: the repair extract errors
+   * on them and the errors gate retains the marker.
+   */
+  private partitionRepairPaths(relPaths: string[]): string[] {
+    const repairable: string[] = [];
+    for (const rel of relPaths) {
+      let disposition;
+      try {
+        const st = fs.statSync(path.resolve(this.rootPath, rel));
+        disposition = classifyRepairStat({ ok: true, isFile: st.isFile() });
+      } catch (err) {
+        disposition = classifyRepairStat({
+          ok: false,
+          code: (err as NodeJS.ErrnoException)?.code,
+        });
+      }
+      if (disposition === 'retire-row') {
+        try {
+          this.deleteFiles([rel]);
+        } catch (err) {
+          logger.debug({ err, rel }, 'retire-row deleteFiles failed (non-fatal)');
+        }
+        continue;
+      }
+      repairable.push(rel);
+    }
+    return repairable;
+  }
+
   private async runPipeline(
     relPaths: string[],
     force: boolean,
@@ -1412,18 +1452,14 @@ export class IndexingPipeline {
     // TRA-1017: repair scope — files a previous run persisted without
     // resolving. Force-extracted below so their `pendingImports` extraction
     // state is rebuilt; a bare re-resolution cannot reconstruct it (the ESM
-    // import pass reads only that state). Empty on healthy indexes. Entries
-    // deleted from disk since are dropped: their rows are reconcileScope's
-    // domain, and an unextractable path must never wedge the scope.
+    // import pass reads only that state). Empty on healthy indexes.
+    // Partitioned (not merely existence-filtered): confirmed deletions
+    // retire their rows here, inaccessible paths stay scoped so the errors
+    // gate retains them — `existsSync` conflates the two and would clear
+    // either wrongly.
     const repairPaths =
       wasIncomplete && this._postprocessLevel !== 'none'
-        ? this.readIncompleteFiles().filter((p) => {
-            try {
-              return fs.existsSync(path.resolve(this.rootPath, p));
-            } catch {
-              return false;
-            }
-          })
+        ? this.partitionRepairPaths(this.readIncompleteFiles())
         : [];
     // Sync the xxhash-wasm module before any extract() runs so the
     // content-hash gate is non-blocking on the hot path.
@@ -1861,20 +1897,12 @@ export class IndexingPipeline {
       // run. Re-extract exactly the repair scope first so this pass actually
       // restores the graph; only then is the mark safe to clear. Clearing it
       // without the re-extract blessed permanently missing edges (the
-      // zero-change shortcuts trust hashes that say "current"). Paths deleted
-      // from disk since are dropped from the scope — their rows are
-      // reconcileScope's domain, and an unextractable path must never wedge
-      // the repair.
+      // zero-change shortcuts trust hashes that say "current"). Partitioned
+      // (not merely existence-filtered) for the same reason as in
+      // runPipeline: confirmed deletions retire their rows here — this path
+      // never runs reconcileScope — while inaccessible paths stay scoped.
       const needsRepair = this.isPostprocessIncomplete();
-      const repairPaths = needsRepair
-        ? this.readIncompleteFiles().filter((p) => {
-            try {
-              return fs.existsSync(path.resolve(this.rootPath, p));
-            } catch {
-              return false;
-            }
-          })
-        : [];
+      const repairPaths = needsRepair ? this.partitionRepairPaths(this.readIncompleteFiles()) : [];
       let repairErrors = 0;
       try {
         if (repairPaths.length > 0) {

@@ -10,7 +10,7 @@
  */
 import Database from 'better-sqlite3';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +19,7 @@ import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
 import { FileExtractor } from '../file-extractor.js';
-import { IndexAbortedError, throwIfIndexAborted } from '../index-abort.js';
+import { IndexAbortedError, classifyRepairStat, throwIfIndexAborted } from '../index-abort.js';
 import { IndexingPipeline } from '../pipeline.js';
 
 let workDir: string;
@@ -74,6 +74,25 @@ describe('throwIfIndexAborted', () => {
     }
     expect(caught).toBeInstanceOf(IndexAbortedError);
     expect((caught as Error).name).toBe('IndexAbortedError');
+  });
+});
+
+describe('classifyRepairStat', () => {
+  it.each([
+    // A readable file always repairs (its hash gate cannot be trusted).
+    [{ ok: true, isFile: true }, 'repair'],
+    // Confirmed gone: reconcile the row, retire the obligation.
+    [{ ok: false, code: 'ENOENT' }, 'retire-row'],
+    [{ ok: false, code: 'ENOTDIR' }, 'retire-row'],
+    [{ ok: true, isFile: false }, 'retire-row'],
+    // Inaccessible (EACCES/EPERM/...) or unknown: retain — the re-extract
+    // errors and the errors gate keeps the marker. existsSync conflates
+    // these with deletion and must not be used here.
+    [{ ok: false, code: 'EACCES' }, 'repair'],
+    [{ ok: false, code: 'EPERM' }, 'repair'],
+    [{ ok: false, code: undefined }, 'repair'],
+  ] as const)('classifies %j as %s', (stat, expected) => {
+    expect(classifyRepairStat(stat)).toBe(expected);
   });
 });
 
@@ -639,4 +658,103 @@ describe('indexAll with AbortSignal (TRA-1017)', () => {
       }
     },
   );
+});
+
+/**
+ * TRA-1017 round 4: a repair path that is merely unreachable must not retire
+ * the dirty row. `existsSync` conflates deletion with inaccessibility — the
+ * deferred pass (which never reconciles scope) would then clear the marker
+ * with the stale row still stored. Classification runs on the stat outcome:
+ * confirmed deletion reconciles the row, access failure retains the scope.
+ */
+describe.each([
+  ['temporarily-absent', false],
+  ['inaccessible', true],
+] as const)('dirty row with %s file (TRA-1017)', (mode, needsChmod) => {
+  // chmod-based traversal denial is permission semantics: meaningless for
+  // root (nothing is denied) and unreliable on Windows. The rename variant
+  // runs everywhere; the classifier truth table above covers the codes.
+  const maybeSkip =
+    needsChmod && (process.platform === 'win32' || process.geteuid?.() === 0)
+      ? it.skipIf(true)
+      : it;
+  maybeSkip(`does not forget the row, and the retry converges (file ${mode})`, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'index-abort-r4-'));
+    const child = join(root, 'child');
+    mkdirSync(child);
+    const r4Db = initializeDatabase(join(root, 'index.db'));
+    const r4Store = new Store(r4Db);
+    const write = (name: string, text: string): void => {
+      writeFileSync(join(root, name), text);
+    };
+    write('a.ts', 'export function foo() { return 1; }\n');
+    write('child/b.ts', "import { foo } from '../a';\nexport function bar() { return foo(); }\n");
+    write('c.ts', "import { foo } from './a';\nexport function keep() { return foo(); }\n");
+    const p = new IndexingPipeline(
+      r4Store,
+      PluginRegistry.createWithDefaults(),
+      TraceMcpConfigSchema.parse({}),
+      root,
+    );
+    const importCount = (): number =>
+      (
+        r4Db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM edges
+             WHERE edge_type_id = (SELECT id FROM edge_types WHERE name = 'imports')`,
+          )
+          .get() as { n: number }
+      ).n;
+    try {
+      await p.indexAll(true);
+      expect(importCount()).toBe(2);
+      write('child/b.ts', "import '../a';\nexport function bar() { return 2; }\n");
+      const controller = new AbortController();
+      // biome-ignore lint/suspicious/noExplicitAny: spying on the private phase boundary
+      const internal = p as any;
+      const extract = internal.extractAndPersist.bind(p);
+      const spy = vi
+        .spyOn(internal, 'extractAndPersist')
+        // biome-ignore lint/suspicious/noExplicitAny: passthrough args
+        .mockImplementation(async (...args: any[]) => {
+          await extract(...args);
+          controller.abort();
+        });
+      await expect(
+        p.indexFiles(['child/b.ts'], { signal: controller.signal }),
+      ).rejects.toBeInstanceOf(IndexAbortedError);
+      spy.mockRestore();
+      expect(importCount()).toBe(1);
+      if (mode === 'inaccessible') chmodSync(child, 0o000);
+      else renameSync(join(child, 'b.ts'), join(root, 'saved-b.tmp'));
+      write(
+        'c.ts',
+        "import { foo } from './a';\nexport function keep() { return foo(); }\nexport function added() { return 7; }\n",
+      );
+      await p.indexFiles(['c.ts']);
+      await p.__flushEdgeReconcileForTests();
+      const marker = r4Store.getRepoMetadata('postprocess_incomplete');
+      const dirtyRowRemains = !!r4Store.getFile('child/b.ts');
+      if (mode === 'inaccessible') chmodSync(child, 0o700);
+      else renameSync(join(root, 'saved-b.tmp'), join(child, 'b.ts'));
+      await p.indexAll(false, { discovery: 'full-walk' });
+      const afterRetry = importCount();
+      await p.indexAll(true);
+      // Safe outcomes: retain the repair mark or deliberately remove the old
+      // DB row, so the restored file cannot hash-skip its missing imports.
+      expect({ safeState: marker === '1' || !dirtyRowRemains, afterRetry }).toEqual({
+        safeState: true,
+        afterRetry: importCount(),
+      });
+    } finally {
+      try {
+        chmodSync(child, 0o700);
+      } catch {
+        /* restore-only; the rename variant has nothing to restore */
+      }
+      await p.dispose();
+      r4Db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
