@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.1...v3.31.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **app:** manual MCP setup hints name the launcher shim, not PATH binary (TRA-1109) ([#1322](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1322)) ([7b1f28a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7b1f28aa5a64141e62b4c2acdc0f3631a5ce03eb))
+* **daemon,indexer:** bound daemon shutdown within its 20s deadline (TRA-1017) ([#1328](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1328)) ([c43098d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c43098ded7bfd3e915a8e70d8e53928d06b4a313))
+* **graph:** keep Live through drag gestures, overlay inspector without canvas resize (TRA-1783) ([#1337](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1337)) ([920c65f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/920c65f47999649474a97a1858eb9e706d25e34c))
+* **memory:** scope Sessions tab to requested project (TRA-1065) ([#1323](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1323)) ([255e3e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/255e3e0e60665bccfd238dd7fa78db80acb6fef3))
+* **scale:** close non-leading-spread hole in min/max gate (TRA-981) ([#1336](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1336)) ([6854851](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6854851e647c98c5ec7b6e6388d318b3020aa4c6))
+
+
+### Documentation
+
+* **site:** tell the truth about who runs tweakcc (TRA-979) ([#1319](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1319)) ([07ba468](https://github.com/nikolai-vysotskyi/trace-mcp/commit/07ba468a33491701676df397f569c18c597ab2dd))
+
 ## [3.31.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.0...v3.31.1) (2026-09-21)
 
 
