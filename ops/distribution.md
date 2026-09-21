@@ -2755,3 +2755,24 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — the yzfly merge is inbound.
 
+### Delta recheck, 2026-09-21 morning (TRA-1778): six hours after the night pass, threads silent, sweep classified, no shippable step
+
+**Open threads — all unchanged, nothing owed (all via GitHub API).**
+- Catalog PRs: `eltociear#119` (open, clean, 1 comment — our own 09-20 reminder, no maintainer reply), `GetBindu#195` (same shape), `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping not before 26.09), `ai-boost#240` (open, still dirty — not rebased per the ledger rule: rebase only close to a merge signal, and there is none).
+- `hermes#395`, `nix#606`: open, 1 comment each — both our own 09-20 reminders, no replies. The single allowed nix reminder is spent; do not ping nix again.
+- `awesome-claude-code#2871`: open, 1 comment (filing-moment bot validation 09-18), no maintainer reply — wait, do not ping.
+- Comment threads: `slopstop#633` (newest ours 09-06 — deliberately not pinged: nothing new to add since the failure-mode note), `atlas#105` (open, 9 comments, newest the maintainer's own 09-07 Tier-2 close-out), `pi-extensions#1204` (open, 0 comments), `kilocode#13843` (open, 3 comments — 09-07 ours, 09-19 third-party Kylin repro, 09-20T06:56 reporter iterating with maintainer; all predate the night pass, nothing addressed to us), `kilocode#12707` (newest ours 09-07).
+- `MiniMax-AI/MiniMax-Code-Plugins#54` (TRA-1705): open, 0 comments, `updated_at` moved to 09-21T01:18Z — read before assuming: last commit is still ours (09-19 `bf93ee4`), the only check is `[code]smith` SKIPPED. CI-only movement, no human action, nothing owed.
+- `hashgraph-online/awesome-ai-plugins#182`: closed/merged 08-31, `updated_at` 09-10 — no new activity. Ownership-claim decline stands.
+- trace-mcp 178★/22 forks — flat since the night pass.
+
+**Mention sweep: 2 hits, both read and classified, both recorded in `ops/mentions-seen.txt`.**
+- `mrchatam/Trace`: name collision, not a mention. 11★ Go project ("Local-first project knowledge graph", pushed 09-20) ships its own binary named `trace-mcp` (`cmd/trace-mcp/main.go` imports `github.com/mrchatam/Trace/internal/mcp`). None of the hits reference us. No outreach — competitor-shaped repo with nothing of ours to point at.
+- `yzfly/awesome-context-engineering`: our own merged listing (PR #44) — the sweep matches our entry line. Already a ledger row; silenced future hits, not dismissed.
+
+**Catalogs:** moratorium holds, no submissions. Queue stands (StackMap first, aloth second, TensorBlock third).
+
+**Competitors:** star snapshot skipped — six hours after the night pass is noise, not signal; `docs/_data/competitors.yml` untouched (Competitor Intelligence lane).
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+

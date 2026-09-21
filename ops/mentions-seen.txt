@@ -171,3 +171,9 @@ lza6/Aggregate-to-2api
 # ── Swept 2026-09-17 night (TRA-1624) ──
 # Single-author zh-TW Claude-maintained catalog (0★, 0 forks, 163 entries, static index.html, no license, no submission path): catalog.json already carries us accurately (81 langs, 87 frameworks, over-70% PR tokens, added 2026-09-07). No audience, nothing to submit, ledger row added:
 cyc123456789/claude-catalog
+
+# ── Swept 2026-09-21 morning (TRA-1778) ──
+# Name collision, not a mention (11★ Go project, pushed 2026-09-20): ships its own binary named `trace-mcp` (`cmd/trace-mcp/main.go`, `package main`, imports `github.com/mrchatam/Trace/internal/mcp`, "Thin MCP stdio server (official go-sdk)"). Read the matched file before classifying — none of the hits reference nikolai-vysotskyi/trace-mcp. No outreach (competitor-shaped repo, and there is nothing of ours to point at):
+mrchatam/Trace
+# Our own merged listing (PR #44 merged 2026-09-20, verified live in README.md + README_CN.md): the sweep matches our entry line. Genuine surface, already tracked as a ledger row — silencing future hits, not dismissing it:
+yzfly/awesome-context-engineering
