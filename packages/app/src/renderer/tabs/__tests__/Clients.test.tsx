@@ -552,3 +552,71 @@ it('renders every known client row', async () => {
   }
   expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(19);
 });
+
+// ── TRA-1109 ──────────────────────────────────────────────────────────────
+
+/* The manual rows named a bare `trace-mcp` from PATH while the automatic
+   writes point at the absolute launcher shim — on a machine with a stale npm
+   install beside the desktop app those are different programs at different
+   versions. The steps must name the same shim the app writes itself. */
+const SHIM = '/Users/x/.trace/bin/trace';
+
+function mockShimPath(): void {
+  (
+    window as unknown as { electronAPI: Record<string, unknown> }
+  ).electronAPI.getLauncherShimPath = vi.fn().mockResolvedValue(SHIM);
+}
+
+it('names the absolute shim in the JetBrains steps, not a bare binary', async () => {
+  mockShimPath();
+  render(<Clients />);
+
+  const buttons = await screen.findAllByRole('button', { name: 'Set up manually…' });
+  fireEvent.click(buttons[0]);
+
+  expect(await screen.findByText(`Settings → Tools → AI Assistant → MCP → Add → Command: ${SHIM}, Args: serve`)).toBeTruthy();
+  expect(screen.queryByText(/Command: trace-mcp/)).toBeNull();
+});
+
+it('gives Warp a paste-ready snippet carrying the shim as command', async () => {
+  mockShimPath();
+  render(<Clients />);
+
+  const buttons = await screen.findAllByRole('button', { name: 'Set up manually…' });
+  fireEvent.click(buttons[1]);
+
+  const caption = await screen.findByText(/Settings → Agents/);
+  expect(caption.textContent).toContain(`"command":"${SHIM}"`);
+  expect(caption.textContent).toContain('"args":["serve"]');
+  expect(caption.textContent).not.toContain('…');
+});
+
+it('copies the shim path from the JetBrains row', async () => {
+  const writeText = vi.fn();
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  mockShimPath();
+  render(<Clients />);
+
+  const buttons = await screen.findAllByRole('button', { name: 'Set up manually…' });
+  fireEvent.click(buttons[0]);
+  fireEvent.click(await screen.findByRole('button', { name: 'Copy shim path' }));
+
+  expect(writeText).toHaveBeenCalledWith(SHIM);
+});
+
+it('copies the JSON snippet from the Warp row', async () => {
+  const writeText = vi.fn();
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  mockShimPath();
+  render(<Clients />);
+
+  const buttons = await screen.findAllByRole('button', { name: 'Set up manually…' });
+  fireEvent.click(buttons[1]);
+  fireEvent.click(await screen.findByRole('button', { name: 'Copy JSON snippet' }));
+
+  expect(writeText).toHaveBeenCalledTimes(1);
+  const pasted = JSON.parse(writeText.mock.calls[0][0]) as {
+    mcpServers: { trace: { command: string; args: string[] } };
+  };
+  expect(pasted.mcpServers.trace).toEqual({ command: SHIM, args: ['serve'] });
+});

@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
+  /** TRA-1109: absolute launcher shim path for the manual-setup rows. */
+  getLauncherShimPath: (): Promise<string> => ipcRenderer.invoke('get-launcher-shim-path'),
   guessFirstProject: (): Promise<{ path: string; name: string } | null> =>
     ipcRenderer.invoke('guess-first-project'),
   getMcpClientStatuses: (

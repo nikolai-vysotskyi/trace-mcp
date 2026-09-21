@@ -46,6 +46,8 @@ export const clients = {
   blockedDismiss: 'ठीक है',
   setUpManually: 'खुद सेट करें…',
   hideSteps: 'चरण छिपाएँ',
+  copyShimPath: 'शिम पथ कॉपी करें',
+  copyWarpSnippet: 'JSON स्निपेट कॉपी करें',
 
   enforcementLevel: 'एनफ़ोर्समेंट स्तर',
   levelBase: 'Base',

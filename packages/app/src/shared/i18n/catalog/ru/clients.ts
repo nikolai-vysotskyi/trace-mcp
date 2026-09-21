@@ -46,6 +46,8 @@ export const clients = {
   blockedDismiss: 'Понятно',
   setUpManually: 'Настроить вручную…',
   hideSteps: 'Скрыть шаги',
+  copyShimPath: 'Скопировать путь к шиму',
+  copyWarpSnippet: 'Скопировать JSON-фрагмент',
 
   enforcementLevel: 'Уровень контроля',
   levelBase: 'Базовый',

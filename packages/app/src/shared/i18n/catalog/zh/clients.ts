@@ -45,6 +45,8 @@ export const clients = {
   blockedDismiss: '知道了',
   setUpManually: '手动配置…',
   hideSteps: '隐藏步骤',
+  copyShimPath: '复制 shim 路径',
+  copyWarpSnippet: '复制 JSON 片段',
 
   enforcementLevel: '管控级别',
   levelBase: '基础',

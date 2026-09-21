@@ -60,6 +60,11 @@ import {
 import { Skeleton } from '../workspace/components/Skeleton';
 import { type ClientInfo, useDaemon } from '../hooks/useDaemon';
 import { useUsefulPaint } from '../perf';
+import {
+  buildManualCopyText,
+  buildManualHint,
+  type ManualClientName,
+} from './manualHints';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
 type ClientName =
@@ -118,11 +123,14 @@ const MANUAL_CLIENTS = new Set<ClientName>(['jetbrains-ai', 'warp']);
 
 /* Not translated, on purpose: this is the literal path a user clicks inside
    somebody else's app, and those menus ship in English. A translated path sends
-   them looking for a menu that is not there. */
-const MANUAL_HINTS: Partial<Record<ClientName, string>> = {
-  'jetbrains-ai': 'Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
-  warp: 'Settings → Agents → MCP servers → + Add → paste { mcpServers: { "trace-mcp": … } }',
-};
+   them looking for a menu that is not there. The hint bodies themselves live in
+   ./manualHints, built around the absolute launcher shim path (TRA-1109) rather
+   than a bare binary name resolved from PATH. */
+const MANUAL_CLIENT_NAMES: ManualClientName[] = ['jetbrains-ai', 'warp'];
+
+function isManualHintName(name: ClientName): name is ManualClientName {
+  return (MANUAL_CLIENT_NAMES as ClientName[]).includes(name);
+}
 
 interface DetectedClient {
   name: string;
@@ -376,6 +384,7 @@ function SupportedClientRow({
   onConnectWithLevel,
   onUpdate,
   onEnableRedirect,
+  shimPath,
 }: {
   name: ClientName;
   label: string;
@@ -398,6 +407,8 @@ function SupportedClientRow({
   configPath?: string | null;
   configExists?: boolean;
   staleReason?: string;
+  /** TRA-1109 absolute launcher shim path for the manual-setup hints. */
+  shimPath?: string | null;
   /** TRA-1647 pickup code for this client (absent on older daemons). */
   pickup?: ClientPickup | null;
   /** TRA-1698 redirect state (absent on older daemons — shows no badge). */
@@ -462,12 +473,19 @@ function SupportedClientRow({
      and offers the one-click fix, so the caption keeps the path. */
   const showEnableRedirect = connected && hook === 'missing';
   const showHookActive = connected && hook === 'active';
+  /* TRA-1109: the manual hint names the same absolute launcher shim the
+     automatic writes use — never a bare binary name from PATH, which on a
+     machine with a stale npm install beside the desktop app resolves to a
+     different program at a different version. */
+  const manualHint = isManual && isManualHintName(name) ? buildManualHint(name, shimPath) : null;
+  const manualCopy = isManual && isManualHintName(name) ? buildManualCopyText(name, shimPath) : null;
+  const copyLabel = name === 'warp' ? t('copyWarpSnippet') : t('copyShimPath');
   const caption = error
     ? error
     : restartHint
       ? restartHint
       : isManual && showSteps
-        ? MANUAL_HINTS[name]
+        ? manualHint
         : status === 'missing'
         ? configExists === true && configPath
           ? shortPath(configPath)
@@ -577,13 +595,27 @@ function SupportedClientRow({
           {configuring ? t('updating') : t('update')}
         </Button>
       ) : isManual ? (
-        <Button
-          active={showSteps}
-          aria-expanded={showSteps}
-          onClick={() => setShowSteps((v) => !v)}
-        >
-          {showSteps ? t('hideSteps') : t('setUpManually')}
-        </Button>
+        /* TRA-1109: the shim path is long and typed by hand (JetBrains) or the
+           snippet is pasted (Warp), so the expanded row offers it on the
+           clipboard next to the toggle. */
+        <span className="flex items-center gap-1.5 shrink-0">
+          {showSteps && manualCopy && (
+            <Button
+              variant="icon"
+              icon="content_copy"
+              onClick={() => void navigator.clipboard?.writeText(manualCopy)}
+              aria-label={copyLabel}
+              title={copyLabel}
+            />
+          )}
+          <Button
+            active={showSteps}
+            aria-expanded={showSteps}
+            onClick={() => setShowSteps((v) => !v)}
+          >
+            {showSteps ? t('hideSteps') : t('setUpManually')}
+          </Button>
+        </span>
       ) : (
         <Button
           ref={levelMenu.ref}
@@ -729,6 +761,17 @@ export function Clients() {
   const [redirectBusy, setRedirectBusy] = useState(false);
   const [redirectError, setRedirectError] = useState<string | null>(null);
   const [redirectDone, setRedirectDone] = useState(false);
+  /**
+   * TRA-1109: the absolute launcher shim path the manual-setup rows name. The
+   * renderer has no fs/homedir, so the main process answers it over IPC; null
+   * until it lands (or when IPC is absent, e.g. a plain browser) reads as
+   * "not known yet" and the hints fall back to the bare binary name.
+   */
+  const [shimPath, setShimPath] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.electronAPI?.getLauncherShimPath?.()?.then(setShimPath, () => {});
+  }, []);
 
   /* Useful once the client list has anything to show — detection resolved,
      or a partial list already on screen. */
@@ -1050,6 +1093,7 @@ export function Clients() {
                       onConnectWithLevel={(level) => handleConnect(c.name, level)}
                       onUpdate={() => handleUpdate(c.name)}
                       onEnableRedirect={handleEnableRedirect}
+                      shimPath={shimPath}
                     />
                   );
                 })
