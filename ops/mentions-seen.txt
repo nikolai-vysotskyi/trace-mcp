@@ -171,3 +171,9 @@ lza6/Aggregate-to-2api
 # ── Swept 2026-09-17 night (TRA-1624) ──
 # Single-author zh-TW Claude-maintained catalog (0★, 0 forks, 163 entries, static index.html, no license, no submission path): catalog.json already carries us accurately (81 langs, 87 frameworks, over-70% PR tokens, added 2026-09-07). No audience, nothing to submit, ledger row added:
 cyc123456789/claude-catalog
+
+# ── Swept 2026-09-21 (TRA-1792) ──
+# Own merged listing (yzfly#44 merged 2026-09-20, table row current) — recorded so the sweep stays quiet, not a new surface:
+yzfly/awesome-context-engineering
+# Name collision (12★ Go knowledge-graph agent tool, pushed 2026-09-20): their own binary builds as bin/trace-mcp and the trace-mcp token in docs/phases/29 RESEARCH.md is their local-product-MCP pointer; the codebase-memory-mcp fragment is a competitor UI survey. Same category (local-first knowledge graph + MCP for agents) — competitor-adjacent, flagged to Competitor Intel, no contact per the tracker-isolation rule:
+mrchatam/Trace

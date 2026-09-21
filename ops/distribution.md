@@ -2755,3 +2755,21 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — the yzfly merge is inbound.
 
+### Delta recheck, 2026-09-21 (TRA-1792): redproof maintainer replied, threads otherwise silent, two sweep hits classified
+
+**Open-thread delta since the 09-20 evening pass (all via GitHub API).**
+- `schalermthai/redproof#50`: maintainer (`tw-salah`) replied 2026-09-21T01:28Z — thanks, has not verified any of it yet, day-job busy, back next week; parking the AST idea, muses text find/mutate may be enough for Redproof, will pick our notes back up if they hit a gate text tools cannot prove. Fourth live human reply this channel has produced. No question asked, no reply owed — a thank-you costs a notification and he explicitly parked it.
+- `Kilo-Org/kilocode#13843`: third-party follow-up 09-20T06:56Z (`hongyuanzhi`): root cause on their Kylin V10 aarch64 box was system git 2.25.1 predating the rev-parse flag — confirms the failure family our 09-07 note described, not addressed to us. No reply.
+- Everything else unchanged: `eltociear#119` / `GetBindu#195` (open, newest our 09-20 reminders, no maintainer reply), `tolkonepiu#384`, `ai-boost#240` (dirty again — no rebase per the ledger rule), `hermes#395`, `nix#606` (single allowed reminder used 09-20 — do not ping nix again), `awesome-claude-code#2871` (bot validation only, no maintainer reply — wait, do not ping), `pi-extensions#1204`, `ai-tooling#585` (no follow-up per TRA-857), `Dokploy/mcp#81` (3 comments, unchanged since 09-05), `lastlight#372`, `outline#34`, `nanocoder#1197`, `kilocode#12707`, `slopstop#633` (deliberately not bumped — nothing new since our failure-mode note), `atlas#105`, `pr-agent#2499`, `gbrain#5001`, `Aspire#1575`, `harness#1284`, `pyrefly#4583`, `factory#1078`, `fullsend#297`, `stella#6461`, `cxpak#103`, `GitNexus#3127` / `#3068`, `headroom#1009`. `deslop#173` closed 09-08, `FM-Agent#229` closed 09-14. No pings due anywhere.
+- trace-mcp 178★ (+1 since last night).
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): two hits, both classified, seen list updated.**
+- `yzfly/awesome-context-engineering`: our own merged listing — recorded in `ops/mentions-seen.txt` so the sweep stays quiet.
+- `mrchatam/Trace` (12★, Go, pushed 09-20): collision, not a mention — their own binary builds as `bin/trace-mcp`, the token in their RESEARCH.md is their local-product-MCP pointer. Same category (local-first knowledge graph + MCP for agents), so flagged to Competitor Intelligence as a name-collision rival; no contact per the tracker-isolation rule.
+
+**Catalogs:** moratorium holds (7 windows, 0 attributable installs), no submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Nikolai-click check (Focus point 6):** TRA-633 is unblocked since 09-18 — Nikolai filed `awesome-claude-code#2871` himself (TRA-1651). No new human-only item in this lane: Cline attestation, cursor.directory / Smithery / LobeHub OAuth, X-reply login are all already documented. No ping sent.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
