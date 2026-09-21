@@ -523,4 +523,33 @@ describe('sweepEphemeralDbs', () => {
     expect(fs.existsSync(`${db}-wal`)).toBe(false);
     expect(fs.existsSync(`${db}-shm`)).toBe(false);
   });
+
+  it('deletes the watcher snapshot alongside the base DB (TRA-1714)', () => {
+    const db = makeEphemeralDb('withsnapshot', 48);
+    const snap = `${db}.watcher-snapshot`;
+    fs.writeFileSync(snap, '{}');
+    const t = Date.now() / 1000 - 48 * 3600;
+    fs.utimesSync(snap, t, t);
+
+    expect(sweepEphemeralDbs(24)).toEqual([db]);
+    expect(fs.existsSync(snap)).toBe(false);
+  });
+
+  it('treats a fresh watcher snapshot as activity on an otherwise old DB (TRA-1714)', () => {
+    const db = makeEphemeralDb('activesnap', 48);
+    fs.writeFileSync(`${db}.watcher-snapshot`, '{}'); // fresh mtime: live watcher
+
+    expect(sweepEphemeralDbs(24)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('collects orphan snapshots whose DB is already gone (TRA-1714)', () => {
+    fs.mkdirSync(EPHEMERAL_INDEX_DIR, { recursive: true });
+    const orphanBase = path.join(EPHEMERAL_INDEX_DIR, 'gone-abc123.db');
+    const snap = `${orphanBase}.watcher-snapshot`;
+    fs.writeFileSync(snap, '{}');
+
+    expect(sweepEphemeralDbs(24)).toContain(orphanBase);
+    expect(fs.existsSync(snap)).toBe(false);
+  });
 });

@@ -718,7 +718,13 @@ export function sweepImplicitProjects(max = MAX_IMPLICIT_PROJECTS): string[] {
   return removed;
 }
 
-const MISSING_ROOT_SIDECARS = ['', '-wal', '-shm', '-journal'] as const;
+// TRA-1714: `.watcher-snapshot` is per-DB-path incremental-discovery state
+// (`<db>.watcher-snapshot`), so it dies with its DB. Without this every swept
+// DB left one behind forever — 150+ orphans observed in `ephemeral/` while
+// only 87 live DBs remained. It also counts as activity in the mtime clock
+// below: a freshly rewritten snapshot means a live watcher still walks that
+// root, even if the DB file itself hasn't been touched.
+const MISSING_ROOT_SIDECARS = ['', '-wal', '-shm', '-journal', '.watcher-snapshot'] as const;
 
 export interface MissingRootSweepResult {
   /** Roots removed (grace period elapsed) — their DBs were also deleted. */
@@ -832,7 +838,9 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
  * This is the eviction path that does not depend on anyone deleting the
  * checkout directory — the exact case the presence-based sweeps miss, since
  * agent runtimes leave their workdirs on disk forever. mtime across the DB and
- * its WAL/SHM sidecars is the clock (an active run keeps writing), and a live
+ * its sidecars (WAL/SHM/journal, plus the watcher snapshot — a fresh snapshot
+ * means a live watcher still walks that root) is the clock (an active run
+ * keeps writing), and a live
  * holder marker vetoes deletion, so this cannot pull a DB out from under a
  * running agent.
  */
@@ -869,6 +877,28 @@ export function sweepEphemeralDbs(maxAgeHours = 24): string[] {
     }
     removeHoldersDir(base);
     removed.push(base);
+  }
+
+  // TRA-1714: snapshots whose DB is already gone. The loop above only visits
+  // live `.db` bases, so a snapshot left by an earlier sweep (or a run that
+  // died between snapshot write and DB close) would sit here forever — 150+
+  // observed against 87 live DBs. A snapshot is resume state for exactly one
+  // DB path; with no base file there is nothing to resume, and a snapshot
+  // always trails its DB's creation, so "base missing" cannot be a live run
+  // mid-startup. Unlinked immediately, no age gate.
+  for (const file of files) {
+    if (!file.endsWith('.db.watcher-snapshot')) continue;
+    const base = path.join(EPHEMERAL_INDEX_DIR, file.slice(0, -'.watcher-snapshot'.length));
+    try {
+      fs.statSync(base);
+    } catch {
+      try {
+        fs.unlinkSync(path.join(EPHEMERAL_INDEX_DIR, file));
+        removed.push(base);
+      } catch {
+        /* already gone — fine */
+      }
+    }
   }
   return removed;
 }
