@@ -195,8 +195,15 @@ export function purgeStaleElectronEdges(
   for (const e of relevant) {
     const srcView = viewOf(e.srcFile);
     const tgtView = viewOf(e.tgtFile);
-    const srcRoles = srcView?.roles ?? emptyRoles();
-    const tgtRoles = tgtView?.roles ?? emptyRoles();
+    // Reviewer C (PR #1318): an unresolvable endpoint (row missing from the
+    // store, non-TS/JS language, unreadable file — or a workspace-relative
+    // path the store lookup can't translate) must keep the edge, not drop
+    // it. The full scan can't see such files either, so keep-in-both-modes
+    // preserves scoped == full while avoiding over-deletion on transient
+    // IO errors and workspace-scoped configurations.
+    if (!srcView || !tgtView) continue;
+    const srcRoles = srcView.roles;
+    const tgtRoles = tgtView.roles;
 
     if (e.edgeType === 'electron_ipc_invoke' || e.edgeType === 'electron_ipc_send') {
       const sourceKind = e.edgeType === 'electron_ipc_invoke' ? 'invoke' : 'send';

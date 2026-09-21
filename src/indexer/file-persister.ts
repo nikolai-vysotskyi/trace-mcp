@@ -134,6 +134,13 @@ export class FilePersister {
         // subset of outgoing); pendingImports still drives re-resolution
         // when the file keeps imports.
         store.deleteOutgoingEdgesForFileNodes(fileId);
+        // Reviewer C (PR #1318): the wipe above also drops persist-time
+        // `otherEdges` (e.g. Python `py_inherits` / `py_uses_decorator`),
+        // which no resolver re-emits. Re-save them from the current
+        // extraction — symbol ids are stable on this path, so resolution
+        // hits the same nodes and INSERT OR IGNORE restores identical rows
+        // (and correctly drops edges for removed constructs).
+        if (ext.otherEdges.length > 0) this.storeRawEdges(ext.otherEdges);
         if (ext.importEdges.length > 0) {
           this.state.pendingImports.set(fileId, ext.importEdges);
         }

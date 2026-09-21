@@ -7,8 +7,10 @@ the two-part removal fix costs per indexing run.
 
 - Part A (`src/indexer/file-persister.ts`): the fast symbol path now deletes
   outgoing edges for the re-persisted file (previously only outgoing
-  `imports`, and only when the new file still had imports). The resolve pass
-  re-emits the current set, so comment-only edits land on row-identical edges.
+  `imports`, and only when the new file still had imports) and re-saves
+  persist-time `otherEdges` (Python `py_inherits`/`py_uses_decorator`), which
+  no resolver re-emits. The resolve pass re-emits the rest of the current
+  set, so comment-only edits land on row-identical edges.
 - Part B (`src/indexer/edge-resolvers/electron-removals.ts`, new stage
   `resolveElectronRemovalEdges` right after framework Pass-2 emission):
   verifies electron cross-file edges whose precondition may have changed and
