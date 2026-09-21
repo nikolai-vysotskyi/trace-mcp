@@ -84,11 +84,20 @@ const BOUNDED_EXEMPT: Record<string, { reason: string; dynamicInCount: number }>
   },
 };
 
+/** Platform-proof path key: `node:path.join` yields `\` on Windows. */
+function norm(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
 function srcFiles(): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
+      // `join()` yields backslashes on Windows — normalize so BOUNDED_EXEMPT
+      // lookups and `startsWith('src/...')` filters below behave identically
+      // on every platform (TRA-1804: unnormalized paths missed all exemptions
+      // on windows-latest and flagged exempt files as offenders).
+      const full = norm(join(dir, entry.name));
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.ts')) out.push(full);
     }
@@ -212,5 +221,16 @@ describe('no unbounded SQLite IN lists in src/ (TRA-1005)', () => {
         `the chunking removed (TRA-1005). Accumulate with a loop instead:\n\n` +
         offenders.join('\n'),
     ).toEqual([]);
+  });
+
+  it('path keys are Windows-proof (TRA-1804)', () => {
+    // Every BOUNDED_EXEMPT key must be written with `/` so it matches the
+    // normalized walk output, and a simulated Windows path must resolve to
+    // the same key — otherwise windows-latest flags exempt files again.
+    for (const key of Object.keys(BOUNDED_EXEMPT)) {
+      expect(key).not.toMatch(/\\/);
+      expect(BOUNDED_EXEMPT[norm(key.replace(/\//g, '\\'))]).toBeDefined();
+    }
+    expect(norm('src\\indexer\\edge-resolver.ts').startsWith('src/indexer/')).toBe(true);
   });
 });
