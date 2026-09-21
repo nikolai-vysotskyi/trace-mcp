@@ -247,6 +247,29 @@ describe.skipIf(!hasGuardRuntime)('guard script decisions', () => {
     // rg-native scoping flags — passes.
     ["rg -g '*.ts' foo", 'pass'],
     ['rg --glob *.ts foo', 'pass'],
+    ['rg --glob=*.ts foo', 'pass'],
+    ["rg -g'*.ts' foo", 'pass'],
+    ['rg -tjs foo', 'pass'],
+    // Pattern via --opt=value plus an explicit path — passes.
+    ['grep -r --regexp=foo src/', 'pass'],
+    ['rg --regexp=foo src/', 'pass'],
+    ['rg --file=patterns.txt src/', 'pass'],
+    // A quoted pipe is a pattern, not a pipeline — passes (scoped).
+    ['rg "|" src/', 'pass'],
+    // Lookalike flags that do not scope anything — blocked.
+    ['rg --ignore-case foo', 'block'],
+    ['grep -r -h foo', 'block'],
+    ['grep -r -G foo', 'block'],
+    // -h is help only for rg; for grep it is --no-filename (no scoping).
+    ['rg -h', 'pass'],
+    ['rg -V', 'pass'],
+    ['grep -V', 'pass'],
+    ['grep -rh foo', 'block'],
+    ['rg -e --glob', 'block'],
+    // Redirect targets and next-command tails are not search paths — blocked.
+    ['rg foo> result.txt', 'block'],
+    ['rg foo >result.txt', 'block'],
+    ['rg foo; echo done', 'block'],
     // Not recursive at all — passes.
     ['grep foo', 'pass'],
     ['grep -n foo bar.ts', 'pass'],
