@@ -2008,10 +2008,19 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
               // One-shot final fit when the initial settle is "done enough".
               if (!frozenRef.current && alpha < 0.2 && performance.now() - settleStartedRef.current >= 6000) {
                 frozenRef.current = true;
-                g.pause();
-                setLive(false);
-                setSimRunning(false);
-                if (!userInteractedRef.current) fitAllPoints(g, nodesRef.current.length, 800, 0.2);
+                // TRA-1783 (second-model review): after any user interaction
+                // the initial-settle marker must NOT flip the Live toggle. A
+                // drag released past the 6 s settle window would otherwise
+                // auto-pause on the first tick after onZoomEnd re-heated the
+                // solver — mouse-up must keep the motion going, pause is
+                // manual-toggle-only. The untouched auto-settle path below
+                // still pauses + fits once, as before.
+                if (!userInteractedRef.current) {
+                  g.pause();
+                  setLive(false);
+                  setSimRunning(false);
+                  fitAllPoints(g, nodesRef.current.length, 800, 0.2);
+                }
               }
               if (frozenRef.current) return;
               // Live-fit — disabled after any user zoom/pan so scroll-to-zoom
@@ -2050,7 +2059,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
             // TRA-1783: mouse-up after a drag continues the motion — if Live
             // was on before the gesture, make sure the solver is running
             // again. A manual Paused toggle (live === false) stays paused.
-            if (liveRef.current) {
+            // Second-model review: never re-heat a hidden panel — a deferred
+            // onZoomEnd racing a visibilitychange would otherwise leave the
+            // solver running offscreen. The visibility effect resumes it
+            // (while Live is still on) as soon as the pane is visible again,
+            // mirroring the idle-wake guard.
+            if (liveRef.current && !offscreenPausedRef.current) {
               try {
                 const g = graphRef.current;
                 if (g) {

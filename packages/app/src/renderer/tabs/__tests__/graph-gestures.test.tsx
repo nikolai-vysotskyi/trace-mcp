@@ -177,6 +177,64 @@ it('stays paused through a gesture when the user explicitly paused (TRA-1783)', 
   expect(screen.getByTitle('resumeSimulation')).toBeTruthy();
 });
 
+it('does not auto-pause on the initial settle tick after a released drag (TRA-1783 review)', async () => {
+  // performance.now is stubbed explicitly — not via fake timers — so the
+  // 6 s settle window below is deterministic and the test cannot pass
+  // vacuously on a real-clock reading.
+  let nowMs = 1000;
+  const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+  try {
+    await mount();
+    // Settle window elapses while Live, then a drag starts and ends.
+    act(() => {
+      nowMs = 7500;
+    });
+    act(() => mock.config.onZoomStart({}, true));
+    act(() => mock.config.onZoomEnd({}, true));
+    expect(mock.graph.isSimulationRunning).toBe(true);
+    // First real solver tick after release: alpha already decayed (< 0.2),
+    // so the initial-settle one-shot fires here — it must mark frozen
+    // without flipping the Live toggle or pausing the solver.
+    act(() => mock.config.onSimulationTick(0.15));
+    expect(mock.graph.isSimulationRunning).toBe(true);
+    expect(screen.getByTitle('pauseSimulation')).toBeTruthy();
+    expect(screen.queryByTitle('resumeSimulation')).toBeNull();
+    // And the one-shot is one-shot: a second tick changes nothing either.
+    act(() => mock.config.onSimulationTick(0.1));
+    expect(mock.graph.isSimulationRunning).toBe(true);
+    expect(screen.queryByTitle('resumeSimulation')).toBeNull();
+  } finally {
+    nowSpy.mockRestore();
+  }
+});
+
+it('does not re-heat the solver from a deferred zoom-end while offscreen (TRA-1783 review)', async () => {
+  await mount();
+  act(() => mock.config.onZoomStart({}, true));
+  // Hide the pane mid-gesture: visibilitychange → solver paused + flagged.
+  Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+  try {
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(mock.graph.isSimulationRunning).toBe(false);
+    // The deferred gesture end must NOT restart the solver on a hidden pane.
+    act(() => mock.config.onZoomEnd({}, true));
+    expect(mock.graph.isSimulationRunning).toBe(false);
+    expect(screen.getByTitle('pauseSimulation')).toBeTruthy();
+    // Showing the pane again resumes via the visibility effect (Live is on).
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(mock.graph.isSimulationRunning).toBe(true);
+  } finally {
+    // Restore the prototype getter so later tests see the real value.
+    // biome-ignore lint/performance/noDelete: test-only jsdom cleanup
+    delete (document as unknown as Record<string, unknown>).hidden;
+  }
+});
+
 it('does not pause the initial programmatic camera fit', async () => {
   await mount();
   act(() => mock.config.onZoomStart({}, false));
