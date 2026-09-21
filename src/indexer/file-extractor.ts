@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../db/store.js';
 import type { FileRow } from '../db/types.js';
+import type { TraceMcpError } from '../errors.js';
 import { logger } from '../logger.js';
 import { executeFrameworkExtractNodes, executeLanguagePlugin } from '../plugin-api/executor.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
@@ -74,6 +75,61 @@ export interface ExtractCallOptions {
   existing?: FileRow | null;
   /** Pre-resolved gitignore status (skips the matcher). */
   gitignored?: boolean;
+}
+
+/**
+ * TRA-1768: per-process dedup for repeated identical language-plugin
+ * failures. A broken environment (e.g. a smoke fixture's partial
+ * `node_modules` missing the tree-sitter WASM grammars) fails EVERY file
+ * of a language with the identical message — the old code logged one L50
+ * per file (112 lines for a single cause) into the shared daemon.log.
+ * Now the first occurrence keeps the full error log; repeats go to debug,
+ * with a warn summary every N repeats. Keyed by root + error identity so
+ * different projects — or genuinely different per-file errors — still log
+ * independently. Mirrors the crash-dedup shape in extract-pool.ts.
+ */
+const PARSE_FAILURE_SUMMARY_EVERY = 50;
+/** Bound on distinct signatures tracked; beyond it the map resets (DoS-safe). */
+const MAX_PARSE_FAILURE_KEYS = 1000;
+const parseFailureCounts = new Map<string, { count: number; firstFile: string }>();
+
+function languagePluginFailureKey(rootPath: string, error: TraceMcpError): string {
+  const message = 'message' in error ? error.message : error.code;
+  return `${rootPath}\n${error.code}\n${message}`;
+}
+
+/** Test hook — clears the per-process dedup state between cases. */
+export function resetLanguagePluginFailureDedupForTests(): void {
+  parseFailureCounts.clear();
+}
+
+function logLanguagePluginFailure(rootPath: string, relPath: string, error: TraceMcpError): void {
+  const key = languagePluginFailureKey(rootPath, error);
+  const seen = parseFailureCounts.get(key);
+  if (!seen) {
+    if (parseFailureCounts.size >= MAX_PARSE_FAILURE_KEYS) parseFailureCounts.clear();
+    parseFailureCounts.set(key, { count: 1, firstFile: relPath });
+    logger.error({ file: relPath, rootPath, code: error.code, error }, 'Language plugin failed');
+    return;
+  }
+  seen.count += 1;
+  if (seen.count % PARSE_FAILURE_SUMMARY_EVERY === 0) {
+    logger.warn(
+      {
+        rootPath,
+        code: error.code,
+        repeatCount: seen.count,
+        firstFile: seen.firstFile,
+        error,
+      },
+      `Language plugin failed ${seen.count} times with same error (summary, per-file details at debug)`,
+    );
+    return;
+  }
+  logger.debug(
+    { file: relPath, rootPath, code: error.code },
+    'Language plugin failed (repeat suppressed)',
+  );
 }
 
 export class FileExtractor {
@@ -266,7 +322,7 @@ export class FileExtractor {
       treeCacheScope: rootPath,
     });
     if (parseResult.isErr()) {
-      logger.error({ file: relPath, error: parseResult.error }, 'Language plugin failed');
+      logLanguagePluginFailure(rootPath, relPath, parseResult.error);
       return { kind: 'error' };
     }
 
