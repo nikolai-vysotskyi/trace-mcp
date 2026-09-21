@@ -5,7 +5,7 @@
  */
 
 import { logger } from '../logger.js';
-import { withRetry } from '../utils/retry.js';
+import { isRetryableEmbeddingError, withRetry } from '../utils/retry.js';
 import { combineAbortSignals } from './abort.js';
 import type {
   AIProvider,
@@ -74,7 +74,7 @@ class GeminiEmbeddingService implements EmbeddingService {
         const data = (await resp.json()) as { embeddings: { values: number[] }[] };
         return data.embeddings.map((e) => e.values);
       },
-      { label: 'Gemini embeddings' },
+      { label: 'Gemini embeddings', isRetryable: isRetryableEmbeddingError },
     );
   }
 
