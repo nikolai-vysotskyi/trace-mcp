@@ -131,9 +131,11 @@
   overflow-y: auto;
   max-height: calc(100% - 64px) !important;
 }
-.graph-canvas[data-selected="true"] {
-  right: 344px;
-}
+/* TRA-1783: the selected-node inspector is a floating overlay (same as
+   .graph-hubs / Most connected) — it must NOT resize the canvas. The old
+   `.graph-canvas[data-selected="true"] { right: 344px }` rule shrank the WebGL
+   container on every select/deselect, so cosmos.gl resized and the whole
+   layout visibly jumped. Canvas stays `inset-0` in both states. */
 .graph-explorer {
   container-type: inline-size;
   container-name: graph-pane;
@@ -145,10 +147,7 @@
     max-height: 45% !important;
     width: calc(100% - 24px) !important;
   }
-  .graph-canvas[data-selected="true"] {
-    right: 0;
-    bottom: 50%;
-  }
+  /* TRA-1783: narrow-pane bottom-sheet is an overlay too — no canvas resize. */
 }
 .graph-selected .graph-node-path {
   overflow-wrap: anywhere;
