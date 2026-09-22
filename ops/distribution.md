@@ -2755,3 +2755,25 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — the yzfly merge is inbound.
 
+### Delta recheck, 2026-09-22 (TRA-1826): two inbound movements, one same-name collision, sweep recorded
+
+**Open threads — audited via API. Three movements since the 09-20 evening pass; nothing owed anywhere.**
+- `git-pkgs/outline#34`: the PR "Add cross-file code graph with Go and Python resolvers" **MERGED 2026-09-22T07:21Z**. Our three resolver edge cases (Go `/v2`+ suffix in `defaultAlias`, Go external test packages, Python `__init__.py` re-exports) were contributed 09-08/09-15 and the maintainer's only question in between was answered. Nothing owed — a thank-you would cost a notification.
+- `schalermthai/redproof#50`: maintainer `tw-salah` replied 2026-09-21T01:28Z — thanks ("the kind of thing you only learn by building it"), parking the AST work until next week, and asking himself whether Redproof needs AST at all ("maybe that's enough"). His question answers itself in the same comment, so no reply: arguing for AST would be pitching, thanking would be a notification. Recorded as the week's third live human reply.
+- `Kilo-Org/kilocode#13843`: third-party `hongyuanzhi` follow-up 2026-09-20T06:56Z — root cause found on their box (system git 2.25.1 predates `git rev-parse --path-format`, added in 2.31; Kilo's fallback stringifies the rejected command line into the malformed path), fixed by upgrading to git 2.55.0, with a version-detect-or-fallback suggestion for Kilo. Not addressed to us; our 09-07 analysis stands. No reply.
+- Catalog PRs: `eltociear#119`, `GetBindu#195` (1 comment each — both our own 09-20 reminders, no maintainer reply), `hermes#395`, `nix#606` (same), `tolkonepiu#384` (0 comments, untouched since 08-29 — no ping before 26.09), `ai-boost#240` (0 comments — re-read 10-05). No second reminders: the single allowed ping is spent on all four reminded threads.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN, newest still the 09-18 filing-moment bot validation — no maintainer reply, wait, do not ping.
+- Rest unchanged: `nanocoder#1197` (newest the 09-11 third-party pitch), `slopstop#633` (newest ours 09-06 — still deliberately not bumped), `atlas#105` (newest the maintainer's 09-07 Tier-2 close-out), `lastlight#372` (newest ours 09-18), `kilocode#12707` (newest ours), `Dokploy/mcp#81` (3 comments, unchanged since 09-05), `pr-agent#2499`, `pyrefly#4583`, `gbrain#5001`, `factory#1078`, `GitNexus#3127`, `ai-tooling#585` (no follow-up per TRA-857), `pi-extensions#1204`, `Aspire#1575` (newest 09-12, not ours to chase), `cxpak#103`, `stella#6461` (unchanged). `deslop#173` closed 09-08.
+- `MiniMax-AI/MiniMax-Code-Plugins#54` (Nikolai's own plugin PR, from TRA-1670): OPEN, `mergeable_state: unstable`, reviewer `hetaoBackend` requested changes twice (09-21, 09-22T01:38Z — round 2 asks for a fail-closed PATH binding, the full six-tool mutation surface, and an exact-version smoke). Nikolai pushed the round-2 fixes (`810585b`, 09-22T04:12Z: `npx -y trace-mcp@3.28.0` launcher, all six mutating tools documented with gates, pinned-build verification instead of prose) and awaits re-review. His lane — recorded, not touched.
+- trace-mcp 178★/21 forks — flat against 09-19's 177/22.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): 3 hits, all classified, `ops/mentions-seen.txt` updated.**
+- `crazy54/awesome-agentic-atlas`, `yzfly/awesome-context-engineering` — already classified in this ledger, were only missing from the seen list. Added, no rows.
+- `mrchatam/Trace` (12★, Go, pushed 09-20) — **collision, not a mention.** An independent local-first knowledge-graph MCP server shipping its own stdio binary also called `trace-mcp` (`cmd/trace-mcp/main.go`, tools `trace_why`/`trace_context`/`trace_search`/`trace_plan`/…). Same binary name, same category, zero shared code with us. No outreach (rival repo). Flagged for Competitor Intelligence: the bare name `trace-mcp` is now claimed by two unrelated binaries, which strengthens the TRA-1119 reading that the name alone does not identify us.
+
+**Trial-plan sweep (past week, 40 hits): noise only, no address.** Star filter applied before opening bodies: `davideast/pyric` 35★, `monkeygerbil222/DevGraph` 0★, `jasoncarreira/baleyg` 0★, `LightspeedDMS/code-indexer` 1★ (already skipped as machine-generated), `DeusData/codebase-memory-mcp` 44k★ (competitor tracker — no comment per the standing rule). Rest is agent-written roadmap digests.
+
+**Catalogs:** moratorium holds (TRA-886 still `in_progress`, acquisition unreadable). No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run — all three movements are inbound.
+
