@@ -13,6 +13,7 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { commitInChunks } from '../resolver-budget.js';
 
 interface CallSiteRow {
   calleeName: string;
@@ -34,7 +35,10 @@ interface SymbolRow {
   metadata: string | null;
 }
 
-export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolvePythonCallEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
 
   // 1. Get the 'calls' edge type
@@ -163,8 +167,11 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
 
   let created = 0;
 
-  store.db.transaction(() => {
-    for (const sym of symbolsWithCalls) {
+  // TRA-1764: one transaction per chunk with a fair yield between chunks —
+  // the full-pass loop over every symbol with call sites used to run as one
+  // synchronous transaction, starving /health on the same thread.
+  await commitInChunks(store.db, symbolsWithCalls, (chunk) => {
+    for (const sym of chunk) {
       let callSites: CallSiteRow[];
       try {
         const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
@@ -237,7 +244,7 @@ export function resolvePythonCallEdges(state: PipelineState, scope?: ChangeScope
         created++;
       }
     }
-  })();
+  });
 
   if (created > 0) {
     logger.info({ edges: created }, 'Python call edges resolved');

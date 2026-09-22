@@ -16,6 +16,7 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { commitInChunks } from '../resolver-budget.js';
 
 interface TsCallSite {
   calleeName: string;
@@ -56,7 +57,10 @@ type SymEntry = {
 
 const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
 
-export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolveTypeScriptCallEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
 
   const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
@@ -201,8 +205,11 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
 
   let created = 0;
 
-  store.db.transaction(() => {
-    for (const sym of symbolsWithCalls) {
+  // TRA-1764: one transaction per chunk with a fair yield between chunks —
+  // the full-pass loop over every symbol with call sites used to run as one
+  // synchronous transaction, starving /health on the same thread.
+  await commitInChunks(store.db, symbolsWithCalls, (chunk) => {
+    for (const sym of chunk) {
       let callSites: TsCallSite[];
       let localTypes: LocalTypes = {};
       try {
@@ -252,7 +259,7 @@ export function resolveTypeScriptCallEdges(state: PipelineState, scope?: ChangeS
         created++;
       }
     }
-  })();
+  });
 
   if (created > 0) {
     logger.info({ edges: created }, 'TypeScript/JavaScript call edges resolved');
