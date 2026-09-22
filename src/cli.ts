@@ -151,6 +151,7 @@ import {
   extractRpcId,
 } from './daemon/mcp-error-response.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
+import { recordUnresolvableResolution } from './daemon/resolution-telemetry.js';
 import {
   collectIdleSessions,
   dropSessionBookkeeping,
@@ -1434,6 +1435,13 @@ program
           );
         }
         if (resolution.kind === 'no-projects' || resolution.kind === 'ambiguous') {
+          // TRA-1791: no project to attribute this failure to, so no
+          // per-project status sentinel can record it — persist it in the
+          // daemon-global snapshot instead. The guard hook reads it to tell
+          // "this session cannot consult trace-mcp" apart from "the agent
+          // hasn't consulted yet" and stops deadlocking Reads in the former
+          // case. Never throws; request handling must not depend on it.
+          recordUnresolvableResolution(resolution);
           const { status, body } = buildResolutionFailureError(resolution, rpcId);
           res.writeHead(status, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(body));

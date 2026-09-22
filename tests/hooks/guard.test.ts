@@ -162,6 +162,40 @@ function writeStatus(
   return file;
 }
 
+/** Write the daemon-global unresolvable-resolution snapshot (TRA-1791). */
+function writeDaemonStatus(payload: Record<string, unknown>): string {
+  const dir = stateStatusDir;
+  if (!dir) throw new Error('test setup must isolate TRACE_MCP_DATA_DIR');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'trace-mcp-daemon.json');
+  fs.writeFileSync(file, JSON.stringify(payload));
+  return file;
+}
+
+function removeDaemonStatus(): void {
+  if (!stateStatusDir) return;
+  const file = path.join(stateStatusDir, 'trace-mcp-daemon.json');
+  if (fs.existsSync(file)) fs.rmSync(file, { force: true });
+}
+
+/** Fresh daemon snapshot: sessions are failing to resolve *right now*. */
+function freshDaemonPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const now = new Date().toISOString();
+  return {
+    schema: 1,
+    pid: 12345,
+    started_at: now,
+    updated_at: now,
+    unresolvable_total: 3,
+    dangerous_hints_total: 3,
+    last_unresolvable_at: now,
+    last_resolution: 'ambiguous',
+    last_hinted_root: '/',
+    last_hint_reason: 'filesystem root',
+    ...overrides,
+  };
+}
+
 /** Write a project-level .mcp.json declaring trace-mcp's configured transport.
  * `key` defaults to the legacy "trace-mcp" server key; pass "trace" to
  * simulate a config produced by the post-rename "Migrate to trace" flow
@@ -1808,3 +1842,126 @@ describe.skipIf(process.platform === 'win32')('guard: sentinel lookup from a sub
     expect(decision.context ?? '').toContain('no heartbeat sentinel');
   });
 });
+
+describe.skipIf(process.platform === 'win32')(
+  'guard unresolvable-session fallback (TRA-1791)',
+  () => {
+    const projectDir = path.join(
+      TMP_BASE,
+      `trace-mcp-guard-unres-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    let sessionId: string;
+    let heartbeatFile: string;
+
+    beforeEach(() => {
+      fs.mkdirSync(projectDir, { recursive: true });
+      sessionId = `vitest-unres-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      heartbeatFile = setHeartbeatAlive(projectDir);
+      // A daemon file leaked by another test would arm the fallback here.
+      removeDaemonStatus();
+    });
+
+    afterEach(() => {
+      removeDaemonStatus();
+      const readsDir = path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
+      if (fs.existsSync(readsDir)) fs.rmSync(readsDir, { recursive: true, force: true });
+      if (fs.existsSync(projectDir)) {
+        const real = fs.realpathSync(projectDir);
+        const consultedDir = path.join(TMP_BASE, `trace-mcp-consulted-${projectHash(real)}`);
+        if (fs.existsSync(consultedDir)) fs.rmSync(consultedDir, { recursive: true, force: true });
+        fs.rmSync(projectDir, { recursive: true, force: true });
+      }
+      if (heartbeatFile && fs.existsSync(heartbeatFile)) fs.rmSync(heartbeatFile, { force: true });
+    });
+
+    function codeFile(name: string): string {
+      const file = path.join(projectDir, name);
+      fs.writeFileSync(file, 'export const x = 1;');
+      return file;
+    }
+
+    function readCode(file: string): HookDecision {
+      return runGuard('Read', { file_path: file }, sessionId, projectDir);
+    }
+
+    it('keeps the first denies strict while daemon telemetry is fresh', () => {
+      writeDaemonStatus(freshDaemonPayload());
+      const file = codeFile('unres1.ts');
+      const first = readCode(file);
+      expect(first.allowed).toBe(false);
+      expect(first.reason).toContain('get_outline');
+      const second = readCode(file);
+      expect(second.allowed).toBe(false);
+      expect(second.reason).toContain('BLOCKED');
+    });
+
+    it('allows with warning from the third deny while telemetry is fresh', () => {
+      writeDaemonStatus(freshDaemonPayload());
+      const file = codeFile('unres2.ts');
+      expect(readCode(file).allowed).toBe(false);
+      expect(readCode(file).allowed).toBe(false);
+      const third = readCode(file);
+      expect(third.allowed).toBe(true);
+      expect(third.context ?? '').toContain('cannot resolve a project');
+      expect(third.context ?? '').toContain("hinted root '/'");
+    });
+
+    it('stays strict when the daemon telemetry is stale', () => {
+      writeDaemonStatus(
+        freshDaemonPayload({
+          last_unresolvable_at: new Date(Date.now() - 3_600_000).toISOString(),
+        }),
+      );
+      const file = codeFile('unres3.ts');
+      for (let i = 0; i < 3; i += 1) {
+        expect(readCode(file).allowed).toBe(false);
+      }
+    });
+
+    it('stays strict when the daemon writes no telemetry at all', () => {
+      const file = codeFile('unres4.ts');
+      expect(readCode(file).allowed).toBe(false);
+      expect(readCode(file).allowed).toBe(false);
+      expect(readCode(file).allowed).toBe(false);
+    });
+
+    it('ignores malformed daemon telemetry', () => {
+      const dir = stateStatusDir;
+      if (!dir) throw new Error('test setup must isolate TRACE_MCP_DATA_DIR');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'trace-mcp-daemon.json'), '{not json');
+      const file = codeFile('unres5.ts');
+      const decision = readCode(file);
+      expect(decision.allowed).toBe(false);
+      expect(decision.reason).toContain('get_outline');
+    });
+
+    it('latches the session usable after telemetry goes quiet, and heals on markers', () => {
+      writeDaemonStatus(freshDaemonPayload());
+      const file = codeFile('unres6.ts');
+      expect(readCode(file).allowed).toBe(false);
+      expect(readCode(file).allowed).toBe(false);
+      expect(readCode(file).allowed).toBe(true);
+      // The daemon goes quiet (e.g. the agent stopped calling trace tools):
+      // the latched session stays usable instead of re-blocking.
+      removeDaemonStatus();
+      const fourth = readCode(file);
+      expect(fourth.allowed).toBe(true);
+      expect(fourth.context ?? '').toContain('cannot reach a project');
+      // A consultation marker proves the channel healed: silent marker path resumes.
+      writeConsultationMarker(projectDir, 'unres6.ts');
+      const fifth = readCode(file);
+      expect(fifth.allowed).toBe(true);
+      expect(fifth.context ?? '').toBe('');
+    });
+
+    it('does not trip when markers already exist', () => {
+      writeDaemonStatus(freshDaemonPayload());
+      const file = codeFile('unres7.ts');
+      writeConsultationMarker(projectDir, 'unres7.ts');
+      const decision = readCode(file);
+      expect(decision.allowed).toBe(true);
+      expect(decision.context ?? '').toBe('');
+    });
+  },
+);
