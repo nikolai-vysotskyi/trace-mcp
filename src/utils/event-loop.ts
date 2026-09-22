@@ -97,3 +97,78 @@ export async function runInOwnTurn<T>(fn: () => T): Promise<T> {
   await yieldToEventLoopFair();
   return fn();
 }
+
+/**
+ * TRA-1828: event-loop lag monitor for the live daemon.
+ *
+ * Bulk reindex passes (~2700 files, 30–65 s) starved the daemon's only
+ * thread while `daemon.log` stayed green: every connected stdio session
+ * flipped proxy→local (`daemon-disappeared`, 391/day) because /health —
+ * guarded by a 500 ms client timeout and a 30 s stability window — stopped
+ * answering. Nothing on the daemon side measured the stall, so QA could not
+ * tell "clients dropped" apart from "daemon busy".
+ *
+ * The monitor samples a `setInterval` tick and reports the drift
+ * (`actualGap - intervalMs`) as lag. A tick delayed past `thresholdMs`
+ * counts one stall: the stall counter + max lag are the "счётчик", the
+ * `onStall` callback is where the daemon attaches its warn-log. The timer
+ * is unref'd — it observes the loop, never holds it open.
+ */
+export interface EventLoopLagMonitorOptions {
+  /** Sampling period (ms). Default 1000. */
+  intervalMs?: number;
+  /** Lag past which a tick counts as a stall (ms). Default 1000. */
+  thresholdMs?: number;
+  /** Called once per stalled tick with (lagMs, maxLagMs, stallCount). */
+  onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
+}
+
+export interface EventLoopLagStats {
+  stallCount: number;
+  maxLagMs: number;
+}
+
+export class EventLoopLagMonitor {
+  private readonly intervalMs: number;
+  private readonly thresholdMs: number;
+  private readonly onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private lastTick = 0;
+  private stalls = 0;
+  private maxLag = 0;
+
+  constructor(opts: EventLoopLagMonitorOptions = {}) {
+    this.intervalMs = opts.intervalMs ?? 1000;
+    this.thresholdMs = opts.thresholdMs ?? 1000;
+    this.onStall = opts.onStall;
+  }
+
+  start(): void {
+    if (this.timer) return;
+    this.lastTick = Date.now();
+    this.timer = setInterval(() => {
+      const now = Date.now();
+      const lag = now - this.lastTick - this.intervalMs;
+      this.lastTick = now;
+      if (lag >= this.thresholdMs) {
+        this.stalls++;
+        if (lag > this.maxLag) this.maxLag = lag;
+        try {
+          this.onStall?.(Math.round(lag), this.maxLag, this.stalls);
+        } catch {
+          /* observing must never break the loop it watches */
+        }
+      }
+    }, this.intervalMs);
+    this.timer.unref?.();
+  }
+
+  stop(): void {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  getStats(): EventLoopLagStats {
+    return { stallCount: this.stalls, maxLagMs: this.maxLag };
+  }
+}
