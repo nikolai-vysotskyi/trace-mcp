@@ -187,6 +187,40 @@ function resolveWorkerEntry(): URL | null {
   return null;
 }
 
+/** Filesystem path of a worker entry URL (never throws; for logs/probes). */
+function workerEntryPath(entry: URL | null): string | null {
+  if (!entry) return null;
+  try {
+    return fileURLToPath(entry);
+  } catch {
+    return entry.href;
+  }
+}
+
+/** True when the worker entry file exists on disk right now. */
+function workerEntryFileExists(entry: URL | null): boolean {
+  const p = workerEntryPath(entry);
+  if (!p) return false;
+  try {
+    return fs.existsSync(p);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * TRA-1807: one loud line per process (per entry path) when the worker entry
+ * file is gone — e.g. the install tree was deleted under a running daemon.
+ * Without this, every slot crash-loops to its 5-failure budget, emitting
+ * ~20 `Extract worker crashed` error lines before the pool disables itself.
+ */
+let warnedMissingWorkerEntry: string | null = null;
+
+/** Test hook — clears the TRA-1807 missing-entry tripwire between cases. */
+export function resetMissingWorkerEntryWarnForTests(): void {
+  warnedMissingWorkerEntry = null;
+}
+
 /**
  * Idle teardown delay. After this long with no in-flight requests we
  * terminate workers so the parent process can exit naturally. Daemons stay
@@ -269,6 +303,10 @@ export class ExtractPool {
   }
 
   private ensureStarted(): void {
+    // TRA-1807: re-resolve lazily — the entry may have appeared after
+    // construction (install raced with daemon start); tryRecover() covers
+    // the reverse direction (reappeared after a disable).
+    if (!this.workerEntry) this.workerEntry = resolveWorkerEntry();
     if (this.workers.length > 0 || this.terminated || !this.workerEntry || this.poolDisabled)
       return;
     for (let i = 0; i < this.size; i++) {
@@ -293,6 +331,25 @@ export class ExtractPool {
     if (!this.workerEntry || this.terminated || this.poolDisabled) return;
     const slot = this.slots[idx];
     if (!slot || slot.permanentlyDead) return;
+    // TRA-1807: the install tree may have been deleted under a running
+    // daemon (foreign sandbox kickstart). Spawning anyway crash-loops each
+    // slot to its 5-failure budget (~20 error lines); mark the slot dead
+    // immediately with a single loud line instead and fall back to
+    // in-process extraction.
+    if (!workerEntryFileExists(this.workerEntry)) {
+      slot.permanentlyDead = true;
+      const entryPath = workerEntryPath(this.workerEntry);
+      if (warnedMissingWorkerEntry !== entryPath) {
+        warnedMissingWorkerEntry = entryPath;
+        logger.error(
+          { workerEntry: entryPath, entry: process.argv[1] ?? null },
+          'Extract worker entry missing — install tree deleted under a running daemon (TRA-1807). ' +
+            'Falling back to in-process extraction; restart the daemon from a stable install',
+        );
+      }
+      this.maybeDisablePool();
+      return;
+    }
     let w: Worker;
     try {
       w = new Worker(this.workerEntry);
@@ -312,6 +369,13 @@ export class ExtractPool {
   }
 
   async extract(req: ExtractRequest): Promise<ExtractResponse> {
+    if (this.terminated) throw new Error('Extract worker pool unavailable in this runtime');
+    // TRA-1807: a pool disabled while its install tree was gone gets one
+    // chance per call to come back once the entry reappears — no restart
+    // needed for the transient case.
+    if (this.poolDisabled && !this.tryRecover()) {
+      throw new Error('Extract worker pool unavailable in this runtime');
+    }
     if (!this.available) throw new Error('Extract worker pool unavailable in this runtime');
     if (this.idleTimer) {
       clearTimeout(this.idleTimer);
@@ -552,12 +616,35 @@ export class ExtractPool {
     );
   }
 
+  /**
+   * TRA-1807: reanimate a pool that was disabled while its install tree was
+   * gone, now that the worker entry exists again (transient delete, or an
+   * install that finished after the daemon started). No-op unless the pool
+   * is disabled. Returns true when the pool is usable again — the next
+   * ensureStarted() respawns fresh slots. Never throws.
+   */
+  private tryRecover(): boolean {
+    if (!this.poolDisabled || this.terminated) return !this.poolDisabled;
+    const entry = this.workerEntry ?? resolveWorkerEntry();
+    if (!workerEntryFileExists(entry)) return false;
+    this.workerEntry = entry;
+    this.poolDisabled = false;
+    this.slots = [];
+    this.workers = [];
+    this.busy = [];
+    logger.info(
+      { workerEntry: workerEntryPath(entry) },
+      'Extract worker pool re-enabled — worker entry reappeared; respawning (TRA-1807)',
+    );
+    return true;
+  }
+
   private maybeDisablePool(): void {
     if (this.poolDisabled) return;
     if (!this.slots.every((s) => s?.permanentlyDead)) return;
     this.poolDisabled = true;
     logger.warn(
-      { size: this.size },
+      { size: this.size, workerEntry: workerEntryPath(this.workerEntry) },
       'Extract worker pool permanently disabled — all slots failed; falling back to in-process extraction',
     );
     // Reject anything still queued or pending so callers unwind cleanly.

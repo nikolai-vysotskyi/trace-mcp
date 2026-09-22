@@ -10,7 +10,9 @@ import { installProcessSafetyNet } from './server/process-safety-net.js';
 import { armBoundedExit, DAEMON_SHUTDOWN_DEADLINE_MS } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
+  checkDaemonRuntimeIntact,
   describeStopContext,
+  ephemeralServeHttpRefusal,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -663,6 +665,16 @@ program
     'Tool preset for clients that connect to this daemon directly over HTTP (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full). A stdio session carries its own preset and is never narrowed by this.',
   )
   .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
+    // TRA-1807: fail closed when launched from an ephemeral install (agent-run
+    // sandbox, shared tmp). A daemon serving from a directory that dies with
+    // the run keeps answering /health while parsing + extraction are dead.
+    // Dev checkouts (.git above the entry) are deliberate invocations, not a
+    // hijacked live daemon, and are exempt — same as the postinstall skip.
+    const refusal = ephemeralServeHttpRefusal(process.argv[1] ?? '');
+    if (refusal) {
+      console.error(refusal);
+      process.exit(1);
+    }
     if (opts.preset) {
       process.env.TRACE_MCP_PRESET = opts.preset;
     }
@@ -676,6 +688,23 @@ program
     // anything else, so a crash loop is visible in daemon.log itself rather
     // than only via `launchctl print` after someone thinks to look.
     logPreviousExit();
+    // TRA-1807: verify the install tree is intact before serving. A daemon
+    // started from a half-deleted tree (or one deleted mid-run by a finished
+    // agent sandbox) otherwise degrades silently: every parse fails with
+    // ENOENT and the extract pool disables itself. Fail loudly instead.
+    // Skipped for dev runs from source (no bundled dist/ there by design).
+    if (PKG_VERSION !== '0.0.0-dev') {
+      const runtimeProblems = checkDaemonRuntimeIntact(
+        path.dirname(fileURLToPath(import.meta.url)),
+      );
+      if (runtimeProblems.length > 0) {
+        for (const problem of runtimeProblems) {
+          logger.error({ problem }, 'serve-http startup integrity check failed');
+          console.error(`trace serve-http: ${problem}`);
+        }
+        process.exit(1);
+      }
+    }
     // TRA-421 registers our PID so clients can tell "busy" from "dead" without
     // /health. TRA-525: that registration happens in the listen() callback, NOT
     // here. Writing it before bind let a process that never becomes the daemon

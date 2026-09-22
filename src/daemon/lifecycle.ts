@@ -16,10 +16,13 @@ import { execSync, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import path from 'node:path';
+import { getWasmPath } from 'tree-sitter-wasm';
 import {
   DAEMON_DISABLED_PATH,
   DAEMON_LOG_PATH,
   DEFAULT_DAEMON_PORT,
+  isDevCheckoutEntry,
+  isEphemeralInstallPath,
   LAUNCHD_PLIST_PATH,
   TRACE_MCP_HOME,
 } from '../global.js';
@@ -133,6 +136,77 @@ export function enableDaemon(): void {
   } catch (err) {
     logger.warn({ err: String(err) }, 'Failed to clear daemon opt-out');
   }
+}
+
+// ── Startup runtime integrity (TRA-1807) ────────────────────────────
+// A daemon whose install tree vanished under it (sandbox dir deleted after
+// a foreign postinstall kickstarted launchd from it) keeps answering
+// /health while every tree-sitter parse fails with ENOENT and the extract
+// pool disables itself permanently. `serve-http` calls this at startup and
+// exits loudly instead of degrading silently; each returned string is one
+// human-readable problem line for stderr + daemon.log.
+
+/**
+ * TRA-1807 fail-closed verdict for `serve-http` startup. Returns an
+ * actionable error message when the running entry must be refused (an
+ * ephemeral install that is not a dev checkout), or null when it may start.
+ * Pure so unit tests can drive it directly; cli.ts prints + exits.
+ */
+export function ephemeralServeHttpRefusal(entryPath: string): string | null {
+  if (!entryPath) return null;
+  const abs = path.resolve(entryPath);
+  if (!isEphemeralInstallPath(abs)) return null;
+  if (isDevCheckoutEntry(abs)) return null;
+  return (
+    `trace serve-http refuses to start from an ephemeral install path:\n` +
+    `  ${abs}\n` +
+    `The live daemon must run from a stable install (global npm root or ~/.trace/bin). ` +
+    `Reinstall trace-mcp globally and restart the daemon (TRA-1807).`
+  );
+}
+
+/**
+ * Verify the files `serve-http` needs are present next to the running
+ * entry: the bundled extract-worker sibling and the tree-sitter WASM
+ * grammar directory. Pure (no logging, no exit) so unit tests can drive it
+ * against throwaway dirs; the caller decides how loud to fail.
+ *
+ * @param cliDir directory containing the running cli entry (dist/ when bundled)
+ */
+export function checkDaemonRuntimeIntact(cliDir: string): string[] {
+  const problems: string[] = [];
+  const workerEntry = path.join(cliDir, 'extract-worker.js');
+  try {
+    if (!fs.existsSync(workerEntry)) {
+      problems.push(
+        `extract worker entry missing: ${workerEntry} — the extract pool cannot start; ` +
+          `reinstall trace-mcp from a stable location, then restart the daemon (TRA-1807)`,
+      );
+    }
+  } catch (err) {
+    problems.push(`cannot stat extract worker entry ${workerEntry}: ${String(err)} (TRA-1807)`);
+  }
+  let wasmOutDir: string | null = null;
+  try {
+    wasmOutDir = path.dirname(getWasmPath('typescript'));
+  } catch (err) {
+    problems.push(
+      `cannot resolve tree-sitter WASM grammars: ${String(err)} — reinstall trace-mcp from a stable location (TRA-1807)`,
+    );
+  }
+  if (wasmOutDir) {
+    try {
+      if (!fs.existsSync(wasmOutDir)) {
+        problems.push(
+          `tree-sitter WASM grammar directory missing: ${wasmOutDir} — every parse will fail with ENOENT; ` +
+            `reinstall trace-mcp from a stable location, then restart the daemon (TRA-1807)`,
+        );
+      }
+    } catch (err) {
+      problems.push(`cannot stat WASM grammar directory ${wasmOutDir}: ${String(err)} (TRA-1807)`);
+    }
+  }
+  return problems;
 }
 
 // ── Platform: macOS (launchd) ───────────────────────────────────────
