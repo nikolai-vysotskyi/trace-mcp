@@ -598,6 +598,14 @@ program
     const idleTimeoutMs = (config.idle_timeout_minutes ?? 30) * 60_000;
     const daemonStabilityMs = (config.daemon_stability_seconds ?? 30) * 1_000;
     const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
+    // Product default (ROADMAP week 2026-09-07, re-confirmed TRA-1832 sweep
+    // 2026-09-22): the daemon stays the default session backend. Rationale:
+    // proxy-by-default + snapshot fast path (TRA-948) + hot-swap local
+    // fallback kept every session alive through a live restart storm
+    // (8 daemon-disappeared flips, 0 user-visible outages — TRA-1836).
+    // The storm itself (silent /health under bulk load) is the defect to fix,
+    // not a reason to flip the default: flipping would trade one shared
+    // daemon for a local backend per session on every busy machine.
     const autoSpawnDaemon =
       process.env.TRACE_MCP_NO_DAEMON === '1' ? false : (config.auto_spawn_daemon ?? true);
     const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 20) * 1_000;
