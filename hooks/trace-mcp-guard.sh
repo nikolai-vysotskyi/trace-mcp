@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.18
+# trace-mcp-guard v0.19
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.19 changes (TRA-1791 — unresolvable-session fallback):
+#   - The guard knew only "daemon alive / daemon dead". A session whose MCP
+#     client connected with an unusable root (cwd=/ → dangerous hint dropped
+#     → ambiguous over N registered projects) has a LIVE daemon and can never
+#     earn a consultation marker — every trace call 400s — so each code Read
+#     stayed BLOCKED until the 5-deny auto-degrade tripped, expired, and
+#     tripped again. The loop users felt as "the guard randomly blocks Reads".
+#   - The daemon now persists unresolvable /mcp resolutions to
+#     <state home>/status/trace-mcp-daemon.json (daemon-global: an ambiguous
+#     failure has no project to attribute it to). When that file shows a
+#     FRESH unresolvable resolution, this session holds ZERO consultation
+#     markers, and the session already suffered UNRESOLVABLE_MIN_DENIES
+#     (default 2) denies, the hook allows with a warning instead of denying:
+#     consultation is impossible here, not skipped. First denies stay strict
+#     so healthy sessions keep the "call get_outline first" nudge, and a
+#     per-session latch keeps the session usable (no re-block loop) until a
+#     marker proves the channel healed. No daemon file (older server) behaves
+#     exactly as v0.18.
 #
 # v0.18 changes (TRA-1088 — find the sentinel from a subdirectory):
 #   - Resolves the project root by walking up from the cwd to the nearest
@@ -773,6 +792,119 @@ if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]] && [[ -f "$PROJECT_ROOT/
     HEARTBEAT_REASON="trace-mcp heartbeat is from a '${STATUS_TRANSPORT}' process but .mcp.json configures trace-mcp as '${EXPECTED_TRANSPORT}' — the transport your client actually connects over is not running"
   fi
 fi
+
+# ─── Unresolvable-session fallback (TRA-1791) ───────────────────
+# A live heartbeat is not proof THIS session can consult trace-mcp. When the
+# MCP client arrived with an unusable root (cwd=/, a home/system dir — the
+# resolver drops the hint per TRA-286 and lands on ambiguous over the whole
+# registry), every trace call fails and no consultation marker can ever
+# appear: strict then BLOCKEDs forever, relieved only by the 5-deny
+# auto-degrade, which expires and re-arms — the "guard randomly blocks Reads"
+# loop from the issue.
+#
+# The daemon records each such failure in the daemon-global
+# $STATUS_HOME/trace-mcp-daemon.json (global because an ambiguous failure has
+# no project to attribute it to). This check trips allow-with-warning when
+# ALL of these hold:
+#   1. the daemon heartbeat for THIS project is fresh (HEARTBEAT_DEAD == 0);
+#   2. this session holds zero consultation markers (consultation impossible,
+#      not merely skipped — a marker also heals a previously tripped latch);
+#   3. the daemon file shows an unresolvable resolution within
+#      UNRESOLVABLE_WINDOW_SEC (default 600s);
+#   4. this session already suffered UNRESOLVABLE_MIN_DENIES (default 2)
+#      denies — the first denies stay strict so a healthy session keeps its
+#      "call get_outline first" nudge.
+# Tripping writes a per-session latch (cleared with READS_DIR, so it never
+# leaks across sessions): the session stays usable instead of re-blocking on
+# every call while the channel is down, and strict resumes the moment a
+# marker proves the channel healed. Sessions on a machine whose daemon never
+# writes the file (older server) behave exactly as before.
+# ponytail: the daemon signal is machine-global while denies are per-session —
+# a healthy session can trip this while a SIBLING session is failing. Cost is
+# bounded (warnings + allowed reads until the first successful consultation
+# clears the latch), and strict-for-healthy is preserved whenever the daemon
+# is quiet.
+UNRESOLVABLE_WINDOW_SEC=${TRACE_MCP_GUARD_UNRESOLVABLE_WINDOW:-600}
+[[ "$UNRESOLVABLE_WINDOW_SEC" =~ ^[0-9]+$ ]] || UNRESOLVABLE_WINDOW_SEC=600
+UNRESOLVABLE_MIN_DENIES=${TRACE_MCP_GUARD_UNRESOLVABLE_MIN_DENIES:-2}
+[[ "$UNRESOLVABLE_MIN_DENIES" =~ ^[0-9]+$ ]] || UNRESOLVABLE_MIN_DENIES=2
+UNRESOLVABLE_LATCH_SEC=${TRACE_MCP_GUARD_UNRESOLVABLE_LATCH_SEC:-1800}
+[[ "$UNRESOLVABLE_LATCH_SEC" =~ ^[0-9]+$ ]] || UNRESOLVABLE_LATCH_SEC=1800
+UNRESOLVABLE_LATCH_FILE="$READS_DIR/.unresolvable-latch"
+DAEMON_STATUS_FILE="$STATUS_HOME/trace-mcp-daemon.json"
+
+# Echo "<count>:<first_ts>" for the session deny aggregate, honouring the
+# same rolling window maybe_auto_degrade uses below.
+deny_aggregate_counts() {
+  local count=0 first_ts=$NOW
+  if [[ -f "$DENY_AGGREGATE_FILE" ]]; then
+    IFS=':' read -r count first_ts < "$DENY_AGGREGATE_FILE" || true
+    [[ "$count" =~ ^[0-9]+$ ]] || count=0
+    [[ "$first_ts" =~ ^[0-9]+$ ]] || first_ts=$NOW
+    if (( NOW - first_ts > AUTO_DEGRADE_WINDOW_SEC )); then
+      count=0
+      first_ts=$NOW
+    fi
+  fi
+  echo "${count}:${first_ts}"
+}
+
+# Strip anything that would break the JSON envelope the reason is embedded
+# in (the daemon's hint reason is server-generated, but never trust a file).
+sanitize_reason_fragment() {
+  printf '%s' "$1" | tr -d '"' | tr '\n\r' '  ' | cut -c1-160
+}
+
+unresolvable_fallback_check() {
+  (( HEARTBEAT_DEAD == 0 )) || return 1
+  # Fast path: neither a latch nor daemon telemetry exists — nothing to do.
+  [[ -f "$DAEMON_STATUS_FILE" || -f "$UNRESOLVABLE_LATCH_FILE" ]] || return 1
+  # A marker proves the channel works — heal a previously tripped latch.
+  if any_consultation_markers; then
+    rm -f "$UNRESOLVABLE_LATCH_FILE" 2>/dev/null || true
+    return 1
+  fi
+  # Latched earlier this session and still no markers — stay lenient.
+  if [[ -f "$UNRESOLVABLE_LATCH_FILE" ]]; then
+    local expiry
+    expiry=$(cat "$UNRESOLVABLE_LATCH_FILE" 2>/dev/null || echo 0)
+    [[ "$expiry" =~ ^[0-9]+$ ]] || expiry=0
+    if (( NOW < expiry )); then
+      HEARTBEAT_DEAD=1
+      HEARTBEAT_REASON="trace-mcp session cannot reach a project (unresolvable earlier this session, still no consultation marker)"
+      return 0
+    fi
+    rm -f "$UNRESOLVABLE_LATCH_FILE" 2>/dev/null || true
+  fi
+  # Fresh daemon-side evidence that /mcp resolutions are failing?
+  local last_iso last_epoch denies_count _denies_first
+  last_iso=$(jq -r '.last_unresolvable_at // empty' "$DAEMON_STATUS_FILE" 2>/dev/null || echo "")
+  [[ -n "$last_iso" ]] || return 1
+  last_epoch=$(iso_to_epoch "$last_iso")
+  (( last_epoch > 0 )) || return 1
+  (( NOW - last_epoch <= UNRESOLVABLE_WINDOW_SEC )) || return 1
+  IFS=':' read -r denies_count _denies_first < <(deny_aggregate_counts)
+  (( denies_count >= UNRESOLVABLE_MIN_DENIES )) || return 1
+  # Trip: latch this session, then fall back with an actionable reason.
+  echo $((NOW + UNRESOLVABLE_LATCH_SEC)) > "$UNRESOLVABLE_LATCH_FILE" 2>/dev/null || true
+  local total kind hinted hint_reason detail
+  total=$(jq -r '.unresolvable_total // 0' "$DAEMON_STATUS_FILE" 2>/dev/null || echo 0)
+  [[ "$total" =~ ^[0-9]+$ ]] || total=0
+  kind=$(jq -r '.last_resolution // empty' "$DAEMON_STATUS_FILE" 2>/dev/null || echo "")
+  kind=$(sanitize_reason_fragment "$kind")
+  hinted=$(jq -r '.last_hinted_root // empty' "$DAEMON_STATUS_FILE" 2>/dev/null || echo "")
+  hint_reason=$(jq -r '.last_hint_reason // empty' "$DAEMON_STATUS_FILE" 2>/dev/null || echo "")
+  detail="last ${kind:-unknown}"
+  if [[ -n "$hinted" ]]; then
+    detail="${detail}, client hinted root '$(sanitize_reason_fragment "$hinted")'"
+    [[ -n "$hint_reason" ]] && detail="${detail} ($(sanitize_reason_fragment "$hint_reason"))"
+  fi
+  HEARTBEAT_DEAD=1
+  HEARTBEAT_REASON="trace-mcp MCP sessions cannot resolve a project (daemon: ${total} unresolvable, ${detail}). Your MCP client is connected without a usable project root — point it at the project directory or reconnect with ?project=<absolute-path>"
+  return 0
+}
+
+unresolvable_fallback_check || true
 
 # Auto-degradation: track per-session deny aggregate. If N denies pile up
 # within the window AND no consultation markers exist, assume the MCP channel

@@ -54,9 +54,11 @@ export function buildProjectNotFoundError(input: ProjectNotFoundInput): JsonRpcE
     reason = 'dangerous_root';
     message =
       `Refusing to index ${projectRoot} (${dangerReason}). ` +
-      'Configure your MCP client to use a real project directory ' +
+      'Your MCP client connected with that directory as its project root — ' +
+      'point it at a real project directory ' +
       '(the folder containing package.json / pyproject.toml / go.mod / .git) ' +
-      'instead of your home or a system directory.';
+      'instead of your home or a system directory, then reconnect the client ' +
+      'so it picks up the new root.';
   } else if (!hasMarkers) {
     reason = 'no_project_markers';
     message =
