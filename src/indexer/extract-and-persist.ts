@@ -1,10 +1,9 @@
-import { cpus } from 'node:os';
 import type { Store } from '../db/store.js';
 import { disableFts5Triggers, enableFts5Triggers, ensureFts5Triggers } from '../db/schema.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext } from '../plugin-api/types.js';
-import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 import { throwIfIndexAborted } from './index-abort.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
@@ -223,7 +222,6 @@ export async function extractAndPersist(
   // 1903-file walk with 1 change to a 1-file batch, which must NOT pay the
   // pool spawn cost — in-process extraction wins for exactly these runs.
   const pool = maybeGetExtractPool(candidates.length);
-  const CONCURRENCY = pool ? pool.size : Math.min(8, cpus().length);
 
   // Single shared persister/resolver — no need to recreate per batch.
   const state = getPipelineState();
@@ -292,49 +290,45 @@ export async function extractAndPersist(
           }),
         );
       } else {
-        for (let c = 0; c < batch.length; c += CONCURRENCY) {
+        // TRA-1828: in-process extraction parses on the main thread, so the
+        // synchronous unit is bounded to ONE file per fair turn — not a chunk
+        // of CONCURRENCY files. A chunk of 8 large-file parses back-to-back
+        // held the loop past the 500 ms /health client timeout; per-file
+        // turns keep every unit to a single parse. Sequential here costs no
+        // parallelism: the work was single-threaded either way.
+        for (const relPath of batch) {
           // TRA-1017: the in-process path parses on the main thread, so a
           // large batch without a pool is the longest stretch without a
-          // boundary — check per chunk as well.
+          // boundary — check per file as well.
           throwIfIndexAborted(params.signal, rootPath);
-          // In-process extraction (no worker pool: dev mode, tests, sub-100
-          // file batches) parses on the main thread, so a chunk is a synchronous
-          // unit like any other and has to take its turn — otherwise every
-          // project's chunk lands in the same one.
           await yieldToEventLoopFair();
-          const chunk = batch.slice(c, c + CONCURRENCY);
-          const results = await Promise.all(
-            chunk.map((relPath) => extractor.extract(relPath, fileForce(relPath))),
-          );
-          for (const ext of results) {
-            if (ext.kind === 'skipped') {
-              result.skipped++;
-              continue;
-            }
-            if (ext.kind === 'mtime_updated') {
-              // WHY: in-process path normally writes via the in-extractor
-              // store handle; this branch is defensive for callers that
-              // construct a FileExtractor without a store.
-              store.updateFileMtime(ext.fileId, ext.newMtimeMs);
-              result.skipped++;
-              continue;
-            }
-            if (ext.kind === 'error') {
-              result.errors++;
-              continue;
-            }
-            extractions.push(ext.extraction);
+          const ext = await extractor.extract(relPath, fileForce(relPath));
+          if (ext.kind === 'skipped') {
+            result.skipped++;
+            continue;
           }
+          if (ext.kind === 'mtime_updated') {
+            // WHY: in-process path normally writes via the in-extractor
+            // store handle; this branch is defensive for callers that
+            // construct a FileExtractor without a store.
+            store.updateFileMtime(ext.fileId, ext.newMtimeMs);
+            result.skipped++;
+            continue;
+          }
+          if (ext.kind === 'error') {
+            result.errors++;
+            continue;
+          }
+          extractions.push(ext.extraction);
         }
       }
 
       if (extractions.length > 0) {
-        // persistBatch is one synchronous SQLite transaction over up to 500
-        // files — stacked back-to-back across batches (or across projects) it
-        // starves the event loop, /health stops answering, and the desktop
-        // app's watchdog kills the daemon mid-warm-up. Giving it a turn of its
-        // own bounds that window at negligible cost.
-        await runInOwnTurn(() => persister.persistBatch(extractions));
+        // TRA-1828: persistBatch commits in 50-file transactions with a fair
+        // yield between chunks (see PERSIST_WRITE_CHUNK) and takes its own
+        // first turn internally — no runInOwnTurn wrapper needed here. Awaiting
+        // the full batch: churn maps are only valid once every chunk landed.
+        await persister.persistBatch(extractions);
         result.indexed += extractions.length;
         // TRA-1017: record exactly what this transaction rewrote, durably and
         // now — an abort at the next boundary must still know this batch's

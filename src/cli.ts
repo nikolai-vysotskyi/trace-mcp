@@ -180,6 +180,7 @@ import { scanSecurity } from './tools/quality/security-scan.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
+import { EventLoopLagMonitor } from './utils/event-loop.js';
 import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
@@ -3292,6 +3293,12 @@ program
     let daemonShuttingDown = false;
     /** Set once we own the port; cleared on shutdown so it cannot re-register a dying PID. */
     let pidReassert: NodeJS.Timeout | undefined;
+    // TRA-1828: event-loop lag observer. Bulk reindex passes starved the
+    // daemon's only thread while daemon.log stayed green — clients saw
+    // `daemon-disappeared` but the daemon logged nothing. The monitor counts
+    // stalls and warn-logs each one so QA can tell "daemon busy" apart from
+    // "daemon dead". Started in the listen() callback below, stopped here.
+    let lagMonitor: EventLoopLagMonitor | null = null;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -3299,6 +3306,8 @@ program
       // cleanup once.
       if (daemonShuttingDown) return;
       daemonShuttingDown = true;
+      lagMonitor?.stop();
+      lagMonitor = null;
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
       // async cleanup and only exits from httpServer.close()'s callback. If a
       // close hangs or the event loop is starved, the daemon would never die on
@@ -3699,6 +3708,23 @@ program
       // costs one stat per tick. unref'd — never holds the process open.
       pidReassert = setInterval(reassertOwnDaemonPidFile, PID_REASSERT_INTERVAL_MS);
       pidReassert.unref();
+      // TRA-1828: watch for event-loop stalls from bulk indexing. A stall
+      // here is the daemon-side counterpart of the clients'
+      // `daemon-disappeared` fallback — same incident, observed locally so
+      // daemon.log stops being blind to it. Threshold 2 s: the /health
+      // client timeout is 500 ms and the watcher needs 30 s of consecutive
+      // misses to flip, so a 2 s stall is noteworthy but not yet fatal.
+      lagMonitor = new EventLoopLagMonitor({
+        intervalMs: 1000,
+        thresholdMs: 2000,
+        onStall: (lagMs, maxLagMs, stallCount) => {
+          logger.warn(
+            { lagMs, maxLagMs, stallCount, reindexInFlight: countReindexingProjects() },
+            'Event loop stall — bulk indexing may be starving /health (TRA-1828)',
+          );
+        },
+      });
+      lagMonitor.start();
       const projectCount = projectManager.listProjects().length;
       logger.info(
         {
