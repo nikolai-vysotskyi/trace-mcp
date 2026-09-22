@@ -21,7 +21,7 @@ import { withPs1Bom } from './ps1-bom.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
 import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
-import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME } from '../global.js';
+import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME, isEphemeralProjectRoot } from '../global.js';
 import { getHomeDir } from './home.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
@@ -215,19 +215,55 @@ export function getPkgRootsPath(): string {
  * Append-only, deduplicated, capped: an entry costs one `-d` test per start.
  */
 export function recordPkgRoot(cliPath: string): void {
-  // <root>/trace-mcp/dist/cli.js → <root>
-  const root = path.resolve(path.dirname(cliPath), '..', '..');
-  if (path.basename(root) !== 'node_modules') return;
   const file = getPkgRootsPath();
   try {
     const existing = (readIfExists(file) ?? '')
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith('#'));
-    if (existing.includes(root)) return;
-    const next = [...existing, root].slice(-MAX_PKG_ROOTS);
-    ensureDir(path.dirname(file));
-    atomicWriteString(file, `${next.join('\n')}\n`, { mode: 0o600, rejectSymlinks: true });
+    // Drop entries whose directories no longer exist, so a root deleted
+    // out from under us (an abandoned task dir recorded before this guard)
+    // stops occupying a capped slot on the next init run. Runs on every
+    // call — including ones whose input is skipped below — so a smoke-test
+    // install still cleans up after its predecessors instead of adding to
+    // the pile.
+    const live = existing.filter((l) => {
+      try {
+        return fs.existsSync(l);
+      } catch {
+        return false;
+      }
+    });
+    const flush = (roots: string[]): void => {
+      ensureDir(path.dirname(file));
+      atomicWriteString(file, `${roots.join('\n')}\n`, { mode: 0o600, rejectSymlinks: true });
+    };
+    // <root>/trace-mcp/dist/cli.js → <root>
+    const root = path.resolve(path.dirname(cliPath), '..', '..');
+    if (path.basename(root) !== 'node_modules') {
+      if (live.length !== existing.length) flush(live);
+      return;
+    }
+    // One-shot agent-run checkouts (Multica task dirs, Claude scratchpads)
+    // and anything under the OS temp dir are gone within the hour, but this
+    // file is capped at MAX_PKG_ROOTS: recording them evicts durable roots
+    // the shim's probe actually needs (TRA-1811 — three dead /private/tmp
+    // entries found live, wasting nearly a third of the list).
+    const tmpDir = path.resolve(os.tmpdir());
+    if (
+      isEphemeralProjectRoot(root) ||
+      isEphemeralProjectRoot(cliPath) ||
+      root === tmpDir ||
+      root.startsWith(`${tmpDir}${path.sep}`)
+    ) {
+      if (live.length !== existing.length) flush(live);
+      return;
+    }
+    if (live.includes(root)) {
+      if (live.length !== existing.length) flush(live);
+      return;
+    }
+    flush([...live, root].slice(-MAX_PKG_ROOTS));
   } catch {
     /* best-effort — a missed record only costs the shim a probe */
   }
