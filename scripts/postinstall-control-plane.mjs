@@ -21,6 +21,9 @@
  *   - Dev checkouts (.git next to package.json) and `npm link` symlinks are skipped.
  *   - TRACE_MCP_MANAGED_BY=launchd: skip (we're being run by launchd, don't recurse).
  *   - CI=true: skip launchd bootstrap (don't pollute CI machines).
+ *   - Ephemeral install (agent-run sandbox under /tmp, /private/tmp,
+ *     multica-task dirs, workdir checkouts): refuse to touch launcher.env,
+ *     the shim, or launchd at all (TRA-1807).
  *   - All errors swallowed and logged to ~/.trace/postinstall.log.
  *   - Daemon is NOT auto-started; only kickstarted if it was already loaded.
  *
@@ -179,9 +182,34 @@ function isDevCheckout() {
   }
 }
 
+// MUST match src/global.ts::isEphemeralInstallPath (TRA-1807). Mirrored here
+// as plain regexes because postinstall runs unbundled with no access to src/.
+const EPHEMERAL_INSTALL_PATTERNS = [
+  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i,
+  /[/\\]multica-task-\d+[/\\]/i,
+  /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i,
+];
+
+/**
+ * True when this postinstall itself runs from a one-shot agent-run sandbox
+ * or a shared tmp root. Such an install must never adopt the live daemon:
+ * overwriting launcher.env + the shim + kickstarting launchd would pin
+ * :3741 to a directory that vanishes with the run (TRA-1807).
+ */
+function isEphemeralInstallPath(installPath) {
+  const abs = path.resolve(installPath);
+  if (EPHEMERAL_INSTALL_PATTERNS.some((re) => re.test(abs))) return true;
+  for (const tmpRoot of ['/tmp', '/private/tmp']) {
+    if (abs === tmpRoot || abs.startsWith(`${tmpRoot}/`) || abs.startsWith(`${tmpRoot}\\`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Mirror src/init/launcher.ts::quoteEnvValue. The shim strips one pair of
+// surrounding double-quotes and performs no expansion.
 function quoteEnvValue(v) {
-  // Mirror src/init/launcher.ts::quoteEnvValue. The shim strips one pair of
-  // surrounding double-quotes and performs no expansion.
   if (v.includes('"')) {
     throw new Error(`launcher config value contains unsupported character ": ${v}`);
   }
@@ -632,6 +660,18 @@ function main() {
   const cliPath = path.join(PKG_ROOT, 'dist', 'cli.js');
   if (!fs.existsSync(cliPath)) {
     log('paths', `dist/cli.js missing at ${cliPath} — aborting (likely npm install before build)`);
+    return;
+  }
+  // TRA-1807: a postinstall running from an agent-run sandbox must not adopt
+  // the live daemon. Rewriting launcher.env + the shim and kickstarting
+  // launchd from here pins :3741 to a directory that dies with the run,
+  // leaving parsing + the extract pool permanently broken. Refuse loudly
+  // (into postinstall.log) and leave the current daemon untouched.
+  if (isEphemeralInstallPath(PKG_ROOT)) {
+    log(
+      'ephemeral',
+      `refusing to adopt live daemon from ephemeral install at ${PKG_ROOT} — launcher.env, shim and launchd left untouched (TRA-1807)`,
+    );
     return;
   }
   const version = readPackageVersion();

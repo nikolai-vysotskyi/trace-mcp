@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DAEMON_SHUTDOWN_DEADLINE_MS } from '../../src/server/bounded-shutdown.js';
+import { isEphemeralInstallPath } from '../../src/global.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +15,32 @@ const ATTRIBUTION_PATH = path.join(REPO_ROOT, 'scripts', 'daemon-attribution.mjs
 
 function mkTmp(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+/**
+ * Stage a fake INSTALLED package outside ephemeral shapes (TRA-1807).
+ *
+ * The Multica runtime exports a task-scoped TMPDIR (`/tmp/multica-task-<id>`),
+ * and postinstall refuses to adopt the live daemon from anywhere under it
+ * (or under /tmp at all) — a fixture staged with plain mkTmp would read as a
+ * sandbox install and take the refusal branch. Step out of the task dir first
+ * (same idea as tmpRootOutsideTaskDir in tests/test-utils.ts); on a machine
+ * where that still lands under /tmp, fall back to the real home. The
+ * returned dir is verified against the real classifier the script mirrors.
+ */
+function mkStableTmp(prefix: string): string {
+  const base = os.tmpdir();
+  const stepped = /[/\\]multica-task-\d+[/\\]?$/i.test(base) ? path.dirname(base) : base;
+  for (const dir of [stepped, os.homedir()]) {
+    try {
+      const staged = fs.mkdtempSync(path.join(dir, prefix));
+      if (!isEphemeralInstallPath(staged)) return staged;
+      fs.rmSync(staged, { recursive: true, force: true });
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  throw new Error('mkStableTmp: no non-ephemeral staging dir found');
 }
 
 // CI sets TRACE_MCP_NO_POSTINSTALL=1 at workflow level so npm install doesn't
@@ -145,7 +172,9 @@ describe('postinstall-control-plane', () => {
 
   it('writes launcher.env and shim when not a dev checkout (idempotent)', () => {
     // Create a fake installed package layout that has NO .git.
-    const fakePkg = mkTmp('trace-mcp-fakepkg-');
+    // Staged outside ephemeral shapes (mkStableTmp): under a task-scoped
+    // TMPDIR the refusal branch would fire instead of the install branch.
+    const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
     try {
       fs.mkdirSync(path.join(fakePkg, 'scripts'), { recursive: true });
       fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
@@ -217,7 +246,8 @@ describe('postinstall-control-plane', () => {
   it('migrates a pre-existing ~/.trace-mcp home dir to ~/.trace and preserves a legacy bin symlink', () => {
     // No TRACE_MCP_DATA_DIR override this time — exercise the real default
     // resolution (~/.trace, migrated from ~/.trace-mcp) instead of pinning it.
-    const fakePkg = mkTmp('trace-mcp-fakepkg-');
+    // Staged outside ephemeral shapes (mkStableTmp) — see above.
+    const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
     try {
       fs.mkdirSync(path.join(fakePkg, 'scripts'), { recursive: true });
       fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
@@ -297,7 +327,8 @@ describe('postinstall-control-plane', () => {
   it.skipIf(process.platform === 'win32')(
     'repoints a stale legacy shim copy at the current one instead of leaving it frozen',
     () => {
-      const fakePkg = mkTmp('trace-mcp-fakepkg-');
+      // Staged outside ephemeral shapes (mkStableTmp) — see above.
+      const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
       try {
         stageFakePkg(fakePkg);
 
@@ -330,7 +361,8 @@ describe('postinstall-control-plane', () => {
   it.skipIf(process.platform === 'win32')(
     "leaves a wrapper at the legacy path that isn't ours alone",
     () => {
-      const fakePkg = mkTmp('trace-mcp-fakepkg-');
+      // Staged outside ephemeral shapes (mkStableTmp) — see above.
+      const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
       try {
         stageFakePkg(fakePkg);
 
@@ -351,6 +383,42 @@ describe('postinstall-control-plane', () => {
       }
     },
   );
+
+  // TRA-1807: a postinstall running from an agent-run sandbox
+  // (/private/tmp/multica-task-<id>/...) must not adopt the live daemon —
+  // overwriting launcher.env + the shim and kickstarting launchd from there
+  // pins :3741 to a directory that dies with the run.
+  it('refuses to adopt the live daemon from an ephemeral sandbox install', () => {
+    // Deterministic task-style dir (NOT mkdtempSync: its random suffix would
+    // land inside the run id and break the `multica-task-<digits>/` shape —
+    // the id itself must be pure digits followed by a separator).
+    // Mirror the incident layout: <sandbox>/pinned-latest/node_modules/trace-mcp.
+    const sandbox = path.join(os.tmpdir(), `multica-task-${process.pid}1807`);
+    fs.mkdirSync(sandbox, { recursive: true });
+    const fakePkg = path.join(sandbox, 'pinned-latest', 'node_modules', 'trace-mcp');
+    try {
+      stageFakePkg(fakePkg);
+
+      // Run the staged sandbox copy (runScript would run the REPO script,
+      // which early-skips as a dev checkout).
+      const fakeScript = path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs');
+      execFileSync(process.execPath, [fakeScript], {
+        env: buildEnv({ HOME: home, TRACE_MCP_DATA_DIR: home, CI: 'true' }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      });
+
+      // Nothing adopted: no launcher.env, no shim, refusal logged, exit 0
+      // (postinstall must never fail npm install).
+      expect(fs.existsSync(path.join(home, 'launcher.env'))).toBe(false);
+      expect(fs.existsSync(path.join(home, 'bin', 'trace'))).toBe(false);
+      const log = fs.readFileSync(path.join(home, 'postinstall.log'), 'utf-8');
+      expect(log).toMatch(/refusing to adopt live daemon from ephemeral install/);
+      expect(log).toMatch(/TRA-1807/);
+    } finally {
+      fs.rmSync(sandbox, { recursive: true, force: true });
+    }
+  });
 
   it('PLIST_VERSION constant matches src/daemon/lifecycle.ts', () => {
     const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');

@@ -1,10 +1,14 @@
 /**
- * TRA-1768: a broken environment (e.g. a smoke fixture's partial
- * `node_modules` missing the tree-sitter WASM grammars) fails EVERY file of
- * a language with the identical message. FileExtractor used to log one L50
- * `Language plugin failed` per file — 112 lines for a single cause — into
- * the shared daemon.log. Now the first occurrence keeps the full error log,
- * repeats go to debug, and every 50th repeat emits a warn summary.
+ * TRA-1768: a broken environment fails EVERY file of a language with the
+ * identical message. FileExtractor used to log one L50 `Language plugin
+ * failed` per file — 112 lines for a single cause — into the shared
+ * daemon.log. Now the first occurrence keeps the full error log, repeats go
+ * to debug, and every 50th repeat emits a warn summary.
+ *
+ * NOTE: a missing-WASM ENOENT no longer reaches this path — TRA-1807
+ * promotes it to a process-once config-fatal (see
+ * file-extractor-missing-wasm-env.test.ts). The message below is therefore
+ * deliberately a generic parse failure, not an ENOENT.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,8 +21,7 @@ import { initContentHasher } from '../../util/hash.js';
 import { buildProjectContext } from '../project-context.js';
 import { FileExtractor, resetLanguagePluginFailureDedupForTests } from '../file-extractor.js';
 
-const WASM_MESSAGE =
-  "TypeScript parse failed: ENOENT: no such file or directory, open '/smoke/run/node_modules/tree-sitter-wasm/out/tsx/tree-sitter-tsx.wasm'";
+const GENERIC_MESSAGE = 'TypeScript parse failed: unexpected token `}` at offset 42';
 
 function failingPluginFor(message: string): LanguagePlugin {
   return {
@@ -71,7 +74,7 @@ describe('FileExtractor language-plugin failure dedup (TRA-1768)', () => {
   }
 
   it('logs the first identical failure as error, repeats as debug, every 50th as warn', async () => {
-    const extractor = extractorFor(tmpRoot, WASM_MESSAGE);
+    const extractor = extractorFor(tmpRoot, GENERIC_MESSAGE);
     const files = Array.from({ length: 55 }, (_, i) => writeTsx(`src/a${i}.tsx`));
 
     for (const f of files) {
@@ -90,7 +93,7 @@ describe('FileExtractor language-plugin failure dedup (TRA-1768)', () => {
   });
 
   it('a different error message gets its own error log', async () => {
-    const extractor = extractorFor(tmpRoot, WASM_MESSAGE);
+    const extractor = extractorFor(tmpRoot, GENERIC_MESSAGE);
     await extractor.extract(writeTsx('src/a.tsx'), true);
     expect(errorSpy).toHaveBeenCalledTimes(1);
 
@@ -102,13 +105,13 @@ describe('FileExtractor language-plugin failure dedup (TRA-1768)', () => {
   });
 
   it('the same message under a different root gets its own error log', async () => {
-    const extractor = extractorFor(tmpRoot, WASM_MESSAGE);
+    const extractor = extractorFor(tmpRoot, GENERIC_MESSAGE);
     await extractor.extract(writeTsx('src/a.tsx'), true);
     expect(errorSpy).toHaveBeenCalledTimes(1);
 
     const otherRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-1768-other-'));
     try {
-      const other = extractorFor(otherRoot, WASM_MESSAGE);
+      const other = extractorFor(otherRoot, GENERIC_MESSAGE);
       const abs = path.join(otherRoot, 'src/c.tsx');
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, 'export const y = 2;\n', 'utf-8');
