@@ -2777,3 +2777,23 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — all three movements are inbound.
 
+### Delta recheck, 2026-09-23 (TRA-1831): all threads silent, sweep clean, one 0-star builder noted and skipped
+
+**Open threads — audited via API. Zero movements since the 09-22 pass; nothing owed anywhere.**
+- Catalog PRs: `eltociear#119`, `GetBindu#195` (open, 1 comment each — both our own 09-20 reminders, no maintainer reply), `hermes#395`, `nix#606` (same shape). No second reminders: the single allowed ping is spent.
+- `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, not yet), `ai-boost#240` (open, 0 comments — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, newest still the 09-18 filing-moment bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (newest the maintainer's 09-21 thanks), `kilocode#13843` (newest the 09-20 third-party git-version follow-up, not addressed to us), `atlas#105` (newest the maintainer's 09-07 Tier-2 close-out), `slopstop#633` (newest ours 09-06 — still deliberately not bumped), `kilocode#12707` (newest ours), `Dokploy/mcp#81` (3 comments, unchanged since 09-05), `nanocoder#1197` (newest the 09-11 third-party pitch; the 09-17 `updated_at` is non-comment activity, verified via the comments endpoint).
+- `MiniMax-AI/MiniMax-Code-Plugins#54` (Nikolai's own plugin PR): OPEN, newest still his 09-22 round-2 fix push, awaits re-review. His lane — recorded, not touched.
+- trace-mcp 179★/21 forks — +1 star against 09-22.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read, `ops/mentions-seen.txt` untouched.
+
+**Issue-index sweep (qualified path query): 21 hits, no new mentions.** Newest is MiniMax#54 (09-22, known). Nothing since the last pass names us that the ledger does not already record.
+
+**Trial-plan sweep (2026-09-20…23, 44 hits): one notable, skipped with reason.** Star filter before opening bodies; the rest is agent-written roadmap digests plus the already-skipped `pyric`, `code-indexer`, `baleyg` and the competitor tracker. The notable one is `Falconiere/comemory` (0★, created 09-22): a planning stack for symbol-level code-graph edges (`calls`/`inherits`/`implements`/`references` via an ast-grep extractor, same-file-or-unambiguous-PathIndex resolution first) — squarely our defect class and competently specified. Skipped anyway: zero stars, hours old, no question asked and no defect visible, so anything we write there today is a cold pitch, not an answer. Revisit only if they file a question a reader of our tree can answer. No outreach, no issue.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
