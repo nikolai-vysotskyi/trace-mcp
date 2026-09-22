@@ -150,7 +150,13 @@ describe('ActivityStore', () => {
     // TRA-1579: GitHub's Windows runners are heavily loaded and SQLite there
     // is an order of magnitude slower, so the budget is OS-scaled — a dropped
     // index still blows either budget by 10x+.
+    // TRA-1839: the budget above covers only the READ. The 50k-row setup
+    // (~390 synchronous flush transactions) took 79s on a pathological
+    // windows-latest runner (Sep 2026) and tripped the 60s job-level
+    // testTimeout before the assert ever ran. The setup is not the guard —
+    // the read is — so the test carries its own timeout instead of a
+    // smaller fixture (fewer rows would weaken the missing-index signal).
     const PERF_BUDGET_MS = process.platform === 'win32' ? 1000 : 150;
     expect(elapsed).toBeLessThan(PERF_BUDGET_MS);
-  });
+  }, 120_000);
 });
