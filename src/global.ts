@@ -238,14 +238,15 @@ export function isEphemeralInstallPath(installPath: string): boolean {
   ) {
     return true;
   }
-  // Shared tmp roots. Compare with a separator boundary (or exact equality)
-  // so `/tmpfoo` or `/private/tmp-backup` don't match.
+  // Shared tmp roots, matched on every OS (defense in depth: refusing a
+  // daemon install from `/tmp` is harmless on Windows too). Compare on a
+  // forward-slash form with any drive letter stripped, because on Windows
+  // `path.resolve('/tmp/...')` yields `C:\tmp\...` and a literal `/tmp`
+  // prefix never matches (TRA-1810). Keep the separator boundary so
+  // `/tmpfoo` or `/private/tmp-backup` don't match.
+  const normalized = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
   for (const tmpRoot of ['/tmp', '/private/tmp']) {
-    if (
-      abs === tmpRoot ||
-      abs.startsWith(`${tmpRoot}/`) ||
-      abs.startsWith(`${tmpRoot}${path.sep}`)
-    ) {
+    if (normalized === tmpRoot || normalized.startsWith(`${tmpRoot}/`)) {
       return true;
     }
   }

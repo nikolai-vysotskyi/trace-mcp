@@ -199,8 +199,11 @@ const EPHEMERAL_INSTALL_PATTERNS = [
 function isEphemeralInstallPath(installPath) {
   const abs = path.resolve(installPath);
   if (EPHEMERAL_INSTALL_PATTERNS.some((re) => re.test(abs))) return true;
+  // POSIX tmp roots on every OS (TRA-1810): on Windows path.resolve('/tmp/…')
+  // yields `C:\tmp\…`, so compare on forward slashes with drive stripped.
+  const normalized = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
   for (const tmpRoot of ['/tmp', '/private/tmp']) {
-    if (abs === tmpRoot || abs.startsWith(`${tmpRoot}/`) || abs.startsWith(`${tmpRoot}\\`)) {
+    if (normalized === tmpRoot || normalized.startsWith(`${tmpRoot}/`)) {
       return true;
     }
   }
