@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-21T06:52:55.448Z"
+updated: "2026-09-22T06:42:16.137Z"
 active_users:
-  day: 50
-  week: 130
-  month: 267
+  day: 54
+  week: 134
+  month: 278
   first_ping_date: "2026-08-29"
-  days_observed: 24
+  days_observed: 25
   month_window_full: false
-events_28d: 1666
+events_28d: 1755
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 1666
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 67088536
-  tokens_saved_raw: 89016880
-  usd_saved: 67.09
+  tokens_saved: 66403733
+  tokens_saved_raw: 91412146
+  usd_saved: 66.4
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 16
+  days: 17
   capped_days: 2
-  raw_ratio: 1.33
+  raw_ratio: 1.38
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,7 +85,7 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 237
+  new_installs_28d: 248
   activated_pct: null
   used_pct: null
   retention_dau_mau_pct: null
@@ -163,38 +163,38 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 541
-  "upgrade": 486
-  "(not set)": 313
-  "new": 237
+  "active": 583
+  "upgrade": 518
+  "(not set)": 315
+  "new": 248
   "unknown": 54
-  "downgrade": 33
+  "downgrade": 35
 by_version:
   "3.25.0": 75
   "3.23.2": 54
   "3.24.0": 49
+  "3.27.1": 41
   "3.22.0": 38
-  "3.27.1": 38
   "(not set)": 36
   "3.26.0": 34
   "3.10.0": 29
   "3.26.1": 29
   "3.26.3": 29
+  "3.28.0": 29
   "3.17.1": 28
   "3.15.0": 27
-  "3.28.0": 26
   "3.11.0": 25
+  "3.29.0": 23
   "3.8.0": 23
-  "3.29.0": 20
   "3.18.0": 19
   "3.14.0": 16
+  "3.31.1": 16
   "3.19.0": 9
   "3.20.0": 9
+  "3.31.0": 9
+  "3.30.0": 8
+  "3.30.1": 8
   "3.25.1": 7
-  "3.26.2": 6
-  "3.30.0": 6
-  "3.30.1": 5
-  "3.23.0": 3
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,10 +212,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 527
+  at_or_above: 557
   below: 77
   unknown: 36
-  pct: 87
+  pct: 88
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -258,9 +258,9 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "(not set)": 88
-  "United Arab Emirates": 43
-  "United States": 22
+  "(not set)": 92
+  "United Arab Emirates": 49
+  "United States": 23
   "Russia": 17
   "China": 8
   "Thailand": 8
@@ -281,14 +281,14 @@ by_country:
   "Indonesia": 2
   "Malta": 2
   "New Zealand": 2
-  "Spain": 2
+  "Pakistan": 2
 by_client:
-  "unknown": 221
-  "claude-code": 66
-  "codex-mcp-client": 38
+  "unknown": 231
+  "claude-code": 67
+  "codex-mcp-client": 39
   "(not set)": 36
-  "antigravity-client": 11
-  "mcp": 10
+  "antigravity-client": 12
+  "mcp": 11
   "opencode": 8
   "Visual Studio Code": 4
   "cursor-vscode": 3
