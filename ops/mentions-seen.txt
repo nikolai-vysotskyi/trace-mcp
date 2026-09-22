@@ -171,3 +171,11 @@ lza6/Aggregate-to-2api
 # ── Swept 2026-09-17 night (TRA-1624) ──
 # Single-author zh-TW Claude-maintained catalog (0★, 0 forks, 163 entries, static index.html, no license, no submission path): catalog.json already carries us accurately (81 langs, 87 frameworks, over-70% PR tokens, added 2026-09-07). No audience, nothing to submit, ledger row added:
 cyc123456789/claude-catalog
+
+# ── Swept 2026-09-22 (TRA-1814) ──
+# Direct competitor (Go knowledge-graph MCP shipping `trace`/`trace-mcp` binaries, 12★, no reference to us): no outreach per competitor rule, ledger row added:
+mrchatam/Trace
+# Link-farm rejected 2026-09-16 that auto-listed us 2026-09-21; still 0★/0 forks, rejection stands:
+crazy54/awesome-agentic-atlas
+# Own merged listing (PR #44 merged 2026-09-20); the sweep matches our own entry text, nothing to read:
+yzfly/awesome-context-engineering
