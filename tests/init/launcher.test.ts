@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getLauncherConfigPath,
   getLauncherDir,
@@ -229,19 +229,92 @@ describe('recordPkgRoot', () => {
   });
 
   it('deduplicates and caps the list', () => {
-    for (let i = 0; i < 14; i++) {
-      recordPkgRoot(cliUnder(`/prefix${i}`));
+    // recordPkgRoot prunes entries whose directories no longer exist, so the
+    // fake prefixes below must read as live for this to exercise dedup/cap
+    // rather than the prune. Compare against the resolved roots (not the raw
+    // '/prefixN' literals): on Windows path.resolve drive-qualifies them
+    // ('/prefix0' -> 'C:\prefix0\...'), so a startsWith('/prefix') check
+    // would treat every fixture as dead and the test would pass vacuously.
+    const liveRoots = new Set(Array.from({ length: 14 }, (_, i) => pkgRoot(`/prefix${i}`)));
+    const realExists = fs.existsSync;
+    const spy = vi
+      .spyOn(fs, 'existsSync')
+      .mockImplementation(
+        (p: fs.PathLike) =>
+          (typeof p === 'string' && liveRoots.has(p) ? true : realExists(p)) as boolean,
+      );
+    try {
+      for (let i = 0; i < 14; i++) {
+        recordPkgRoot(cliUnder(`/prefix${i}`));
+      }
+      recordPkgRoot(cliUnder('/prefix13'));
+      const roots = rootsOf();
+      expect(roots).toHaveLength(10);
+      expect(roots.at(-1)).toBe(pkgRoot('/prefix13'));
+      expect(new Set(roots).size).toBe(10);
+    } finally {
+      spy.mockRestore();
     }
-    recordPkgRoot(cliUnder('/prefix13'));
-    const roots = rootsOf();
-    expect(roots).toHaveLength(10);
-    expect(roots.at(-1)).toBe(pkgRoot('/prefix13'));
-    expect(new Set(roots).size).toBe(10);
   });
 
   it('ignores a cli path that is not under a node_modules root', () => {
     recordPkgRoot('/somewhere/dist/cli.js');
     expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+  });
+
+  it('skips one-shot ephemeral roots (TRA-1811)', () => {
+    // Mirrors the live find: smoke-test installs under /private/tmp/multica-task-*
+    // were recorded into the capped pkg-roots file and evicted durable roots.
+    recordPkgRoot(
+      path.join(
+        '/private/tmp/multica-task-3847237843/pinned/node_modules',
+        'trace-mcp',
+        'dist',
+        'cli.js',
+      ),
+    );
+    recordPkgRoot(
+      path.join(
+        '/Users/nikolai/multica_workspaces/wspace/run-1/workdir',
+        'node_modules',
+        'trace-mcp',
+        'dist',
+        'cli.js',
+      ),
+    );
+    expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+  });
+
+  it('skips roots under the OS temp dir (TRA-1811)', () => {
+    recordPkgRoot(
+      path.join(os.tmpdir(), 'trace-mcp-smoke-run', 'node_modules', 'trace-mcp', 'dist', 'cli.js'),
+    );
+    expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+  });
+
+  it('prunes dead entries when recording a new root (TRA-1811)', () => {
+    const livePrefix = path.join(tmp, 'liveprefix');
+    const liveRoot = pkgRoot(livePrefix);
+    fs.mkdirSync(liveRoot, { recursive: true });
+    fs.writeFileSync(
+      getPkgRootsPath(),
+      ['/private/tmp/multica-task-1/pinned/node_modules', liveRoot, ''].join('\n'),
+    );
+    recordPkgRoot(cliUnder('/prefix-new'));
+    expect(rootsOf()).toEqual([liveRoot, pkgRoot('/prefix-new')]);
+  });
+
+  it('prunes dead entries even when the new input is skipped (TRA-1811)', () => {
+    const livePrefix = path.join(tmp, 'liveprefix');
+    const liveRoot = pkgRoot(livePrefix);
+    fs.mkdirSync(liveRoot, { recursive: true });
+    fs.writeFileSync(
+      getPkgRootsPath(),
+      ['/private/tmp/multica-task-1/pinned/node_modules', liveRoot, ''].join('\n'),
+    );
+    // Input under the OS temp dir is skipped, but the prune above still runs.
+    recordPkgRoot(cliUnder(livePrefix));
+    expect(rootsOf()).toEqual([liveRoot]);
   });
 });
 
