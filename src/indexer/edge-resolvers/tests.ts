@@ -3,13 +3,17 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { commitInChunks } from '../resolver-budget.js';
 
 // JS/TS: *.test.ts, *.spec.ts, __tests__/
 // Python: test_*.py, *_test.py, conftest.py, tests/test_*.py
 const TEST_PATH_RE =
   /\.(test|spec)\.[jt]sx?$|__tests__\/|(?:^|[/\\])test_[^/\\]+\.py$|(?:^|[/\\])[^/\\]+_test\.py$|conftest\.py$/;
 
-export function resolveTestCoversEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolveTestCoversEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
   let allFiles: import('../../db/types.js').FileRow[];
   if (scope) {
@@ -74,8 +78,11 @@ export function resolveTestCoversEdges(state: PipelineState, scope?: ChangeScope
      DO UPDATE SET metadata = excluded.metadata`,
   );
 
-  store.db.transaction(() => {
-    for (const edge of allEdges) {
+  // TRA-1764: one transaction per chunk with a fair yield between chunks —
+  // a full-pass storm used to hold the event loop (and /health with it) for
+  // the whole 5k+ edge loop in a single synchronous transaction.
+  await commitInChunks(store.db, allEdges, (chunk) => {
+    for (const edge of chunk) {
       if (edge.edge_type_name !== 'imports') continue;
       if (!testNodeToFile.has(edge.source_node_id)) continue;
 
@@ -112,7 +119,7 @@ export function resolveTestCoversEdges(state: PipelineState, scope?: ChangeScope
         created++;
       }
     }
-  })();
+  });
 
   if (created > 0) {
     logger.info({ edges: created }, 'test_covers edges resolved');

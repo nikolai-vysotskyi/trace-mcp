@@ -18,6 +18,7 @@ import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
+import { commitInChunks } from '../resolver-budget.js';
 
 interface PhpSymbol {
   id: number;
@@ -31,7 +32,10 @@ interface PhpSymbol {
   metadata: string | null;
 }
 
-export function resolvePhpCallEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolvePhpCallEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
 
   // Scope-aware iteration: outgoing edges from re-extracted files were already
@@ -195,8 +199,11 @@ export function resolvePhpCallEdges(state: PipelineState, scope?: ChangeScope): 
     typeRefs++;
   }
 
-  store.db.transaction(() => {
-    for (const sym of allSymbols) {
+  // TRA-1764: one transaction per chunk with a fair yield between chunks —
+  // the full-pass loop over every PHP symbol used to run as one synchronous
+  // transaction, starving /health on the same thread.
+  await commitInChunks(store.db, allSymbols, (chunk) => {
+    for (const sym of chunk) {
       // Scope-aware: skip symbols whose file was not re-extracted in this run.
       // Their outgoing edges were not deleted, so don't recreate them.
       if (scopedFileIds && !scopedFileIds.has(sym.file_id)) continue;
@@ -344,7 +351,7 @@ export function resolvePhpCallEdges(state: PipelineState, scope?: ChangeScope): 
         }
       }
     }
-  })();
+  });
 
   const total =
     calls +
