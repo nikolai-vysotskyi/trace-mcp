@@ -2755,3 +2755,53 @@ A new comparison page cannot break a top-20 held by reddit threads, the vendor d
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run — the yzfly merge is inbound.
 
+### Delta recheck, 2026-09-22 day (TRA-1819): six hours after the morning pass, outline merged, threads silent, sweep known-only
+
+**Open threads — audited via API, nothing owed anywhere.**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, head `810585b` (our round-2 fix),
+  our 04:12Z reply newest — no reviewer reaction yet. Wait.
+- Catalog PRs: `eltociear#119` / `GetBindu#195` (open, clean; newest still our
+  09-20 reminders — no second ping, limit used), `tolkonepiu#384` (open, clean,
+  untouched since 08-29 — no ping before 26.09), `ai-boost#240` (open, dirty
+  again after the maintainer's daily self-add — not rebased per the ledger rule:
+  rebase only close to a merge signal, and there is none).
+- `hermes#395`, `nix#606`: open, newest still our 09-20 reminders — no second
+  ping. `awesome-claude-code#2871`: open, only the filing-moment bot validation
+  (day 5 — do not ping; refusal is routine there). `Dokploy/mcp#81`: open,
+  3 comments, newest still 09-05.
+- Comment threads: `atlas#105` (9 comments, newest the maintainer's own 09-07
+  Tier-2 close-out), `slopstop#633` (newest ours 09-06), `nanocoder#1197`
+  (newest the third-party pitch 09-11), `kilocode#13843` (third-party
+  root-cause follow-up 09-20: system git 2.25.1 predates `--path-format`,
+  reporter fixed by upgrading — asks us nothing; our 09-07 analysis stands),
+  `kilocode#12707`, `pr-agent#2499` (newest ours 09-14), `lastlight#372`
+  (newest ours 09-18), `GitNexus#3127`, `pi-extensions#1204`, `pyrefly#4583`,
+  `ai-tooling#585` (no follow-up per TRA-857): all unchanged.
+
+**One thread closed inbound: `git-pkgs/outline#34` MERGED 2026-09-22T07:21Z.**
+Not our PR — authored by `andrew` (the maintainer), 6 commits, +3002/−27,
+"Add cross-file code graph with Go and Python resolvers". Our part: a 09-08
+edge-case review of `resolve.go`, his 09-13 "how did you find this PR", our
+09-15 answer. Merged with no further question to us. Nothing owed — a
+thank-you would only cost a notification. Recorded as the third thread of this
+class to resolve (after deslop's fix-shipped and atlas's defect-back), all
+three from the same move: read their code first, send the traps already paid
+for, no ask attached.
+
+**One citation with no address: `sosalejandro/atlas#147`** (open, filed 09-06
+by the maintainer himself): "make published claims testable, so a fabricated
+number fails CI instead of review" — names our `tests/docs/readme-claims.test.ts`
+and `docs/_data/counts.yml` as prior art worth copying. Internal docs issue,
+asks nothing of us; do not comment ("thanks for citing us" is noise). Noted
+because it validates the TRA-1120 gate direction from outside.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): 3 repos, all known.**
+`mrchatam/Trace` (competitor, no outreach), `crazy54/awesome-agentic-atlas`
+(rejection stands), `yzfly/awesome-context-engineering` (own merged listing).
+No `mentions-seen.txt` change — all three were recorded by TRA-1814 (#1345).
+
+**Catalogs:** moratorium holds, no submissions. Queue stands (StackMap, aloth,
+TensorBlock).
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
