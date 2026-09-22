@@ -5,6 +5,23 @@
 
 import type { RawEdge } from '../plugin-api/types.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
+
+/**
+ * Files committed per transaction by `persistBatch` (TRA-1828).
+ *
+ * The batch used to land as ONE synchronous SQLite transaction over up to
+ * 500 files — on a bulk reindex that single transaction held the daemon's
+ * only thread for seconds, /health (500 ms client timeout) stopped
+ * answering, and every connected stdio session flipped proxy→local. Chunked
+ * commits with a fair yield between chunks bound the stall window to one
+ * chunk instead of the whole batch, mirroring `commitInChunks` for edge
+ * resolution (TRA-1764). Name-churn maps still reflect the whole call:
+ * `commitNameChurn` accumulates per file and the maps are only read after
+ * the full batch lands, so chunking the transactions changes nothing
+ * observable downstream.
+ */
+export const PERSIST_WRITE_CHUNK = 50;
 
 /**
  * Callback for storing raw edges — injected from the pipeline so that
@@ -39,20 +56,29 @@ export class FilePersister {
   ) {}
 
   /**
-   * Persist phase: write a batch of extractions to DB in a single transaction.
-   * Reduces SQLite journal syncs from N to 1 per batch. Resets symbol-name
-   * churn tracking at the start so each call's ChangeScope reflects only the
-   * current batch.
+   * Persist phase: write a batch of extractions to DB in chunked transactions.
+   * Resets symbol-name churn tracking at the start so each call's ChangeScope
+   * reflects only the current batch. Async: yields to the event loop between
+   * chunks (TRA-1828) — callers must await the full batch before reading
+   * `newSymbolNames` / `deletedSymbolNames`.
    */
-  persistBatch(extractions: FileExtraction[]): void {
+  async persistBatch(extractions: FileExtraction[]): Promise<void> {
     this.newSymbolNames.clear();
     this.deletedSymbolNames.clear();
     this._pendingOldNames.clear();
-    this.state.store.db.transaction(() => {
-      for (const ext of extractions) {
-        this.persistExtraction(ext);
-      }
-    })();
+    // Own turn first: the pre-yield must come immediately before the sync
+    // work (see `runInOwnTurn`) so concurrent indexers cannot stack their
+    // first chunks into a single turn.
+    await yieldToEventLoopFair();
+    for (let i = 0; i < extractions.length; i += PERSIST_WRITE_CHUNK) {
+      if (i > 0) await yieldToEventLoopFair();
+      const chunk = extractions.slice(i, i + PERSIST_WRITE_CHUNK);
+      this.state.store.db.transaction(() => {
+        for (const ext of chunk) {
+          this.persistExtraction(ext);
+        }
+      })();
+    }
   }
 
   /**

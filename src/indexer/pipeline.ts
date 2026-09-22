@@ -693,7 +693,7 @@ export class IndexingPipeline {
       // the intended outcome here, not the parser regression `checkShrink`
       // hunts for. Repairing an index that was 93% stale would otherwise raise
       // a shrink warning on the very run that fixed it.
-      this.reconcileScope(filePaths, collected.truncated);
+      await this.reconcileScope(filePaths, collected.truncated);
       const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       // Bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for genuine
       // from-scratch indexes — never on a live daemon whose DB other
@@ -1078,7 +1078,7 @@ export class IndexingPipeline {
    * the daemon runs `indexAll` per project on start, so a stale index converges
    * without any explicit `trace-mcp doctor --fix` step.
    */
-  private reconcileScope(inScope: string[], truncated: boolean): number {
+  private async reconcileScope(inScope: string[], truncated: boolean): Promise<number> {
     const staleIds = selectOutOfScopeFiles({
       files: this.store.getAllFiles(),
       inScope,
@@ -1089,9 +1089,18 @@ export class IndexingPipeline {
     });
     this._scopeRowsRemoved = staleIds.length;
     if (staleIds.length === 0) return 0;
-    this.store.db.transaction(() => {
-      for (const id of staleIds) this.store.deleteFile(id);
-    })();
+    // TRA-1828: after an fs-drop storm the stale set can be thousands of
+    // rows — one synchronous delete transaction over all of them held the
+    // daemon's only thread (and /health with it). Chunked deletes with a
+    // fair yield between chunks bound the stall to one chunk.
+    const RECONCILE_DELETE_CHUNK = 200;
+    for (let i = 0; i < staleIds.length; i += RECONCILE_DELETE_CHUNK) {
+      if (i > 0) await yieldToEventLoopFair();
+      const slice = staleIds.slice(i, i + RECONCILE_DELETE_CHUNK);
+      this.store.db.transaction(() => {
+        for (const id of slice) this.store.deleteFile(id);
+      })();
+    }
     logger.info(
       { root: this.rootPath, removed: staleIds.length, inScope: inScope.length },
       'Dropped index rows for files no longer in scope',
