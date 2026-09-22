@@ -148,11 +148,11 @@ function instrument(totals: StageTotals, opts: { patchParse: boolean }): () => v
   });
 
   const origPersist = FilePersister.prototype.persistBatch;
-  FilePersister.prototype.persistBatch = function (this: FilePersister, ...args: unknown[]) {
+  FilePersister.prototype.persistBatch = async function (this: FilePersister, ...args: unknown[]) {
     const t0 = performance.now();
     try {
       // biome-ignore lint: bench instrumentation, not production code
-      return (origPersist as any).apply(this, args);
+      return await (origPersist as any).apply(this, args);
     } finally {
       totals.persistMs += performance.now() - t0;
       totals.persistCalls++;
