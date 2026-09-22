@@ -231,13 +231,17 @@ describe('recordPkgRoot', () => {
   it('deduplicates and caps the list', () => {
     // recordPkgRoot prunes entries whose directories no longer exist, so the
     // fake prefixes below must read as live for this to exercise dedup/cap
-    // rather than the prune.
+    // rather than the prune. Compare against the resolved roots (not the raw
+    // '/prefixN' literals): on Windows path.resolve drive-qualifies them
+    // ('/prefix0' -> 'C:\prefix0\...'), so a startsWith('/prefix') check
+    // would treat every fixture as dead and the test would pass vacuously.
+    const liveRoots = new Set(Array.from({ length: 14 }, (_, i) => pkgRoot(`/prefix${i}`)));
     const realExists = fs.existsSync;
     const spy = vi
       .spyOn(fs, 'existsSync')
       .mockImplementation(
         (p: fs.PathLike) =>
-          (typeof p === 'string' && p.startsWith('/prefix') ? true : realExists(p)) as boolean,
+          (typeof p === 'string' && liveRoots.has(p) ? true : realExists(p)) as boolean,
       );
     try {
       for (let i = 0; i < 14; i++) {
