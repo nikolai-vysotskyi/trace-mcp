@@ -103,7 +103,59 @@ export function resetLanguagePluginFailureDedupForTests(): void {
   parseFailureCounts.clear();
 }
 
+/**
+ * TRA-1807: process-once tripwire for a deleted install tree. When the
+ * daemon's own `tree-sitter-wasm/out` directory is gone (e.g. a foreign
+ * postinstall kickstarted the live daemon from an agent sandbox that has
+ * since been deleted), EVERY parse of EVERY language fails with the same
+ * ENOENT — a config-level fatal, not a per-file problem. Log it once with
+ * the running entry + remediation; everything after goes to debug with no
+ * counters. (Each worker thread carries its own copy of this flag, so a
+ * 4-worker pool emits at most one line per worker.)
+ */
+let warnedMissingWasmEnv = false;
+
+/** Test hook — clears the TRA-1807 missing-WASM tripwire between cases. */
+export function resetMissingWasmEnvWarnForTests(): void {
+  warnedMissingWasmEnv = false;
+}
+
+function isMissingWasmEnvError(error: TraceMcpError): boolean {
+  const message = 'message' in error ? String(error.message) : String(error.code);
+  const code = String(error.code ?? '');
+  if (!/ENOENT/i.test(code) && !/ENOENT/i.test(message)) return false;
+  return message.includes('tree-sitter-wasm') || message.includes('.wasm');
+}
+
+function logMissingWasmEnvOnce(rootPath: string, relPath: string, error: TraceMcpError): boolean {
+  if (!isMissingWasmEnvError(error)) return false;
+  if (warnedMissingWasmEnv) {
+    logger.debug(
+      { file: relPath, rootPath, code: error.code },
+      'Language plugin failed (missing WASM env, already reported)',
+    );
+    return true;
+  }
+  warnedMissingWasmEnv = true;
+  logger.error(
+    {
+      file: relPath,
+      rootPath,
+      code: error.code,
+      error,
+      entry: process.argv[1] ?? null,
+    },
+    'Language plugin failed: tree-sitter WASM grammars unreadable (ENOENT) — ' +
+      'the install tree this process runs from is likely deleted (TRA-1807). ' +
+      'Restart the daemon from a stable install; per-file repeats suppressed after this line',
+  );
+  return true;
+}
+
 function logLanguagePluginFailure(rootPath: string, relPath: string, error: TraceMcpError): void {
+  // Config-fatal first: a missing install tree must not feed the per-root
+  // counters (they reached 4750+ summaries in the TRA-1807 incident).
+  if (logMissingWasmEnvOnce(rootPath, relPath, error)) return;
   const key = languagePluginFailureKey(rootPath, error);
   const seen = parseFailureCounts.get(key);
   if (!seen) {

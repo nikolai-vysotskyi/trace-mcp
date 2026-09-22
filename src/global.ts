@@ -206,6 +206,79 @@ export function isEphemeralProjectRoot(root: string): boolean {
   );
 }
 
+/**
+ * True when `installPath` is an install location that must never back the
+ * live daemon (TRA-1807).
+ *
+ * A postinstall running from an agent-run sandbox (`npm install` inside
+ * `/private/tmp/multica-task-<id>/...`) used to overwrite `launcher.env` +
+ * the `~/.trace/bin/trace` shim with its own sandbox `dist/cli.js` and then
+ * `launchctl kickstart` the live daemon — pinning `:3741` to a directory
+ * that vanishes with the run. The daemon kept serving from a deleted tree:
+ * every tree-sitter WASM load failed with ENOENT and the extract pool
+ * disabled itself permanently, with no self-recovery.
+ *
+ * This is the install-path twin of {@link isEphemeralProjectRoot}: it matches
+ * the same one-shot run shapes, plus the shared tmp roots a stable global
+ * install never lives under (`/tmp`, `/private/tmp`). Deliberately NOT the
+ * whole `os.tmpdir()` — on macOS that is `/var/folders/.../T`, which also
+ * hosts legitimate test fixtures and ad-hoc checkouts.
+ *
+ * Consumed by:
+ * - `serve-http` (fail-closed at startup),
+ * - `scripts/postinstall-control-plane.mjs` (refuses to adopt the live
+ *   daemon; mirrored there as plain regexes — keep in sync, TRA-1807).
+ */
+export function isEphemeralInstallPath(installPath: string): boolean {
+  const abs = path.resolve(installPath);
+  if (
+    EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
+    EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
+    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs)
+  ) {
+    return true;
+  }
+  // Shared tmp roots, matched on every OS (defense in depth: refusing a
+  // daemon install from `/tmp` is harmless on Windows too). Compare on a
+  // forward-slash form with any drive letter stripped, because on Windows
+  // `path.resolve('/tmp/...')` yields `C:\tmp\...` and a literal `/tmp`
+  // prefix never matches (TRA-1810). Keep the separator boundary so
+  // `/tmpfoo` or `/private/tmp-backup` don't match.
+  const normalized = abs.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '');
+  for (const tmpRoot of ['/tmp', '/private/tmp']) {
+    if (normalized === tmpRoot || normalized.startsWith(`${tmpRoot}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when `entryPath` (a cli entry file) lives inside a dev checkout —
+ * a `.git` directory within a few levels above it.
+ *
+ * TRA-1807: developers running `serve-http` from their own working tree
+ * (including the project's own daemon-spawn tests, which exercise the
+ * built dist/ of the checkout) are deliberate invocations, not a hijacked
+ * live daemon — the ephemeral-install guard exempts them. The hijack vector
+ * is npm-installed trees, which never carry `.git`. Mirrors the dev-checkout
+ * skips in postinstall (`isDevCheckout`) and the updater.
+ */
+export function isDevCheckoutEntry(entryPath: string): boolean {
+  let dir = path.dirname(path.resolve(entryPath));
+  for (let i = 0; i < 4; i++) {
+    try {
+      if (fs.existsSync(path.join(dir, '.git'))) return true;
+    } catch {
+      return false;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return false;
+    dir = parent;
+  }
+  return false;
+}
+
 /** Global project registry. */
 export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 
