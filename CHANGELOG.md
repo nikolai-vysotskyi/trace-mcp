@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.2...v3.31.3) (2026-09-22)
+
+
+### Bug Fixes
+
+* **ai:** quiet L50 noise when embedding provider is down at startup (TRA-1798) ([#1341](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1341)) ([9c83004](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9c83004af295aafa856bb59f62709d72b378b477))
+* **daemon,indexer:** refuse ephemeral daemon installs, fail loud on deleted trees (TRA-1807) ([#1343](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1343)) ([6f94888](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f948880f23ef44a1d4ee51127574a28828bb81f))
+* **guard:** session-aware fallback for unresolvable MCP sessions (TRA-1791) ([#1347](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1347)) ([ed27cf2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed27cf211e0f0efc7f2b2e688e95ff493531a5d7))
+* **indexer:** time-slice bulk persist/extract/reconcile + daemon event-loop lag monitor (TRA-1828) ([#1350](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1350)) ([357c1ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/357c1aba1d3d16e1253c30c80ec9165c742d7b09))
+* **indexer:** time-slice heavy edge-resolution passes so /health stays answerable (TRA-1764) ([#1312](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1312)) ([b33a85e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b33a85ef05d9642db5d0c073b584a99ab828f183))
+* **launcher:** skip ephemeral/tmp roots in pkg-roots, prune dead entries (TRA-1811) ([#1344](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1344)) ([5b4094b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5b4094bdc793385793bfe5fb041223096e75b79a))
+
 ## [3.31.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.1...v3.31.2) (2026-09-21)
 
 
