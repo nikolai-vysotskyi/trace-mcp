@@ -1,13 +1,17 @@
 /**
- * TRA-1138: the watcher's onRescan callback must go through the same
- * `parallel_initial_index` limiter as initial indexing. onRescan fires when
- * the watcher concludes it dropped fs events — bulk checkout, package
- * install, wake from sleep — and wake from sleep hits every registered
- * project at the same moment. Ungated, N registered projects meant N
- * concurrent full re-walks of their roots, while the identical work at
- * daemon start is capped at 2.
+ * ProjectManager watcher rescan with an unset limiter (TRA-1138).
  *
- * Same mocking harness as project-manager-ancestor-watcher.test.ts: fake
+ * Lives in its own file on purpose (TRA-1839), not next to the gating test:
+ * both tests share module-level mock state (`rescanCallbacks`, `tmpHome`),
+ * and vitest does NOT cancel a test whose `it` timeout fires — the orphaned
+ * async fn keeps running. On a pathological windows-latest runner (Sep 2026)
+ * the gating test's 30s timeout fired mid-`addProject`; the orphan then
+ * reassigned `tmpHome` and appended callbacks under the ungated test, which
+ * picked up a stale callback pointing at an afterEach-deleted directory and
+ * failed with `expected +0 to be 1`. Separate files get separate module
+ * registries, so no timeout in another test can contaminate this one.
+ *
+ * Same mocking harness as project-manager-rescan-gated.test.ts: fake
  * pipeline + watcher + server so no real DB, @parcel/watcher or MCP server
  * starts. The fake pipeline records concurrent indexAll() depth; the fake
  * watcher hands back the onRescan callback so the test can fire it.
@@ -71,7 +75,7 @@ beforeEach(() => {
   activeIndexAll = 0;
   peakIndexAll = 0;
   rescanCallbacks.length = 0;
-  tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-rescan-gate-'));
+  tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-rescan-ungated-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
   vi.resetModules();
   pmRef = undefined;
@@ -91,35 +95,34 @@ afterEach(async () => {
   rmSync(tmpHome, { recursive: true, force: true });
 }, 30_000);
 
-describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
-  it('caps concurrent rescans at parallel_initial_index, not at project count', async () => {
+describe('ProjectManager watcher rescan with unset limiter (TRA-1138)', () => {
+  // NOT a race test: the real FileWatcher.stop() unsubscribes and then drains
+  // the in-flight rescan, and shutdown() clears the limiter only after that,
+  // so a live rescan never sees a null limiter (Reviewer C verified this
+  // against the unmocked watcher). FakeWatcher.stop() is a no-op, which is
+  // what lets the callback be fired here at all. What this pins is only the
+  // defensive branch itself: an unset limiter degrades to an ungated re-walk
+  // instead of throwing inside a watcher callback.
+  it('runs the rescan ungated when the limiter is unset', async () => {
     const { ProjectManager } = await import('../project-manager.js');
     const pm = new ProjectManager();
     pmRef = pm;
 
-    for (let i = 0; i < 5; i++) {
-      const dir = join(tmpHome, `repo-${i}`);
-      mkdirSync(dir, { recursive: true });
-      await pm.addProject(dir);
-    }
-    expect(rescanCallbacks).toHaveLength(5);
+    const dir = join(tmpHome, 'repo-solo');
+    mkdirSync(dir, { recursive: true });
+    await pm.addProject(dir);
+    // The only callback in this file's registry is ours — no sibling test
+    // can append a stale one (TRA-1839). Assert it, so a future merge back
+    // into a shared file fails loudly instead of testing the wrong callback.
+    expect(rescanCallbacks).toHaveLength(1);
+    const rescan = rescanCallbacks[0];
 
-    // Initial indexing has settled; measure the rescan burst on its own.
-    // TRA-1579: explicit waitFor budget — the default 1s timeout flakes on
-    // loaded Windows runners where 5 projects' initial indexing plus event
-    // loop lag exceeds it. The test itself still caps at 30s.
-    // TRA-1839: raised to 60s. On a pathological windows-latest runner
-    // (Sep 2026) the cold import of the daemon graph plus 5 sequential
-    // real-DB addProjects alone approached the 30s cap, and the timeout
-    // firing mid-test left the orphaned async fn mutating shared module
-    // state under the NEXT test (see project-manager-rescan-ungated.test.ts).
-    await vi.waitFor(() => expect(activeIndexAll).toBe(0), { timeout: 10_000, interval: 50 });
+    await pm.shutdown();
+    pmRef = undefined;
     peakIndexAll = 0;
 
-    // Wake from sleep: every watcher fires onRescan at the same moment.
-    await Promise.all(rescanCallbacks.map((cb) => cb()));
-
-    expect(peakIndexAll).toBeGreaterThan(0);
-    expect(peakIndexAll).toBeLessThanOrEqual(2); // default parallel_initial_index
-  }, 60_000);
+    // The defensive branch must not throw on the null limiter.
+    await expect(rescan()).resolves.toBeUndefined();
+    expect(peakIndexAll).toBe(1);
+  }, 30_000);
 });
