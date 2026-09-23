@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.3...v3.31.4) (2026-09-23)
+
+
+### Bug Fixes
+
+* **daemon:** bound wedged native watcher calls so startup cannot stall in indexing (TRA-1843) ([#1359](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1359)) ([6b387d6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6b387d6d4e2af0eafac24983ff6d035e40459b1d))
+* **daemon:** slice warmup wait, bail on stalled startup (TRA-1844) ([#1360](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1360)) ([14b1981](https://github.com/nikolai-vysotskyi/trace-mcp/commit/14b19812696d4db5af3d2155f1e7a4597ab0afc2))
+* **db,indexer:** slow-SQL guard + index-friendly workspace preload (TRA-1834) ([#1352](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1352)) ([157b026](https://github.com/nikolai-vysotskyi/trace-mcp/commit/157b026a30011955d7f5dd877e2e798cf246a88b))
+* **graph:** omit service topology without source endpoints (TRA-1748) ([#1327](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1327)) ([d0b068d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0b068d1422b52fae2723d1ba825b427b75defb7))
+* **indexer,db:** chunk unbounded SQLite IN lists past variable/arg ceilings (TRA-1005) ([#1324](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1324)) ([28fb702](https://github.com/nikolai-vysotskyi/trace-mcp/commit/28fb702823ed89d1dc5aee6f2d4a7f2f6c743940))
+* **indexer:** dedupe File too large warn per path (TRA-1841) ([#1357](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1357)) ([08764b9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/08764b9d3115a7d3a47451911f851f9c6253fc19))
+* **init:** scope-aware hermes guard (TRA-1014) ([#1325](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1325)) ([a8ac6c4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a8ac6c461d256018522e3e108919b9fbf206eb73))
+* reconcile deleted files in subproject indexes (TRA-1746) ([#1329](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1329)) ([1412319](https://github.com/nikolai-vysotskyi/trace-mcp/commit/14123192a4afe01872451a61c2e1ab7795f37901))
+* **security:** confine mutating-tool writes to project root (TRA-1848) ([#1361](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1361)) ([100180a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/100180a4fa910e0bcc663dea3c2f40a48871c6d2))
+
+
+### Performance
+
+* **tools:** trim fattest tool descriptions, restore schema-budget headroom (TRA-1842) ([#1358](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1358)) ([fd3240d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd3240d51eac6006b9bc762330fa1c6740d55a32))
+
+
+### Documentation
+
+* **daemon:** record daemon-as-default decision at auto_spawn_daemon sites (TRA-1832) ([#1353](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1353)) ([f952add](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f952addc225067ef360bb32a903dd6e11dd34fad))
+* **ops:** delta recheck 2026-09-23 late, iharh bookmark noted (TRA-1860) ([#1365](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1365)) ([3f4b7f6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f4b7f60afce1050ab86742f9d3f5bcdaafa071c))
+* **outreach:** evening delta 2026-09-23 — threads silent, registry-ingest row, competitor-install note (TRA-1849) ([#1362](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1362)) ([b2778a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2778a8a398e404b017da900f91cf50ba73f9f7a))
+
+
+### Tests
+
+* **daemon:** replace snapshot wall-clock budget with causal ordering assert (TRA-1146) ([#1321](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1321)) ([dbb26ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dbb26ef6e7fb1fdcb88264a1f752e5df3d547119))
+* **windows:** harden shutdown-abort + ancestor-watcher timing flakes (TRA-1854) ([#1363](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1363)) ([2a80378](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a8037818a0e0b64a790f735b36dc33569eb38ab))
+* **windows:** harden timing-flake trio from TRA-1839 ([#1355](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1355)) ([c7af41a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c7af41a19a3ca0005b0e565d6804755ae7cc80fb))
+
+
+### Chores
+
+* **bench:** response-tokens re-measure at 3.31.0 (TRA-1774) ([#1316](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1316)) ([a22da7b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a22da7b2809dbbafe5d6336dc3e90927c4773724))
+
+
+### CI/CD
+
+* **pr:** fail PRs whose squash message release-please cannot parse (TRA-1039) ([#1326](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1326)) ([e5a180a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e5a180a8a3a4a7aa4bf46a0a89832ba22e55285e))
+* **release:** migrate SBOM job to async generate-report flow (TRA-908) ([#1320](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1320)) ([1b5209d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b5209df6ecb3428e51f736a70981f89560bcb15))
+
 ## [3.31.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.2...v3.31.3) (2026-09-22)
 
 
