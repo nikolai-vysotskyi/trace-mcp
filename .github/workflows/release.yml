@@ -181,7 +181,7 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
     env:
@@ -192,13 +192,34 @@ jobs:
         run: |
           set -euo pipefail
           FILE="trace-mcp-${TAG#v}.spdx.json"
-          # DEPRECATED, Sunset: 2026-11-13 (headers on the response itself;
-          # github.blog/changelog/2026-05-12-synchronous-sbom-api-deprecated).
-          # The successor is async — POST .../sbom/generate-report, then poll
-          # .../fetch-report/{uuid} — and returned 404 when probed on
-          # 2026-09-05, so it is not yet usable here. Migrate before the
-          # sunset or this step starts failing (TRA-908).
-          gh api "repos/${{ github.repository }}/dependency-graph/sbom" --jq .sbom > "$FILE"
+          # The synchronous .../dependency-graph/sbom endpoint was deprecated
+          # 2026-05-12 and sunsets 2026-11-13
+          # (github.blog/changelog/2026-05-12-synchronous-sbom-api-deprecated).
+          # The successor is async despite the issue text saying POST: it is
+          # GET .../sbom/generate-report (201 with an sbom_url), then poll
+          # GET .../sbom/fetch-report/{uuid} — 202 `{}` while the report is
+          # still being built, the SPDX JSON itself once ready. Verified live
+          # on 2026-09-21: POSTing generate-report 404s, GET returns 201, the
+          # report was ready after ~10s (TRA-908).
+          SBOM_URL=$(gh api "repos/${{ github.repository }}/dependency-graph/sbom/generate-report" --jq .sbom_url)
+          UUID="${SBOM_URL##*/}"
+          if [ -z "$UUID" ] || [ "$UUID" = "null" ]; then
+            echo "::error::generate-report returned no sbom_url"
+            exit 1
+          fi
+          READY=0
+          for i in $(seq 1 30); do
+            if gh api "repos/${{ github.repository }}/dependency-graph/sbom/fetch-report/$UUID" > "$FILE" \
+              && jq -e '.spdxVersion' "$FILE" >/dev/null; then
+              READY=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$READY" -ne 1 ]; then
+            echo "::error::SBOM report $UUID was not ready after 5 minutes of polling"
+            exit 1
+          fi
           # An empty package list means the dependency graph had not been
           # ingested for this commit yet — better to fail loudly than to ship
           # an SBOM that claims we depend on nothing.
