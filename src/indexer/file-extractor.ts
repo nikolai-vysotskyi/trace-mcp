@@ -21,6 +21,7 @@ import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import {
+  DEFAULT_MAX_FILE_SIZE,
   isBinaryBuffer,
   isSensitiveFile,
   validateFileSize,
@@ -101,6 +102,47 @@ function languagePluginFailureKey(rootPath: string, error: TraceMcpError): strin
 /** Test hook — clears the per-process dedup state between cases. */
 export function resetLanguagePluginFailureDedupForTests(): void {
   parseFailureCounts.clear();
+}
+
+/**
+ * TRA-1841: per-process dedup for the `File too large, skipping` warn. A
+ * live growing file (e.g. an app's append-only `.jsonl` scratchpad) trips
+ * the size gate on EVERY reconcile — ~400 L40 lines for a single path in
+ * one night, drowning the rest of the sweep signal. The skip itself is
+ * correct; only the log volume is wrong. The first occurrence per
+ * (root, path) keeps the full warn (path + size + limit); repeats go to
+ * debug. Keyed by root + path so co-hosted projects sharing a relPath
+ * still log independently. Mirrors the TRA-1768 dedup shape above. (Each
+ * worker thread carries its own copy of this set, so a pool emits at most
+ * one warn line per worker per path.)
+ */
+const MAX_FILE_TOO_LARGE_KEYS = 1000;
+const fileTooLargeWarned = new Set<string>();
+
+function fileTooLargeKey(rootPath: string, relPath: string): string {
+  return `${rootPath}\n${relPath}`;
+}
+
+/** Test hook — clears the per-process file-too-large dedup state between cases. */
+export function resetFileTooLargeWarnDedupForTests(): void {
+  fileTooLargeWarned.clear();
+}
+
+function logFileTooLargeOnce(
+  rootPath: string,
+  relPath: string,
+  size: number,
+  limit: number,
+  message = 'File too large, skipping',
+): void {
+  const key = fileTooLargeKey(rootPath, relPath);
+  if (fileTooLargeWarned.has(key)) {
+    logger.debug({ file: relPath, size }, `${message} (repeat suppressed)`);
+    return;
+  }
+  if (fileTooLargeWarned.size >= MAX_FILE_TOO_LARGE_KEYS) fileTooLargeWarned.clear();
+  fileTooLargeWarned.add(key);
+  logger.warn({ file: relPath, size, limit }, message);
 }
 
 /**
@@ -269,7 +311,12 @@ export class FileExtractor {
     if (fileSize != null) {
       const preCheck = validateFileSize(fileSize, isForceIncluded ? 5 * 1024 * 1024 : undefined);
       if (preCheck.isErr()) {
-        logger.warn({ file: relPath, size: fileSize }, 'File too large, skipping');
+        logFileTooLargeOnce(
+          rootPath,
+          relPath,
+          fileSize,
+          isForceIncluded ? 5 * 1024 * 1024 : DEFAULT_MAX_FILE_SIZE,
+        );
         return { kind: 'error' };
       }
     }
@@ -319,15 +366,18 @@ export class FileExtractor {
     if (!isForceIncluded) {
       const sizeCheck = validateFileSize(content.length);
       if (sizeCheck.isErr()) {
-        logger.warn({ file: relPath, size: content.length }, 'File too large, skipping');
+        logFileTooLargeOnce(rootPath, relPath, content.length, DEFAULT_MAX_FILE_SIZE);
         return { kind: 'error' };
       }
     } else if (content.length > 5 * 1024 * 1024) {
       // Above 5MB even a declared entry point is more likely a bundled
       // artifact than real source. Refuse and let the operator opt in
       // via an explicit raise of validateFileSize's max if they know.
-      logger.warn(
-        { file: relPath, size: content.length },
+      logFileTooLargeOnce(
+        rootPath,
+        relPath,
+        content.length,
+        5 * 1024 * 1024,
         'force-included package entry exceeds 5 MB hard ceiling — skipping',
       );
       return { kind: 'error' };
