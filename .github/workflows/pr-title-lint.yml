@@ -45,15 +45,20 @@ jobs:
             revert
 
   # TRA-1039: fail the PR when its future squash-merge commit would not parse.
-  # scripts/lint-squash-message.mjs rebuilds `<title> (#<number>)` + body and
-  # runs it through the same @conventional-commits/parser release-please uses
-  # (kept in sync with the release-please-action pin in release.yml) — plus
-  # release-please's own message-splitting and BEGIN_COMMIT_OVERRIDE handling,
-  # so this job's verdict matches what release-please will do on master.
+  # scripts/lint-squash-message.mjs rebuilds `<title> (#<number>)` over the
+  # PR's COMMIT messages — not the PR description — because this repo
+  # squashes with squash_merge_commit_message=COMMIT_MESSAGES (so the squash
+  # body is the concatenated commit messages; checking the description
+  # misses the real #1032 incident). It runs each piece through the same
+  # @conventional-commits/parser release-please uses (kept in sync with the
+  # release-please-action pin in release.yml) — plus release-please's own
+  # message-splitting and BEGIN_COMMIT_OVERRIDE handling, so this job's
+  # verdict matches what release-please will do on master.
   lint-squash-message:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read # gh api pulls/<n>/commits below
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,9 +71,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Fetch PR commit messages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/commits" --paginate \
+            --jq '[.[].commit.message]' > "${RUNNER_TEMP}/pr-commits.json"
+
       - name: Lint the future squash-merge message
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_COMMITS_FILE: ${{ runner.temp }}/pr-commits.json
         run: node scripts/lint-squash-message.mjs
