@@ -633,12 +633,22 @@ export function getCommunityDetail(
   const dependsOn = new Map<number, number>();
   const dependedBy = new Map<number, number>();
 
-  // Single query: get all edges involving this community's files
+  // Single query: get all edges involving this community's files.
+  // TRA-1005: chunk — fileList feeds TWO `IN` lists and is spread twice
+  // into `.all(...)`, so the ceiling hits at ~16k files (CHUNK = 500 →
+  // 1000 vars / 1000 args per chunk). Each chunk's GROUP BY already counts
+  // globally for the pairs it sees, and a cross-chunk pair surfaces in two
+  // chunks — so chunks merge by pair-dedupe (cf. getAllOrmAssociations),
+  // never by summing.
   const fileList = members.map((m) => m.file_path);
   if (fileList.length > 0) {
-    const placeholders = fileList.map(() => '?').join(',');
-    const edgeRows = store.db
-      .prepare(`
+    const CHUNK = 500;
+    const pairRows = new Map<string, { source_file: string; target_file: string; cnt: number }>();
+    for (let i = 0; i < fileList.length; i += CHUNK) {
+      const chunk = fileList.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const edgeRows = store.db
+        .prepare(`
       SELECT sf.path AS source_file, tf.path AS target_file, COUNT(*) AS cnt
       FROM edges e
       JOIN nodes sn ON e.source_node_id = sn.id
@@ -652,13 +662,19 @@ export function getCommunityDetail(
         AND sf.path != tf.path
       GROUP BY sf.path, tf.path
     `)
-      .all(...fileList, ...fileList) as Array<{
-      source_file: string;
-      target_file: string;
-      cnt: number;
-    }>;
+        .all(...chunk, ...chunk) as Array<{
+        source_file: string;
+        target_file: string;
+        cnt: number;
+      }>;
 
-    for (const row of edgeRows) {
+      for (const row of edgeRows) {
+        const key = `${row.source_file}\0${row.target_file}`;
+        if (!pairRows.has(key)) pairRows.set(key, row);
+      }
+    }
+
+    for (const row of pairRows.values()) {
       if (myFiles.has(row.source_file) && !myFiles.has(row.target_file)) {
         const targetComm = fileToComm.get(row.target_file);
         if (targetComm != null) {

@@ -143,6 +143,31 @@ describe('SQLite variable / V8 spread limits (TRA-1005)', () => {
     expect(rows).toHaveLength(2);
   });
 
+  it('getAllOrmAssociations dedupes rows matched in two chunks (cross-chunk file_id + target-name)', () => {
+    const store = testStore();
+
+    const a = store.insertFile('src/a.ts', 'typescript', 'h1', 10, null, null);
+    const b = store.insertFile('src/b.ts', 'typescript', 'h2', 10, null, null);
+    const source = store.insertOrmModel({ name: 'Source', orm: 'prisma' }, a);
+    store.insertOrmModel({ name: 'Target', orm: 'prisma' }, b);
+    store.insertOrmAssociation(source, null, 'Target', 'hasMany', undefined, a);
+
+    // CHUNK = 500: chunk 1 holds A (+ 499 phantoms) and matches the row via
+    // `file_id`; chunk 2 holds B and matches the SAME row via the
+    // target-model-name branch. The single-statement original returned it
+    // once — chunk accumulation must too.
+    const ids = [a, ...fakeIds(499), b];
+    expect(ids).toHaveLength(501);
+    const ph = ids.map(() => '?').join(',');
+    const original = store.db
+      .prepare(
+        `SELECT * FROM orm_associations WHERE file_id IN (${ph}) OR (target_model_id IS NULL AND target_model_name IN (SELECT name FROM orm_models WHERE file_id IN (${ph})))`,
+      )
+      .all(...ids, ...ids);
+    expect(original).toHaveLength(1);
+    expect(store.getAllOrmAssociations(ids)).toHaveLength(1);
+  });
+
   it('EdgeResolver.storeRawEdges survives multi-chunk symbol/node batches', () => {
     const store = testStore();
     edgeTypeId(store, 'calls');

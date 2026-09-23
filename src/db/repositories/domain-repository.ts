@@ -245,6 +245,12 @@ export class DomainRepository {
       // are spread twice into `.all(...)`, so the ceiling hits at ~16k files.
       // CHUNK = 500 → 1000 vars / 1000 args per chunk, far under both limits.
       const out: OrmAssociationRow[] = [];
+      // The two `IN` lists overlap by design: an unresolved association
+      // declared in chunk N can target a model living in chunk M, so the
+      // same row matches the `file_id` branch in one chunk and the
+      // target-name branch in another. The single-statement original
+      // returned it once — dedupe by primary key to keep that contract.
+      const seen = new Set<number>();
       const CHUNK = 500;
       for (let i = 0; i < fileIds.length; i += CHUNK) {
         const chunk = fileIds.slice(i, i + CHUNK);
@@ -263,7 +269,11 @@ export class DomainRepository {
                         (SELECT name FROM orm_models WHERE file_id IN (${ph})))`,
           )
           .all(...chunk, ...chunk) as OrmAssociationRow[];
-        for (const row of rows) out.push(row);
+        for (const row of rows) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          out.push(row);
+        }
       }
       return out;
     }
