@@ -2812,3 +2812,23 @@ Six hours after TRA-1831, audited via API. Zero movements on every open thread: 
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-23 late (TRA-1860): threads silent, one bookmark noted, MiniMax movement is Nikolai's own
+
+Audited via API (pulls/issues endpoints; `search/issues` answers 404 from this token, so no issue-index sweep this run — mention sweep covers code, not issues).
+
+**Open threads — zero movements owed anywhere.**
+- Catalog PRs: `eltociear#119`, `GetBindu#195` (open, newest our 09-20 reminders), `hermes#395`, `nix#606` (open, 1 comment each — our 09-20 pings). No second reminders: the single allowed ping is spent.
+- `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, not yet), `ai-boost#240` (open, 0 comments — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, newest still the 09-18 filing-moment bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (2 comments, newest the maintainer's 09-21 thanks), `kilocode#13843` (3 comments, newest the 09-20 third-party git-version follow-up), `atlas#105` (9 comments, newest 09-07), `slopstop#633` (newest ours 09-06 — still deliberately not bumped), `kilocode#12707` (newest ours), `Dokploy/mcp#81` (3 comments, unchanged since 09-05), `nanocoder#1197` (4 comments, newest 09-17 — non-comment activity per the 09-23 morning verification), `lastlight#372` (6 comments, newest ours 09-18).
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, `updated 2026-09-23T15:09Z` — the movement is Nikolai's own fourth comment (both upstream write-boundary gaps fixed on master at `28fb7028`, probes re-run against the master build), no new review from `hetaoBackend` (still the two `CHANGES_REQUESTED`, 09-21/09-22). His lane — recorded, not touched.
+- trace-mcp 181★/21 forks (+2 stars against the 09-23 morning pass).
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): one hit, classified, `ops/mentions-seen.txt` updated.** `iharh/notes` (7★, personal notes repo, pushed today): `ai/thematical/code-understand/trace-mcp.txt` holds exactly two lines — our site and repo URLs. A bookmark, not a surface and not a question: nobody to write to, nothing to correct, no row. Intel value only: the directory lists us beside codebase-memory-mcp, codegraph, graphify, gitnexus, serena, context-mode, semble, socraticode, claude-context and chunkhound — an independent engineer filed us in exactly our competitive set, unprompted. Flagged for Competitor Intelligence / positioning; no outreach.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage (nothing to do but wait), MiniMax#54 awaits the reviewer's re-review (his comment today already covers it), and the human-only doors stand as recorded in TRA-633 with no new entry. No consolidated request sent — per the standing rule, one reminder per door, and no door is due one.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
