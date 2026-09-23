@@ -92,6 +92,7 @@ import {
   markProjectStopping,
 } from './daemon/reindex-file-handler.js';
 import { startVitalsLog } from './daemon/vitals-log.js';
+import { armStartupWatchdog } from './daemon/startup-watchdog.js';
 import { getDroppedEventStats } from './indexer/watcher.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
 // Statically imported (unlike session.ts's own default dynamic import) so
@@ -3580,6 +3581,10 @@ program
     startVitalsLog({
       getCounts: () => {
         const loaded = projectManager.listProjects();
+        // TRA-1843: one warn per stall episode (latched inside) so a project
+        // wedged in indexing names itself instead of sitting silent in the
+        // vitals line at `sweep_busy` forever.
+        projectManager.warnOnIndexingStalls();
         return {
           loaded: loaded.length,
           // TRA-1125: initial-load status alone under-reports. Incremental
@@ -3807,6 +3812,26 @@ program
       // HTTP server is already accepting; in-flight requests against a still-
       // indexing project return 503 (Retry-After: 5) so the hook fallback
       // takes over transparently until indexing completes.
+      // TRA-1843: backstop for the eternal-`starting` hang — if the bootstrap
+      // below has not finished within the budget (a setup path wedged past
+      // every per-call bound), name the stuck roots and report ready anyway.
+      // Per-project `indexing` status still gates 503s, so `ok` means
+      // "serving", never "every index finished". Disarmed on the normal path.
+      const disarmStartupWatchdog = armStartupWatchdog({
+        getStuckRoots: () =>
+          projectManager
+            .listProjects()
+            .filter((p) => p.status === 'starting' || p.status === 'indexing')
+            .map((p) => p.root),
+        onStuck: (stuckRoots) => {
+          logger.error(
+            { stuckRoots },
+            'Startup watchdog: registered-project loading did not finish in time — ' +
+              'flipping /health to ok so clients stop waiting on "starting" (TRA-1843)',
+          );
+          startupComplete = true;
+        },
+      });
       void (async () => {
         try {
           await projectManager.loadAllRegistered();
@@ -3820,6 +3845,7 @@ program
         // reports "ok" the moment the blocking work finishes. The cwd-add and
         // grammar warm-up that follow are non-gating.
         startupComplete = true;
+        disarmStartupWatchdog();
 
         // Soft GC (TRA-23): run once now, then hourly for the life of the
         // daemon — long-running daemons otherwise only swept at startup
