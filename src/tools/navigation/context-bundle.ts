@@ -314,10 +314,19 @@ export function getContextBundle(
     // For file-type deps, grab their top-level exported symbols (batched)
     if (fileRefIds.length > 0) {
       const depFileMap = store.getFilesByIds(fileRefIds);
-      const placeholders = fileRefIds.map(() => '?').join(',');
-      const allFileSyms = store.db
-        .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`)
-        .all(...fileRefIds) as SymbolRow[];
+      // TRA-1005: chunk — one `IN (?,...)` over the full array tops
+      // SQLITE_MAX_VARIABLE_NUMBER (32766), and the spread trips V8's
+      // argument ceiling (~65k).
+      const allFileSyms: SymbolRow[] = [];
+      const CHUNK = 900;
+      for (let i = 0; i < fileRefIds.length; i += CHUNK) {
+        const chunk = fileRefIds.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        const rows = store.db
+          .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders}) AND parent_id IS NULL`)
+          .all(...chunk) as SymbolRow[];
+        for (const row of rows) allFileSyms.push(row);
+      }
       for (const sym of allFileSyms) {
         if (seenDepIds.has(sym.id)) continue;
         seenDepIds.add(sym.id);

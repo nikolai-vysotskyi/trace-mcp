@@ -55,13 +55,10 @@ function searchRepoDb(
   const rankSpread = maxRank - minRank || 1;
 
   const symbolIds = ftsResults.map((r) => r.symbolId);
-  const symbolRows = db
-    .prepare(
-      `SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.signature, s.line_start, f.path as file_path
-     FROM symbols s JOIN files f ON f.id = s.file_id
-     WHERE s.id IN (${symbolIds.map(() => '?').join(',')})`,
-    )
-    .all(...symbolIds) as Array<{
+  // TRA-1005: chunk — FTS result lists are unbounded in theory, so they must
+  // not feed one IN list / one spread call (SQLITE_MAX_VARIABLE_NUMBER, V8
+  // argument ceiling). Rows accumulate with a loop, not push(...rows).
+  const symbolRows: Array<{
     id: number;
     symbol_id: string;
     name: string;
@@ -70,7 +67,29 @@ function searchRepoDb(
     signature: string | null;
     line_start: number | null;
     file_path: string;
-  }>;
+  }> = [];
+  const CHUNK = 900;
+  for (let i = 0; i < symbolIds.length; i += CHUNK) {
+    const chunk = symbolIds.slice(i, i + CHUNK);
+    const ph = chunk.map(() => '?').join(',');
+    const rows = db
+      .prepare(
+        `SELECT s.id, s.symbol_id, s.name, s.kind, s.fqn, s.signature, s.line_start, f.path as file_path
+     FROM symbols s JOIN files f ON f.id = s.file_id
+     WHERE s.id IN (${ph})`,
+      )
+      .all(...chunk) as Array<{
+      id: number;
+      symbol_id: string;
+      name: string;
+      kind: string;
+      fqn: string | null;
+      signature: string | null;
+      line_start: number | null;
+      file_path: string;
+    }>;
+    for (const row of rows) symbolRows.push(row);
+  }
 
   const symbolMap = new Map(symbolRows.map((s) => [s.id, s]));
 

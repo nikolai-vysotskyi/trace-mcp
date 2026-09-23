@@ -951,13 +951,19 @@ function traverseIncoming(
     // Batch fetch complexity
     const complexityMap = new Map<number, number>();
     if (symbolIds.length > 0) {
-      const placeholders = symbolIds.map(() => '?').join(',');
-      const rows = store.db
-        .prepare(
-          `SELECT id, cyclomatic FROM symbols WHERE id IN (${placeholders}) AND cyclomatic IS NOT NULL`,
-        )
-        .all(...symbolIds) as Array<{ id: number; cyclomatic: number }>;
-      for (const r of rows) complexityMap.set(r.id, r.cyclomatic);
+      // TRA-1005: chunk — an unbounded id list tops
+      // SQLITE_MAX_VARIABLE_NUMBER (32766) and trips V8's spread ceiling.
+      const CHUNK = 900;
+      for (let i = 0; i < symbolIds.length; i += CHUNK) {
+        const chunk = symbolIds.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        const rows = store.db
+          .prepare(
+            `SELECT id, cyclomatic FROM symbols WHERE id IN (${placeholders}) AND cyclomatic IS NOT NULL`,
+          )
+          .all(...chunk) as Array<{ id: number; cyclomatic: number }>;
+        for (const r of rows) complexityMap.set(r.id, r.cyclomatic);
+      }
     }
 
     for (const srcId of sourceNodeIds) {

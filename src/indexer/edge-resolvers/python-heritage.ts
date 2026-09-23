@@ -20,29 +20,37 @@ export function resolvePythonHeritageEdges(state: PipelineState, scope?: ChangeS
       ? Array.from(state.changedFileIds)
       : undefined;
 
-  let query: string;
-  const params: unknown[] = [];
-
+  // TRA-1005: chunk the scope — one `IN (?,...)` over the full array tops
+  // SQLITE_MAX_VARIABLE_NUMBER (32766), and spreading it into `.all(...)`
+  // trips V8's argument ceiling (~65k). Rows accumulate with a loop.
+  const classesWithBases: Array<{ id: number; name: string; metadata: string }> = [];
   if (changedFileIds?.length) {
-    const ph = changedFileIds.map(() => '?').join(',');
-    query = `SELECT s.id, s.name, s.metadata FROM symbols s
+    const CHUNK = 900;
+    for (let i = 0; i < changedFileIds.length; i += CHUNK) {
+      const chunk = changedFileIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(
+          `SELECT s.id, s.name, s.metadata FROM symbols s
              JOIN files f ON s.file_id = f.id
              WHERE f.language = 'python' AND s.kind = 'class'
              AND s.metadata IS NOT NULL AND json_extract(s.metadata, '$.bases') IS NOT NULL
-             AND f.id IN (${ph})`;
-    params.push(...changedFileIds);
+             AND f.id IN (${ph})`,
+        )
+        .all(...chunk) as Array<{ id: number; name: string; metadata: string }>;
+      for (const r of rows) classesWithBases.push(r);
+    }
   } else {
-    query = `SELECT s.id, s.name, s.metadata FROM symbols s
+    const rows = store.db
+      .prepare(
+        `SELECT s.id, s.name, s.metadata FROM symbols s
              JOIN files f ON s.file_id = f.id
              WHERE f.language = 'python' AND s.kind = 'class'
-             AND s.metadata IS NOT NULL AND json_extract(s.metadata, '$.bases') IS NOT NULL`;
+             AND s.metadata IS NOT NULL AND json_extract(s.metadata, '$.bases') IS NOT NULL`,
+      )
+      .all() as Array<{ id: number; name: string; metadata: string }>;
+    for (const r of rows) classesWithBases.push(r);
   }
-
-  const classesWithBases = store.db.prepare(query).all(...params) as Array<{
-    id: number;
-    name: string;
-    metadata: string;
-  }>;
 
   if (classesWithBases.length === 0) return;
 

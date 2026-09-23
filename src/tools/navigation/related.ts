@@ -131,13 +131,13 @@ export function getRelatedSymbols(
         }
       }
 
-      // Get symbols from co-imported files (batched instead of per-file N+1)
+      // Get symbols from co-imported files (batched instead of per-file N+1).
+      // TRA-1005: chunk — coFileIds is unbounded in theory, so it must not
+      // feed one IN list / one spread call (SQLITE_MAX_VARIABLE_NUMBER,
+      // V8 argument ceiling). Rows accumulate with a loop, not push(...rows).
       const coFileIds = [...fileNodeMap.keys()];
       if (coFileIds.length > 0) {
-        const placeholders = coFileIds.map(() => '?').join(',');
-        const allCoSymbols = store.db
-          .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders})`)
-          .all(...coFileIds) as Array<{
+        const allCoSymbols: Array<{
           id: number;
           file_id: number;
           name: string;
@@ -146,7 +146,25 @@ export function getRelatedSymbols(
           fqn: string | null;
           signature: string | null;
           line_start: number | null;
-        }>;
+        }> = [];
+        const CHUNK = 900;
+        for (let i = 0; i < coFileIds.length; i += CHUNK) {
+          const chunk = coFileIds.slice(i, i + CHUNK);
+          const placeholders = chunk.map(() => '?').join(',');
+          const rows = store.db
+            .prepare(`SELECT * FROM symbols WHERE file_id IN (${placeholders})`)
+            .all(...chunk) as Array<{
+            id: number;
+            file_id: number;
+            name: string;
+            kind: string;
+            symbol_id: string;
+            fqn: string | null;
+            signature: string | null;
+            line_start: number | null;
+          }>;
+          for (const sym of rows) allCoSymbols.push(sym);
+        }
         for (const sym of allCoSymbols) {
           if (sym.id === target.id) continue;
           const info = fileNodeMap.get(sym.file_id);
