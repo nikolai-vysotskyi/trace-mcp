@@ -61,6 +61,8 @@ async function main(): Promise<void> {
   const idleTimeoutMs = (config.idle_timeout_minutes ?? 30) * 60_000;
   const daemonStabilityMs = (config.daemon_stability_seconds ?? 30) * 1_000;
   const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
+  // Product default: daemon-backed sessions; see the recorded rationale at the
+  // autoSpawnDaemon default in src/cli.ts (TRA-1832 / TRA-1836).
   const autoSpawnDaemon =
     process.env.TRACE_MCP_NO_DAEMON === '1' ? false : (config.auto_spawn_daemon ?? true);
   const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 20) * 1_000;
