@@ -131,9 +131,22 @@ export function extractCommitOverride(body) {
  * Copied from `splitMessages` in release-please's src/commit.ts: a squash
  * message can carry several conventional commits separated by a blank line,
  * and nested commits inside BEGIN_NESTED_COMMIT/END_NESTED_COMMIT blocks.
- * Each piece is parsed independently there, so each piece is checked here.
+ *
+ * Partitioned so the gate can treat the two groups differently: a piece of
+ * the TOP-LEVEL message that does not parse means the whole squash commit
+ * is silently dropped from the changelog (the TRA-1039 class) and must fail
+ * CI; a NESTED piece that does not parse is skipped by upstream's per-piece
+ * try/catch (debug line only) while the release still ships from the main
+ * message — so it is best-effort here (console.warn, never a failure).
+ * Without the partition, prose merely mentioning the literal
+ * `BEGIN_NESTED_COMMIT` (docs about release-please, this gate's own commit
+ * messages) is cut into a phantom "nested" piece that cannot parse and
+ * reds a mandatory check for no reason.
+ *
+ * `splitMessages` below keeps the exact upstream return shape (top-level
+ * pieces first, then nested) — only `lintSquashMessage` uses the partition.
  */
-export function splitMessages(message) {
+export function splitSquashMessages(message) {
   const parts = message.split('BEGIN_NESTED_COMMIT');
   const messages = [parts.shift()];
   for (const part of parts) {
@@ -142,12 +155,17 @@ export function splitMessages(message) {
     messages[0] = messages[0] + rest.join('END_NESTED_COMMIT');
   }
 
-  const conventionalCommits = messages[0]
+  const topLevel = messages[0]
     .split(
       /\r?\n\r?\n(?=(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(?:\(.*?\))?: )/,
     )
     .filter(Boolean);
-  return [...conventionalCommits, ...messages.slice(1)];
+  return { topLevel, nested: messages.slice(1) };
+}
+
+export function splitMessages(message) {
+  const { topLevel, nested } = splitSquashMessages(message);
+  return [...topLevel, ...nested];
 }
 
 /** Pulls the `at <line>:<col>` position out of a parser error, if present. */
@@ -164,7 +182,8 @@ function errorPosition(error) {
  * squash setting; when absent, the PR description is used as a documented
  * approximation (local use only — CI always passes commits).
  * @returns {string[]} human-readable problems; empty means release-please
- * would parse every piece of the future squash commit.
+ * would still ship the future squash commit (top-level parses; nested
+ * pieces it cannot parse are skipped upstream, so they only warn here).
  */
 export function lintSquashMessage(title, body, prNumber, commitMessages) {
   if (!title || title.trim() === '') {
@@ -179,16 +198,26 @@ export function lintSquashMessage(title, body, prNumber, commitMessages) {
     commitMessages && commitMessages.length > 0
       ? buildSquashMessageFromCommits(title, commitMessages, prNumber)
       : buildSquashMessage(title, body, prNumber);
-  const messages = splitMessages(override ?? squashMessage);
+  const { topLevel, nested } = splitSquashMessages(override ?? squashMessage);
   const problems = [];
-  for (const message of messages) {
+  const checkPiece = (message, { isNested }) => {
     // A blank piece can never yield a commit — upstream's per-piece
     // try/catch skips it silently, so flagging it would be a false positive
     // (e.g. the empty head left by a leading BEGIN_NESTED_COMMIT).
-    if (message.trim() === '') continue;
+    if (message.trim() === '') return;
     try {
       parser(message);
     } catch (error) {
+      // A nested piece that does not parse is skipped by upstream's
+      // per-piece try/catch while the release still ships from the main
+      // message — best-effort here, never a gate failure. Only a top-level
+      // piece failing means the whole squash commit vanishes (TRA-1039).
+      if (isNested) {
+        console.warn(
+          `nested commit piece skipped by release-please (and by this gate): "${message.split('\n')[0]}" — parser error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return;
+      }
       const subject = message.split('\n')[0];
       const position = errorPosition(error);
       const lines = message.split('\n');
@@ -204,7 +233,9 @@ export function lintSquashMessage(title, body, prNumber, commitMessages) {
           `notes with a BEGIN_COMMIT_OVERRIDE block in the PR body.`,
       );
     }
-  }
+  };
+  for (const message of topLevel) checkPiece(message, { isNested: false });
+  for (const message of nested) checkPiece(message, { isNested: true });
   return problems;
 }
 

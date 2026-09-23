@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_PATH = path.join(__dirname, '..', '..', 'scripts', 'lint-squash-message.mjs');
@@ -13,6 +13,7 @@ const {
   buildSquashMessageFromCommits,
   extractCommitOverride,
   lintSquashMessage,
+  splitSquashMessages,
 } = (await import(MODULE_PATH)) as {
   buildSquashBodyFromCommits: (commitMessages?: string[]) => string;
   buildSquashMessage: (title: string, body: string, prNumber?: number) => string;
@@ -28,6 +29,7 @@ const {
     prNumber?: number,
     commitMessages?: string[],
   ) => string[];
+  splitSquashMessages: (message: string) => { topLevel: string[]; nested: string[] };
 };
 
 const TITLE = 'fix(app): give macOS back its dock margin (TRA-780)';
@@ -127,6 +129,81 @@ describe('lint-squash-message', () => {
 
   it('extracts nothing when there is no override block', () => {
     expect(extractCommitOverride('plain body')).toBeNull();
+  });
+});
+
+// Reviewer B NEEDS WORK 2026-09-23: prose merely mentioning the literal
+// BEGIN_NESTED_COMMIT (docs about release-please, this gate's own commit
+// messages) was cut into a phantom "nested" piece that cannot parse, failing
+// the gate with `unexpected token ' ' at 1:6` — and red CI on this PR
+// itself. Upstream skips such nested pieces via per-piece try/catch while
+// the release still ships, so the gate must only fail on top-level pieces.
+describe('nested pieces are best-effort, top-level pieces gate', () => {
+  const NESTED_TITLE = 'fix(ci): lint squash from PR commits, split after override (TRA-1039)';
+
+  it('passes when prose mentions BEGIN_NESTED_COMMIT — the self-hosting case', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const commits = [
+        [
+          NESTED_TITLE,
+          '',
+          'A nested BEGIN_NESTED_COMMIT block inside an override parses as',
+          'upstream does; blank pieces are skipped like upstream\u2019s',
+          'per-piece try/catch.',
+        ].join('\n'),
+      ];
+      expect(lintSquashMessage(NESTED_TITLE, '', 1326, commits)).toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns (not fails) on an unparsable nested piece', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // Phantom shape from CI run 35865642892: prose cut at the literal
+      // leaves a nested piece starting with a space (`unexpected token ' ').
+      const body = [
+        'fix: real top-level thing',
+        '',
+        'A nested BEGIN_NESTED_COMMIT block inside an override parses as upstream does.',
+      ].join('\n');
+      expect(lintSquashMessage('fix: umbrella', body, 7)).toEqual([]);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('still fails when the top-level piece does not parse, nested present or not', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const body = [
+        'TABLE(RESULT_SCAN(q)) queries',
+        '',
+        'BEGIN_NESTED_COMMIT',
+        'fix: nested fix',
+        'END_NESTED_COMMIT',
+      ].join('\n');
+      const problems = lintSquashMessage(TITLE, body, 1);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('silently dropped by release-please');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('partitions top-level from nested without changing splitMessages content', () => {
+    const { topLevel, nested } = splitSquashMessages(
+      ['fix: one', '', 'BEGIN_NESTED_COMMIT', 'fix: nested', 'END_NESTED_COMMIT', 'tail'].join(
+        '\n',
+      ),
+    );
+    expect(nested).toHaveLength(1);
+    expect(nested[0]).toContain('fix: nested');
+    expect(topLevel.join('\n')).toContain('fix: one');
+    expect(topLevel.join('\n')).toContain('tail');
   });
 });
 
