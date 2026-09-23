@@ -12,6 +12,7 @@ import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
 import { maybeYield } from '../../utils/event-loop.js';
 import { readIfExists } from '../../utils/safe-fs.js';
+import { firstWriteViolation, validatePath, validateWritePath } from '../../utils/security.js';
 import {
   type AstCodemodFileResult,
   astLangForFile,
@@ -34,6 +35,13 @@ import {
 
 // Re-export shared types for consumers
 export type { FileEdit, RefactorResult } from './shared.js';
+
+/**
+ * Extract a human-readable message from a security/write-guard failure.
+ */
+function guardMessage(error: { code: string; detail?: string } & object): string {
+  return 'detail' in error && typeof error.detail === 'string' ? error.detail : error.code;
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // TOOL 1: APPLY RENAME
@@ -160,7 +168,23 @@ export function applyRename(
     return result;
   }
 
-  // 4b. Flush writes (skipped on dry_run)
+  // 4b. Confinement — abort BEFORE any write when a target resolves
+  // outside the project root (DB paths are trusted, but a symlinked file
+  // inside the root would otherwise write through to the outside, TRA-1848).
+  if (!dryRun && pendingWrites.length > 0) {
+    const violation = firstWriteViolation(
+      projectRoot,
+      pendingWrites.map((w) => w.filePath),
+    );
+    if (violation !== null) {
+      result.success = false;
+      result.error = violation;
+      result.warnings.push(`Rename blocked: ${violation}`);
+      return result;
+    }
+  }
+
+  // 4c. Flush writes (skipped on dry_run)
   if (!dryRun) {
     for (const { filePath, lines } of pendingWrites) {
       writeLines(filePath, lines);
@@ -297,6 +321,14 @@ export function removeDeadCode(
   });
 
   if (!dryRun) {
+    // TRA-1848: refuse to write through a symlink (or any other escape)
+    // before touching the file.
+    const writeCheck = validateWritePath(filePath, projectRoot);
+    if (writeCheck.isErr()) {
+      result.success = false;
+      result.error = guardMessage(writeCheck.error);
+      return result;
+    }
     // 5. Remove the lines
     lines.splice(actualStart, endLine - actualStart);
 
@@ -377,7 +409,16 @@ export function extractFunction(
     warnings: [],
   };
 
-  const absPath = path.resolve(projectRoot, filePath);
+  // TRA-1848: confine the target to the project root. The MCP-layer guard
+  // covers remote calls, but this function is also reachable directly — and
+  // neither layer historically caught symlinks (checked at write time below).
+  const pathCheck = validatePath(filePath, projectRoot);
+  if (pathCheck.isErr()) {
+    result.error = guardMessage(pathCheck.error);
+    return result;
+  }
+
+  const absPath = pathCheck.value;
   const source = readIfExists(absPath);
   if (source === null) {
     result.error = `File not found: ${filePath}`;
@@ -449,6 +490,13 @@ export function extractFunction(
   }
 
   if (!dryRun) {
+    // TRA-1848: the preview above may legitimately read through a symlink,
+    // but the write must not follow it outside the project root.
+    const writeCheck = validateWritePath(absPath, projectRoot);
+    if (writeCheck.isErr()) {
+      result.error = guardMessage(writeCheck.error);
+      return result;
+    }
     try {
       fs.writeFileSync(absPath, newContent, 'utf-8');
       result.files_modified.push(toPosix(path.relative(projectRoot, absPath)));
@@ -564,6 +612,25 @@ export async function applyCodemod(
     return result;
   }
 
+  // TRA-1848: fast-glob honours `..` against cwd, so a pattern like
+  // `../outside/*.js` matches files outside the project root — and the apply
+  // loop below used to overwrite them. Refuse explicitly rather than
+  // silently trimming the match list.
+  {
+    const escaped = files.filter((f) => {
+      const abs = path.isAbsolute(f) ? path.normalize(f) : path.resolve(projectRoot, f);
+      return validatePath(abs, projectRoot).isErr();
+    });
+    if (escaped.length > 0) {
+      const shown = escaped.slice(0, 5).join(', ');
+      const more = escaped.length > 5 ? ` (and ${escaped.length - 5} more)` : '';
+      result.error =
+        `file_pattern escapes project root: ${shown}${more}. ` +
+        `file_pattern must only match files inside the project root.`;
+      return result;
+    }
+  }
+
   // Filter out binary files
   files = files.filter((f) => !BINARY_EXTENSIONS.has(path.extname(f).toLowerCase()));
 
@@ -676,6 +743,25 @@ export async function applyCodemod(
 
   result.total_files = filesWithMatches.size;
 
+  // TRA-1848: a matched file that is (or sits under) a symlink pointing
+  // outside the root would write through to the outside on apply. Refuse the
+  // whole codemod — in both dry-run and apply modes, since even the preview
+  // reads outside files — rather than trimming silently.
+  if (filesWithMatches.size > 0) {
+    const symlinkEscapes = [...filesWithMatches].filter((relPath) =>
+      validateWritePath(path.resolve(projectRoot, relPath), projectRoot).isErr(),
+    );
+    if (symlinkEscapes.length > 0) {
+      const shown = symlinkEscapes.slice(0, 5).join(', ');
+      const more = symlinkEscapes.length > 5 ? ` (and ${symlinkEscapes.length - 5} more)` : '';
+      result.error =
+        `Refusing codemod: ${shown}${more} resolve(s) outside the project root via symlink. ` +
+        `Remove the symlink escape or narrow file_pattern.`;
+      result.total_files = 0;
+      return result;
+    }
+  }
+
   // Report the engine that actually produced matches. AST wins when any AST
   // file matched; otherwise regex. (In 'ast'/'regex' modes this is fixed.)
   if (requestedEngine === 'ast') {
@@ -722,6 +808,13 @@ export async function applyCodemod(
   // 6. Apply changes — re-run the same engine that matched each file.
   for (const relPath of filesWithMatches) {
     const absPath = path.resolve(projectRoot, relPath);
+    // TRA-1848 backstop: re-check confinement at write time (TOCTOU — a
+    // symlink planted between the scan above and this write). Skip the file
+    // with a warning rather than writing through.
+    if (validateWritePath(absPath, projectRoot).isErr()) {
+      result.warnings.push(`Skipped write outside project root (symlink): ${relPath}`);
+      continue;
+    }
     try {
       const content = fs.readFileSync(absPath, 'utf-8');
       let newContent = content;
