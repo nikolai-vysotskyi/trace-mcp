@@ -1,0 +1,1 @@
+fix(app): give macOS back its dock margin — the icon shipped a fifth too big (TRA-780)

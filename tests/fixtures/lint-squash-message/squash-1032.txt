@@ -1,0 +1,30 @@
+fix(app): give macOS back its dock margin — the icon shipped a fifth too big (TRA-780) (#1032)
+
+* fix(app): give macOS back its dock margin — the icon shipped a fifth too big
+
+TRA-780 took the artwork's padding out on the reasoning that our plate rendered
+smaller than its neighbours'. That was backwards. macOS draws every dock icon in
+the same slot, and a conforming icon leaves margin inside its own canvas rather
+than filling it — Apple's grid puts the rounded square at 824 of 1024, 80.5%.
+
+Measured off a real dock screenshot, every neighbour's plate is 94px and ours
+shipped at 116 — 23% larger, which is what Nikolai spotted.
+
+The margin goes into the rasteriser rather than back into the master, because it
+is a packaging convention for one platform and not part of the mark: the lockups
+inline the same master and must not inherit a dock margin. The masters keep
+drawing the plate edge to edge and their test still asserts that.
+
+Rendered at the dock's 117px slot the plate is now 95px against the neighbours'
+94. A new test measures the shipped icon-1024.png rather than the master, so the
+two conventions cannot drift into each other again.
+
+Agent: Lead Engineer
+
+* docs: the padded canvas rounds to 1273, not 1272
+
+Math.round(1024 / (824/1024)) is 1273 and the inset 124.5; the comment claimed
+1272/124. The rendered plate was always the intended 824px — only the note was
+wrong. Caught in review.
+
+Agent: Lead Engineer

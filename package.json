@@ -116,6 +116,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
+    "@conventional-commits/parser": "0.4.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.3",
     "@types/better-sqlite3": "^9.6.0",
