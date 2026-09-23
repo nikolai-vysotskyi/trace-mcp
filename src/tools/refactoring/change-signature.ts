@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
+import { firstWriteViolation, validateWritePath } from '../../utils/security.js';
 import type { FileEdit, RefactorResult } from './shared.js';
 import { detectLanguage, readLines, toPosix, writeLines } from './shared.js';
 
@@ -207,6 +208,22 @@ export function changeSignature(
 
   // Apply definition change
   if (!dryRun) {
+    // TRA-1848: confine the definition file AND every call-site file BEFORE
+    // the first write — the call-site updates below also write to disk, so a
+    // violation must abort the whole mutation, not leave a partial one.
+    const siteIds = collectCallSiteFileIds(store, symbol.id, symbol.file_id);
+    const targets = [filePath];
+    for (const fid of siteIds) {
+      const f = store.getFileById(fid);
+      if (f) targets.push(path.resolve(projectRoot, f.path));
+    }
+    const violation = firstWriteViolation(projectRoot, targets);
+    if (violation !== null) {
+      result.success = false;
+      result.error = violation;
+      result.warnings.push(`Signature change blocked: ${violation}`);
+      return result;
+    }
     // Replace the definition lines (whole region, so the body is preserved verbatim)
     lines.splice(defStartIdx, symbol.line_end - defStartIdx, ...newDefLines);
     writeLines(filePath, lines);
@@ -436,6 +453,36 @@ interface CallSiteResult {
   warnings: string[];
 }
 
+/**
+ * File IDs that may receive call-site updates for `symbol` (TRA-1848:
+ * shared with the pre-write confinement check in `changeSignature` so the
+ * validated set and the written set cannot drift apart).
+ */
+function collectCallSiteFileIds(
+  store: Store,
+  symbolId: number,
+  definitionFileId: number,
+): Set<number> {
+  const fileIds = new Set<number>();
+  const symNodeId = store.getNodeId('symbol', symbolId);
+  if (symNodeId !== undefined) {
+    for (const edge of store.getIncomingEdges(symNodeId)) {
+      const ref = store.getNodeRef(edge.source_node_id);
+      if (!ref) continue;
+      if (ref.nodeType === 'symbol') {
+        const s = store.getSymbolById(ref.refId);
+        if (s) fileIds.add(s.file_id);
+      } else if (ref.nodeType === 'file') {
+        fileIds.add(ref.refId);
+      }
+    }
+  }
+
+  // Also check the definition file itself (for recursive calls, etc.)
+  fileIds.add(definitionFileId);
+  return fileIds;
+}
+
 function updateCallSites(
   store: Store,
   projectRoot: string,
@@ -449,25 +496,7 @@ function updateCallSites(
   const result: CallSiteResult = { edits: [], files: [], warnings: [] };
 
   // Find all files that reference this symbol via the dependency graph
-  const symNodeId = store.getNodeId('symbol', symbol.id);
-  if (symNodeId === undefined) return result;
-
-  const incomingEdges = store.getIncomingEdges(symNodeId);
-  const fileIds = new Set<number>();
-
-  for (const edge of incomingEdges) {
-    const ref = store.getNodeRef(edge.source_node_id);
-    if (!ref) continue;
-    if (ref.nodeType === 'symbol') {
-      const s = store.getSymbolById(ref.refId);
-      if (s) fileIds.add(s.file_id);
-    } else if (ref.nodeType === 'file') {
-      fileIds.add(ref.refId);
-    }
-  }
-
-  // Also check the definition file itself (for recursive calls, etc.)
-  fileIds.add(symbol.file_id);
+  const fileIds = collectCallSiteFileIds(store, symbol.id, symbol.file_id);
 
   // Build the argument transformation plan
   const argPlan = buildArgTransformPlan(oldParams, newParams, changes);
@@ -555,9 +584,21 @@ function updateCallSites(
 
     if (fileModified) {
       if (!dryRun) {
-        writeLines(filePath, lines);
+        // TRA-1848 backstop: re-check confinement at write time (TOCTOU — a
+        // symlink planted after the pre-write check in `changeSignature`).
+        // Skip the file with a warning rather than writing through (and do
+        // not list it as modified — nothing was written).
+        if (validateWritePath(filePath, projectRoot).isErr()) {
+          result.warnings.push(
+            `Skipped write outside project root (symlink): ${toPosix(file.path)}`,
+          );
+        } else {
+          writeLines(filePath, lines);
+          result.files.push(toPosix(file.path));
+        }
+      } else {
+        result.files.push(toPosix(file.path));
       }
-      result.files.push(toPosix(file.path));
     }
   }
 
