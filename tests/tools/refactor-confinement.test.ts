@@ -132,12 +132,19 @@ describe('TRA-1848: apply_codemod file_pattern confinement', () => {
 
   it('refuses an absolute file_pattern outside the root', async () => {
     const sb = createSandbox();
-    const result = await applyCodemod(sb.root, 'outer', 'OUTER_X', path.join(sb.outside, '*.js'), {
+    // Forward slashes: fast-glob's preferred spelling, so the absolute
+    // pattern has the best chance of matching on every OS.
+    const absolutePattern = `${sb.outside.replace(/\\/g, '/')}/*.js`;
+    const result = await applyCodemod(sb.root, 'outer', 'OUTER_X', absolutePattern, {
       dryRun: false,
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? '').toMatch(/escape.*project root/i);
+    // POSIX: the glob matches and confinement refuses with the escape error.
+    // Windows: fast-glob may return no matches for an absolute pattern, which
+    // is still an explicit refusal ("No files matched") — either way nothing
+    // outside is written.
+    expect(result.error ?? '').toMatch(/escape.*project root|No files matched/i);
     expect(fs.readFileSync(sb.outsideFile, 'utf-8')).toBe(sb.outsideBefore);
   });
 

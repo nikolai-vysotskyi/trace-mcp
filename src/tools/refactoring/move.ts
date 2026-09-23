@@ -363,6 +363,7 @@ function moveSymbol(
     const remainingSourceLines = [...sourceLines];
     remainingSourceLines.splice(extractStart, extractEnd - extractStart);
     const remainingSourceText = remainingSourceLines.join('\n');
+    // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- symbol.name passes through escapeRegex (all metacharacters neutralised), so the interpolated value cannot alter the pattern structure.
     const nameRegex = new RegExp(`\\b${escapeRegex(symbol.name)}\\b`);
 
     // Strip existing import lines so we don't count `import {foo}` itself
@@ -436,6 +437,7 @@ function moveSymbol(
       // Check if this importer references the moved symbol
       const importerLines = readLines(importerAbsPath);
       const importerContent = importerLines.join('\n');
+      // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- symbol.name passes through escapeRegex (all metacharacters neutralised), so the interpolated value cannot alter the pattern structure.
       const nameRegex = new RegExp(`\\b${escapeRegex(symbol.name)}\\b`);
 
       if (!nameRegex.test(importerContent)) continue;
@@ -765,6 +767,7 @@ function rewriteSymbolImport(
     if (normalizedResolved !== normalizedSource) continue;
 
     // Found an import from the source file — check if it references our symbol
+    // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- symbolName passes through escapeRegex (all metacharacters neutralised), so the interpolated value cannot alter the pattern structure.
     const nameRegex = new RegExp(`\\b${escapeRegex(symbolName)}\\b`);
     if (!nameRegex.test(line)) continue;
 
@@ -846,6 +849,7 @@ function rewriteSymbolImport(
 function findReferencedNames(text: string, names: Set<string>): string[] {
   const found: string[] = [];
   for (const name of names) {
+    // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- name passes through escapeRegex (all metacharacters neutralised), so the interpolated value cannot alter the pattern structure.
     const regex = new RegExp(`\\b${escapeRegex(name)}\\b`);
     if (regex.test(text)) {
       found.push(name);
