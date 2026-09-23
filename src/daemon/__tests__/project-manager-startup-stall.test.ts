@@ -21,7 +21,19 @@ const watcherState = vi.hoisted(() => ({ failingRoots: [] as string[] }));
 
 vi.mock('../../indexer/pipeline.js', () => {
   class FakeIndexingPipeline {
+    private readonly rootPath: string;
+    constructor(_store?: unknown, _registry?: unknown, _config?: unknown, projectRoot?: string) {
+      this.rootPath = projectRoot ?? '';
+    }
     async indexAll() {
+      // A failing root's background chain must settle WITHOUT opening
+      // anything else: the real chain's success path runs subproject
+      // auto-sync (a live topology.db handle), which outlives the aborted
+      // addProject and EBUSYs the afterEach cleanup on Windows. Rejecting
+      // exercises the chain's error branch instead — no handles, no race.
+      if (watcherState.failingRoots.includes(this.rootPath)) {
+        throw new Error(`indexAll failed for ${this.rootPath} (TRA-1843 fixture)`);
+      }
       return { totalFiles: 0, indexed: 0, skipped: 0, errors: 0, durationMs: 0 };
     }
     async indexFiles() {
@@ -30,7 +42,11 @@ vi.mock('../../indexer/pipeline.js', () => {
     deleteFiles() {}
     async dispose() {}
   }
-  return { IndexingPipeline: FakeIndexingPipeline };
+  // project-manager.ts also imports IndexAbortedError for the background
+  // chain's `instanceof` checks — without it the rejection branch throws a
+  // TypeError that escapes as an unhandled rejection.
+  class FakeIndexAbortedError extends Error {}
+  return { IndexingPipeline: FakeIndexingPipeline, IndexAbortedError: FakeIndexAbortedError };
 });
 
 vi.mock('../../indexer/watcher.js', () => {
