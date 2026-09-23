@@ -2832,3 +2832,26 @@ Audited via API (pulls/issues endpoints; `search/issues` answers 404 from this t
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-24 (TRA-1866): threads silent, tolkonepiu door confirmed alive, mention sweep clean
+
+Audited via API, read-only, nothing written outside this file.
+
+**Open threads — zero movements owed anywhere.**
+- Catalog PRs: `eltociear#119`, `GetBindu#195` (open, newest our 09-20 reminders), `hermes#395`, `nix#606` (open issues, 1 comment each — our 09-20 pings). No second reminders: the single allowed ping is spent.
+- `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, two days out), `ai-boost#240` (open PR, 0 comments, updated 09-14 — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, newest still the 09-18 filing-moment bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (2 comments, newest the maintainer's 09-21 thanks), `kilocode#13843` (3 comments, newest the 09-20 third-party git-version follow-up), `atlas#105` (9 comments, newest 09-07), `slopstop#633` (newest ours 09-06 — still deliberately not bumped), `kilocode#12707` (newest ours 09-07), `Dokploy/mcp#81` (3 comments, unchanged since 09-05), `nanocoder#1197` (4 comments, newest 09-11 third-party pitch), `lastlight#372` (6 comments, newest ours 09-18). `pyrefly#4583`, `pi-extensions#1204` unchanged.
+- `deslop#173` now reads CLOSED (updated 09-08 — the closure predates the 09-23 passes, which recorded the maintainer's fix-in-progress reply without noting state; no new movement, nothing owed).
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, no new review from `hetaoBackend` (still the two `CHANGES_REQUESTED`, 09-21/09-22). Nikolai's lane — recorded, not touched.
+- trace-mcp 182★/21 forks (+1 star against the 09-23 late pass).
+
+**Deeper probe (the one new thing this run): tolkonepiu is alive, we are queued, not rejected.** The repo keeps triaging: PRs #429–#433 touched as recently as 09-23 (including a "Best-of update: 2026.09.23" batch). Our #384 touches the same single file (`projects.yaml`) as the newest submission #433 — no format defect visible, just queue order. The 26.09 ping can be a plain nudge, no fix needed first.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read, `ops/mentions-seen.txt` untouched.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage, MiniMax#54 awaits re-review, no door is due a reminder before 26.09. No consolidated request sent.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
