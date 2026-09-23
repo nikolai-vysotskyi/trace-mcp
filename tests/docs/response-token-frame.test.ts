@@ -48,9 +48,50 @@ const dirNames = new Set(
  * Does this string occur in the indexed corpus? The corpus is the whole
  * repository, not `src/` — that is what the benchmark indexes and therefore what
  * the frame is drawn from.
+ *
+ * Whole-repo occurrence is necessary but not sufficient for the identifier
+ * stratum: the usage basket resolves each name via `search limit:1` on the
+ * served index scope, and a name that occurs as text but is defined outside
+ * that scope resolves zero symbols (TRA-1774). `definedInIndexScope` covers
+ * the sufficiency half.
  */
 function occursInCorpus(needle: string): boolean {
   const r = spawnSync('git', ['grep', '-lIiF', '--', needle], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  });
+  return r.status === 0 && r.stdout.trim().length > 0;
+}
+
+/**
+ * TRA-1774: the served index scope — the top-level directories the benchmark's
+ * server actually indexes (`include` in `.trace-mcp.json`). Derived from the
+ * config rather than hard-coded, so the guard tracks the scope the bench
+ * consumes if that config ever changes.
+ */
+const INDEX_SCOPE_DIRS = (() => {
+  const config = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, '.trace-mcp.json'), 'utf8')) as {
+    include?: string[];
+  };
+  const tops = new Set<string>();
+  for (const pattern of config.include ?? []) {
+    const top = pattern.split('/')[0];
+    if (top && top !== '*' && top !== '**') tops.add(top);
+  }
+  return [...tops].filter((d) => fs.existsSync(path.join(REPO_ROOT, d)));
+})();
+
+/**
+ * Is this identifier DEFINEd (not merely mentioned) inside the served index
+ * scope? Definition-shaped occurrences only — `function NAME`, `class NAME`,
+ * `interface NAME`, `const/let/var NAME`, `type NAME`, `enum NAME`. A name
+ * that is only used (called, imported, referenced) in scope but defined
+ * outside it still resolves zero symbols, so usage-shaped matches are
+ * deliberately not counted.
+ */
+function definedInIndexScope(needle: string): boolean {
+  const pattern = `(function|class|interface|const|let|var|type|enum)[ \t]+${needle}([^A-Za-z0-9_]|$)`;
+  const r = spawnSync('git', ['grep', '-lE', '-e', pattern, '--', ...INDEX_SCOPE_DIRS], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
   });
@@ -82,6 +123,25 @@ describe('response-token sampling frame', () => {
         false,
       );
       expect(occursInCorpus(q), `"${q}" does not occur in the repository`).toBe(true);
+    }
+  });
+
+  it('identifier stratum is defined inside the served index scope, not merely mentioned', () => {
+    // TRA-1774: the usage basket resolves each identifier via `search limit:1`
+    // and prices the captured `symbol_id` with `find_usages`. Whole-repo text
+    // occurrence cannot guard that path — `ServiceInfo` occurs in the repo but
+    // is defined only under `packages/app/`, outside the served scope, so the
+    // bench's `search` resolves zero symbols and `find_usages` throws instead
+    // of measuring. Every identifier must be defined in the scope the bench
+    // indexes; the bench itself stays the loud backstop for anything subtler
+    // than scope (e.g. rows missing downstream of a correct extraction).
+    for (const q of strata('identifier')) {
+      expect(
+        definedInIndexScope(q),
+        `"${q}" is not defined under ${INDEX_SCOPE_DIRS.join('/')} — ` +
+          'the bench resolves usage-basket identifiers via search, which only sees ' +
+          'the served index scope; a name defined outside it throws at find_usages',
+      ).toBe(true);
     }
   });
 
