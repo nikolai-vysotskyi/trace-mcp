@@ -181,3 +181,9 @@ yzfly/awesome-context-engineering
 # Competitor-intel note for that lane; no outreach (rival repo, and the collision is theirs to keep):
 mrchatam/Trace
 metaone01/agent-forge
+
+# ── Swept 2026-09-23 evening (TRA-1857) ──
+# Personal bookmark file (7★): ai/thematical/code-understand/trace-mcp.txt holds
+# two bare URLs (trace-mcp.com + repo), no evaluation, no audience. Not a
+# surface, no ledger row. Deferred from TRA-1852 until PR #1362 merged.
+iharh/notes
