@@ -179,7 +179,7 @@ function matchGlob(name: string, pattern: string): boolean {
   return false;
 }
 
-const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
+export const DEFAULT_MAX_FILE_SIZE = 1_048_576; // 1 MB
 
 const ARTISAN_WHITELIST = new Set(['route:list', 'model:show', 'event:list']);
 
