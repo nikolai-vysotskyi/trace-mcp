@@ -18,32 +18,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 /**
- * Budget for the snapshot path to answer `initialize`. The comparison point
- * is the OLD flow's daemon `/health` fetch, bounded by a flat
- * `AbortSignal.timeout(500)` (getDaemonHealth) plus whatever backend
- * selection costs on top of that — 500ms is a wall-clock timer, not an
- * OS-scaled one, so the old flow's real floor is *at least* 500ms everywhere,
- * Windows included.
+ * Hang watchdog, not a performance budget (TRA-1146): the functional test
+ * fails only if the session never answers at all. How *fast* it answers is
+ * the perf suite's job — tests/perf/session-snapshot-perf.test.ts carries the
+ * absolute budget, and ci.yml / release.yml exclude tests/perf/** from every
+ * gate ("flaky timings on shared CI CPU"), so a slow shared runner shows up
+ * as a trend signal, never as a blocked release. A functional test must not
+ * assert wall-clock time measured on a rented machine with unknown load:
+ * 783ms vs a 700ms budget blocked release 3.23.0 (PR #1037) over 12 % noise,
+ * the third incident of this class in two weeks.
  *
- * `cross-platform-test` (TRA-970) was the first CI run to ever exercise this
- * file on a real Windows runner — ci.yml gates that job to release
- * PRs/nightly/an explicit label, so nothing had run this assertion there
- * before. GitHub's Windows runners are measurably slower for process/socket
- * work than Linux/macOS (a documented GH Actions characteristic, not a
- * trace-mcp regression): two Windows runs measured 459ms and 514ms,
- * comfortably under 400ms every time on macOS/Linux.
- *
- * TRA-1579: the Windows budget was 700ms and still flaked on loaded runners
- * (session-snapshot was one of the three rotating red suites). 1500ms keeps
- * margin above every observed value while the assertion still pins the real
- * contract — the old flow's floor is the daemon `/health` fetch's own
- * 500ms wall-clock timeout plus backend selection on top, so the snapshot
- * path answering in well under that is the win being guarded. The timing
- * test also retries on win32: a single stalled socket poll on a loaded box
- * must not fail the suite; a real regression fails every attempt.
+ * The ordering assertion in the test below is the relative comparison the
+ * budget used to approximate: the mocked real backend can only start after
+ * settleRealBackend()'s daemon `/health` probe times out (getDaemonHealth's
+ * own AbortSignal.timeout(500) against the black-hole port) and swaps it in,
+ * so an `initialize` answered while zero real-backend starts happened
+ * necessarily beat the old flow — on any hardware, at any load.
  */
-const INIT_BUDGET_MS = process.platform === 'win32' ? 1500 : 400;
-const INIT_RETRY = process.platform === 'win32' ? 2 : 0;
+const HANG_TIMEOUT_MS = 15_000;
 
 /** Stands in for the real indexer-backed local backend the swap settles onto. */
 const localBackendStarts = vi.fn();
@@ -122,9 +114,7 @@ afterEach(async () => {
 });
 
 describe('StdioSession snapshot fast path (TRA-948)', () => {
-  it('answers initialize and a read tool call from the snapshot before the daemon /health timeout elapses, then hands off to the real backend', {
-    retry: INIT_RETRY,
-  }, async () => {
+  it('answers initialize and a read tool call from the snapshot before the daemon /health timeout elapses, then hands off to the real backend', async () => {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
     session = new StdioSession({
@@ -188,18 +178,24 @@ describe('StdioSession snapshot fast path (TRA-948)', () => {
       waitForId(1),
       new Promise<never>((_, reject) => {
         const t = setTimeout(
-          () => reject(new Error(`no initialize response within ${INIT_BUDGET_MS}ms`)),
-          INIT_BUDGET_MS,
+          () => reject(new Error(`no initialize response within ${HANG_TIMEOUT_MS}ms`)),
+          HANG_TIMEOUT_MS,
         );
         t.unref?.();
       }),
     ]);
     const initMs = Date.now() - started;
 
-    // The daemon's /health fetch alone is bounded to 500ms
-    // (getDaemonHealth's AbortSignal.timeout) before the *old* flow could
-    // even pick a backend — the snapshot must beat that comfortably.
-    expect(initMs).toBeLessThan(INIT_BUDGET_MS);
+    // Relative, not absolute (TRA-1146): the daemon's /health fetch alone is
+    // bounded to 500ms (getDaemonHealth's AbortSignal.timeout) against the
+    // black-hole port, and the mocked real backend starts only after that
+    // probe times out and settleRealBackend() swaps it in — so zero starts
+    // at this moment proves the snapshot answered before the *old* flow
+    // could even pick a backend. serverInfo.name pins the same fact from
+    // the other side: the mock LocalBackend answers 'x', the snapshot 'trace'.
+    // initMs is logged for the perf trend, never asserted here.
+    console.log(`snapshot initialize answered in ${initMs}ms (budget lives in tests/perf/)`);
+    expect(localBackendStarts).not.toHaveBeenCalled();
     expect(initResponse.error).toBeUndefined();
     expect((initResponse.result as { serverInfo?: { name?: string } })?.serverInfo?.name).toBe(
       'trace',
