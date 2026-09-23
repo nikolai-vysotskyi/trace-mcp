@@ -5,10 +5,12 @@ import {
   computeProxyTimeoutMs,
   DEFAULT_PROXY_INITIALIZE_TIMEOUT_MS,
   DEFAULT_PROXY_WARMUP_GRACE_MS,
+  hasStartupProgressChanged,
   PROXY_ABSOLUTE_MAX_MS,
   probeProxyReadiness,
   resolveProxyInitializeTimeout,
   resolveProxyWarmupGrace,
+  WARMUP_PROGRESS_SLICE_MS,
 } from '../../src/daemon/router/proxy-timeout.js';
 
 /**
@@ -45,15 +47,52 @@ describe('resolveProxyInitializeTimeout', () => {
 });
 
 describe('resolveProxyWarmupGrace', () => {
-  it('defaults to 30s', () => {
+  it('defaults to 20s (base + grace stays under client startup timeouts, TRA-1844)', () => {
     expect(resolveProxyWarmupGrace(undefined, undefined)).toBe(DEFAULT_PROXY_WARMUP_GRACE_MS);
-    expect(DEFAULT_PROXY_WARMUP_GRACE_MS).toBe(30_000);
+    expect(DEFAULT_PROXY_WARMUP_GRACE_MS).toBe(20_000);
   });
 
   it('explicit opts win over env; garbage env is ignored', () => {
     expect(resolveProxyWarmupGrace(5_000, '9999')).toBe(5_000);
     expect(resolveProxyWarmupGrace(undefined, '8000')).toBe(8_000);
-    expect(resolveProxyWarmupGrace(undefined, 'nope')).toBe(30_000);
+    expect(resolveProxyWarmupGrace(undefined, 'nope')).toBe(20_000);
+  });
+});
+
+describe('hasStartupProgressChanged', () => {
+  it('same tuple twice means stalled', () => {
+    expect(
+      hasStartupProgressChanged(
+        { projectsReady: 0, projectsTotal: 46 },
+        { projectsReady: 0, projectsTotal: 46 },
+      ),
+    ).toBe(false);
+  });
+
+  it('either counter moving means converging', () => {
+    expect(
+      hasStartupProgressChanged(
+        { projectsReady: 0, projectsTotal: 46 },
+        { projectsReady: 3, projectsTotal: 46 },
+      ),
+    ).toBe(true);
+    expect(
+      hasStartupProgressChanged(
+        { projectsReady: 3, projectsTotal: 46 },
+        { projectsReady: 3, projectsTotal: 47 },
+      ),
+    ).toBe(true);
+  });
+
+  it('absent signal is not evidence of a stall (legacy health payloads keep the grace)', () => {
+    expect(hasStartupProgressChanged(undefined, { projectsReady: 0, projectsTotal: 1 })).toBe(true);
+    expect(hasStartupProgressChanged({ projectsReady: 0, projectsTotal: 1 }, undefined)).toBe(true);
+    expect(hasStartupProgressChanged(undefined, undefined)).toBe(true);
+  });
+
+  it('slice length is a short fraction of the grace', () => {
+    expect(WARMUP_PROGRESS_SLICE_MS).toBe(2_000);
+    expect(WARMUP_PROGRESS_SLICE_MS).toBeLessThan(DEFAULT_PROXY_WARMUP_GRACE_MS);
   });
 });
 
@@ -127,6 +166,32 @@ describe('probeProxyReadiness', () => {
     const r = await probeProxyReadiness(port);
     expect(r).toMatchObject({ reachable: true, starting: true });
     expect(r!.rttMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('maps the startup progress tuple through (TRA-1844)', async () => {
+    const port = await startHealthServer({
+      status: 'starting',
+      phase: 'startup_index',
+      transport: 'http',
+      progress: { projectsReady: 0, projectsTotal: 46 },
+    });
+    const r = await probeProxyReadiness(port);
+    expect(r).toMatchObject({
+      reachable: true,
+      starting: true,
+      progress: { projectsReady: 0, projectsTotal: 46 },
+    });
+  });
+
+  it('treats a malformed progress payload as absent, not stalled', async () => {
+    const port = await startHealthServer({
+      status: 'starting',
+      transport: 'http',
+      progress: { projectsReady: 'many', projectsTotal: -1 },
+    });
+    const r = await probeProxyReadiness(port);
+    expect(r).toMatchObject({ reachable: true, starting: true });
+    expect(r!.progress).toBeUndefined();
   });
 
   it('reports reachable + not-starting for a live daemon (any status shape)', async () => {

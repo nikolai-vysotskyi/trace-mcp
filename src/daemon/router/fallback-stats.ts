@@ -21,7 +21,7 @@ const MAX_LINES = 5_000;
 
 export interface SessionFallbackEvent {
   ts: number;
-  /** Why this session went local: proxy-initialize-timeout, proxy-initialize-error, proxy-send-failed, daemon-disappeared. */
+  /** Why this session went local: proxy-initialize-timeout, proxy-initialize-error, proxy-startup-stalled, proxy-send-failed, daemon-disappeared. */
   reason: string;
   pid: number;
 }

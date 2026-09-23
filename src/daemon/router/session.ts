@@ -18,9 +18,12 @@ import { PollingDaemonWatcher } from './daemon-watcher.js';
 import { recordSessionFallback } from './fallback-stats.js';
 import {
   computeProxyTimeoutMs,
+  hasStartupProgressChanged,
   probeProxyReadiness,
   resolveProxyInitializeTimeout,
   resolveProxyWarmupGrace,
+  WARMUP_PROGRESS_SLICE_MS,
+  type StartupProgress,
 } from './proxy-timeout.js';
 import {
   createHandshakeWatchdog,
@@ -154,8 +157,13 @@ export interface StdioSessionOptions {
   proxyInitializeTimeoutMs?: number;
   /**
    * Extra wait granted when /health reports the daemon is still starting up.
-   * Defaults to env TRACE_MCP_PROXY_WARMUP_GRACE_MS or 30_000. Every session
-   * that sees `starting` waits on the one warming daemon instead of each
+   * Defaults to env TRACE_MCP_PROXY_WARMUP_GRACE_MS or 20_000. A `starting`
+   * daemon is granted this grace in slices (see maybeExtendProxyDeadline):
+   * the session keeps waiting only while /health proves startup is
+   * converging, and falls back to local mode at the first stalled slice —
+   * a startup that outlasts the client's own timeout must never pin the
+   * handshake for the whole grace (TRA-1844). Every session that is still
+   * waiting at any moment waits on the one warming daemon instead of each
    * forking a local backend (cross-process single-flight).
    */
   proxyWarmupGraceMs?: number;
@@ -558,6 +566,12 @@ export class StdioSession {
    * One /health probe per handshake: extend the deadline when the daemon is
    * provably alive-but-slow or still warming up. Never shortens it, never
    * throws, and no-ops when the handshake already settled.
+   *
+   * The warming-up branch grants the grace in slices (TRA-1844): one slice
+   * is extended immediately, and each further slice only when a re-probe
+   * shows startup converging. A stalled startup — same progress tuple twice
+   * in a row — falls back at the slice instead of burning the whole grace
+   * past the client's own startup timeout.
    */
   private async maybeExtendProxyDeadline(id: string | number, baseMs: number): Promise<void> {
     let readiness: Awaited<ReturnType<typeof probeProxyReadiness>> = null;
@@ -572,31 +586,162 @@ export class StdioSession {
       this.opts.proxyWarmupGraceMs,
       process.env.TRACE_MCP_PROXY_WARMUP_GRACE_MS,
     );
-    const totalMs = computeProxyTimeoutMs(baseMs, readiness, warmupGraceMs);
-    if (totalMs <= baseMs) return;
-    const deadline = this.proxyArmedAt + totalMs;
-    if (deadline <= Date.now()) return;
-    this.proxyDeadline = deadline;
+    if (!readiness.starting) {
+      const totalMs = computeProxyTimeoutMs(baseMs, readiness, warmupGraceMs);
+      if (totalMs <= baseMs) return;
+      const deadline = this.proxyArmedAt + totalMs;
+      if (deadline <= Date.now()) return;
+      this.proxyDeadline = deadline;
+      if (this.initializeTimer) clearTimeout(this.initializeTimer);
+      this.initializeTimer = setTimeout(
+        () => {
+          void this.onProxyWatchdogFire(id);
+        },
+        Math.max(0, deadline - Date.now()),
+      );
+      this.initializeTimer.unref?.();
+      logger.info(
+        {
+          id,
+          baseMs,
+          totalMs,
+          starting: readiness.starting,
+          healthRttMs: readiness.rttMs,
+        },
+        'StdioSession: daemon is loaded but reachable — extending the proxy handshake deadline',
+      );
+      return;
+    }
+    this.watchStartupProgress(id, baseMs, warmupGraceMs, readiness.progress, true);
+  }
+
+  /**
+   * Warmup slice loop (TRA-1844). Extends the proxy handshake deadline by one
+   * slice and re-probes at its end: keep waiting while the daemon's startup
+   * progress moves, fall back the moment it stalls, and never wait past
+   * armedAt + base + grace. Daemons without a progress signal (legacy/fake
+   * health payloads) get the remaining grace in one shot — absence of the
+   * signal is not evidence of a stall.
+   */
+  private watchStartupProgress(
+    id: string | number,
+    baseMs: number,
+    warmupGraceMs: number,
+    lastProgress: StartupProgress | undefined,
+    firstSlice: boolean,
+  ): void {
+    if (id !== this.initializeId || this.router.getActiveKind() !== 'proxy') return;
+    const capTotal = computeProxyTimeoutMs(
+      baseMs,
+      { reachable: true, starting: true, rttMs: 0 },
+      warmupGraceMs,
+    );
+    const capAt = this.proxyArmedAt + capTotal;
+    const sliceAt = Math.min(Date.now() + WARMUP_PROGRESS_SLICE_MS, capAt);
+    if (sliceAt <= Date.now()) {
+      // Cap reached. On the first slice the base watchdog is still armed and
+      // will fall back on its own — stay silent. Deeper in the chain the
+      // slice timers replaced it, so no timer would ever fire again: fall
+      // back now rather than hanging the handshake (review, PR #1360).
+      if (!firstSlice) void this.fallbackToLocal(id, 'proxy-initialize-timeout');
+      return;
+    }
+    this.proxyDeadline = sliceAt;
     if (this.initializeTimer) clearTimeout(this.initializeTimer);
+    if (firstSlice) {
+      logger.info(
+        { id, baseMs, totalMs: capTotal, starting: true },
+        'StdioSession: daemon is warming up — waiting instead of falling back to local mode',
+      );
+    }
     this.initializeTimer = setTimeout(
       () => {
-        void this.onProxyWatchdogFire(id);
+        void this.onStartupSlice(id, baseMs, warmupGraceMs, capAt, lastProgress);
       },
-      Math.max(0, deadline - Date.now()),
+      Math.max(0, sliceAt - Date.now()),
     );
     this.initializeTimer.unref?.();
-    logger.info(
-      {
-        id,
-        baseMs,
-        totalMs,
-        starting: readiness.starting,
-        healthRttMs: readiness.rttMs,
-      },
-      readiness.starting
-        ? 'StdioSession: daemon is warming up — waiting instead of falling back to local mode'
-        : 'StdioSession: daemon is loaded but reachable — extending the proxy handshake deadline',
-    );
+  }
+
+  /** One warmup slice elapsed: re-probe and decide whether to keep waiting. */
+  private async onStartupSlice(
+    id: string | number,
+    baseMs: number,
+    warmupGraceMs: number,
+    capAt: number,
+    lastProgress: StartupProgress | undefined,
+  ): Promise<void> {
+    if (id !== this.initializeId || this.router.getActiveKind() !== 'proxy') return;
+    let readiness: Awaited<ReturnType<typeof probeProxyReadiness>> = null;
+    try {
+      readiness = await probeProxyReadiness(this.opts.daemonPort);
+    } catch {
+      readiness = null;
+    }
+    if (id !== this.initializeId || this.router.getActiveKind() !== 'proxy') return;
+    if (!readiness) {
+      // The daemon died mid-wait: the dead-daemon fast path, not the grace.
+      await this.fallbackToLocal(id, 'proxy-initialize-timeout');
+      return;
+    }
+    if (!readiness.starting) {
+      // Ready now: the in-flight proxied handshake may complete at any
+      // moment, so grant it one last slice bounded by the cap, then fall
+      // back. A full remainder here would reintroduce the TRA-1844 hang for
+      // a daemon whose /health is ready while its MCP handler is still slow.
+      const deadline = Math.min(Date.now() + WARMUP_PROGRESS_SLICE_MS, capAt);
+      if (deadline <= Date.now()) {
+        await this.fallbackToLocal(id, 'proxy-initialize-timeout');
+        return;
+      }
+      this.proxyDeadline = deadline;
+      if (this.initializeTimer) clearTimeout(this.initializeTimer);
+      this.initializeTimer = setTimeout(
+        () => {
+          void this.onProxyWatchdogFire(id);
+        },
+        Math.max(0, deadline - Date.now()),
+      );
+      this.initializeTimer.unref?.();
+      return;
+    }
+    if (readiness.progress === undefined) {
+      // No progress signal (legacy/fake health payloads) — grant the
+      // remainder in one shot. Absence of the signal is not evidence of a
+      // stall, so the legacy path keeps the pre-TRA-1844 behavior.
+      const totalMs = Math.min(
+        computeProxyTimeoutMs(baseMs, readiness, warmupGraceMs),
+        Math.max(baseMs, capAt - this.proxyArmedAt),
+      );
+      if (totalMs <= baseMs) {
+        await this.fallbackToLocal(id, 'proxy-initialize-timeout');
+        return;
+      }
+      const deadline = this.proxyArmedAt + totalMs;
+      if (deadline <= Date.now()) {
+        await this.fallbackToLocal(id, 'proxy-initialize-timeout');
+        return;
+      }
+      this.proxyDeadline = deadline;
+      if (this.initializeTimer) clearTimeout(this.initializeTimer);
+      this.initializeTimer = setTimeout(
+        () => {
+          void this.onProxyWatchdogFire(id);
+        },
+        Math.max(0, deadline - Date.now()),
+      );
+      this.initializeTimer.unref?.();
+      return;
+    }
+    if (!hasStartupProgressChanged(lastProgress, readiness.progress)) {
+      logger.warn(
+        { id, progress: readiness.progress },
+        'StdioSession: daemon startup stalled — falling back to local mode instead of waiting out the warmup grace',
+      );
+      await this.fallbackToLocal(id, 'proxy-startup-stalled');
+      return;
+    }
+    this.watchStartupProgress(id, baseMs, warmupGraceMs, readiness.progress, false);
   }
 
   /** The watchdog timer fired: re-arm when an extension moved the deadline, else fall back. */
