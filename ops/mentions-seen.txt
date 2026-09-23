@@ -180,3 +180,4 @@ yzfly/awesome-context-engineering
 # (cmd/trace-mcp/main.go, tools trace_why/trace_context/trace_search/…). Same binary name, same category, zero shared code.
 # Competitor-intel note for that lane; no outreach (rival repo, and the collision is theirs to keep):
 mrchatam/Trace
+metaone01/agent-forge
