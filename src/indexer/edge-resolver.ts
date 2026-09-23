@@ -447,17 +447,27 @@ export class EdgeResolver {
       }
     }
 
-    // 5. Pre-load workspace info for cross-workspace detection
+    // 5. Pre-load workspace info for cross-workspace detection.
+    //
+    // TRA-1834: the old form joined with an OR plus a correlated subquery
+    // (`... OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM
+    // symbols ...))`), which defeats index use on the join and plans as a
+    // scan with per-row TEXT comparisons — exactly the B-tree + binCollFunc
+    // shape a wedged `sqlite3_step` shows. The rewrite below is
+    // row-for-row equivalent (LEFT JOINs on PK equality only, so no
+    // fan-out and no dropped rows for any node_type) while every join
+    // probes by primary key.
     const nodeWorkspaceCache = new Map<number, string | null>();
     if (allNodeIds && allNodeIds.size > 0) {
       const nodeIdArr = Array.from(allNodeIds);
       const ph = nodeIdArr.map(() => '?').join(',');
       const rows = store.db
         .prepare(`
-        SELECT n.id AS node_id, f.workspace
+        SELECT n.id AS node_id, COALESCE(f_by_file.workspace, f_by_symbol.workspace) AS workspace
         FROM nodes n
-        LEFT JOIN files f ON (n.node_type = 'file' AND n.ref_id = f.id)
-          OR (n.node_type = 'symbol' AND f.id = (SELECT file_id FROM symbols WHERE id = n.ref_id))
+        LEFT JOIN files f_by_file ON n.node_type = 'file' AND f_by_file.id = n.ref_id
+        LEFT JOIN symbols s ON n.node_type = 'symbol' AND s.id = n.ref_id
+        LEFT JOIN files f_by_symbol ON f_by_symbol.id = s.file_id
         WHERE n.id IN (${ph})
       `)
         .all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;

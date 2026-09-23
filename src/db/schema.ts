@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
+import { installSlowStatementGuard } from './slow-statement.js';
 
 const SCHEMA_VERSION = 33;
 
@@ -1998,6 +1999,11 @@ export function initializeDatabase(
 
   const db = new Database(dbPath);
   restrictDbPerms(dbPath);
+  // TRA-1834: time every statement and warn-log the SQL text past the
+  // threshold. The 2026-09-22 night run caught the daemon wedged 5+ min in
+  // one synchronous sqlite3_step with no log line naming the statement —
+  // the next such stall must identify itself.
+  installSlowStatementGuard(db);
 
   if (isFreshDb) {
     // TRA-1541: pin page_size explicitly (4096 = SQLite default, but an
