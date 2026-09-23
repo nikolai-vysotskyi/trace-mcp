@@ -4,7 +4,8 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Adaptive proxy-initialize timeout (TRA-1605, PROC-1).
+ * Adaptive proxy-initialize timeout (TRA-1605, PROC-1), sliced warmup
+ * (TRA-1844).
  *
  * The old fixed 1 s watchdog fired at the same instant in every session on a
  * loaded box, stampeding N sessions into local mode at once. The watchdog is
@@ -17,6 +18,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *   past the base budget instead of falling back (single-flight wait);
  * - warming daemon that never answers → the session still falls back, just
  *   after the bounded grace (no pinning).
+ *
+ * TRA-1844 refines the warming branch: the grace is granted in 2 s slices
+ * and each further slice requires /health to show startup converging. A
+ * stalled startup (same progress tuple twice) falls back at the first slice
+ * — base + grace must never outlast the MCP client's own startup timeout
+ * (Claude Code gives up at 30 s; the old 31 s total failed every handshake
+ * for as long as the daemon reported "starting").
  */
 
 vi.mock('../../src/daemon/lifecycle.js', () => ({
@@ -56,7 +64,7 @@ type McpBehavior = { kind: 'answer'; afterMs: number } | { kind: 'hang' };
  * MCP handler is starved.
  */
 async function startFakeDaemon(opts: {
-  health: Record<string, unknown>;
+  health: Record<string, unknown> | (() => Record<string, unknown>);
   mcp: McpBehavior;
 }): Promise<{ port: number; close: () => Promise<void> }> {
   const timers: NodeJS.Timeout[] = [];
@@ -65,7 +73,7 @@ async function startFakeDaemon(opts: {
     if (req.url === '/health' || req.url?.startsWith('/health?')) {
       req.resume();
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(opts.health));
+      res.end(JSON.stringify(typeof opts.health === 'function' ? opts.health() : opts.health));
       return;
     }
     if (req.url?.startsWith('/mcp')) {
@@ -246,5 +254,59 @@ describe('StdioSession adaptive proxy timeout (TRA-1605)', () => {
     expect(localStarts).toBe(1);
     expect(ms).toBeGreaterThan(2_000);
     expect(ms).toBeLessThan(8_000);
+  });
+
+  it('stalled startup: falls back at the first slice, not at the grace (TRA-1844)', async () => {
+    // /health reports "starting" with a frozen progress tuple — the shape a
+    // wedged daemon produces (zero projects ready for hours). The session
+    // must not burn the whole grace waiting on it.
+    const daemon = await startFakeDaemon({
+      health: () => ({
+        status: 'starting',
+        phase: 'startup_index',
+        transport: 'http',
+        progress: { projectsReady: 0, projectsTotal: 46 },
+      }),
+      mcp: { kind: 'hang' },
+    });
+    cleanup = () => daemon.close();
+
+    const { ms, frames, kind, localStarts } = await handshakeAgainst(daemon.port, {
+      proxyWarmupGraceMs: 10_000,
+    });
+
+    expect(responsesFor(frames, 1)).toHaveLength(1);
+    expect(kind).toBe('local');
+    expect(localStarts).toBe(1);
+    // ~base (1 s) + one slice (2 s): far below base + grace (11 s).
+    expect(ms).toBeGreaterThan(1_500);
+    expect(ms).toBeLessThan(8_000);
+  });
+
+  it('converging startup: keeps waiting while progress moves (TRA-1844)', async () => {
+    // Every /health poll shows one more project ready — startup is slow but
+    // alive — and the daemon answers the proxied handshake mid-warmup.
+    let polls = 0;
+    const daemon = await startFakeDaemon({
+      health: () => ({
+        status: 'starting',
+        phase: 'startup_index',
+        transport: 'http',
+        progress: { projectsReady: polls++, projectsTotal: 46 },
+      }),
+      mcp: { kind: 'answer', afterMs: 4_500 },
+    });
+    cleanup = () => daemon.close();
+
+    const { ms, frames, kind, localStarts } = await handshakeAgainst(daemon.port, {
+      proxyWarmupGraceMs: 10_000,
+    });
+
+    // Waited past the base budget (no storm) and answered through the proxy.
+    expect(responsesFor(frames, 1)).toHaveLength(1);
+    expect(kind).toBe('proxy');
+    expect(localStarts).toBe(0);
+    expect(ms).toBeGreaterThan(1_000);
+    expect(ms).toBeLessThan(10_000);
   });
 });
