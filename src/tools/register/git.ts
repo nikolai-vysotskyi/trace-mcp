@@ -123,7 +123,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_dead_code',
-    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan. Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead.',
+    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel-export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan. Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total }.',
     {
       file_pattern: z
         .string()
@@ -206,7 +206,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'scan_security',
-    'Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. Detects SQL injection (CWE-89), XSS (CWE-79), command injection (CWE-78), path traversal (CWE-22), hardcoded secrets (CWE-798), insecure crypto (CWE-327), open redirects (CWE-601), and SSRF (CWE-918). Skips test files. Weakly-grounded ("low" confidence) findings are held back by default and counted in suppressed_low_confidence — pass include_low_confidence to see them. Use for pattern-based security audit. For data-flow-aware analysis use taint_analysis instead. Read-only. Returns JSON: { findings: [{ rule, severity, cwe, file, line, message }], total, summary, suppressed_low_confidence }.',
+    'Scan project files for OWASP Top-10 vulnerabilities (SQLi, XSS, command injection, path traversal, hardcoded secrets, insecure crypto, open redirects, SSRF — reported with CWE IDs). Skips test files. Low-confidence findings are held back by default and counted in suppressed_low_confidence — pass include_low_confidence to see them. For data-flow analysis use taint_analysis. Read-only. Returns JSON: { findings: [{ rule, severity, cwe, file, line, message }], total, summary, suppressed_low_confidence }.',
     {
       scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       rules: z
@@ -233,7 +233,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .boolean()
         .optional()
         .describe(
-          'Report findings whose confidence is "low" (default: false). These are weakly grounded and are the main source of scanner noise.',
+          'Also report weakly-grounded "low" confidence findings (default: false — the main scanner-noise source).',
         ),
       output_format: z
         .enum(['json', 'sarif'])
