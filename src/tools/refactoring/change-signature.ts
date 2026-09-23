@@ -586,16 +586,19 @@ function updateCallSites(
       if (!dryRun) {
         // TRA-1848 backstop: re-check confinement at write time (TOCTOU — a
         // symlink planted after the pre-write check in `changeSignature`).
-        // Skip the file with a warning rather than writing through.
+        // Skip the file with a warning rather than writing through (and do
+        // not list it as modified — nothing was written).
         if (validateWritePath(filePath, projectRoot).isErr()) {
           result.warnings.push(
             `Skipped write outside project root (symlink): ${toPosix(file.path)}`,
           );
         } else {
           writeLines(filePath, lines);
+          result.files.push(toPosix(file.path));
         }
+      } else {
+        result.files.push(toPosix(file.path));
       }
-      result.files.push(toPosix(file.path));
     }
   }
 
