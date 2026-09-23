@@ -138,7 +138,11 @@ describe('ProjectManager.stopProject aborts the initial index (TRA-1017)', () =>
     expect(events).toContain('index-aborted');
     expect(events).toContain('dispose');
     expect(events.indexOf('index-aborted')).toBeLessThan(events.indexOf('dispose'));
-  }, 30_000);
+    // TRA-1854: 60s, not 30s. The cross-platform job budget is already 60s,
+    // but this per-test timeout overrides it — and on a loaded
+    // windows-latest runner the cold daemon-graph import alone eats most of
+    // the old 30s cap before shutdown even starts (same family as TRA-1839).
+  }, 60_000);
 
   it('bounds the wait when the index ignores the abort', async () => {
     hangForever = true;
@@ -156,5 +160,10 @@ describe('ProjectManager.stopProject aborts the initial index (TRA-1017)', () =>
     expect(elapsedMs).toBeLessThan(STOP_PROJECT_TEARDOWN_BUDGET_MS + 10_000);
     expect(capturedSignal!.aborted).toBe(true);
     expect(events).toContain('dispose');
-  }, 30_000);
+    // TRA-1854: 60s, not 30s. The shutdown itself honors a ~13s teardown
+    // budget, but the per-test 30s cap also covers the cold daemon-graph
+    // import + addProject that precede it — on a loaded windows-latest
+    // runner (release 3.31.4, Sep 2026) that prefix pushed the total past
+    // 30s and the timeout fired mid-shutdown (`Test timed out in 30000ms`).
+  }, 60_000);
 });
