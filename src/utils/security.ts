@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok, securityViolation, type TraceMcpResult } from '../errors.js';
 
@@ -192,6 +193,103 @@ export function validatePath(filePath: string, rootPath: string): TraceMcpResult
   }
 
   return ok(resolved);
+}
+
+/**
+ * Write-path confinement for mutating tools (TRA-1848).
+ *
+ * `validatePath` is lexical (resolve-based) and intentionally stays that way
+ * for read paths. Writes need more: a path that is lexically inside the root
+ * can still escape it through a symlink — either a symlinked file at the
+ * target or a symlinked parent directory pointing outside. This check runs
+ * immediately before a write and layers on top of the lexical check:
+ *  1. lexical confinement (same rule as `validatePath`),
+ *  2. reject when the target itself is a symlink,
+ *  3. realpath confinement of the target (or, for not-yet-existing targets,
+ *     of the nearest existing ancestor) against the realpath of the root.
+ *
+ * Returns the resolved absolute path on success.
+ */
+export function validateWritePath(filePath: string, rootPath: string): TraceMcpResult<string> {
+  const lexical = validatePath(filePath, rootPath);
+  if (lexical.isErr()) return lexical;
+  const abs = lexical.value;
+
+  // 2. The target itself must not be a symlink — writing through it would
+  //    modify whatever it points at, outside any root comparison.
+  let linkStat: fs.Stats | null = null;
+  try {
+    linkStat = fs.lstatSync(abs);
+  } catch {
+    // ENOENT — target doesn't exist yet; handled by the parent-dir check below.
+  }
+  if (linkStat?.isSymbolicLink()) {
+    return err(securityViolation(`Refusing to write through symlink: ${filePath}`));
+  }
+
+  // 3. Realpath confinement — resolves symlinked parent directories too.
+  const realRoot = safeRealpath(path.resolve(rootPath)) ?? path.resolve(rootPath);
+  const realTarget = realpathOfExistingTarget(abs);
+  if (realTarget !== null) {
+    const rootPrefix = realRoot.endsWith(path.sep) ? realRoot : realRoot + path.sep;
+    if (realTarget !== realRoot && !realTarget.startsWith(rootPrefix)) {
+      return err(securityViolation(`Path escapes project root via symlink: ${filePath}`));
+    }
+  }
+
+  return ok(abs);
+}
+
+/** Best-effort realpath; null when the path (or its ancestors) can't be resolved. */
+function safeRealpath(p: string): string | null {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Realpath of `abs` when it exists, otherwise the realpath of the nearest
+ * existing ancestor with the missing remainder re-appended. Null when no
+ * ancestor exists on disk (nothing to resolve symlinks against — the lexical
+ * check above already passed, so there is no escape to detect).
+ */
+function realpathOfExistingTarget(abs: string): string | null {
+  const direct = safeRealpath(abs);
+  if (direct !== null) return direct;
+
+  const missing: string[] = [];
+  let cursor = abs;
+  for (;;) {
+    const parent = path.dirname(cursor);
+    if (parent === cursor) return null; // filesystem root — no existing ancestor
+    missing.unshift(path.basename(cursor));
+    const realParent = safeRealpath(parent);
+    if (realParent !== null) return path.join(realParent, ...missing);
+    cursor = parent;
+  }
+}
+
+/**
+ * Verify every absolute target in `absPaths` is writable inside `projectRoot`
+ * (lexical + symlink confinement via {@link validateWritePath}). Returns the
+ * first violation message, or null when all targets are confined. Mutating
+ * tools call this BEFORE any write so a violation aborts the whole mutation
+ * instead of leaving a partial one on disk (TRA-1848).
+ */
+export function firstWriteViolation(
+  projectRoot: string,
+  absPaths: Iterable<string>,
+): string | null {
+  for (const absPath of absPaths) {
+    const check = validateWritePath(absPath, projectRoot);
+    if (check.isErr()) {
+      const e = check.error;
+      return 'detail' in e && typeof e.detail === 'string' ? e.detail : e.code;
+    }
+  }
+  return null;
 }
 
 /**

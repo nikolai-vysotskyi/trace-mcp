@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
+import { firstWriteViolation } from '../../utils/security.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
 import { computeRelativeSpecifier, rewriteImportForMovedTarget } from './import-rewriter.js';
 import type { FileEdit, RefactorResult } from './shared.js';
@@ -410,6 +411,23 @@ function moveSymbol(
   }
 
   // 8. Update all importing files
+  // TRA-1848: the importer rewrites below write to disk immediately when
+  // !dryRun, so confine every write target (source, target, importers)
+  // BEFORE the first mutation — a violation aborts with nothing written.
+  if (!dryRun) {
+    const preImporters = getImportingFiles(store, symbol.file_id, projectRoot);
+    const violation = firstWriteViolation(projectRoot, [
+      sourceAbsPath,
+      targetAbsPath,
+      ...preImporters.map((f) => f.filePath),
+    ]);
+    if (violation !== null) {
+      result.success = false;
+      result.error = violation;
+      result.warnings.push(`Move blocked: ${violation}`);
+      return result;
+    }
+  }
   if (isExported) {
     const importingFiles = getImportingFiles(store, symbol.file_id, projectRoot);
     for (const { filePath: importerAbsPath } of importingFiles) {
@@ -543,6 +561,22 @@ function moveFile(
   }
 
   const importingFiles = getImportingFiles(store, fileRow.id, projectRoot);
+
+  // TRA-1848: the importer rewrites + rename below mutate disk immediately
+  // when !dryRun — confine every target BEFORE the first mutation.
+  if (!dryRun) {
+    const violation = firstWriteViolation(projectRoot, [
+      sourceAbsPath,
+      targetAbsPath,
+      ...importingFiles.map((f) => f.filePath),
+    ]);
+    if (violation !== null) {
+      result.success = false;
+      result.error = violation;
+      result.warnings.push(`Move blocked: ${violation}`);
+      return result;
+    }
+  }
 
   // 2. Rewrite import paths in all importers
   for (const { filePath: importerAbsPath } of importingFiles) {
