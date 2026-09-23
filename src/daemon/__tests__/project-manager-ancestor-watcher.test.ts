@@ -130,7 +130,16 @@ describe('ProjectManager ancestor watcher restart (#209)', () => {
       root: umbrella,
       descendantExcludeGlobs: ['child-repo/**'],
     });
-  }, 30_000);
+    // TRA-1854: 60s, not 30s. The cross-platform job budget is already 60s,
+    // but this per-test timeout overrides it — and on a loaded
+    // windows-latest runner the cold daemon-graph import + sequential
+    // addProjects alone approached the old 30s cap (release 3.31.4, Sep
+    // 2026; same family as TRA-1839). No file split needed here: unlike the
+    // TRA-1839 rescan pair, an orphaned async fn can only append extra
+    // start/restart entries, and every assert below is either toContainEqual
+    // or a root-inequality against a tmpdir the orphan never saw — a future
+    // merge of stricter asserts must re-check that.
+  }, 60_000);
 
   it('restarts the ancestor watcher again when the descendant is removed', async () => {
     const { ProjectManager } = await import('../project-manager.js');
@@ -147,7 +156,7 @@ describe('ProjectManager ancestor watcher restart (#209)', () => {
       root: umbrella,
       descendantExcludeGlobs: [],
     });
-  }, 30_000);
+  }, 60_000); // TRA-1854: see above — cold import on loaded windows runners.
 
   it('does not restart unrelated (sibling) project watchers', async () => {
     const { ProjectManager } = await import('../project-manager.js');
@@ -162,5 +171,5 @@ describe('ProjectManager ancestor watcher restart (#209)', () => {
     await pm.addProject(child);
 
     expect(watcherRestartCalls.some((c) => c.root === sibling)).toBe(false);
-  }, 30_000);
+  }, 60_000); // TRA-1854: see above — cold import on loaded windows runners.
 });
