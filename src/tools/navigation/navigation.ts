@@ -444,16 +444,23 @@ export async function search(
   const now = new Date();
   const scored: SearchResultItem[] = [];
 
-  // Batch-fetch all candidate symbols in one query
+  // Batch-fetch all candidate symbols in one query.
+  // TRA-1005: chunk — candidate lists are unbounded in theory, so they must
+  // not feed one IN list / one spread call (SQLITE_MAX_VARIABLE_NUMBER, V8
+  // argument ceiling). Rows accumulate with a loop, not push(...rows).
   const symbolIdStrs = candidates.map((c) => c.symbolIdStr);
-  const allSymbols =
-    symbolIdStrs.length > 0
-      ? (store.db
-          .prepare(
-            `SELECT * FROM symbols WHERE symbol_id IN (${symbolIdStrs.map(() => '?').join(',')})`,
-          )
-          .all(...symbolIdStrs) as SymbolRow[])
-      : [];
+  const allSymbols: SymbolRow[] = [];
+  if (symbolIdStrs.length > 0) {
+    const CHUNK = 900;
+    for (let i = 0; i < symbolIdStrs.length; i += CHUNK) {
+      const chunk = symbolIdStrs.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(`SELECT * FROM symbols WHERE symbol_id IN (${ph})`)
+        .all(...chunk) as SymbolRow[];
+      for (const row of rows) allSymbols.push(row);
+    }
+  }
   const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
 
   // Batch-fetch files and node IDs
@@ -644,14 +651,21 @@ async function runFusionSearch(
     candidateNumIds.add(r.id);
   }
 
-  // Batch-fetch all symbols
+  // Batch-fetch all symbols.
+  // TRA-1005: chunk (same SQLITE_MAX_VARIABLE_NUMBER / V8 ceiling as above).
   const allSymbolIds = [...candidateNumIds];
-  const allSymbols =
-    allSymbolIds.length > 0
-      ? (store.db
-          .prepare(`SELECT * FROM symbols WHERE id IN (${allSymbolIds.map(() => '?').join(',')})`)
-          .all(...allSymbolIds) as SymbolRow[])
-      : [];
+  const allSymbols: SymbolRow[] = [];
+  if (allSymbolIds.length > 0) {
+    const CHUNK = 900;
+    for (let i = 0; i < allSymbolIds.length; i += CHUNK) {
+      const chunk = allSymbolIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(`SELECT * FROM symbols WHERE id IN (${ph})`)
+        .all(...chunk) as SymbolRow[];
+      for (const row of rows) allSymbols.push(row);
+    }
+  }
   const symbolById = new Map(allSymbols.map((s) => [s.id, s]));
   const symbolByIdStr = new Map(allSymbols.map((s) => [s.symbol_id, s]));
 

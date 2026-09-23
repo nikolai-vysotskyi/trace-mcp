@@ -58,9 +58,14 @@ export function resolvePythonTypeEdges(state: PipelineState, scope?: ChangeScope
 
   let sources: SourceRow[];
   if (scopedIds && scopedIds.length > 0) {
-    const ph = scopedIds.map(() => '?').join(',');
-    sources = store.db
-      .prepare(`
+    // TRA-1005: chunk the scope (SQLITE_MAX_VARIABLE_NUMBER + V8 arg ceiling).
+    sources = [];
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(`
       SELECT s.id, s.name, s.kind, s.file_id, s.metadata, f.workspace
         FROM symbols s
         JOIN files f ON s.file_id = f.id
@@ -69,7 +74,9 @@ export function resolvePythonTypeEdges(state: PipelineState, scope?: ChangeScope
          AND json_extract(s.metadata, '$.typeRefs') IS NOT NULL
          AND s.file_id IN (${ph})
     `)
-      .all(...scopedIds) as SourceRow[];
+        .all(...chunk) as SourceRow[];
+      for (const row of rows) sources.push(row);
+    }
   } else {
     sources = store.db
       .prepare(`

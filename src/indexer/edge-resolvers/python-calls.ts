@@ -56,9 +56,14 @@ export async function resolvePythonCallEdges(
 
   let symbolsWithCalls: SymbolRow[];
   if (scopedIds && scopedIds.length > 0) {
-    const ph = scopedIds.map(() => '?').join(',');
-    symbolsWithCalls = store.db
-      .prepare(`
+    // TRA-1005: chunk the scope (SQLITE_MAX_VARIABLE_NUMBER + V8 arg ceiling).
+    symbolsWithCalls = [];
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = store.db
+        .prepare(`
       SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id,
              p.symbol_id AS parent_symbol_id, s.metadata
       FROM symbols s
@@ -69,7 +74,9 @@ export async function resolvePythonCallEdges(
         AND json_extract(s.metadata, '$.callSites') IS NOT NULL
         AND s.file_id IN (${ph})
     `)
-      .all(...scopedIds) as SymbolRow[];
+        .all(...chunk) as SymbolRow[];
+      for (const row of rows) symbolsWithCalls.push(row);
+    }
   } else {
     symbolsWithCalls = store.db
       .prepare(`

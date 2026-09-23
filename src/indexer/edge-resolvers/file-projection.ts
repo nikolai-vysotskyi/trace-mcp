@@ -87,10 +87,13 @@ export async function resolveFileProjectionEdges(
   // transaction covers at most PROJECTION_ID_CHUNK source rows with a fair
   // yield between them. INSERT OR IGNORE is idempotent across ranges, and
   // ranges partition the source rows, so the chunked pass writes exactly
-  // what the single pass did. Scoped runs stay single-transaction: they are
-  // bounded by the changed-file set by construction.
+  // what the single pass did.
+  // TRA-1005: the scoped file-id list feeds TWO `IN` lists per statement (one
+  // per UNION branch) and is spread twice per `.run(...)`, so the ceiling
+  // hits at ~16k changed files / V8's arg ceiling at ~32k. Scoped execution
+  // is chunked at 900 (statements are rebuilt per chunk — scoped runs are
+  // rare, so prepare cost is noise); unscoped keeps the RANGE_FILTER pass.
   const RANGE_FILTER = `AND e.id >= ? AND e.id < ?`;
-  const filePh = scopedIds ? scopedIds.map(() => '?').join(',') : '';
   const excludedPh = [...excludedSet].map(() => '?').join(',') || 'SELECT -1';
   const symSymJoins = `
     FROM edges e
@@ -120,18 +123,19 @@ export async function resolveFileProjectionEdges(
       0,
       'ast_inferred'
   `;
-  const symSymBranch = (side: string): string => `
+  const symSymBranch = (side: string, filePh: string): string => `
     ${symSymSelect}
     ${symSymJoins}
     ${symSymBase}
       AND ${side} IN (${filePh})
       AND e.edge_type_id NOT IN (${excludedPh})
   `;
-  const stmt = store.db.prepare(`
+  const buildSymSymStmt = (filePh: string | null) =>
+    store.db.prepare(`
     INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
     ${
-      scopedIds
-        ? `${symSymBranch('ss.file_id')} UNION ${symSymBranch('ts.file_id')}`
+      filePh
+        ? `${symSymBranch('ss.file_id', filePh)} UNION ${symSymBranch('ts.file_id', filePh)}`
         : `${symSymSelect} ${symSymJoins} ${symSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
     }
   `);
@@ -164,18 +168,19 @@ export async function resolveFileProjectionEdges(
       0,
       'ast_inferred'
   `;
-  const fileSymBranch = (side: string): string => `
+  const fileSymBranch = (side: string, filePh: string): string => `
     ${fileSymSelect}
     ${fileSymJoins}
     ${fileSymBase}
       AND ${side} IN (${filePh})
       AND e.edge_type_id NOT IN (${excludedPh})
   `;
-  const stmtFileSym = store.db.prepare(`
+  const buildFileSymStmt = (filePh: string | null) =>
+    store.db.prepare(`
     INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
     ${
-      scopedIds
-        ? `${fileSymBranch('src_file.id')} UNION ${fileSymBranch('tgt_file.id')}`
+      filePh
+        ? `${fileSymBranch('src_file.id', filePh)} UNION ${fileSymBranch('tgt_file.id', filePh)}`
         : `${fileSymSelect} ${fileSymJoins} ${fileSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
     }
   `);
@@ -185,27 +190,45 @@ export async function resolveFileProjectionEdges(
       .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
       .get(importsType.id) as { c: number }
   ).c;
+  // Scoped params: one changed-id list per UNION branch, in placeholder order
+  // (edge_type, branch-1 ids, branch-1 excluded, edge_type, branch-2 ids,
+  // branch-2 excluded). Scoped runs are chunked at 900 (TRA-1005:
+  // statements are rebuilt per chunk — scoped runs are rare, so prepare
+  // cost is noise). Unscoped keeps the TRA-1764 id-range pass.
   if (scopedIds) {
-    // Scoped params: one changed-id list per UNION branch, in placeholder order
-    // (edge_type, branch-1 ids, branch-1 excluded, edge_type, branch-2 ids,
-    // branch-2 excluded). Scoped runs stay single-transaction: they are
-    // bounded by the changed-file set by construction.
-    const scopedBranchParams = [...scopedIds, ...excludedSet];
     store.db.transaction(() => {
-      stmt.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
-      stmtFileSym.run(importsType.id, ...scopedBranchParams, importsType.id, ...scopedBranchParams);
+      const CHUNK = 900;
+      for (let i = 0; i < scopedIds.length; i += CHUNK) {
+        const chunk = scopedIds.slice(i, i + CHUNK);
+        const filePh = chunk.map(() => '?').join(',');
+        const branchParams = [...chunk, ...excludedSet];
+        buildSymSymStmt(filePh).run(
+          importsType.id,
+          ...branchParams,
+          importsType.id,
+          ...branchParams,
+        );
+        buildFileSymStmt(filePh).run(
+          importsType.id,
+          ...branchParams,
+          importsType.id,
+          ...branchParams,
+        );
+      }
     })();
   } else {
     // Unscoped full pass: one transaction per id range with a fair yield
     // between them (TRA-1764). Unscoped placeholder order is (edge_type,
     // excluded..., lo, hi).
+    const symSymStmt = buildSymSymStmt(null);
+    const fileSymStmt = buildFileSymStmt(null);
     const bounds = store.db.prepare(`SELECT MIN(id) AS lo, MAX(id) AS hi FROM edges`).get() as {
       lo: number | null;
       hi: number | null;
     };
     const runRange = store.db.transaction((lo: number, hi: number) => {
-      stmt.run(importsType.id, ...excludedSet, lo, hi);
-      stmtFileSym.run(importsType.id, ...excludedSet, lo, hi);
+      symSymStmt.run(importsType.id, ...excludedSet, lo, hi);
+      fileSymStmt.run(importsType.id, ...excludedSet, lo, hi);
     });
     if (bounds.lo != null && bounds.hi != null) {
       let first = true;

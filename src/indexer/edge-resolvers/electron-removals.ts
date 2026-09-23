@@ -383,11 +383,13 @@ function loadFileView(state: PipelineState, relPath: string): FileView | null {
 
 function deleteEdgesById(state: PipelineState, ids: number[]): void {
   const CHUNK = 900;
-  const stmt = (ph: string) => `DELETE FROM edges WHERE id IN (${ph})`;
   state.store.db.transaction(() => {
     for (let i = 0; i < ids.length; i += CHUNK) {
       const chunk = ids.slice(i, i + CHUNK);
-      state.store.db.prepare(stmt(chunk.map(() => '?').join(','))).run(...chunk);
+      // Local `ph` (not a builder parameter) so the TRA-1005 CI gate can
+      // resolve the placeholder source to this chunk binding textually.
+      const ph = chunk.map(() => '?').join(',');
+      state.store.db.prepare(`DELETE FROM edges WHERE id IN (${ph})`).run(...chunk);
     }
   })();
   if (ids.length > 0) {

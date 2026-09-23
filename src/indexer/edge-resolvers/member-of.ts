@@ -35,15 +35,22 @@ export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope):
   const scopedIds = scope ? Array.from(scope.changedFileIds) : null;
   let rows: Array<{ member_id: number; parent_id: number }>;
   if (scopedIds && scopedIds.length > 0) {
-    const ph = scopedIds.map(() => '?').join(',');
-    rows = store.db
-      .prepare(`
+    // TRA-1005: chunk the scope (SQLITE_MAX_VARIABLE_NUMBER + V8 arg ceiling).
+    rows = [];
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const chunkRows = store.db
+        .prepare(`
       SELECT s.id AS member_id, s.parent_id
       FROM symbols s
       WHERE s.parent_id IS NOT NULL
         AND s.file_id IN (${ph})
     `)
-      .all(...scopedIds) as Array<{ member_id: number; parent_id: number }>;
+        .all(...chunk) as Array<{ member_id: number; parent_id: number }>;
+      for (const r of chunkRows) rows.push(r);
+    }
   } else if (scopedIds && scopedIds.length === 0) {
     return;
   } else {

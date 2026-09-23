@@ -363,18 +363,25 @@ export class EdgeResolver {
 
     const symbolNodeCache = new Map<string, number>();
     if (symbolIdStrs.size > 0) {
+      // TRA-1005: chunk — one `IN (?,...)` over the full set tops
+      // SQLITE_MAX_VARIABLE_NUMBER (32766), and spreading the whole array
+      // into `.all(...arr)` trips V8's argument ceiling (~65k).
       const arr = Array.from(symbolIdStrs);
-      const placeholders = arr.map(() => '?').join(',');
-      const rows = store.db
-        .prepare(
-          `SELECT s.symbol_id, n.id AS node_id
-           FROM symbols s
-           JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
-          WHERE s.symbol_id IN (${placeholders})`,
-        )
-        .all(...arr) as Array<{ symbol_id: string; node_id: number }>;
-      for (const row of rows) {
-        symbolNodeCache.set(row.symbol_id, row.node_id);
+      const CHUNK = 900;
+      for (let i = 0; i < arr.length; i += CHUNK) {
+        const chunk = arr.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        const rows = store.db
+          .prepare(
+            `SELECT s.symbol_id, n.id AS node_id
+             FROM symbols s
+             JOIN nodes n ON n.node_type = 'symbol' AND n.ref_id = s.id
+            WHERE s.symbol_id IN (${placeholders})`,
+          )
+          .all(...chunk) as Array<{ symbol_id: string; node_id: number }>;
+        for (const row of rows) {
+          symbolNodeCache.set(row.symbol_id, row.node_id);
+        }
       }
     }
 
@@ -459,10 +466,14 @@ export class EdgeResolver {
     // probes by primary key.
     const nodeWorkspaceCache = new Map<number, string | null>();
     if (allNodeIds && allNodeIds.size > 0) {
+      // TRA-1005: chunk (same SQLITE_MAX_VARIABLE_NUMBER / V8 ceiling).
       const nodeIdArr = Array.from(allNodeIds);
-      const ph = nodeIdArr.map(() => '?').join(',');
-      const rows = store.db
-        .prepare(`
+      const CHUNK = 900;
+      for (let i = 0; i < nodeIdArr.length; i += CHUNK) {
+        const chunk = nodeIdArr.slice(i, i + CHUNK);
+        const ph = chunk.map(() => '?').join(',');
+        const rows = store.db
+          .prepare(`
         SELECT n.id AS node_id, COALESCE(f_by_file.workspace, f_by_symbol.workspace) AS workspace
         FROM nodes n
         LEFT JOIN files f_by_file ON n.node_type = 'file' AND f_by_file.id = n.ref_id
@@ -470,8 +481,9 @@ export class EdgeResolver {
         LEFT JOIN files f_by_symbol ON f_by_symbol.id = s.file_id
         WHERE n.id IN (${ph})
       `)
-        .all(...nodeIdArr) as Array<{ node_id: number; workspace: string | null }>;
-      for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
+          .all(...chunk) as Array<{ node_id: number; workspace: string | null }>;
+        for (const row of rows) nodeWorkspaceCache.set(row.node_id, row.workspace);
+      }
     }
 
     // Batch insert

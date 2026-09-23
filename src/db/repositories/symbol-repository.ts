@@ -147,11 +147,16 @@ export class SymbolRepository {
       const parentIdMap = new Map<string, number>();
       if (parentSymbolIds.length > 0) {
         const unique = [...new Set(parentSymbolIds)];
-        const placeholders = unique.map(() => '?').join(',');
-        const rows = this.db
-          .prepare(`SELECT symbol_id, id FROM symbols WHERE symbol_id IN (${placeholders})`)
-          .all(...unique) as { symbol_id: string; id: number }[];
-        for (const row of rows) parentIdMap.set(row.symbol_id, row.id);
+        // TRA-1005: chunk (same SQLITE_MAX_VARIABLE_NUMBER / V8 ceiling).
+        const CHUNK = 900;
+        for (let i = 0; i < unique.length; i += CHUNK) {
+          const chunk = unique.slice(i, i + CHUNK);
+          const placeholders = chunk.map(() => '?').join(',');
+          const rows = this.db
+            .prepare(`SELECT symbol_id, id FROM symbols WHERE symbol_id IN (${placeholders})`)
+            .all(...chunk) as { symbol_id: string; id: number }[];
+          for (const row of rows) parentIdMap.set(row.symbol_id, row.id);
+        }
       }
 
       const ids: number[] = [];
@@ -297,10 +302,22 @@ export class SymbolRepository {
         AND (json_extract(s.metadata, '$.extends') IS NOT NULL
           OR json_extract(s.metadata, '$.implements') IS NOT NULL)`;
     if (fileIds && fileIds.length > 0) {
-      const ph = fileIds.map(() => '?').join(',');
-      return this.db.prepare(`${base} AND s.file_id IN (${ph})`).all(...fileIds) as (SymbolRow & {
-        file_path: string;
-      })[];
+      // TRA-1005: chunk — one `IN (?,...)` over the full array tops
+      // SQLITE_MAX_VARIABLE_NUMBER (32766) past ~32k files, and spreading the
+      // whole array into `.all(...ids)` trips V8's argument ceiling (~65k).
+      const out: (SymbolRow & { file_path: string })[] = [];
+      const CHUNK = 900;
+      for (let i = 0; i < fileIds.length; i += CHUNK) {
+        const chunk = fileIds.slice(i, i + CHUNK);
+        const ph = chunk.map(() => '?').join(',');
+        const rows = this.db
+          .prepare(`${base} AND s.file_id IN (${ph})`)
+          .all(...chunk) as (SymbolRow & {
+          file_path: string;
+        })[];
+        for (const row of rows) out.push(row);
+      }
+      return out;
     }
     return this.db.prepare(base).all() as (SymbolRow & { file_path: string })[];
   }
