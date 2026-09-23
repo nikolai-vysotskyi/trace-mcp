@@ -283,6 +283,36 @@ describe('StdioSession adaptive proxy timeout (TRA-1605)', () => {
     expect(ms).toBeLessThan(8_000);
   });
 
+  it('converging-but-never-answering startup: falls back at the cap, never hangs (TRA-1844)', async () => {
+    // Progress moves on every probe for the whole grace, but the MCP handler
+    // never answers. The session must still fall back at ~base + grace —
+    // reaching the cap with no timer armed used to hang the handshake until
+    // the client gave up (review, PR #1360).
+    let polls = 0;
+    const daemon = await startFakeDaemon({
+      health: () => ({
+        status: 'starting',
+        phase: 'startup_index',
+        transport: 'http',
+        progress: { projectsReady: polls++, projectsTotal: 46 },
+      }),
+      mcp: { kind: 'hang' },
+    });
+    cleanup = () => daemon.close();
+
+    const { ms, frames, kind, localStarts } = await handshakeAgainst(daemon.port, {
+      proxyWarmupGraceMs: 4_000,
+    });
+
+    expect(responsesFor(frames, 1)).toHaveLength(1);
+    expect(kind).toBe('local');
+    expect(localStarts).toBe(1);
+    // ~base (1 s) + grace (4 s): waited the grace out (single-flight kept),
+    // then fell back instead of hanging.
+    expect(ms).toBeGreaterThan(4_000);
+    expect(ms).toBeLessThan(11_000);
+  });
+
   it('converging startup: keeps waiting while progress moves (TRA-1844)', async () => {
     // Every /health poll shows one more project ready — startup is slow but
     // alive — and the daemon answers the proxied handshake mid-warmup.

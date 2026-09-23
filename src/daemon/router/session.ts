@@ -638,7 +638,14 @@ export class StdioSession {
     );
     const capAt = this.proxyArmedAt + capTotal;
     const sliceAt = Math.min(Date.now() + WARMUP_PROGRESS_SLICE_MS, capAt);
-    if (sliceAt <= Date.now()) return;
+    if (sliceAt <= Date.now()) {
+      // Cap reached. On the first slice the base watchdog is still armed and
+      // will fall back on its own — stay silent. Deeper in the chain the
+      // slice timers replaced it, so no timer would ever fire again: fall
+      // back now rather than hanging the handshake (review, PR #1360).
+      if (!firstSlice) void this.fallbackToLocal(id, 'proxy-initialize-timeout');
+      return;
+    }
     this.proxyDeadline = sliceAt;
     if (this.initializeTimer) clearTimeout(this.initializeTimer);
     if (firstSlice) {
@@ -677,9 +684,31 @@ export class StdioSession {
       await this.fallbackToLocal(id, 'proxy-initialize-timeout');
       return;
     }
-    if (!readiness.starting || readiness.progress === undefined) {
-      // Ready now, or a daemon whose health carries no progress signal —
-      // grant the remainder in one shot (the pre-TRA-1844 behavior).
+    if (!readiness.starting) {
+      // Ready now: the in-flight proxied handshake may complete at any
+      // moment, so grant it one last slice bounded by the cap, then fall
+      // back. A full remainder here would reintroduce the TRA-1844 hang for
+      // a daemon whose /health is ready while its MCP handler is still slow.
+      const deadline = Math.min(Date.now() + WARMUP_PROGRESS_SLICE_MS, capAt);
+      if (deadline <= Date.now()) {
+        await this.fallbackToLocal(id, 'proxy-initialize-timeout');
+        return;
+      }
+      this.proxyDeadline = deadline;
+      if (this.initializeTimer) clearTimeout(this.initializeTimer);
+      this.initializeTimer = setTimeout(
+        () => {
+          void this.onProxyWatchdogFire(id);
+        },
+        Math.max(0, deadline - Date.now()),
+      );
+      this.initializeTimer.unref?.();
+      return;
+    }
+    if (readiness.progress === undefined) {
+      // No progress signal (legacy/fake health payloads) — grant the
+      // remainder in one shot. Absence of the signal is not evidence of a
+      // stall, so the legacy path keeps the pre-TRA-1844 behavior.
       const totalMs = Math.min(
         computeProxyTimeoutMs(baseMs, readiness, warmupGraceMs),
         Math.max(baseMs, capAt - this.proxyArmedAt),
