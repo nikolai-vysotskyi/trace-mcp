@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
@@ -171,5 +172,144 @@ describe('installHermesHooks', () => {
     const result = byTarget(installHermesHooks({ autoAllowlist: true }), allowlistPath());
     expect(result.action).toBe('created');
     expect(JSON.parse(fs.readFileSync(allowlistPath(), 'utf-8')).approvals).toHaveLength(1);
+  });
+});
+
+// The decision table shells out to bash + python3 (the guard's own runtime).
+// Skip cleanly on machines without them instead of going red.
+const hasGuardRuntime = (() => {
+  try {
+    execFileSync('bash', ['--version'], { stdio: 'ignore' });
+    execFileSync('python3', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+describe.skipIf(!hasGuardRuntime)('guard script decisions', () => {
+  let home: string;
+  let previousHome: string | undefined;
+
+  const scriptPath = () => path.join(home, 'agent-hooks', 'trace-mcp-guard.sh');
+
+  /** Feed the installed guard script a Hermes pre_tool_call payload, return parsed stdout. */
+  const runGuard = (command: string, toolName = 'terminal'): Record<string, unknown> => {
+    const payload = JSON.stringify({ tool_name: toolName, tool_input: { command } });
+    const stdout = execFileSync('bash', [scriptPath()], { input: payload, encoding: 'utf-8' });
+    return JSON.parse(stdout) as Record<string, unknown>;
+  };
+  const decisionOf = (command: string, toolName?: string): 'pass' | 'block' =>
+    runGuard(command, toolName).decision === 'block' ? 'block' : 'pass';
+
+  beforeEach(() => {
+    home = createTmpDir('hermes-guard-');
+    previousHome = process.env.HERMES_HOME;
+    process.env.HERMES_HOME = home;
+    installHermesHooks();
+  });
+
+  afterEach(() => {
+    if (previousHome === undefined) delete process.env.HERMES_HOME;
+    else process.env.HERMES_HOME = previousHome;
+    removeTmpDir(home);
+  });
+
+  // The guard's contract, pinned: unconstrained recursive search is blocked,
+  // scoped or non-recursive invocations pass through.
+  const cases: Array<[string, 'pass' | 'block']> = [
+    // Unconstrained recursive grep — blocked.
+    ['grep -r foo', 'block'],
+    ['grep -R foo', 'block'],
+    ['grep --recursive foo', 'block'],
+    ['grep -rn foo', 'block'],
+    ['grep -ri foo', 'block'],
+    ['grep -r -e foo', 'block'],
+    ['grep -r -efoo', 'block'],
+    ['grep -r --regexp=foo', 'block'],
+    ['grep -r -m 5 foo', 'block'],
+    // rg/ag/ack recurse by default — blocked without a flag.
+    ['rg foo', 'block'],
+    ['ag foo', 'block'],
+    ['ack foo', 'block'],
+    ['rg --max-count 5 foo', 'block'],
+    ['grep -r foo | head -20', 'block'],
+    ['/usr/bin/grep -r foo', 'block'],
+    // Scoped with --include/--exclude — passes (the promised exception).
+    ["grep -r --include='*.ts' foo src/", 'pass'],
+    ['grep -r --include *.ts foo', 'pass'],
+    ['grep -r --exclude-dir=node_modules foo', 'pass'],
+    // Scoped with an explicit path operand — passes.
+    ['grep -r foo src/', 'pass'],
+    ['grep -r -e foo src', 'pass'],
+    ['grep -r -m5 foo src', 'pass'],
+    ['rg foo src/', 'pass'],
+    // rg-native scoping flags — passes.
+    ["rg -g '*.ts' foo", 'pass'],
+    ['rg --glob *.ts foo', 'pass'],
+    ['rg --glob=*.ts foo', 'pass'],
+    ["rg -g'*.ts' foo", 'pass'],
+    ['rg -tjs foo', 'pass'],
+    // Pattern via --opt=value plus an explicit path — passes.
+    ['grep -r --regexp=foo src/', 'pass'],
+    ['rg --regexp=foo src/', 'pass'],
+    ['rg --file=patterns.txt src/', 'pass'],
+    // A quoted pipe is a pattern, not a pipeline — passes (scoped).
+    ['rg "|" src/', 'pass'],
+    // Lookalike flags that do not scope anything — blocked.
+    ['rg --ignore-case foo', 'block'],
+    ['grep -r -h foo', 'block'],
+    ['grep -r -G foo', 'block'],
+    // -h is help only for rg; for grep it is --no-filename (no scoping).
+    ['rg -h', 'pass'],
+    ['rg -V', 'pass'],
+    ['grep -V', 'pass'],
+    ['grep -rh foo', 'block'],
+    ['rg -e --glob', 'block'],
+    // Redirect targets and next-command tails are not search paths — blocked.
+    ['rg foo> result.txt', 'block'],
+    ['rg foo >result.txt', 'block'],
+    ['rg foo; echo done', 'block'],
+    // Empty quoted patterns are still operands, not missing args.
+    ['rg "" src/', 'pass'],
+    ["grep -r '' src/", 'pass'],
+    ['rg -e "" src/', 'pass'],
+    ['rg ""', 'block'],
+    // Command substitution cannot be parsed statically — fail open.
+    ['rg $(printf foo) src/', 'pass'],
+    ['rg `printf foo` src/', 'pass'],
+    // ag/ack -r is a valueless recurse flag (rg -r takes a replacement value).
+    ['ag -r foo src/', 'pass'],
+    ['ack -r foo src/', 'pass'],
+    ['rg -r bar foo src/', 'pass'],
+    ['rg -r foo src/', 'block'],
+    // Not recursive at all — passes.
+    ['grep foo', 'pass'],
+    ['grep -n foo bar.ts', 'pass'],
+    // Introspection flags never search — passes.
+    ['rg --help', 'pass'],
+    ['rg --version', 'pass'],
+    // Not a search — passes.
+    ['ls -la', 'pass'],
+  ];
+
+  it.each(cases)('`%s` → %s', (command, expected) => {
+    expect(decisionOf(command)).toBe(expected);
+  });
+
+  it('passes non-terminal tools through untouched', () => {
+    expect(decisionOf('grep -r foo', 'search')).toBe('pass');
+    expect(runGuard('grep -r foo', 'search')).toEqual({});
+  });
+
+  it('still blocks find -name source walks', () => {
+    expect(decisionOf('find . -name "*.ts"')).toBe('block');
+    expect(decisionOf('find . -name "*.md"')).toBe('pass');
+  });
+
+  it('block reasons point at the trace-mcp equivalent', () => {
+    const out = runGuard('rg foo');
+    expect(out.decision).toBe('block');
+    expect(String(out.reason)).toMatch(/search_text/);
   });
 });

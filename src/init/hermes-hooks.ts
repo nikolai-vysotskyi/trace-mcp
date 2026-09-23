@@ -22,7 +22,7 @@ import { atomicWriteJson } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
-const HERMES_GUARD_VERSION = '0.1.1';
+const HERMES_GUARD_VERSION = '0.1.4';
 
 function hermesHome(): string {
   return process.env.HERMES_HOME ?? path.join(os.homedir(), '.hermes');
@@ -65,11 +65,225 @@ cmd=$(printf '%s' "$payload" | python3 -c 'import json,sys; d=json.load(sys.stdi
 first=$(printf '%s' "$cmd" | sed -E 's/^[[:space:]]+//' | awk '{print $1}')
 
 case "$first" in
-  grep|rg|ack|ag)
-    # Allow greps that scope themselves with --include= or explicit file args.
-    # We only block the unconstrained "find me this string anywhere" shape.
-    if printf '%s' "$cmd" | grep -qE '(-r|--recursive|\\s-R\\b)'; then
-      block "Use trace-mcp instead: 'search' (for symbols) or 'search_text' (for raw text). These are faster, ranked, and understand the dependency graph. If you truly need a recursive grep, narrow the scope with --include or a specific subdirectory."
+  grep|*/grep|rg|*/rg|ack|*/ack|ag|*/ag)
+    # Block only the unconstrained "find me this string anywhere" shape.
+    # grep recurses only with -r/-R/--recursive; rg/ag/ack recurse by default.
+    # A search scoped with a per-tool file filter (--include for grep,
+    # -g/--glob for rg, --ignore for ag, --type for ack) or with an explicit
+    # path operand passes through. Option names are matched exactly per tool
+    # in a single sequential pass, so lookalikes (--ignore-case, grep -h/-G)
+    # and flag-shaped patterns (-e value, args after --) do not count.
+    # Token parsing lives in python3 (already required above for JSON); when
+    # it is unavailable the decision is empty and we fail open to pass.
+    decision=$(printf '%s' "$cmd" | python3 -c '
+import sys
+cmd = sys.stdin.read()
+try:
+    # Narrow guard: command substitution is out of scope for static parsing
+    # (the tokenizer cannot know what $(...) expands to). Fail open rather
+    # than risk vetoing a scoped search whose shape we cannot see.
+    # (Backtick is chr(96): a literal backtick here would close the TS
+    # template literal that embeds this script.)
+    if "$(" in cmd or chr(96) in cmd:
+        print("pass")
+        sys.exit(0)
+    SQ = chr(39)
+    DQ = chr(34)
+    BS = chr(92)
+    toks = []
+    buf = []
+    started = False
+    i = 0
+    n = len(cmd)
+    while i < n:
+        c = cmd[i]
+        if c == SQ:
+            started = True
+            i += 1
+            while i < n and cmd[i] != SQ:
+                buf.append(cmd[i])
+                i += 1
+            i += 1
+        elif c == DQ:
+            started = True
+            i += 1
+            while i < n and cmd[i] != DQ:
+                if cmd[i] == BS and i + 1 < n:
+                    buf.append(cmd[i + 1])
+                    i += 2
+                else:
+                    buf.append(cmd[i])
+                    i += 1
+            i += 1
+        elif c == BS and i + 1 < n:
+            started = True
+            buf.append(cmd[i + 1])
+            i += 2
+        elif c.isspace():
+            if started:
+                toks.append(("word", "".join(buf)))
+                del buf[:]
+                started = False
+            i += 1
+        elif c == ";" or c == "(" or c == ")":
+            if started:
+                toks.append(("word", "".join(buf)))
+                del buf[:]
+                started = False
+            toks.append(("sep", c))
+            i += 1
+        elif c == "&":
+            if started:
+                toks.append(("word", "".join(buf)))
+                del buf[:]
+                started = False
+            if cmd[i+1:i+2] == "&":
+                toks.append(("sep", "&&"))
+                i += 2
+            elif cmd[i+1:i+2] == ">":
+                if cmd[i+2:i+3] == ">":
+                    toks.append(("redir", "&>>"))
+                    i += 3
+                else:
+                    toks.append(("redir", "&>"))
+                    i += 2
+            else:
+                toks.append(("sep", "&"))
+                i += 1
+        elif c == "|":
+            if started:
+                toks.append(("word", "".join(buf)))
+                del buf[:]
+                started = False
+            if cmd[i+1:i+2] == "|":
+                toks.append(("sep", "||"))
+                i += 2
+            else:
+                toks.append(("sep", "|"))
+                i += 1
+        elif c == "<" or c == ">":
+            pre = "".join(buf)
+            was_started = started
+            del buf[:]
+            started = False
+            fd = ""
+            if pre:
+                if pre.isdigit():
+                    fd = pre
+                else:
+                    toks.append(("word", pre))
+            elif was_started:
+                toks.append(("word", pre))
+            op = c
+            j = i + 1
+            if cmd[j:j+1] == c:
+                op = op + c
+                j += 1
+            if op == "<" and cmd[j:j+1] == "-":
+                op = op + "-"
+                j += 1
+            if cmd[j:j+1] == "&" or cmd[j:j+1] == ">" or cmd[j:j+1] == "<":
+                if op == "<" or op == ">" or op == "<<" or op == ">>":
+                    op = op + cmd[j:j+1]
+                    j += 1
+            toks.append(("redir", fd + op))
+            i = j
+        else:
+            started = True
+            buf.append(c)
+            i += 1
+    if started:
+        toks.append(("word", "".join(buf)))
+    words = []
+    k = 0
+    while k < len(toks):
+        kind, text = toks[k]
+        if kind == "sep":
+            break
+        if kind == "redir":
+            k += 1
+            if k < len(toks) and toks[k][0] == "word":
+                k += 1
+            continue
+        words.append(text)
+        k += 1
+    if not words:
+        print("pass")
+        sys.exit(0)
+    tool = words[0].rsplit("/", 1)[-1]
+    if tool != "grep" and tool != "rg" and tool != "ack" and tool != "ag":
+        print("pass")
+        sys.exit(0)
+    args = words[1:]
+    scoping_long = {
+        "grep": ("--include", "--exclude", "--exclude-dir", "--exclude-from"),
+        "rg": ("--glob", "--iglob", "--type", "--type-add", "--type-not", "--ignore-file"),
+        "ag": ("--ignore", "--ignore-dir"),
+        "ack": ("--type", "--type-add", "--type-set", "--type-del", "--ignore-dir", "--ignore-directory", "--ignore-file"),
+    }[tool]
+    scoping_short = {"grep": "", "rg": "gt", "ack": "", "ag": "G"}[tool]
+    help_short = {"grep": "V", "rg": "hV", "ack": "V", "ag": "V"}[tool]
+    value_long = ("--regexp", "--file", "--max-count", "--after-context", "--before-context", "--context", "--replace", "--devices", "--directories", "--glob", "--iglob", "--ignore", "--ignore-dir", "--ignore-file", "--type", "--type-add", "--type-not", "--include", "--exclude", "--exclude-dir", "--exclude-from", "--max-columns", "--threads", "--max-filesize", "--dfa-size-limit", "--colors", "--hyperlink-format", "--path-separator", "--label")
+    value_short = {"grep": "efmABCdDgtjM", "rg": "efmABCdDgtrjM", "ack": "efmABCdDgtjM", "ag": "efmABCdDgtjM"}[tool]
+    recursive = False
+    pattern_via_flag = False
+    operands = []
+    i = 0
+    opts_done = False
+    while i < len(args):
+        a = args[i]
+        if opts_done:
+            operands.append(a)
+        elif a == "--":
+            opts_done = True
+        elif a.startswith("--"):
+            name, eq, _v = a.partition("=")
+            if name == "--recursive" or name == "--dereference-recursive":
+                recursive = True
+            elif name == "--no-recursive" or name == "--help" or name == "--version":
+                print("pass")
+                sys.exit(0)
+            elif name in scoping_long:
+                print("pass")
+                sys.exit(0)
+            elif name == "--regexp" or name == "--file":
+                pattern_via_flag = True
+            if not eq and name in value_long:
+                i += 1
+        elif a.startswith("-") and len(a) > 1:
+            j = 1
+            while j < len(a):
+                ch = a[j]
+                if tool == "grep" and (ch == "r" or ch == "R"):
+                    recursive = True
+                if ch in help_short:
+                    print("pass")
+                    sys.exit(0)
+                if ch in scoping_short:
+                    print("pass")
+                    sys.exit(0)
+                if ch == "e" or ch == "f":
+                    pattern_via_flag = True
+                if ch in value_short:
+                    if j == len(a) - 1:
+                        i += 1
+                    break
+                j += 1
+        else:
+            operands.append(a)
+        i += 1
+    if tool == "grep" and not recursive:
+        print("pass")
+        sys.exit(0)
+    if pattern_via_flag:
+        print("pass" if len(operands) >= 1 else "block")
+    else:
+        print("pass" if len(operands) >= 2 else "block")
+except Exception:
+    print("pass")
+' 2>/dev/null || true)
+    if [ "$decision" = "block" ]; then
+      block "Use trace-mcp instead: 'search' (for symbols) or 'search_text' (for raw text). These are faster, ranked, and understand the dependency graph. If you truly need a recursive grep, narrow the scope with --include/--glob or a specific subdirectory."
     fi
     ;;
   find)
