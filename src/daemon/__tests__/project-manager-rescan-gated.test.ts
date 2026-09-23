@@ -108,6 +108,11 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     // TRA-1579: explicit waitFor budget — the default 1s timeout flakes on
     // loaded Windows runners where 5 projects' initial indexing plus event
     // loop lag exceeds it. The test itself still caps at 30s.
+    // TRA-1839: raised to 60s. On a pathological windows-latest runner
+    // (Sep 2026) the cold import of the daemon graph plus 5 sequential
+    // real-DB addProjects alone approached the 30s cap, and the timeout
+    // firing mid-test left the orphaned async fn mutating shared module
+    // state under the NEXT test (see project-manager-rescan-ungated.test.ts).
     await vi.waitFor(() => expect(activeIndexAll).toBe(0), { timeout: 10_000, interval: 50 });
     peakIndexAll = 0;
 
@@ -116,31 +121,5 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
 
     expect(peakIndexAll).toBeGreaterThan(0);
     expect(peakIndexAll).toBeLessThanOrEqual(2); // default parallel_initial_index
-  }, 30_000);
-
-  // NOT a race test: the real FileWatcher.stop() unsubscribes and then drains
-  // the in-flight rescan, and shutdown() clears the limiter only after that,
-  // so a live rescan never sees a null limiter (Reviewer C verified this
-  // against the unmocked watcher). FakeWatcher.stop() is a no-op, which is
-  // what lets the callback be fired here at all. What this pins is only the
-  // defensive branch itself: an unset limiter degrades to an ungated re-walk
-  // instead of throwing inside a watcher callback.
-  it('runs the rescan ungated when the limiter is unset', async () => {
-    const { ProjectManager } = await import('../project-manager.js');
-    const pm = new ProjectManager();
-    pmRef = pm;
-
-    const dir = join(tmpHome, 'repo-solo');
-    mkdirSync(dir, { recursive: true });
-    await pm.addProject(dir);
-    const rescan = rescanCallbacks[0];
-
-    await pm.shutdown();
-    pmRef = undefined;
-    peakIndexAll = 0;
-
-    // The defensive branch must not throw on the null limiter.
-    await expect(rescan()).resolves.toBeUndefined();
-    expect(peakIndexAll).toBe(1);
-  }, 30_000);
+  }, 60_000);
 });
