@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Guide — .trace.json Reference"
 description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # trace-mcp Configuration
