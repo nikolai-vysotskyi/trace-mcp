@@ -21,6 +21,28 @@ const DEFAULT_DEBOUNCE_MS = 300;
  */
 const MAC_LOAD_RETRY_DELAYS_MS = [300, 900, 2000];
 
+/**
+ * Bound for one native `watcher.subscribe()` round-trip (TRA-1843).
+ *
+ * Field case: the daemon held 4 eager projects in `indexing` for 87+ min
+ * with 0% CPU and zero pipeline lines — two projects sat inside
+ * `watcher.start()` (never reaching `Project added to daemon`) while holding
+ * both `loadAllRegistered` setup slots, so the remaining eager projects never
+ * even started and `startupComplete` never flipped. A subscribe that does not
+ * answer in this long is not slow, it is wedged (normal subscribes resolve in
+ * ms) — fail loudly so `addProject()` tears the half-added entry down and the
+ * project retries lazily on its next request instead of pinning startup.
+ */
+export const WATCHER_SUBSCRIBE_TIMEOUT_MS = 60_000;
+let subscribeTimeoutMs = WATCHER_SUBSCRIBE_TIMEOUT_MS;
+/** Test seam — the timeout above is far too long for a unit test to wait out. */
+export function setWatcherSubscribeTimeoutForTests(ms: number): void {
+  subscribeTimeoutMs = ms;
+}
+export function resetWatcherSubscribeTimeoutForTests(): void {
+  subscribeTimeoutMs = WATCHER_SUBSCRIBE_TIMEOUT_MS;
+}
+
 let cachedWatcher: ParcelWatcherModule | null = null;
 
 /**
@@ -334,7 +356,63 @@ export class FileWatcher {
       ? picomatch(descendantGlobs, { dot: true })
       : undefined;
 
-    this.subscription = await watcher.subscribe(
+    this.subscription = await this.subscribeWithTimeout(watcher, rootPath, {
+      rootPath,
+      config,
+      onChanges,
+      debounceMs,
+      onDeletes,
+      opts,
+      traceignore,
+      gitignore,
+      ignoreDirs,
+      isExcluded,
+      isOwnedByDescendant,
+      descendantGlobs,
+    });
+
+    logger.info({ rootPath }, 'File watcher started');
+  }
+
+  /**
+   * Native `subscribe()` with the TRA-1843 timeout. On timeout the start fails
+   * instead of wedging `loadAllRegistered`'s setup slots forever — and a
+   * native subscription that resolves *after* we gave up is unsubscribed
+   * immediately so it can never leak as an untracked live fs-event handle.
+   */
+  private async subscribeWithTimeout(
+    watcher: ParcelWatcherModule,
+    rootPath: string,
+    args: {
+      rootPath: string;
+      config: TraceMcpConfig;
+      onChanges: (paths: string[]) => Promise<void>;
+      debounceMs: number;
+      onDeletes: ((paths: string[]) => Promise<void>) | undefined;
+      opts: StartOpts | undefined;
+      traceignore: TraceignoreMatcher;
+      gitignore: GitignoreMatcher;
+      ignoreDirs: string[];
+      isExcluded: (path: string) => boolean;
+      isOwnedByDescendant: ((path: string) => boolean) | undefined;
+      descendantGlobs: string[];
+    },
+  ): Promise<parcelWatcher.AsyncSubscription> {
+    const {
+      config,
+      onChanges,
+      debounceMs,
+      onDeletes,
+      opts,
+      traceignore,
+      gitignore,
+      ignoreDirs,
+      isExcluded,
+      isOwnedByDescendant,
+      descendantGlobs,
+    } = args;
+    let timedOut = false;
+    const subscribePromise = watcher.subscribe(
       rootPath,
       async (err, events) => {
         if (err) {
@@ -421,8 +499,39 @@ export class FileWatcher {
         ],
       },
     );
-
-    logger.info({ rootPath }, 'File watcher started');
+    // A native subscription that resolves after the timeout below already
+    // rejected must never leak as an untracked live handle — drop it at once.
+    // The rejection handler is a no-op: the race below surfaces the real error.
+    void subscribePromise.then(
+      (late) => {
+        if (timedOut) {
+          late.unsubscribe().catch(() => {});
+        }
+      },
+      () => {},
+    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        subscribePromise,
+        new Promise<never>((_, reject) => {
+          // Global timers, not the injected debounce clock: the injected
+          // stub is the debounce accounting tests count exactly, and an
+          // extra set/clear pair per start() would perturb those counts.
+          timer = setTimeout(() => {
+            timedOut = true;
+            reject(
+              new Error(
+                `File watcher subscribe timed out after ${subscribeTimeoutMs}ms for ${rootPath} (TRA-1843) — ` +
+                  'the native watcher did not answer; the project load fails and retries lazily on its next request',
+              ),
+            );
+          }, subscribeTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /**

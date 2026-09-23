@@ -80,6 +80,40 @@ export interface DiscoveryResult {
 
 /** Above this many git-touched files the walk is cheaper/safer — walk. */
 export const GIT_FAST_PATH_MAX_FILES = 500;
+/**
+ * Bound for one native watcher round-trip (`getEventsSince`, `writeSnapshot`)
+ * (TRA-1843).
+ *
+ * Field case: initial `indexAll` runs sat inside `tryIncrementalDiscovery`'s
+ * since-query while the native watcher layer was wedged — 0% CPU, zero
+ * pipeline lines, both `indexAllLimit` slots leaked forever, every later
+ * `indexAll` queued behind them. A since-query that does not answer in this
+ * long is not slow (healthy ones answer in ms), so fall back to the full walk
+ * instead of holding the run — and a snapshot write that does not answer is
+ * post-run bookkeeping, so skip it instead of holding the run's settlement.
+ */
+export const WATCHER_NATIVE_TIMEOUT_MS = 30_000;
+let watcherNativeTimeoutMs = WATCHER_NATIVE_TIMEOUT_MS;
+/** Test seam — the timeout above is far too long for a unit test to wait out. */
+export function setWatcherNativeTimeoutForTests(ms: number): void {
+  watcherNativeTimeoutMs = ms;
+}
+export function resetWatcherNativeTimeoutForTests(): void {
+  watcherNativeTimeoutMs = WATCHER_NATIVE_TIMEOUT_MS;
+}
+
+/** Race `promise` against the native-watcher bound; reject with `message` on timeout. */
+function withNativeTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), watcherNativeTimeoutMs);
+  });
+  // The timeout always fires, so the clear below always runs — no handle leak
+  // even when the native promise never settles.
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
 /** Force a verifying full walk every Nth incremental run at the latest. */
 export const FULL_WALK_EVERY_N_RUNS = 10;
 /** …or when the last full walk is older than this (stale-scope bound). */
@@ -138,10 +172,9 @@ export const queryWatcherSince: QueryWatcherSinceFn = async (rootPath, snapshotP
   }
   let events: Array<{ path: string; type: string }>;
   try {
-    events = (await watcher.getEventsSince(
-      rootPath,
-      snapshotPath,
-      ignore ? { ignore } : {},
+    events = (await withNativeTimeout(
+      watcher.getEventsSince(rootPath, snapshotPath, ignore ? { ignore } : {}),
+      `watcher getEventsSince timed out after ${watcherNativeTimeoutMs}ms for ${rootPath} (TRA-1843)`,
     )) as Array<{
       path: string;
       type: string;
@@ -150,6 +183,8 @@ export const queryWatcherSince: QueryWatcherSinceFn = async (rootPath, snapshotP
     // FSEvents log truncation ("events were dropped" family), inotify
     // backend refusal, brute-force fallback failure — all mean the answer
     // may be incomplete, and an incomplete answer is worse than a slow one.
+    // A timeout lands here too: a wedged native layer must fall back to the
+    // walk, never hold the indexAll run (TRA-1843).
     logger.debug({ err, rootPath }, 'watcher since-query failed — full walk');
     return null;
   }
@@ -180,7 +215,10 @@ export async function writeWatcherSnapshot(
   }
   try {
     fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    await watcher.writeSnapshot(rootPath, snapshotPath, ignore ? { ignore } : {});
+    await withNativeTimeout(
+      watcher.writeSnapshot(rootPath, snapshotPath, ignore ? { ignore } : {}),
+      `watcher writeSnapshot timed out after ${watcherNativeTimeoutMs}ms for ${rootPath} (TRA-1843)`,
+    );
     return true;
   } catch (err) {
     logger.debug({ err, rootPath }, 'watcher writeSnapshot failed (non-fatal)');
