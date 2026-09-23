@@ -24,6 +24,7 @@ import {
 } from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import type { ClientCallRow, TopologyStore } from '../topology/topology-db.js';
+import { reconcileSubprojectIndex } from './reconcile-index.js';
 import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
 import type { EndpointSchemaDiff } from './schema-diff.js';
 import {
@@ -289,6 +290,15 @@ export class SubprojectManager {
     }
     assertSafeRoot(absProjectRoot, 'project');
 
+    const reconciledIndexes = new Set<string>();
+    // Include previously registered children even if their service marker was
+    // removed; detection alone can no longer rediscover those repositories.
+    for (const repo of this.topoStore.getSubprojectsByProject(absProjectRoot)) {
+      if (repo.db_path && !reconciledIndexes.has(repo.db_path)) {
+        reconcileSubprojectIndex(repo.repo_root, repo.db_path);
+        reconciledIndexes.add(repo.db_path);
+      }
+    }
     const detected = detectServices([absProjectRoot]);
     const results: SubprojectAddResult[] = [];
     // Track registered repos for the post-pass that scans cross-service endpoint literals.
@@ -308,6 +318,11 @@ export class SubprojectManager {
     for (const svc of detected) {
       const repoName = svc.name;
       const dbPath = getDbPath(svc.repoRoot);
+
+      if (!reconciledIndexes.has(dbPath)) {
+        reconcileSubprojectIndex(svc.repoRoot, dbPath);
+        reconciledIndexes.add(dbPath);
+      }
 
       const repoId = this.topoStore.upsertSubproject({
         name: repoName,
@@ -570,6 +585,7 @@ export class SubprojectManager {
     let contractsUpdated = 0;
     let endpointsUpdated = 0;
     let clientCallsScanned = 0;
+    const reconciledIndexes = new Set<string>();
 
     for (const repo of repos) {
       if (!fs.existsSync(repo.repo_root)) {
@@ -578,6 +594,11 @@ export class SubprojectManager {
           'Subproject repo no longer exists, skipping',
         );
         continue;
+      }
+
+      if (repo.db_path && !reconciledIndexes.has(repo.db_path)) {
+        reconcileSubprojectIndex(repo.repo_root, repo.db_path);
+        reconciledIndexes.add(repo.db_path);
       }
 
       const detected = detectServices([repo.repo_root]);

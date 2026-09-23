@@ -110,7 +110,12 @@ export class Store {
     this.files.deleteFile(
       fileId,
       (fId) => this.graph.deleteEdgesForFileNodes(fId),
-      (fId) => this.files.deleteEntitiesByFile(fId),
+      (fId) => {
+        this.files.deleteEntitiesByFile(fId);
+        // The files FK cascades symbol rows, but polymorphic graph nodes have
+        // no FK to symbols. Remove them while their file ownership is known.
+        this.symbols.deleteSymbolsByFile(fId);
+      },
     );
   }
 
