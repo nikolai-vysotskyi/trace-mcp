@@ -85,6 +85,15 @@ const AI_COALESCE_WAIT_MS = 5_000;
 export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 13_000;
 
 /**
+ * How long a project may sit in `starting`/`indexing` before the vitals tick
+ * calls it stalled (TRA-1843). Warn-only: a healthy bulk index of a huge
+ * monorepo can legitimately run past this, so stalled projects keep their
+ * status and their sweep exemption — the line exists so the next idle-stall
+ * triages from one log line instead of an 87-minute mystery.
+ */
+export const INDEXING_STALL_WARN_MS = 15 * 60_000;
+
+/**
  * Canonical in-memory key for the managed-projects map (TRA-1608).
  *
  * The map used to be keyed by the raw caller string, so the same filesystem
@@ -159,6 +168,14 @@ export interface ManagedProject {
   serverHandle: ServerHandle;
   status: 'starting' | 'indexing' | 'ready' | 'error';
   error?: string;
+  /**
+   * Epoch ms when the project entered `starting`/`indexing` (TRA-1843). Set
+   * once at creation in `addProject()` and never updated: a project that only
+   * ever sits in `indexing` without its initial promise settling is exactly
+   * the idle-stall `warnOnIndexingStalls()` diagnoses. Entries that predate
+   * this field (behavioural-test fakes) simply never count as stalled.
+   */
+  indexingStartedAt?: number;
   cancelDebouncedAI?: () => void;
   /** Aborted during stopProject() so in-flight AI fetches bail instead of
    *  running to completion against a now-disposed Store. */
@@ -304,6 +321,14 @@ export class ProjectManager {
    * back under the ceiling (TRA-1738 review).
    */
   private overCapWarned = false;
+  /**
+   * Latch for `warnOnIndexingStalls()`: roots already warned about in the
+   * current stall episode (TRA-1843). Same one-line-per-episode rationale as
+   * `overCapWarned` — a wedged project must not log every 60s vitals tick
+   * for the rest of the daemon's life. Pruned as soon as a root leaves
+   * `starting`/`indexing`, so a re-stall warns again as a new episode.
+   */
+  private warnedStallRoots = new Set<string>();
 
   constructor(opts?: { resourcePool?: ProjectResourcePool }) {
     this.resourcePool = opts?.resourcePool ?? null;
@@ -589,6 +614,7 @@ export class ProjectManager {
       indexAbortController,
       lspEnricher,
       lastAccessedAt: Date.now(),
+      indexingStartedAt: Date.now(),
       cancelDebouncedAI: () => {
         debouncedSummarize.cancel();
         debouncedEmbed.cancel();
@@ -778,7 +804,9 @@ export class ProjectManager {
     // Agent-driven edits still reindex via register_edit / the PostToolUse hook;
     // only external (IDE) edits go unnoticed until the next connect's indexAll.
     if (watch) {
-      await watcher.start(
+      // Separated from the await below so the failure path adds no
+      // indentation churn to the 200-line subscribe arguments (TRA-1843).
+      const watcherStarted = watcher.start(
         projectRoot,
         config,
         async (paths) => {
@@ -981,6 +1009,16 @@ export class ProjectManager {
           },
         },
       );
+      try {
+        await watcherStarted;
+      } catch (err) {
+        // TRA-1843: a failed watcher start (subscribe error, or the native
+        // layer wedged past WATCHER_SUBSCRIBE_TIMEOUT_MS) must not leave the
+        // half-added entry behind — tear it down and rethrow so the project
+        // retries lazily instead of pinning `indexing`/`sweep_busy` forever.
+        await this.abortAddProject(managed);
+        throw err;
+      }
     }
 
     // A registered ancestor of this new project already has a live watcher
@@ -1104,6 +1142,106 @@ export class ProjectManager {
     } catch (err) {
       logger.debug({ err }, 'wal_checkpoint after FK hard reset failed (non-fatal)');
     }
+  }
+
+  /**
+   * Tear down a half-added project after `addProject()` failed past the point
+   * where the entry became visible in the map (TRA-1843).
+   *
+   * Before this, ANY setup failure past `projects.set()` (a wedged native
+   * `watcher.subscribe()` most notably) left a ghost behind: status
+   * `indexing`, DB open, initial index queued, holder mark announced. The
+   * ghost pinned `projects_indexing`/`sweep_busy` forever with zero pipeline
+   * output, and — while stuck inside `watcher.start()` — held a
+   * `loadAllRegistered` setup slot, so the remaining eager projects never
+   * even started and `/health` reported `starting` indefinitely.
+   *
+   * Unlike `stopProject()`, this never waits on the watcher op queue or the
+   * initial-index chain: the watcher never finished starting (a late native
+   * subscribe is dropped by the watcher itself), and the queued index
+   * observes `indexAbortController` at its next boundary and bails on its
+   * own — awaiting either here could re-wedge startup on the same hang this
+   * cleans up after. Every step is best-effort so cleanup never throws a
+   * second error masking the original setup failure. The on-disk registry row
+   * is untouched, so the project retries lazily on its next request (same as
+   * the idle-unload path).
+   */
+  private async abortAddProject(managed: ManagedProject): Promise<void> {
+    const root = managed.root;
+    try {
+      managed.indexAbortController?.abort();
+    } catch {
+      /* abort() never throws; defensive */
+    }
+    try {
+      managed.cancelDebouncedAI?.();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      managed.lspEnricher?.cancel();
+    } catch {
+      /* non-fatal */
+    }
+    // Terminal unsubscribe without draining: nothing was ever served, and the
+    // op queue below a wedged subscribe is exactly what must not be awaited.
+    try {
+      await managed.watcher.unsubscribe();
+    } catch {
+      /* non-fatal — the map entry is dropped below regardless */
+    }
+    try {
+      clearServerPid(managed.db);
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      managed.serverHandle.dispose();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      await managed.server.close();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      await managed.pipeline.dispose();
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      managed.db.close();
+    } catch {
+      /* non-fatal — worst case the handle is reclaimed with the process */
+    }
+    try {
+      releaseDbHoldersForRoot(root);
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      this.sharedPool?.dropProject(root);
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      dropTreeCacheScope(root);
+    } catch {
+      /* non-fatal */
+    }
+    try {
+      this.resourcePool?.disposeProject(root);
+    } catch {
+      /* non-fatal */
+    }
+    if (this.projects.get(root) === managed) this.projects.delete(root);
+    clearProjectStopping(root);
+    clearProjectReindexCache(root);
+    logger.warn(
+      { projectRoot: root },
+      'Project load failed mid-setup — tore down half-added entry so it retries lazily (TRA-1843)',
+    );
   }
 
   /**
@@ -1451,6 +1589,63 @@ export class ProjectManager {
     out.evictable = candidates.size;
     out.fresh = evictableList.length - candidates.size;
     return out;
+  }
+
+  /**
+   * Projects stuck in `starting`/`indexing` longer than `thresholdMs`
+   * (TRA-1843). Read-only: never changes status or unloads anything — a slow
+   * bulk index is indistinguishable from a wedged one at this level, so the
+   * stall only ever surfaces as a log line via `warnOnIndexingStalls()`.
+   * Entries without `indexingStartedAt` (predate the field) are skipped: with
+   * no entry timestamp a stall duration cannot be proven.
+   */
+  getStalledIndexing(
+    thresholdMs: number = INDEXING_STALL_WARN_MS,
+    now: number = Date.now(),
+  ): Array<{ root: string; status: ManagedProject['status']; stalledMs: number }> {
+    const out: Array<{ root: string; status: ManagedProject['status']; stalledMs: number }> = [];
+    for (const managed of this.projects.values()) {
+      if (managed.status !== 'starting' && managed.status !== 'indexing') continue;
+      if (managed.indexingStartedAt === undefined) continue;
+      const stalledMs = now - managed.indexingStartedAt;
+      if (stalledMs >= thresholdMs)
+        out.push({ root: managed.root, status: managed.status, stalledMs });
+    }
+    return out;
+  }
+
+  /**
+   * Log one warn per stalled-indexing episode (see `getStalledIndexing`).
+   * Called from the daemon vitals tick, so without the latch a wedged project
+   * would log every 60s for the daemon's whole life. Returns the currently
+   * stalled list for the vitals/health callers that want it.
+   */
+  warnOnIndexingStalls(thresholdMs: number = INDEXING_STALL_WARN_MS): Array<{
+    root: string;
+    status: ManagedProject['status'];
+    stalledMs: number;
+  }> {
+    const stalled = this.getStalledIndexing(thresholdMs);
+    const stillStalled = new Set(stalled.map((s) => s.root));
+    // Episode pruning first: a root that left indexing (ready/error/unloaded)
+    // re-arms its warn, so a re-stall reads as a new episode, not silence.
+    for (const root of [...this.warnedStallRoots]) {
+      if (!stillStalled.has(root)) this.warnedStallRoots.delete(root);
+    }
+    for (const s of stalled) {
+      if (this.warnedStallRoots.has(s.root)) continue;
+      this.warnedStallRoots.add(s.root);
+      logger.warn(
+        {
+          projectRoot: s.root,
+          status: s.status,
+          stalledSec: Math.round(s.stalledMs / 1000),
+          thresholdSec: Math.round(thresholdMs / 1000),
+        },
+        'Project stuck indexing for a long time — still starting/indexing with no completion (TRA-1843)',
+      );
+    }
+    return stalled;
   }
 
   /**
