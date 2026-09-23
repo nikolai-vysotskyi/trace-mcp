@@ -18,6 +18,7 @@ import type { DetectedFramework, PackageManagerInfo } from '../init/types.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
+import { deleteDbFamily } from '../utils/db-family.js';
 import {
   findOverlapForNewRoot,
   findParentProject,
@@ -147,9 +148,10 @@ async function handleMultiRoot(
   const cleaned: string[] = [];
   for (const proj of allProjects) {
     if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(`${parentDir}/`)) {
-      // Delete child's DB file
+      // Delete child's DB file + its whole family (TRA-1864: a bare unlink
+      // of the base .db strands WAL/SHM sidecars as orphans).
       if (fs.existsSync(proj.dbPath)) {
-        fs.unlinkSync(proj.dbPath);
+        deleteDbFamily(proj.dbPath);
       }
       unregisterProject(proj.root);
       removeProjectConfig(proj.root);
