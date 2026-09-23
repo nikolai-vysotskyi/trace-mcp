@@ -19,7 +19,7 @@ export const OutputFormatSchema = z
   .enum(['json', 'markdown', 'toon'])
   .optional()
   .describe(
-    'Output format. "json" (default), "markdown" (LLM-friendly fenced markdown, tool-specific), or "toon" (Token-Oriented Object Notation — 30-60% fewer tokens on tabular data, lossless).',
+    'Output format: "json" (default), "markdown" (tool-specific), or "toon" (30-60% fewer tokens on tabular data).',
   );
 
 export function isToonRequested(format: unknown): format is 'toon' {

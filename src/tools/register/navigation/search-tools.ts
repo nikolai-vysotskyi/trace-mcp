@@ -94,7 +94,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .enum(['auto', 'on', 'off', 'only'])
         .optional()
         .describe(
-          'auto (default): hybrid if AI available. on: force hybrid. off: lexical-only. only: pure vector. Non-"off" needs an AI provider + one embed_repo run.',
+          'auto (default): hybrid if AI available. on: force hybrid. off: lexical-only. only: pure vector. Non-"off" needs an AI provider.',
         ),
       semantic_weight: z
         .number()
@@ -111,7 +111,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe(
-          'Enable Signal Fusion — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity match. Weights come from `tune_weights`.',
+          'Enable Signal Fusion — WRR ranking across lexical, structural, similarity, and identity channels. Weights come from `tune_weights`.',
         ),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
@@ -119,7 +119,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .enum(RETRIEVAL_MODES)
         .optional()
         .describe(
-          'single (default): top-K. tiered: high/medium/low buckets. drill: scoped to drill_from. flat: raw FTS, no PageRank. get: exact lookup. Omit to auto-pick.',
+          'single (default): top-K. tiered: high/medium/low buckets. drill: scoped to drill_from. flat: raw FTS. get: exact lookup. Omit to auto-pick.',
         ),
       drill_from: z
         .string()
@@ -130,7 +130,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .enum(SEARCH_MODE_NAMES)
         .optional()
         .describe(
-          'Run one named retrieval algorithm instead of the mode dispatcher. Ignores mode/filters/fuzzy/fusion; returns { retriever, items, total }.',
+          'Run one named retrieval algorithm instead of the mode dispatcher. Ignores mode/filters/fuzzy/fusion.',
         ),
       detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
