@@ -26,6 +26,19 @@ function recencyOf(entry: RegistryEntry): number {
  * Split registered projects into the ones to load at boot and the ones to
  * leave for lazy load. `cap <= 0` disables the cap (loads everything, the
  * pre-TRA-278 behaviour).
+ *
+ * TRA-1863: a multi-root parent (e.g. `thewed`) intentionally watches its
+ * declared children's subtrees too — `registeredDescendantRoots()` excludes
+ * declared children from the ancestor's ignore list, so every edit under a
+ * child double-indexes while the parent is resident. When recency ranking
+ * puts the parent inside the cap but a registered child outside it, the
+ * child has no watcher of its own, its DB rots, and query routing
+ * (`resolveDeepestKnownRoot` prefers the deepest root) keeps serving that
+ * stale child DB. So an eager multi-root parent pulls its still-deferred
+ * REGISTERED declared children into the eager set with it — one logical
+ * unit stays co-resident. The cap may be exceeded by the size of the family;
+ * it remains a soft startup budget (the idle-unload sweep still enforces
+ * `daemon_eager_load_projects` as the steady-state ceiling afterwards).
  */
 export function selectEagerLoadRoots(
   entries: RegistryEntry[],
@@ -33,5 +46,19 @@ export function selectEagerLoadRoots(
 ): { eager: RegistryEntry[]; deferred: RegistryEntry[] } {
   if (cap <= 0 || entries.length <= cap) return { eager: entries, deferred: [] };
   const ranked = [...entries].sort((a, b) => recencyOf(b) - recencyOf(a));
-  return { eager: ranked.slice(0, cap), deferred: ranked.slice(cap) };
+  const eager = ranked.slice(0, cap);
+  const deferred = ranked.slice(cap);
+  const eagerRoots = new Set(eager.map((e) => e.root));
+  const deferredByRoot = new Map(deferred.map((e) => [e.root, e]));
+  for (const parent of eager) {
+    if (parent.type !== 'multi-root') continue;
+    for (const childRoot of parent.children ?? []) {
+      const child = deferredByRoot.get(childRoot);
+      if (!child) continue;
+      deferredByRoot.delete(childRoot);
+      eagerRoots.add(childRoot);
+      eager.push(child);
+    }
+  }
+  return { eager, deferred: deferred.filter((e) => !eagerRoots.has(e.root)) };
 }
