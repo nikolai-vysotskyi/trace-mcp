@@ -183,6 +183,7 @@ import { scanSecurity } from './tools/quality/security-scan.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
+import { sweepOrphanDbSidecars } from './utils/db-family.js';
 import { EventLoopLagMonitor } from './utils/event-loop.js';
 import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
@@ -452,6 +453,25 @@ function softGcSweep(): void {
     }
   } catch (err) {
     logger.warn({ err }, 'pruneStaleDecisions soft-prune failed (non-fatal)');
+  }
+
+  // TRA-1864: stem-less WAL/SHM/journal sidecars (and snapshots) whose `.db`
+  // is gone — the ~1.5 GB legacy pile of pre-TRA-1136 top-level ephemeral
+  // DBs, plus any future bare-`unlinkSync` regression. No age gate: a sidecar
+  // without its stem DB is never a live run (SQLite creates the main file
+  // first), and a live holder vetoes deletion. Runs here so daemon startup
+  // and the hourly pass both collect them, not just `prune --apply`.
+  try {
+    const { deleted, freedBytes } = sweepOrphanDbSidecars();
+    if (deleted.length > 0) {
+      const freedMb = Math.round(freedBytes / 1_048_576);
+      logger.info(
+        { deletedFiles: deleted.length, freedMb },
+        `Removed ${deleted.length} orphaned index-DB sidecar(s) (${freedMb} MB freed)`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'sweepOrphanDbSidecars soft-prune failed (non-fatal)');
   }
 }
 

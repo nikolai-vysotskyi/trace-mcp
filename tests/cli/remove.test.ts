@@ -17,8 +17,9 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>();
   return {
     ...actual,
-    default: { ...actual, existsSync: vi.fn(), unlinkSync: vi.fn() },
+    default: { ...actual, existsSync: vi.fn(), statSync: vi.fn(), unlinkSync: vi.fn() },
     existsSync: vi.fn(),
+    statSync: vi.fn(),
     unlinkSync: vi.fn(),
   };
 });
@@ -63,6 +64,7 @@ const { removeProjectConfig } = await import('../../src/config.js');
 const p = await import('@clack/prompts');
 
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockStatSync = vi.mocked(fs.statSync);
 const mockUnlinkSync = vi.mocked(fs.unlinkSync);
 const mockFindProjectRoot = vi.mocked(findProjectRoot);
 const mockFindParentProject = vi.mocked(findParentProject);
@@ -80,6 +82,7 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.clearAllMocks();
   mockExistsSync.mockReturnValue(true);
+  mockStatSync.mockReturnValue({ size: 1024, mtimeMs: 0 } as fs.Stats);
   mockFindParentProject.mockReturnValue(null);
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -142,6 +145,9 @@ describe('remove — single project', () => {
 
     expect(p.confirm).not.toHaveBeenCalled();
     expect(mockUnlinkSync).toHaveBeenCalledWith(entry.dbPath);
+    // TRA-1864: the whole DB family goes, not just the base .db.
+    expect(mockUnlinkSync).toHaveBeenCalledWith(`${entry.dbPath}-wal`);
+    expect(mockUnlinkSync).toHaveBeenCalledWith(`${entry.dbPath}-shm`);
     expect(mockRemoveProjectConfig).toHaveBeenCalledWith(entry.root);
     expect(mockUnregisterProject).toHaveBeenCalledWith(entry.root);
 

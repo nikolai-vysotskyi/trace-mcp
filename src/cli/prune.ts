@@ -30,7 +30,7 @@ import {
   TRACE_MCP_HOME,
 } from '../global.js';
 import { logger } from '../logger.js';
-import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
+import { hasLiveHolderOrUnknown } from '../db-holders.js';
 import {
   findEphemeralProjects,
   listProjects,
@@ -46,6 +46,7 @@ import {
   findOrphanTmpFilesUnderHome,
   sweepOrphanTmpFilesUnderHome,
 } from '../utils/atomic-write.js';
+import { deleteDbFamily, findOrphanDbSidecars, sweepOrphanDbSidecars } from '../utils/db-family.js';
 
 /** Categories assigned to each DB candidate. */
 export type PruneCategory =
@@ -303,27 +304,10 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
   return candidates;
 }
 
-/** Delete a base DB + its sidecars, swallowing ENOENT. */
+/** Delete a base DB + its whole family via the shared helper (TRA-1864). */
 function unlinkDb(basePath: string): { deleted: string[]; bytes: number } {
-  const deleted: string[] = [];
-  let bytes = 0;
-  // Nothing holds a DB that no longer exists (TRA-304).
-  removeHoldersDir(basePath);
-  for (const suffix of SQLITE_SIDECARS) {
-    const full = basePath + suffix;
-    try {
-      const stat = fs.statSync(full);
-      fs.unlinkSync(full);
-      deleted.push(full);
-      bytes += stat.size;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') {
-        logger.warn({ err, file: full }, 'prune: unlink failed');
-      }
-    }
-  }
-  return { deleted, bytes };
+  const { deleted, freedBytes } = deleteDbFamily(basePath);
+  return { deleted, bytes: freedBytes };
 }
 
 /** Run the full prune algorithm. Idempotent. */
@@ -631,6 +615,19 @@ export const pruneCommand = new Command('prune')
       // Orphan atomic-write tmp files in state directories
       const tmpFilesSummary = scanOrPruneTmpFiles(apply);
 
+      // TRA-1864: stem-less WAL/SHM/journal sidecars (+ snapshots) whose
+      // `.db` is gone. `scanIndexDir` above only walks base `.db` files, so
+      // without this these orphans are invisible to every other category.
+      // Dry-run lists them; --apply deletes.
+      const orphanFound = apply ? [] : findOrphanDbSidecars();
+      const orphanSwept = apply ? sweepOrphanDbSidecars() : { deleted: [], freedBytes: 0 };
+      const orphanSidecarBytes = apply
+        ? orphanSwept.freedBytes
+        : orphanFound.reduce((n, g) => n + g.bytes, 0);
+      const orphanSidecarCount = apply
+        ? orphanSwept.deleted.length
+        : orphanFound.reduce((n, g) => n + g.files.length, 0);
+
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -665,6 +662,11 @@ export const pruneCommand = new Command('prune')
               tmpFiles: {
                 staleTmpFiles: tmpFilesSummary.staleTmpFiles,
                 removedTmpFiles: tmpFilesSummary.removedTmpFiles,
+              },
+              orphanSidecars: {
+                count: orphanSidecarCount,
+                freedBytes: orphanSidecarBytes,
+                deleted: orphanSwept.deleted,
               },
             },
             null,
@@ -748,6 +750,19 @@ export const pruneCommand = new Command('prune')
           : `${tmpFilesSummary.staleTmpFiles.length} orphaned atomic write .tmp file(s) — would remove:`;
         const list = apply ? tmpFilesSummary.removedTmpFiles : tmpFilesSummary.staleTmpFiles;
         p.note([heading, ...list.map((f) => `  ${shortPath(f)}`)].join('\n'), 'Orphan Tmp Files');
+      }
+      if (orphanSidecarCount > 0) {
+        const heading = apply
+          ? `Removed ${orphanSwept.deleted.length} orphaned index-DB sidecar(s) (WAL/SHM without a DB, ${fmtBytes(orphanSwept.freedBytes)} freed):`
+          : `${orphanSidecarCount} orphaned index-DB sidecar(s) (WAL/SHM without a DB, ${fmtBytes(orphanSidecarBytes)}) — would remove:`;
+        const list = apply
+          ? orphanSwept.deleted.slice(0, 10)
+          : orphanFound.flatMap((g) => g.files).slice(0, 10);
+        const lines = [heading, ...list.map((f) => `  ${shortPath(f)}`)];
+        if (orphanSidecarCount > 10) {
+          lines.push(`  ... and ${orphanSidecarCount - 10} more`);
+        }
+        p.note(lines.join('\n'), 'Orphan Sidecars');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');

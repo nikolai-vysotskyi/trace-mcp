@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
+import { DB_FAMILY_SUFFIXES } from '../utils/db-family.js';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
 import { getProject, isEphemeralProjectRoot, listProjects } from '../registry.js';
@@ -59,8 +60,8 @@ export interface RemoveArtifactsOptions {
   keepDbFiles?: boolean;
 }
 
-/** SQLite sidecars that may exist next to a `.db` file. */
-const SQLITE_SIDECARS = ['', '-wal', '-shm', '-journal'] as const;
+/** SQLite sidecars that may exist next to a `.db` file (TRA-1864: shared list). */
+const SQLITE_SIDECARS = DB_FAMILY_SUFFIXES;
 
 function tryUnlink(file: string): { deleted: boolean; bytes: number; error?: string } {
   try {

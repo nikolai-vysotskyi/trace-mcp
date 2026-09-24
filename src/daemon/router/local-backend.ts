@@ -36,6 +36,7 @@ import { createServer, type ServerHandle } from '../../server/server.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
+import { deleteDbFamily } from '../../utils/db-family.js';
 import { BackgroundLspEnricher } from '../../lsp/background-enricher.js';
 import { serializeError } from '../log-error.js';
 import { createLightweightProjectRelay } from '../project-relay.js';
@@ -778,14 +779,9 @@ export class LocalBackend implements Backend {
       } catch {
         /* best-effort */
       }
-      // Delete session-specific temp DB and its WAL/SHM companions.
-      for (const suffix of ['', '-wal', '-shm']) {
-        try {
-          fs.unlinkSync(this.dbPath + suffix);
-        } catch {
-          /* may not exist */
-        }
-      }
+      // Delete session-specific temp DB and its whole family (TRA-1864:
+      // the old ['', '-wal', '-shm'] loop stranded -journal/snapshot/holders).
+      deleteDbFamily(this.dbPath);
       this.db = null;
       this.store = null;
       this.handle = null;

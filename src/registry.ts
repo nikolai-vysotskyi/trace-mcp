@@ -19,11 +19,11 @@ import {
   hasLiveHolder,
   hasLiveHolderOrUnknown,
   releaseDbHolder,
-  removeHoldersDir,
 } from './db-holders.js';
 import { initializeGuard } from './guard-init.js';
 import { isDangerousProjectRoot } from './dangerous-root.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+import { DB_FAMILY_SUFFIXES, deleteDbFamily } from './utils/db-family.js';
 import { readIfExists } from './utils/safe-fs.js';
 
 export interface RegistryEntry {
@@ -744,7 +744,9 @@ export function sweepImplicitProjects(max = MAX_IMPLICIT_PROJECTS): string[] {
 // only 87 live DBs remained. It also counts as activity in the mtime clock
 // below: a freshly rewritten snapshot means a live watcher still walks that
 // root, even if the DB file itself hasn't been touched.
-const MISSING_ROOT_SIDECARS = ['', '-wal', '-shm', '-journal', '.watcher-snapshot'] as const;
+//
+// TRA-1864: the family list lives in `utils/db-family.ts` (`DB_FAMILY_SUFFIXES`)
+// next to the whole-family deleter, so the two cannot drift apart again.
 
 export interface MissingRootSweepResult {
   /** Roots removed (grace period elapsed) — their DBs were also deleted. */
@@ -781,13 +783,7 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
         (other) => other.dbPath === entry.dbPath,
       );
       if (entry.dbPath && !sharedWithSibling && !hasLiveHolderOrUnknown(entry.dbPath, root)) {
-        for (const suffix of MISSING_ROOT_SIDECARS) {
-          try {
-            fs.unlinkSync(entry.dbPath + suffix);
-          } catch {
-            /* missing sidecar or already gone — fine */
-          }
-        }
+        deleteDbFamily(entry.dbPath);
       }
       continue;
     }
@@ -838,13 +834,7 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
     );
     if (sharedWithSibling || hasLiveHolderOrUnknown(entry.dbPath, root)) continue;
 
-    for (const suffix of MISSING_ROOT_SIDECARS) {
-      try {
-        fs.unlinkSync(entry.dbPath + suffix);
-      } catch {
-        /* missing sidecar or already gone — fine */
-      }
-    }
+    deleteDbFamily(entry.dbPath);
   }
 
   if (changed) saveRegistry(reg);
@@ -878,7 +868,7 @@ export function sweepEphemeralDbs(maxAgeHours = 24): string[] {
     if (!file.endsWith('.db')) continue;
     const base = path.join(EPHEMERAL_INDEX_DIR, file);
     let newestMtime = 0;
-    for (const suffix of MISSING_ROOT_SIDECARS) {
+    for (const suffix of DB_FAMILY_SUFFIXES) {
       try {
         newestMtime = Math.max(newestMtime, fs.statSync(base + suffix).mtimeMs);
       } catch {
@@ -888,14 +878,7 @@ export function sweepEphemeralDbs(maxAgeHours = 24): string[] {
     if (newestMtime === 0 || newestMtime >= cutoff) continue;
     if (hasLiveHolderOrUnknown(base)) continue;
 
-    for (const suffix of MISSING_ROOT_SIDECARS) {
-      try {
-        fs.unlinkSync(base + suffix);
-      } catch {
-        /* absent sidecar or already gone — fine */
-      }
-    }
-    removeHoldersDir(base);
+    deleteDbFamily(base);
     removed.push(base);
   }
 

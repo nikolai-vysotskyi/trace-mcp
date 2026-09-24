@@ -38,6 +38,7 @@ import {
   modifyGlobalConfigJsonc,
   readGlobalConfigText,
 } from '../config-jsonc.js';
+import { deleteDbFamily } from '../utils/db-family.js';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { loadConfig, removeProjectConfig, saveProjectConfig } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
@@ -928,7 +929,8 @@ async function registerMultiRootProject(
   const parentPrefix = parentDir + path.sep;
   for (const proj of allProjects) {
     if (proj.root !== parentDir && proj.root.startsWith(parentPrefix)) {
-      if (fs.existsSync(proj.dbPath)) fs.unlinkSync(proj.dbPath);
+      // Whole family, not just the base .db (TRA-1864: stranded WAL/SHM).
+      if (fs.existsSync(proj.dbPath)) deleteDbFamily(proj.dbPath);
       unregisterProject(proj.root);
       removeProjectConfig(proj.root);
     }
