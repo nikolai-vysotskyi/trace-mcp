@@ -4,6 +4,7 @@ import picomatch from 'picomatch';
 import type { FileRow, Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { validatePath } from '../../utils/security.js';
+import { isEnvFile } from '../../utils/source-reader.js';
 
 interface SearchTextMatch {
   file: string;
@@ -101,6 +102,13 @@ export function searchText(
     const isMatch = picomatch(filePattern, { dot: true });
     files = files.filter((f) => isMatch(f.path));
   }
+
+  // TRA-1890: .env files hold secrets and are keys-only by design
+  // (key discovery lives in get_env_vars). Raw full-text search must never
+  // read them — not on key match, value-substring match, or context lines.
+  // The language gate catches indexed env files; the basename gate catches
+  // `*.env` shapes indexed under another language.
+  files = files.filter((f) => f.language !== 'env' && !isEnvFile(f.path));
 
   const matches: SearchTextMatch[] = [];
   let totalMatches = 0;
