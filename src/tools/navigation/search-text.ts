@@ -211,7 +211,7 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const ENV_BASENAME_RE = /^\.env(\..+)?$/;
+const ENV_BASENAME_RE = /^\.env(\..+)?$|\.env$/;
 
 /**
  * True for rows that may carry secret values: indexed with the `env`

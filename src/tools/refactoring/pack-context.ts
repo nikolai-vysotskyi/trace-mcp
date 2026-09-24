@@ -396,7 +396,7 @@ export function packContext(
 
 // --- Helpers ---
 
-const ENV_BASENAME_RE = /^\.env(\..+)?$/;
+const ENV_BASENAME_RE = /^\.env(\..+)?$|\.env$/;
 
 interface ScopeFile {
   id: number;

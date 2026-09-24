@@ -80,6 +80,53 @@ describe('env secret redaction (TRA-1889)', () => {
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().matches).toHaveLength(0);
     });
+
+    it('redacts *.env-suffixed files even when the row language is not env', () => {
+      const store2 = createTestStore();
+      fs.writeFileSync(path.join(tmpDir, 'config.env'), `TOKEN=${SENTINEL_VALUE}\n`);
+      store2.insertFile('config.env', 'plaintext', 'h-cfg', 100);
+      const result = searchText(store2, tmpDir, { query: SENTINEL_VALUE });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().matches).toHaveLength(0);
+    });
+
+    it('never leaks spaced assignments (KEY = value)', () => {
+      const store2 = createTestStore();
+      fs.writeFileSync(path.join(tmpDir, '.env'), `SPACED_KEY = ${SENTINEL_VALUE}\n`);
+      store2.insertFile('.env', 'env', 'h-spaced', 100);
+      const byValue = searchText(store2, tmpDir, { query: SENTINEL_VALUE });
+      expect(byValue.isOk()).toBe(true);
+      expect(byValue._unsafeUnwrap().matches).toHaveLength(0);
+      // The key stays findable, redacted.
+      const byKey = searchText(store2, tmpDir, { query: 'SPACED_KEY' });
+      expect(byKey.isOk()).toBe(true);
+      const data = byKey._unsafeUnwrap();
+      expect(data.matches.length).toBeGreaterThan(0);
+      expect(JSON.stringify(data)).not.toContain(SENTINEL_VALUE);
+    });
+
+    it('never leaks multiline PEM bodies, including =-padded lines', () => {
+      const store2 = createTestStore();
+      const bodyLine = 'TUlJRsYWtlLWJvZHktZnJhZ21lbnQtbGluZTAxPT0=';
+      fs.writeFileSync(
+        path.join(tmpDir, '.env'),
+        [
+          'RSA_KEY=-----BEGIN FAKE RSA PRIVATE KEY-----',
+          bodyLine,
+          'TUlJRsYWtlLWJvZHktZnJhZ21lbnQtbGluZTAy',
+          '-----END FAKE RSA PRIVATE KEY-----',
+          '',
+        ].join('\n'),
+      );
+      store2.insertFile('.env', 'env', 'h-pem', 200);
+      for (const query of [bodyLine, 'TUlJRsYWtlLWJvZHktZnJhZ21lbnQtbGluZTAy', 'BEGIN FAKE RSA']) {
+        const result = searchText(store2, tmpDir, { query, contextLines: 3 });
+        expect(result.isOk()).toBe(true);
+        const data = result._unsafeUnwrap();
+        expect(JSON.stringify(data)).not.toContain('TUlJRsYWtl');
+        expect(JSON.stringify(data)).not.toContain('BEGIN FAKE');
+      }
+    });
   });
 
   describe('packContext source section', () => {
@@ -135,6 +182,31 @@ describe('env secret redaction (TRA-1889)', () => {
       expect(result.content).not.toContain(SENTINEL_VALUE);
       // Keys + structure stay visible — the section is redacted, not dropped.
       expect(result.content).toContain('API_KEY');
+    });
+
+    it('masks multiline PEM bodies in source (not just single-line values)', () => {
+      const bodyLine = 'TUlJRsYWtlLWJvZHktcGFja2NvbnRleHQwMT09';
+      fs.writeFileSync(
+        path.join(tmpDir, '.env'),
+        [
+          'RSA_KEY=-----BEGIN FAKE RSA PRIVATE KEY-----',
+          bodyLine,
+          '-----END FAKE RSA PRIVATE KEY-----',
+          '',
+        ].join('\n'),
+      );
+      const result = packContext(createPackStore(), createMockRegistry(), {
+        scope: 'project',
+        format: 'markdown',
+        maxTokens: 50000,
+        include: ['source'],
+        compress: false,
+        projectRoot: tmpDir,
+      });
+      expect(result.sections).toContain('source');
+      expect(result.content).not.toContain('TUlJRsYWtl');
+      expect(result.content).not.toContain('BEGIN FAKE');
+      expect(result.content).toContain('RSA_KEY');
     });
   });
 
