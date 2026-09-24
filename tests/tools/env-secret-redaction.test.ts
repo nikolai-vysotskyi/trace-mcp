@@ -2,6 +2,11 @@
  * TRA-1889 regression: secret values in indexed .env files must never leak
  * through searchText, packContext (source section), or scanNonCodeFiles.
  *
+ * searchText and scanNonCodeFiles exclude .env files entirely (TRA-1890,
+ * merged); packContext emits the redacted view (keys + type hints).
+ * The spaced-assignment and PEM cases below guard the shared
+ * redactEnvFile hardening that packContext (and source-reader) rely on.
+ *
  * All sentinel values below are fake — no live secrets anywhere in this file.
  */
 import fs from 'node:fs';
@@ -66,13 +71,12 @@ describe('env secret redaction (TRA-1889)', () => {
       const blob = JSON.stringify(data);
       expect(blob).not.toContain(SENTINEL_VALUE);
       expect(blob).not.toContain(SENTINEL_DB_URL);
-      // The key itself stays findable (redacted view), not silently dropped.
-      expect(data.matches.length).toBeGreaterThan(0);
-      expect(data.matches[0].file).toBe('.env');
-      expect(data.matches[0].match).toContain('API_KEY');
+      // TRA-1890 (merged): search_text excludes .env files entirely —
+      // key discovery lives in get_env_vars. No .env matches at all.
+      expect(data.matches.every((m) => m.file !== '.env')).toBe(true);
     });
 
-    it('redacts dotenv basenames even when the row language is not env', () => {
+    it('excludes dotenv basenames even when the row language is not env', () => {
       const store2 = createTestStore();
       fs.writeFileSync(path.join(tmpDir, '.env.local'), `TOKEN=${SENTINEL_VALUE}\n`);
       store2.insertFile('.env.local', 'plaintext', 'h-local', 100);
@@ -81,7 +85,7 @@ describe('env secret redaction (TRA-1889)', () => {
       expect(result._unsafeUnwrap().matches).toHaveLength(0);
     });
 
-    it('redacts *.env-suffixed files even when the row language is not env', () => {
+    it('excludes *.env-suffixed files even when the row language is not env', () => {
       const store2 = createTestStore();
       fs.writeFileSync(path.join(tmpDir, 'config.env'), `TOKEN=${SENTINEL_VALUE}\n`);
       store2.insertFile('config.env', 'plaintext', 'h-cfg', 100);
@@ -97,11 +101,11 @@ describe('env secret redaction (TRA-1889)', () => {
       const byValue = searchText(store2, tmpDir, { query: SENTINEL_VALUE });
       expect(byValue.isOk()).toBe(true);
       expect(byValue._unsafeUnwrap().matches).toHaveLength(0);
-      // The key stays findable, redacted.
+      // Excluded, not redacted (TRA-1890): even a key query returns no .env match.
       const byKey = searchText(store2, tmpDir, { query: 'SPACED_KEY' });
       expect(byKey.isOk()).toBe(true);
       const data = byKey._unsafeUnwrap();
-      expect(data.matches.length).toBeGreaterThan(0);
+      expect(data.matches.every((m) => m.file !== '.env')).toBe(true);
       expect(JSON.stringify(data)).not.toContain(SENTINEL_VALUE);
     });
 
@@ -211,24 +215,20 @@ describe('env secret redaction (TRA-1889)', () => {
   });
 
   describe('scanNonCodeFiles', () => {
-    it('redacts values when the renamed symbol is a key', () => {
+    it('never emits .env lines for a renamed key (excluded, TRA-1890)', () => {
       fs.writeFileSync(
         path.join(tmpDir, '.env'),
         [`OLD_KEY_NAME=${SENTINEL_VALUE}`, `OTHER=plain`, ''].join('\n'),
       );
       const mentions = scanNonCodeFiles(tmpDir, 'OLD_KEY_NAME', 'NEW_KEY_NAME');
-      expect(mentions.length).toBeGreaterThan(0);
-      const blob = JSON.stringify(mentions);
-      expect(blob).not.toContain(SENTINEL_VALUE);
-      // Line numbers stay accurate (redaction preserves line layout).
-      expect(mentions[0].line).toBe(1);
-      expect(mentions[0].suggestion).toContain('NEW_KEY_NAME');
+      expect(mentions.every((m) => m.file !== '.env')).toBe(true);
+      expect(JSON.stringify(mentions)).not.toContain(SENTINEL_VALUE);
     });
 
     it('reports no raw value when the symbol only appears inside a value', () => {
       fs.writeFileSync(path.join(tmpDir, '.env'), `SOME_KEY=prefix-OLD_TOKEN-suffix\n`);
       const mentions = scanNonCodeFiles(tmpDir, 'OLD_TOKEN', 'NEW_TOKEN');
-      // After redaction the value is `<string>` — nothing left to match,
+      // .env is out of scope for the scanner — nothing to match,
       // and critically the raw value never reaches the output.
       expect(JSON.stringify(mentions)).not.toContain('prefix-OLD_TOKEN-suffix');
     });
