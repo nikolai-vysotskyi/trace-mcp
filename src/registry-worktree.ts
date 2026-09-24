@@ -19,7 +19,9 @@
  * Mirrors jcodemunch v1.82.0 canonical-candidates behavior.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
+import { getProjectRemoteIdentity } from './global.js';
 import { logger } from './logger.js';
 import { listProjects, type RegistryEntry, resolveRegisteredAncestor } from './registry.js';
 import { probeWorktree, type WorktreeProbe } from './utils/git-worktree.js';
@@ -28,7 +30,7 @@ export interface CanonicalCandidate {
   /** The registered project that shares the worktree's common-dir. */
   entry: RegistryEntry;
   /** Why we proposed this — useful for the user-facing hint. */
-  rationale: 'shared_git_common_dir' | 'main_worktree_match';
+  rationale: 'shared_git_common_dir' | 'main_worktree_match' | 'same_remote';
 }
 
 export interface WorktreeResolveResult {
@@ -118,10 +120,49 @@ export function resolveWorktreeAware(requestedRoot: string): WorktreeResolveResu
   // Main worktree first, then alphabetical by name for determinism.
   candidates.sort((a, b) => {
     if (a.rationale !== b.rationale) {
-      return a.rationale === 'main_worktree_match' ? -1 : 1;
+      const rank = (r: CanonicalCandidate['rationale']): number =>
+        r === 'main_worktree_match' ? 0 : r === 'shared_git_common_dir' ? 1 : 2;
+      return rank(a.rationale) - rank(b.rationale);
     }
     return a.entry.name.localeCompare(b.entry.name);
   });
+
+  // GH#1371 / TRA-1881: worktrees of a *bare* mirror never share a common-dir
+  // with the canonical checkout (their common dir is the bare `.git` itself,
+  // e.g. `~/.gate/repos/<id>.git`), so the probe above finds nothing and each
+  // short-lived checkout cold-indexes from scratch. Fall back to git remote
+  // identity — the same signal `registerProject` (TRA-38) uses to share one
+  // DB across checkouts of one repo. Runs even when the probe failed (no git
+  // binary, unborn bare admin dir): remote identity reads `.git/config`
+  // directly with no subprocess.
+  if (candidates.length === 0) {
+    const identity = getProjectRemoteIdentity(requestedRoot);
+    if (identity) {
+      for (const entry of listProjects()) {
+        if (path.resolve(entry.root) === path.resolve(requestedRoot)) continue;
+        // A lingering "Missing folder" row (GH#1371 residue whose dir was
+        // deleted with its parent, so boot self-heal never pruned it) still
+        // carries a cached remoteIdentity that matches — routing read traffic
+        // to a dead entry's DB. The common-dir loop above is naturally immune
+        // (probe fails on missing dirs); skip dead roots here too.
+        try {
+          if (!fs.existsSync(entry.root)) continue;
+        } catch {
+          continue;
+        }
+        let entryIdentity: string | null = null;
+        try {
+          entryIdentity = entry.remoteIdentity ?? getProjectRemoteIdentity(entry.root);
+        } catch {
+          continue;
+        }
+        if (entryIdentity === identity) {
+          candidates.push({ entry, rationale: 'same_remote' });
+        }
+      }
+      candidates.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
+    }
+  }
 
   return { direct, isLinkedWorktree: true, canonicalCandidates: candidates, probe };
 }

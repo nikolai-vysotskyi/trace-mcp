@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { saveProjectConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
-import { ensureGlobalDirs } from './global.js';
+import { ensureGlobalDirs, getAutoRegisterMode } from './global.js';
 import { generateConfig } from './init/config-generator.js';
 import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
@@ -58,16 +58,11 @@ export function setupProject(
 ): ProjectSetupResult {
   const absRoot = path.resolve(projectRoot);
 
-  const dangerReason = isDangerousProjectRoot(absRoot);
-  if (dangerReason) {
-    throw new Error(
-      `Refusing to register "${absRoot}" as a trace-mcp project: ${dangerReason}. ` +
-        `Projects must point to a specific source directory, not a system or root path. ` +
-        `This usually means an MCP client spawned trace-mcp with an unexpected working directory — ` +
-        `configure a "cwd" on the MCP server entry or run trace-mcp from inside your project folder.`,
-    );
-  }
-
+  // Already-registered roots resolve without touching any gate below: an
+  // implicit `setupProject` during daemon boot (`loadAllRegistered`), lazy
+  // reload, or a `POST /api/projects` re-add must keep working under
+  // `auto_register.mode: "never"` (GH#1371 / TRA-1881 review). Only fresh
+  // roots are subject to the mode/danger gates.
   const existing = getProject(absRoot);
   if (existing && !opts?.force) {
     // TRA-706: a deliberate `add`/`init` on an already auto-registered project
@@ -96,6 +91,30 @@ export function setupProject(
       migrated: false,
       isNew: false,
     };
+  }
+
+  // GH#1371 / TRA-1881: `auto_register.mode: "never"` (and `"ask"`, which has
+  // no interactive prompt yet) disables every *implicit* registration. Only
+  // absence of deliberate opts counts as implicit — `add`/`init` pass
+  // `explicit`, `ask` passes `force`, and both bypass this gate.
+  if (!opts?.explicit && !opts?.force) {
+    const mode = getAutoRegisterMode();
+    if (mode === 'never' || mode === 'ask') {
+      throw new Error(
+        `Auto-registration is disabled (auto_register.mode: "${mode}"). ` +
+          `Register "${absRoot}" deliberately with \`trace-mcp add\` to index it.`,
+      );
+    }
+  }
+
+  const dangerReason = isDangerousProjectRoot(absRoot);
+  if (dangerReason) {
+    throw new Error(
+      `Refusing to register "${absRoot}" as a trace-mcp project: ${dangerReason}. ` +
+        `Projects must point to a specific source directory, not a system or root path. ` +
+        `This usually means an MCP client spawned trace-mcp with an unexpected working directory — ` +
+        `configure a "cwd" on the MCP server entry or run trace-mcp from inside your project folder.`,
+    );
   }
 
   // Prevention gap (TRA-95): findOverlapForNewRoot() existed with full test
