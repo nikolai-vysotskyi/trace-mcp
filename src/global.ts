@@ -191,8 +191,12 @@ const EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN =
 /**
  * True when `root` is a one-shot agent-run checkout, in either layout the
  * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
- * {@link EPHEMERAL_TASK_DIR_PATTERN}). Such roots are never persisted to
- * registry.json — see the `_ephemeralEntries` note in registry.ts.
+ * {@link EPHEMERAL_TASK_DIR_PATTERN}), or matches a user-configured
+ * `auto_register.exclude` glob (GH#1371 / TRA-1881: throwaway worktrees,
+ * bare-mirror checkouts, /tmp clones, CI gates). Such roots are never
+ * persisted to registry.json — see the `_ephemeralEntries` note in
+ * registry.ts — and their DBs land in {@link EPHEMERAL_INDEX_DIR} via
+ * {@link getDbPath}, where age-based eviction can collect them.
  *
  * Lives here rather than in registry.ts (which re-exports it) because
  * {@link getDbPath} needs it, and global.ts must stay import-free.
@@ -202,8 +206,252 @@ export function isEphemeralProjectRoot(root: string): boolean {
   return (
     EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
     EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
-    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs)
+    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs) ||
+    isUserExcludedProjectRoot(abs)
   );
+}
+
+/**
+ * Auto-registration mode from the global config (`auto_register.mode`,
+ * GH#1371 / TRA-1881). `'always'` (default) preserves historic behavior.
+ * `'never'` disables every implicit registration; `'ask'` is accepted but
+ * currently behaves as `'never'` (no interactive prompt exists in the daemon
+ * path yet — see the `auto_register` template comment).
+ *
+ * `TRACE_MCP_AUTO_REGISTER_MODE` overrides the file when set (CI gates).
+ * Sync + cached: safe to call from registration hot paths.
+ */
+export type AutoRegisterMode = 'always' | 'never' | 'ask';
+
+export function getAutoRegisterMode(): AutoRegisterMode {
+  return readAutoRegisterConfig().mode;
+}
+
+/**
+ * True when `root` (absolute or relative) matches a user-configured
+ * `auto_register.exclude` glob. Patterns are matched against the resolved
+ * root after `~` and `$VAR`/`${VAR}` expansion (so `$TMPDIR/**`, `~/.gate/**`
+ * work). A pattern without glob magic matches the directory itself and
+ * everything under it; a trailing `/**` also matches the base directory.
+ *
+ * Extra patterns can also come from `TRACE_MCP_AUTO_REGISTER_EXCLUDE`
+ * (comma-separated, same syntax) — useful for CI gates that cannot edit the
+ * global config file.
+ */
+export function isUserExcludedProjectRoot(root: string): boolean {
+  const abs = path.resolve(root);
+  const patterns = readAutoRegisterExcludePatterns();
+  // Candidate (root, pattern) pairs: the as-given forms plus best-effort
+  // realpath variants on both sides. On macOS `/tmp` symlinks to
+  // `/private/tmp` and `path.resolve` doesn't resolve symlinks, so a `/tmp/**`
+  // pattern under-matches an already-realpath'd root (and a `/private/tmp/**`
+  // pattern under-matches a symlinked root) without this.
+  const roots = [abs];
+  try {
+    const real = fs.realpathSync(abs);
+    if (real !== abs) roots.push(real);
+  } catch {
+    /* missing dir — the abs check below already ran */
+  }
+  const allPatterns = [...patterns];
+  for (const pattern of patterns) {
+    const variant = realpathAutoRegisterPatternBase(pattern);
+    if (variant && variant !== pattern) allPatterns.push(variant);
+  }
+  for (const r of roots) {
+    for (const pattern of allPatterns) {
+      if (autoRegisterPatternMatches(r, pattern)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Best-effort realpath of the literal leading directory of an exclude glob
+ * (the part before the first `*?[{` magic, cut back to the last `/`), with
+ * the glob tail re-attached. Returns null when there is nothing to resolve
+ * (no magic, unresolvable prefix, or already canonical). Lets a `/tmp/**`
+ * pattern match a `/private/tmp/...` root and vice versa.
+ */
+function realpathAutoRegisterPatternBase(pattern: string): string | null {
+  try {
+    const expanded = expandAutoRegisterPattern(pattern);
+    const normalized = expanded.replace(/\\/g, '/');
+    const magicIdx = normalized.search(/[*?[\]{}]/);
+    if (magicIdx === -1) {
+      const real = fs.realpathSync(expanded).replace(/\\/g, '/');
+      return real !== normalized ? real : null;
+    }
+    const head = normalized.slice(0, magicIdx);
+    const slash = head.lastIndexOf('/');
+    if (slash <= 0) return null;
+    const dirHead = head.slice(0, slash) || '/';
+    const realDir = fs.realpathSync(dirHead).replace(/\\/g, '/');
+    if (realDir === dirHead) return null;
+    return realDir + normalized.slice(slash);
+  } catch {
+    return null;
+  }
+}
+
+// The `auto_register` slice of the global config. Read fresh on every call:
+// the file is tiny (~1 KB), callers are registration paths (not per-tool-call
+// hot paths), and a cache keyed on mtime+size risks serving stale excludes
+// when the file is rewritten within one timestamp tick (notably in tests).
+function readAutoRegisterConfig(): { mode: AutoRegisterMode; exclude: string[] } {
+  let mode: AutoRegisterMode = 'always';
+  let exclude: string[] = [];
+  try {
+    const rawText = fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf8');
+    const parsed: unknown = JSON.parse(stripJsonComments(rawText));
+    const section =
+      typeof parsed === 'object' && parsed !== null
+        ? (parsed as Record<string, unknown>).auto_register
+        : null;
+    if (typeof section === 'object' && section !== null) {
+      const m = (section as Record<string, unknown>).mode;
+      if (m === 'never' || m === 'ask' || m === 'always') mode = m;
+      const e = (section as Record<string, unknown>).exclude;
+      if (Array.isArray(e)) exclude = e.filter((v): v is string => typeof v === 'string');
+    }
+  } catch {
+    /* corrupt config — validate elsewhere; fall back to defaults here */
+  }
+  const envMode = (process.env.TRACE_MCP_AUTO_REGISTER_MODE ?? '').trim().toLowerCase();
+  if (envMode === 'always' || envMode === 'never' || envMode === 'ask') mode = envMode;
+  const envExclude = (process.env.TRACE_MCP_AUTO_REGISTER_EXCLUDE ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (envExclude.length > 0) exclude = [...exclude, ...envExclude];
+  return { mode, exclude };
+}
+
+function readAutoRegisterExcludePatterns(): string[] {
+  return readAutoRegisterConfig().exclude;
+}
+
+function expandAutoRegisterPattern(pattern: string): string {
+  let out = pattern.trim();
+  if (!out) return out;
+  const home = os.homedir();
+  if (out === '~' || out.startsWith('~/') || out.startsWith('~\\')) {
+    out = path.join(home, out.slice(2));
+  }
+  out = out.replace(/\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([^}]+)\}/g, (m, v1, v2) => {
+    const name: string = v1 ?? v2;
+    return process.env[name] ?? m;
+  });
+  // `$TMPDIR` on macOS ends with `/`, so `$TMPDIR/**` expands to a double
+  // slash that would never match a resolved root (`/a//b/**` vs `/a/b/c`).
+  out = out.replace(/([^:]|^)\/{2,}/g, '$1/');
+  return out;
+}
+
+function autoRegisterGlobToRegExp(glob: string): RegExp {
+  const g = glob.replace(/\\/g, '/');
+  let re = '';
+  let i = 0;
+  while (i < g.length) {
+    const c = g[i];
+    if (c === '*') {
+      if (g[i + 1] === '*') {
+        if (g[i + 2] === '/') {
+          re += '(?:.*/)?';
+          i += 3;
+        } else {
+          re += '.*';
+          i += 2;
+        }
+      } else {
+        re += '[^/]*';
+        i += 1;
+      }
+    } else if (c === '?') {
+      re += '[^/]';
+      i += 1;
+    } else if (c === '[') {
+      const close = g.indexOf(']', i + 1);
+      if (close === -1) {
+        re += '\\[';
+        i += 1;
+      } else {
+        // Glob negation `[!a]` is regex `[^a]` — without the translation the
+        // `!` compiles literally and the class matches `!`+`a` instead.
+        const body = g.slice(i, close + 1);
+        re += body.startsWith('[!') ? `[^${body.slice(2)}` : body;
+        i = close + 1;
+      }
+    } else if ('+()|^$.{}\\'.includes(c)) {
+      re += `\\${c}`;
+      i += 1;
+    } else {
+      re += c;
+      i += 1;
+    }
+  }
+  return new RegExp(`^${re}$`);
+}
+
+function autoRegisterPatternMatches(absRoot: string, rawPattern: string): boolean {
+  const expanded = expandAutoRegisterPattern(rawPattern);
+  if (!expanded) return false;
+  const isWin = process.platform === 'win32';
+  const normRoot = absRoot.replace(/\\/g, '/');
+  const normPattern = expanded.replace(/\\/g, '/');
+  const root = isWin ? normRoot.toLowerCase() : normRoot;
+  const pattern = isWin ? normPattern.toLowerCase() : normPattern;
+  const hasMagic = /[*?[\]{}]/.test(pattern);
+
+  // Bare directory without glob magic: the dir itself and everything under it.
+  if (!hasMagic) {
+    const base = pattern.replace(/\/+$/, '');
+    return root === base || root.startsWith(`${base}/`);
+  }
+
+  // Trailing /** matches the base directory itself AND everything under it
+  // (`/tmp/**` vs `/tmp`): strip it, match the base as a glob, and allow an
+  // optional `/...` suffix. Without this, `/**` compiles to `/.*` and a bare
+  // base with no trailing slash (`/tmp`) never matches.
+  let optionalSuffix = false;
+  let effective = pattern;
+  if (effective.endsWith('/**')) {
+    effective = effective.slice(0, -3);
+    optionalSuffix = true;
+  }
+  // Pattern is exactly `/**` — matches every absolute root.
+  if (optionalSuffix && (effective === '' || effective === '**')) return true;
+
+  let rx: RegExp;
+  try {
+    rx = autoRegisterGlobToRegExp(effective);
+  } catch {
+    return false;
+  }
+  if (rx.test(root)) return true;
+  if (optionalSuffix) {
+    try {
+      if (autoRegisterGlobToRegExp(`${effective}/**`).test(root)) return true;
+    } catch {
+      /* fall through to the relative-pattern check below */
+    }
+    // Base contains no magic and the checks above missed on case/edge —
+    // belt-and-braces prefix comparison (covers `/tmp/**` vs `/tmp` when the
+    // base itself is a plain directory).
+    if (!/[*?[\]{}]/.test(effective)) {
+      const base = effective.replace(/\/+$/, '');
+      if (root === base || root.startsWith(`${base}/`)) return true;
+    }
+  }
+  // Relative patterns (no leading slash / drive) match at any depth.
+  if (!pattern.startsWith('/') && !/^[a-z]:\//i.test(pattern) && !pattern.startsWith('**/')) {
+    try {
+      if (autoRegisterGlobToRegExp(`**/${pattern}`).test(root)) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
 }
 
 /**
@@ -486,6 +734,12 @@ export const DEFAULT_CONFIG_JSONC = `{
   "ignore": {
     "directories": [],                           // extra directory names to skip
     "patterns": []                               // extra gitignore-style patterns
+  },
+
+  // ── Auto-registration (throwaway checkouts) ──────────────────────
+  "auto_register": {
+    "mode": "always",                            // "always" | "never" | "ask" ("ask" currently behaves as "never"; no interactive prompt exists in the daemon path yet)
+    "exclude": []                                // extra globs for throwaway checkouts, e.g. ["~/.gate/worktrees/**", "/tmp/**", "/private/tmp/**", "$TMPDIR/**"]
   },
 
   // ── Framework-specific ───────────────────────────────────────────

@@ -23,7 +23,7 @@ import { loadConfig } from './config.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
 import { DEFAULT_DAEMON_PORT } from './global.js';
 import { attachFileLogging, logger } from './logger.js';
-import { detectGitWorktree } from './project-root.js';
+import { resolveServeRoots } from './project-root.js';
 import { resolveDbPath } from './registry.js';
 import { parsePresetArg } from './server/tool-filter.js';
 
@@ -36,12 +36,14 @@ async function main(): Promise<void> {
   const preset = parsePresetArg(process.argv);
   if (preset) process.env.TRACE_MCP_PRESET = preset;
 
-  const projectRoot = process.cwd();
-
-  // Share the main repo's index instead of building a redundant one when
-  // launched from a linked git worktree (mirrors `trace-mcp serve`).
-  const worktreeInfo = detectGitWorktree(projectRoot);
-  const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
+  // GH#1371 edge 1 / TRA-1886: honor TRACE_MCP_REPO_ROOT exactly like
+  // `trace-mcp serve` (resolveServeRoots), instead of binding to cwd.
+  // Linked git worktrees share the main repo's index rather than building a
+  // redundant one (mirrors `trace-mcp serve`).
+  const { projectRoot, indexRoot, envOverride } = resolveServeRoots();
+  if (envOverride) {
+    logger.info({ envOverride }, 'Serving TRACE_MCP_REPO_ROOT instead of cwd');
+  }
 
   // ponytail: no auto-register here (unlike `trace-mcp serve`) — the daemon
   // registers the project itself on the proxy's first request

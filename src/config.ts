@@ -384,6 +384,24 @@ const IgnoreConfigSchema = z
   })
   .prefault({});
 
+/**
+ * Auto-registration control (GH#1371 / TRA-1881).
+ *
+ * Throwaway checkouts (CI gates, bare-mirror worktrees, /tmp clones) used to
+ * auto-register as persistent projects and cold-index from scratch. `exclude`
+ * extends the built-in ephemeral patterns with user globs (matched against
+ * the resolved root after `~`/`$VAR` expansion) — excluded roots are never
+ * persisted to registry.json and their DBs live in the ephemeral index dir.
+ * `mode: "never"` disables every implicit registration (`"ask"` is accepted
+ * but currently behaves as `"never"` — no interactive prompt exists yet).
+ */
+const AutoRegisterConfigSchema = z
+  .object({
+    mode: z.enum(['always', 'never', 'ask']).default('always'),
+    exclude: z.array(z.string()).default([]),
+  })
+  .prefault({});
+
 const LspServerConfigSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).default([]),
@@ -947,6 +965,7 @@ export const TraceMcpConfigSchema = z.object({
   // ENAMETOOLONG (#218). Opt in only for trees known to be cycle-free.
   follow_symlinks: z.boolean().default(false),
   ignore: IgnoreConfigSchema,
+  auto_register: AutoRegisterConfigSchema,
   frameworks: FrameworkConfigSchema,
   ai: AiConfigSchema,
   plugins: z.array(z.string()).default([]),
@@ -1145,6 +1164,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     telemetry: TelemetryConfigSchema,
     tools: ToolsConfigSchema,
     ignore: IgnoreConfigSchema,
+    auto_register: AutoRegisterConfigSchema,
     frameworks: FrameworkConfigSchema,
     logging: z.object({
       file: z.boolean().optional(),

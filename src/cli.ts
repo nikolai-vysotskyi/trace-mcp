@@ -110,6 +110,7 @@ import {
   DEFAULT_DAEMON_PORT,
   ensureGlobalDirs,
   EPHEMERAL_INDEX_DIR,
+  getAutoRegisterMode,
   GLOBAL_CONFIG_PATH,
   INDEX_DIR,
   TOPOLOGY_DB_PATH,
@@ -581,6 +582,9 @@ program
     // Only register if findProjectRoot resolves to indexRoot itself — never climb
     // above CWD, which would accidentally register a parent directory
     // (e.g. ~/PhpstormProjects when CWD is ~/PhpstormProjects/some-project).
+    // GH#1371 / TRA-1881: `auto_register.mode: "never"` (or `"ask"`) disables
+    // this entirely — serve keeps going with defaults and an honest
+    // "not indexed" surface instead of a cold index.
     const existing = getProject(indexRoot);
     if (!existing) {
       try {
@@ -594,8 +598,14 @@ program
             'Skipped auto-register: project root is above CWD',
           );
         }
-      } catch {
-        // Not a project dir — will still try to serve with defaults
+      } catch (e) {
+        // Not a project dir — will still try to serve with defaults.
+        // setupProject() also throws here when auto_register.mode disables
+        // implicit registration — same outcome, but worth saying plainly.
+        const msg = e instanceof Error ? e.message : '';
+        if (msg.includes('Auto-registration is disabled')) {
+          logger.info({ root: indexRoot }, 'Skipped auto-register: auto_register.mode disables it');
+        }
       }
     }
 
@@ -2871,6 +2881,29 @@ program
               }),
             );
             return;
+          }
+
+          // GH#1371 / TRA-1881: `auto_register.mode: "never"` (or `"ask"`)
+          // refuses *new* implicit registrations with an honest 403 instead
+          // of a cold index. Already-registered roots (and the ancestor path
+          // above) still resolve — this only blocks creating fresh rows.
+          if (!getProject(absRoot)) {
+            const autoMode = getAutoRegisterMode();
+            if (autoMode === 'never' || autoMode === 'ask') {
+              logger.info(
+                { root: absRoot, mode: autoMode },
+                'Refused daemon project registration: auto_register.mode disables it',
+              );
+              res.writeHead(403, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  error:
+                    `Auto-registration is disabled (auto_register.mode: "${autoMode}"). ` +
+                    `Register "${absRoot}" deliberately with \`trace-mcp add\` to index it.`,
+                }),
+              );
+              return;
+            }
           }
 
           await projectManager.addProject(absRoot);

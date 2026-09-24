@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Guide — .trace.json Reference"
 description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
-updated: 2026-09-21
+updated: 2026-09-24
 ---
 
 # trace-mcp Configuration
@@ -78,6 +78,49 @@ Projects you registered yourself with `trace add` or `trace init` are exempt fro
 caps and are only removed by `trace remove` / `trace-mcp doctor --fix`. Eviction only
 deregisters — your directory and its index database are left alone, so an evicted
 project is re-registered the next time you open it.
+
+### Excluding throwaway checkouts from auto-registration
+
+Short-lived checkouts — CI gates, git worktrees off a bare mirror, `/tmp` clones —
+otherwise auto-register as persistent projects, cold-index from scratch, and linger as
+"Missing folder" once deleted. Two knobs in the global config control this:
+
+```jsonc
+{
+  "auto_register": {
+    "mode": "always", // "always" | "never" | "ask" ("ask" currently behaves as "never")
+    "exclude": [      // globs matched against the resolved root
+      "~/.gate/worktrees/**",
+      "/tmp/**",
+      "/private/tmp/**",
+      "$TMPDIR/**"
+    ]
+  }
+}
+```
+
+- `exclude` extends the built-in one-shot patterns. An excluded root is never written
+  to `registry.json` — its index lives in the ephemeral index dir and is collected by
+  age. When the checkout shares a git remote with an already-indexed project (including
+  bare-mirror worktrees, which share no common dir), read-only lookups route to that
+  canonical index instead of building a redundant one.
+- Supported glob dialect is `*`, `**`, `?`, and `[...]` character classes (including
+  `[!...]` negation). `{a,b}` brace expansion is **not** supported — a pattern using
+  braces never matches. Write patterns as absolute paths (after `~` / `$VAR` expansion):
+  a relative pattern such as `gate/**` matches at *any* depth system-wide, so prefer
+  `~/gate/**`. On macOS list both `/tmp/**` and `/private/tmp/**` (`/tmp` is a symlink;
+  matching resolves both sides best-effort, but an explicit pair never depends on it).
+- `mode: "never"` disables every implicit registration; the daemon answers new roots
+  with an honest "not indexed" error instead of a cold index. Deliberate
+  `trace-mcp add` / `trace-mcp init` always still works.
+- `TRACE_MCP_AUTO_REGISTER_MODE` and `TRACE_MCP_AUTO_REGISTER_EXCLUDE` (comma-separated
+  globs) override the file — useful for gates that cannot edit the global config.
+  `TRACE_MCP_REPO_ROOT` redirects the session root for both `serve` and the shim's
+  proxy path.
+
+Removing one checkout of a same-remote pair (`trace-mcp remove <clone>`) unregisters
+only that checkout: a database still claimed by another registered project (or a live
+process) is kept, and the output says so.
 
 ### Config merge order
 

@@ -366,6 +366,28 @@ export function findRegisteredEntryByRemote(
   return null;
 }
 
+/**
+ * True when `dbPath` is still owned by someone other than `excludeRoot`:
+ * another registry entry points at it (TRA-38 same-remote sharing), or a
+ * live holder marker claims it. The mirrored inline checks in
+ * `removeProjectArtifacts` and `sweepMissingRoots` predate this helper;
+ * `trace-mcp remove` (GH#1371 edge 2 / TRA-1887) uses it so deleting one
+ * checkout can never unlink the shared DB out from under its sibling.
+ */
+export function isDbPathShared(dbPath: string, excludeRoot: string): boolean {
+  const absExclude = path.resolve(excludeRoot);
+  if (listProjects().some((e) => path.resolve(e.root) !== absExclude && e.dbPath === dbPath)) {
+    return true;
+  }
+  try {
+    return hasLiveHolderOrUnknown(dbPath, excludeRoot);
+  } catch {
+    // Unreadable holder dir counts as "in use" — same safe direction as
+    // removeProjectArtifacts (guessing wrong deletes someone else's index).
+    return true;
+  }
+}
+
 /** Find a multi-root project that contains this child root. */
 export function findParentProject(childRoot: string): RegistryEntry | null {
   const absChild = path.resolve(childRoot);
