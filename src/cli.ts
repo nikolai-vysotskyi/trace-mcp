@@ -2921,6 +2921,11 @@ program
             status: 'removed',
             project: projectRoot,
             deletedFiles: artifacts.deleted.length,
+            // TRA-1887: removeProjectArtifacts keeps the index DB while a
+            // sibling entry or live holder still claims it — deletedFiles
+            // alone can't tell "kept (shared)" from "nothing to delete".
+            keptFiles: artifacts.kept.length,
+            kept: artifacts.kept,
             freedBytes: artifacts.freedBytes,
             topology: artifacts.topology,
             decisions: artifacts.decisions,
