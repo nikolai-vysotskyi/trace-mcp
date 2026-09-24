@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { redactEnvFile } from './env-parser.js';
 
 const GITIGNORED_NOTICE = '[content hidden — file is gitignored]';
 
@@ -97,23 +96,14 @@ export function readSymbolSource(
 
 const ENV_BASENAME_RE = /^\.env(\..+)?$/;
 
-/** Check if a file path is a .env file. */
-function isEnvFile(filePath: string): boolean {
-  return ENV_BASENAME_RE.test(path.basename(filePath));
-}
-
 /**
- * Read a file safely:
- * - .env files → redact values, return keys + type hints (even if gitignored)
- * - gitignored files → return notice instead of source
- * - all other files → return content as-is
+ * Check if a file path is a secret-holding env file.
+ * Covers `.env`, `.env.*` (e.g. `.env.local`) and `*.env` (e.g. `prod.env`).
+ *
+ * Raw-text paths (search_text, rename non-code scan) must never read these —
+ * key discovery stays available via get_env_vars (keys + type hints only).
  */
-function _readFileSafe(filePath: string, gitignored?: boolean): string {
-  // .env redaction takes priority over gitignore — keys/types are always safe to expose
-  if (isEnvFile(filePath)) {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return redactEnvFile(content);
-  }
-  if (gitignored) return GITIGNORED_NOTICE;
-  return fs.readFileSync(filePath, 'utf-8');
+export function isEnvFile(filePath: string): boolean {
+  const base = path.basename(filePath);
+  return ENV_BASENAME_RE.test(base) || base.endsWith('.env');
 }

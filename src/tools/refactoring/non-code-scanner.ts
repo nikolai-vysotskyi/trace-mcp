@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fg from 'fast-glob';
+import { isEnvFile } from '../../utils/source-reader.js';
 import type { NonCodeMention } from './shared.js';
 import { buildRenameRegex, SKIP_DIRS } from './shared.js';
 
@@ -14,8 +15,10 @@ const NON_CODE_PATTERNS = [
   '**/*.yml',
   '**/*.json',
   '**/*.toml',
-  '**/*.env',
-  '**/.env*',
+  // NOTE (TRA-1890): no `**/*.env` / `**/.env*` here on purpose. Env files
+  // are keys-only by design (see get_env_vars); echoing a matched line would
+  // leak the value sitting next to the key. The loop below also skips env
+  // basenames defensively so a future glob can never reintroduce the leak.
   '**/*.ini',
   '**/*.cfg',
   '**/Dockerfile',
@@ -67,6 +70,8 @@ export function scanNonCodeFiles(
   files = files.filter((f) => !SKIP_FILES.has(path.basename(f)));
 
   for (const relPath of files) {
+    // TRA-1890: never echo secret holders, even if a future glob matches them.
+    if (isEnvFile(relPath)) continue;
     const absPath = path.resolve(projectRoot, relPath);
     let content: string;
     try {
