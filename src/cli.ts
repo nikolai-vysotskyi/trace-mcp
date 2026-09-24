@@ -65,7 +65,7 @@ import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
-import { pruneCommand, pruneIndexDir } from './cli/prune.js';
+import { pruneCommand, pruneIndexDir, sweepTopLevelOrphanDbs } from './cli/prune.js';
 import { removeCommand } from './cli/remove.js';
 import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
@@ -4024,6 +4024,33 @@ program
             }
           } catch (err) {
             logger.warn({ err }, 'sweepEphemeralDbs failed (non-fatal)');
+          }
+          try {
+            // TRA-1908: top-level counterpart of the ephemeral sweep above.
+            // `orphan_unregistered` DBs (no registry row at all — old naming
+            // schemes, razed throwaway checkouts) are only dead past the TTL;
+            // a fresh one may just be a project not yet re-added. The sweep
+            // itself reports the scanned count so daemon.log stays verifiable
+            // either way, mirroring the TRA-1714 ephemeral line above.
+            const orphanResult = sweepTopLevelOrphanDbs();
+            if (orphanResult.removed.length > 0) {
+              logger.info(
+                { removedDbs: orphanResult.removed },
+                `Deleted ${orphanResult.removed.length} abandoned unregistered index DB(s)`,
+              );
+            } else if (orphanResult.scannedOrphans > 0) {
+              logger.info(
+                {
+                  orphanDbs: orphanResult.scannedOrphans,
+                  retainedWithinTtl: orphanResult.retainedWithinTtl,
+                },
+                `Top-level orphan sweep: ${orphanResult.scannedOrphans} unregistered DB(s) within TTL, nothing to delete`,
+              );
+            } else {
+              logger.debug('Top-level orphan sweep: no unregistered DBs present');
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepTopLevelOrphanDbs failed (non-fatal)');
           }
           // TRA-527: same story one store over — subproject auto-sync wrote a
           // permanent row into the *global* topology DB per run workdir, and no
