@@ -3,6 +3,7 @@ import path from 'node:path';
 import picomatch from 'picomatch';
 import type { FileRow, Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
+import { redactEnvFile } from '../../utils/env-parser.js';
 import { validatePath } from '../../utils/security.js';
 import { isEnvFile } from '../../utils/source-reader.js';
 
@@ -142,6 +143,13 @@ export function searchText(
       continue; // File may have been deleted since indexing
     }
 
+    // .env files carry secret values: search the redacted view (keys + type
+    // hints) so key names stay findable but values can never leak via `match`
+    // or `context`. Mirrors the keys-only guarantee of get_env_vars.
+    if (isEnvFileRow(file)) {
+      content = redactEnvFile(content);
+    }
+
     const lines = content.split('\n');
     let fileHasMatch = false;
 
@@ -201,4 +209,17 @@ export function searchText(
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const ENV_BASENAME_RE = /^\.env(\..+)?$/;
+
+/**
+ * True for rows that may carry secret values: indexed with the `env`
+ * language, or named like a dotenv file. The language check is authoritative
+ * (EnvIndexer owns it); the basename check is defense-in-depth for rows
+ * indexed before/without the env classifier.
+ */
+function isEnvFileRow(file: FileRow): boolean {
+  if (file.language === 'env') return true;
+  return ENV_BASENAME_RE.test(path.basename(file.path));
 }
