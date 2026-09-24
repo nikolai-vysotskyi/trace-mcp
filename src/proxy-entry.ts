@@ -36,11 +36,17 @@ async function main(): Promise<void> {
   const preset = parsePresetArg(process.argv);
   if (preset) process.env.TRACE_MCP_PRESET = preset;
 
-  // GH#1371 edge 1 / TRA-1886: honor TRACE_MCP_REPO_ROOT exactly like
-  // `trace-mcp serve` (resolveServeRoots), instead of binding to cwd.
+  // GH#1371 edge 1 / TRA-1886, TRA-1915: honor TRACE_MCP_REPO_ROOT exactly
+  // like `trace-mcp serve` (resolveServeRoots), instead of binding to cwd.
   // Linked git worktrees share the main repo's index rather than building a
   // redundant one (mirrors `trace-mcp serve`).
-  const { projectRoot, indexRoot, envOverride } = resolveServeRoots();
+  const { projectRoot, indexRoot, worktreeMainRoot, envOverride } = resolveServeRoots();
+  if (worktreeMainRoot) {
+    logger.info(
+      { worktreeRoot: projectRoot, mainRoot: worktreeMainRoot },
+      'Git worktree detected — sharing main repo index',
+    );
+  }
   if (envOverride) {
     logger.info({ envOverride }, 'Serving TRACE_MCP_REPO_ROOT instead of cwd');
   }
