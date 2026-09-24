@@ -10,6 +10,7 @@ import {
   EPHEMERAL_INDEX_DIR,
   getDbPath,
   getProjectRemoteIdentity,
+  INDEX_DIR,
   isEphemeralProjectRoot,
   projectName,
   REGISTRY_PATH,
@@ -924,6 +925,76 @@ export function sweepEphemeralDbs(maxAgeHours = 24): string[] {
         /* already gone — fine */
       }
     }
+  }
+  return removed;
+}
+
+/** Matches a session-shaped top-level DB (`<name>-session-<id>.db`, task cache). */
+function isTopLevelSessionFile(basename: string): boolean {
+  return /-session-[0-9a-f-]+\.db$/i.test(basename) || basename.startsWith('daemon-task-cache-');
+}
+
+/**
+ * Delete top-level index DBs that no registry row points at and that have
+ * been idle longer than `maxAgeDays` (default 7), returning the base paths
+ * removed (TRA-1907).
+ *
+ * This is the top-level analogue of {@link sweepEphemeralDbs} (TRA-396): the
+ * night QA sweep found 718 files / ~1.1 GB under `index/*.db*` referenced by
+ * no registry `dbPath` (266 `.db` older than 7 days, median ~20 days —
+ * leftovers of old naming schemes, deleted throwaway checkouts, and benches),
+ * while `prune` can only class them `orphan_unregistered` — a category soft
+ * GC deliberately never auto-deletes, since for a *registered-but-renamed*
+ * project it just means "not re-added yet". The age gate is what makes the
+ * automatic path safe: a DB nobody re-registered in a week is not coming back.
+ *
+ * Safety, mirroring `sweepEphemeralDbs`:
+ * - Registered = basename of any registry `dbPath`. TRA-38 dbPath sharing
+ *   names the same basename on every sharing row, so shared DBs always match.
+ * - Session-shaped files are skipped — the `session_expired` sweep owns them.
+ * - The `ephemeral/` subdirectory is skipped — `sweepEphemeralDbs` owns it.
+ * - mtime across the whole DB family (WAL/SHM/journal + watcher snapshot —
+ *   a fresh snapshot means a live watcher still walks that root) is the
+ *   clock; an active run keeps writing.
+ * - A live holder marker vetoes deletion, so this cannot pull a DB out from
+ *   under a running agent. Deletion goes through `deleteDbFamily` (TRA-1864).
+ *
+ * `indexDir` is injectable so tests can sweep a fixture directory instead of
+ * the live index.
+ */
+export function sweepUnregisteredTopLevelDbs(maxAgeDays = 7, indexDir = INDEX_DIR): string[] {
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  const registered = new Set<string>();
+  for (const entry of listProjects()) {
+    if (entry.dbPath) registered.add(path.basename(entry.dbPath));
+  }
+  const removed: string[] = [];
+  let files: string[];
+  try {
+    files = fs.readdirSync(indexDir);
+  } catch {
+    return removed; // never created — nothing to sweep
+  }
+
+  for (const file of files) {
+    if (file === 'ephemeral') continue; // owned by sweepEphemeralDbs
+    if (!file.endsWith('.db')) continue; // sidecars deleted via their base's family
+    if (isTopLevelSessionFile(file)) continue; // owned by the session_expired sweep
+    if (registered.has(file)) continue;
+    const base = path.join(indexDir, file);
+    let newestMtime = 0;
+    for (const suffix of DB_FAMILY_SUFFIXES) {
+      try {
+        newestMtime = Math.max(newestMtime, fs.statSync(base + suffix).mtimeMs);
+      } catch {
+        /* sidecar absent */
+      }
+    }
+    if (newestMtime === 0 || newestMtime >= cutoff) continue;
+    if (hasLiveHolderOrUnknown(base)) continue;
+
+    deleteDbFamily(base);
+    removed.push(base);
   }
   return removed;
 }

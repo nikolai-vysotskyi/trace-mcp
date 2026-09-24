@@ -14,6 +14,7 @@ import {
   registerProject,
   resolveRegisteredAncestor,
   sweepEphemeralDbs,
+  sweepUnregisteredTopLevelDbs,
 } from '../src/registry.js';
 
 let savedRegistry: string | null = null;
@@ -551,5 +552,140 @@ describe('sweepEphemeralDbs', () => {
 
     expect(sweepEphemeralDbs(24)).toContain(orphanBase);
     expect(fs.existsSync(snap)).toBe(false);
+  });
+});
+
+// TRA-1907: top-level `index/*.db` files no registry row points at (~1.1 GB /
+// 718 files observed: old naming schemes, deleted throwaway checkouts,
+// benches). The sweep gets its own fixture directory — never the live index.
+describe('sweepUnregisteredTopLevelDbs', () => {
+  let tmpIndex: string;
+
+  beforeEach(() => {
+    tmpIndex = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-toplevel-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpIndex, { recursive: true, force: true });
+  });
+
+  function makeTopDb(name: string, ageDays: number): string {
+    const db = path.join(tmpIndex, name);
+    fs.writeFileSync(db, 'x');
+    const t = Date.now() / 1000 - ageDays * 24 * 3600;
+    fs.utimesSync(db, t, t);
+    return db;
+  }
+
+  function ageFile(file: string, ageDays: number): void {
+    const t = Date.now() / 1000 - ageDays * 24 * 3600;
+    fs.utimesSync(file, t, t);
+  }
+
+  function writeRows(rows: Array<{ root: string; dbPath: string }>): void {
+    const projects: Record<string, unknown> = {};
+    for (const r of rows) {
+      projects[r.root] = {
+        name: path.basename(r.root),
+        root: r.root,
+        dbPath: r.dbPath,
+        lastIndexed: null,
+        addedAt: new Date().toISOString(),
+      };
+    }
+    fs.writeFileSync(REGISTRY_PATH, JSON.stringify({ version: 1, projects }, null, 2));
+  }
+
+  it('deletes an old unregistered DB with its whole family', () => {
+    const db = makeTopDb('trace-mcp-aaaabbbbcccc.db', 20);
+    for (const suffix of ['-wal', '-shm', '.watcher-snapshot']) {
+      fs.writeFileSync(db + suffix, 'x');
+      ageFile(db + suffix, 20);
+    }
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([db]);
+    for (const suffix of ['', '-wal', '-shm', '.watcher-snapshot']) {
+      expect(fs.existsSync(db + suffix)).toBe(false);
+    }
+  });
+
+  it('keeps a DB whose basename a registry row points at', () => {
+    const db = makeTopDb('myapp-0123456789ab.db', 20);
+    writeRows([{ root: '/Users/x/projects/myapp', dbPath: db }]);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('keeps a DB shared by two rows (TRA-38 dbPath sharing)', () => {
+    const db = makeTopDb('shared-0123456789ab.db', 20);
+    writeRows([
+      { root: '/Users/x/checkouts/app-a', dbPath: db },
+      { root: '/Users/x/checkouts/app-b', dbPath: db },
+    ]);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('keeps an unregistered DB still inside the TTL', () => {
+    const db = makeTopDb('fresh-0123456789ab.db', 1);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('honours a custom TTL', () => {
+    const db = makeTopDb('middle-0123456789ab.db', 10);
+
+    expect(sweepUnregisteredTopLevelDbs(30, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([db]);
+  });
+
+  it('keeps an old DB a live holder still has open', () => {
+    const db = makeTopDb('busy-0123456789ab.db', 20);
+    announceDbHolder(db, '/some/running/workdir');
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('treats a fresh WAL sidecar as activity on an otherwise old DB', () => {
+    const db = makeTopDb('walwrites-0123456789ab.db', 20);
+    fs.writeFileSync(`${db}-wal`, 'x'); // fresh mtime: live writer
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('skips session-shaped files (owned by the session_expired sweep)', () => {
+    const db = makeTopDb('app-0123456789ab-session-abcdef12.db', 20);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('skips the ephemeral subdirectory (owned by sweepEphemeralDbs)', () => {
+    fs.mkdirSync(path.join(tmpIndex, 'ephemeral'), { recursive: true });
+    const db = path.join(tmpIndex, 'ephemeral', 'run-0123456789ab.db');
+    fs.writeFileSync(db, 'x');
+    ageFile(db, 20);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('leaves stem-less sidecars for sweepOrphanDbSidecars', () => {
+    const wal = path.join(tmpIndex, 'ghost-0123456789ab.db-wal');
+    fs.writeFileSync(wal, 'x');
+    ageFile(wal, 20);
+
+    expect(sweepUnregisteredTopLevelDbs(7, tmpIndex)).toEqual([]);
+    expect(fs.existsSync(wal)).toBe(true);
+  });
+
+  it('returns [] when the directory does not exist', () => {
+    expect(sweepUnregisteredTopLevelDbs(7, path.join(tmpIndex, 'never-created'))).toEqual([]);
   });
 });

@@ -146,6 +146,7 @@ import {
   resolveDbPath,
   resolveRegisteredAncestor,
   sweepEphemeralDbs,
+  sweepUnregisteredTopLevelDbs,
   updateLastIndexed,
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
@@ -473,6 +474,47 @@ function softGcSweep(): void {
     }
   } catch (err) {
     logger.warn({ err }, 'sweepOrphanDbSidecars soft-prune failed (non-fatal)');
+  }
+
+  // TRA-1907: top-level `index/*.db` files no registry row points at — ~1.1 GB
+  // / 718 files on the observed machine (old naming schemes, deleted throwaway
+  // checkouts, benches). `prune --apply` deletes these immediately as
+  // `orphan_unregistered`, but soft GC must not: for a live project that
+  // simply hasn't been re-added yet that category is benign. The 7-day TTL is
+  // what makes the automatic path safe. The within-TTL line keeps the sweep
+  // visible in daemon.log even when there is nothing to delete (same reason
+  // as the TRA-1714 ephemeral line below), so the night contour can tell a
+  // healthy TTL apart from a sweep that never runs.
+  try {
+    const removedTopLevel = sweepUnregisteredTopLevelDbs();
+    if (removedTopLevel.length > 0) {
+      logger.info(
+        { removedTopLevel },
+        `Deleted ${removedTopLevel.length} unregistered top-level index DB(s) idle >7 days`,
+      );
+    } else {
+      let unregisteredWithinTtl = 0;
+      try {
+        const registeredBasenames = new Set(
+          listProjects()
+            .map((e) => (e.dbPath ? path.basename(e.dbPath) : ''))
+            .filter((b) => b.length > 0),
+        );
+        unregisteredWithinTtl = fs
+          .readdirSync(INDEX_DIR)
+          .filter((f) => f.endsWith('.db') && !registeredBasenames.has(f)).length;
+      } catch {
+        /* dir not created yet — nothing to report */
+      }
+      if (unregisteredWithinTtl > 0) {
+        logger.info(
+          { unregisteredTopLevelDbs: unregisteredWithinTtl },
+          `Top-level index sweep: ${unregisteredWithinTtl} unregistered DB(s) within TTL, nothing to delete`,
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'sweepUnregisteredTopLevelDbs soft-prune failed (non-fatal)');
   }
 }
 
