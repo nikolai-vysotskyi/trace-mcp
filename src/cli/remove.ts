@@ -13,6 +13,7 @@ import { TOPOLOGY_DB_PATH } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
 import { findParentProject, getProject, unregisterProject } from '../registry.js';
 import { TopologyStore } from '../topology/topology-db.js';
+import { deleteDbFamily } from '../utils/db-family.js';
 
 export const removeCommand = new Command('remove')
   .description('Unregister a project and delete its index')
@@ -80,11 +81,11 @@ export const removeCommand = new Command('remove')
       }
     }
 
-    // Delete DB file
+    // Delete DB file + its whole family (WAL/SHM/journal, snapshot, holders).
     let dbDeleted = false;
     if (!opts.keepDb && fs.existsSync(entry.dbPath)) {
-      fs.unlinkSync(entry.dbPath);
-      dbDeleted = true;
+      const { deleted } = deleteDbFamily(entry.dbPath);
+      dbDeleted = deleted.includes(entry.dbPath);
     }
 
     // Clean topology data (subprojects, services, endpoints, etc.)
@@ -173,7 +174,7 @@ async function handleRemoveFromMultiRoot(
   if (newChildren.length === 0) {
     // No children left — remove the entire multi-root
     if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-      fs.unlinkSync(parent.dbPath);
+      deleteDbFamily(parent.dbPath);
     }
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
@@ -204,7 +205,7 @@ async function handleRemoveFromMultiRoot(
 
     // Remove multi-root
     if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-      fs.unlinkSync(parent.dbPath);
+      deleteDbFamily(parent.dbPath);
     }
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
@@ -239,7 +240,7 @@ async function handleRemoveFromMultiRoot(
   // We remove the old registration and tell the user to re-add.
   // (Re-registering inline would duplicate too much logic from add.ts)
   if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-    fs.unlinkSync(parent.dbPath);
+    deleteDbFamily(parent.dbPath);
   }
   cleanTopology(parent.root);
   removeProjectConfig(parent.root);
