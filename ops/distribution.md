@@ -2875,3 +2875,26 @@ Twelve hours after TRA-1866, audited via API, read-only, nothing written outside
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-24 evening (TRA-1892): threads silent, ai-tooling loose end closed, sweep clean
+
+Four hours after TRA-1878, audited via API, read-only, nothing written outside this file.
+
+**Open threads — zero movements owed anywhere.** All 20 `updated_at` values match the day pass exactly, so no newest-comment re-read was needed anywhere:
+- Catalog PRs/issues: `eltociear#119`, `GetBindu#195`, `hermes#395`, `nix#606` (open, 1 comment each, all `updated_at` 2026-09-20T04:09 — our single allowed reminders, spent), `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, two days out), `ai-boost#240` (open, 0 comments, `updated_at` 09-14 — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, `updated_at` still 09-18 bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (09-21), `kilocode#13843` (09-20), `kilocode#12707` (09-07), `atlas#105` (09-07), `slopstop#633` (09-06, deliberately not bumped), `Dokploy/mcp#81` (09-05), `nanocoder#1197` (09-17), `lastlight#372` (09-18), `pyrefly#4583` (09-07), `pi-extensions#1204` (09-05), `ai-tooling#585` (09-04), `pr-agent#2499` (09-14). All OPEN, all unchanged.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, `updated_at` still 2026-09-23T15:09Z — no re-review from `hetaoBackend`, still the two `CHANGES_REQUESTED`. His lane — recorded, not touched.
+- trace-mcp 182★/21 forks — flat against the day pass.
+
+**Loose end closed (carried from the TRA-1875 release-window reply): the resuscitated ai-tooling account.** That note asked whether the telemetry claim in `mattbutlerengineering/ai-tooling`'s eval is still wrong and whether our correction #585 still stands. Verified read-only: the repo pushed today (2026-09-24T13:28Z) but it is routine catalog churn ("daily discovery 2026-09-24 — 8 adds, 1 skip, 5 re-stamped"), not an eval edit. `evaluations/trace-mcp.md` still carries June numbers (88 stars, v1.43.1, "~170 tools") and still says "no telemetry" under What worked — so our #585 correction (anonymous usage ping on by default since TRA-887) is still accurate and still unaddressed (OPEN, 0 comments, `updated_at` 09-04). Per TRA-857 no follow-up is owed there — recorded here, not pinged.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read.
+
+**Competitor pulse (no touch):** `tirth8205/code-review-graph` at 31,765★ (+17 since the morning pass) with `pushed_at` still 2026-09-18 — stars grow, triage stands still. For Competitor Intelligence, nothing to write.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage, MiniMax#54 awaits re-review, no door is due a reminder before 26.09. No consolidated request sent.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
