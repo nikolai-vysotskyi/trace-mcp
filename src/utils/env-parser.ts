@@ -146,8 +146,11 @@ export function parseEnvFile(content: string): EnvEntry[] {
       continue;
     }
 
-    // Variable line: KEY=VALUE or export KEY=VALUE
-    const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)/);
+    // Variable line: KEY=VALUE, KEY = VALUE, or export KEY=VALUE.
+    // Whitespace around `=` is tolerated (common in hand-edited .env files)
+    // so that spaced assignments are still recognised as entries — critical
+    // for redactEnvFile, which must never pass a value line through raw.
+    const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)/);
     if (!match) {
       pendingComment = null;
       continue;
@@ -186,6 +189,18 @@ export function parseEnvFile(content: string): EnvEntry[] {
 /**
  * Redact .env file content: keep keys and comments, replace values with type hints.
  * Used by source-reader to safely expose .env structure without secrets.
+ *
+ * Security properties (TRA-1889):
+ * - Only recognised `KEY=...` entries, blank lines, and `#` comments pass
+ *   through in recognisable form. Every other line is masked, so malformed
+ *   assignments and continuation lines of multiline secrets can never leak.
+ * - Multiline blobs (PEM blocks, unterminated quoted values) are tracked
+ *   across lines: continuation lines are masked even when they happen to
+ *   look like assignments (e.g. a base64 body line ending in `=` padding
+ *   parses as `KEY=value` — emitting it as `KEY=<hint>` would leak up to
+ *   63 chars of key material in the "key" position).
+ * - Line count is preserved 1:1, keeping reported line numbers accurate for
+ *   downstream consumers (non-code-scanner, search context).
  */
 export function redactEnvFile(content: string): string {
   const entries = parseEnvFile(content);
@@ -197,18 +212,82 @@ export function redactEnvFile(content: string): string {
     entryByLine.set(e.line, e);
   }
 
+  let blob: { kind: 'pem' } | { kind: 'quote'; quote: string } | null = null;
+
   for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+
+    if (blob) {
+      // Inside a multiline secret: mask everything, including the closing
+      // line (harmless to hide, unsafe to misjudge).
+      result.push('# <redacted>');
+      if (blob.kind === 'pem' && BLOB_END_RE.test(rawLine)) {
+        blob = null;
+      } else if (blob.kind === 'quote' && rawLine.includes(blob.quote)) {
+        blob = null;
+      }
+      continue;
+    }
+
     const entry = entryByLine.get(i + 1);
     if (entry) {
       const typeHint = formatTypeHint(entry);
       result.push(`${entry.key}=${typeHint}`);
-    } else {
+      blob = detectBlobOpen(rawLine);
+    } else if (rawLine.trim() === '' || rawLine.trim().startsWith('#')) {
       // Keep comments and blank lines as-is
-      result.push(lines[i]);
+      result.push(rawLine);
+    } else {
+      // Anything else is not a recognised entry: most importantly,
+      // continuation lines of multiline secrets (PEM keys, certs, JSON
+      // blobs) and malformed assignments. Passing them through raw would
+      // leak secret material, so mask them.
+      result.push('# <redacted>');
     }
   }
 
   return result.join('\n');
+}
+
+const BLOB_BEGIN_RE = /-----BEGIN [^-]+-----/;
+const BLOB_END_RE = /-----END [^-]+-----/;
+
+/**
+ * Detect whether an entry line opens a multiline secret whose continuation
+ * lines must be masked: a PEM block, or a quoted value without its closing
+ * quote on the same line (standard dotenv multiline). Returns the blob kind
+ * or null. Inspects only the raw text around the assignment — the parsed
+ * value itself is never needed (and never exposed) here.
+ */
+function detectBlobOpen(
+  rawLine: string,
+): { kind: 'pem' } | { kind: 'quote'; quote: string } | null {
+  const eq = rawLine.indexOf('=');
+  if (eq === -1) return null;
+  const valuePart = rawLine.slice(eq + 1);
+
+  if (BLOB_BEGIN_RE.test(valuePart) && !BLOB_END_RE.test(valuePart)) {
+    return { kind: 'pem' };
+  }
+
+  // Unterminated quote: exactly one occurrence of the opening quote char —
+  // two or more means the value is (at least superficially) closed on this
+  // line, e.g. `KEY="a"b`, so no blob opens and following lines are judged
+  // on their own.
+  const trimmed = valuePart.trimStart();
+  const first = trimmed[0];
+  if ((first === '"' || first === "'") && countChar(valuePart, first) === 1) {
+    return { kind: 'quote', quote: first };
+  }
+  return null;
+}
+
+function countChar(s: string, ch: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === ch) n++;
+  }
+  return n;
 }
 
 function formatTypeHint(entry: EnvEntry): string {
