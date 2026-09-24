@@ -31,12 +31,21 @@ interface IndexHealthResult {
   warnings: string[];
   progress?: ProgressSnapshot;
   /**
-   * Embedding backlog state. Present only when embeddings are configured or a
-   * previous run failed — otherwise the extra COUNT isn't worth paying for.
-   * Without this, semantic search silently degrades with nothing to look at
-   * (TRA-812).
+   * Vector coverage of the index. Reported whenever symbols exist — NOT only
+   * when embeddings are enabled or a previous run failed. Gating it on
+   * `ai.enabled` is what let a 52%-covered index and a 0%-covered project
+   * both read as healthy with FTS-only search (TRA-1904): without these
+   * numbers the caller cannot tell semantic ranking is degraded.
    */
   embedding?: {
+    /** Whether this project will produce vectors (ai.enabled + embedding feature). */
+    enabled: boolean;
+    /** Total indexed symbols — the denominator of the coverage ratio. */
+    totalSymbols: number;
+    /** Indexed symbols that already have a vector. */
+    embedded: number;
+    /** Integer percent of symbols with vectors (0–100). */
+    coveragePct: number;
     /** Indexed symbols with no vector yet. */
     queued: number;
     /** Epoch ms until which background embedding is paused, if it is. */
@@ -118,22 +127,58 @@ export function getIndexHealth(
 
   const breaker = readEmbeddingBreakerState(store.db);
   let embedding: IndexHealthResult['embedding'];
-  if (config.ai?.enabled || breaker) {
+  // TRA-1904: report vector coverage whenever symbols exist. The old gate
+  // (`ai.enabled || breaker`) hid two states that both serve FTS-only
+  // results: AI disabled entirely (0 vectors, empty meta — the assetfeed
+  // case) and an undrained backlog with no recorded failure (fresh symbols
+  // after a reindex, provider briefly unreachable inside one cooldown).
+  if (stats.totalSymbols > 0) {
+    // Mirrors createAIProvider(): no vectors flow unless the project opted
+    // into AI *and* left the embedding capability on. ai.enabled defaults
+    // to false, so a project that never configured AI lands here as
+    // enabled=false with coverage 0% instead of an absent block.
+    const enabled = config.ai?.enabled === true && (config.ai.features?.embedding ?? true);
     const queued = store.countUnembeddedSymbols();
-    const paused = breaker && breaker.disabledUntilMs > Date.now();
+    const embedded = Math.max(0, stats.totalSymbols - queued);
+    const coveragePct =
+      stats.totalSymbols > 0 ? Math.round((embedded / stats.totalSymbols) * 100) : 100;
+    const paused = !!breaker && breaker.disabledUntilMs > Date.now();
     embedding = {
+      enabled,
+      totalSymbols: stats.totalSymbols,
+      embedded,
+      coveragePct,
       queued,
       pausedUntil: paused ? breaker.disabledUntilMs : undefined,
       lastFailureAt: breaker?.lastFailureAt || undefined,
       lastError: breaker?.lastError,
     };
-    if (paused && queued > 0) {
+    if (!enabled) {
+      // Deliberate operator choice (lexical-only is a supported config), so
+      // this stays a warning, not degraded — but it must be said out loud:
+      // every semantic/hybrid query on this project is FTS-only.
+      let msg =
+        `Semantic search is disabled (ai.enabled=false or ai.features.embedding=false): ` +
+        `${embedded}/${stats.totalSymbols} symbols have vectors but none are used — search is FTS-only. ` +
+        `Enable an AI provider and run embed_repo for hybrid ranking.`;
+      // A stale breaker row means AI was enabled before and the backfill was
+      // failing then — forensics for why vectors are missing, not a live
+      // pause (nothing runs while disabled, so no degraded status).
+      if (breaker && (breaker.lastError || breaker.disabledUntilMs > Date.now()) && queued > 0) {
+        msg +=
+          ` A previous embedding run failed before AI was disabled ` +
+          `(${breaker.lastError ?? 'unknown error'}); the ${queued}-symbol backlog will ` +
+          `not drain until AI is re-enabled.`;
+      }
+      warnings.push(msg);
+    } else if (paused && queued > 0) {
       if (status === 'ok') status = 'degraded';
       warnings.push(
         `${queued} symbols are queued for embedding but background embedding is paused until ` +
           `${new Date(breaker.disabledUntilMs).toISOString()} after repeated failures ` +
           `(${breaker.lastError ?? 'unknown error'}). Semantic and hybrid search results are ` +
-          `incomplete until the embedding provider is reachable; call embed_repo to retry now.`,
+          `incomplete until the embedding provider is reachable; call embed_repo to retry now. ` +
+          `(vector coverage ${coveragePct}% — ${embedded}/${stats.totalSymbols} symbols embedded)`,
       );
     } else if (breaker?.lastError && queued > 0) {
       // Cooldown expired but no batch has succeeded since: the provider is
@@ -143,7 +188,18 @@ export function getIndexHealth(
       warnings.push(
         `${queued} symbols are queued for embedding but the last background attempt failed ` +
           `(${breaker.lastError}). Search is FTS-only until the embedding provider is reachable; ` +
-          `call embed_repo to retry now.`,
+          `call embed_repo to retry now. ` +
+          `(vector coverage ${coveragePct}% — ${embedded}/${stats.totalSymbols} symbols embedded)`,
+      );
+    } else if (queued > 0) {
+      // No breaker row at all: the backlog was never attempted (fresh reindex
+      // + provider down, or background pass not yet fired). Previously this
+      // read as healthy with silently partial semantic ranking (TRA-1904).
+      if (status === 'ok') status = 'degraded';
+      warnings.push(
+        `${queued} of ${stats.totalSymbols} symbols have no vector yet ` +
+          `(coverage ${coveragePct}%). Background embedding has not drained the backlog — ` +
+          `semantic and hybrid ranking cover only the embedded subset; call embed_repo to backfill.`,
       );
     }
   }
