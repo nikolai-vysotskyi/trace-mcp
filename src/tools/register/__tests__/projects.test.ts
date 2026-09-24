@@ -237,3 +237,64 @@ describe('call_project_tool', () => {
     expect(response.isError).toBeUndefined();
   });
 });
+
+describe('call_project_tool journal broadcast (TRA-1868)', () => {
+  it('broadcasts relayed calls on the caller session, attributed to the target project', async () => {
+    const targetHandler = vi.fn(
+      async (): Promise<ToolResponse> => ({
+        content: [{ type: 'text', text: JSON.stringify({ ok: true }) }],
+      }),
+    );
+    const relay: ProjectRelay = {
+      listRelayTargets: () => [REPO_A],
+      openProject: vi.fn(async () => ({ toolHandlers: new Map([['search', targetHandler]]) })),
+      dispose: () => undefined,
+    };
+    const emitted: Array<Record<string, unknown>> = [];
+    const { server, captured } = makeCapturingServer();
+    registerProjectsTools(
+      server as never,
+      ctxStub({
+        projectRelay: relay,
+        journal: { record: vi.fn() },
+        sessionId: 'caller-sess',
+        onJournalEntry: (d: unknown) => emitted.push(d as Record<string, unknown>),
+      }),
+    );
+    const { handler } = findTool(captured, 'call_project_tool');
+
+    const response = await handler({ project: REPO_A, tool: 'search', args: { query: 'x' } });
+    expect(response.isError).toBeUndefined();
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      project: REPO_A,
+      tool: 'search',
+      params_summary: 'search x',
+      is_error: false,
+      session_id: 'caller-sess',
+    });
+  });
+
+  it('stays silent when nothing executed (unknown project / tool)', async () => {
+    const relay: ProjectRelay = {
+      listRelayTargets: () => [REPO_A],
+      openProject: vi.fn(async () => ({ toolHandlers: new Map() })),
+      dispose: () => undefined,
+    };
+    const emitted: unknown[] = [];
+    const { server, captured } = makeCapturingServer();
+    registerProjectsTools(
+      server as never,
+      ctxStub({
+        projectRelay: relay,
+        journal: { record: vi.fn() },
+        sessionId: 'caller-sess',
+        onJournalEntry: (d: unknown) => emitted.push(d),
+      }),
+    );
+    const { handler } = findTool(captured, 'call_project_tool');
+    await handler({ project: REPO_A, tool: 'nope', args: {} });
+    await handler({ project: REPO_UNKNOWN, tool: 'search', args: {} });
+    expect(emitted).toHaveLength(0);
+  });
+});

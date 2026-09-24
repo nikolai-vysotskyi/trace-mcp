@@ -33,6 +33,7 @@ import { SqliteTaskCache } from '../../pipeline/index.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../../progress.js';
 import { createServer, type ServerHandle } from '../../server/server.js';
+import { ActivityStore } from '../../session/activity-store.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
@@ -221,6 +222,17 @@ export class LocalBackend implements Backend {
   private watcher: FileWatcher | null = null;
   private extractPool: ExtractPool | null = null;
   private handle: ServerHandle | null = null;
+  /**
+   * Durable activity journal (TRA-1868). stdio sessions used to create their
+   * server without onJournalEntry, so every locally-served tool call was
+   * invisible to activity.db — during a daemon hiccup ALL traffic goes
+   * local and the journal reads as if the machine went idle. Same shared
+   * DB file the daemon writes (WAL + busy_timeout tolerate the extra
+   * writers); null when the constructor throws, mirroring cli.ts.
+   */
+  private activityStore: ActivityStore | null = null;
+  /** Session id stamped into this backend's journal broadcasts. */
+  private readonly localSessionId = randomUUID();
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
   private clientTransport: InMemoryTransport | null = null;
@@ -652,10 +664,26 @@ export class LocalBackend implements Backend {
       );
 
     // Create McpServer and wire it to our in-memory pair.
+    // TRA-1868: give the session its own journal writer — without
+    // onJournalEntry the gate's broadcasts (and hence activity.db) stay
+    // silent for everything this backend serves.
+    if (!this.activityStore) {
+      try {
+        this.activityStore = new ActivityStore();
+      } catch (e) {
+        logger.warn(`activity store unavailable: ${(e as Error)?.message ?? e}`);
+      }
+    }
+    const activityStore = this.activityStore;
+    const localSessionId = this.localSessionId;
     this.handle = createServer(this.store, this.registry, config, projectRoot, this.progress, {
       topoStore: this.topoStore,
       decisionStore: this.decisionStore,
       projectRelay: this.projectRelay,
+      sessionId: localSessionId,
+      onJournalEntry: (data) => {
+        activityStore?.record({ ...data, project: projectRoot, session_id: localSessionId });
+      },
     });
 
     const [client, server] = InMemoryTransport.createLinkedPair();
@@ -734,6 +762,15 @@ export class LocalBackend implements Backend {
     } catch {
       /* best-effort */
     }
+
+    // Flush any buffered activity-journal entries before this backend goes
+    // away — otherwise the last ~2 s of locally-served calls never land.
+    try {
+      this.activityStore?.close();
+    } catch {
+      /* best-effort */
+    }
+    this.activityStore = null;
 
     // Hand off heavy cleanup to the background: let any in-flight indexing
     // drain before we close the DB and delete the temp file. Session will

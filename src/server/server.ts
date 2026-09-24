@@ -762,6 +762,11 @@ export function createServer(
     // this with the broadcastEvent-bound callback.
     onPipelineEvent: deps?.onPipelineEvent ?? (() => {}),
     projectRelay: deps?.projectRelay ?? null,
+    // TRA-1868: the same pair the tool gate receives below, exposed so
+    // dispatch paths that bypass the gate (batch, call_project_tool) can
+    // still reach the durable activity journal.
+    onJournalEntry: deps?.onJournalEntry,
+    sessionId: deps?.sessionId,
   };
 
   const metaCtx: MetaContext = {

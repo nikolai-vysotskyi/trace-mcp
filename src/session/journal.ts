@@ -42,6 +42,28 @@ interface JournalSummary {
   duplicate_queries: string[];
 }
 
+/**
+ * Human-readable one-line summary of a tool call's params: `<tool> <key>`
+ * (or just `<tool>` when no meaningful key). Shared by SessionJournal and
+ * the journal-broadcast emitters that bypass the gate (`batch`,
+ * `call_project_tool`), so every durable journal row uses the same shape.
+ */
+export function summarizeToolParams(tool: string, params: Record<string, unknown>): string {
+  const key =
+    params.query ??
+    params.description ??
+    params.symbol_id ??
+    params.fqn ??
+    params.file_path ??
+    params.path ??
+    '';
+  const keyStr = String(key).slice(0, 80);
+  // Tool name alone when no meaningful key — avoids producing tool("")
+  // which then gets wrapped by the caller into the noisy 'tool("")' shape.
+  if (keyStr.length === 0) return tool;
+  return `${tool} ${keyStr}`;
+}
+
 interface PrefetchBoost {
   /** File path that was frequently accessed after get_task_context */
   file: string;
@@ -641,19 +663,18 @@ export class SessionJournal {
   }
 
   private buildSummary(tool: string, params: Record<string, unknown>): string {
-    const key =
-      params.query ??
-      params.description ??
-      params.symbol_id ??
-      params.fqn ??
-      params.file_path ??
-      params.path ??
-      '';
-    const keyStr = String(key).slice(0, 80);
-    // Tool name alone when no meaningful key — avoids producing tool("")
-    // which then gets wrapped by the caller into the noisy 'tool("")' shape.
-    if (keyStr.length === 0) return tool;
-    return `${tool} ${keyStr}`;
+    return summarizeToolParams(tool, params);
+  }
+
+  /**
+   * Newest entry timestamp (ms), or 0 when the journal is empty. Used by the
+   * daemon's activity-journal silence self-check (TRA-1868): live sessions
+   * with fresh entries while the durable journal stays old means the
+   * broadcast path is broken, not that traffic is absent.
+   */
+  latestTimestamp(): number {
+    const last = this.entries.at(-1);
+    return last?.timestamp ?? 0;
   }
 
   private hash(tool: string, params: Record<string, unknown>): string {

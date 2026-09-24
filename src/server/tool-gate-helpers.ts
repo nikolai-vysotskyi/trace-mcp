@@ -13,7 +13,7 @@
  */
 import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
-import type { SessionJournal } from '../session/journal.js';
+import { summarizeToolParams, type SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
 import { allSiblings, routesTo } from '../tools/tool-families.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
@@ -323,7 +323,16 @@ async function handleDuplicate(
       },
     };
     ctx.stripMetaFields(dedupResponse);
-    ctx.journal.record(ctx.name, params, (dupInfo.compact_result._result_count as number) ?? 1);
+    const dedupCount = (dupInfo.compact_result._result_count as number) ?? 1;
+    ctx.journal.record(ctx.name, params, dedupCount);
+    // TRA-1868: a served-from-cache call is still a tool call — without this
+    // the durable activity journal goes blind on cache-heavy sessions.
+    emitJournalEntry(ctx, {
+      count: dedupCount,
+      resultTokens: undefined,
+      latencyMs: 0,
+      isError: false,
+    });
     const dedupText = ctx.j(dedupResponse);
     ctx.savings.recordActualTokens(ctx.name, Math.ceil(dedupText.length / 4));
     return { content: [{ type: 'text', text: dedupText }] };
@@ -458,12 +467,32 @@ export function createGatedCallback(
     try {
       result = await originalCb(...cbArgs);
     } catch (err) {
-      telemetrySpan.setAttribute('duration_ms', Date.now() - normalStart);
+      const throwLatency = Date.now() - normalStart;
+      telemetrySpan.setAttribute('duration_ms', throwLatency);
       telemetrySpan.recordError(err);
       telemetrySpan.end();
       // A throw returns no context at all, so it saves nothing. Without this it
       // would keep the pre-call guess and score better than a real answer.
       ctx.savings.recordFailedCall(ctx.name);
+      ctx.recordToolCall?.(false);
+      // TRA-1868: a throwing call used to vanish from the durable activity
+      // journal entirely — the is_error metric then undercounts exactly the
+      // calls QA cares about. Emit it as an error. Deliberately no
+      // journal.record: a count-0 entry would poison dedup with a bogus
+      // "executed with 0 results" warning on the next identical call.
+      if (ctx.onJournalEntry && ctx.sessionId) {
+        ctx.onJournalEntry({
+          project: ctx.projectRoot ?? '',
+          ts: Date.now(),
+          tool: ctx.name,
+          params_summary: summarizeToolParams(ctx.name, params),
+          result_count: 0,
+          result_tokens: undefined,
+          latency_ms: throwLatency,
+          is_error: true,
+          session_id: ctx.sessionId,
+        });
+      }
       throw err;
     }
     const resultObj = result as WrappedToolResponse;

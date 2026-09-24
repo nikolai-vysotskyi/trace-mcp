@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listProjects } from '../../registry.js';
 import type { ServerContext } from '../../server/types.js';
+import { summarizeToolParams } from '../../session/journal.js';
 
 /**
  * Cross-project tools: `list_projects` (discover registered roots) and
@@ -161,7 +162,37 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
         };
       }
 
-      return handler(args ?? {});
+      // TRA-1868: the relay dispatches the target's RAW handler past both
+      // sessions' gates, so relayed calls were invisible to the durable
+      // activity journal. Broadcast on the CALLER's session: the work is
+      // attributed to the target project, where it actually ran.
+      const relayStart = Date.now();
+      const relayed = await handler(args ?? {});
+      const relayedText = relayed.content?.[0]?.text;
+      const relayedTokens =
+        typeof relayedText === 'string' ? Math.ceil(relayedText.length / 4) : undefined;
+      const { onJournalEntry, sessionId, journal } = ctx;
+      try {
+        journal.record(tool, args ?? {}, relayed.isError ? 0 : 1, {
+          resultTokens: relayedTokens,
+        });
+      } catch {
+        /* journal is best-effort */
+      }
+      if (onJournalEntry && sessionId) {
+        onJournalEntry({
+          project: resolvedRoot,
+          ts: Date.now(),
+          tool,
+          params_summary: summarizeToolParams(tool, args ?? {}),
+          result_count: relayed.isError ? 0 : 1,
+          result_tokens: relayedTokens,
+          latency_ms: Date.now() - relayStart,
+          is_error: !!relayed.isError,
+          session_id: sessionId,
+        });
+      }
+      return relayed;
     },
   );
 }

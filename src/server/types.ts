@@ -14,6 +14,7 @@ import type { RankingLedger } from '../runtime/ranking-ledger.js';
 import type { TelemetrySink } from '../runtime/telemetry-sink.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
+import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import type { StateEngine } from '../state/state-engine.js';
 import type { TopologyStore } from '../topology/topology-db.js';
 
@@ -115,6 +116,16 @@ export interface ServerContext {
    * relay as unavailable rather than throwing.
    */
   projectRelay: ProjectRelay | null;
+  /**
+   * Durable-journal broadcast for dispatch paths that bypass the tool gate
+   * (`batch` sub-calls, `call_project_tool` relay). The gate itself receives
+   * these via installToolGate; the values are the same ones. Omitted in
+   * contexts with no durable journal (unit tests) — those paths then skip
+   * the broadcast the same way the gate does (TRA-1868).
+   */
+  onJournalEntry?: (data: JournalEntryCallbackData) => void;
+  /** Session ID stamped into `onJournalEntry` broadcasts. Required when the callback is set. */
+  sessionId?: string;
 }
 
 /** Extended context for meta tools that bypass preset gate */
