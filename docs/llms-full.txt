@@ -3756,10 +3756,16 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 > retry + `Embedding batch failed` error path — those are real regressions. The
 > pause is stored in the project DB, so it survives a daemon restart instead of
 > re-attempting the whole backlog on every start. While it is open,
-> `get_index_health` reports `embedding: { queued, pausedUntil, lastError }`
-> and adds a warning — semantic and hybrid search results are incomplete until
-> the provider is reachable. `embed_repo` ignores the pause and retries
-> immediately.
+> `get_index_health` reports `embedding: { enabled, totalSymbols, embedded,
+> coveragePct, queued, pausedUntil, lastError }` and adds a warning — semantic
+> and hybrid search results are incomplete until the provider is reachable.
+> `embed_repo` ignores the pause and retries immediately.
+>
+> Vector coverage is reported whenever symbols exist — not only while a pause
+> is open (TRA-1904). `ai.enabled` defaults to `false`, so a project that
+> never configured AI reports `enabled: false, coveragePct: 0` with an
+> FTS-only warning instead of an absent block; an undrained backlog with no
+> recorded failure is reported as `degraded` with a backfill hint.
 
 > **`ai.enabled` takes effect per project start.** A project already open in the
 > daemon keeps the config it was started with, so flipping `ai.enabled` off stops
