@@ -46,7 +46,12 @@ import {
   findOrphanTmpFilesUnderHome,
   sweepOrphanTmpFilesUnderHome,
 } from '../utils/atomic-write.js';
-import { deleteDbFamily, findOrphanDbSidecars, sweepOrphanDbSidecars } from '../utils/db-family.js';
+import {
+  DB_FAMILY_SUFFIXES,
+  deleteDbFamily,
+  findOrphanDbSidecars,
+  sweepOrphanDbSidecars,
+} from '../utils/db-family.js';
 
 /** Categories assigned to each DB candidate. */
 export type PruneCategory =
@@ -97,6 +102,8 @@ export interface PruneSummary {
 }
 
 const DEFAULT_SESSION_TTL_DAYS = 7;
+/** Default grace for a top-level DB with no registry row (TRA-1908). */
+export const DEFAULT_TOP_LEVEL_ORPHAN_TTL_DAYS = 7;
 const STRAY_SMALL_MIN_FILES = 5;
 const STRAY_SMALL_MIN_AGE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -348,6 +355,71 @@ export function pruneIndexDir(options: PruneOptions = {}): PruneSummary {
   }
 
   return summary;
+}
+
+export interface TopLevelOrphanSweepResult {
+  /** Base `.db` paths actually deleted (whole family via {@link deleteDbFamily}). */
+  removed: string[];
+  /** `orphan_unregistered` candidates seen by this run. */
+  scannedOrphans: number;
+  /** Of those, how many were kept because family mtime is still inside the TTL. */
+  retainedWithinTtl: number;
+}
+
+/**
+ * TTL sweep for top-level index DBs with no registry row (TRA-1908).
+ *
+ * The night QA contour (TRA-1709) found 718 files (~1.1 GB) under
+ * `~/.trace-mcp/index/*.db*` referenced by no `dbPath` in registry.json —
+ * 266 `.db` older than 7 days, mostly `trace-mcp-*` / `app-*` / `workdir-*`
+ * leftovers of old naming schemes and razed throwaway checkouts. The
+ * presence-based sweeps never reach them (nothing is "missing" — there is
+ * no row at all), and `softGcSweep` deliberately never touches
+ * `orphan_unregistered` without an age gate (a DB with no row could just be
+ * a project not yet re-added), so they sat forever.
+ *
+ * This is the age-gated counterpart, mirroring `sweepEphemeralDbs` (TRA-396):
+ * an unregistered top-level `.db` whose whole family (WAL/SHM/journal plus
+ * the watcher snapshot — a fresh snapshot means a live watcher still walks
+ * that root, TRA-1714) stayed untouched for `maxAgeDays` is dead by the same
+ * argument the ephemeral sweep applies. Registry matching is reused from
+ * {@link scanIndexDir} (path hash + `dbPath` hash + multi-root children, so
+ * TRA-38 shared-dbPath siblings count as live), session files keep their own
+ * TTL (`session_active` never lands here), and a live holder marker vetoes
+ * deletion — re-checked right before unlink for TOCTOU safety on top of the
+ * `live` classification the scan already applies.
+ */
+export function sweepTopLevelOrphanDbs(
+  maxAgeDays = DEFAULT_TOP_LEVEL_ORPHAN_TTL_DAYS,
+): TopLevelOrphanSweepResult {
+  const candidates = scanIndexDir();
+  const orphans = candidates.filter((c) => c.category === 'orphan_unregistered');
+  const cutoff = Date.now() - maxAgeDays * DAY_MS;
+  const removed: string[] = [];
+  let retainedWithinTtl = 0;
+
+  for (const c of orphans) {
+    // Newest mtime across the whole family is the clock: an active run
+    // keeps writing the WAL/snapshot even when the base `.db` looks old.
+    let newestMtime = 0;
+    for (const suffix of DB_FAMILY_SUFFIXES) {
+      try {
+        newestMtime = Math.max(newestMtime, fs.statSync(c.path + suffix).mtimeMs);
+      } catch {
+        /* sidecar absent */
+      }
+    }
+    if (newestMtime === 0) continue; // raced away between scan and sweep — keep it
+    if (newestMtime >= cutoff) {
+      retainedWithinTtl += 1;
+      continue;
+    }
+    if (hasLiveHolderOrUnknown(c.path)) continue;
+    unlinkDb(c.path);
+    removed.push(c.path);
+  }
+
+  return { removed, scannedOrphans: orphans.length, retainedWithinTtl };
 }
 
 /** Self-check: walking projectHash + projectName here matches what indexer uses. */
