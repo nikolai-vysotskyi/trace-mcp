@@ -6,8 +6,9 @@ function entry(
   root: string,
   lastIndexed: string | null,
   addedAt = '2020-01-01T00:00:00.000Z',
+  extra?: Partial<RegistryEntry>,
 ): RegistryEntry {
-  return { name: root, root, dbPath: `${root}.db`, lastIndexed, addedAt };
+  return { name: root, root, dbPath: `${root}.db`, lastIndexed, addedAt, ...extra };
 }
 
 describe('selectEagerLoadRoots', () => {
@@ -52,5 +53,72 @@ describe('selectEagerLoadRoots', () => {
     ];
     selectEagerLoadRoots(entries, 1);
     expect(entries.map((e) => e.root)).toEqual(['/a', '/b']);
+  });
+
+  it('TRA-1863: an eager multi-root parent pulls its deferred registered children along', () => {
+    const entries = [
+      entry('/ws/parent', '2026-09-23T00:00:00.000Z', undefined, {
+        type: 'multi-root',
+        children: ['/ws/parent/front', '/ws/parent/laravel'],
+      }),
+      entry('/ws/parent/front', '2026-09-21T00:00:00.000Z'),
+      entry('/ws/parent/laravel', '2026-09-23T12:00:00.000Z'),
+      entry('/other-fresh', '2026-09-24T00:00:00.000Z'),
+    ];
+    // Cap 3 takes /other-fresh + /ws/parent/laravel + /ws/parent on recency;
+    // the stale child /ws/parent/front would starve — but the parent
+    // intentionally watches its declared children, so the family stays
+    // co-resident instead (cap overflows by the family size).
+    const { eager, deferred } = selectEagerLoadRoots(entries, 3);
+    expect(eager.map((e) => e.root).sort()).toEqual(
+      ['/other-fresh', '/ws/parent', '/ws/parent/front', '/ws/parent/laravel'].sort(),
+    );
+    expect(deferred).toHaveLength(0);
+  });
+
+  it('TRA-1863: promotion is family-scoped — unrelated deferred entries stay deferred', () => {
+    const entries = [
+      entry('/ws/parent', '2026-09-23T00:00:00.000Z', undefined, {
+        type: 'multi-root',
+        children: ['/ws/parent/front'],
+      }),
+      entry('/ws/parent/front', '2026-09-21T00:00:00.000Z'),
+      entry('/other-fresh', '2026-09-24T00:00:00.000Z'),
+      entry('/unrelated-old', '2026-09-20T00:00:00.000Z'),
+    ];
+    const { eager, deferred } = selectEagerLoadRoots(entries, 2);
+    expect(eager.map((e) => e.root).sort()).toEqual(
+      ['/other-fresh', '/ws/parent', '/ws/parent/front'].sort(),
+    );
+    expect(deferred.map((e) => e.root)).toEqual(['/unrelated-old']);
+  });
+
+  it('TRA-1863: unregistered declared children are not promoted', () => {
+    const entries = [
+      entry('/ws/parent', '2026-09-23T00:00:00.000Z', undefined, {
+        type: 'multi-root',
+        children: ['/ws/parent/ghost'],
+      }),
+      entry('/other', '2026-09-24T00:00:00.000Z'),
+      entry('/old', '2026-01-01T00:00:00.000Z'),
+    ];
+    const { eager, deferred } = selectEagerLoadRoots(entries, 2);
+    expect(eager.map((e) => e.root)).toEqual(['/other', '/ws/parent']);
+    expect(deferred.map((e) => e.root)).toEqual(['/old']);
+  });
+
+  it('TRA-1863: a deferred multi-root parent does not pull its children', () => {
+    const entries = [
+      entry('/fresh-a', '2026-09-24T00:00:00.000Z'),
+      entry('/fresh-b', '2026-09-23T12:00:00.000Z'),
+      entry('/ws/parent', '2026-09-20T00:00:00.000Z', undefined, {
+        type: 'multi-root',
+        children: ['/ws/parent/front'],
+      }),
+      entry('/ws/parent/front', '2026-09-21T00:00:00.000Z'),
+    ];
+    const { eager, deferred } = selectEagerLoadRoots(entries, 2);
+    expect(eager.map((e) => e.root)).toEqual(['/fresh-a', '/fresh-b']);
+    expect(deferred.map((e) => e.root).sort()).toEqual(['/ws/parent', '/ws/parent/front'].sort());
   });
 });
