@@ -104,6 +104,12 @@ otherwise auto-register as persistent projects, cold-index from scratch, and lin
   age. When the checkout shares a git remote with an already-indexed project (including
   bare-mirror worktrees, which share no common dir), read-only lookups route to that
   canonical index instead of building a redundant one.
+- Supported glob dialect is `*`, `**`, `?`, and `[...]` character classes (including
+  `[!...]` negation). `{a,b}` brace expansion is **not** supported — a pattern using
+  braces never matches. Write patterns as absolute paths (after `~` / `$VAR` expansion):
+  a relative pattern such as `gate/**` matches at *any* depth system-wide, so prefer
+  `~/gate/**`. On macOS list both `/tmp/**` and `/private/tmp/**` (`/tmp` is a symlink;
+  matching resolves both sides best-effort, but an explicit pair never depends on it).
 - `mode: "never"` disables every implicit registration; the daemon answers new roots
   with an honest "not indexed" error instead of a cold index. Deliberate
   `trace-mcp add` / `trace-mcp init` always still works.

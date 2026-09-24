@@ -241,10 +241,57 @@ export function getAutoRegisterMode(): AutoRegisterMode {
 export function isUserExcludedProjectRoot(root: string): boolean {
   const abs = path.resolve(root);
   const patterns = readAutoRegisterExcludePatterns();
+  // Candidate (root, pattern) pairs: the as-given forms plus best-effort
+  // realpath variants on both sides. On macOS `/tmp` symlinks to
+  // `/private/tmp` and `path.resolve` doesn't resolve symlinks, so a `/tmp/**`
+  // pattern under-matches an already-realpath'd root (and a `/private/tmp/**`
+  // pattern under-matches a symlinked root) without this.
+  const roots = [abs];
+  try {
+    const real = fs.realpathSync(abs);
+    if (real !== abs) roots.push(real);
+  } catch {
+    /* missing dir — the abs check below already ran */
+  }
+  const allPatterns = [...patterns];
   for (const pattern of patterns) {
-    if (autoRegisterPatternMatches(abs, pattern)) return true;
+    const variant = realpathAutoRegisterPatternBase(pattern);
+    if (variant && variant !== pattern) allPatterns.push(variant);
+  }
+  for (const r of roots) {
+    for (const pattern of allPatterns) {
+      if (autoRegisterPatternMatches(r, pattern)) return true;
+    }
   }
   return false;
+}
+
+/**
+ * Best-effort realpath of the literal leading directory of an exclude glob
+ * (the part before the first `*?[{` magic, cut back to the last `/`), with
+ * the glob tail re-attached. Returns null when there is nothing to resolve
+ * (no magic, unresolvable prefix, or already canonical). Lets a `/tmp/**`
+ * pattern match a `/private/tmp/...` root and vice versa.
+ */
+function realpathAutoRegisterPatternBase(pattern: string): string | null {
+  try {
+    const expanded = expandAutoRegisterPattern(pattern);
+    const normalized = expanded.replace(/\\/g, '/');
+    const magicIdx = normalized.search(/[*?[\]{}]/);
+    if (magicIdx === -1) {
+      const real = fs.realpathSync(expanded).replace(/\\/g, '/');
+      return real !== normalized ? real : null;
+    }
+    const head = normalized.slice(0, magicIdx);
+    const slash = head.lastIndexOf('/');
+    if (slash <= 0) return null;
+    const dirHead = head.slice(0, slash) || '/';
+    const realDir = fs.realpathSync(dirHead).replace(/\\/g, '/');
+    if (realDir === dirHead) return null;
+    return realDir + normalized.slice(slash);
+  } catch {
+    return null;
+  }
 }
 
 // The `auto_register` slice of the global config. Read fresh on every call:
@@ -329,7 +376,10 @@ function autoRegisterGlobToRegExp(glob: string): RegExp {
         re += '\\[';
         i += 1;
       } else {
-        re += g.slice(i, close + 1);
+        // Glob negation `[!a]` is regex `[^a]` — without the translation the
+        // `!` compiles literally and the class matches `!`+`a` instead.
+        const body = g.slice(i, close + 1);
+        re += body.startsWith('[!') ? `[^${body.slice(2)}` : body;
         i = close + 1;
       }
     } else if ('+()|^$.{}\\'.includes(c)) {

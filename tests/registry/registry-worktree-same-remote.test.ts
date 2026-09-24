@@ -32,7 +32,9 @@ function runGit(cwd: string, ...args: string[]): void {
   });
 }
 
-function writeRegistryProjects(projects: Record<string, { root: string; name: string }>): void {
+function writeRegistryProjects(
+  projects: Record<string, { root: string; name: string; remoteIdentity?: string }>,
+): void {
   fs.mkdirSync(path.dirname(REGISTRY_PATH), { recursive: true });
   const reg = {
     version: 1,
@@ -45,6 +47,7 @@ function writeRegistryProjects(projects: Record<string, { root: string; name: st
           dbPath: path.join(p.root, '.trace-mcp', 'index.db'),
           lastIndexed: null,
           addedAt: new Date().toISOString(),
+          ...(p.remoteIdentity ? { remoteIdentity: p.remoteIdentity } : {}),
         },
       ]),
     ),
@@ -117,6 +120,31 @@ describe('resolveWorktreeAware same-remote fallback (TRA-1881)', () => {
     const hint = worktreeHint(result);
     expect(hint).toBeTruthy();
     expect(hint).toContain('canonical');
+  });
+
+  it('does not route to a deleted-dir ("Missing folder") row with a cached remote identity', () => {
+    const canonical = path.join(tmpDir, 'canonical');
+    makeCanonical(canonical);
+
+    const bare = path.join(tmpDir, 'mirror.git');
+    makeBareMirror(bare, canonical, tmpDir);
+    const wt = path.join(tmpDir, 'wt-run-1');
+    runGit(tmpDir, '--git-dir', bare, 'worktree', 'add', '-q', '--detach', wt);
+
+    // Registry holds only a dead row: directory gone (with its parent, so
+    // boot self-heal never pruned it), but the cached remoteIdentity matches.
+    const deadRoot = path.join(tmpDir, 'deleted-canonical');
+    writeRegistryProjects({
+      [deadRoot]: {
+        root: deadRoot,
+        name: 'deleted-canonical',
+        remoteIdentity: 'github.com/org/bare-mirror-fixture',
+      },
+    });
+    expect(fs.existsSync(deadRoot)).toBe(false);
+
+    const result = resolveWorktreeAware(wt);
+    expect(result.canonicalCandidates).toHaveLength(0);
   });
 
   it('does not route when remotes differ', () => {

@@ -114,6 +114,22 @@ describe('auto_register persistence + mode gate (TRA-1881)', () => {
     expect(registry.getProject(deliberate)?.explicit).toBe(true);
   });
 
+  it('mode never still resolves an already-registered root implicitly (daemon boot)', () => {
+    // Register first under "always", then flip to "never": boot, lazy reload
+    // and POST re-add all call setupProject with no opts on a registered root
+    // and must get the entry back, not a throw.
+    writeConfig({ auto_register: { mode: 'always', exclude: [] } });
+    const stable = path.join(tmpHome, 'stable-app');
+    makeProject(stable);
+    const first = projectSetup.setupProject(stable, { explicit: true });
+    expect(first.isNew).toBe(true);
+
+    writeConfig({ auto_register: { mode: 'never', exclude: [] } });
+    const again = projectSetup.setupProject(stable);
+    expect(again.isNew).toBe(false);
+    expect(again.entry.root).toBe(path.resolve(stable));
+  });
+
   it('isDbPathShared refcounts a same-remote sibling DB (TRA-1887)', () => {
     const remote = 'https://github.com/org/shared-remote.git';
     const canonical = path.join(tmpHome, 'canonical');

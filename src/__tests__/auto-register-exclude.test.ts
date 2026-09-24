@@ -61,13 +61,24 @@ describe('isUserExcludedProjectRoot (TRA-1881)', () => {
     expect(isUserExcludedProjectRoot(path.join(home, 'projects/app'))).toBe(false);
   });
 
-  it('matches /tmp/** including /tmp itself, but not lookalikes', () => {
-    writeGlobalConfig({ auto_register: { exclude: ['/tmp/**', '/private/tmp/**'] } });
-    expect(isUserExcludedProjectRoot('/tmp/clone-1')).toBe(true);
-    expect(isUserExcludedProjectRoot('/tmp')).toBe(true);
-    expect(isUserExcludedProjectRoot('/tmpfoo/x')).toBe(false);
-    expect(isUserExcludedProjectRoot('/private/tmp/x')).toBe(true);
-    expect(isUserExcludedProjectRoot('/private/tmp-backup/x')).toBe(false);
+  it('matches a trailing-/** exclude including the base itself, but not lookalikes', () => {
+    // Portable core (runs everywhere): derive the base from os.tmpdir() — on
+    // Windows path.resolve('/tmp/..') gains a drive letter that never matches
+    // a drive-less POSIX pattern, so POSIX literals live in the gated block
+    // below (TRA-1810).
+    const base = path.join(os.tmpdir(), 'trace-1881-exclude-base');
+    writeGlobalConfig({ auto_register: { exclude: [`${base}/**`] } });
+    expect(isUserExcludedProjectRoot(path.join(base, 'clone-1'))).toBe(true);
+    expect(isUserExcludedProjectRoot(base)).toBe(true);
+    expect(isUserExcludedProjectRoot(`${base}-other/x`)).toBe(false);
+    if (process.platform !== 'win32') {
+      writeGlobalConfig({ auto_register: { exclude: ['/tmp/**', '/private/tmp/**'] } });
+      expect(isUserExcludedProjectRoot('/tmp/clone-1')).toBe(true);
+      expect(isUserExcludedProjectRoot('/tmp')).toBe(true);
+      expect(isUserExcludedProjectRoot('/tmpfoo/x')).toBe(false);
+      expect(isUserExcludedProjectRoot('/private/tmp/x')).toBe(true);
+      expect(isUserExcludedProjectRoot('/private/tmp-backup/x')).toBe(false);
+    }
   });
 
   it('expands $TMPDIR and ${TMPDIR}', () => {
@@ -85,17 +96,30 @@ describe('isUserExcludedProjectRoot (TRA-1881)', () => {
   });
 
   it('treats a bare directory (no glob magic) as the dir + subtree', () => {
-    writeGlobalConfig({ auto_register: { exclude: ['/data/gate'] } });
-    expect(isUserExcludedProjectRoot('/data/gate')).toBe(true);
-    expect(isUserExcludedProjectRoot('/data/gate/a/b')).toBe(true);
-    expect(isUserExcludedProjectRoot('/data/gate-other')).toBe(false);
+    const base = path.join(os.tmpdir(), 'trace-1881-bare-gate');
+    writeGlobalConfig({ auto_register: { exclude: [base] } });
+    expect(isUserExcludedProjectRoot(base)).toBe(true);
+    expect(isUserExcludedProjectRoot(path.join(base, 'a', 'b'))).toBe(true);
+    expect(isUserExcludedProjectRoot(`${base}-other`)).toBe(false);
+    if (process.platform !== 'win32') {
+      writeGlobalConfig({ auto_register: { exclude: ['/data/gate'] } });
+      expect(isUserExcludedProjectRoot('/data/gate')).toBe(true);
+      expect(isUserExcludedProjectRoot('/data/gate/a/b')).toBe(true);
+      expect(isUserExcludedProjectRoot('/data/gate-other')).toBe(false);
+    }
   });
 
   it('honors TRACE_MCP_AUTO_REGISTER_EXCLUDE without a config file', () => {
     writeGlobalConfig({});
-    vi.stubEnv('TRACE_MCP_AUTO_REGISTER_EXCLUDE', '/tmp/**');
-    expect(isUserExcludedProjectRoot('/tmp/clone-9')).toBe(true);
-    expect(isUserExcludedProjectRoot('/opt/app')).toBe(false);
+    const base = path.join(os.tmpdir(), 'trace-1881-env-gate');
+    vi.stubEnv('TRACE_MCP_AUTO_REGISTER_EXCLUDE', `${base}/**`);
+    expect(isUserExcludedProjectRoot(path.join(base, 'clone-9'))).toBe(true);
+    expect(isUserExcludedProjectRoot(path.join(os.tmpdir(), 'trace-1881-other-app'))).toBe(false);
+    if (process.platform !== 'win32') {
+      vi.stubEnv('TRACE_MCP_AUTO_REGISTER_EXCLUDE', '/tmp/**');
+      expect(isUserExcludedProjectRoot('/tmp/clone-9')).toBe(true);
+      expect(isUserExcludedProjectRoot('/opt/app')).toBe(false);
+    }
   });
 
   it('keeps the built-in ephemeral patterns working', () => {
@@ -107,9 +131,18 @@ describe('isUserExcludedProjectRoot (TRA-1881)', () => {
   });
 
   it('routes an excluded root DB to the ephemeral index dir', () => {
-    writeGlobalConfig({ auto_register: { exclude: ['/tmp/**'] } });
-    expect(getDbPath('/tmp/clone-1').startsWith(`${EPHEMERAL_INDEX_DIR}${path.sep}`)).toBe(true);
-    expect(getDbPath('/opt/stable-app').startsWith(`${INDEX_DIR}${path.sep}`)).toBe(true);
+    const base = path.join(os.tmpdir(), 'trace-1881-db-gate');
+    const stable = path.join(os.tmpdir(), 'trace-1881-stable-app');
+    writeGlobalConfig({ auto_register: { exclude: [`${base}/**`] } });
+    expect(
+      getDbPath(path.join(base, 'clone-1')).startsWith(`${EPHEMERAL_INDEX_DIR}${path.sep}`),
+    ).toBe(true);
+    expect(getDbPath(stable).startsWith(`${INDEX_DIR}${path.sep}`)).toBe(true);
+    if (process.platform !== 'win32') {
+      writeGlobalConfig({ auto_register: { exclude: ['/tmp/**'] } });
+      expect(getDbPath('/tmp/clone-1').startsWith(`${EPHEMERAL_INDEX_DIR}${path.sep}`)).toBe(true);
+      expect(getDbPath('/opt/stable-app').startsWith(`${INDEX_DIR}${path.sep}`)).toBe(true);
+    }
   });
 });
 

@@ -19,6 +19,7 @@
  * Mirrors jcodemunch v1.82.0 canonical-candidates behavior.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectRemoteIdentity } from './global.js';
 import { logger } from './logger.js';
@@ -139,9 +140,14 @@ export function resolveWorktreeAware(requestedRoot: string): WorktreeResolveResu
     if (identity) {
       for (const entry of listProjects()) {
         if (path.resolve(entry.root) === path.resolve(requestedRoot)) continue;
-        // Skip entries already proposed above (same path check aside, a
-        // common-dir candidate trivially shares the remote too).
-        if (candidates.some((c) => path.resolve(c.entry.root) === path.resolve(entry.root))) {
+        // A lingering "Missing folder" row (GH#1371 residue whose dir was
+        // deleted with its parent, so boot self-heal never pruned it) still
+        // carries a cached remoteIdentity that matches — routing read traffic
+        // to a dead entry's DB. The common-dir loop above is naturally immune
+        // (probe fails on missing dirs); skip dead roots here too.
+        try {
+          if (!fs.existsSync(entry.root)) continue;
+        } catch {
           continue;
         }
         let entryIdentity: string | null = null;
