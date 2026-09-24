@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import Database from 'better-sqlite3';
@@ -11,6 +12,7 @@ import { PluginRegistry } from '../../plugin-api/registry.js';
 import { ProgressState } from '../../progress.js';
 import { createServer, type ServerHandle } from '../../server/server.js';
 import type { ProjectRelay } from '../../server/types.js';
+import { ActivityStore } from '../../session/activity-store.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { createLightweightProjectRelay } from '../project-relay.js';
 import type { Backend } from './types.js';
@@ -47,6 +49,14 @@ export class SnapshotBackend implements Backend {
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
   private readonly projectRelay: ProjectRelay = createLightweightProjectRelay();
+  /**
+   * Durable activity journal (TRA-1868). The snapshot answers a session's
+   * first tool calls before the real backend settles — without its own
+   * writer those calls never reach activity.db. Same shared file as the
+   * daemon/local writers; null when the constructor throws.
+   */
+  private activityStore: ActivityStore | null = null;
+  private readonly snapshotSessionId = randomUUID();
 
   constructor(opts: SnapshotBackendOptions) {
     this.opts = opts;
@@ -81,6 +91,14 @@ export class SnapshotBackend implements Backend {
       /* noop */
     }
 
+    try {
+      this.activityStore = new ActivityStore();
+    } catch (e) {
+      logger.warn(`activity store unavailable: ${(e as Error)?.message ?? e}`);
+    }
+    const activityStore = this.activityStore;
+    const snapshotSessionId = this.snapshotSessionId;
+    const snapshotProject = projectRoot;
     this.handle = createServer(store, registry, config, projectRoot, progress, {
       topoStore: this.topoStore,
       decisionStore: this.decisionStore,
@@ -89,6 +107,17 @@ export class SnapshotBackend implements Backend {
       // moment later — counting this transient snapshot too would double
       // every session that has one (TRA-951 precedent).
       skipUsagePing: true,
+      // ...but tool CALLS are not usage pings: each call is served exactly
+      // once (here, before the swap), so journaling them here double-counts
+      // nothing and closes the snapshot hole in activity.db (TRA-1868).
+      sessionId: snapshotSessionId,
+      onJournalEntry: (data) => {
+        activityStore?.record({
+          ...data,
+          project: snapshotProject,
+          session_id: snapshotSessionId,
+        });
+      },
     });
 
     const [client, server] = InMemoryTransport.createLinkedPair();
@@ -126,6 +155,14 @@ export class SnapshotBackend implements Backend {
       /* best-effort */
     }
     this.handle = null;
+    // Flush buffered journal entries — the snapshot's calls happened, they
+    // just haven't hit the 2 s flush timer yet.
+    try {
+      this.activityStore?.close();
+    } catch {
+      /* best-effort */
+    }
+    this.activityStore = null;
     try {
       this.topoStore?.close();
     } catch {

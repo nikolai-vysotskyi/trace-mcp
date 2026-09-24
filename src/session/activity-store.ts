@@ -86,8 +86,10 @@ export class ActivityStore {
   private buffer: ActivityEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private lastPruneAt = 0;
+  /** Last time a batch actually landed on disk. Enables the stall watchdog. */
+  private lastWriteAt = Date.now();
   /** One log line per failure kind — a full disk would otherwise write a line per batch. */
-  private warned = { flush: false, prune: false };
+  private warned = { flush: false, prune: false, stall: false };
   private readonly insertStmt: Database.Statement;
   private readonly recordingSinceMs: number;
 
@@ -163,6 +165,7 @@ export class ActivityStore {
           });
         }
       })(batch);
+      this.lastWriteAt = Date.now();
     } catch (e) {
       // A failed batch is a hole in a chart, not a reason to take the daemon
       // down. Dropped deliberately — retrying would grow the buffer unbounded.
@@ -175,6 +178,38 @@ export class ActivityStore {
       }
     }
     this.prune();
+  }
+
+  /**
+   * Stall watchdog (TRA-1868): the 2 s flush timer cannot fire while the
+   * event loop is wedged (bulk indexing starved it for minutes in the field),
+   * so a stuck buffer is the first symptom of the next journal silence —
+   * long before anyone notices the charts went flat. Warns once per stuck
+   * episode; re-arms when the buffer drains.
+   *
+   * The timer is unref'd so CLI one-shots that construct a store never hang
+   * on it. Returns a stop function; callers with a shutdown path
+   * (daemon serve-http, LocalBackend.stop) should call it, everyone else can
+   * rely on unref + process exit.
+   */
+  startWatchdog(opts?: { intervalMs?: number; maxStuckMs?: number }): () => void {
+    const intervalMs = opts?.intervalMs ?? 60_000;
+    const maxStuckMs = opts?.maxStuckMs ?? 5 * 60_000;
+    const timer = setInterval(() => {
+      if (this.buffer.length === 0) {
+        this.warned.stall = false;
+        return;
+      }
+      if (Date.now() - this.lastWriteAt > maxStuckMs && !this.warned.stall) {
+        this.warned.stall = true;
+        logger.warn(
+          { buffered: this.buffer.length, stuckMs: Date.now() - this.lastWriteAt },
+          'activity journal entries buffered but not reaching disk — Activity history is stalling',
+        );
+      }
+    }, intervalMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 
   /**

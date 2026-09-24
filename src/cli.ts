@@ -1095,12 +1095,62 @@ program
     // window regardless of how busy the project was (TRA-1071). Entries are
     // appended here as they are broadcast and read back per time window.
     let activityStore: import('./session/activity-store.js').ActivityStore | null = null;
+    let stopActivityWatchdog: (() => void) | null = null;
+    // Last time a journal broadcast actually reached the store. Distinct from
+    // the store's own flush health: this answers "is anything emitting",
+    // the watchdog answers "is the store writing what it receives".
+    let lastJournalEmitAt = 0;
     try {
       const { ActivityStore } = await import('./session/activity-store.js');
       activityStore = new ActivityStore();
+      stopActivityWatchdog = activityStore.startWatchdog();
     } catch (e) {
       logger.warn(`activity store unavailable: ${(e as Error)?.message ?? e}`);
     }
+    // TRA-1868 self-check: the journal went silently blind for 2+ hours
+    // across healthy daemon restarts (no warn anywhere) while tool traffic
+    // kept flowing. Every 5 min, if live sessions recorded tool calls
+    // recently but nothing reached the durable journal for 15+ min, say so
+    // in daemon.log instead of letting the next night-QA run go blind.
+    const journalSilenceCheck = setInterval(
+      () => {
+        try {
+          if (!activityStore || lastJournalEmitAt === 0) return;
+          const now = Date.now();
+          if (now - lastJournalEmitAt <= 15 * 60 * 1000) return;
+          let liveTraffic = false;
+          for (const h of sessionHandles.values()) {
+            try {
+              if (h.journal.latestTimestamp() > now - 5 * 60 * 1000) {
+                liveTraffic = true;
+                break;
+              }
+            } catch {
+              /* a half-torn-down session must not break the sweep */
+            }
+          }
+          if (liveTraffic) {
+            logger.warn(
+              {
+                silentMs: now - lastJournalEmitAt,
+                sessions: sessionHandles.size,
+              },
+              'activity journal silent 15+ min despite live tool traffic — Activity history and is_error metrics have gaps (TRA-1868)',
+            );
+            // One line per stuck episode, not per tick: without traffic the
+            // next tick stays quiet by itself, but with CONTINUED traffic the
+            // emit timestamp would have moved. Re-arm by pretending we just
+            // warned "now" — the next warn fires only after another 15 min of
+            // traffic-without-emits.
+            lastJournalEmitAt = now;
+          }
+        } catch {
+          /* self-check must never break the daemon */
+        }
+      },
+      5 * 60 * 1000,
+    );
+    journalSilenceCheck.unref?.();
 
     async function createSessionTransport(
       projectRoot: string,
@@ -1151,6 +1201,7 @@ program
           const entry = { ...data, project: projectRoot, session_id: sessionId };
           broadcastEvent(buildJournalEvent(entry));
           activityStore?.record(entry);
+          lastJournalEmitAt = Date.now();
         },
         // R09 v2: lets MCP tools (embed_repo, snapshot_graph) emit
         // pipeline-lifecycle events through the existing SSE bus.
@@ -3481,6 +3532,12 @@ program
       clearInterval(activityPoker);
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
+      clearInterval(journalSilenceCheck);
+      try {
+        stopActivityWatchdog?.();
+      } catch {
+        /* best-effort */
+      }
       // TRA-849: which phase eats the shutdown budget is not answerable from
       // the log today — we only know the total sometimes exceeded 5s. Time the
       // one phase that can block on real work (`stopProject` awaits each

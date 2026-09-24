@@ -28,6 +28,7 @@ import { checkEmbeddingDrift } from '../../runtime/embedding-drift.js';
 import { tuneRepoWeights } from '../../runtime/tuning.js';
 import { enrichItemsWithFreshness } from '../../scoring/freshness.js';
 import type { MetaContext } from '../../server/types.js';
+import { summarizeToolParams } from '../../session/journal.js';
 import { getSessionResume } from '../../session/resume.js';
 import { registerAITools } from '../ai/ai-tools.js';
 import { getCommunities } from '../analysis/communities.js';
@@ -62,6 +63,8 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     toolHandlers,
     presetName,
     deferredTools,
+    onJournalEntry,
+    sessionId,
   } = ctx;
 
   // --- Resources ---
@@ -970,16 +973,42 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         }
         try {
           savings.recordCall(call.tool);
+          const subStart = Date.now();
           const response = await handler(call.args);
+          const subLatency = Date.now() - subStart;
           // Parse the JSON text from the response to embed inline
           const text = response.content?.[0]?.text;
           // batch dispatches handlers directly, so the gate's correction never
           // runs here — without this every batched call keeps the pre-call
           // compression guess (TRA-880).
+          let subTokens: number | undefined;
           if (typeof text === 'string') {
             const batchTokens = Math.ceil(text.length / 4);
+            subTokens = batchTokens;
             if (response.isError) savings.recordFailedCall(call.tool, batchTokens);
             else savings.recordActualTokens(call.tool, batchTokens);
+          }
+          // TRA-1868: batch used to dispatch raw handlers past the gate, so
+          // every batched sub-call was invisible to the durable activity
+          // journal (and to in-memory dedup). Record + broadcast each one.
+          const subCount = response.isError ? 0 : 1;
+          try {
+            journal.record(call.tool, call.args, subCount, { resultTokens: subTokens });
+          } catch {
+            /* journal is best-effort */
+          }
+          if (onJournalEntry && sessionId) {
+            onJournalEntry({
+              project: projectRoot,
+              ts: Date.now(),
+              tool: call.tool,
+              params_summary: summarizeToolParams(call.tool, call.args),
+              result_count: subCount,
+              result_tokens: subTokens,
+              latency_ms: subLatency,
+              is_error: !!response.isError,
+              session_id: sessionId,
+            });
           }
           if (text) {
             try {
