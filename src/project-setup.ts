@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { saveProjectConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
-import { ensureGlobalDirs } from './global.js';
+import { ensureGlobalDirs, getAutoRegisterMode } from './global.js';
 import { generateConfig } from './init/config-generator.js';
 import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
@@ -57,6 +57,20 @@ export function setupProject(
   opts?: { force?: boolean; migrateOldDb?: boolean; explicit?: boolean },
 ): ProjectSetupResult {
   const absRoot = path.resolve(projectRoot);
+
+  // GH#1371 / TRA-1881: `auto_register.mode: "never"` (and `"ask"`, which has
+  // no interactive prompt yet) disables every *implicit* registration. Only
+  // absence of deliberate opts counts as implicit — `add`/`init` pass
+  // `explicit`, `ask` passes `force`, and both bypass this gate.
+  if (!opts?.explicit && !opts?.force) {
+    const mode = getAutoRegisterMode();
+    if (mode === 'never' || mode === 'ask') {
+      throw new Error(
+        `Auto-registration is disabled (auto_register.mode: "${mode}"). ` +
+          `Register "${absRoot}" deliberately with \`trace-mcp add\` to index it.`,
+      );
+    }
+  }
 
   const dangerReason = isDangerousProjectRoot(absRoot);
   if (dangerReason) {
