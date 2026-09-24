@@ -221,5 +221,21 @@ describe('registry health (#168)', () => {
       expect(registry.registeredDescendantRoots(umbrella)).toEqual([]);
       expect(registry.descendantExcludeGlobs(umbrella)).toEqual([]);
     });
+
+    // TRA-1863: the descendant-wake path needs ALL registered roots under an
+    // ancestor — including declared multi-root children, which the exclusion
+    // list above deliberately leaves out.
+    it('registeredNestedRoots includes declared multi-root children', () => {
+      const umbrella = makeProjectDir('mono');
+      const declared = makeProjectDir('mono/packages/app');
+      const plain = makeProjectDir('mono/other');
+      const sibling = makeProjectDir('sibling');
+      registry.registerProject(umbrella, { type: 'multi-root', children: [declared] });
+      for (const p of [declared, plain, sibling]) registry.registerProject(p);
+
+      expect(registry.registeredNestedRoots(umbrella).sort()).toEqual([declared, plain].sort());
+      // A leaf project with no registered descendants nests nothing.
+      expect(registry.registeredNestedRoots(declared)).toEqual([]);
+    });
   });
 });

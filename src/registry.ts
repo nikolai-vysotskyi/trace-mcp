@@ -534,6 +534,26 @@ export function registeredDescendantRoots(root: string): string[] {
 }
 
 /**
+ * Every registered project root strictly inside `root`, INCLUDING declared
+ * `multi-root` children (which {@link registeredDescendantRoots} deliberately
+ * leaves out). Used by the daemon's descendant-wake path (TRA-1863): a
+ * multi-root parent intentionally watches its declared children's subtrees,
+ * so when it sees events there for a child that is currently unloaded, the
+ * child — not the exclusion list — is what needs attention.
+ */
+export function registeredNestedRoots(root: string): string[] {
+  const absRoot = path.resolve(root);
+  const reg = loadRegistry();
+  return Object.values(reg.projects)
+    .map((e) => e.root)
+    .filter((r) => {
+      if (r === absRoot) return false;
+      const rel = path.relative(absRoot, r);
+      return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+    });
+}
+
+/**
  * fast-glob / parcel-watcher ignore globs (POSIX, relative to `root`) for every
  * registered descendant of `root`. Feed into collectFiles()'s ignore list and
  * the incremental indexFiles() gate so an ancestor never indexes a

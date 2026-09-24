@@ -47,6 +47,7 @@ import {
   listProjects,
   MAX_PENDING_REINDEX_ATTEMPTS,
   recordPendingReindexAttempt,
+  registeredNestedRoots,
   unregisterProject,
   updateLastIndexed,
 } from '../registry.js';
@@ -92,6 +93,25 @@ export const STOP_PROJECT_TEARDOWN_BUDGET_MS = 13_000;
  * triages from one log line instead of an 87-minute mystery.
  */
 export const INDEXING_STALL_WARN_MS = 15 * 60_000;
+
+/**
+ * Minimum gap between two wake-up loads of the same unloaded descendant
+ * (TRA-1863). The decision is taken synchronously in the ancestor's watcher
+ * callback while the `addProject()` it kicks is still winding through its
+ * awaits (config load, DB open) — without this, every debounce batch during
+ * continuous editing would queue another full load of the same root.
+ */
+export const DESCENDANT_WAKE_COOLDOWN_MS = 60_000;
+
+/**
+ * Upper bound on descendant wakes kicked by a single watcher batch
+ * (TRA-1863). A bulk operation (branch checkout, dependency install) can
+ * touch many registered descendants at once; each wake is a full
+ * `addProject()` (DB open, watcher, background indexAll), so an unbounded
+ * batch would recreate the boot-time thundering herd mid-session. The rest
+ * stay deferred — their next change batch (or first query) wakes them.
+ */
+export const DESCENDANT_WAKE_PER_BATCH = 5;
 
 /**
  * Canonical in-memory key for the managed-projects map (TRA-1608).
@@ -314,6 +334,13 @@ export class ProjectManager {
   /** Idle-unload sweep timer — see startIdleUnloadSweep(). Null when not running
    *  (never started, or stopped via stopIdleUnloadSweep()/shutdown()). */
   private idleUnloadTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Last wake-up kick per unloaded-descendant root (TRA-1863) — see
+   * `DESCENDANT_WAKE_COOLDOWN_MS`. Bounded by the number of registered
+   * projects; entries are never cleared (a stale timestamp only delays one
+   * wake by the cooldown, it never blocks it).
+   */
+  private lastDescendantWake = new Map<string, number>();
   /**
    * Latch for the over-ceiling warn in unloadIdleProjects(): a durable
    * all-pinned state would otherwise log the same warn every 5-minute tick
@@ -814,6 +841,12 @@ export class ProjectManager {
           // sweep from evicting a project that's being actively edited, even
           // if no MCP session is connected (e.g. IDE-only editing).
           managed.lastAccessedAt = Date.now();
+          // TRA-1863: a multi-root parent intentionally watches its declared
+          // children's subtrees too, so events here may belong to a registered
+          // descendant that is currently unloaded (deferred at boot, or swept
+          // as idle) — its own DB would otherwise rot while this parent stays
+          // fresh and queries keep binding to the stale child. Wake it.
+          this.wakeUnloadedDescendants(projectRoot, paths);
           const watchStart = performance.now();
           const stats = getReindexStats();
           // Dedup against the recent-reindex cache: if the same Edit fired
@@ -1066,6 +1099,74 @@ export class ProjectManager {
             'excludes will still be recomputed on next daemon restart via loadAllRegistered)',
         );
       }
+    }
+  }
+
+  /**
+   * Reload registered descendants whose files just changed under this
+   * ancestor's watcher while they have no live project of their own
+   * (TRA-1863).
+   *
+   * A multi-root parent intentionally watches its declared children's
+   * subtrees (they are excluded from `descendantExcludeGlobs()`), so its
+   * watcher is the only thing that ever sees an IDE-only edit inside an
+   * unloaded child: the child was deferred by the eager-load cap at boot or
+   * swept as idle, and without this kick nothing would ever reload it — its
+   * DB rots while the parent stays fresh and query routing
+   * (`resolveDeepestKnownRoot` prefers the deepest root) keeps serving the
+   * stale child. The reload is a plain `addProject()` (watcher + background
+   * indexAll), identical to the lazy path a first query would take.
+   *
+   * Fire-and-forget and bounded: at most `DESCENDANT_WAKE_PER_BATCH` loads
+   * per batch (bulk operations touching many descendants must not recreate
+   * the boot-time herd), and a per-descendant cooldown covers both
+   * continuous editing and the in-flight window before the kicked load lands
+   * in the map. Non-multi-root ancestors exclude registered descendants at
+   * the native level, so they simply never observe such paths and never wake
+   * — no double-watch risk either way.
+   */
+  private wakeUnloadedDescendants(ancestorRoot: string, changedAbsPaths: string[]): void {
+    let nested: string[];
+    try {
+      nested = registeredNestedRoots(ancestorRoot);
+    } catch {
+      return;
+    }
+    if (nested.length === 0) return;
+    const now = Date.now();
+    let woken = 0;
+    for (const abs of changedAbsPaths) {
+      // Deepest match wins: a path under doubly-nested registrations wakes
+      // only the most-specific unloaded owner, mirroring query routing.
+      let owner: string | null = null;
+      for (const desc of nested) {
+        if (desc.length <= (owner?.length ?? -1)) continue;
+        const rel = path.relative(desc, abs);
+        if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) owner = desc;
+      }
+      if (!owner) continue;
+      if (this.projects.has(managerKey(owner))) continue;
+      const last = this.lastDescendantWake.get(owner) ?? 0;
+      if (now - last < DESCENDANT_WAKE_COOLDOWN_MS) continue;
+      if (woken >= DESCENDANT_WAKE_PER_BATCH) {
+        logger.debug(
+          { ancestor: ancestorRoot, owner },
+          'Descendant wake batch cap reached — remaining unloaded descendants stay deferred',
+        );
+        return;
+      }
+      this.lastDescendantWake.set(owner, now);
+      woken++;
+      logger.info(
+        { ancestor: ancestorRoot, descendant: owner },
+        'Reloading idle-unloaded registered descendant after ancestor watcher saw its files change',
+      );
+      void this.addProject(owner).catch((err) => {
+        logger.warn(
+          { error: serializeError(err), descendant: owner },
+          'Descendant wake reload failed (non-fatal — next change batch or query retries)',
+        );
+      });
     }
   }
 
