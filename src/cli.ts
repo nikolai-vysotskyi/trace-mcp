@@ -4040,7 +4040,10 @@ program
               );
             } else if (orphanResult.scannedOrphans > 0) {
               logger.info(
-                { orphanDbs: orphanResult.scannedOrphans },
+                {
+                  orphanDbs: orphanResult.scannedOrphans,
+                  retainedWithinTtl: orphanResult.retainedWithinTtl,
+                },
                 `Top-level orphan sweep: ${orphanResult.scannedOrphans} unregistered DB(s) within TTL, nothing to delete`,
               );
             } else {
