@@ -35,11 +35,13 @@ const FORBIDDEN = [
 ];
 
 /**
- * A line that points at the safe tool or that prohibits the shape is
- * instruction, not encouragement — e.g. the FORBIDDEN box in SKILL.md and
- * the decision-matrix row that lists `get_env_vars` as the env path.
+ * A line that explicitly prohibits the shape is instruction, not
+ * encouragement — e.g. the FORBIDDEN box in SKILL.md ("never ...").
+ * Deliberately narrow: generic words like `instead`, `don't`, `do not`, or a
+ * mere mention of `get_env_vars` must NOT suppress a hit, otherwise genuine
+ * violations sharing the line are silently skipped.
  */
-const PROHIBITION = /get_env_vars|never|forbidden|do not|don't|don’t|prohibit|instead/i;
+const PROHIBITION = /\b(?:never|forbidden|prohibit(?:ed)?|do not use)\b/i;
 
 function proseFiles(): string[] {
   const out: string[] = [];
