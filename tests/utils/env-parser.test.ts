@@ -59,6 +59,22 @@ describe('env-parser', () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].comment).toBe('Line 1 Line 2');
     });
+
+    it('tolerates whitespace around = (TRA-1889)', () => {
+      const entries = parseEnvFile('SPACED_KEY = spaced-value\nEXPORTED export NOPE\n');
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ key: 'SPACED_KEY', valueType: 'string', line: 1 });
+    });
+
+    it('tolerates whitespace around = with export prefix', () => {
+      const entries = parseEnvFile('export SPACED_EXPORT = 123\n');
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        key: 'SPACED_EXPORT',
+        valueType: 'number',
+        valueFormat: 'integer',
+      });
+    });
   });
 
   describe('type inference', () => {
@@ -196,6 +212,60 @@ describe('env-parser', () => {
       const result = redactEnvFile(input);
       expect(result).not.toContain('super-secret-password-123');
       expect(result).not.toContain('hunter2');
+    });
+
+    it('masks unrecognised lines instead of passing them through (TRA-1889)', () => {
+      const input = ['KEY=value', 'stray continuation without equals', '=nokey', ''].join('\n');
+      const result = redactEnvFile(input);
+      const lines = result.split('\n');
+      expect(lines).toHaveLength(4);
+      expect(lines[0]).toBe('KEY=<string>');
+      expect(lines[1]).toBe('# <redacted>');
+      expect(lines[2]).toBe('# <redacted>');
+      expect(lines[3]).toBe('');
+      expect(result).not.toContain('stray continuation');
+      expect(result).not.toContain('=nokey');
+    });
+
+    it('redacts spaced assignments instead of passing them through (TRA-1889)', () => {
+      const result = redactEnvFile('SPACED_KEY = spaced-sentinel-value\n');
+      expect(result).toContain('SPACED_KEY=<string>');
+      expect(result).not.toContain('spaced-sentinel-value');
+    });
+
+    it('masks multiline PEM blobs including =-padded body lines (TRA-1889)', () => {
+      const input = [
+        'RSA_KEY=-----BEGIN FAKE RSA PRIVATE KEY-----',
+        'TUlJRsYWtlLWJvZHktbGluZS0wMQ==',
+        'TUlJRsYWtlLWJvZHktbGluZS0wMg',
+        '-----END FAKE RSA PRIVATE KEY-----',
+        'NEXT=ok',
+        '',
+      ].join('\n');
+      const result = redactEnvFile(input);
+      const lines = result.split('\n');
+      // 1:1 line mapping preserved
+      expect(lines).toHaveLength(6);
+      expect(lines[0]).toBe('RSA_KEY=<string:cron>');
+      expect(lines[1]).toBe('# <redacted>');
+      expect(lines[2]).toBe('# <redacted>');
+      expect(lines[3]).toBe('# <redacted>');
+      expect(lines[4]).toBe('NEXT=<string>');
+      expect(result).not.toContain('TUlJRsYWtl');
+      expect(result).not.toContain('BEGIN FAKE');
+    });
+
+    it('masks unterminated quoted multiline values (TRA-1889)', () => {
+      const input = ['MULTI="line one', 'line two', 'line three"', 'AFTER=1', ''].join('\n');
+      const result = redactEnvFile(input);
+      const lines = result.split('\n');
+      expect(lines).toHaveLength(5);
+      expect(lines[0]).toBe('MULTI=<string>');
+      expect(lines[1]).toBe('# <redacted>');
+      expect(lines[2]).toBe('# <redacted>');
+      expect(lines[3]).toBe('AFTER=<boolean>');
+      expect(result).not.toContain('line one');
+      expect(result).not.toContain('line two');
     });
   });
 

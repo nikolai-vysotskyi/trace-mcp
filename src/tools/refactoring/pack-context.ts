@@ -13,6 +13,7 @@ import path from 'node:path';
 import { searchFts } from '../../db/fts.js';
 import type { Store } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
+import { redactEnvFile } from '../../utils/env-parser.js';
 import { getPageRank } from '../analysis/graph-analysis.js';
 
 export type PackStrategy = 'most_relevant' | 'core_first' | 'compact';
@@ -210,7 +211,13 @@ export function packContext(
         continue;
       }
 
-      if (compress) {
+      // .env files carry secret values: emit the redacted view (keys + type
+      // hints) instead of raw source. Takes priority over compress mode —
+      // env files have no symbols, so compression would otherwise fall
+      // through to the raw content. Mirrors get_env_vars keys-only design.
+      if (isEnvScopeFile(f)) {
+        content = redactEnvFile(content);
+      } else if (compress) {
         // In compress mode: keep signatures, strip function bodies
         const symbols = store.getSymbolsByFile(f.id);
         if (symbols.length > 0) {
@@ -389,6 +396,24 @@ export function packContext(
 
 // --- Helpers ---
 
+const ENV_BASENAME_RE = /^\.env(\..+)?$|\.env$/;
+
+interface ScopeFile {
+  id: number;
+  path: string;
+  language?: string | null;
+}
+
+/**
+ * True for scope files that may carry secret values: indexed with the `env`
+ * language, or named like a dotenv file. The language check is authoritative;
+ * the basename check covers rows indexed without the env classifier.
+ */
+function isEnvScopeFile(f: ScopeFile): boolean {
+  if (f.language === 'env') return true;
+  return ENV_BASENAME_RE.test(path.basename(f.path));
+}
+
 /**
  * Per-call scope context. Holds the full file list (loaded once) and a lazily
  * computed PageRank rank map, so that multiple getScopeFiles/getAllScopeFiles
@@ -401,13 +426,13 @@ interface ScopeContext {
   /** Underlying store — used only by the feature-scope FTS path. */
   store: Store;
   /** All indexed files (loaded once). */
-  allFiles: { id: number; path: string }[];
+  allFiles: ScopeFile[];
   /** path → PageRank score, computed on first rerank and reused thereafter. */
   getRankMap(): Map<string, number> | null;
 }
 
 function createScopeContext(store: Store): ScopeContext {
-  const allFiles = store.getAllFiles() as { id: number; path: string }[];
+  const allFiles = store.getAllFiles() as ScopeFile[];
   let rankMap: Map<string, number> | null | undefined; // undefined = not yet computed
   return {
     store,
@@ -428,11 +453,7 @@ function createScopeContext(store: Store): ScopeContext {
   };
 }
 
-function getAllScopeFiles(
-  ctx: ScopeContext,
-  scope: string,
-  scopePath?: string,
-): { id: number; path: string }[] {
+function getAllScopeFiles(ctx: ScopeContext, scope: string, scopePath?: string): ScopeFile[] {
   const all = ctx.allFiles;
   if (scope === 'module' && scopePath) {
     return all.filter((f) => f.path.startsWith(scopePath));
@@ -456,14 +477,14 @@ function getScopeFiles(
   query: string | undefined,
   limit: number,
   strategy: PackStrategy = 'most_relevant',
-): { id: number; path: string }[] {
+): ScopeFile[] {
   const all = ctx.allFiles;
 
   // Helper: re-rank a candidate set by PageRank descending. The rank map is
   // computed at most once per packContext call (see ScopeContext) and reused
   // across every section — same ordering as before, without rebuilding the
   // file graph + re-running PageRank per section.
-  const rerankByPageRank = (candidates: { id: number; path: string }[]) => {
+  const rerankByPageRank = (candidates: ScopeFile[]) => {
     const rankMap = ctx.getRankMap();
     if (!rankMap) return candidates;
     return [...candidates].sort((a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0));
@@ -479,13 +500,13 @@ function getScopeFiles(
     // Use FTS search to find relevant files
     const ftsResults = searchFts(ctx.store.db, query, limit * 2, 0);
     const fileIds = new Set<number>();
-    const files: { id: number; path: string }[] = [];
+    const files: ScopeFile[] = [];
     for (const r of ftsResults) {
       if (!fileIds.has(r.fileId)) {
         const file = ctx.store.getFileById(r.fileId);
         if (file) {
           fileIds.add(r.fileId);
-          files.push({ id: file.id, path: file.path });
+          files.push({ id: file.id, path: file.path, language: file.language });
         }
       }
       if (files.length >= limit) break;
