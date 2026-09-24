@@ -2898,3 +2898,25 @@ Four hours after TRA-1878, audited via API, read-only, nothing written outside t
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-24 night (TRA-1897): threads silent, MiniMax movement is Nikolai's own
+
+Two hours after TRA-1892, audited via API, read-only, nothing written outside this file.
+
+**Open threads — the only movement is Nikolai's own comment, nothing owed anywhere.**
+All 20 `updated_at` values re-read; 19 match the evening pass exactly:
+- Catalog PRs/issues: `eltociear#119`, `GetBindu#195`, `hermes#395`, `nix#606` (open, 1 comment each — our 09-20 reminders, single allowed ping spent), `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, two days out), `ai-boost#240` (open, 0 comments, `updated_at` 09-14 — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, `updated_at` still 09-18 bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (09-21), `kilocode#13843` (09-20), `kilocode#12707` (09-07), `atlas#105` (09-07), `slopstop#633` (09-06, deliberately not bumped), `Dokploy/mcp#81` (09-05), `nanocoder#1197` (09-17), `lastlight#372` (09-18), `pyrefly#4583` (09-07), `pi-extensions#1204` (09-05), `ai-tooling#585` (09-04), `pr-agent#2499` (09-14). All OPEN, all unchanged. `deslop#173` CLOSED 09-08, unchanged.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, `updated_at` 2026-09-24T16:08Z — the movement is Nikolai's own fifth comment (pin bump `41cac18` to `trace-mcp@3.31.5`, probes re-run against the fixed release, ready for another look). Reviewer `hetaoBackend` still at the two `CHANGES_REQUESTED` (09-21/09-22), no new review. His lane — recorded, not touched.
+- trace-mcp 182★/21 forks — flat against the evening pass.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read, `ops/mentions-seen.txt` untouched.
+
+**Competitor pulse (no touch):** `tirth8205/code-review-graph` at 31,767★ (+2 since the evening pass) with `pushed_at` still 2026-09-18 — stars grow, triage stands still. For Competitor Intelligence, nothing to write.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage, MiniMax#54 awaits re-review (his comment today already re-requests it), no door is due a reminder before 26.09. No consolidated request sent.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
