@@ -41,6 +41,43 @@ interface Fixture {
   config: TraceMcpConfig;
 }
 
+/**
+ * Two linked function symbols in one file. The edge keeps the linker-failure
+ * check quiet so embedding assertions read cleanly; `embedded` controls
+ * whether both symbols already have vectors.
+ */
+function seedLinkedSymbols(store: Store, embedded: boolean): void {
+  const fid = store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+  const mk = (name: string, start: number) =>
+    store.insertSymbol(fid, {
+      symbolId: `src/a.ts::${name}#function`,
+      name,
+      kind: 'function',
+      fqn: name,
+      byteStart: start,
+      byteEnd: start + 10,
+      lineStart: 1,
+      lineEnd: 2,
+    });
+  const a = mk('alpha', 0);
+  const b = mk('beta', 20);
+  if (embedded) {
+    for (const id of [a, b]) {
+      store.db
+        .prepare('INSERT INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)')
+        .run(id, Buffer.from(new Float32Array([0.1, 0.2]).buffer));
+    }
+  }
+  const aNode = store.getNodeId('symbol', a);
+  const bNode = store.getNodeId('symbol', b);
+  if (aNode === undefined || bNode === undefined) throw new Error('symbol nodes not created');
+  store.insertEdge(aNode, bNode, 'calls');
+}
+
+function aiEnabledConfig(base: TraceMcpConfig): TraceMcpConfig {
+  return { ...base, ai: { enabled: true } } as unknown as TraceMcpConfig;
+}
+
 describe('getIndexHealth() — behavioural contract', () => {
   let ctx: Fixture;
 
@@ -117,13 +154,67 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(result.warnings.some((w) => /edges/i.test(w))).toBe(true);
   });
 
-  it('omits the embedding block when AI is off and nothing has failed', () => {
+  it('no symbols → no embedding block (nothing to cover)', () => {
     ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
     expect(getIndexHealth(ctx.store, ctx.config).embedding).toBeUndefined();
   });
 
+  // TRA-1904: a 0%-covered project used to read as healthy with an absent
+  // embedding block. Coverage is now reported whenever symbols exist — even
+  // with AI off — so FTS-only search is visible, not silent.
+  it('AI off with symbols → coverage 0% with enabled=false and an FTS-only warning, status stays ok', () => {
+    seedLinkedSymbols(ctx.store, false);
+
+    const result = getIndexHealth(ctx.store, ctx.config);
+    expect(result.embedding).toMatchObject({
+      enabled: false,
+      totalSymbols: 2,
+      embedded: 0,
+      coveragePct: 0,
+      queued: 2,
+    });
+    // Lexical-only is a supported operator choice — warn, don't degrade.
+    expect(result.status).toBe('ok');
+    expect(result.warnings.some((w) => /FTS-only/.test(w))).toBe(true);
+  });
+
+  // TRA-1904: an undrained backlog with no breaker row (fresh reindex while
+  // the provider was down, or background pass not yet fired) used to read as
+  // healthy with silently partial semantic ranking.
+  it('AI on with an undrained backlog and no breaker → degraded with a backfill warning', () => {
+    seedLinkedSymbols(ctx.store, false);
+
+    const result = getIndexHealth(ctx.store, aiEnabledConfig(ctx.config));
+    expect(result.embedding).toMatchObject({
+      enabled: true,
+      totalSymbols: 2,
+      embedded: 0,
+      coveragePct: 0,
+      queued: 2,
+    });
+    expect(result.status).toBe('degraded');
+    expect(result.warnings.some((w) => /call embed_repo to backfill/.test(w))).toBe(true);
+  });
+
+  it('AI on with full coverage → 100% block, no embedding warning, status ok', () => {
+    seedLinkedSymbols(ctx.store, true);
+
+    const result = getIndexHealth(ctx.store, aiEnabledConfig(ctx.config));
+    expect(result.embedding).toMatchObject({
+      enabled: true,
+      totalSymbols: 2,
+      embedded: 2,
+      coveragePct: 100,
+      queued: 0,
+    });
+    expect(result.warnings.some((w) => /embed/i.test(w))).toBe(false);
+    expect(result.status).toBe('ok');
+  });
+
   // TRA-812: a paused embedding backlog degraded semantic search silently for
-  // two days. get_index_health is the surface that has to say so.
+  // two days. get_index_health is the surface that has to say so. (A pause
+  // can only happen while the pipeline runs, so this uses an AI-enabled
+  // config — the realistic setup.)
   it('reports a paused embedding backlog as degraded, with the deadline and cause', () => {
     const fid = ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
     ctx.store.insertSymbol(fid, {
@@ -147,16 +238,44 @@ describe('getIndexHealth() — behavioural contract', () => {
       }),
     );
 
-    const result = getIndexHealth(ctx.store, ctx.config);
+    const result = getIndexHealth(ctx.store, aiEnabledConfig(ctx.config));
     expect(result.embedding?.queued).toBe(1);
+    expect(result.embedding?.enabled).toBe(true);
+    expect(result.embedding?.totalSymbols).toBe(1);
+    expect(result.embedding?.coveragePct).toBe(0);
     expect(result.embedding?.pausedUntil).toBe(pausedUntil);
     expect(result.embedding?.lastError).toBe('fetch failed');
     expect(result.status).toBe('degraded');
     expect(result.warnings.some((w) => /queued for embedding.*paused/s.test(w))).toBe(true);
   });
 
+  // TRA-1904: AI disabled now, but a stale breaker row explains why vectors
+  // are missing. Warning, not degraded — nothing will run while disabled.
+  it('AI off with a stale embedding failure → FTS-only warning names the prior failure', () => {
+    seedLinkedSymbols(ctx.store, false);
+    ctx.store.db.prepare('INSERT OR REPLACE INTO server_state (key, value) VALUES (?, ?)').run(
+      'embedding_breaker',
+      JSON.stringify({
+        disabledUntilMs: Date.now() + 600_000,
+        consecutiveFailures: 2,
+        lastFailureAt: Date.now(),
+        lastError: 'fetch failed',
+      }),
+    );
+
+    const result = getIndexHealth(ctx.store, ctx.config);
+    expect(result.embedding?.enabled).toBe(false);
+    expect(result.embedding?.queued).toBe(2);
+    expect(result.status).toBe('ok');
+    expect(
+      result.warnings.some((w) => /FTS-only/.test(w) && /before AI was disabled/.test(w)),
+    ).toBe(true);
+  });
+
   it('an elapsed pause is not reported as paused', () => {
-    ctx.store.insertFile('src/a.ts', 'typescript', 'h-a', 100);
+    // Full vector coverage: no backlog, so the stale failure explains
+    // nothing current — but the row is still surfaced for forensics.
+    seedLinkedSymbols(ctx.store, true);
     ctx.store.db.prepare('INSERT OR REPLACE INTO server_state (key, value) VALUES (?, ?)').run(
       'embedding_breaker',
       JSON.stringify({
@@ -171,6 +290,7 @@ describe('getIndexHealth() — behavioural contract', () => {
     expect(result.embedding?.pausedUntil).toBeUndefined();
     // The last failure is still worth reporting — it explains a stale backlog.
     expect(result.embedding?.lastError).toBe('fetch failed');
+    expect(result.embedding?.coveragePct).toBe(100);
     expect(result.status).toBe('ok');
   });
 
