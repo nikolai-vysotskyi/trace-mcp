@@ -183,3 +183,6 @@ mrchatam/Trace
 metaone01/agent-forge
 # Bookmark, not a surface: personal notes repo, file holds only our two URLs, no question asked (2026-09-23):
 iharh/notes
+# Registry auto-ingest, not a surface: daily-snapshot MCP-server tracker, page auto-generated from the official
+# registry with current copy at 3.31.5, no submission path, no audience. Ledger row added (2026-09-24):
+rogerchappel/mcpchangefeed
