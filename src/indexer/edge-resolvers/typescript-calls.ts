@@ -213,6 +213,14 @@ export async function resolveTypeScriptCallEdges(
   );
 
   let created = 0;
+  // TRA-1902: a concurrent writer can delete symbol nodes between the
+  // upfront node-id snapshot above and a later chunk's INSERT — the
+  // inter-chunk yield lets a watcher batch, a dropped-events full-walk
+  // overlapping an incremental run, or a second pipeline on a shared dbPath
+  // (TRA-1887) commit in between. INSERT OR IGNORE does not suppress FK
+  // violations, so one stale edge used to abort the whole reconcile with
+  // SQLITE_CONSTRAINT_FOREIGNKEY. Skip stale edges with a warn instead.
+  let skippedStale = 0;
 
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // the full-pass loop over every symbol with call sites used to run as one
@@ -264,8 +272,15 @@ export async function resolveTypeScriptCallEdges(
         if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
         if (call.isNew) edgeMeta.new = true;
 
-        insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
-        created++;
+        try {
+          insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
+          created++;
+        } catch (e) {
+          // TRA-1902: endpoint node deleted after the snapshot — the edge is
+          // stale, not the pass. Anything else is a real bug: rethrow.
+          if (!isForeignKeyViolation(e)) throw e;
+          skippedStale++;
+        }
       }
     }
   });
@@ -273,6 +288,19 @@ export async function resolveTypeScriptCallEdges(
   if (created > 0) {
     logger.info({ edges: created }, 'TypeScript/JavaScript call edges resolved');
   }
+  if (skippedStale > 0) {
+    logger.warn(
+      { skipped: skippedStale },
+      'TypeScript/JavaScript call edges skipped stale node references deleted mid-pass',
+    );
+  }
+}
+
+/** better-sqlite3 FK violation (code first, message as fallback). */
+function isForeignKeyViolation(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  if ((e as { code?: unknown }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return true;
+  return /FOREIGN KEY constraint failed/i.test(e.message);
 }
 
 /** Pick best candidate from a list, preferring same workspace. Strict: never cross workspace. */
