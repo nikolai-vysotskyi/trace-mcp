@@ -46,6 +46,26 @@ Activate this skill whenever you need to:
 | Dead code / dead exports | `get_dead_code` (`mode: "exports_only"`) | Grep for unused |
 | Project health / coverage gaps | `self_audit` | manual inspection |
 | Complexity / hotspots | `get_complexity_report` / `get_risk_hotspots` | guessing |
+| List env keys / what config exists | `get_env_vars` (keys + types/formats only, never values) | `os.environ` dump, `cat` of a `.env` file |
+
+## Environment Variables (Safe Path)
+
+- Task "list env keys / what config exists" → `get_env_vars`. It returns keys plus
+  inferred types/formats only — never values, so it is safe for secrets.
+- `get_env_vars { "pattern": "DB_" }` filters by key prefix.
+  `get_env_vars { "file": ".env", "redacted": true }` gives a line-by-line redacted
+  per-file view (keys + type hints, no values, preserves order/comments; requires `file`).
+- Config file discovery goes via `search` / `get_symbol` / `get_outline` /
+  `get_task_context` — never by importing a module to see what it touches.
+
+> **FORBIDDEN — never use these for env/config discovery (values leak into model context):**
+>
+> - never dump the environment: `python -c "import os; print(os.environ)"` or any
+>   `os.environ` / `process.env` printout
+> - never import-diff the environment: `before = dict(os.environ)`, import a module,
+>   then diff `os.environ` to see what it touched
+> - never `print(module.__file__)` for file discovery
+> - never `cat` or directly Read a `.env` file for discovery
 
 ## Token-Efficiency Rules
 
