@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.32.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.5...v3.32.0) (2026-09-24)
+
+
+### Features
+
+* **config:** auto_register mode + exclude for throwaway checkouts (TRA-1881) ([#1377](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1377)) ([deedf87](https://github.com/nikolai-vysotskyi/trace-mcp/commit/deedf8789cd1b9866876ff96422528551fe7058c))
+* **health:** always report embedding coverage in get_index_health (TRA-1904) ([#1382](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1382)) ([9bf3e00](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9bf3e00aea0ef2a7a854818b64832d62ed9007f0))
+
+
+### Bug Fixes
+
+* **indexer:** skip ts-calls edges with nodes deleted mid-pass (TRA-1902) ([#1381](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1381)) ([ad40138](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad4013807eb3228d1731e4c7b4ca59af7cbd4308))
+* **remove:** keep shared dbPath on remove (TRA-1887) ([#1379](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1379)) ([3dbbf46](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3dbbf461b89d3d87ae6d69f9d390a465b9fbff8a))
+* **security:** keep .env secret values out of search_text and rename non-code scan (TRA-1890) ([#1376](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1376)) ([d9c0832](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d9c083260e84217566c905b403718b9b46cae904))
+* **security:** redact .env values in search_text, pack-context, non-code-scanner (TRA-1889) ([#1375](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1375)) ([8ae82bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8ae82bc4f35cd006ef0fe2c46e17a8b9d803d854))
+
+
+### Documentation
+
+* **ops:** delta recheck 2026-09-24 day, mcpchangefeed ingest (TRA-1878) ([#1372](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1372)) ([0603896](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0603896550be7b64bc0326618e724b3b35df779d))
+* **ops:** delta recheck 2026-09-24 evening, ai-tooling loose end closed (TRA-1892) ([#1378](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1378)) ([5dc228b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5dc228bc426d54056acfeb726afa40ca6c56065f))
+* **ops:** delta recheck 2026-09-24 night, MiniMax movement is Nikolai's own (TRA-1897) ([#1380](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1380)) ([a4f8d85](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a4f8d850c75831e5e1f00ecae50be8e4957735e1))
+* **skills:** route env discovery through get_env_vars, guard prose (TRA-1883) ([#1374](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1374)) ([b2d39a5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2d39a5dc4d60cb4037454f47aa3f3af0cc2acd7))
+
 ## [3.31.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.4...v3.31.5) (2026-09-24)
 
 
