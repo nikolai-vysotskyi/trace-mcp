@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.31.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.4...v3.31.5) (2026-09-24)
+
+
+### Bug Fixes
+
+* **activity:** journal every dispatch path and warn on journal silence (TRA-1868) ([#1370](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1370)) ([c07dd17](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c07dd17e0d3bc96913e9f6e3e8789383214e7dff))
+* **daemon:** keep multi-root families co-resident and wake unloaded descendants (TRA-1863) ([#1366](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1366)) ([7cac6c5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7cac6c506a4c00f129a83668a9ceec42575e1965))
+* **index:** delete whole DB family + sweep stem-less WAL/SHM orphans (TRA-1864) ([#1367](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1367)) ([20b5d2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20b5d2d9499feca28688c8f70c059a086f904c5d))
+
+
+### Documentation
+
+* **ops:** delta recheck 2026-09-24, tolkonepiu alive (TRA-1866) ([#1368](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1368)) ([32533da](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32533da4c7c827f33f3d8e186256334bd7546196))
+
 ## [3.31.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.3...v3.31.4) (2026-09-23)
 
 
