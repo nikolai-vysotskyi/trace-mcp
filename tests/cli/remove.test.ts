@@ -35,7 +35,14 @@ vi.mock('../../src/project-root.js', () => ({
 vi.mock('../../src/registry.js', () => ({
   findParentProject: vi.fn(),
   getProject: vi.fn(),
+  listProjects: vi.fn(() => []),
   unregisterProject: vi.fn(),
+}));
+
+vi.mock('../../src/db-holders.js', () => ({
+  hasLiveHolderOrUnknown: vi.fn(() => false),
+  releaseDbHolder: vi.fn(),
+  removeHoldersDir: vi.fn(),
 }));
 
 vi.mock('../../src/topology/topology-db.js', () => ({
@@ -59,7 +66,10 @@ vi.mock('@clack/prompts', () => ({
 
 const { removeCommand } = await import('../../src/cli/remove.js');
 const { findProjectRoot } = await import('../../src/project-root.js');
-const { findParentProject, getProject, unregisterProject } = await import('../../src/registry.js');
+const { findParentProject, getProject, listProjects, unregisterProject } = await import(
+  '../../src/registry.js'
+);
+const { hasLiveHolderOrUnknown, releaseDbHolder } = await import('../../src/db-holders.js');
 const { removeProjectConfig } = await import('../../src/config.js');
 const p = await import('@clack/prompts');
 
@@ -69,6 +79,9 @@ const mockUnlinkSync = vi.mocked(fs.unlinkSync);
 const mockFindProjectRoot = vi.mocked(findProjectRoot);
 const mockFindParentProject = vi.mocked(findParentProject);
 const mockGetProject = vi.mocked(getProject);
+const mockListProjects = vi.mocked(listProjects);
+const mockHasLiveHolder = vi.mocked(hasLiveHolderOrUnknown);
+const mockReleaseHolder = vi.mocked(releaseDbHolder);
 const mockUnregisterProject = vi.mocked(unregisterProject);
 const mockRemoveProjectConfig = vi.mocked(removeProjectConfig);
 
@@ -84,6 +97,8 @@ beforeEach(() => {
   mockExistsSync.mockReturnValue(true);
   mockStatSync.mockReturnValue({ size: 1024, mtimeMs: 0 } as fs.Stats);
   mockFindParentProject.mockReturnValue(null);
+  mockListProjects.mockReturnValue([]);
+  mockHasLiveHolder.mockReturnValue(false);
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -259,5 +274,99 @@ describe('remove — multi-root child', () => {
     await run(['/proj/monorepo/a']);
 
     expect(mockUnregisterProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('remove — shared dbPath (TRA-1887 / GH#1371 edge 2)', () => {
+  const canonical = {
+    name: 'myapp',
+    root: '/proj/myapp',
+    dbPath: '/idx/myapp-abc123.db',
+    lastIndexed: null,
+    addedAt: 'x',
+  };
+  const clone = {
+    name: 'myapp',
+    root: '/tmp/clone-myapp',
+    dbPath: '/idx/myapp-abc123.db',
+    lastIndexed: null,
+    addedAt: 'y',
+  };
+
+  beforeEach(() => {
+    mockFindProjectRoot.mockReturnValue(clone.root);
+    mockFindParentProject.mockReturnValue(null);
+    mockGetProject.mockReturnValue(clone);
+  });
+
+  it('clone sharing canonical dbPath unregisters clone but keeps the DB file', async () => {
+    // Another registry entry still points at the same dbPath.
+    mockListProjects.mockReturnValue([clone, canonical]);
+    mockHasLiveHolder.mockReturnValue(false);
+
+    await run([clone.root, '--force', '--json']);
+
+    expect(mockUnlinkSync).not.toHaveBeenCalled();
+    expect(mockReleaseHolder).toHaveBeenCalledWith(clone.dbPath, clone.root);
+    expect(mockRemoveProjectConfig).toHaveBeenCalledWith(clone.root);
+    expect(mockUnregisterProject).toHaveBeenCalledWith(clone.root);
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('"status": "removed"');
+    expect(printed).toContain('"dbDeleted": false');
+    expect(printed).toContain('"dbKept": true');
+    expect(printed).toContain('"dbShared": true');
+    expect(printed).toContain('"dbSharedReason": "sibling"');
+  });
+
+  it('keeps the DB while a live holder claims it, even with no sibling row', async () => {
+    mockListProjects.mockReturnValue([clone]);
+    mockHasLiveHolder.mockReturnValue(true);
+
+    await run([clone.root, '--force', '--json']);
+
+    expect(mockUnlinkSync).not.toHaveBeenCalled();
+    expect(mockUnregisterProject).toHaveBeenCalledWith(clone.root);
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('"dbSharedReason": "holder"');
+  });
+
+  it('deletes the DB when nobody else shares or holds it', async () => {
+    mockListProjects.mockReturnValue([clone]);
+    mockHasLiveHolder.mockReturnValue(false);
+
+    await run([clone.root, '--force', '--json']);
+
+    expect(mockUnlinkSync).toHaveBeenCalledWith(clone.dbPath);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('"dbDeleted": true');
+    expect(printed).toContain('"dbShared": false');
+  });
+
+  it('multi-root parent with shared dbPath keeps the DB on child exclude', async () => {
+    const parent = {
+      name: 'monorepo',
+      root: '/proj/monorepo',
+      dbPath: '/idx/shared-abc123.db',
+      type: 'multi-root',
+      children: ['/proj/monorepo/a', '/proj/monorepo/b'],
+    };
+    mockFindProjectRoot.mockReturnValue('/proj/monorepo/a');
+    mockFindParentProject.mockReturnValue(parent);
+    mockGetProject.mockReturnValue(null);
+    // A sibling single-root entry shares the parent's dbPath.
+    mockListProjects.mockReturnValue([
+      parent,
+      { name: 'other', root: '/proj/other', dbPath: parent.dbPath },
+    ]);
+    mockHasLiveHolder.mockReturnValue(false);
+
+    await run(['/proj/monorepo/a', '--force', '--json']);
+
+    expect(mockUnlinkSync).not.toHaveBeenCalled();
+    expect(mockUnregisterProject).toHaveBeenCalledWith(parent.root);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('"dbShared": true');
   });
 });

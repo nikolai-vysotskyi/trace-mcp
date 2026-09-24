@@ -9,9 +9,10 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import { Command } from 'commander';
 import { removeProjectConfig } from '../config.js';
+import { hasLiveHolderOrUnknown, releaseDbHolder } from '../db-holders.js';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
-import { findParentProject, getProject, unregisterProject } from '../registry.js';
+import { findParentProject, getProject, listProjects, unregisterProject } from '../registry.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { deleteDbFamily } from '../utils/db-family.js';
 
@@ -82,11 +83,17 @@ export const removeCommand = new Command('remove')
     }
 
     // Delete DB file + its whole family (WAL/SHM/journal, snapshot, holders).
-    let dbDeleted = false;
-    if (!opts.keepDb && fs.existsSync(entry.dbPath)) {
-      const { deleted } = deleteDbFamily(entry.dbPath);
-      dbDeleted = deleted.includes(entry.dbPath);
-    }
+    // TRA-1887 (GH#1371 edge 2): dbPath is not private to this row — a
+    // same-remote clone can share the canonical checkout's dbPath (TRA-38
+    // sibling sharing in registerProject). Unlinking it here would delete the
+    // canonical index out from under a live project. Mirror
+    // removeProjectArtifacts: keep the DB while another registry entry points
+    // at it or a live holder claims it; per-root topology/config rows are
+    // still cleaned up below regardless.
+    const db = guardedDeleteDb(entry.dbPath, entry.root, opts.keepDb);
+    const dbDeleted = db.dbDeleted;
+    const dbKept = db.dbKept;
+    const dbSharedReason = db.reason;
 
     // Clean topology data (subprojects, services, endpoints, etc.)
     const topoCleaned = cleanTopology(entry.root);
@@ -106,6 +113,9 @@ export const removeCommand = new Command('remove')
             project: entry.name,
             root: entry.root,
             dbDeleted,
+            dbKept,
+            dbShared: dbSharedReason !== null,
+            ...(dbSharedReason ? { dbSharedReason } : {}),
             topologyCleaned: topoCleaned.subprojects > 0 || topoCleaned.services > 0,
           },
           null,
@@ -117,6 +127,8 @@ export const removeCommand = new Command('remove')
       lines.push(`Project: ${entry.name}`);
       if (dbDeleted) {
         lines.push(`Database deleted: ${shortPath(entry.dbPath)}`);
+      } else if (dbSharedReason) {
+        lines.push(`Database kept (shared with another project): ${shortPath(entry.dbPath)}`);
       } else if (opts.keepDb) {
         lines.push(`Database kept: ${shortPath(entry.dbPath)}`);
       }
@@ -173,9 +185,7 @@ async function handleRemoveFromMultiRoot(
 
   if (newChildren.length === 0) {
     // No children left — remove the entire multi-root
-    if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-      deleteDbFamily(parent.dbPath);
-    }
+    const db = guardedDeleteDb(parent.dbPath, parent.root, opts.keepDb);
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
@@ -187,13 +197,21 @@ async function handleRemoveFromMultiRoot(
             status: 'removed_multi_root',
             reason: 'no children remaining',
             parent: parent.name,
+            dbDeleted: db.dbDeleted,
+            dbKept: db.dbKept,
+            dbShared: db.reason !== null,
+            ...(db.reason ? { dbSharedReason: db.reason } : {}),
           },
           null,
           2,
         ),
       );
     } else {
-      p.note('No children remaining — entire multi-root project removed.', 'Removed');
+      p.note(
+        'No children remaining — entire multi-root project removed.' +
+          (db.reason ? '\nDatabase kept (shared with another project).' : ''),
+        'Removed',
+      );
       p.outro('Multi-root project unregistered.');
     }
     return;
@@ -204,9 +222,7 @@ async function handleRemoveFromMultiRoot(
     const remainingChild = newChildren[0];
 
     // Remove multi-root
-    if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-      deleteDbFamily(parent.dbPath);
-    }
+    const db = guardedDeleteDb(parent.dbPath, parent.root, opts.keepDb);
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
@@ -218,6 +234,10 @@ async function handleRemoveFromMultiRoot(
             status: 'excluded_from_multi_root',
             excluded: path.basename(childRoot),
             remaining: path.basename(remainingChild),
+            dbDeleted: db.dbDeleted,
+            dbKept: db.dbKept,
+            dbShared: db.reason !== null,
+            ...(db.reason ? { dbSharedReason: db.reason } : {}),
             hint: `Run \`trace-mcp add ${remainingChild}\` to re-register the remaining project individually.`,
           },
           null,
@@ -228,7 +248,8 @@ async function handleRemoveFromMultiRoot(
       p.note(
         `Excluded: ${path.basename(childRoot)}\n` +
           `Only one child remaining: ${path.basename(remainingChild)}\n` +
-          `Multi-root removed. Run \`trace-mcp add ${remainingChild}\` to re-register individually.`,
+          `Multi-root removed. Run \`trace-mcp add ${remainingChild}\` to re-register individually.` +
+          (db.reason ? '\nDatabase kept (shared with another project).' : ''),
         'Converted',
       );
       p.outro('Child excluded from multi-root.');
@@ -239,9 +260,7 @@ async function handleRemoveFromMultiRoot(
   // Multiple children remain — need to re-register the multi-root without this child.
   // We remove the old registration and tell the user to re-add.
   // (Re-registering inline would duplicate too much logic from add.ts)
-  if (!opts.keepDb && fs.existsSync(parent.dbPath)) {
-    deleteDbFamily(parent.dbPath);
-  }
+  const db = guardedDeleteDb(parent.dbPath, parent.root, opts.keepDb);
   cleanTopology(parent.root);
   removeProjectConfig(parent.root);
   unregisterProject(parent.root);
@@ -253,6 +272,10 @@ async function handleRemoveFromMultiRoot(
           status: 'excluded_from_multi_root',
           excluded: path.basename(childRoot),
           remaining: newChildren.map((c) => path.basename(c)),
+          dbDeleted: db.dbDeleted,
+          dbKept: db.dbKept,
+          dbShared: db.reason !== null,
+          ...(db.reason ? { dbSharedReason: db.reason } : {}),
           hint: `Run \`trace-mcp add ${parent.root}\` to re-register with ${newChildren.length} children.`,
         },
         null,
@@ -263,11 +286,61 @@ async function handleRemoveFromMultiRoot(
     p.note(
       `Excluded: ${path.basename(childRoot)}\n` +
         `Remaining children: ${newChildren.map((c) => path.basename(c)).join(', ')}\n` +
-        `Run \`trace-mcp add ${parent.root}\` to re-register the multi-root.`,
+        `Run \`trace-mcp add ${parent.root}\` to re-register the multi-root.` +
+        (db.reason ? '\nDatabase kept (shared with another project).' : ''),
       'Excluded',
     );
     p.outro('Child excluded. Re-add the parent to rebuild the index.');
   }
+}
+
+/**
+ * TRA-1887 (GH#1371 edge 2): dbPath is not private to its registry row.
+ * Returns the reason the DB must be kept, or null when it is safe to delete.
+ * Mirrors the guards in removeProjectArtifacts (sibling entry + live holder).
+ */
+function dbKeepReason(dbPath: string, selfRoot: string): 'sibling' | 'holder' | null {
+  const absSelf = path.resolve(selfRoot);
+  let siblingShares = false;
+  try {
+    siblingShares = listProjects().some(
+      (e) => path.resolve(e.root) !== absSelf && e.dbPath === dbPath,
+    );
+  } catch {
+    // Fail toward keeping: an unreadable registry must not cost someone else's index.
+    return 'sibling';
+  }
+  if (siblingShares) return 'sibling';
+  if (hasLiveHolderOrUnknown(dbPath, selfRoot)) return 'holder';
+  return null;
+}
+
+/**
+ * Guarded whole-family delete for the remove command. Returns the honest
+ * kept/deleted outcome so callers can report it without re-deriving.
+ */
+function guardedDeleteDb(
+  dbPath: string,
+  selfRoot: string,
+  keepDb?: boolean,
+): { dbDeleted: boolean; dbKept: boolean; reason: 'sibling' | 'holder' | null } {
+  if (keepDb) {
+    return { dbDeleted: false, dbKept: fs.existsSync(dbPath), reason: null };
+  }
+  if (!fs.existsSync(dbPath)) {
+    return { dbDeleted: false, dbKept: false, reason: null };
+  }
+  const reason = dbKeepReason(dbPath, selfRoot);
+  if (reason) {
+    try {
+      releaseDbHolder(dbPath, selfRoot);
+    } catch {
+      /* best effort — a leftover marker is reaped by the next scan */
+    }
+    return { dbDeleted: false, dbKept: true, reason };
+  }
+  const { deleted } = deleteDbFamily(dbPath);
+  return { dbDeleted: deleted.includes(dbPath), dbKept: false, reason: null };
 }
 
 function cleanTopology(repoRoot: string): { subprojects: number; services: number } {
