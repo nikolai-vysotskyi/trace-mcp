@@ -48,6 +48,7 @@ import {
   MAX_PENDING_REINDEX_ATTEMPTS,
   recordPendingReindexAttempt,
   registeredNestedRoots,
+  shouldServeSharedDbReadOnly,
   unregisterProject,
   updateLastIndexed,
 } from '../registry.js';
@@ -446,6 +447,21 @@ export class ProjectManager {
       logger.warn({ err, projectRoot, dbPath }, 'failed to announce index-DB holder (non-fatal)');
     }
 
+    // GH#1371 edge 3 / TRA-1916: a follower sharing its owner's DB from a
+    // different commit must not write into it (branch-only files would land
+    // in the canonical index). Serve the shared DB read-only: no initial
+    // index, no file watcher. Worktree-shared roots (indexRoot above) are a
+    // separate pre-existing mechanism and are untouched by this verdict.
+    const sharedGuard = worktreeInfo
+      ? { readOnly: false as const, owner: null, reason: null as string | null }
+      : shouldServeSharedDbReadOnly(projectRoot, dbPath);
+    if (sharedGuard.readOnly) {
+      logger.warn(
+        { projectRoot, dbPath, owner: sharedGuard.owner?.root, reason: sharedGuard.reason },
+        'Project shares its index DB from a different commit — serving read-only, indexing disabled',
+      );
+    }
+
     const db = initializeDatabase(dbPath, {
       cacheMb: config.index_cache_mb,
       mmapMb: config.index_mmap_mb,
@@ -702,135 +718,146 @@ export class ProjectManager {
         );
       }
     }
-    managed.initialIndexPromise = this.indexAllLimit!(() =>
-      pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal }),
-    )
-      .then(async () => {
-        managed.status = 'ready';
-        updateLastIndexed(projectRoot);
-        if (needsForcedReindex) {
-          try {
-            clearPendingReindex(projectRoot);
-          } catch (err) {
-            logger.warn(
-              { projectRoot, err: String(err) },
-              'Lazy post-update reindex: clearing flag failed (non-fatal)',
-            );
-          }
-        }
-        runSummarization(aiAbortController.signal);
-        runEmbeddings(aiAbortController.signal);
-        await runSubprojectAutoSync(projectRoot, config);
-        logger.info({ projectRoot }, 'Project indexing complete');
-      })
-      .catch(async (err) => {
-        // TRA-1017: asked to stop mid-index (daemon shutdown, project removal,
-        // idle unload) — not a failure. The teardown already in progress owns
-        // the DB from here; just note it and leave the status alone so a
-        // half-torn-down project is never advertised as errored/ready.
-        if (err instanceof IndexAbortedError) {
-          logger.info({ projectRoot }, 'Initial indexing aborted by project stop (non-fatal)');
-          return;
-        }
-        if (isForeignKeyError(err)) {
-          logger.warn(
-            { projectRoot, error: String(err) },
-            'Initial indexing hit FOREIGN KEY violation — likely stale data from older schema. Retrying with force=true.',
-          );
-          const finishRecovery = async (via: string): Promise<void> => {
-            managed.status = 'ready';
-            updateLastIndexed(projectRoot);
-            if (needsForcedReindex) {
-              try {
-                clearPendingReindex(projectRoot);
-              } catch {
-                /* non-fatal — flag will retry next startup */
-              }
-            }
-            runSummarization();
-            runEmbeddings();
-            await runSubprojectAutoSync(projectRoot, config);
-            logger.info({ projectRoot }, `Project indexing complete (${via})`);
-          };
-          try {
-            await this.indexAllLimit!(() =>
-              pipeline.indexAll(true, { signal: indexAbortController.signal }),
-            );
-            await finishRecovery('force-reindex recovery');
-            return;
-          } catch (retryErr) {
-            // The in-place force-reindex retry re-ran against the wedged rows
-            // with foreign_keys = ON (the DB was non-empty, so it never entered
-            // bulk-load mode) and hit the same violation. If this is still a FK
-            // error, escalate ONCE to a hard table reset: wipe the graph tables
-            // in place so the follow-up run starts from an empty index, enters
-            // bulk-load mode (foreign_keys = OFF) and rebuilds cleanly — the
-            // programmatic equivalent of deleting + rebuilding the index DB
-            // file, but without closing the shared handle. Any non-FK failure,
-            // or a failure that survives the hard reset, is terminal: we set an
-            // error status and stop. There is no third attempt, so recovery can
-            // never loop. (An abort during the retry is a stop, not a failure:
-            // handled like the outer IndexAbortedError branch — the promise
-            // must never reject, so return instead of rethrowing.)
-            if (retryErr instanceof IndexAbortedError) {
-              logger.info(
-                { projectRoot },
-                'Force-reindex recovery aborted by project stop (non-fatal)',
-              );
-              return;
-            }
-            if (!isForeignKeyError(retryErr)) {
-              managed.status = 'error';
-              managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
-              logger.error(
-                { error: serializeError(retryErr), projectRoot, originalError: String(err) },
-                'Force-reindex recovery also failed',
-              );
-              return;
-            }
-            logger.warn(
-              { projectRoot, error: String(retryErr) },
-              'In-place force-reindex still hit FOREIGN KEY violation — hard-resetting index tables and rebuilding from scratch.',
-            );
+    // GH#1371 edge 3 / TRA-1916: a read-only follower serves the owner's DB
+    // as-is — no initial index. lastIndexed stays as inherited at
+    // registration; stamping it here would claim a write that never ran.
+    if (sharedGuard.readOnly) {
+      managed.status = 'ready';
+      managed.initialIndexPromise = Promise.resolve();
+    } else {
+      managed.initialIndexPromise = this.indexAllLimit!(() =>
+        pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal }),
+      )
+        .then(async () => {
+          managed.status = 'ready';
+          updateLastIndexed(projectRoot);
+          if (needsForcedReindex) {
             try {
-              this.hardResetIndexTables(store);
+              clearPendingReindex(projectRoot);
+            } catch (err) {
+              logger.warn(
+                { projectRoot, err: String(err) },
+                'Lazy post-update reindex: clearing flag failed (non-fatal)',
+              );
+            }
+          }
+          runSummarization(aiAbortController.signal);
+          runEmbeddings(aiAbortController.signal);
+          await runSubprojectAutoSync(projectRoot, config);
+          logger.info({ projectRoot }, 'Project indexing complete');
+        })
+        .catch(async (err) => {
+          // TRA-1017: asked to stop mid-index (daemon shutdown, project removal,
+          // idle unload) — not a failure. The teardown already in progress owns
+          // the DB from here; just note it and leave the status alone so a
+          // half-torn-down project is never advertised as errored/ready.
+          if (err instanceof IndexAbortedError) {
+            logger.info({ projectRoot }, 'Initial indexing aborted by project stop (non-fatal)');
+            return;
+          }
+          if (isForeignKeyError(err)) {
+            logger.warn(
+              { projectRoot, error: String(err) },
+              'Initial indexing hit FOREIGN KEY violation — likely stale data from older schema. Retrying with force=true.',
+            );
+            const finishRecovery = async (via: string): Promise<void> => {
+              managed.status = 'ready';
+              updateLastIndexed(projectRoot);
+              if (needsForcedReindex) {
+                try {
+                  clearPendingReindex(projectRoot);
+                } catch {
+                  /* non-fatal — flag will retry next startup */
+                }
+              }
+              runSummarization();
+              runEmbeddings();
+              await runSubprojectAutoSync(projectRoot, config);
+              logger.info({ projectRoot }, `Project indexing complete (${via})`);
+            };
+            try {
               await this.indexAllLimit!(() =>
                 pipeline.indexAll(true, { signal: indexAbortController.signal }),
               );
-              await finishRecovery('force-reindex recovery after hard reset');
+              await finishRecovery('force-reindex recovery');
               return;
-            } catch (hardErr) {
-              if (hardErr instanceof IndexAbortedError) {
+            } catch (retryErr) {
+              // The in-place force-reindex retry re-ran against the wedged rows
+              // with foreign_keys = ON (the DB was non-empty, so it never entered
+              // bulk-load mode) and hit the same violation. If this is still a FK
+              // error, escalate ONCE to a hard table reset: wipe the graph tables
+              // in place so the follow-up run starts from an empty index, enters
+              // bulk-load mode (foreign_keys = OFF) and rebuilds cleanly — the
+              // programmatic equivalent of deleting + rebuilding the index DB
+              // file, but without closing the shared handle. Any non-FK failure,
+              // or a failure that survives the hard reset, is terminal: we set an
+              // error status and stop. There is no third attempt, so recovery can
+              // never loop. (An abort during the retry is a stop, not a failure:
+              // handled like the outer IndexAbortedError branch — the promise
+              // must never reject, so return instead of rethrowing.)
+              if (retryErr instanceof IndexAbortedError) {
                 logger.info(
                   { projectRoot },
                   'Force-reindex recovery aborted by project stop (non-fatal)',
                 );
                 return;
               }
-              managed.status = 'error';
-              managed.error = `Index rebuild after FK hard reset still failed: ${String(hardErr)}`;
-              logger.error(
-                {
-                  error: serializeError(hardErr),
-                  projectRoot,
-                  originalError: String(err),
-                  retryError: String(retryErr),
-                },
-                'FK hard-reset recovery also failed — giving up (no further retry)',
+              if (!isForeignKeyError(retryErr)) {
+                managed.status = 'error';
+                managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
+                logger.error(
+                  { error: serializeError(retryErr), projectRoot, originalError: String(err) },
+                  'Force-reindex recovery also failed',
+                );
+                return;
+              }
+              logger.warn(
+                { projectRoot, error: String(retryErr) },
+                'In-place force-reindex still hit FOREIGN KEY violation — hard-resetting index tables and rebuilding from scratch.',
               );
-              return;
+              try {
+                this.hardResetIndexTables(store);
+                await this.indexAllLimit!(() =>
+                  pipeline.indexAll(true, { signal: indexAbortController.signal }),
+                );
+                await finishRecovery('force-reindex recovery after hard reset');
+                return;
+              } catch (hardErr) {
+                if (hardErr instanceof IndexAbortedError) {
+                  logger.info(
+                    { projectRoot },
+                    'Force-reindex recovery aborted by project stop (non-fatal)',
+                  );
+                  return;
+                }
+                managed.status = 'error';
+                managed.error = `Index rebuild after FK hard reset still failed: ${String(hardErr)}`;
+                logger.error(
+                  {
+                    error: serializeError(hardErr),
+                    projectRoot,
+                    originalError: String(err),
+                    retryError: String(retryErr),
+                  },
+                  'FK hard-reset recovery also failed — giving up (no further retry)',
+                );
+                return;
+              }
             }
           }
-        }
-        managed.status = 'error';
-        managed.error = String(err);
-        logger.error({ error: serializeError(err), projectRoot }, 'Initial indexing failed');
-      });
+          managed.status = 'error';
+          managed.error = String(err);
+          logger.error({ error: serializeError(err), projectRoot }, 'Initial indexing failed');
+        });
+    }
 
     // Start file watcher (skipped in read-mostly mode — see `watch` above).
     // Agent-driven edits still reindex via register_edit / the PostToolUse hook;
     // only external (IDE) edits go unnoticed until the next connect's indexAll.
-    if (watch) {
+    // GH#1371 edge 3 / TRA-1916: also skipped for read-only followers — a
+    // watcher-driven indexFiles would write the follower's files into the
+    // owner's DB just as surely as the initial index above would.
+    if (watch && !sharedGuard.readOnly) {
       // Separated from the await below so the failure path adds no
       // indentation churn to the 200-line subscribe arguments (TRA-1843).
       const watcherStarted = watcher.start(

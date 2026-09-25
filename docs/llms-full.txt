@@ -3421,6 +3421,13 @@ Removing one checkout of a same-remote pair (`trace-mcp remove <clone>`) unregis
 only that checkout: a database still claimed by another registered project (or a live
 process) is kept, and the output says so.
 
+Checkouts that share a git remote share one index database only while they sit on the
+same commit. A checkout on a different commit registers onto its own database instead,
+so its branch-only files never land in the canonical checkout's index. A checkout that
+diverges *after* sharing (or was registered before this guard) is served from the
+owner's index read-only — no indexing, no file watcher — until its commit matches the
+owner's again.
+
 ### Config merge order
 
 1. **Global defaults** — `~/.trace/.config.json` (or `~/.trace-mcp/.config.json` fallback)
