@@ -529,9 +529,9 @@ it('says nothing about restart for a hot-reload client', async () => {
   expect(screen.queryByText(/to apply the update/)).toBeNull();
 });
 
-/* The to-verify half of the matrix (cline, kilocode, antigravity, gemini-cli,
+/* The to-verify half of the matrix (cline, kilocode, antigravity,
    minimax-code, zed, kimi, opencode, hermes) had no rows at all — a hint for
-   them had nowhere to land. All twenty-one clients render; only the two
+   them had nowhere to land. All twenty clients render; only the two
    manual ones skip Connect. */
 it('renders every known client row', async () => {
   api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: [] });
@@ -541,7 +541,6 @@ it('renders every known client row', async () => {
     'Cline',
     'KiloCode',
     'Antigravity',
-    'Gemini CLI',
     'MiniMax Code',
     'Zed',
     'Kimi Code CLI',
@@ -550,7 +549,7 @@ it('renders every known client row', async () => {
   ]) {
     expect(await screen.findByText(label)).toBeTruthy();
   }
-  expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(19);
+  expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(18);
 });
 
 // ── TRA-1109 ──────────────────────────────────────────────────────────────

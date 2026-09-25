@@ -15,7 +15,6 @@ export type DetectedMcpClientName =
   | 'cline'
   | 'kilocode'
   | 'antigravity'
-  | 'gemini-cli'
   | 'minimax-code'
   | 'zed'
   | 'kimi'
@@ -44,7 +43,6 @@ export const MCP_CLIENT_DISPLAY_NAMES: Record<DetectedMcpClientName, string> = {
   cline: 'Cline',
   kilocode: 'KiloCode',
   antigravity: 'Antigravity',
-  'gemini-cli': 'Gemini CLI',
   'minimax-code': 'MiniMax Code',
   zed: 'Zed',
   kimi: 'Kimi Code CLI',

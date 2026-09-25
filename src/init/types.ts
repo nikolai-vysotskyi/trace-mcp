@@ -52,7 +52,6 @@ export interface DetectedMcpClient {
     | 'cline'
     | 'kilocode'
     | 'antigravity'
-    | 'gemini-cli'
     | 'minimax-code'
     | 'zed'
     | 'kimi'

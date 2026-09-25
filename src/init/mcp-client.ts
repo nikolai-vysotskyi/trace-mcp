@@ -1216,10 +1216,6 @@ export const MCP_CLIENT_PICKUP: Record<DetectedMcpClient['name'], McpClientPicku
   kilocode: 'reload-window',
   // Reload window / manual server reload (antigravity.google/docs + guides).
   antigravity: 'reload-window',
-  // Setup tutorial: "Restart Gemini CLI. It will automatically try to start
-  // the defined servers." Config edits are silently ignored until a full
-  // process restart (google-gemini/gemini-cli#19792).
-  'gemini-cli': 'restart-session',
   // No pickup confirmation in official docs (third-party guides claim saving
   // settings.json restarts the context-server process). Conservative
   // restart-app until verified on a live Zed (TRA-1658 review).
@@ -1349,7 +1345,6 @@ export const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'cline',
   'kilocode',
   'antigravity',
-  'gemini-cli',
   'minimax-code',
   'zed',
   'kimi',
@@ -1367,7 +1362,6 @@ const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
   'cline',
   'kilocode',
   'antigravity',
-  'gemini-cli',
   'minimax-code',
   'kimi',
 ]);
@@ -1533,7 +1527,7 @@ function detectClientStatus(
     }
     default: {
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
-      // cline, kilocode, antigravity, gemini-cli, minimax-code, kimi all use
+      // cline, kilocode, antigravity, minimax-code, kimi all use
       // the standard mcpServers JSON shape compared by entryMatches().
       // Zed has its own matcher (context_servers) just below.
       const present = (() => {
@@ -1708,15 +1702,10 @@ export function getConfigPath(
     case 'antigravity':
       // Antigravity (Google agentic IDE): standard mcpServers JSON, global-only.
       // Source: ~/.gemini/config/mcp_config.json — NOT ~/.gemini/settings.json,
-      // which belongs to Gemini CLI ('gemini-cli' below). Same parent dir,
-      // different file; the writer/detector must keep them apart (TRA-1659).
+      // which belonged to the deprecated Gemini CLI (removed in TRA-1931).
+      // Same parent dir, different file; the writer/detector must never touch
+      // settings.json (TRA-1659).
       return path.join(getHome(), '.gemini', 'config', 'mcp_config.json');
-    case 'gemini-cli':
-      // Gemini CLI: standard mcpServers JSON at ~/.gemini/settings.json,
-      // global-only. Source: https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html
-      // (`gemini mcp add -s user` writes this file; without -s it writes the
-      // project-scoped .gemini/settings.json, which init does not target).
-      return path.join(getHome(), '.gemini', 'settings.json');
     case 'zed': {
       // Zed: `context_servers` in settings.json (not `mcpServers`). User file
       // ~/.config/zed (macOS/Linux; $XDG_CONFIG_HOME honored on Linux),
