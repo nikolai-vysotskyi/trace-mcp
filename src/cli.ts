@@ -19,6 +19,7 @@ import {
   startDaemonLogRotation,
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
+import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/exit-breadcrumb.js';
 import {
   printTelemetryNoticeOnce,
   recordDaemonCleanStop,
@@ -705,6 +706,12 @@ program
     'Tool preset for clients that connect to this daemon directly over HTTP (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full). A stdio session carries its own preset and is never narrowed by this.',
   )
   .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
+    // TRA-1911: install the synchronous exit breadcrumb FIRST, before any early
+    // `process.exit()` below. Pino buffers asynchronously, so a log line
+    // immediately followed by `process.exit()` can die in the buffer and the
+    // death lands in daemon.log as silence. The breadcrumb's `exit` handler is
+    // sync (`appendFileSync`) and always leaves one attributable line behind.
+    installDaemonExitBreadcrumb();
     // TRA-1807: fail closed when launched from an ephemeral install (agent-run
     // sandbox, shared tmp). A daemon serving from a directory that dies with
     // the run keeps answering /health while parsing + extraction are dead.
@@ -713,6 +720,7 @@ program
     const refusal = ephemeralServeHttpRefusal(process.argv[1] ?? '');
     if (refusal) {
       console.error(refusal);
+      noteDaemonShutdownReason('ephemeral-install-refusal');
       process.exit(1);
     }
     if (opts.preset) {
@@ -742,6 +750,7 @@ program
           logger.error({ problem }, 'serve-http startup integrity check failed');
           console.error(`trace serve-http: ${problem}`);
         }
+        noteDaemonShutdownReason('startup-integrity-failure');
         process.exit(1);
       }
     }
@@ -3453,6 +3462,12 @@ program
       // cleanup once.
       if (daemonShuttingDown) return;
       daemonShuttingDown = true;
+      // TRA-1911: record the reason synchronously, before the first await. The
+      // `exit` breadcrumb fires later with only a numeric code — this is what
+      // attributes it. Must precede everything async: an awaited hang followed
+      // by the bounded-exit forcing `process.exit()` would otherwise leave a
+      // bare `exitCode` with no reason.
+      noteDaemonShutdownReason(reason ?? 'unknown');
       lagMonitor?.stop();
       lagMonitor = null;
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
@@ -3628,13 +3643,22 @@ program
     };
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
+    // TRA-1911: SIGHUP arrived with no handler, so a hangup killed the daemon
+    // without a word — not even the `Daemon shutting down` line. `isSignal`
+    // above already classified SIGHUP; it was just never registered.
+    process.on('SIGHUP', shutdown);
 
     httpServer.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'EADDRINUSE') {
         logger.warn({ port }, 'Port in use — another daemon instance is already running, exiting');
+        // TRA-1911: the warn above is pino-buffered and `process.exit()` can
+        // discard it — the sync breadcrumb is what survives. A bind-race loser
+        // must never look like a silent death.
+        noteDaemonShutdownReason('eaddrinuse-bind-race');
         process.exit(2);
       }
       logger.error({ err: String(err) }, 'httpServer error');
+      noteDaemonShutdownReason('http-server-error');
       process.exit(1);
     });
 
