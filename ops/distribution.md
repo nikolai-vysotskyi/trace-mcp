@@ -2942,3 +2942,22 @@ All 20 `updated_at` values re-read; 19 match the night pass exactly:
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-25 day (TRA-1924): MiniMax round 3, rest silent, sweep clean
+
+Hours after TRA-1909, audited via API, read-only, nothing written outside this file.
+
+**Open threads — one real movement, on Nikolai's own PR.**
+All catalog `updated_at` values re-read and unchanged: `eltociear#119`, `GetBindu#195`, `hermes#395`, `nix#606` (open, newest our 09-20 reminders, single ping spent), `tolkonepiu#384` (open, 0 comments, untouched since 08-29 — ping window opens 26.09, tomorrow, not yet), `ai-boost#240` (open, `updated_at` 09-14 — re-read 10-05). `hesreallyhim/awesome-claude-code#2871` still 09-18 bot validation, no maintainer reply, wait, do not ping. Comment threads all unchanged: `redproof#50` (09-21), `kilocode#13843` (09-20), `kilocode#12707` (09-07), `atlas#105` (09-07), `slopstop#633` (09-06, deliberately not bumped), `Dokploy/mcp#81` (09-05), `nanocoder#1197` (09-17), `lastlight#372` (09-18), `pyrefly#4583` (09-07), `pi-extensions#1204` (09-05), `ai-tooling#585` (09-04), `pr-agent#2499` (09-14). `deslop#173` CLOSED 09-08, unchanged.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: reviewer `hetaoBackend` posted a third `CHANGES_REQUESTED` today 2026-09-25T01:30Z against head `41cac18` — pin/provenance acknowledged as improved, blockers remaining: daemonless exact-runtime controls, full mutation disclosure, reproducible exact-pin MCP smoke. His lane — recorded, not touched.
+- trace-mcp 182★/21 forks — flat.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read, `ops/mentions-seen.txt` untouched.
+
+**Competitor pulse (no touch):** `tirth8205/code-review-graph` at 31,771★ (+2 since the morning pass) with `pushed_at` still 2026-09-18 — stars grow, triage stands still. For Competitor Intelligence, nothing to write.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage, MiniMax#54 has a new review round waiting on his side (he gets it via GitHub directly), no door is due a reminder before 26.09 (tolkonepiu window opens tomorrow). No consolidated request sent.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
