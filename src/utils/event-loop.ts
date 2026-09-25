@@ -121,6 +121,11 @@ export interface EventLoopLagMonitorOptions {
   thresholdMs?: number;
   /** Called once per stalled tick with (lagMs, maxLagMs, stallCount). */
   onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
+  /**
+   * Called on every tick (including healthy ones). TRA-1957: the cross-thread
+   * stall watchdog beats its heartbeat here — one call per event-loop turn.
+   */
+  onTick?: () => void;
 }
 
 export interface EventLoopLagStats {
@@ -132,6 +137,7 @@ export class EventLoopLagMonitor {
   private readonly intervalMs: number;
   private readonly thresholdMs: number;
   private readonly onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
+  private readonly onTick?: () => void;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTick = 0;
   private stalls = 0;
@@ -141,6 +147,7 @@ export class EventLoopLagMonitor {
     this.intervalMs = opts.intervalMs ?? 1000;
     this.thresholdMs = opts.thresholdMs ?? 1000;
     this.onStall = opts.onStall;
+    this.onTick = opts.onTick;
   }
 
   start(): void {
@@ -150,6 +157,11 @@ export class EventLoopLagMonitor {
       const now = Date.now();
       const lag = now - this.lastTick - this.intervalMs;
       this.lastTick = now;
+      try {
+        this.onTick?.();
+      } catch {
+        /* observing must never break the loop it watches */
+      }
       if (lag >= this.thresholdMs) {
         this.stalls++;
         if (lag > this.maxLag) this.maxLag = lag;

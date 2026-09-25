@@ -26,6 +26,10 @@ const ALLOWED: Record<string, string> = {
   'src/session/providers/sqlite-source.ts': 'better-sqlite3 native binding, loaded lazily',
   'src/daemon/project-artifacts.ts': 'topology-db is loaded lazily to keep daemon startup cheap',
   'src/cli/install-app.ts': 'reads package.json version at runtime, not a module import',
+  'src/utils/stall-watchdog.ts':
+    'require() calls live inside the eval() worker source string (TRA-1957): ' +
+    'eval workers execute as CommonJS, so require is the correct form there, ' +
+    'and the string never executes as ESM',
 };
 
 describe('no bare require() in src/', () => {

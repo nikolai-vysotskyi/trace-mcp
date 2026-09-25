@@ -54,4 +54,20 @@ describe('EventLoopLagMonitor', () => {
     monitor.stop();
     expect(monitor.getStats()).toEqual({ stallCount: 0, maxLagMs: 0 });
   });
+
+  it('calls onTick on every tick (TRA-1957 heartbeat source)', async () => {
+    let ticks = 0;
+    const monitor = new EventLoopLagMonitor({
+      intervalMs: 20,
+      thresholdMs: 5000,
+      onTick: () => {
+        ticks++;
+      },
+    });
+    monitor.start();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    monitor.stop();
+    expect(ticks).toBeGreaterThanOrEqual(2);
+    expect(monitor.getStats()).toEqual({ stallCount: 0, maxLagMs: 0 });
+  });
 });
