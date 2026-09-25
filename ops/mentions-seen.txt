@@ -186,3 +186,9 @@ iharh/notes
 # Registry auto-ingest, not a surface: daily-snapshot MCP-server tracker, page auto-generated from the official
 # registry with current copy at 3.31.5, no submission path, no audience. Ledger row added (2026-09-24):
 rogerchappel/mcpchangefeed
+
+# ── Swept 2026-09-25 (TRA-1928) ──
+# Rival-in-building (11★, single author, MIT): research notes pin our source (@e5a180a) and name trace-mcp
+# the direct analogue for hooks + output-rewrite. Internal doc, no audience, no contact path — competitor
+# signal only, ledger row added, no outreach:
+MaquinaTech/graph-indexer
