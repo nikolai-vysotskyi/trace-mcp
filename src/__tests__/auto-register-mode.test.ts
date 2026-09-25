@@ -142,6 +142,10 @@ describe('auto_register persistence + mode gate (TRA-1881)', () => {
         path.join(gitDir, 'config'),
         ['[remote "origin"]', `\turl = ${remote}`, ''].join('\n'),
       );
+      // TRA-1916: same-remote DB sharing requires the checkouts to sit on the
+      // same commit — a real checkout always has HEAD, so the fixture needs
+      // one too (same symbolic ref on both sides → same fingerprint).
+      fs.writeFileSync(path.join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
     }
     writeConfig({ auto_register: { mode: 'always', exclude: [] } });
 

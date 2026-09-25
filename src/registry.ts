@@ -9,6 +9,7 @@ import {
   ensureGlobalDirs,
   EPHEMERAL_INDEX_DIR,
   getDbPath,
+  getGitHeadFingerprint,
   getProjectRemoteIdentity,
   isEphemeralProjectRoot,
   projectName,
@@ -202,6 +203,33 @@ function claimSharedDb(siblingDbPath: string, absRoot: string): boolean {
 }
 
 /**
+ * GH#1371 edge 3 / TRA-1916: a same-remote sibling's DB is only reusable when
+ * the two checkouts point at the same commit. The `files` table keys rows by
+ * repo-relative path with no branch/commit column, so indexing a diverged
+ * checkout into the shared DB writes branch-only files into the canonical
+ * index — and a full-walk `reconcileScope` deletes canonical-only rows the
+ * clone's tree doesn't contain.
+ *
+ * Fails toward isolation: an unreadable HEAD can't prove sameness, so it
+ * answers false (own DB), mirroring `claimSharedDb`'s safe direction above.
+ * The one exception is a sibling whose root no longer exists on disk — a dead
+ * checkout can't diverge any further, and reusing its already-built index is
+ * the Multica ephemeral-checkout win TRA-38 exists for, so the holder logic
+ * below stays the decider there.
+ */
+function sharedDbCompatible(sibling: RegistryEntry, absRoot: string): boolean {
+  try {
+    if (!fs.existsSync(sibling.root)) return true;
+  } catch {
+    return true;
+  }
+  const selfFingerprint = getGitHeadFingerprint(absRoot);
+  const siblingFingerprint = getGitHeadFingerprint(sibling.root);
+  if (!selfFingerprint || !siblingFingerprint) return false;
+  return selfFingerprint === siblingFingerprint;
+}
+
+/**
  * Claim the one-time auto-registration notice for `root` (#936).
  *
  * True exactly once per registry entry: the first caller stamps
@@ -299,7 +327,14 @@ export function registerProject(
   // and twenty checkouts of one repo resolve to one index instead of twenty.
   // TRA-1136: `getDbPath` routes an ephemeral root to EPHEMERAL_INDEX_DIR on
   // its own, so this no longer needs a separate branch for it.
-  const shareWithSibling = sibling ? claimSharedDb(sibling.dbPath, absRoot) : false;
+  //
+  // GH#1371 edge 3 / TRA-1916: compatibility is checked BEFORE the holder
+  // claim below — an incompatible checkout must neither share the DB nor
+  // leave a holder marker on it. Short-circuit order matters here.
+  const shareWithSibling =
+    sibling && sharedDbCompatible(sibling, absRoot)
+      ? claimSharedDb(sibling.dbPath, absRoot)
+      : false;
   const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot);
   try {
     if (!shareWithSibling) announceDbHolder(dbPath, absRoot);
@@ -386,6 +421,88 @@ export function isDbPathShared(dbPath: string, excludeRoot: string): boolean {
     // removeProjectArtifacts (guessing wrong deletes someone else's index).
     return true;
   }
+}
+
+/** Every registered entry besides `excludeRoot` that points at `dbPath`. */
+export function findDbPathSharers(dbPath: string, excludeRoot: string): RegistryEntry[] {
+  const absExclude = path.resolve(excludeRoot);
+  return listProjects().filter((e) => path.resolve(e.root) !== absExclude && e.dbPath === dbPath);
+}
+
+/**
+ * The owning entry among all rows pointing at `dbPath`: earliest `addedAt`
+ * (root as tiebreak). The first checkout registered the DB, so it is the
+ * canonical writer; later same-remote rows are followers. Deterministic
+ * across restarts, which is what keeps the read-only verdict below stable.
+ */
+export function findSharedDbOwner(dbPath: string): RegistryEntry | null {
+  const rows = listProjects().filter((e) => e.dbPath === dbPath);
+  if (rows.length === 0) return null;
+  rows.sort(
+    (a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? '') || a.root.localeCompare(b.root),
+  );
+  return rows[0];
+}
+
+export interface SharedDbReadOnlyVerdict {
+  /** True when this root must not write to `dbPath` — serve it read-only. */
+  readOnly: boolean;
+  /** The owning entry whose commit the DB tracks (null when not shared). */
+  owner: RegistryEntry | null;
+  /** Human-readable reason for the verdict (null when writable). */
+  reason: string | null;
+}
+
+/**
+ * GH#1371 edge 3 / TRA-1916, write-path half: decides whether `projectRoot`
+ * may index into `dbPath` or must serve it read-only.
+ *
+ * Registration-time isolation (`sharedDbCompatible` above) stops *new*
+ * diverged shares from forming, but rows registered before that fix — and a
+ * checkout that switches branches *after* sharing — can still share one DB
+ * across two commits. Indexing such a follower writes branch-only files into
+ * the owner's index, so the follower skips both its initial index and its
+ * file watcher and serves the owner's DB as-is (the same "serve from the
+ * matching project" shape TRA-1881 gives excluded roots, minus an index of
+ * its own). The owner's next full walk then reconciles away any branch-only
+ * rows the follower wrote before this guard existed.
+ *
+ * Fires only on positive proof of divergence (both HEADs resolvable *and*
+ * different, follower is not the owner) — every unknown state keeps today's
+ * behavior so a half-readable checkout can never wedge itself read-only.
+ */
+export function shouldServeSharedDbReadOnly(
+  projectRoot: string,
+  dbPath: string,
+): SharedDbReadOnlyVerdict {
+  const absRoot = path.resolve(projectRoot);
+  const sharers = findDbPathSharers(dbPath, absRoot);
+  if (sharers.length === 0) return { readOnly: false, owner: null, reason: null };
+  const owner = findSharedDbOwner(dbPath);
+  if (!owner || path.resolve(owner.root) === absRoot) {
+    return { readOnly: false, owner: null, reason: null };
+  }
+  let ownerExists = false;
+  try {
+    ownerExists = fs.existsSync(owner.root);
+  } catch {
+    ownerExists = false;
+  }
+  // A dead owner can't prove divergence, and its row is the missing-root
+  // sweep's to collect — not this guard's to route around.
+  if (!ownerExists) return { readOnly: false, owner: null, reason: null };
+  const selfFingerprint = getGitHeadFingerprint(absRoot);
+  const ownerFingerprint = getGitHeadFingerprint(owner.root);
+  if (!selfFingerprint || !ownerFingerprint || selfFingerprint === ownerFingerprint) {
+    return { readOnly: false, owner: null, reason: null };
+  }
+  return {
+    readOnly: true,
+    owner,
+    reason:
+      `"${absRoot}" shares its index DB with "${owner.root}" but sits on a different ` +
+      `commit — serving the shared index read-only instead of writing branch-divergent files into it.`,
+  };
 }
 
 /** Find a multi-root project that contains this child root. */

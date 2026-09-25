@@ -1025,3 +1025,126 @@ export function getProjectRemoteIdentity(projectRoot: string): string | null {
   if (!url) return null;
   return normalizeGitRemote(url);
 }
+
+/**
+ * Best-effort fingerprint of the commit a checkout currently points at, read
+ * straight from the git metadata files (no `git` subprocess, no new imports —
+ * see the import-free constraint on this module documented above).
+ *
+ * Returns `sha:<40-hex>` when HEAD (or the ref it points at) resolves to a
+ * commit, `ref:<name>` when HEAD is symbolic but its target ref has no
+ * resolvable object (e.g. a fresh clone whose branch ref was never written —
+ * two checkouts of the same branch still compare equal), or null when the
+ * checkout is not a git work tree / its metadata is unreadable.
+ *
+ * GH#1371 edge 3 / TRA-1916: `registerProject` (TRA-38) shares one index DB
+ * across checkouts with the same git remote, but the `files` table keys rows
+ * by repo-relative path — indexing a checkout that sits on a different commit
+ * writes branch-divergent files into the canonical checkout's index (and a
+ * full-walk reconcile deletes canonical-only rows missing from the clone).
+ * Comparing fingerprints before sharing isolates diverged checkouts onto
+ * their own DB while same-commit checkouts keep the TRA-38 reuse win.
+ */
+export function getGitHeadFingerprint(projectRoot: string): string | null {
+  const absRoot = path.resolve(projectRoot);
+  const dirs = resolveGitHeadDirs(absRoot);
+  if (!dirs) return null;
+  // Trust note (CodeQL js/path-injection): same project-root input as
+  // resolveGitMetadataDir above — reads stay inside the checkout's own git
+  // metadata dirs, and every failure returns null.
+  let head: string;
+  try {
+    // codeql[js/path-injection]: see trust note above
+    head = fs.readFileSync(path.join(dirs.adminDir, 'HEAD'), 'utf8').trim();
+  } catch {
+    return null;
+  }
+  if (!head) return null;
+  if (/^[0-9a-fA-F]{40}$/.test(head)) return `sha:${head.toLowerCase()}`;
+  const refMatch = head.match(/^ref:\s*(.+)$/);
+  if (!refMatch) return `raw:${head}`;
+  const refName = refMatch[1].trim();
+  const sha = resolveHeadRef(dirs, refName);
+  if (sha) return `sha:${sha}`;
+  return `ref:${refName}`;
+}
+
+/**
+ * Locate the per-worktree admin dir (holds this checkout's own HEAD) and the
+ * shared common dir (holds branch refs) for `root`. A plain checkout's `.git`
+ * directory is both; a linked worktree's `.git` file points at the admin dir
+ * and its `commondir` file points back at the shared `.git`. Returns null
+ * when `root` is not a git checkout in either layout (bare repos, whose root
+ * *is* the git dir, are deliberately unsupported — `getProjectRemoteIdentity`
+ * above can't identify them either, so they never reach the sharing path).
+ *
+ * Mirrors `resolveGitMetadataDir` above but additionally returns the admin
+ * dir — HEAD is per-worktree (admin) while branch refs are shared (common),
+ * and the fingerprint needs both.
+ */
+function resolveGitHeadDirs(root: string): { adminDir: string; commonDir: string } | null {
+  const gitEntry = path.join(root, '.git');
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(gitEntry);
+  } catch {
+    return null;
+  }
+  if (stat.isDirectory()) return { adminDir: gitEntry, commonDir: gitEntry };
+  if (!stat.isFile()) return null;
+  let content: string;
+  try {
+    content = fs.readFileSync(gitEntry, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  const match = content.match(/^gitdir:\s*(.+)$/);
+  if (!match) return null;
+  const adminDir = path.resolve(root, match[1].trim());
+  try {
+    const raw = fs.readFileSync(path.join(adminDir, 'commondir'), 'utf8').trim();
+    return { adminDir, commonDir: path.resolve(adminDir, raw) };
+  } catch {
+    return { adminDir, commonDir: path.resolve(adminDir, '../..') };
+  }
+}
+
+/** Resolve a `refs/...` name to a commit SHA via loose ref files + packed-refs. */
+function resolveHeadRef(
+  dirs: { adminDir: string; commonDir: string },
+  refName: string,
+): string | null {
+  // A ref name escaping its directory would turn this into an arbitrary file
+  // read — resolve relative to the metadata dirs and stay inside them. The
+  // content only ever feeds an equality comparison, but containment is free.
+  if (!refName || refName.startsWith('/') || refName.split('/').includes('..')) return null;
+  for (const dir of [dirs.commonDir, dirs.adminDir]) {
+    const refPath = path.resolve(dir, refName);
+    if (refPath !== dir && !refPath.startsWith(`${dir}${path.sep}`)) continue;
+    try {
+      const content = fs.readFileSync(refPath, 'utf8').trim().split(/\s+/)[0] ?? '';
+      if (/^[0-9a-fA-F]{40}$/.test(content)) return content.toLowerCase();
+    } catch {
+      /* not a loose ref here — try packed-refs below */
+    }
+    try {
+      const sha = findRefInPackedRefs(path.join(dir, 'packed-refs'), refName);
+      if (sha) return sha;
+    } catch {
+      /* no packed-refs here */
+    }
+  }
+  return null;
+}
+
+/** Scan a packed-refs file for `refName`, skipping comments and peeled lines. */
+function findRefInPackedRefs(packedRefsPath: string, refName: string): string | null {
+  const text = fs.readFileSync(packedRefsPath, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    if (!line || line.startsWith('#') || line.startsWith('^')) continue;
+    const parts = line.split(/\s+/);
+    if (parts.length < 2 || parts[1] !== refName) continue;
+    if (/^[0-9a-fA-F]{40}$/.test(parts[0])) return parts[0].toLowerCase();
+  }
+  return null;
+}
