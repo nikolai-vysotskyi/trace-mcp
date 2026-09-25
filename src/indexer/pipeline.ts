@@ -15,6 +15,8 @@ import type {
 } from '../plugin-api/types.js';
 import { invalidatePageRankCache } from '../scoring/pagerank.js';
 import { invalidateSearchCache } from '../scoring/search-cache.js';
+import { LOCKS_DIR, projectHash } from '../global.js';
+import { acquireLock, LockError, releaseLock, type LockHandle } from '../utils/pid-lock.js';
 import { invalidateTreeCacheFile } from '../parser/tree-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
@@ -451,6 +453,16 @@ export interface IndexingPipelineDeps {
   } | null;
 }
 
+/**
+ * Cross-process lock name guarding one index DB's bulk-load window (TRA-1923).
+ * Keyed by the DB file (not the project root) so two roots sharing one DB
+ * file (worktree / same-remote sibling share) still serialize against each
+ * other.
+ */
+export function bulkIndexLockName(dbFile: string): string {
+  return `${projectHash(dbFile)}-bulk-index`;
+}
+
 export class IndexingPipeline {
   constructor(
     private store: Store,
@@ -699,7 +711,46 @@ export class IndexingPipeline {
       // Bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for genuine
       // from-scratch indexes — never on a live daemon whose DB other
       // connections may still read (a crash with synchronous=OFF corrupts).
-      if (isFromScratch) {
+      //
+      // TRA-1923: synchronous=OFF additionally assumes EXCLUSIVE access, but
+      // nothing stops two indexers from opening the same DB file: an
+      // overlapping daemon restart (old process draining, new one already
+      // indexing) or two roots sharing one DB file. Two writers that both
+      // skip fsync tear the FTS5 index (`SQLITE_CORRUPT_VTAB: database disk
+      // image is malformed` on the very next FTS-triggering delete). Guard
+      // the window with a best-effort cross-process lock keyed by the DB
+      // file; the loser indexes with crash-safe pragmas instead of failing.
+      const dbFileName: unknown = (this.store.db as { name?: unknown }).name;
+      const isFileDb =
+        typeof dbFileName === 'string' && dbFileName !== '' && dbFileName !== ':memory:';
+      let bulkLock: LockHandle | null = null;
+      let bulkSkippedForOverlap = false;
+      if (isFromScratch && isFileDb) {
+        try {
+          bulkLock = acquireLock({
+            lockDir: LOCKS_DIR,
+            name: bulkIndexLockName(dbFileName as string),
+            op: 'bulk-index',
+          });
+        } catch (e) {
+          if (e instanceof LockError) {
+            bulkSkippedForOverlap = true;
+            logger.warn(
+              { root: this.rootPath, holder: e.holder },
+              'Skipping bulk-load mode — another indexer holds this DB (overlapping run); indexing with crash-safe pragmas instead (TRA-1923)',
+            );
+          } else {
+            // Lock infrastructure itself broken (permissions, full disk) —
+            // fail open toward the pre-existing behavior, loudly.
+            logger.warn(
+              { err: e, root: this.rootPath },
+              'bulk-index lock unavailable — proceeding with bulk-load mode (non-fatal)',
+            );
+          }
+        }
+      }
+      const bulkEngaged = isFromScratch && !bulkSkippedForOverlap;
+      if (bulkEngaged) {
         logger.info('Engaging bulk-load mode for from-scratch index');
         enableBulkMode(this.store.db);
       }
@@ -711,13 +762,14 @@ export class IndexingPipeline {
         // synchronous=OFF on disk would leave the daemon unsafe. disableBulkMode
         // also runs ANALYZE + WAL checkpoint, so we don't need a separate
         // ANALYZE on this path.
-        if (isFromScratch) {
+        if (bulkEngaged) {
           try {
             disableBulkMode(this.store.db);
           } catch (err) {
             logger.warn({ err }, 'Failed to restore pragmas after bulk index (non-fatal)');
           }
         }
+        if (bulkLock) releaseLock(bulkLock);
       }
       // TRA-1664: the walk was cut at security.max_files — the index is
       // partial by construction. Flag the result for immediate callers and
@@ -739,7 +791,11 @@ export class IndexingPipeline {
       // block); now the walk path pays it at most once per ANALYZE_THROTTLE_MS
       // instead of once per run. Bulk-index stamp (below) joins the same
       // budget so a fresh index doesn't re-ANALYZE on the next walk.
-      if (!isFromScratch) {
+      // TRA-1923: keyed on bulkEngaged, not isFromScratch — a from-scratch run
+      // that skipped bulk mode (overlapping indexer) never ran the
+      // disableBulkMode ANALYZE, so it joins the throttled ANALYZE budget
+      // like any other non-bulk walk.
+      if (!bulkEngaged) {
         this.maybeAnalyze();
       } else {
         this.stampAnalyzeComplete();
