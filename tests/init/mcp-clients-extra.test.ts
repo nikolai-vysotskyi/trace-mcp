@@ -329,36 +329,8 @@ describe('Kimi detection', () => {
   });
 });
 
-describe('Gemini CLI detection', () => {
-  it('detects ~/.gemini/settings.json with a trace entry', () => {
-    const dir = path.join(fakeHome, '.gemini');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dir, 'settings.json'),
-      JSON.stringify({
-        theme: 'Default',
-        mcpServers: { trace: { command: '/bin/true', args: ['serve'] } },
-      }),
-    );
-    const clients = detectMcpClients(projectRoot);
-    const gemini = clients.find((c) => c.name === 'gemini-cli');
-    expect(gemini).toBeDefined();
-    expect(gemini?.hasTraceMcp).toBe(true);
-  });
-
-  it('detects ~/.gemini/settings.json without trace-mcp', () => {
-    const dir = path.join(fakeHome, '.gemini');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ mcpServers: {} }));
-    const clients = detectMcpClients(projectRoot);
-    const gemini = clients.find((c) => c.name === 'gemini-cli');
-    expect(gemini).toBeDefined();
-    expect(gemini?.hasTraceMcp).toBe(false);
-  });
-});
-
-describe('Antigravity vs Gemini CLI path separation (TRA-1659)', () => {
-  it('does not report antigravity when only ~/.gemini/settings.json (Gemini CLI) exists', () => {
+describe('Antigravity vs legacy Gemini CLI path separation (TRA-1659, TRA-1931)', () => {
+  it('ignores legacy ~/.gemini/settings.json (deprecated Gemini CLI) entirely', () => {
     const dir = path.join(fakeHome, '.gemini');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
@@ -367,10 +339,12 @@ describe('Antigravity vs Gemini CLI path separation (TRA-1659)', () => {
     );
     const clients = detectMcpClients(projectRoot);
     expect(clients.find((c) => c.name === 'antigravity')).toBeUndefined();
-    expect(clients.find((c) => c.name === 'gemini-cli')?.hasTraceMcp).toBe(true);
+    expect(clients.some((c) => c.configPath.endsWith(path.join('.gemini', 'settings.json')))).toBe(
+      false,
+    );
   });
 
-  it('does not report gemini-cli when only ~/.gemini/config/mcp_config.json (Antigravity) exists', () => {
+  it('reports antigravity from ~/.gemini/config/mcp_config.json', () => {
     const dir = path.join(fakeHome, '.gemini', 'config');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
@@ -378,11 +352,10 @@ describe('Antigravity vs Gemini CLI path separation (TRA-1659)', () => {
       JSON.stringify({ mcpServers: { trace: { command: '/bin/true', args: ['serve'] } } }),
     );
     const clients = detectMcpClients(projectRoot);
-    expect(clients.find((c) => c.name === 'gemini-cli')).toBeUndefined();
     expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(true);
   });
 
-  it('reports both independently when both files exist', () => {
+  it('reports antigravity and still ignores settings.json when both files exist', () => {
     const geminiDir = path.join(fakeHome, '.gemini');
     const antiDir = path.join(fakeHome, '.gemini', 'config');
     fs.mkdirSync(antiDir, { recursive: true });
@@ -392,7 +365,9 @@ describe('Antigravity vs Gemini CLI path separation (TRA-1659)', () => {
     );
     fs.writeFileSync(path.join(antiDir, 'mcp_config.json'), JSON.stringify({ mcpServers: {} }));
     const clients = detectMcpClients(projectRoot);
-    expect(clients.find((c) => c.name === 'gemini-cli')?.hasTraceMcp).toBe(true);
+    expect(clients.some((c) => c.configPath.endsWith(path.join('.gemini', 'settings.json')))).toBe(
+      false,
+    );
     expect(clients.find((c) => c.name === 'antigravity')?.hasTraceMcp).toBe(false);
   });
 });
@@ -453,62 +428,23 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     expect(second[0].action).toBe('already_configured');
   });
 
-  it('Gemini CLI: writes ~/.gemini/settings.json and reports already_configured on re-run', () => {
-    const first = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
-    expect(first[0].action).toBe('created');
-    const file = path.join(fakeHome, '.gemini', 'settings.json');
-    expect(fs.existsSync(file)).toBe(true);
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
-    const second = configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
-    expect(second[0].action).toBe('already_configured');
-  });
-
-  it('Gemini CLI: preserves other settings.json keys and existing servers', () => {
-    // settings.json carries the whole CLI config (theme, model, …) — the
-    // writer must only touch mcpServers (TRA-1659).
-    const file = path.join(fakeHome, '.gemini', 'settings.json');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+  it('Antigravity write does not touch the legacy ~/.gemini/settings.json (TRA-1931)', () => {
+    const legacy = path.join(fakeHome, '.gemini', 'settings.json');
+    fs.mkdirSync(path.dirname(legacy), { recursive: true });
     fs.writeFileSync(
-      file,
+      legacy,
       JSON.stringify({
         theme: 'Default',
-        mcpServers: { linear: { command: 'npx', args: ['@linear/mcp'] } },
+        mcpServers: { trace: { command: '/old/launcher', args: ['serve'] } },
       }),
     );
-    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.theme).toBe('Default');
-    expect(parsed.mcpServers.linear).toBeDefined();
-    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
-  });
-
-  it('Gemini CLI: migrates a legacy "trace-mcp" entry to "trace" in place', () => {
-    const file = path.join(fakeHome, '.gemini', 'settings.json');
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(
-      file,
-      JSON.stringify({
-        mcpServers: { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } },
-      }),
-    );
-    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
-    expect(parsed.mcpServers.trace.args).toEqual(['serve']);
-  });
-
-  it('Gemini CLI write does not touch the Antigravity file and vice versa', () => {
-    configureMcpClients(['gemini-cli'], projectRoot, { scope: 'global' });
-    expect(fs.existsSync(path.join(fakeHome, '.gemini', 'config', 'mcp_config.json'))).toBe(false);
     configureMcpClients(['antigravity'], projectRoot, { scope: 'global' });
-    const gemini = JSON.parse(
-      fs.readFileSync(path.join(fakeHome, '.gemini', 'settings.json'), 'utf-8'),
-    );
+    const before = fs.readFileSync(legacy, 'utf-8');
+    // The orphaned entry of the dead CLI is left alone — we only stop writing it.
+    expect(JSON.parse(before).mcpServers['trace'].command).toBe('/old/launcher');
     const anti = JSON.parse(
       fs.readFileSync(path.join(fakeHome, '.gemini', 'config', 'mcp_config.json'), 'utf-8'),
     );
-    expect(gemini.mcpServers['trace'].args).toEqual(['serve']);
     expect(anti.mcpServers['trace'].args).toEqual(['serve']);
   });
 });
