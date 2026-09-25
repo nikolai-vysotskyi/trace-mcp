@@ -36,14 +36,28 @@ export const clients = {
   pickupRestartApp: 'Redémarrez {{client}} pour appliquer la mise à jour',
   pickupRestartSession: 'Redémarrez la session {{client}} pour appliquer la mise à jour',
   pickupReloadWindow: 'Rechargez la fenêtre {{client}} pour appliquer la mise à jour',
+  disconnect: 'Déconnecter',
+  disconnecting: 'Déconnexion…',
+  disconnectTitle: 'Déconnecter {{client}} ?',
+  disconnectBody:
+    'Supprime l’entrée trace-mcp de la configuration de ce client. Les hooks partagés et les autres réglages sont conservés.',
+  disconnectConfirm: 'Déconnecter',
+  disconnectFailed: 'Impossible de supprimer l’entrée.',
+  disconnectPickupRestartApp: 'Redémarrez {{client}} pour décharger le serveur',
+  disconnectPickupRestartSession: 'Redémarrez la session {{client}} pour décharger le serveur',
+  disconnectPickupReloadWindow: 'Rechargez la fenêtre {{client}} pour décharger le serveur',
   blockedTitle: 'Quittez d’abord Claude.app',
   blockedWhy:
     '{{client}} stocke sa configuration là où Claude.app la réécrit pendant son exécution : tout ce qui est écrit maintenant sera perdu. Quittez complètement l’application puis relancez la mise à jour.',
+  blockedWhyDisconnect:
+    '{{client}} stocke sa configuration là où Claude.app la réécrit pendant son exécution : ce qui est supprimé reviendrait. Quittez complètement l’application puis réessayez la déconnexion.',
   blockedStep1:
     '1. Quittez Claude.app complètement (Cmd+Q sur macOS) — fermer la fenêtre ne suffit pas.',
   blockedStep2: '2. Cliquez sur « Réessayer » ci-dessous.',
+  blockedStep2Disconnect: '2. Cliquez sur « Réessayer la déconnexion » ci-dessous.',
   blockedStep3: '3. Relancez Claude.app.',
   blockedRetry: 'Réessayer',
+  blockedRetryDisconnect: 'Réessayer la déconnexion',
   blockedDismiss: 'Compris',
   setUpManually: 'Configurer manuellement…',
   hideSteps: 'Masquer les étapes',

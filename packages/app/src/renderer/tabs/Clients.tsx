@@ -48,6 +48,7 @@ import { DaemonDownPane } from '../components/DaemonDownPane';
 import { Icon } from '../lattice/icons';
 import {
   Button,
+  ConfirmPopover,
   EmptyState,
   Menu,
   MenuItem,
@@ -229,6 +230,27 @@ function pickupSentence(
   return t(PICKUP_KEYS[pickup], { client: clientLabel });
 }
 
+/**
+ * TRA-1932 removal-side twin of pickupSentence: the entry is gone but the
+ * running server lingers until restart, so the caption after a Disconnect
+ * names the unload step. Separate catalogue keys (not a verb parameter) so
+ * translators can phrase "unload the server" naturally.
+ */
+const DISCONNECT_PICKUP_KEYS = {
+  'restart-app': 'disconnectPickupRestartApp',
+  'restart-session': 'disconnectPickupRestartSession',
+  'reload-window': 'disconnectPickupReloadWindow',
+} as const;
+
+function disconnectPickupSentence(
+  t: (key: string, opts?: Record<string, string>) => string,
+  pickup: ClientPickup | null | undefined,
+  clientLabel: string,
+): string | null {
+  if (!pickup || pickup === 'hot-reload') return null;
+  return t(DISCONNECT_PICKUP_KEYS[pickup], { client: clientLabel });
+}
+
 /** The row's primary label: the project being worked on, then the client that
     is working on it. The session id is neither, so it is never the headline. */
 function sessionTitle(client: ClientInfo, fallback: string): string {
@@ -381,6 +403,7 @@ function SupportedClientRow({
   onConnect,
   onConnectWithLevel,
   onUpdate,
+  onDisconnect,
   onEnableRedirect,
   shimPath,
 }: {
@@ -396,6 +419,9 @@ function SupportedClientRow({
    *   up_to_date    → a green dot + the word "Connected"
    *   stale         → "Update", with the drifted field on its tooltip
    *   legacy        → "Migrate", with the rename on its tooltip
+   *   Every configured row (up_to_date, stale, legacy, unknown) also carries
+   *   a small "Disconnect" that confirms first and removes only the MCP
+   *   entry — hooks and shared settings stay (TRA-1932).
    *   unmanageable  → "Set up manually…", which discloses the steps
    *   unknown       → a neutral dot + "Configured" — the entry is there and the
    *                   format (Codex TOML) cannot be compared, which is not the
@@ -413,11 +439,13 @@ function SupportedClientRow({
   hook?: 'active' | 'missing' | 'na' | null;
   /**
    * Whether this row's entry was just written by Connect/Update in this
-   * session. A write that landed but isn't picked up until restart reads as
-   * "Update did nothing" — while this is set, the caption names the next
-   * step instead of the path.
+   * session — or just removed by Disconnect. A write that landed but isn't
+   * picked up until restart reads as "Update did nothing" — while this is
+   * set, the caption names the next step instead of the path. Same for a
+   * removal: the running server lingers until restart, so the caption names
+   * the unload step instead of flipping to a bare "Connect" row.
    */
-  justWritten?: boolean;
+  justWritten?: 'write' | 'disconnect' | null;
   /** What the last write for this row said when it failed. */
   error?: string;
   configuring: boolean;
@@ -427,6 +455,8 @@ function SupportedClientRow({
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
   onUpdate: () => void;
+  /** TRA-1932: remove the trace-mcp entry (hooks and shared settings stay). */
+  onDisconnect: () => void;
   /** TRA-1698: install the PreToolUse redirect without a terminal. */
   onEnableRedirect: () => void;
 }) {
@@ -435,6 +465,14 @@ function SupportedClientRow({
   const hasLevels = CLAUDE_CLIENTS.has(name);
   const levelMenu = useMenuAnchor();
   const [showSteps, setShowSteps] = useState(false);
+  /* TRA-1932: where the disconnect confirm popover anchors. Set from the
+     Disconnect button's click point; cleared on either choice. */
+  const [confirmDisconnectAt, setConfirmDisconnectAt] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const askDisconnect = (e: React.MouseEvent) => {
+    setConfirmDisconnectAt({ x: e.clientX, y: e.clientY });
+  };
 
   const connected = status === 'up_to_date';
   /* Presence-only detection (Codex TOML): the entry is there, drift cannot be
@@ -465,7 +503,11 @@ function SupportedClientRow({
      client one click from working apart from one that is not on the machine at
      all (TRA-479). It now says which: the file Connect will write into, or that
      there is no such file. */
-  const restartHint = justWritten ? pickupSentence(t, pickup, label) : null;
+  const restartHint = justWritten
+    ? justWritten === 'disconnect'
+      ? disconnectPickupSentence(t, pickup, label)
+      : pickupSentence(t, pickup, label)
+    : null;
   /* TRA-1698: a configured entry without the redirect is the misleading
      "Connected" the issue is about — the row's second line (below) names it
      and offers the one-click fix, so the caption keeps the path. */
@@ -575,23 +617,44 @@ function SupportedClientRow({
               {redirectBusy ? t('enablingRedirect') : t('enableRedirect')}
             </Button>
           )}
+          {/* TRA-1932: the reverse path Connect never had. Small and bordered
+              like every row action here — Disconnect is available, never
+              prominent. The confirm popover below guards it. */}
+          <Button
+            size="small"
+            disabled={configuring}
+            onClick={askDisconnect}
+            title={t('disconnectBody')}
+          >
+            {configuring ? t('disconnecting') : t('disconnect')}
+          </Button>
         </span>
       ) : status === 'legacy' ? (
         /* Nothing is broken or drifted here — the entry names the server
            `trace-mcp` where init now writes `trace`, and both reach the same
            binary. The verb says it, and the tooltip says why; the row used to
            say it a second time in a blue badge beside the same button. */
-        <Button disabled={configuring} onClick={onUpdate} title={t('legacyHint')}>
-          {configuring ? t('migrating') : t('migrate')}
-        </Button>
+        <span className="flex items-center gap-1.5 shrink-0">
+          <Button disabled={configuring} onClick={onUpdate} title={t('legacyHint')}>
+            {configuring ? t('migrating') : t('migrate')}
+          </Button>
+          <Button size="small" disabled={configuring} onClick={askDisconnect}>
+            {t('disconnect')}
+          </Button>
+        </span>
       ) : status === 'stale' ? (
-        <Button
-          disabled={configuring}
-          onClick={onUpdate}
-          title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
-        >
-          {configuring ? t('updating') : t('update')}
-        </Button>
+        <span className="flex items-center gap-1.5 shrink-0">
+          <Button
+            disabled={configuring}
+            onClick={onUpdate}
+            title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
+          >
+            {configuring ? t('updating') : t('update')}
+          </Button>
+          <Button size="small" disabled={configuring} onClick={askDisconnect}>
+            {t('disconnect')}
+          </Button>
+        </span>
       ) : isManual ? (
         /* TRA-1109: the shim path is long and typed by hand (JetBrains) or the
            snippet is pasted (Warp), so the expanded row offers it on the
@@ -643,6 +706,26 @@ function SupportedClientRow({
           ))}
         </Menu>
       )}
+
+      {/* TRA-1932: Disconnect removes the entry, so it confirms first — the
+          same ConfirmPopover idiom as removing a service in ProjectOverview.
+          Rendered at row level so the popover anchors to the button clicked. */}
+      {confirmDisconnectAt && (
+        <ConfirmPopover
+          x={confirmDisconnectAt.x}
+          y={confirmDisconnectAt.y}
+          align="end"
+          danger
+          title={t('disconnectTitle', { client: label })}
+          body={t('disconnectBody')}
+          confirmLabel={t('disconnectConfirm')}
+          onConfirm={() => {
+            setConfirmDisconnectAt(null);
+            onDisconnect();
+          }}
+          onCancel={() => setConfirmDisconnectAt(null)}
+        />
+      )}
     </div>
   );
 }
@@ -662,11 +745,15 @@ function isClaudeRunningError(error?: string): boolean {
 
 function ClaudeBlockedSheet({
   clientLabel,
+  mode,
   retrying,
   onRetry,
   onClose,
 }: {
   clientLabel: string;
+  /** TRA-1932: a Disconnect refused the same way retries through disconnect,
+      never through update — which would re-add the entry just removed. */
+  mode: 'update' | 'disconnect';
   retrying: boolean;
   onRetry: () => void;
   onClose: () => void;
@@ -703,15 +790,27 @@ function ClaudeBlockedSheet({
           {t('blockedTitle')}
         </h2>
         <div id={bodyId} className="lx-sheet-body">
-          <p className="lx-sheet-text">{t('blockedWhy', { client: clientLabel })}</p>
+          <p className="lx-sheet-text">
+            {mode === 'disconnect'
+              ? t('blockedWhyDisconnect', { client: clientLabel })
+              : t('blockedWhy', { client: clientLabel })}
+          </p>
           <p className="lx-sheet-text">{t('blockedStep1')}</p>
-          <p className="lx-sheet-text">{t('blockedStep2')}</p>
+          <p className="lx-sheet-text">
+            {mode === 'disconnect' ? t('blockedStep2Disconnect') : t('blockedStep2')}
+          </p>
           <p className="lx-sheet-text">{t('blockedStep3')}</p>
         </div>
         <div className="lx-sheet-actions">
           <Button onClick={onClose}>{t('blockedDismiss')}</Button>
           <Button variant="prominent" autoFocus disabled={retrying} onClick={onRetry}>
-            {retrying ? t('updating') : t('blockedRetry')}
+            {retrying
+              ? mode === 'disconnect'
+                ? t('disconnecting')
+                : t('updating')
+              : mode === 'disconnect'
+                ? t('blockedRetryDisconnect')
+                : t('blockedRetry')}
           </Button>
         </div>
       </div>
@@ -730,22 +829,30 @@ export function Clients() {
   /** Client name → what its last write said when it failed. */
   const [errors, setErrors] = useState<Record<string, string>>({});
   /**
-   * Clients whose entry Connect/Update wrote in this session (TRA-1647).
-   * Their rows name the pickup step in the caption until a manual refresh —
-   * the auto re-detect after a write must not clear it, or the hint would
-   * never survive to be read.
+   * Clients whose entry Connect/Update wrote — or Disconnect removed — in
+   * this session (TRA-1647). Their rows name the pickup step in the caption
+   * until a manual refresh — the auto re-detect after a write must not clear
+   * it, or the hint would never survive to be read.
    */
-  const [justWritten, setJustWritten] = useState<string[]>([]);
-  const markWritten = useCallback((names: string[]) => {
+  const [justWritten, setJustWritten] = useState<Record<string, 'write' | 'disconnect'>>({});
+  const markWritten = useCallback((names: string[], kind: 'write' | 'disconnect' = 'write') => {
     if (names.length === 0) return;
-    setJustWritten((prev) => [...prev.filter((n) => !names.includes(n)), ...names]);
+    setJustWritten((prev) => {
+      const next = { ...prev };
+      for (const n of names) next[n] = kind;
+      return next;
+    });
   }, []);
   /**
-   * The client whose last write Claude.app refused. The row keeps its red
-   * caption, but the caption truncates to one 11px line and never says the fix
-   * is to quit Claude.app and retry — the sheet above is what says it.
+   * The client whose last write Claude.app refused, and which operation to
+   * retry. The row keeps its red caption, but the caption truncates to one
+   * 11px line and never says the fix is to quit Claude.app and retry — the
+   * sheet above is what says it.
    */
-  const [blockedClient, setBlockedClient] = useState<string | null>(null);
+  const [blockedClient, setBlockedClient] = useState<{
+    name: string;
+    retry: 'update' | 'disconnect';
+  } | null>(null);
   const closeBlocked = useCallback(() => setBlockedClient(null), []);
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -821,11 +928,15 @@ export function Clients() {
   /* A write that failed says so on its row until the next attempt clears it.
      Swallowing the result is how a Connect button that could not run for four
      months looked exactly like one that had nothing to do (TRA-497). */
-  const recordResult = (clientName: string, result?: { ok: boolean; error?: string }) => {
+  const recordResult = (
+    clientName: string,
+    result?: { ok: boolean; error?: string },
+    fallback?: string,
+  ) => {
     setErrors((prev) => {
       const next = { ...prev };
       if (result?.ok) delete next[clientName];
-      else next[clientName] = result?.error ?? t('writeFailed');
+      else next[clientName] = result?.error ?? fallback ?? t('writeFailed');
       return next;
     });
     return result?.ok === true;
@@ -836,7 +947,8 @@ export function Clients() {
     try {
       const result = await window.electronAPI?.configureMcpClient(clientName, level);
       const ok = recordResult(clientName, result);
-      if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
+      if (!ok && isClaudeRunningError(result?.error))
+        setBlockedClient({ name: clientName, retry: 'update' });
       if (ok) {
         markWritten([clientName]);
         await detectClients();
@@ -851,9 +963,30 @@ export function Clients() {
     try {
       const result = await window.electronAPI?.updateMcpClients?.([clientName]);
       const ok = recordResult(clientName, result);
-      if (!ok && isClaudeRunningError(result?.error)) setBlockedClient(clientName);
+      if (!ok && isClaudeRunningError(result?.error))
+        setBlockedClient({ name: clientName, retry: 'update' });
       if (ok) {
         markWritten([clientName]);
+        await detectClients();
+      }
+    } finally {
+      setConfiguringClient(null);
+    }
+  };
+
+  /* TRA-1932: remove the entry, not the integration around it. Failure reports
+     on the row (TRA-497); a Claude.app refusal opens the blocked sheet with
+     a disconnect retry; success names the unload step in the caption until a
+     manual refresh clears it. */
+  const handleDisconnect = async (clientName: string) => {
+    setConfiguringClient(clientName);
+    try {
+      const result = await window.electronAPI?.disconnectMcpClients?.([clientName]);
+      const ok = recordResult(clientName, result, t('disconnectFailed'));
+      if (!ok && isClaudeRunningError(result?.error))
+        setBlockedClient({ name: clientName, retry: 'disconnect' });
+      if (ok) {
+        markWritten([clientName], 'disconnect');
         await detectClients();
       }
     } finally {
@@ -872,7 +1005,8 @@ export function Clients() {
         setBulk({ done: i, total: names.length });
         const result = await window.electronAPI?.updateMcpClients?.([name]);
         if (recordResult(name, result)) written.push(name);
-        if (isClaudeRunningError(result?.error)) setBlockedClient(name);
+        if (isClaudeRunningError(result?.error))
+          setBlockedClient({ name, retry: 'update' });
       }
       markWritten(written);
     } finally {
@@ -883,11 +1017,15 @@ export function Clients() {
 
   /* Retry from the blocked sheet: the entry exists and only needs repairing,
      so this goes through `clients update` even when the block interrupted a
-     Connect — never back through setup, which would re-ask the level (TRA-497). */
+     Connect — never back through setup, which would re-ask the level (TRA-497).
+     A blocked Disconnect retries through `clients disconnect` for the mirror
+     reason: update would re-add the entry just removed. */
   const retryBlocked = () => {
-    const name = blockedClient;
+    const blocked = blockedClient;
     setBlockedClient(null);
-    if (name) void handleUpdate(name);
+    if (!blocked) return;
+    if (blocked.retry === 'disconnect') void handleDisconnect(blocked.name);
+    else void handleUpdate(blocked.name);
   };
 
   /* TRA-1698: install the PreToolUse redirect without a terminal, then
@@ -919,7 +1057,7 @@ export function Clients() {
   };
 
   const refreshAll = () => {
-    setJustWritten([]);
+    setJustWritten({});
     setRedirectDone(false);
     setRedirectError(null);
     detectClients();
@@ -1080,7 +1218,7 @@ export function Clients() {
                       staleReason={s.staleReason}
                       pickup={s.pickup}
                       hook={s.hook}
-                      justWritten={justWritten.includes(c.name)}
+                      justWritten={justWritten[c.name] ?? null}
                       error={errors[c.name]}
                       configuring={
                         configuringClient === c.name || (bulk !== null && bucket.includes(c.name))
@@ -1090,6 +1228,7 @@ export function Clients() {
                       onConnect={() => handleConnect(c.name)}
                       onConnectWithLevel={(level) => handleConnect(c.name, level)}
                       onUpdate={() => handleUpdate(c.name)}
+                      onDisconnect={() => handleDisconnect(c.name)}
                       onEnableRedirect={handleEnableRedirect}
                       shimPath={shimPath}
                     />
@@ -1160,8 +1299,9 @@ export function Clients() {
       </div>
       {blockedClient && (
         <ClaudeBlockedSheet
-          clientLabel={CLIENT_LABELS[blockedClient] ?? blockedClient}
-          retrying={configuringClient === blockedClient}
+          clientLabel={CLIENT_LABELS[blockedClient.name] ?? blockedClient.name}
+          mode={blockedClient.retry}
+          retrying={configuringClient === blockedClient.name}
           onRetry={retryBlocked}
           onClose={closeBlocked}
         />

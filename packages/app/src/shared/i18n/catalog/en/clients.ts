@@ -47,13 +47,31 @@ export const clients = {
   pickupRestartApp: 'Restart {{client}} to apply the update',
   pickupRestartSession: 'Restart the {{client}} session to apply the update',
   pickupReloadWindow: 'Reload the {{client}} window to apply the update',
+  /* TRA-1932 disconnect: the entry is gone but the running server lingers
+     until restart, so the caption after a Disconnect names the unload step.
+     Kept as separate keys (not a verb parameter) so translators can phrase
+     "unload the server" naturally. */
+  disconnect: 'Disconnect',
+  disconnecting: 'Disconnecting…',
+  disconnectTitle: 'Disconnect {{client}}?',
+  disconnectBody:
+    'Removes the trace-mcp entry from this client’s config. Shared hooks and other settings stay untouched.',
+  disconnectConfirm: 'Disconnect',
+  disconnectFailed: 'The entry could not be removed.',
+  disconnectPickupRestartApp: 'Restart {{client}} to unload the server',
+  disconnectPickupRestartSession: 'Restart the {{client}} session to unload the server',
+  disconnectPickupReloadWindow: 'Reload the {{client}} window to unload the server',
   blockedTitle: 'Quit Claude.app first',
   blockedWhy:
     '{{client}} keeps its config where Claude.app rewrites it while running, so anything written now is thrown away. Quit the app completely and update again.',
+  blockedWhyDisconnect:
+    '{{client}} keeps its config where Claude.app rewrites it while running, so anything removed now comes back. Quit the app completely and retry the disconnect.',
   blockedStep1: '1. Quit Claude.app completely (Cmd+Q on macOS) — closing the window is not enough.',
   blockedStep2: '2. Press Retry update below.',
+  blockedStep2Disconnect: '2. Press Retry disconnect below.',
   blockedStep3: '3. Start Claude.app again.',
   blockedRetry: 'Retry update',
+  blockedRetryDisconnect: 'Retry disconnect',
   blockedDismiss: 'Got it',
   setUpManually: 'Set up manually…',
   hideSteps: 'Hide steps',
