@@ -22,6 +22,7 @@ export const benchmarklab = {
   sectionHistory: 'Past runs',
   noRunsTitle: 'No runs yet',
   noRunsSubtitle: 'Pick the arms and run the benchmark — every run is saved.',
+  tableFixture: 'Fixture',
   tableArm: 'Arm',
   tableTokens: 'Tokens',
   tableCalls: 'Calls',

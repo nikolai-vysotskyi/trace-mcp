@@ -516,7 +516,7 @@ function LabResult({
           <table className="w-full text-[12px] leading-[16px]" style={{ color: 'var(--label)' }}>
             <thead>
               <tr style={{ color: 'var(--label-secondary)' }}>
-                <th className="text-left font-semibold pb-2 pr-3">fixture</th>
+                <th className="text-left font-semibold pb-2 pr-3">{t('tableFixture')}</th>
                 {run.arms.map((arm) => (
                   <th key={arm} className="text-right font-semibold pb-2 pr-3 tabular-nums last:pr-0">
                     {arm}

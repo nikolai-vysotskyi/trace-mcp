@@ -29,7 +29,7 @@
  * from the built daemon without dragging the test tree along.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -581,7 +581,9 @@ export function measuredBuildInfo(): { version: string; commit: string; dirty?: 
 
 function makeRunId(startedAt: Date): string {
   const stamp = startedAt.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
-  const rand = Math.random().toString(36).slice(2, 8);
+  // Uniqueness suffix only, never a secret — but Math.random() trips the
+  // Semgrep insecure-RNG gate, so spend the syscall and use randomBytes.
+  const rand = randomBytes(3).toString('hex');
   return `lab-${stamp}-${rand}`;
 }
 

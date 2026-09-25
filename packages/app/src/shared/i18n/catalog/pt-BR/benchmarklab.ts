@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: 'Execuções anteriores',
   noRunsTitle: 'Nenhuma execução ainda',
   noRunsSubtitle: 'Escolha os braços e execute — cada execução é salva.',
+  tableFixture: 'Caso',
   tableArm: 'Braço',
   tableTokens: 'Tokens',
   tableCalls: 'Chamadas',

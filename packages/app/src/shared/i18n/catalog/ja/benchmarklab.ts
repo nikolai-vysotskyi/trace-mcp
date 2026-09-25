@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: '過去の実行',
   noRunsTitle: '実行はまだありません',
   noRunsSubtitle: 'アームを選んでベンチマークを実行 — 実行ごとに保存されます。',
+  tableFixture: 'フィクスチャ',
   tableArm: 'アーム',
   tableTokens: 'トークン',
   tableCalls: '呼び出し',

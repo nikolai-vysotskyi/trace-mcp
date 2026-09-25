@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: 'पिछले रन',
   noRunsTitle: 'अभी कोई रन नहीं',
   noRunsSubtitle: 'आर्म चुनें और बेंचमार्क चलाएँ — हर रन सहेजा जाता है।',
+  tableFixture: 'फिक्सचर',
   tableArm: 'आर्म',
   tableTokens: 'टोकन',
   tableCalls: 'कॉल',

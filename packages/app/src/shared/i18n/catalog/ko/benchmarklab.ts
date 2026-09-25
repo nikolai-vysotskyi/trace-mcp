@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: '이전 실행',
   noRunsTitle: '아직 실행이 없습니다',
   noRunsSubtitle: '암을 선택하고 벤치마크를 실행하세요 — 실행마다 저장됩니다.',
+  tableFixture: '픽스처',
   tableArm: '암',
   tableTokens: '토큰',
   tableCalls: '호출',

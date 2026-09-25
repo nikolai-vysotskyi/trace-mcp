@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: '历史运行',
   noRunsTitle: '暂无运行记录',
   noRunsSubtitle: '选择测试组并运行 — 每次运行都会保存。',
+  tableFixture: '用例',
   tableArm: '测试组',
   tableTokens: 'Token',
   tableCalls: '调用',

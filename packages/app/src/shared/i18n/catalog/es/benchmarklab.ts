@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: 'Ejecuciones anteriores',
   noRunsTitle: 'Sin ejecuciones todavía',
   noRunsSubtitle: 'Elige las ramas y ejecuta el benchmark — cada ejecución se guarda.',
+  tableFixture: 'Caso',
   tableArm: 'Rama',
   tableTokens: 'Tokens',
   tableCalls: 'Llamadas',

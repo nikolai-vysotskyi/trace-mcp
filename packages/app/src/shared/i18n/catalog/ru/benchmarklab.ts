@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: 'Прошлые прогоны',
   noRunsTitle: 'Прогонов пока нет',
   noRunsSubtitle: 'Выберите конфигурации и запустите — каждый прогон сохраняется.',
+  tableFixture: 'Фикстура',
   tableArm: 'Конфигурация',
   tableTokens: 'Токены',
   tableCalls: 'Вызовы',

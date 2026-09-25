@@ -14,6 +14,7 @@ export const benchmarklab = {
   sectionHistory: 'Frühere Läufe',
   noRunsTitle: 'Noch keine Läufe',
   noRunsSubtitle: 'Arme wählen und Benchmark starten — jeder Lauf wird gespeichert.',
+  tableFixture: 'Fixture',
   tableArm: 'Arm',
   tableTokens: 'Tokens',
   tableCalls: 'Aufrufe',
