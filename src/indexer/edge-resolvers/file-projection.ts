@@ -26,6 +26,154 @@ import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { PROJECTION_ID_CHUNK } from '../resolver-budget.js';
 
+/** Slow-chunk tripwire: a single projection range taking longer logs loudly. */
+const SLOW_PROJECTION_CHUNK_MS = 2000;
+
+const INSERT_PREAMBLE = `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)`;
+const PROJECTED_COLS = `1,
+      '{"projected":true}',
+      0,
+      'ast_inferred'`;
+const WORKSPACE_GUARD = `(
+        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
+        OR src_file.workspace = tgt_file.workspace
+      )`;
+const RANGE_FILTER = `AND e.id >= ? AND e.id < ?`;
+
+/**
+ * Full INSERT text for the sym→sym projection. `filePh === null` selects the
+ * unscoped (id-range) form, otherwise the scoped UNION of the source-side and
+ * target-side branches. `excludedPh` is the caller's `?,…` (or `SELECT -1`)
+ * for the edge-type exclusion list.
+ *
+ * Placeholder order (both forms): edge_type, per-branch IN ids, per-branch
+ * excluded ids; unscoped appends lo, hi.
+ *
+ * TRA-1957: CROSS JOIN forces the driving table (.edges range / IN list)
+ * up front — plain JOIN lets the planner pick files×files nested loops
+ * (>300 s per 2000-row range on a 3k-file index; wedged the daemon with
+ * /health and all timers dead). See the plan-shape test.
+ */
+export function symSymInsertSql(filePh: string | null, excludedPh: string): string {
+  const select = (fromWhere: string) => `
+    SELECT DISTINCT
+      src_file_node.id AS source_node_id,
+      tgt_file_node.id AS target_node_id,
+      ? AS edge_type_id,
+      ${PROJECTED_COLS}
+    ${fromWhere}
+  `;
+  if (filePh) {
+    const branchSrc = `
+    FROM symbols ss
+    CROSS JOIN nodes sn ON sn.node_type = 'symbol' AND sn.ref_id = ss.id
+    CROSS JOIN edges e ON e.source_node_id = sn.id
+    CROSS JOIN files src_file ON src_file.id = ss.file_id
+    CROSS JOIN nodes src_file_node ON src_file_node.node_type = 'file' AND src_file_node.ref_id = src_file.id
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    WHERE ss.file_id IN (${filePh})
+      AND ss.file_id <> ts.file_id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+    const branchTgt = `
+    FROM edges e
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    CROSS JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'symbol'
+    CROSS JOIN symbols ss ON ss.id = sn.ref_id
+    CROSS JOIN files src_file ON src_file.id = ss.file_id
+    CROSS JOIN nodes src_file_node ON src_file_node.node_type = 'file' AND src_file_node.ref_id = src_file.id
+    WHERE ts.file_id IN (${filePh})
+      AND ss.file_id <> ts.file_id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+    return `${INSERT_PREAMBLE}\n${select(branchSrc)} UNION ${select(branchTgt)}`;
+  }
+  return `${INSERT_PREAMBLE}
+  ${select(`
+    FROM edges e
+    CROSS JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'symbol'
+    CROSS JOIN symbols ss ON ss.id = sn.ref_id
+    CROSS JOIN files src_file ON src_file.id = ss.file_id
+    CROSS JOIN nodes src_file_node ON src_file_node.node_type = 'file' AND src_file_node.ref_id = src_file.id
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    WHERE ss.file_id <> ts.file_id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+      ${RANGE_FILTER}
+  `)}`;
+}
+
+/**
+ * Full INSERT text for the file→symbol projection. Same conventions as
+ * {@link symSymInsertSql}: `filePh === null` is the unscoped id-range form,
+ * otherwise the scoped UNION (source-file-driven branch + edges-driven
+ * target branch).
+ */
+export function fileSymInsertSql(filePh: string | null, excludedPh: string): string {
+  const select = (fromWhere: string) => `
+    SELECT DISTINCT
+      sn.id AS source_node_id,
+      tgt_file_node.id AS target_node_id,
+      ? AS edge_type_id,
+      ${PROJECTED_COLS}
+    ${fromWhere}
+  `;
+  if (filePh) {
+    const branchSrc = `
+    FROM files src_file
+    CROSS JOIN nodes sn ON sn.node_type = 'file' AND sn.ref_id = src_file.id
+    CROSS JOIN edges e ON e.source_node_id = sn.id
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    WHERE src_file.id IN (${filePh})
+      AND src_file.id <> tgt_file.id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+    const branchTgt = `
+    FROM edges e
+    CROSS JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
+    CROSS JOIN files src_file ON src_file.id = sn.ref_id
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    WHERE tgt_file.id IN (${filePh})
+      AND src_file.id <> tgt_file.id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+  `;
+    return `${INSERT_PREAMBLE}\n${select(branchSrc)} UNION ${select(branchTgt)}`;
+  }
+  return `${INSERT_PREAMBLE}
+  ${select(`
+    FROM edges e
+    CROSS JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
+    CROSS JOIN files src_file ON src_file.id = sn.ref_id
+    CROSS JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
+    CROSS JOIN symbols ts ON ts.id = tn.ref_id
+    CROSS JOIN files tgt_file ON tgt_file.id = ts.file_id
+    CROSS JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
+    WHERE src_file.id <> tgt_file.id
+      AND ${WORKSPACE_GUARD}
+      AND e.edge_type_id NOT IN (${excludedPh})
+      ${RANGE_FILTER}
+  `)}`;
+}
+
 export async function resolveFileProjectionEdges(
   state: PipelineState,
   scope?: ChangeScope,
@@ -76,10 +224,28 @@ export async function resolveFileProjectionEdges(
   // would visually merge independent projects. Drop them here.
   //
   // Scoped runs additionally restrict to edges touching a changed file on
-  // either side (see the WHY note above). The either-side form is written as
-  // a UNION of two single-side branches rather than one `OR` filter: each
-  // branch drives from its file-id IN list through idx_symbols_file, while
-  // the OR form plans as a full join enumeration.
+  // either side (see the WHY note above).
+  //
+  // TRA-1957: join ORDER is load-bearing here, not just join shape. The
+  // predicates alone do not make the planner drive from the selective table:
+  // on a 3k-file / 49k-edge index SQLite planned the unscoped pass as
+  // SCAN files × SCAN files (8.7M pairs) with the `e.id` range buried
+  // deep in the nest — one 2000-row range measured >300 s (single
+  // `sqlite3_step`, event loop parked inside a promise continuation, so
+  // /health, timers and the TRA-1828 lag monitor all died with it; daemon
+  // wedged 30+ min on a fresh-checkout bulk index). Every statement below
+  // therefore uses CROSS JOIN to force the driving table up front:
+  //   - unscoped: `edges e` with its id-range predicate first, everything
+  //     else is a PK/unique lookup per edge row (~0.08 s per range);
+  //   - scoped source-side branches: the changed symbols/files first via
+  //     their IN list (scales with the batch, not the repo);
+  //   - scoped target-side branches: `edges e` first (target fan-in makes
+  //     the symbol-driven order data-dependently slow — measured 9.6 s vs
+  //     0.5 s edges-first on the same 900-file batch).
+  // Do not "simplify" these back to plain JOIN: the optimizer will re-pick
+  // the files-first plan and re-wedge the daemon. The plan-shape test
+  // `file-projection-1957.test.ts` guards the driving table of every
+  // statement built here.
   //
   // TRA-1764: the UNSCOPED full pass below scans the whole edges table in one
   // synchronous transaction — the longest single span of a full reconcile
@@ -93,97 +259,14 @@ export async function resolveFileProjectionEdges(
   // hits at ~16k changed files / V8's arg ceiling at ~32k. Scoped execution
   // is chunked at 900 (statements are rebuilt per chunk — scoped runs are
   // rare, so prepare cost is noise); unscoped keeps the RANGE_FILTER pass.
-  const RANGE_FILTER = `AND e.id >= ? AND e.id < ?`;
   const excludedPh = [...excludedSet].map(() => '?').join(',') || 'SELECT -1';
-  const symSymJoins = `
-    FROM edges e
-    JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'symbol'
-    JOIN symbols ss ON ss.id = sn.ref_id
-    JOIN files src_file ON src_file.id = ss.file_id
-    JOIN nodes src_file_node ON src_file_node.node_type = 'file' AND src_file_node.ref_id = src_file.id
-    JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
-    JOIN symbols ts ON ts.id = tn.ref_id
-    JOIN files tgt_file ON tgt_file.id = ts.file_id
-    JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
-  `;
-  const symSymBase = `
-    WHERE ss.file_id <> ts.file_id
-      AND (
-        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
-        OR src_file.workspace = tgt_file.workspace
-      )
-  `;
-  const symSymSelect = `
-    SELECT DISTINCT
-      src_file_node.id AS source_node_id,
-      tgt_file_node.id AS target_node_id,
-      ? AS edge_type_id,
-      1,
-      '{"projected":true}',
-      0,
-      'ast_inferred'
-  `;
-  const symSymBranch = (side: string, filePh: string): string => `
-    ${symSymSelect}
-    ${symSymJoins}
-    ${symSymBase}
-      AND ${side} IN (${filePh})
-      AND e.edge_type_id NOT IN (${excludedPh})
-  `;
   const buildSymSymStmt = (filePh: string | null) =>
-    store.db.prepare(`
-    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
-    ${
-      filePh
-        ? `${symSymBranch('ss.file_id', filePh)} UNION ${symSymBranch('ts.file_id', filePh)}`
-        : `${symSymSelect} ${symSymJoins} ${symSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
-    }
-  `);
+    store.db.prepare(symSymInsertSql(filePh, excludedPh));
 
   // Also project file→symbol edges (e.g. nuxt_entry_point, references_component)
   // so the source file reaches the target symbol's file.
-  const fileSymJoins = `
-    FROM edges e
-    JOIN nodes sn ON sn.id = e.source_node_id AND sn.node_type = 'file'
-    JOIN files src_file ON src_file.id = sn.ref_id
-    JOIN nodes tn ON tn.id = e.target_node_id AND tn.node_type = 'symbol'
-    JOIN symbols ts ON ts.id = tn.ref_id
-    JOIN files tgt_file ON tgt_file.id = ts.file_id
-    JOIN nodes tgt_file_node ON tgt_file_node.node_type = 'file' AND tgt_file_node.ref_id = tgt_file.id
-  `;
-  const fileSymBase = `
-    WHERE src_file.id <> tgt_file.id
-      AND (
-        src_file.workspace IS NULL OR tgt_file.workspace IS NULL
-        OR src_file.workspace = tgt_file.workspace
-      )
-  `;
-  const fileSymSelect = `
-    SELECT DISTINCT
-      sn.id AS source_node_id,
-      tgt_file_node.id AS target_node_id,
-      ? AS edge_type_id,
-      1,
-      '{"projected":true}',
-      0,
-      'ast_inferred'
-  `;
-  const fileSymBranch = (side: string, filePh: string): string => `
-    ${fileSymSelect}
-    ${fileSymJoins}
-    ${fileSymBase}
-      AND ${side} IN (${filePh})
-      AND e.edge_type_id NOT IN (${excludedPh})
-  `;
   const buildFileSymStmt = (filePh: string | null) =>
-    store.db.prepare(`
-    INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
-    ${
-      filePh
-        ? `${fileSymBranch('src_file.id', filePh)} UNION ${fileSymBranch('tgt_file.id', filePh)}`
-        : `${fileSymSelect} ${fileSymJoins} ${fileSymBase} AND e.edge_type_id NOT IN (${excludedPh}) ${RANGE_FILTER}`
-    }
-  `);
+    store.db.prepare(fileSymInsertSql(filePh, excludedPh));
 
   const before = (
     store.db
@@ -231,11 +314,27 @@ export async function resolveFileProjectionEdges(
       fileSymStmt.run(importsType.id, ...excludedSet, lo, hi);
     });
     if (bounds.lo != null && bounds.hi != null) {
+      const rangeCount = Math.ceil((bounds.hi - bounds.lo + 1) / PROJECTION_ID_CHUNK);
+      logger.debug(
+        { lo: bounds.lo, hi: bounds.hi, ranges: rangeCount },
+        'File projection full pass started',
+      );
       let first = true;
       for (let lo = bounds.lo; lo <= bounds.hi; lo += PROJECTION_ID_CHUNK) {
         if (!first) await yieldToEventLoopFair();
         first = false;
+        // TRA-1957: a single range must never go quiet — time every chunk
+        // and warn loudly past the tripwire so daemon.log always shows where
+        // a slow pass is stuck (the 3.33.0 wedge was silent for 14+ min).
+        const chunkStart = Date.now();
         runRange(lo, lo + PROJECTION_ID_CHUNK);
+        const chunkMs = Date.now() - chunkStart;
+        if (chunkMs >= SLOW_PROJECTION_CHUNK_MS) {
+          logger.warn(
+            { lo, hi: lo + PROJECTION_ID_CHUNK, chunkMs, ranges: rangeCount },
+            'File projection range took suspiciously long (TRA-1957)',
+          );
+        }
       }
     }
   }
@@ -271,6 +370,10 @@ export async function resolveFileProjectionEdges(
  * Allow-list:
  *   - workspace (cross_workspace_import, api_call, type_import, etc.)
  *   - runtime   (observed production traces, legitimately cross-repo)
+ *
+ * TRA-1957: the subquery is CROSS JOIN edges-driven for the same reason as
+ * the projection statements above — plain JOIN plans files×files nested
+ * loops here too.
  */
 export function purgeForbiddenCrossWorkspaceEdges(state: PipelineState): void {
   const { store } = state;
@@ -287,9 +390,9 @@ export function purgeForbiddenCrossWorkspaceEdges(state: PipelineState): void {
     WHERE id IN (
       SELECT e.id
       FROM edges e
-      JOIN edge_types et ON et.id = e.edge_type_id
-      JOIN nodes ns ON ns.id = e.source_node_id
-      JOIN nodes nt ON nt.id = e.target_node_id
+      CROSS JOIN edge_types et ON et.id = e.edge_type_id
+      CROSS JOIN nodes ns ON ns.id = e.source_node_id
+      CROSS JOIN nodes nt ON nt.id = e.target_node_id
       LEFT JOIN symbols ssy ON ns.node_type = 'symbol' AND ssy.id = ns.ref_id
       LEFT JOIN files sf ON sf.id = CASE WHEN ns.node_type = 'file' THEN ns.ref_id ELSE ssy.file_id END
       LEFT JOIN symbols tsy ON nt.node_type = 'symbol' AND tsy.id = nt.ref_id

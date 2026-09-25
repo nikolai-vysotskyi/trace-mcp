@@ -187,6 +187,7 @@ import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sweepOrphanDbSidecars } from './utils/db-family.js';
 import { EventLoopLagMonitor } from './utils/event-loop.js';
+import { StallWatchdog } from './utils/stall-watchdog.js';
 import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
@@ -3592,6 +3593,7 @@ program
     // stalls and warn-logs each one so QA can tell "daemon busy" apart from
     // "daemon dead". Started in the listen() callback below, stopped here.
     let lagMonitor: EventLoopLagMonitor | null = null;
+    let stallWatchdog: StallWatchdog | null = null;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -3607,6 +3609,11 @@ program
       noteDaemonShutdownReason(reason ?? 'unknown');
       lagMonitor?.stop();
       lagMonitor = null;
+      // TRA-1957: release the stall-watchdog worker. Awaited best-effort —
+      // terminate() resolves once the worker is gone; a wedged main thread
+      // can't get here anyway, so this only runs on orderly shutdowns.
+      await stallWatchdog?.stop().catch(() => {});
+      stallWatchdog = null;
       // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
       // async cleanup and only exits from httpServer.close()'s callback. If a
       // close hangs or the event loop is starved, the daemon would never die on
@@ -4032,6 +4039,48 @@ program
       // daemon.log stops being blind to it. Threshold 2 s: the /health
       // client timeout is 500 ms and the watcher needs 30 s of consecutive
       // misses to flip, so a 2 s stall is noteworthy but not yet fatal.
+      // TRA-1957: cross-thread stall watchdog. The lag monitor above is
+      // same-thread — a daemon parked inside one synchronous span (e.g. a
+      // pathological sqlite3_step inside a promise continuation) kills its
+      // own timer with /health. The watchdog's worker thread survives that:
+      // it appends `stalled` to stall-alerts.jsonl after 10 s without a beat
+      // and exits the process after 180 s so launchd respawns (repair scope
+      // makes the restart safe). Heartbeat = one lag-monitor tick.
+      if (process.env.TRACE_MCP_STALL_WATCHDOG !== '0') {
+        const numEnv = (name: string, fallback: number): number => {
+          const raw = process.env[name];
+          if (raw == null || raw === '') return fallback;
+          const n = Number.parseInt(raw, 10);
+          return Number.isFinite(n) && n > 0 ? n : fallback;
+        };
+        try {
+          fs.mkdirSync(INDEX_DIR, { recursive: true });
+        } catch {
+          /* INDEX_DIR is created during daemon init; best-effort here */
+        }
+        try {
+          stallWatchdog = new StallWatchdog({
+            alertFile: path.join(INDEX_DIR, 'stall-alerts.jsonl'),
+            checkIntervalMs: 1000,
+            alertAfterMs: numEnv('TRACE_MCP_STALL_ALERT_MS', 10_000),
+            fatalAfterMs: numEnv('TRACE_MCP_STALL_FATAL_MS', 180_000),
+            fatalExit: process.env.TRACE_MCP_STALL_FATAL !== '0',
+            onWorkerExit: (info) => {
+              logger.error(
+                { ...info },
+                'Stall watchdog worker died — hard-stall detection offline until restart (TRA-1957)',
+              );
+            },
+          });
+          stallWatchdog.start();
+        } catch (err) {
+          // Monitoring must never break serving: a watchdog that fails to
+          // spawn (hardened runtime without worker_threads, exotic platform)
+          // degrades to the same-thread lag monitor above.
+          logger.warn({ err }, 'Stall watchdog failed to start — continuing without it (TRA-1957)');
+          stallWatchdog = null;
+        }
+      }
       lagMonitor = new EventLoopLagMonitor({
         intervalMs: 1000,
         thresholdMs: 2000,
@@ -4040,6 +4089,9 @@ program
             { lagMs, maxLagMs, stallCount, reindexInFlight: countReindexingProjects() },
             'Event loop stall — bulk indexing may be starving /health (TRA-1828)',
           );
+        },
+        onTick: () => {
+          stallWatchdog?.beat();
         },
       });
       lagMonitor.start();

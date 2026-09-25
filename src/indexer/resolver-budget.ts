@@ -25,6 +25,7 @@
  * PROJECTION_ID_CHUNK.
  */
 import type Database from 'better-sqlite3';
+import { logger } from '../logger.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 /** Rows committed per transaction by row-loop resolvers. */
@@ -32,6 +33,9 @@ export const RESOLVER_WRITE_CHUNK = 250;
 
 /** `edges.id` span covered by one file-projection transaction. */
 export const PROJECTION_ID_CHUNK = 2000;
+
+/** Slow-chunk tripwire shared with the file-projection range loop (TRA-1957). */
+export const SLOW_RESOLVER_CHUNK_MS = 2000;
 
 /**
  * Run `runChunk` over `items` in slices of `chunkSize`, each slice in its
@@ -46,8 +50,19 @@ export async function commitInChunks<T>(
   chunkSize: number = RESOLVER_WRITE_CHUNK,
 ): Promise<void> {
   const run = db.transaction((chunk: T[]) => runChunk(chunk));
+  const chunkCount = Math.ceil(items.length / chunkSize);
   for (let i = 0; i < items.length; i += chunkSize) {
     if (i > 0) await yieldToEventLoopFair();
+    // TRA-1957: never go quiet on a slow chunk — the 3.33.0 wedge was a
+    // single synchronous span with no log line for 14+ min.
+    const chunkStart = Date.now();
     run(items.slice(i, i + chunkSize));
+    const chunkMs = Date.now() - chunkStart;
+    if (chunkMs >= SLOW_RESOLVER_CHUNK_MS) {
+      logger.warn(
+        { chunkIndex: i / chunkSize, chunkCount, chunkMs, chunkSize },
+        'Resolver chunk took suspiciously long (TRA-1957)',
+      );
+    }
   }
 }
