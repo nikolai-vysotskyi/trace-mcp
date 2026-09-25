@@ -36,14 +36,28 @@ export const clients = {
   pickupRestartApp: 'Starte {{client}} neu, um das Update zu übernehmen',
   pickupRestartSession: 'Starte die {{client}}-Sitzung neu, um das Update zu übernehmen',
   pickupReloadWindow: 'Lade das {{client}}-Fenster neu, um das Update zu übernehmen',
+  disconnect: 'Trennen',
+  disconnecting: 'Wird getrennt…',
+  disconnectTitle: '{{client}} trennen?',
+  disconnectBody:
+    'Entfernt den trace-mcp-Eintrag aus der Konfiguration dieses Clients. Gemeinsame Hooks und andere Einstellungen bleiben erhalten.',
+  disconnectConfirm: 'Trennen',
+  disconnectFailed: 'Der Eintrag konnte nicht entfernt werden.',
+  disconnectPickupRestartApp: 'Starte {{client}} neu, um den Server zu entladen',
+  disconnectPickupRestartSession: 'Starte die {{client}}-Sitzung neu, um den Server zu entladen',
+  disconnectPickupReloadWindow: 'Lade das {{client}}-Fenster neu, um den Server zu entladen',
   blockedTitle: 'Claude.app zuerst beenden',
   blockedWhy:
     '{{client}} legt seine Konfiguration dort ab, wo Claude.app sie während der Ausführung überschreibt — alles, was du jetzt schreibst, geht verloren. Beende die App vollständig und aktualisiere danach erneut.',
+  blockedWhyDisconnect:
+    '{{client}} legt seine Konfiguration dort ab, wo Claude.app sie während der Ausführung überschreibt — Entferntes käme sofort zurück. Beende die App vollständig und wiederhole das Trennen.',
   blockedStep1:
     '1. Beende Claude.app vollständig (Cmd+Q auf macOS) — das Fenster zu schließen reicht nicht.',
   blockedStep2: '2. Klicke unten auf „Erneut aktualisieren“.',
+  blockedStep2Disconnect: '2. Klicke unten auf „Trennen wiederholen“.',
   blockedStep3: '3. Starte Claude.app erneut.',
   blockedRetry: 'Erneut aktualisieren',
+  blockedRetryDisconnect: 'Trennen wiederholen',
   blockedDismiss: 'Verstanden',
   setUpManually: 'Manuell einrichten…',
   hideSteps: 'Schritte ausblenden',
