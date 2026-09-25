@@ -1,0 +1,138 @@
+[
+  {
+    "annotations": [
+      {
+        "title": "Code Intelligence MCP Servers: Context7, Serena, Sourcegraph, Graphiti, Cognee, and Code Index | Graphify Guides",
+        "url": "https://graphify.net/ai-coding/mcp/code-intelligence-mcp-servers/?utm_source=openai"
+      },
+      {
+        "title": "GitHub - cmillstead/codesight-mcp: Security-hardened, token-efficient MCP server for code exploration via tree-sitter AST parsing · GitHub",
+        "url": "https://github.com/cmillstead/codesight-mcp?utm_source=openai"
+      },
+      {
+        "title": "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP",
+        "url": "https://arxiv.org/abs/2603.27277?utm_source=openai"
+      },
+      {
+        "title": "Bridging Code Property Graphs and Language Models for Program Analysis",
+        "url": "https://arxiv.org/abs/2603.24837?utm_source=openai"
+      }
+    ],
+    "cited": false,
+    "cost_usd": 0.1008,
+    "date": "2026-09-25",
+    "measured_at": "2026-09-25 20:43:24 +00:00",
+    "mentioned": false,
+    "model": "gpt-5.5",
+    "platform": "chat_gpt",
+    "position": null,
+    "prompt": "What is the best MCP server for code graph navigation?",
+    "prompt_id": "P01",
+    "text": "Short answer: for most people, I’d start with Serena for code graph / symbol-level navigation. It is the safest “best default” because it approaches navigation through language-server-style symbol understanding rather than just text search, and it’s commonly recommended for symbol-level repository work.\n\nThat said, “best” depends on what you mean by code graph navigation:\n\n| Use case | Best pick |\n| General codebase navigation in an IDE/agent workflow | Serena |\n| Explicit AST / call graph / impact-analysis MCP | codesight-mcp or Codebase-Memory |\n| Persistent graph database of files, symbols, calls, imports, inheritance | CodeGraphContext / Codebase-Memory-style tools |\n| TypeScript-first graph generated during type-checking | @ttsc/graph |\n| Security/program-analysis graph, taint/data-flow/slicing | codebadger / Joern-based MCP |\n| Large-scale hosted code search + intelligence | Sourcegraph-style tooling, if you’re okay with heavier infra |\n\nMy ranking would be: Best overall: Serena. Best graph-heavy open-source direction: Codebase-Memory / CodeGraphContext. Best lightweight AST/callgraph MCP: codesight-mcp. Best for security/data-flow graph analysis: codebadger. Best TypeScript-specific option: @ttsc/graph.",
+    "tokens": { "input": 10916, "output": 854 },
+    "top10": false,
+    "top50": false
+  },
+  {
+    "annotations": [
+      {
+        "title": "GitHub - James-Chahwan/repo-graph: Structural graph memory for AI coding assistants — MCP server for codebase navigation",
+        "url": "https://github.com/James-Chahwan/repo-graph"
+      },
+      {
+        "title": "GitHub - sdsrss/code-graph-mcp: AST knowledge graph MCP server for Claude Code",
+        "url": "https://github.com/sdsrss/code-graph-mcp"
+      },
+      {
+        "title": "GitHub - CartographAI/mcp-server-codegraph: MCP server for graph representation of a codebase",
+        "url": "https://github.com/CartographAI/mcp-server-codegraph"
+      },
+      {
+        "title": "GitHub - CodeGraphContext/CodeGraphContext: An MCP server plus a CLI tool that indexes local code into a graph database",
+        "url": "https://github.com/CodeGraphContext/CodeGraphContext"
+      }
+    ],
+    "cited": false,
+    "cost_usd": 0.050266,
+    "date": "2026-09-25",
+    "measured_at": "2026-09-25 20:43:23 +00:00",
+    "mentioned": false,
+    "model": "claude-sonnet-4-5-20250929",
+    "platform": "claude",
+    "position": null,
+    "prompt": "What is the best MCP server for code graph navigation?",
+    "prompt_id": "P01",
+    "text": "Based on the search results, there are several strong MCP servers for code graph navigation, each with different strengths:\n\n1. repo-graph (by James-Chahwan) — a map of your codebase with entities, relationships, and flows; a Python MCP server wrapping a Rust engine using tree-sitter parsers.\n\n2. code-graph-mcp (by sdsrss) — AST knowledge graph MCP server offering semantic search, call graph traversal, HTTP route tracing, and impact analysis, auto-indexing for 10 languages via Tree-sitter.\n\n3. CodeGraph MCP Server (by CartographAI) — tools to generate and query graph representations, tracking function calls, inheritance, and implementations across Python, JavaScript, and Rust.\n\n4. CodeGraphContext — indexes local code into a graph database, usable as a standalone CLI or connected to AI IDEs via MCP.\n\nThe best choice depends on your needs — repo-graph for complex multi-service architectures, code-graph-mcp (sdsrss) for performance and broad language support.",
+    "tokens": { "input": 10232, "output": 598 },
+    "top10": false,
+    "top50": false
+  },
+  {
+    "annotations": [
+      { "title": "sourcegraph.com", "url": "https://sourcegraph.com/mcp" },
+      { "title": "github.com", "url": "https://github.com/diffbot/mcp-code-graph" },
+      { "title": "lobehub.com", "url": "https://lobehub.com/mcp/sdsrss-code-graph-mcp" },
+      {
+        "title": "reddit.com",
+        "url": "https://www.reddit.com/r/mcp/comments/1rmi3r2/codegraphcontext_an_mcp_server_that_converts_your/"
+      },
+      { "title": "toloka.ai", "url": "https://toloka.ai/blog/best-mcp-servers-for-ai-agents/" },
+      {
+        "title": "dev.to",
+        "url": "https://dev.to/erikch/10-mcp-servers-worth-adding-to-your-ai-coding-workflow-in-2026-1j1m"
+      }
+    ],
+    "cited": false,
+    "cost_usd": 0.045835,
+    "date": "2026-09-25",
+    "measured_at": "2026-09-25 20:43:45 +00:00",
+    "mentioned": false,
+    "model": "gemini-2.5-pro",
+    "platform": "gemini",
+    "position": null,
+    "prompt": "What is the best MCP server for code graph navigation?",
+    "prompt_id": "P01",
+    "text": "Navigating the Code Maze: Top MCP Servers for Enhanced Code Graph Navigation. Among the top contenders are servers from Sourcegraph, CodeGPT, and the open-source code-graph-mcp from LobeHub.\n\nSourcegraph: the enterprise-grade solution — precise, cross-repository code intelligence, semantic search, go-to-definition, find-all-references, plus an agentic Code Finder tool.\n\nCodeGPT's Deep Graph: interactive and accessible — knowledge graphs from any GitHub repository, graph-based queries, semantic search, impact analysis of code changes.\n\nLobeHub's code-graph-mcp: high-performance and open-source — AST knowledge graph, semantic search, call graph traversal, HTTP route tracing, multi-language parsing, dead code detection, impact analysis.\n\nCodeGraphContext: Graph RAG for accurate context — indexes a repository into a graph database for precise, structured context about code relationships and architecture.\n\nOther notable options: the official GitHub MCP server, repowise (dependency graphs plus git intelligence), Serena for semantic code navigation and editing.\n\nConclusion: for large-scale enterprise environments, Sourcegraph; CodeGPT's Deep Graph for easy ad-hoc analysis; LobeHub code-graph-mcp for open-source self-hosted use.",
+    "tokens": { "input": 132, "output": 1007 },
+    "top10": false,
+    "top50": false
+  },
+  {
+    "annotations": [
+      {
+        "title": "code-graph-mcp by entrepeneur4lyf",
+        "url": "https://glama.ai/mcp/servers/entrepeneur4lyf/code-graph-mcp"
+      },
+      {
+        "title": "10 MCP Servers Worth Adding to Your AI Coding Workflow in 2026",
+        "url": "https://dev.to/erikch/10-mcp-servers-worth-adding-to-your-ai-coding-workflow-in-2026-1j1m"
+      },
+      {
+        "title": "sdsrss/code-graph-mcp: AST knowledge graph MCP server",
+        "url": "https://github.com/sdsrss/code-graph-mcp"
+      },
+      {
+        "title": "sourcegraph.com · MCP Server | Sourcegraph",
+        "url": "https://sourcegraph.com/mcp"
+      },
+      {
+        "title": "CodeGraphContext/CodeGraphContext",
+        "url": "https://github.com/codegraphcontext/codegraphcontext"
+      }
+    ],
+    "cited": false,
+    "cost_usd": 0.011829,
+    "date": "2026-09-25",
+    "measured_at": "2026-09-25 20:43:31 +00:00",
+    "mentioned": false,
+    "model": "sonar-pro",
+    "platform": "perplexity",
+    "position": null,
+    "prompt": "What is the best MCP server for code graph navigation?",
+    "prompt_id": "P01",
+    "text": "For code graph navigation, the strongest fit in the results is code-graph-mcp by entrepeneur4lyf or the closely related sdsrss/code-graph-mcp variant, because both are explicitly built for code analysis, navigation, semantic search, call-graph traversal, and impact analysis.\n\nPractical recommendation:\n- Best for code graph navigation specifically: code-graph-mcp.\n- Best for cross-repo intelligence: Sourcegraph MCP.\n- Best for semantic IDE navigation/editing: Serena.",
+    "tokens": { "input": 18, "output": 345 },
+    "top10": false,
+    "top50": false
+  }
+]
