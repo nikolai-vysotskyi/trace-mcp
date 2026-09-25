@@ -2,6 +2,7 @@ export const shell = {
   navWorkspace: 'Espace de travail',
   navSavings: 'Économies',
   navClients: 'Clients MCP',
+  navBenchmarkLab: 'Benchmark Lab',
   navOverview: 'Vue d’ensemble',
   navAsk: 'Ask',
   navGraph: 'Graphe',

@@ -1,7 +1,7 @@
 ---
 title: "TokenSave Alternative: trace-mcp vs TokenSave for AI agents"
 description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 88 framework integrations, AST refactoring, and OWASP taint analysis."
-updated: 2026-09-16
+updated: 2026-09-25
 ---
 
 # TokenSave alternative: trace-mcp vs TokenSave
@@ -186,6 +186,23 @@ trace-mcp integrates static application security testing directly into the MCP s
 - **Configurable Quality Gates**: Enforces architectural boundaries, dependency cycles, and dead-code thresholds in CI.
 
 TokenSave includes `tokensave_unsafe_patterns`, which performs regex/AST pattern matching for known hazardous constructs (such as `eval` or `unsafe` blocks in Rust), but provides no cross-file taint analysis, no source-to-sink data flow tracking, and no SARIF report generation.
+
+## Measured in Benchmark Lab
+
+Tool counts describe the advertised surface; the Benchmark Lab measures what answers cost. On {{ site.data.benchmark_lab.generated_at | date: "%-d %B %Y" }}, at trace-mcp {{ site.data.benchmark_lab.measured_build.version }} (`{{ site.data.benchmark_lab.measured_build.commit }}`){% if site.data.measurements.benchmark_lab.historical %} — a result from that build, not a claim about the current one{% endif %}, the in-app Lab ran its pinned battery — {{ site.data.benchmark_lab.battery.fixture_count }} recall fixtures, battery sha `{{ site.data.benchmark_lab.battery.fixtures_sha }}` — over three arms, priced at {{ site.data.benchmark_lab.model.name }} (${{ site.data.benchmark_lab.model.input_usd_per_mtok }}/Mtok input). Tokens are exact (o200k_base), not estimated:
+
+| arm | tokens | calls | success | vs file-reading | cost (USD) |
+|-----|-------:|------:|--------:|----------------:|----------:|
+| file-reading (control) | {{ site.data.benchmark_lab.arms[0].total_tokens }} | {{ site.data.benchmark_lab.arms[0].total_calls }} | {{ site.data.benchmark_lab.arms[0].success_count }}/{{ site.data.benchmark_lab.arms[0].fixtures }} | — | ${{ site.data.benchmark_lab.arms[0].cost_usd }} |
+| minimal | {{ site.data.benchmark_lab.arms[1].total_tokens }} | {{ site.data.benchmark_lab.arms[1].total_calls }} | {{ site.data.benchmark_lab.arms[1].success_count }}/{{ site.data.benchmark_lab.arms[1].fixtures }} | −{{ site.data.benchmark_lab.arms[1].savings_vs_baseline_pct }}% | ${{ site.data.benchmark_lab.arms[1].cost_usd }} |
+| standard | {{ site.data.benchmark_lab.arms[2].total_tokens }} | {{ site.data.benchmark_lab.arms[2].total_calls }} | {{ site.data.benchmark_lab.arms[2].success_count }}/{{ site.data.benchmark_lab.arms[2].fixtures }} | −{{ site.data.benchmark_lab.arms[2].savings_vs_baseline_pct }}% | ${{ site.data.benchmark_lab.arms[2].cost_usd }} |
+
+<figure>
+  <img src="/images/benchmark-lab-tokens.svg" alt="Bar chart of exact tokens per Benchmark Lab arm over {{ site.data.benchmark_lab.battery.fixture_count }} pinned fixtures: file reading {{ site.data.benchmark_lab.arms[0].total_tokens }} tokens, minimal preset {{ site.data.benchmark_lab.arms[1].total_tokens }}, standard preset {{ site.data.benchmark_lab.arms[2].total_tokens }}" width="720" height="252" loading="lazy" />
+  <figcaption>Benchmark Lab, {{ site.data.benchmark_lab.generated_at | date: "%-d %B %Y" }}: the file-reading control bar dwarfs both index arms; the minimal arm answers {{ site.data.benchmark_lab.arms[1].success_count }} of {{ site.data.benchmark_lab.arms[1].fixtures }} fixtures, the standard arm all {{ site.data.benchmark_lab.arms[2].fixtures }}. Re-run with <code>tsx scripts/bench-lab.ts</code>; the <a href="/perf/prereg-benchmark-lab/">preregistration</a> binds the next run.</figcaption>
+</figure>
+
+The control arm reads the raw files that answer each fixture — no index, the price of answering without trace-mcp. The minimal arm's one miss is `06-context-pipeline`: raw `search_text` for "IndexingPipeline" does not rank `src/indexer/pipeline.ts` in its top 10 (too many files mention the class), while the standard arm's packed envelope does — a real measurement of that strategy's limits, published rather than re-run until it passes. Per-fixture rows, the battery hash and the re-run command live in [`benchmark_lab.json`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/_data/benchmark_lab.json); run it yourself from the Benchmark Lab tab in the app.
 
 ## When to choose TokenSave
 

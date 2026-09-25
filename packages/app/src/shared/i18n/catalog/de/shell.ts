@@ -3,6 +3,7 @@ export const shell = {
   navWorkspace: 'Workspace',
   navSavings: 'Einsparungen',
   navClients: 'MCP-Clients',
+  navBenchmarkLab: 'Benchmark Lab',
   navOverview: 'Übersicht',
   navAsk: 'Fragen',
   navGraph: 'Graph',

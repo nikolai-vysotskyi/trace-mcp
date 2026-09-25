@@ -2,6 +2,7 @@ export const shell = {
   navWorkspace: '工作区',
   navSavings: '节省',
   navClients: 'MCP 客户端',
+  navBenchmarkLab: 'Benchmark Lab',
   navOverview: '概览',
   navAsk: '提问',
   navGraph: '图谱',

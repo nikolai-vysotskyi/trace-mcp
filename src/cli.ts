@@ -2803,6 +2803,143 @@ program
         return;
       }
 
+      // ── Benchmark Lab (TRA-1951) ──────────────────────────────────
+      // In-app measured comparisons: the pinned recall-harness battery over
+      // our own arms (file-reading control, minimal, standard). v1 runs
+      // synchronously — the battery is eight fixtures, seconds of indexed
+      // queries — and every run is persisted to ~/.trace/benchmark-runs.
+      if (req.method === 'GET' && url.pathname === '/api/benchmark-lab/arms') {
+        try {
+          const { LAB_ARMS } = await import('./benchmark-lab/arms.js');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ arms: LAB_ARMS }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/benchmark-lab/fixtures') {
+        try {
+          const { loadLabFixtures } = await import('./benchmark-lab/runner.js');
+          const fixtures = loadLabFixtures().map((f) => ({
+            id: f.id,
+            kind: f.kind,
+            query: f.query,
+            k: f.k ?? 10,
+          }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ fixtures }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/benchmark-lab/run') {
+        try {
+          const body = await collectBody(req);
+          const parsed = (JSON.parse(body.toString() || '{}') ?? {}) as {
+            project?: string;
+            arms?: string[];
+            fixtureIds?: string[];
+          };
+          const registered = listProjects();
+          const projectRoot = parsed.project ?? registered[0]?.root;
+          if (!projectRoot) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: 'No project selected and none registered. Add a project first.',
+              }),
+            );
+            return;
+          }
+          const entry = getProject(projectRoot);
+          if (!entry?.dbPath) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: `No index for ${projectRoot}. Run \`trace-mcp add ${projectRoot}\` first.`,
+              }),
+            );
+            return;
+          }
+          const { runLab } = await import('./benchmark-lab/runner.js');
+          const { isLabArmId } = await import('./benchmark-lab/arms.js');
+          const arms = parsed.arms ?? undefined;
+          if (arms && !arms.every(isLabArmId)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unknown arm. See GET /api/benchmark-lab/arms.' }));
+            return;
+          }
+          const run = await runLab({
+            projectRoot,
+            arms: arms?.filter(isLabArmId),
+            filterIds: parsed.fixtureIds ?? undefined,
+          });
+          const { saveLabRun } = await import('./benchmark-lab/store.js');
+          const file = saveLabRun(run);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ run, file }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/benchmark-lab/runs') {
+        try {
+          const { getLabRun, listLabRuns } = await import('./benchmark-lab/store.js');
+          const id = url.searchParams.get('id');
+          if (id) {
+            const run = getLabRun(id);
+            if (!run) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `No Benchmark Lab run: ${id}` }));
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ run }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ runs: listLabRuns() }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/benchmark-lab/export') {
+        try {
+          const id = url.searchParams.get('id');
+          if (!id) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing ?id= query param' }));
+            return;
+          }
+          const { getLabRun } = await import('./benchmark-lab/store.js');
+          const run = getLabRun(id);
+          if (!run) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: `No Benchmark Lab run: ${id}` }));
+            return;
+          }
+          const { renderLabMarkdown } = await import('./benchmark-lab/markdown.js');
+          res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8' });
+          res.end(renderLabMarkdown(run));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/stats') {
         try {
           const { getReindexStats } = await import('./daemon/reindex-stats.js');
