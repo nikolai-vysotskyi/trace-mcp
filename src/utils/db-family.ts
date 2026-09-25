@@ -39,6 +39,31 @@ export const DB_FAMILY_SUFFIXES = ['', '-wal', '-shm', '-journal', '.watcher-sna
 /** Suffixes that mark a file as a sidecar of some stem `<stem>.db`. */
 const ORPHAN_SIDECAR_SUFFIXES = ['-wal', '-shm', '-journal'] as const;
 
+/**
+ * Live SQLite sidecar suffixes (WAL mode `-wal`/`-shm`, rollback-journal
+ * `-journal` — including the `<name>.db-journal` spelling, which ends in
+ * `-journal` too).
+ *
+ * TRA-1943: a live DB's sidecars blink in and out of existence as the engine
+ * checkpoints — a watcher/indexer that treats them as source races every
+ * one (readdir sees `kanban.db-wal`, the engine unlinks it before open, the
+ * read dies ENOENT). They are engine scratch, never indexable content, so
+ * every indexing entry point drops them before any stat/read via
+ * {@link isSqliteSidecarPath}.
+ */
+const SQLITE_SIDECAR_SUFFIXES = ['-wal', '-shm', '-journal'] as const;
+
+/**
+ * Whether a project-relative (or absolute) path is a SQLite sidecar file.
+ * Matched on the basename, so a directory that merely happens to end in
+ * `-wal` never nukes the real source files inside it.
+ */
+export function isSqliteSidecarPath(p: string): boolean {
+  const slash = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  const base = slash >= 0 ? p.slice(slash + 1) : p;
+  return SQLITE_SIDECAR_SUFFIXES.some((s) => base.endsWith(s));
+}
+
 /** Result of a family delete / orphan sweep. */
 export interface DbFamilyDeletion {
   /** Absolute paths actually unlinked. */

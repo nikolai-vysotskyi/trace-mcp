@@ -4,6 +4,7 @@ import type * as parcelWatcher from '@parcel/watcher';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
+import { isSqliteSidecarPath } from '../utils/db-family.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 
@@ -438,8 +439,14 @@ export class FileWatcher {
         const notIgnored = (p: string) => {
           if (ignoreDirs.some((d) => p.startsWith(d))) return false;
           const rel = path.relative(rootPath, p);
-          if (isExcluded(rel.split(path.sep).join('/'))) return false;
-          if (isOwnedByDescendant?.(rel.split(path.sep).join('/'))) return false;
+          const relPosix = rel.split(path.sep).join('/');
+          // TRA-1943: a live DB's `-wal`/`-shm`/`-journal` sidecars churn on
+          // every checkpoint — engine scratch, never source. Drop the event
+          // before debounce so it never wakes the pipeline (which would
+          // race the unlink and log a doomed `Cannot read file` ENOENT).
+          if (isSqliteSidecarPath(relPosix)) return false;
+          if (isExcluded(relPosix)) return false;
+          if (isOwnedByDescendant?.(relPosix)) return false;
           if (gitignore.isIgnored(rel)) return false;
           return !traceignore.isIgnored(rel);
         };

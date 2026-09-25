@@ -20,6 +20,7 @@ import type {
 import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
+import { isSqliteSidecarPath } from '../utils/db-family.js';
 import {
   DEFAULT_MAX_FILE_SIZE,
   isBinaryBuffer,
@@ -244,6 +245,14 @@ export class FileExtractor {
       return { kind: 'error' };
     }
 
+    // TRA-1943: SQLite WAL/SHM/journal sidecars are engine scratch, not
+    // source — and they blink in and out as the engine checkpoints, so even
+    // stating them is a race. Drop before any filesystem touch.
+    if (isSqliteSidecarPath(relPath)) {
+      logger.debug({ file: relPath }, 'SQLite sidecar skipped (not source)');
+      return { kind: 'skipped' };
+    }
+
     // Reject symlinks to prevent escaping the project root
     let fileMtimeMs: number | null = null;
     let fileSize: number | null = null;
@@ -332,13 +341,24 @@ export class FileExtractor {
         logger.debug({ file: relPath }, 'Directory skipped (not a file)');
         return { kind: 'skipped' };
       }
+      const errno = err as NodeJS.ErrnoException;
+      // TRA-1943: a sidecar that slipped past the pre-stat gate (stale
+      // watcher event arriving after the engine unlinked it) died in the
+      // readdir→open race — expected engine churn, not an indexing failure.
+      // Debug, and `skipped` so it neither counts as an error nor retries.
+      if (errno?.code === 'ENOENT' && isSqliteSidecarPath(relPath)) {
+        logger.debug(
+          { file: relPath, rootPath, code: errno?.code },
+          'SQLite sidecar vanished before read (race, not an error)',
+        );
+        return { kind: 'skipped' };
+      }
       // TRA-1715: the bare `{ file }` record was undiagnosable — 3317 of them
       // with no root and no cause. Carry the root plus the errno code and
       // message (ENOENT vs EACCES decides the response) so the daemon log
       // alone answers which project lost which file and why. Strings, not
       // the raw Error: a stack per unreadable file would flood the log when
       // a whole root vanishes mid-run.
-      const errno = err as NodeJS.ErrnoException;
       logger.warn(
         {
           file: relPath,
