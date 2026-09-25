@@ -3,6 +3,7 @@ import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { descendantExcludeGlobs } from '../registry.js';
+import { isSqliteSidecarPath } from '../utils/db-family.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { TraceignoreMatcher } from '../utils/traceignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
@@ -150,6 +151,12 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   if (gitignore) {
     entries = entries.filter((e) => !gitignore.isIgnored(e));
   }
+
+  // TRA-1943: SQLite sidecars (`*-wal`/`*-shm`/`*-journal`) are engine
+  // scratch on a live DB, never source — and they blink in and out as the
+  // engine checkpoints, so the full walk keeps handing the extractor paths
+  // that die ENOENT on open. Drop them from the walk itself.
+  entries = entries.filter((e) => !isSqliteSidecarPath(e));
 
   if (entries.length > maxFiles) {
     logger.warn(

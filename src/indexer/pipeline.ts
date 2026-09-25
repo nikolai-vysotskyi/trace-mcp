@@ -25,6 +25,7 @@ import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
+import { isSqliteSidecarPath } from '../utils/db-family.js';
 import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
@@ -1268,6 +1269,14 @@ export class IndexingPipeline {
       }
       if (gitignore?.isIgnored(relPosix)) {
         logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
+        continue;
+      }
+      // TRA-1943: SQLite sidecars are engine scratch, never source — and a
+      // live DB's `-wal`/`-shm` blink in and out as it checkpoints, racing
+      // every stat/read with ENOENT. Drop before the stat below so watcher
+      // churn on them is a no-op instead of a doomed pipeline + warn.
+      if (isSqliteSidecarPath(relPosix)) {
+        logger.debug({ file: rel }, 'SQLite sidecar skipped in indexFiles');
         continue;
       }
       // TRA-1649: the watcher enqueues directory paths (mkdir/create events
