@@ -707,6 +707,80 @@ Not blockers to route around — genuinely outside what an agent may do alone:
   and an email, the Cline submission is a GitHub issue, and the registry publish
   needs no credential at all in CI.
 
+## Article platforms — owned series, not directories (TRA-1953, 2026-09-25)
+
+Not catalogs: no submission queue, no maintainer triage, no star gate. The
+mechanism is different too — Common Crawl eats dev.to/Hashnode/Medium, and LLM
+training data quotes whoever it saw a hundred times. The `/vs/` pages cannot
+win head-term queries from our own domain (TRA-682: page one is third-party
+articles), so this series is the off-page half of that gap. Same hygiene as the
+table above: what was verified, with the date; decisions and dead ends, not
+just state. Arrivals (views, referrals) go to `ops/arrivals.md` in
+`trace-mcp-private`; GEO-battery movement goes to the parent issue, not here.
+
+Iron rules (from the issue, repeated so the next run does not re-derive them):
+
+- **Canonical first.** The site publishes first, the platform second with a
+  canonical back to `trace-mcp.com` (dev.to: `canonical_url` front matter;
+  Medium/Hashnode: canonical link). A verbatim cross-post without canonical is
+  forbidden — it builds duplicates against ourselves.
+- **Accounts are human-made.** Same class as Smithery/GitHub OAuth above: an
+  agent never authorizes OAuth or creates an account on Nikolai's behalf. The
+  agent prepares markdown + cover; the human presses Publish (or hands over an
+  API key explicitly).
+- **Outward copy passes SEO Agent review** — same gate as site/SEO texts —
+  and numbers come only from `docs/_data/counts.yml` (182 tools / 81
+  languages / 88 frameworks) and `docs/_data/pr_context_bench.json` +
+  `pr_context_quality.json` (72.7% median over 60 merged PRs in 6 repos we do
+  not own, comprehension 65% baseline vs 67% trace, false positives 0.58 vs
+  0.80). The saving never travels without the quality pair
+  (`ops/positioning.md`). Retired strings stay retired: "~42 minutes",
+  "up to 99%", "40-50%", "100% local". Locality wording: "Your code and index
+  never leave the machine; an anonymous usage ping is on by default and
+  opt-out."
+- **Adaptation, not copypasta.** Headline/intro fitted to the platform, footer
+  line "Originally published on trace-mcp.com" with link.
+- **Cadence: 1 post / 2 weeks, from already-published material only**
+  (vs-tables, Benchmark Lab exports, framework guides). No invented content.
+- **Cut rule: after 4 posts, read views, referrals and GEO-battery movement.
+  No movement — cut it.**
+
+Platform order (by ROI, from the issue):
+
+| Platform | Status | Canonical mechanism | Verified |
+|---|---|---|---|
+| dev.to | **Not started** — no account yet, human step pending (TRA-1953). First post drafted, awaiting SEO review | `canonical_url` front matter, supported natively | 2026-09-25 |
+| Hashnode | Not started | canonical link field | 2026-09-25 |
+| Substack | Not started — series as newsletter, free archives get crawled | canonical link | 2026-09-25 |
+| Medium | Not started, lowest priority — paywall + nofollow; only with canonical back, no SEO-weight bet | canonical link (import story carries it) | 2026-09-25 |
+| Habr | Bonus RU segment — needs original Russian text, not a translation; anti-promo moderation is strict, no data-free posts | canonical link | 2026-09-25 |
+
+Queuing (HN, Lobste.rs, Reddit) is explicitly NOT this series — launches only,
+only with Nikolai's ok.
+
+Runbook (repeatable publish checklist, per platform):
+
+1. Pick the source: an already-live `trace-mcp.com` page (post 1:
+   `/pr-context-benchmark.html`). Record its URL — it becomes the canonical.
+2. Adapt (do not copy): platform-fitted headline + intro, data tables kept,
+   footer "Originally published at <canonical URL>".
+3. Claims check: every number re-read from `docs/_data/` that day; quality
+   pair attached; retired strings grep-checked (`42 minutes`, `99%`,
+   `40-50%`, `100% local`); boundary line present where locality is claimed.
+4. SEO Agent review on the markdown. No review — no publish.
+5. Human publishes (account + Publish button are human-only, or an explicitly
+   handed-over API key for dev.to's API). Agent never logs in as Nikolai.
+6. Same day: record URL + date in the table above; log views/referrals in
+   private `ops/arrivals.md`; note GEO-battery movement in the parent issue.
+
+Post 1 (drafted 2026-09-25, not published): dev.to adaptation of the PR-context
+benchmark — 72.7% median fewer input tokens to review a PR, 60 merged PRs in 6
+repos we do not own, method at `https://trace-mcp.com/pr-context-benchmark.html`
+(canonical), quality at parity (65% vs 67% understood, 0.58 vs 0.80 false
+positives). Draft markdown attached to TRA-1953 as `devto-post-1.md`,
+`published: false`, cover `docs/og-image.png`. Pending: SEO Agent review, then
+Nikolai creates the dev.to account and presses Publish.
+
 ## Sweeping GitHub code search for mentions we did not make (2026-09-05)
 
 Recorded as a **source with a method**, not as a surface, because it is how the
