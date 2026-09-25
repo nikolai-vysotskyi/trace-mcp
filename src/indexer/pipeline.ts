@@ -45,6 +45,7 @@ import { extractAndPersist as extractAndPersistImpl } from './extract-and-persis
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
+import { checkUnindexableSkip } from './unindexable-skip-cache.js';
 // P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
 // of being called imperatively from `runPipeline`. The Task wrappers live in
 // `src/pipeline/tasks/*` and delegate to the existing private methods on
@@ -1175,7 +1176,8 @@ export class IndexingPipeline {
    *
    * Pure — no DB, no lock. That is what lets `indexFiles()` decide a batch is
    * a no-op before it queues behind the pipeline lock (TRA-935). Touches the
-   * filesystem (one stat per path) but never the database.
+   * filesystem (one stat per path, plus at most one 8 KB head read for the
+   * binary verdict) but never the database.
    */
   private filterIndexablePaths(filePaths: string[]): string[] {
     // Same exclude gate collectFiles() applies via fast-glob. Without it,
@@ -1217,14 +1219,35 @@ export class IndexingPipeline {
       // keeps them out of `totalFiles` entirely; FileExtractor keeps its own
       // isDirectory guard as a safety net for direct callers. A stat failure
       // (deleted between event and run) keeps the path so the extractor's
-      // read path handles it as before.
+      // read path handles it as before. The same stat feeds the TRA-1912
+      // precheck below — one syscall answers both, before the pipeline lock.
+      let entryStat: fs.Stats | null = null;
+      const absPath = path.resolve(this.rootPath, rel);
       try {
-        if (fs.statSync(path.resolve(this.rootPath, rel)).isDirectory()) {
+        entryStat = fs.statSync(absPath);
+        if (entryStat.isDirectory()) {
           logger.debug({ file: rel }, 'Directory skipped in indexFiles');
           continue;
         }
       } catch {
         /* stat failed — leave the path for the extractor to handle */
+      }
+      // TRA-1912: negative cache for deterministically-unindexable files. A
+      // live growing file past the size cap (or a hot binary journal)
+      // re-fires the watcher on every append; without this gate each event
+      // ran a full doomed pipeline (lock + whole-file read + error count)
+      // only for the extractor to reject it again. Dropped here — one stat
+      // plus at most one 8 KB head read, no lock, no DB — until the verdict
+      // goes stale (shrunk under the cap / replaced by text).
+      if (entryStat) {
+        const unindexable = checkUnindexableSkip({
+          rootPath: this.rootPath,
+          relPosix,
+          absPath,
+          size: entryStat.size,
+          mtimeMs: entryStat.mtimeMs,
+        });
+        if (unindexable) continue;
       }
       // Store paths are always posix-separated (collectFiles() via
       // fast-glob) — pushing `rel` instead of `relPosix` inserted a phantom
