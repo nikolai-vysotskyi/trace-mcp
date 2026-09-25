@@ -26,6 +26,7 @@ import {
   configureMcpClients,
   getMcpClientStatuses,
   MCP_CLIENT_PICKUP,
+  removeMcpClients,
   type McpClientPickup,
   type McpClientStatus,
 } from '../init/mcp-client.js';
@@ -130,6 +131,106 @@ clientsCommand
       }
     },
   );
+
+clientsCommand
+  .command('disconnect')
+  .description(
+    'Remove the trace-mcp entry from one or more client configs. Never touches hooks, tweakcc, CLAUDE.md or agent_behavior.',
+  )
+  .argument(
+    '[clients...]',
+    'Clients to disconnect (e.g. cursor amp). Omit to disconnect every client with a trace-mcp entry.',
+  )
+  .option('--json', 'Output machine-readable JSON')
+  .option('--scope <scope>', 'Config scope: global | project', 'global')
+  .option('--dry-run', 'Report what would be removed without removing it')
+  .action(
+    (
+      clients: string[],
+      opts: { json?: boolean; scope?: 'global' | 'project'; dryRun?: boolean },
+    ) => {
+      const scope = opts.scope === 'project' ? 'project' : 'global';
+      const projectRoot = resolveProjectRoot();
+
+      /* `legacy` never comes out of getMcpClientStatuses today (a lingering
+         legacy key reports as `stale` with reason `legacy-key`), but the
+         desktop app already speaks it — match it too so a future status can't
+         silently opt a configured client out of a bare disconnect. */
+      const targets = (
+        clients.length > 0
+          ? (clients as DetectedMcpClient['name'][])
+          : getMcpClientStatuses(projectRoot, scope)
+              .filter(
+                (s) =>
+                  s.status === 'up_to_date' ||
+                  s.status === 'stale' ||
+                  (s.status as string) === 'legacy',
+              )
+              .map((s) => s.client)
+      ) as DetectedMcpClient['name'][];
+
+      const steps =
+        targets.length > 0
+          ? removeMcpClients(targets, projectRoot, { scope, dryRun: opts.dryRun })
+          : [];
+
+      if (opts.json) {
+        console.log(JSON.stringify({ scope, projectRoot, clients: targets, steps }, null, 2));
+      } else {
+        printDisconnectReport(targets, steps);
+      }
+
+      /* Same failure contract as `update`: only a `skipped` carrying the
+         `Error:` marker fails the command. `already_absent` is the
+         idempotent second run, not a failure. */
+      if (steps.some((s) => s.action === 'skipped' && s.detail?.startsWith('Error:'))) {
+        process.exitCode = 1;
+      }
+    },
+  );
+
+function printDisconnectReport(targets: string[], steps: InitStepResult[]): void {
+  if (targets.length === 0) {
+    console.log('No client config holds a trace-mcp entry.');
+    return;
+  }
+  for (const s of steps) {
+    console.log(`  ${s.action.padEnd(18)}  ${s.target}${s.detail ? `  (${s.detail})` : ''}`);
+  }
+  // TRA-1647, removal side: the client unloads the server only on restart, so
+  // a row that just lost its entry still shows the server until then. Name
+  // the next step per client, right under the row that was removed. (The
+  // mocked mcp-client module in tests/cli/clients.test.ts does not export the
+  // table — hence the optional access, same as printUpdateReport.)
+  for (const name of targets) {
+    const pickup = (MCP_CLIENT_PICKUP as Record<string, McpClientPickup | null> | undefined)?.[
+      name
+    ];
+    if (!pickup || pickup === 'hot-reload') continue;
+    const removed = steps.some((s) => s.action === 'removed' && s.detail?.startsWith(`${name} (`));
+    if (removed) console.log(`  → ${formatDisconnectHint(name, pickup)}`);
+  }
+}
+
+/**
+ * English CLI copy of the disconnect pickup metadata. "Unload", not "apply
+ * the update" — the entry is gone, what lingers is the running server. Keep
+ * these sentences in sync with the `disconnectPickup*` catalogue keys in
+ * packages/app/src/shared/i18n/catalog/en/clients.ts.
+ */
+function formatDisconnectHint(name: string, pickup: McpClientPickup): string {
+  const label = formatClientDisplayName(name);
+  switch (pickup) {
+    case 'restart-app':
+      return `Restart ${label} to unload the server.`;
+    case 'restart-session':
+      return `Restart the ${label} session to unload the server.`;
+    case 'reload-window':
+      return `Reload the ${label} window to unload the server.`;
+    case 'hot-reload':
+      return '';
+  }
+}
 
 function printUpdateReport(targets: string[], steps: InitStepResult[]): void {
   if (targets.length === 0) {

@@ -485,6 +485,28 @@ ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
   });
 });
 
+// IPC: remove the trace-mcp entry from one or more client configs (TRA-1932).
+//
+// Boundary: per-client disconnect removes ONLY the MCP entry. Hooks, tweakcc
+// and CLAUDE.md are shared across the Claude family — disconnecting Cursor
+// must not rip the redirect out from under Claude Code — so `clients
+// disconnect` never touches them, and neither does this handler.
+ipcMain.handle('disconnect-mcp-clients', async (_event, clientNames: string[]) => {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    execCli(
+      ['clients', 'disconnect', ...clientNames, '--json'],
+      { timeout: 60_000, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+          return;
+        }
+        resolve({ ok: true });
+      },
+    );
+  });
+});
+
 // IPC: install the PreToolUse redirect (guard hook) in one click (TRA-1698).
 //
 // The Clients screen could only write MCP entries; the hook that closes the

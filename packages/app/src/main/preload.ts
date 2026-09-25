@@ -73,6 +73,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
   updateMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('update-mcp-clients', clientNames),
+  /** TRA-1932: remove the trace-mcp entry. Hooks and shared settings stay untouched. */
+  disconnectMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('disconnect-mcp-clients', clientNames),
   openProjectTab: (root: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-project-tab', root),
   onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => {

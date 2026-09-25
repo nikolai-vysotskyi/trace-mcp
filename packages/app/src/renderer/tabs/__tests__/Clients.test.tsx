@@ -67,6 +67,7 @@ function api(): {
   getMcpClientStatuses: ReturnType<typeof vi.fn>;
   configureMcpClient: ReturnType<typeof vi.fn>;
   updateMcpClients: ReturnType<typeof vi.fn>;
+  disconnectMcpClients: ReturnType<typeof vi.fn>;
 } {
   return (window as unknown as { electronAPI: never }).electronAPI;
 }
@@ -77,6 +78,7 @@ beforeEach(() => {
     detectMcpClients: vi.fn().mockResolvedValue([]),
     configureMcpClient: vi.fn().mockResolvedValue({ ok: true }),
     updateMcpClients: vi.fn().mockResolvedValue({ ok: true }),
+    disconnectMcpClients: vi.fn().mockResolvedValue({ ok: true }),
   };
 });
 
@@ -618,4 +620,97 @@ it('copies the JSON snippet from the Warp row', async () => {
     mcpServers: { trace: { command: string; args: string[] } };
   };
   expect(pasted.mcpServers.trace).toEqual({ command: SHIM, args: ['serve'] });
+});
+
+// ── TRA-1932 ──────────────────────────────────────────────────────────────
+
+/* The screen could only Connect / Update / Migrate — once connected, the only
+   way out was a terminal. Every configured row now carries a Disconnect that
+   confirms first; bare Connect rows and manual rows carry none. */
+it('offers Disconnect on every configured row, and none elsewhere', async () => {
+  render(<Clients />);
+
+  // claude-code (up_to_date) + windsurf (stale); cursor is missing, warp manual.
+  expect(await screen.findAllByRole('button', { name: 'Disconnect' })).toHaveLength(2);
+});
+
+/* Disconnect removes the entry, so it confirms — the same ConfirmPopover
+   idiom as removing a service in ProjectOverview. Confirming calls
+   disconnect only: never update (which would re-add the entry) and never
+   setup (which would re-ask the enforcement level). */
+it('confirms before disconnecting, through disconnect alone', async () => {
+  render(<Clients />);
+
+  // Sorted first: the stale windsurf row.
+  const disconnects = await screen.findAllByRole('button', { name: 'Disconnect' });
+  fireEvent.click(disconnects[0]);
+
+  const popover = document.querySelector('.ws-popover');
+  expect(popover?.textContent).toContain('Disconnect Windsurf?');
+  fireEvent.click(within(popover as HTMLElement).getByRole('button', { name: 'Disconnect' }));
+
+  await waitFor(() => expect(api().disconnectMcpClients).toHaveBeenCalledWith(['windsurf']));
+  expect(api().updateMcpClients).not.toHaveBeenCalled();
+  expect(api().configureMcpClient).not.toHaveBeenCalled();
+});
+
+it('disconnects nothing when the confirm is cancelled', async () => {
+  render(<Clients />);
+
+  // Second: the connected claude-code row.
+  const disconnects = await screen.findAllByRole('button', { name: 'Disconnect' });
+  fireEvent.click(disconnects[1]);
+  expect(document.querySelector('.ws-popover')?.textContent).toContain('Disconnect Claude Code?');
+
+  fireEvent.click(
+    within(document.querySelector('.ws-popover') as HTMLElement).getByRole('button', {
+      name: 'Cancel',
+    }),
+  );
+
+  expect(document.querySelector('.ws-popover')).toBeNull();
+  expect(api().disconnectMcpClients).not.toHaveBeenCalled();
+});
+
+/* TRA-497 applies to the reverse path too: a failed removal reports on its
+   row instead of spinning back to a state that pretends it worked. */
+it('says on the row when a disconnect failed', async () => {
+  api().disconnectMcpClients.mockResolvedValue({ ok: false, error: 'Error: EACCES' });
+  render(<Clients />);
+
+  const disconnects = await screen.findAllByRole('button', { name: 'Disconnect' });
+  fireEvent.click(disconnects[0]);
+  fireEvent.click(
+    within(document.querySelector('.ws-popover') as HTMLElement).getByRole('button', {
+      name: 'Disconnect',
+    }),
+  );
+
+  expect(await screen.findByText('Error: EACCES')).toBeTruthy();
+});
+
+/* Removal side of TRA-1647: the entry is gone but the running server lingers
+   until restart — without the hint the row reads as "disconnect did nothing". */
+it('names the unload step after a successful disconnect', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [
+      {
+        client: 'cursor',
+        configPath: '/Users/x/.cursor/mcp.json',
+        status: 'up_to_date',
+        pickup: 'restart-app',
+      },
+    ],
+  });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Disconnect' }));
+  fireEvent.click(
+    within(document.querySelector('.ws-popover') as HTMLElement).getByRole('button', {
+      name: 'Disconnect',
+    }),
+  );
+
+  expect(await screen.findByText('Restart Cursor to unload the server')).toBeTruthy();
 });

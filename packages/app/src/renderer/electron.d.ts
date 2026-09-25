@@ -66,6 +66,8 @@ declare global {
       ) => Promise<{ ok: boolean; error?: string }>;
       /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
       updateMcpClients: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
+      /** TRA-1932: remove the trace-mcp entry. Hooks and shared settings stay untouched. */
+      disconnectMcpClients?: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;

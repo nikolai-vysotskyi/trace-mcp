@@ -484,6 +484,243 @@ export function configureMcpClients(
 }
 
 // ---------------------------------------------------------------------------
+// Removal (disconnect): the mirror of configureMcpClients (TRA-1932)
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove the trace-mcp server entry for selected MCP clients.
+ *
+ * Boundary (TRA-1932): this removes ONLY the MCP entry — both the current
+ * `trace` key and the legacy `trace-mcp` key. Hooks, tweakcc prompts and the
+ * CLAUDE.md block are shared across the Claude family and stay untouched:
+ * disconnecting Cursor must not rip the redirect out from under Claude Code.
+ *
+ * Missing config file (or a file with neither key) is `already_absent`, not
+ * an error — disconnect is idempotent, so a second run reports absence.
+ * Real failures carry the same `Error:` marker `clients update` keys its exit
+ * code (and the desktop app its blocked sheet) on.
+ */
+export function removeMcpClients(
+  clientNames: DetectedMcpClient['name'][],
+  projectRoot: string,
+  opts: { scope: McpScope; dryRun?: boolean },
+): InitStepResult[] {
+  const results: InitStepResult[] = [];
+
+  for (const name of clientNames) {
+    // JetBrains AI Assistant / Warp: IDE/cloud-managed config, no file to edit.
+    if (name === 'jetbrains-ai' || name === 'warp') {
+      results.push({
+        target: name,
+        action: 'skipped',
+        detail: `Remove the trace entry for ${name} in its Settings UI (managed outside trace-mcp)`,
+      });
+      continue;
+    }
+
+    const configPath = getConfigPath(name, projectRoot, opts.scope);
+    if (!configPath) {
+      results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
+      continue;
+    }
+
+    // Same clobber as the write path (TRA-1645): Claude.app rewrites
+    // claude_desktop_config.json while running, so a removal now would read
+    // back as still present — or worse, report success for a no-op. Refuse
+    // with the `Error:` failure marker instead of a silent lie.
+    if (name === 'claude-desktop' && !opts.dryRun && isClaudeDesktopRunning()) {
+      results.push({
+        target: configPath,
+        action: 'skipped',
+        detail:
+          'Error: Claude.app is running — it will overwrite mcpServers. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp clients disconnect`.',
+      });
+      continue;
+    }
+
+    try {
+      const action = removeEntryForClient(name, configPath, opts.dryRun);
+      // A dry run never writes: a removal it WOULD perform reports as
+      // `skipped`, mirroring configureMcpClients' "Would configure" rows
+      // (which also keep the exit code at 0 — see clients.ts).
+      if (opts.dryRun && action === 'removed') {
+        results.push({
+          target: configPath,
+          action: 'skipped',
+          detail: `Would disconnect ${name} (${opts.scope})`,
+        });
+        continue;
+      }
+      results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
+
+      // Post-write verify for Claude Desktop: the app may have launched
+      // between the running check above and the write. Same `Error:` marker
+      // as the refusal (TRA-1645).
+      if (name === 'claude-desktop' && !opts.dryRun && action === 'removed') {
+        if (verifyTraceMcpEntryAbsent(configPath)) continue;
+        results[results.length - 1] = {
+          target: configPath,
+          action: 'skipped',
+          detail:
+            'Error: Removal was overwritten by Claude.app. Quit Claude.app completely (Cmd+Q on macOS), then re-run `trace-mcp clients disconnect`.',
+        };
+      }
+    } catch (err) {
+      results.push({
+        target: configPath,
+        action: 'skipped',
+        detail: `Error: ${(err as Error).message}`,
+      });
+    }
+  }
+
+  return results;
+}
+
+/** Dispatch to the per-format remover. `dryRun` only suppresses the write —
+ *  presence detection still reads the file, so absence stays `already_absent`. */
+function removeEntryForClient(
+  name: DetectedMcpClient['name'],
+  configPath: string,
+  dryRun?: boolean,
+): 'removed' | 'already_absent' {
+  switch (name) {
+    case 'codex':
+      return removeCodexTomlEntries(configPath, dryRun);
+    case 'hermes':
+      return removeHermesYamlEntries(configPath, dryRun);
+    case 'amp':
+      return removeJsoncKeys(configPath, 'amp.mcpServers', dryRun);
+    case 'zed':
+      return removeJsoncKeys(configPath, 'context_servers', dryRun);
+    case 'opencode':
+      return removeJsoncKeys(configPath, 'mcp', dryRun);
+    default:
+      // Standard `mcpServers` JSON (claude-code, cursor, …) and Factory
+      // Droid: removal doesn't care about the entry shape (`type: "stdio"`
+      // or otherwise), only the keys.
+      return removeJsoncKeys(configPath, 'mcpServers', dryRun);
+  }
+}
+
+/**
+ * Delete both server keys under one top-level object of a JSON/JSONC file,
+ * preserving comments and formatting around untouched regions via
+ * jsonc-parser modify()/applyEdits(). A missing file — or a file with
+ * neither key — is `already_absent`.
+ */
+function removeJsoncKeys(
+  configPath: string,
+  topKey: string,
+  dryRun?: boolean,
+): 'removed' | 'already_absent' {
+  let content: string;
+  try {
+    content = fs.readFileSync(configPath, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return 'already_absent';
+    throw e;
+  }
+
+  const parsed = parseJsonc(content) as Record<string, unknown> | null;
+  const top = parsed?.[topKey] as Record<string, unknown> | undefined;
+  const present = [MCP_KEY, LEGACY_MCP_KEY].filter(
+    (key) => top && typeof top === 'object' && key in top,
+  );
+  if (present.length === 0) return 'already_absent';
+  if (dryRun) return 'removed';
+
+  // modify() with value=undefined throws when the path doesn't exist — only
+  // the keys proven present above are removed, one edit pass each on the
+  // evolving text so offsets stay valid.
+  let updated = content;
+  for (const key of present) {
+    const edits = modify(updated, [topKey, key], undefined, {
+      formattingOptions: AMP_FORMATTING,
+    });
+    updated = applyEdits(updated, edits);
+  }
+  atomicWriteString(configPath, updated.endsWith('\n') ? updated : updated + '\n', {
+    rejectSymlinks: true,
+  });
+  return 'removed';
+}
+
+/**
+ * Delete both keys under `mcp_servers` in the Hermes YAML config, via the
+ * Document API so comments and neighbouring keys survive. `hasIn` guards
+ * `deleteIn`, which throws on a missing collection (see writeHermesYamlEntry).
+ */
+function removeHermesYamlEntries(
+  configPath: string,
+  dryRun?: boolean,
+): 'removed' | 'already_absent' {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(configPath, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return 'already_absent';
+    throw e;
+  }
+
+  const doc = YAML.parseDocument(raw);
+  if (doc.errors.length > 0) {
+    throw new Error(`Hermes config.yaml has parse errors: ${doc.errors[0].message}`);
+  }
+  const present = [MCP_KEY, LEGACY_MCP_KEY].filter((key) => doc.hasIn(['mcp_servers', key]));
+  if (present.length === 0) return 'already_absent';
+  if (dryRun) return 'removed';
+
+  for (const key of present) doc.deleteIn(['mcp_servers', key]);
+  atomicWriteString(configPath, doc.toString({ lineWidth: 0 }), { rejectSymlinks: true });
+  return 'removed';
+}
+
+/**
+ * Drop both `[mcp_servers.<key>]` sections (each with its `.env` sub-table,
+ * if any) from the Codex TOML config. Reuses stripCodexTomlSection — the same
+ * narrowly-scoped line filter the writer uses, so removal deletes exactly the
+ * shape the writer produces.
+ */
+function removeCodexTomlEntries(
+  configPath: string,
+  dryRun?: boolean,
+): 'removed' | 'already_absent' {
+  let existing: string;
+  try {
+    existing = fs.readFileSync(configPath, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return 'already_absent';
+    throw e;
+  }
+
+  const present =
+    codexSectionHeaderPattern(MCP_KEY).test(existing) ||
+    codexSectionHeaderPattern(LEGACY_MCP_KEY).test(existing);
+  if (!present) return 'already_absent';
+  if (dryRun) return 'removed';
+
+  const stripped = stripCodexTomlSection(stripCodexTomlSection(existing, LEGACY_MCP_KEY), MCP_KEY);
+  atomicWriteString(configPath, stripped, { rejectSymlinks: true });
+  return 'removed';
+}
+
+/**
+ * Verify that NEITHER server key survived on disk — the removal-side twin of
+ * verifyTraceMcpEntry (Claude.app overwrite race, TRA-1645).
+ */
+function verifyTraceMcpEntryAbsent(configPath: string): boolean {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const servers = content?.mcpServers;
+    if (!servers || typeof servers !== 'object') return true;
+    return !(MCP_KEY in servers) && !(LEGACY_MCP_KEY in servers);
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // JSON writers (Claude Code, Claw, Claude Desktop, Cursor, Windsurf, Continue, Junie)
 // ---------------------------------------------------------------------------
 
@@ -967,7 +1204,7 @@ export function codexSectionHeaderPattern(key: string): RegExp {
  * `key` at the start of a line, which is exactly the shape writeCodexTomlEntry
  * itself always produces.
  */
-function stripCodexTomlSection(content: string, key: string): string {
+export function stripCodexTomlSection(content: string, key: string): string {
   const header = codexSectionHeaderPattern(key);
   const out: string[] = [];
   let skipping = false;
