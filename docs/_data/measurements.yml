@@ -26,3 +26,11 @@ response_tokens:
   prereg: docs/perf/prereg-response-tokens.md
   page: /perf/response-tokens/
   historical: false # re-measured at 3.31.0 (TRA-1774)
+
+benchmark_lab:
+  title: Benchmark Lab arms
+  figure: per-arm tokens, calls and success over the pinned battery against the file-reading control
+  data: docs/_data/benchmark_lab.json
+  prereg: docs/perf/prereg-benchmark-lab.md
+  page: /vs/tokensave.html
+  historical: false # measured at 3.33.0 (TRA-1951)
