@@ -95,6 +95,7 @@ describe('application-menu commands', () => {
       { id: 'workspace', label: 'Workspace' },
       { id: 'savings', label: 'Savings' },
       { id: 'clients', label: 'MCP Clients' },
+      { id: 'benchmarklab', label: 'Benchmark Lab' },
     ]);
   });
 

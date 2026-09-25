@@ -1,5 +1,6 @@
 import { activity } from './activity.js';
 import { ask } from './ask.js';
+import { benchmarklab } from './benchmarklab.js';
 import { clients } from './clients.js';
 import { common } from './common.js';
 import { graph } from './graph.js';
@@ -21,6 +22,7 @@ import { workspace } from './workspace.js';
 export const zh = {
   activity,
   ask,
+  benchmarklab,
   clients,
   common,
   graph,

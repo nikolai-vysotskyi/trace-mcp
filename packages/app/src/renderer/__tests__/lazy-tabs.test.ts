@@ -42,6 +42,11 @@ describe('lazily loaded tabs', () => {
     expect(typeof mod.Savings).toBe('function');
   });
 
+  it('BenchmarkLab is still a named export', async () => {
+    const mod = await import('../tabs/BenchmarkLab');
+    expect(typeof mod.BenchmarkLab).toBe('function');
+  });
+
   it('GraphExplorerGPU is still a named export', async () => {
     const mod = await import('../tabs/GraphExplorerGPU');
     // React.forwardRef returns an object, standard functional components return a function.
