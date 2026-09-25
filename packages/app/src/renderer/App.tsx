@@ -53,6 +53,9 @@ import { Workspace } from './workspace/Workspace';
 // tool feeds are not loaded during window cold start.
 const Activity = lazy(() => import('./tabs/Activity').then((m) => ({ default: m.Activity })));
 const AskTab = lazy(() => import('./tabs/AskTab').then((m) => ({ default: m.AskTab })));
+const BenchmarkLab = lazy(() =>
+  import('./tabs/BenchmarkLab').then((m) => ({ default: m.BenchmarkLab })),
+);
 const GraphExplorerGPU = lazy(() =>
   import('./tabs/GraphExplorerGPU').then((m) => ({ default: m.GraphExplorerGPU })),
 );
@@ -67,7 +70,7 @@ const Savings = lazy(() => import('./tabs/Savings').then((m) => ({ default: m.Sa
 // ?view=menu&tab=workspace → Menu window (sidebar + Workspace/Clients/Settings)
 // ?view=project&root=/path → Project window (sidebar + Overview/Graph)
 
-type GlobalTab = 'workspace' | 'savings' | 'clients' | 'settings';
+type GlobalTab = 'workspace' | 'savings' | 'clients' | 'benchmarklab' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
 // Built per render, not frozen at module scope: switching the language has to
@@ -77,6 +80,9 @@ const globalTabs = (): { id: GlobalTab; label: string; icon: string }[] => [
   /* What trace-mcp gave back, not what the agent spent (TRA-1091). */
   { id: 'savings', label: t('shell:navSavings'), icon: 'savings' },
   { id: 'clients', label: t('shell:navClients'), icon: 'cable' },
+  /* Measured comparisons, run in the app (TRA-1951). Last on purpose: the
+     first three keep their ⌘1…⌘3 accelerators. */
+  { id: 'benchmarklab', label: t('shell:navBenchmarkLab'), icon: 'monitoring' },
 ];
 
 /**
@@ -88,7 +94,8 @@ function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
     value === 'clients' ||
     value === 'settings' ||
     value === 'workspace' ||
-    value === 'savings'
+    value === 'savings' ||
+    value === 'benchmarklab'
   )
     return value;
   // 'projects' / 'dashboard' / anything else → workspace (the new home).
@@ -693,6 +700,11 @@ function MenuContent({
         </Suspense>
       )}
       {tab === 'clients' && <Clients />}
+      {tab === 'benchmarklab' && (
+        <Suspense fallback={null}>
+          <BenchmarkLab />
+        </Suspense>
+      )}
       {tab === 'settings' && (
         <Settings
           appearance={appearance}

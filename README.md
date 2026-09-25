@@ -216,6 +216,8 @@ AI agents burn tokens recomputing what they already discovered last turn — re-
 
 Measured at trace-mcp 3.31.0 (`76996eb9`) on 21 September 2026. Its [preregistration](https://trace-mcp.com/perf/prereg-response-tokens/) publishes it as the first **pass** of the 25% bar we declared before measuring — and says in the same breath that the pass came from registering a sampling frame, not from shipping a faster product. The prediction written before that run named an interval the result landed above; it was wrong and it stays on the page.
 
+**Benchmark Lab — the same question, asked by the app.** The desktop app's Benchmark Lab tab runs a pinned battery of 8 recall fixtures over three arms and saves every run to `~/.trace/benchmark-runs`. Measured at trace-mcp 3.33.0 (`4e1ac4fd`) on 26 September 2026: the file-reading control spent 82,412 tokens over 13 calls (8/8 answered); the minimal arm answered 7 of 8 for 512 tokens (−99.4%); the standard arm answered 8 of 8 for 13,657 tokens (−83.4%). The minimal miss is a real measurement — raw `search_text` does not rank `src/indexer/pipeline.ts` in its top 10 — published rather than re-run until it passes. [Method, battery hash and re-run →](https://trace-mcp.com/perf/prereg-benchmark-lab/)
+
 **Benchmark: trace-mcp's own codebase** (694 files, 3,831 symbols → 929 files, 5,197 symbols in v1.30):
 
 ```

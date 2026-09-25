@@ -363,7 +363,11 @@ describe('preregistration and version stamps (TRA-920)', () => {
     parseYaml(read(file).match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '') as Record<string, unknown>;
 
   it('registers at least the two figures on the storefront', () => {
-    expect(measurements.map(([key]) => key).sort()).toEqual(['pr_context', 'response_tokens']);
+    expect(measurements.map(([key]) => key).sort()).toEqual([
+      'benchmark_lab',
+      'pr_context',
+      'response_tokens',
+    ]);
   });
 
   it.each(measurements)('%s carries the build it was measured at', (_key, entry) => {
@@ -456,6 +460,7 @@ describe('preregistration and version stamps (TRA-920)', () => {
     ],
     ['docs/pr-context-benchmark.md', ['site.data.pr_context_bench.measured_build']],
     ['docs/reduce-claude-code-token-usage.md', ['site.data.response_tokens.measured_build']],
+    ['docs/vs/tokensave.md', ['site.data.benchmark_lab.measured_build']],
   ];
 
   it.each(STAMPED)('%s renders the build next to the figure', (file, needles) => {
