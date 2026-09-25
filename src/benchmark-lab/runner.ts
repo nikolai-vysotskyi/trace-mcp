@@ -90,8 +90,34 @@ export interface LabFixture {
 }
 
 function defaultFixturesDir(): string {
-  // src/benchmark-lab → repo root in dev, package root for dist/.
-  return path.resolve(__dirname, '..', '..', 'tests', 'recall-harness', 'fixtures');
+  // src/benchmark-lab → repo root in dev; tsup flattens dist/*.js, so the
+  // bundled module sits one level below the package root. Walk up instead of
+  // counting levels — the count differs per build.
+  return (
+    findUpwards(['tests', 'recall-harness', 'fixtures']) ??
+    // Fallback keeps the honest "battery not found" error in loadLabFixtures
+    // (e.g. an installed package without tests/) instead of throwing here.
+    path.resolve(__dirname, '..', '..', 'tests', 'recall-harness', 'fixtures')
+  );
+}
+
+/**
+ * Walk up from this module looking for `targetParts` joined onto a parent.
+ * Level-counting breaks across builds (tsup flattens dist/), existence does not.
+ */
+function findUpwards(targetParts: string[], maxDepth = 8): string | null {
+  let dir = __dirname;
+  for (let i = 0; i <= maxDepth; i++) {
+    try {
+      if (fs.existsSync(path.join(dir, ...targetParts))) return path.join(dir, ...targetParts);
+    } catch {
+      // Permission errors while probing are not a verdict — keep walking.
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
 }
 
 export function loadLabFixtures(dir: string = defaultFixturesDir()): LabFixture[] {
@@ -497,12 +523,23 @@ async function driveStandard(
 // ──────────────────────────────────────────────────────────────────────────
 
 function repoRootFromHere(): string | null {
-  // src/benchmark-lab → repo root in dev, package root for dist/.
-  const candidate = path.resolve(__dirname, '..', '..');
-  try {
-    if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
-  } catch {
-    // fall through to null
+  // The package root is the ancestor holding trace-mcp's own package.json.
+  // Matched by package name, not depth: a stray package.json in a parent
+  // directory must not capture the lookup.
+  let dir = __dirname;
+  for (let i = 0; i <= 8; i++) {
+    try {
+      const manifest = path.join(dir, 'package.json');
+      if (fs.existsSync(manifest)) {
+        const name = (JSON.parse(fs.readFileSync(manifest, 'utf-8')) as { name?: string }).name;
+        if (name === 'trace-mcp') return dir;
+      }
+    } catch {
+      // Unreadable manifest — keep walking.
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
   }
   return null;
 }

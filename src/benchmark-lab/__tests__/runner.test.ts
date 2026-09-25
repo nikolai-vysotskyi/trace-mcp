@@ -12,7 +12,7 @@ import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
-import { runLab } from '../runner.js';
+import { hashFixturesDir, loadLabFixtures, runLab } from '../runner.js';
 
 const PROJECT_FILES: Record<string, string> = {
   'src/alpha.ts': [
@@ -163,5 +163,14 @@ describe('lab runner', () => {
     await expect(
       runLab({ projectRoot: '/tmp/does-not-exist', dbPath: '/tmp/does-not-exist.db' }),
     ).rejects.toThrow(/needs an indexed project/);
+  });
+
+  it('resolves the pinned battery from the module location, not a level count', () => {
+    // tsup flattens dist/*.js, so '../..' points somewhere else in the built
+    // daemon. Upward existence search works in both layouts.
+    const fixtures = loadLabFixtures();
+    expect(fixtures.length).toBeGreaterThan(0);
+    expect(fixtures.map((f) => f.id)).toContain('01-search-indexer-entry-point');
+    expect(hashFixturesDir()).toMatch(/^[0-9a-f]{16}$/);
   });
 });
