@@ -958,6 +958,21 @@ Where it differs is query ergonomics, framework depth, and code modification. Na
 
 Where it differs is licensing, prompt efficiency, framework semantics, and write capabilities. GitNexus is distributed under PolyForm Noncommercial 1.0.0, which strictly forbids commercial and enterprise usage without a proprietary commercial license, whereas trace-mcp is 100% permissive open-source under MIT. Its raw Cypher querying tool shifts query formulation onto the LLM, inviting prompt overhead and syntax hallucinations, while trace-mcp serves typed, schema-validated MCP tools. GitNexus requires native C++ Tree-sitter builds via `node-gyp-build`, whereas trace-mcp runs anywhere via WASM-sandboxed `web-tree-sitter`. GitNexus extracts syntax without deep framework semantics, whereas trace-mcp maps {{ site.data.counts.frameworks }} frameworks (route-to-handler, controller-to-template, ORM-to-table) and provides atomic AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and OWASP Top-10 taint analysis. Full head-to-head: [trace-mcp vs GitNexus](/vs/gitnexus.html).
 
+### trace-mcp vs ast-grep — pattern search vs a persistent graph
+{: #vs-ast-grep}
+
+[ast-grep](https://github.com/ast-grep/ast-grep) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT) is structural `grep`: patterns written as ordinary code with `$METAVAR` wildcards, matched against tree-sitter ASTs, rewritten in place, linted from YAML rules — multi-core, zero daemon, packaged on every installer. It is the sharpest tool in this field for shape-based rewrites ("every `x && x()` becomes `x?.()`"), and it wins that job outright against anything graph-shaped. What it has no answer for is the edge: no stored call graph, no transitive impact, no framework relations, no MCP surface — per-invocation scans rather than an index an agent queries across forty turns. Pick ast-grep for codemods and CI lint; pick the graph when the question is structural or the session is long. Full head-to-head: [trace-mcp vs ast-grep](/vs/ast-grep.html).
+
+### trace-mcp vs Continue — the agent vs the index it queries
+{: #vs-continue}
+
+[Continue](https://github.com/continuedev/continue) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0) is the pioneering open-source coding agent: VS Code extension, JetBrains plugin and CLI with bring-your-own-model configuration. Read its maintenance notice before adopting — the README states the repository is read-only after its final 2.0.0 release. The comparison is barely a rivalry: Continue is the loop you talk to, trace-mcp is the persistent graph ({{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, SQLite + FTS5) that any agent queries for scoped structural answers instead of re-reading files. If you run a maintained agent today, the graph composes with that one instead. Full head-to-head: [trace-mcp vs Continue](/vs/continue.html).
+
+### trace-mcp vs Aider — the terminal loop vs the graph beside it
+{: #vs-aider}
+
+[Aider](https://github.com/Aider-AI/aider) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0) is the terminal pair programmer everything else is measured against: repo map into the prompt, edit, lint/test retries, auto-commit with sensible messages, against almost any model including local ones. The map is the best "just give the model context" mechanism here, and on repos that fit in context it is simpler and often cheaper than any graph. Where it stops is edges and persistence: the map is rebuilt per session and the model re-derives structure from text, while the graph stores callers, impact and framework wiring as queryable edges with code-linked memory across sessions. Run the loop for edits; query the graph for the structural question before each one. Full head-to-head: [trace-mcp vs Aider](/vs/aider.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -970,7 +985,12 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 11, 2026 — current
+### Pass of September 26, 2026 — current
+
+- **Three new head-to-head spokes (TRA-1948 batch 1)**: [trace-mcp vs ast-grep](/vs/ast-grep.html) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT — structural search/lint/rewrite CLI, no MCP server in README), [trace-mcp vs Continue](/vs/continue.html) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0 — open-source coding agent, README states read-only after final 2.0.0), [trace-mcp vs Aider](/vs/aider.html) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0 — terminal pair programmer with repo map, no MCP server in README). Read via web fetch of each README at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star counts added to `docs/_data/competitors.yml`; hub subsections above written for the hub, not pasted from the spokes.
+- Rows for other projects were not re-checked in this pass and carry the September 11 figures.
+
+### Pass of September 11, 2026
 
 - **Dedicated comparison page for GitNexus ({{ site.data.competitors.gitnexus.stars }} stars)**: added [trace-mcp vs GitNexus](/vs/gitnexus.html) comparing trace-mcp's permissive MIT license, {{ site.data.counts.frameworks }} framework semantic integrations, typed MCP tools, and AST refactoring write tools against GitNexus's LadybugDB, Leiden community clustering, and raw Cypher queries under PolyForm Noncommercial 1.0.0.
 - **First source read of grafel** (cajasmota/grafel, Go, MIT, v0.x, 15 stars), the top priority from the previous pass's queue. Read through the GitHub API at `main`: `go.mod`, `cmd/grafel/`, `internal/mcp/`, `internal/substrate/`, `internal/responseshapediff/`, `internal/tautology/`, `internal/stubdetector/`, `internal/mmapview.go`. Corrected language: written in **Go** (Go 1.23+ with cgo Tree-sitter), not Rust as assumed prior to source reading. It implements a multi-repo code knowledge graph daemon for AI agents with 22 MCP tools, in-memory/mmap graph substrate (`mmapview.go`), cross-repo HTTP payload drift (`response_shape_diff_tool`, `payload_drift_tool`), and static code quality canaries (`tautology_detector_tool`, `stub_detector_tool`). No AST refactoring, no framework route-to-handler mappings, no session decision memory. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.
@@ -3200,6 +3220,252 @@ Yes. Repomix for a remote repository you want to look at once; codegraph for the
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers, with the same sourcing discipline.
 - The head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codegraph](/vs/codegraph.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs CodeGraphContext](/vs/codegraphcontext.html) · [vs SocratiCode](/vs/socraticode.html) · [vs jCodeMunch](/vs/jcodemunch.html) · [vs TokenSave](/vs/tokensave.html) · [vs GitNexus](/vs/gitnexus.html) · [vs Context Mode](/vs/context-mode.html) · [vs code-review-graph](/vs/code-review-graph.html) · [vs Narsil-MCP](/vs/narsil-mcp.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with any of these tools.
+
+---
+
+# ast-grep alternative: trace-mcp vs ast-grep
+
+Source: https://trace-mcp.com/vs/ast-grep.html
+
+
+
+**TL;DR.** ast-grep (`ast-grep/ast-grep`, {{ site.data.competitors.ast_grep.stars }} stars, MIT, Rust) is the best structural `grep` most teams have never tried: write a pattern that looks like ordinary code with `$LIKE_THIS` wildcards, and it finds or rewrites every AST node with that shape — fast, multi-core, configured in YAML, runnable in CI. trace-mcp is a different kind of tool: it parses the repo into a persistent dependency graph (symbols, imports, call edges, framework edges across {{ site.data.counts.frameworks }} integrations) and serves it over MCP, so an agent asks "who calls this" and "what breaks if I change it" instead of re-searching files every turn.
+
+If the job is "find every `if (x && x())` and rewrite it", ast-grep wins outright. If the job is "an agent working in this repo for forty turns", the graph wins.
+
+## Head-to-head
+
+| Capability | trace-mcp | ast-grep |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.ast_grep.stars }} |
+| License | MIT | MIT |
+| Written in | TypeScript | Rust |
+| Model | persistent index (SQLite + FTS5) | one-shot structural search |
+| Pattern search | ✓ symbol/FTS search (text + graph) | ✓ AST patterns with metavariables |
+| Rewriting | ✓ AST codemod, rename, move, extract | ✓ `--rewrite` + YAML rules |
+| Cross-file call graph | ✓ bidirectional, graph-based | ✗ per-file pattern matches |
+| Impact analysis | ✓ reverse dependency traversal | ✗ |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 0 — CLI, no MCP server in README |
+| Works offline, no API keys | ✓ | ✓ |
+| CI / lint integration | ✓ SARIF 2.1.0, quality gates | ✓ YAML rules as lint |
+| Session memory | ✓ code-linked decisions, staleness-checked | ✗ |
+| Security scanning | ✓ OWASP Top-10 taint | ✗ (custom rules possible, not shipped) |
+
+Verified on September 26, 2026 against the ast-grep README at `main` ({{ site.data.competitors.ast_grep.stars }} stars, `ast-grep/ast-grep`) plus the GitHub API for stars, license and language. Language count for ast-grep not stated as a single figure in the README on that date, so the table carries no number rather than a guessed one.
+
+## When to pick ast-grep
+
+Honest version, and it is a real list:
+
+- **Pattern-shaped search and rewrites.** `ast-grep -p '$A && $A()' -l ts -r '$A?.()'` is the canonical example from its own README: isomorphic patterns, metavariable wildcards, rewrite in one pass. Nothing in trace-mcp is that direct for shape-based edits.
+- **Lint as YAML.** Custom rules (`rule:` + `pattern:` + `fix:`) turn team conventions into CI checks without writing an ESLint plugin or an AST visitor. trace-mcp's quality gates check its own graph; they are not a lint-rule authoring story.
+- **Codemods for breaking library migrations.** The README's pitch to library authors is exactly right: ship a scan/rewrite rule and your users adopt the breaking change mechanically. Our codemod path follows graph edges; theirs follows shapes — and most migrations are shapes.
+- **Zero daemon, zero index, multi-core Rust.** No build step, no SQLite file, no watcher. It scans, uses every core, exits. For scripts and pre-commit hooks that shape is strictly better than ours.
+- **Ecosystem.** Roughly two orders of magnitude more stars, an online playground, and packages on every installer (npm, pip, cargo, brew, scoop, mise, MacPorts, nix). That matters at 2am.
+
+## When to pick trace-mcp
+
+- **The question is structural, not shaped.** "Who calls this", "what breaks if I change this signature", "which route renders this component" — a pattern can approximate the first and cannot answer the rest. The graph resolves them as one tool call.
+- **Multi-turn agent sessions.** ast-grep re-scans per invocation; trace-mcp indexes once and serves scoped answers per query. Across forty turns in a repo that does not fit in context, the index amortises and the scans do not.
+- **Framework semantics.** Route → handler, controller → template, model → table across {{ site.data.counts.frameworks }} integrations. No pattern language models these; the graph stores them as edges.
+- **The agent acts, then remembers.** AST rename/move/extract with import rewriting, OWASP taint with SARIF output, and decisions linked to symbol IDs with staleness checks at recall — none of which a search tool ships.
+
+## The honest caveat
+
+Two of them. First, **ast-grep's pattern engine is the tool ours is not**: for "every call shaped like X", a pattern is more precise than our symbol search plus graph filter, and cheaper than any graph query. We would rather say that here than have you benchmark it yourself.
+
+Second, **our default tool surface is expensive next to a CLI.** trace-mcp advertises 29 tools at roughly 11.6K tokens on the shipped default path; ast-grep advertises nothing because there is no session to advertise into. A short scripted job genuinely costs less through ast-grep.
+
+**Our security scanning has a ceiling, stated on the [comparisons page](/comparisons.html) rather than only here.** The control-flow graph is line-based, not AST-based, and taint analysis is lexical/regex, not a real dataflow engine. Type-aware pruning cuts false positives; it does not turn this into a dataflow analyser.
+
+## FAQ
+
+**What is the core difference between ast-grep and trace-mcp?**
+ast-grep matches structural patterns per invocation; trace-mcp precomputes a persistent graph and serves it over MCP. Pattern matching versus a queryable index.
+
+**Can ast-grep do impact analysis or find callers?**
+Not as a traversal. A pattern for the callee name approximates callers until overloads, re-exports or dynamic dispatch defeat the pattern. Transitive impact needs resolved edges, which is the graph's job.
+
+**Does ast-grep have an MCP server?**
+Not in its README as read on September 26, 2026. It ships as a CLI with YAML rules; an agent uses it by shelling out.
+
+**Which is better for large-scale codemods?**
+ast-grep for shape-based rewrites (isomorphic patterns, YAML lint rules, multi-core). trace-mcp when the rewrite follows edges — rename with import rewriting, moves, signature changes verified against the graph.
+
+**Can I use both?**
+Yes — ast-grep for structural search and rewrites in CI and scripts, trace-mcp as the agent's live index for navigation, impact analysis and framework-aware questions.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs Continue](/vs/continue.html) · [vs Aider](/vs/aider.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# Continue alternative: trace-mcp vs Continue
+
+Source: https://trace-mcp.com/vs/continue.html
+
+
+
+**TL;DR.** Continue (`continuedev/continue`, {{ site.data.competitors.continue_dev.stars }} stars, Apache-2.0) is a pioneering open-source coding agent that lived where you work: a VS Code extension, a JetBrains plugin, and a CLI — chat with your codebase, edit, apply, repeat, against the model of your choice. trace-mcp is not an agent at all: it is a persistent code graph (tree-sitter parsing across {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, SQLite + FTS5) served over MCP, so whatever agent you run asks scoped structural questions instead of re-reading files.
+
+Read the maintenance notice first: Continue's README states the repository is no longer actively maintained and is read-only after its final 2.0.0 release. What follows compares the architectures honestly anyway — including the part where the agent is the thing you actually see.
+
+## Head-to-head
+
+| Capability | trace-mcp | Continue |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.continue_dev.stars }} |
+| License | MIT | Apache-2.0 |
+| What it is | code-graph index served over MCP | full coding agent (chat + edit + apply) |
+| IDE surface | ✗ (any MCP client consumes it) | ✓ VS Code extension, JetBrains plugin, CLI |
+| Model choice | model-agnostic (MCP tools) | ✓ any model via configuration |
+| Persistent code graph | ✓ SQLite + FTS5, incremental | ✗ — not verified as a graph on reading date |
+| Cross-file call graph | ✓ bidirectional, graph-based | not verified on reading date |
+| Impact analysis | ✓ reverse dependency traversal | not verified on reading date |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | not verified on reading date |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | not verified on reading date |
+| Refactoring write path | ✓ AST rename, move, extract, codemod | ✓ agent edits via IDE/CLI |
+| Security scanning | ✓ OWASP Top-10 taint, SARIF 2.1.0 | ✗ (not its lane) |
+| Session memory | ✓ code-linked decisions, staleness-checked | configuration-dependent, not verified |
+| Maintenance status | actively maintained | README states read-only, final 2.0.0 |
+| Works offline, no API keys | ✓ | model-dependent |
+
+Verified on September 26, 2026 against the Continue README at `main` ({{ site.data.competitors.continue_dev.stars }} stars, `continuedev/continue`) plus the GitHub API for stars, license and language. MCP client details and indexing internals were not stated in the README sections read on that date, so those cells read "not verified" rather than a guess.
+
+## When to pick Continue
+
+- **You want the agent, not the index.** Chat in the sidebar, diff-and-apply in the editor, terminal CLI when you live there. trace-mcp has no chat UI, no inline edit loop, no IDE presence — it is infrastructure your agent calls.
+- **Model freedom matters.** Continue's whole pitch is bring-your-own-model with configuration per host. Our tools are model-agnostic by construction (MCP), but we do not pick, route or configure your model.
+- **You live in JetBrains or VS Code.** A native extension with an apply button beats any MCP round-trip for the edit half of the loop.
+- **History and community.** Roughly two orders of magnitude more stars, thousands of contributors, and years as the reference open-source agent. That is real even with the maintenance notice attached.
+
+## When to pick trace-mcp
+
+- **Your agent re-reads the same repo every turn.** Whole-file context scales with repo size; graph queries scale with the answer. On a multi-turn session in a large codebase, the index amortises and the file reads do not.
+- **The questions are structural.** Callers, callees, impact, route → handler, controller → template, model → table. An agent without a graph improvises these from text; with the graph it calls one tool.
+- **You switch agents.** The graph outlives any single agent host — VS Code today, CLI tomorrow, a different harness next quarter. The index stays; only the client changes.
+- **Work continues past reading.** AST refactoring with import rewriting, dead-code removal, OWASP taint with SARIF, quality gates, complexity hotspots. Continue edits through the agent loop; trace-mcp verifies through the graph.
+
+## The honest caveat
+
+The maintenance notice cuts both ways and we state it plainly: recommending "run both" against a read-only agent repository is a stranger recommendation than on our other pages. If you already run Continue 2.0.0 and it works, the graph composes with it. If you are choosing an agent today, choose a maintained one — and the graph still composes with that one instead.
+
+And the standing caveat on our side: **our default tool surface costs ~11.6K tokens before the agent asks anything**, and our security scanning ceiling (line-based CFG, lexical taint, type-aware pruning — not a dataflow engine) is stated on the [comparisons page](/comparisons.html), not hidden here.
+
+## FAQ
+
+**Is Continue a competitor of trace-mcp?**
+Not directly. Continue is the agent you talk to; trace-mcp is the index that agent queries. One consumes context, the other produces it.
+
+**Is Continue still maintained?**
+Its README states the repository is no longer actively maintained and is read-only after the final 2.0.0 release (telemetry removed, auth pulled out, bugs squashed). Verify against the live README before adopting.
+
+**Can Continue use trace-mcp?**
+That is the intended composition — any MCP-capable agent calling scoped graph tools. Continue's current MCP client configuration was not verified on the reading date; check its docs.
+
+**Which has the lower session cost?**
+Different budgets. The agent pays per file read; the graph charges ~11.6K tokens up front on the default path and small per-query costs after. Many structural questions in a big repo favour the graph; a couple of edits in a small one do not.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Aider](/vs/aider.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# Aider alternative: trace-mcp vs Aider
+
+Source: https://trace-mcp.com/vs/aider.html
+
+
+
+**TL;DR.** Aider (`Aider-AI/aider`, {{ site.data.competitors.aider.stars }} stars, Apache-2.0, Python) is the terminal pair programmer everything else gets measured against: `cd` into your project, pick a model (Claude, DeepSeek, OpenAI, or a local one), and it maps your repo, edits, lints, tests and commits with sensible messages — the tightest git-native AI loop in this field. trace-mcp is not a loop at all: it is a persistent graph of the same repo (symbols, imports, call edges, {{ site.data.counts.frameworks }} framework integrations) served over MCP, so an agent resolves structure with one tool call instead of assembling context by hand.
+
+Aider wins the edit; the graph wins the question before the edit.
+
+## Head-to-head
+
+| Capability | trace-mcp | Aider |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.aider.stars }} |
+| License | MIT | Apache-2.0 |
+| Written in | TypeScript | Python |
+| What it is | persistent code graph over MCP | terminal pair programmer |
+| Model choice | model-agnostic (MCP tools) | ✓ cloud + local, 100+ claimed setups |
+| Repo map / index | ✓ SQLite graph + FTS5 + embeddings | ✓ repo map assembled into the prompt |
+| Cross-file call graph | ✓ bidirectional, graph-based | ✗ map ranks context, edges not stored |
+| Impact analysis | ✓ reverse dependency traversal | ✗ (model reasons from mapped context) |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 0 — none advertised in README |
+| Git integration | ✓ change-aware reindex | ✓ auto-commit, diff, undo, watch mode |
+| Lint + test loop | ✓ quality gates, SARIF 2.1.0 | ✓ auto-lint/test with fix retries |
+| Languages (AST parsing) | {{ site.data.counts.languages }} (tree-sitter) | 100+ claimed |
+| Security scanning | ✓ OWASP Top-10 taint | ✗ |
+| Session memory | ✓ code-linked decisions, staleness-checked | chat history, not code-linked |
+| Works offline, no API keys | ✓ | model-dependent (local models possible) |
+
+Verified on September 26, 2026 against the Aider README at `main` ({{ site.data.competitors.aider.stars }} stars, `Aider-AI/aider`) plus the GitHub API for stars, license and language. Aider's language figure is its README's own "100+" claim, quoted as a claim rather than re-measured.
+
+## When to pick Aider
+
+Honest version, and it is a long list — Aider is genuinely excellent:
+
+- **The git-native loop.** Automatic commits with sensible messages, familiar diff/undo, watch mode from your IDE, lint and test retries after every change. Our change-awareness reindexes; Aider's *is* the workflow.
+- **Model freedom.** Claude, DeepSeek, OpenAI, Gemini, local models — Aider connects to almost anything and publishes [LLM leaderboards](https://aider.chat/docs/leaderboards/) so you can watch the ranking move. We are model-agnostic by a different route (MCP tools any model calls) but we do not benchmark models.
+- **Repo map that just works.** For the "make it work in my large project" problem, a ranked map in the prompt is a proven answer with years of tuning behind it. A graph answers different questions; it does not automatically answer "give the model the right context" better on every repo shape.
+- **Proven in the field.** Roughly 280× our stars, thousands of forks, the tool every benchmark names. Voice-to-code, images and web pages as context, copy/paste web-chat mode for locked-down models — the feature list is long because the user base is large enough to have asked for all of it.
+- **Zero index to think about.** No daemon, no SQLite file, no watcher config. The map is built per session and discarded; nothing goes stale because nothing persists.
+
+## When to pick trace-mcp
+
+- **Structure as data, not as context.** Callers, callees, transitive impact, route → handler, controller → template, model → table — stored edges answered in one call, rather than map text the model must re-derive the same edges from.
+- **Persistence across sessions.** Aider's map is rebuilt per session; our graph (with code-linked decisions, verified non-stale at recall) survives restarts, branches and handoffs between agents.
+- **Framework depth.** {{ site.data.counts.frameworks }} integrations that model what web frameworks actually connect. A repo map knows the files; the graph knows the wiring.
+- **Past the edit.** AST rename/move/extract with import rewriting, verified dead-code removal, OWASP taint with SARIF, CI quality gates. Aider edits through the model; trace-mcp verifies through the graph.
+- **Any agent, not one loop.** The graph serves Claude Code, Cursor, Codex, JetBrains agents and whatever ships next quarter through the same MCP surface. Nothing about it is terminal-shaped.
+
+## The honest caveat
+
+Aider's repo map is the single best "just give the model context" mechanism in this field, and a graph does not obsolete it: on repos that fit comfortably in context, map-in-prompt is simpler and often cheaper than our ~11.6K-token default surface plus per-query costs. Saying the graph always wins would be precisely the kind of claim this site exists to refuse.
+
+And our standing ceiling, stated on the [comparisons page](/comparisons.html): line-based CFG, lexical taint with type-aware pruning — not a dataflow engine, and out of scope to become one.
+
+## FAQ
+
+**What is the core difference between Aider and trace-mcp?**
+Aider runs the pair-programming loop (map → edit → lint/test → commit) in your terminal against any model. trace-mcp maintains the persistent graph any agent queries for structural answers. Loop versus index.
+
+**Is Aider's repo map the same as a code graph?**
+No. The map is ranked context assembled per prompt; the graph is stored edges queried per question. The map scales with context; the graph scales with the answer.
+
+**Does Aider have an MCP server?**
+None advertised in its README as read on September 26, 2026. Its surfaces are the terminal, git, IDE watch mode, voice, images and web pages.
+
+**Which supports more languages?**
+Aider claims 100+; we parse {{ site.data.counts.languages }} via tree-sitter. Verify your stack, not the headline.
+
+**Can I use both?**
+Yes — Aider driving edit-test-commit while the graph answers impact-before and callers-after without loading whole files.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Continue](/vs/continue.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
 
 ---
 
