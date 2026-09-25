@@ -24,6 +24,7 @@ let projectRoot: string;
 
 let removeMcpClients: typeof import('../../src/init/mcp-client.js').removeMcpClients;
 let getMcpClientStatuses: typeof import('../../src/init/mcp-client.js').getMcpClientStatuses;
+let getConfigPath: typeof import('../../src/init/mcp-client.js').getConfigPath;
 
 beforeEach(async () => {
   sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-disconnect-'));
@@ -38,7 +39,9 @@ beforeEach(async () => {
   vi.stubEnv('XDG_CONFIG_HOME', '');
   vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
   vi.resetModules();
-  ({ removeMcpClients, getMcpClientStatuses } = await import('../../src/init/mcp-client.js'));
+  ({ removeMcpClients, getMcpClientStatuses, getConfigPath } = await import(
+    '../../src/init/mcp-client.js'
+  ));
 });
 
 afterEach(() => {
@@ -49,6 +52,12 @@ afterEach(() => {
 
 function writeFile(rel: string, content: string): string {
   const full = path.join(fakeHome, rel);
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, content);
+  return full;
+}
+
+function writeAbs(full: string, content: string): string {
   fs.mkdirSync(path.dirname(full), { recursive: true });
   fs.writeFileSync(full, content);
   return full;
@@ -228,8 +237,13 @@ describe('removeMcpClients — special formats', () => {
   });
 
   it('zed: removes both keys under `context_servers`, keeps editor config', () => {
-    const full = writeFile(
-      '.config/zed/settings.json',
+    // Zed's global path is platform-dependent (%APPDATA%\Zed on Windows,
+    // ~/.config/zed elsewhere) — seed exactly where the code reads, or the
+    // test asserts against a file the remover never opens (TRA-1932 review).
+    const full = getConfigPath('zed', projectRoot, 'global');
+    expect(full).toBeTruthy();
+    writeAbs(
+      full as string,
       JSON.stringify({
         theme: 'One Dark',
         context_servers: { trace: { command: '/x' }, 'trace-mcp': { command: '/old' } },
@@ -239,7 +253,7 @@ describe('removeMcpClients — special formats', () => {
     const [step] = removeMcpClients(['zed'], projectRoot, { scope: 'global' });
     expect(step.action).toBe('removed');
 
-    const after = JSON.parse(fs.readFileSync(full, 'utf-8'));
+    const after = JSON.parse(fs.readFileSync(full as string, 'utf-8'));
     expect(after.theme).toBe('One Dark');
     expect(after.context_servers).toEqual({});
   });
