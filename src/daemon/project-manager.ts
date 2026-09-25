@@ -13,7 +13,9 @@ import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
 import type { TraceMcpConfig } from '../config.js';
 import { loadConfig, loadGlobalConfigRaw } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
+import { isCorruptDbError, repairIndex } from '../db/repair.js';
 import { Store } from '../db/store.js';
+import { deleteDbFamily } from '../utils/db-family.js';
 import { announceDbHolder, releaseDbHoldersForRoot } from '../db-holders.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
 import { ExtractPool } from '../indexer/extract-pool.js';
@@ -113,6 +115,16 @@ export const DESCENDANT_WAKE_COOLDOWN_MS = 60_000;
  * stay deferred — their next change batch (or first query) wakes them.
  */
 export const DESCENDANT_WAKE_PER_BATCH = 5;
+
+/**
+ * True when `err` is a SQLite FOREIGN KEY constraint failure. Module scope so
+ * both the initial-index catch in `addProject()` and the shared
+ * `recoverInitialIndex()` ladder can classify retry errors.
+ */
+function isForeignKeyError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /FOREIGN KEY constraint failed/i.test(msg);
+}
 
 /**
  * Canonical in-memory key for the managed-projects map (TRA-1608).
@@ -462,13 +474,31 @@ export class ProjectManager {
       );
     }
 
-    const db = initializeDatabase(dbPath, {
+    // TRA-1923: a previous unclean shutdown (overlapping daemon killed
+    // mid-bulk-index with synchronous=OFF, force exit with the WAL dirty) can
+    // leave the FTS5 index malformed. SQLite reports it on first touch, which
+    // may be here at open/migration time — delete the torn family and start
+    // clean instead of serving a rotten DB. Exactly one retry; a second
+    // corrupt error propagates to the loadAllRegistered failure log.
+    const dbOpenOpts = {
       cacheMb: config.index_cache_mb,
       mmapMb: config.index_mmap_mb,
       // TRA-1541: adaptive per-connection memory — steps down on < 6 GiB
       // machines unless the operator pinned `full`.
       memoryProfile: config.index_memory_profile ?? 'auto',
-    });
+    } as const;
+    let db: Database.Database;
+    try {
+      db = initializeDatabase(dbPath, dbOpenOpts);
+    } catch (err) {
+      if (!isCorruptDbError(err)) throw err;
+      logger.warn(
+        { projectRoot, dbPath, error: serializeError(err) },
+        'Index DB corrupt at open — deleting the torn family and rebuilding from scratch (TRA-1923)',
+      );
+      deleteDbFamily(dbPath);
+      db = initializeDatabase(dbPath, dbOpenOpts);
+    }
     writeServerPid(db);
     const store = new Store(db);
     const registry = PluginRegistry.createWithDefaults();
@@ -679,11 +709,8 @@ export class ProjectManager {
     // wipes the symbol/edge tables and rebuilds them in correct order from
     // source files, which clears the orphan rows. We only retry ONCE and we
     // only retry for FK errors — every other failure surfaces immediately so
-    // we don't mask real bugs.
-    const isForeignKeyError = (err: unknown): boolean => {
-      const msg = err instanceof Error ? err.message : String(err);
-      return /FOREIGN KEY constraint failed/i.test(msg);
-    };
+    // we don't mask real bugs. (TRA-1923: SQLITE_CORRUPT gets the same ladder
+    // via recoverInitialIndex — see the catch below.)
     // Lazy post-update reindex: if updater.ts stamped pendingReindexForVersion
     // on this project's registry entry, run the initial indexAll with force=true
     // (full rebuild) instead of the cheap incremental path. Clears the flag on
@@ -755,95 +782,80 @@ export class ProjectManager {
             logger.info({ projectRoot }, 'Initial indexing aborted by project stop (non-fatal)');
             return;
           }
+          const finishRecovery = async (via: string): Promise<void> => {
+            managed.status = 'ready';
+            updateLastIndexed(projectRoot);
+            if (needsForcedReindex) {
+              try {
+                clearPendingReindex(projectRoot);
+              } catch {
+                /* non-fatal — flag will retry next startup */
+              }
+            }
+            runSummarization();
+            runEmbeddings();
+            await runSubprojectAutoSync(projectRoot, config);
+            logger.info({ projectRoot }, `Project indexing complete (${via})`);
+          };
           if (isForeignKeyError(err)) {
             logger.warn(
               { projectRoot, error: String(err) },
               'Initial indexing hit FOREIGN KEY violation — likely stale data from older schema. Retrying with force=true.',
             );
-            const finishRecovery = async (via: string): Promise<void> => {
-              managed.status = 'ready';
-              updateLastIndexed(projectRoot);
-              if (needsForcedReindex) {
-                try {
-                  clearPendingReindex(projectRoot);
-                } catch {
-                  /* non-fatal — flag will retry next startup */
-                }
-              }
-              runSummarization();
-              runEmbeddings();
-              await runSubprojectAutoSync(projectRoot, config);
-              logger.info({ projectRoot }, `Project indexing complete (${via})`);
-            };
-            try {
-              await this.indexAllLimit!(() =>
-                pipeline.indexAll(true, { signal: indexAbortController.signal }),
-              );
-              await finishRecovery('force-reindex recovery');
-              return;
-            } catch (retryErr) {
-              // The in-place force-reindex retry re-ran against the wedged rows
-              // with foreign_keys = ON (the DB was non-empty, so it never entered
-              // bulk-load mode) and hit the same violation. If this is still a FK
-              // error, escalate ONCE to a hard table reset: wipe the graph tables
-              // in place so the follow-up run starts from an empty index, enters
-              // bulk-load mode (foreign_keys = OFF) and rebuilds cleanly — the
-              // programmatic equivalent of deleting + rebuilding the index DB
-              // file, but without closing the shared handle. Any non-FK failure,
-              // or a failure that survives the hard reset, is terminal: we set an
-              // error status and stop. There is no third attempt, so recovery can
-              // never loop. (An abort during the retry is a stop, not a failure:
-              // handled like the outer IndexAbortedError branch — the promise
-              // must never reject, so return instead of rethrowing.)
-              if (retryErr instanceof IndexAbortedError) {
-                logger.info(
-                  { projectRoot },
-                  'Force-reindex recovery aborted by project stop (non-fatal)',
-                );
-                return;
-              }
-              if (!isForeignKeyError(retryErr)) {
-                managed.status = 'error';
-                managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
-                logger.error(
-                  { error: serializeError(retryErr), projectRoot, originalError: String(err) },
-                  'Force-reindex recovery also failed',
-                );
-                return;
-              }
-              logger.warn(
-                { projectRoot, error: String(retryErr) },
-                'In-place force-reindex still hit FOREIGN KEY violation — hard-resetting index tables and rebuilding from scratch.',
-              );
-              try {
-                this.hardResetIndexTables(store);
-                await this.indexAllLimit!(() =>
+            await this.recoverInitialIndex(managed, projectRoot, {
+              finishRecovery,
+              failureKind: 'fk',
+              originalError: err,
+              retryIndex: () =>
+                this.indexAllLimit!(() =>
                   pipeline.indexAll(true, { signal: indexAbortController.signal }),
-                );
-                await finishRecovery('force-reindex recovery after hard reset');
-                return;
-              } catch (hardErr) {
-                if (hardErr instanceof IndexAbortedError) {
-                  logger.info(
-                    { projectRoot },
-                    'Force-reindex recovery aborted by project stop (non-fatal)',
-                  );
-                  return;
-                }
-                managed.status = 'error';
-                managed.error = `Index rebuild after FK hard reset still failed: ${String(hardErr)}`;
-                logger.error(
-                  {
-                    error: serializeError(hardErr),
-                    projectRoot,
-                    originalError: String(err),
-                    retryError: String(retryErr),
-                  },
-                  'FK hard-reset recovery also failed — giving up (no further retry)',
-                );
-                return;
-              }
+                ),
+            });
+            return;
+          }
+          if (isCorruptDbError(err)) {
+            // TRA-1923: torn FTS5 write (overlapping indexer in bulk mode, or
+            // an unclean shutdown with synchronous=OFF). Rebuild the FTS
+            // families in place, then force-reindex — the programmatic
+            // equivalent of deleting + rebuilding the index DB, without
+            // closing the shared handle. A failure that survives the rebuild
+            // escalates ONCE to a hard table reset; anything beyond that is
+            // terminal, so recovery can never loop.
+            logger.warn(
+              { projectRoot, error: serializeError(err) },
+              'Initial indexing hit SQLITE_CORRUPT — rebuilding FTS and retrying with force=true.',
+            );
+            try {
+              repairIndex(db, 'rebuild-fts');
+            } catch (repairErr) {
+              logger.warn(
+                { projectRoot, error: serializeError(repairErr) },
+                'FTS rebuild on the corrupt index failed — retrying the force-reindex anyway',
+              );
             }
+            await this.recoverInitialIndex(managed, projectRoot, {
+              finishRecovery,
+              failureKind: 'corrupt',
+              originalError: err,
+              retryIndex: () =>
+                this.indexAllLimit!(() =>
+                  pipeline.indexAll(true, { signal: indexAbortController.signal }),
+                ),
+              // The hard reset below wipes every data table but deliberately
+              // skips FTS tables — rebuild them from the (now empty) symbols
+              // table so no stale FTS rows survive into the final attempt.
+              beforeHardReset: () => {
+                try {
+                  repairIndex(db, 'rebuild-fts');
+                } catch (repairErr) {
+                  logger.warn(
+                    { projectRoot, error: serializeError(repairErr) },
+                    'FTS rebuild after hard reset failed (non-fatal — the force-reindex repopulates FTS via triggers)',
+                  );
+                }
+              },
+            });
+            return;
           }
           managed.status = 'error';
           managed.error = String(err);
@@ -1194,6 +1206,94 @@ export class ProjectManager {
           'Descendant wake reload failed (non-fatal — next change batch or query retries)',
         );
       });
+    }
+  }
+
+  /**
+   * Shared retry ladder for initial-index failures that are recoverable by
+   * rebuilding in place: FOREIGN KEY violations from stale schema rows, and
+   * SQLITE_CORRUPT from torn FTS5 writes (TRA-1923).
+   *
+   * Rung 1 re-runs the force-reindex against the (possibly repaired) tables.
+   * A failure of the SAME kind escalates ONCE to {@link hardResetIndexTables}
+   * (+ the caller's `beforeHardReset`, e.g. an FTS rebuild) and one final
+   * force-reindex. Any other failure — a different error kind, or anything
+   * surviving the hard reset — is terminal: `managed.status = 'error'`, no
+   * third attempt, so recovery can never loop. (An abort during a retry is a
+   * stop, not a failure: handled like the outer IndexAbortedError branch —
+   * this promise must never reject, so every path returns.)
+   */
+  private async recoverInitialIndex(
+    managed: ManagedProject,
+    projectRoot: string,
+    opts: {
+      finishRecovery: (via: string) => Promise<void>;
+      failureKind: 'fk' | 'corrupt';
+      originalError: unknown;
+      retryIndex: () => Promise<unknown>;
+      /** Extra in-place reset between the hard table wipe and the final attempt. */
+      beforeHardReset?: () => void;
+    },
+  ): Promise<void> {
+    const isFk = opts.failureKind === 'fk';
+    const kindLabel = isFk ? 'FOREIGN KEY violation' : 'SQLITE_CORRUPT';
+    const shortKind = isFk ? 'FK' : 'corruption';
+    const isSameFailure = isFk ? isForeignKeyError : isCorruptDbError;
+    try {
+      await opts.retryIndex();
+      await opts.finishRecovery(isFk ? 'force-reindex recovery' : 'corrupt-FTS rebuild recovery');
+      return;
+    } catch (retryErr) {
+      if (retryErr instanceof IndexAbortedError) {
+        logger.info({ projectRoot }, 'Force-reindex recovery aborted by project stop (non-fatal)');
+        return;
+      }
+      if (!isSameFailure(retryErr)) {
+        managed.status = 'error';
+        managed.error = `Force-reindex after ${shortKind} recovery still failed: ${String(retryErr)}`;
+        logger.error(
+          {
+            error: serializeError(retryErr),
+            projectRoot,
+            originalError: String(opts.originalError),
+          },
+          'Force-reindex recovery also failed',
+        );
+        return;
+      }
+      logger.warn(
+        { projectRoot, error: String(retryErr) },
+        `In-place force-reindex still hit ${kindLabel} — hard-resetting index tables and rebuilding from scratch.`,
+      );
+      try {
+        this.hardResetIndexTables(managed.store);
+        opts.beforeHardReset?.();
+        await opts.retryIndex();
+        await opts.finishRecovery(
+          isFk ? 'force-reindex recovery after hard reset' : 'corruption recovery after hard reset',
+        );
+        return;
+      } catch (hardErr) {
+        if (hardErr instanceof IndexAbortedError) {
+          logger.info(
+            { projectRoot },
+            'Force-reindex recovery aborted by project stop (non-fatal)',
+          );
+          return;
+        }
+        managed.status = 'error';
+        managed.error = `Index rebuild after ${shortKind} hard reset still failed: ${String(hardErr)}`;
+        logger.error(
+          {
+            error: serializeError(hardErr),
+            projectRoot,
+            originalError: String(opts.originalError),
+            retryError: String(retryErr),
+          },
+          `${isFk ? 'FK' : 'Corruption'} hard-reset recovery also failed — giving up (no further retry)`,
+        );
+        return;
+      }
     }
   }
 
