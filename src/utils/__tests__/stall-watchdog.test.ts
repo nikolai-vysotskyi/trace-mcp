@@ -7,6 +7,9 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import { spawn } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import { StallWatchdog } from '../stall-watchdog.js';
 import type { StallWatchdogOptions } from '../stall-watchdog.js';
@@ -113,4 +116,62 @@ describe('StallWatchdog (TRA-1957)', () => {
     await sleep(150);
     expect(readLines(alertFile)).toEqual([]);
   }, 15_000);
+
+  it('fatal path (prod default) SIGKILLs a wedged child and leaves a fatal line', async () => {
+    // The prod default (fatalExit: true) never runs in-process here — a real
+    // fatal would kill the test runner. Spawn the fixture child instead: it
+    // runs the real StallWatchdog, wedges its own main thread, and must die
+    // by signal with a `fatal` breadcrumb in the alert file.
+    const childDir = mkdtempSync(join(tmpdir(), 'stall-fatal-'));
+    try {
+      const alertFile = join(childDir, 'stall-alerts.jsonl');
+      const fixture = join(
+        dirname(fileURLToPath(import.meta.url)),
+        'fixtures',
+        'stall-fatal-child.ts',
+      );
+      // Run through the tsx CLI entry (same loader the repo's own scripts
+      // use) with the current node — no .bin/shell shims in between, so the
+      // death below is observed first-hand. (Spawning node_modules/.bin/tsx
+      // reaps through a wrapper that masks the signal as exit 137.)
+      const tsxCli = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+      const child = spawn(process.execPath, [tsxCli, fixture, alertFile, '80', '250'], {
+        cwd: process.cwd(),
+        stdio: 'ignore',
+      });
+      const result = await new Promise<{ code: number | null; signal: string | null }>(
+        (resolve, reject) => {
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL');
+            reject(new Error('fatal-path child survived 20 s — watchdog did not kill it'));
+          }, 20_000);
+          child.on('error', (err) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+          child.on('exit', (code, signal) => {
+            clearTimeout(timeout);
+            resolve({ code, signal });
+          });
+        },
+      );
+      // Survival would exit 42; a kill never reaches the exitCode line.
+      // (With the old process.exit()-in-worker bug the child survives to 42
+      // with no fatal line — that is exactly what this guards.)
+      expect(result.code).not.toBe(42);
+      // The kill surfaces as a signal when observed directly, or as 137
+      // (128+SIGKILL) when a supervisor/shim reaps it first; Windows has no
+      // signals and surfaces TerminateProcess as a nonzero code.
+      const killed =
+        result.signal === 'SIGKILL' ||
+        result.code === 137 ||
+        (process.platform === 'win32' && result.code !== 0 && result.code !== null);
+      expect(killed).toBe(true);
+      const kinds = readLines(alertFile).map((l) => l.kind);
+      expect(kinds).toContain('stalled');
+      expect(kinds).toContain('fatal');
+    } finally {
+      rmSync(childDir, { recursive: true, force: true });
+    }
+  }, 30_000);
 });

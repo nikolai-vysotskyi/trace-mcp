@@ -20,11 +20,15 @@
  *     detection. External supervisors (and humans tailing the file) see it
  *     while the daemon is still wedged.
  *   - `fatal`    (once per episode, after `fatalAfterMs` without a beat):
- *     recovery. The worker exits the process so launchd respawns a fresh
- *     daemon. Crash-safe by construction: every indexer chunk is its own
- *     transaction and the TRA-1017 repair scope redoes the interrupted one.
- *     Disable with `fatalExit: false` (or `TRACE_MCP_STALL_FATAL=0`) for
- *     alert-only mode.
+ *     recovery. The worker SIGKILLs the process so launchd respawns a fresh
+ *     daemon. SIGKILL specifically: `process.exit()` called in the worker
+ *     only ends the worker (verified), and SIGTERM is unreliable here — the
+ *     daemon's shutdown handlers need a live event loop, which is exactly
+ *     what a wedged process does not have. Crash-safe by construction: every
+ *     indexer chunk is its own transaction and the TRA-1017 repair scope
+ *     redoes the interrupted one. The `fatal` line doubles as the death
+ *     breadcrumb (cf. TRA-1911 exit records). Disable with `fatalExit: false`
+ *     (or `TRACE_MCP_STALL_FATAL=0`) for alert-only mode.
  * A `recovered` line closes the episode when beats resume.
  *
  * The worker is spawned from an eval string (no extra dist entry to bundle)
@@ -40,9 +44,9 @@ export interface StallWatchdogOptions {
   checkIntervalMs?: number;
   /** Stall duration that logs `stalled` (ms). Default 10_000. */
   alertAfterMs?: number;
-  /** Stall duration that logs `fatal` and exits (ms). Default 180_000. */
+  /** Stall duration that logs `fatal` and kills (ms). Default 180_000. */
   fatalAfterMs?: number;
-  /** Call `process.exit(1)` on fatal (default true). False = alert-only. */
+  /** SIGKILL on fatal (default true). False = alert-only. */
   fatalExit?: boolean;
   /** Called on the main thread if the worker dies unexpectedly (for logging). */
   onWorkerExit?: (info: { code: number | null; hadError: boolean }) => void;
@@ -82,7 +86,11 @@ function check() {
     episodeFatal = true;
     try { fs.appendFileSync(cfg.alertFile, line('fatal', stallMs)); } catch (e) {}
     if (cfg.fatalExit) {
-      process.exit(1);
+      // process.exit() here would end only the worker and leave the wedged
+      // main thread hanging forever (taking further alerts with it) — kill
+      // the whole process instead. SIGKILL: SIGTERM would route into the
+      // daemon's shutdown handlers, which need a live loop to run.
+      try { process.kill(cfg.pid, 'SIGKILL'); } catch (e) {}
     }
   }
 }
