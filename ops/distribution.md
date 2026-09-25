@@ -2983,3 +2983,26 @@ Hours after TRA-1924, audited via API, read-only, nothing written outside this f
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Delta recheck, 2026-09-25 night (TRA-1939): Nikolai rebased eltociear#119, rest silent, sweep clean
+
+Evening after TRA-1928, audited via API, read-only, nothing written outside this file.
+
+**Open threads — one movement, and it is Nikolai's own rebase.**
+`eltociear/awesome-AI-driven-development#119`: OPEN, `mergeable_state: clean`, `updated_at` 2026-09-25T14:07Z — the movement is a `head_ref_force_pushed` event by nikolai-vysotskyi himself (`a24667d8`): a rebase onto the maintainer's latest main, tool count 598 → 599 in both READMEs, our entry line untouched. His lane — recorded, not touched. No reply owed; a thank-you would only cost a notification.
+The other 20 `updated_at` values match TRA-1928 exactly:
+- Catalog PRs/issues: `GetBindu#195`, `hermes#395`, `nix#606` (open, newest our 09-20 pings, single ping spent), `tolkonepiu#384` (open, 0 comments since 08-29 — ping window opens tomorrow 26.09, not today), `ai-boost#240` (open, `updated_at` 09-14 — re-read 10-05).
+- `hesreallyhim/awesome-claude-code#2871` (Nikolai's own filing): OPEN, still 09-18 bot validation — no maintainer reply, wait, do not ping.
+- Comment threads: `redproof#50` (2 comments, 09-21, loop closed), `kilocode#13843` (3, 09-20 third-party follow-up, not ours), `kilocode#12707` (1, 09-07), `atlas#105` (9, 09-07), `slopstop#633` (1, 09-06, deliberately not bumped), `Dokploy/mcp#81` (3, 09-05), `nanocoder#1197` (4, 09-17 third-party pitch), `lastlight#372` (6, 09-18), `pyrefly#4583` (2, 09-07), `pi-extensions#1204` (0, 09-05), `ai-tooling#585` (0, 09-04), `pr-agent#2499` (11, 09-14). All OPEN, all unchanged. `deslop#173` CLOSED 09-08, unchanged.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, still 2026-09-25T01:30Z — the third `CHANGES_REQUESTED` recorded in TRA-1924, no newer review. His lane — recorded, not touched.
+- trace-mcp 182★/21 forks — flat.
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): clean.** No repos outside the seen list, nothing to read, `ops/mentions-seen.txt` untouched.
+
+**Competitor pulse (no touch):** `tirth8205/code-review-graph` at 31,784★ (+5 since TRA-1928) with `pushed_at` still 2026-09-18 — stars grow, triage stands still. For Competitor Intelligence, nothing to write.
+
+**Nothing needed from Nikolai this run.** #2871 awaits triage, MiniMax#54 awaits re-review (he gets it via GitHub directly), no door is due a reminder before tomorrow 26.09 (tolkonepiu window — next run's decision, not this one's). TRA-633's one click already happened 09-18; the Focus item is satisfied, not pending. No consolidated request sent.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
