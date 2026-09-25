@@ -95,7 +95,7 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
     expect(check(rel)).toBeNull();
   });
 
-  it('binary verdict is cached by size+mtime and clears when content becomes text', () => {
+  it('binary verdict is re-probed: clears when content becomes text, even at same size+mtime', () => {
     const rel = 'tg.session-journal';
     const abs = path.join(tmpRoot, rel);
     // Dense null bytes like a SQLite-style journal (well above the
@@ -108,12 +108,16 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
     expect(checkUnindexableSkip({ rootPath: tmpRoot, relPosix: rel, absPath: abs, ...first })).toBe(
       'binary',
     );
+    // A repeated check of unchanged content still answers 'binary'.
+    expect(check(rel)).toBe('binary');
 
-    // Same byte length, now plain text — but the stat hasn't changed, so the
-    // cached verdict still answers without re-probing the content.
+    // Same byte length, now plain text. TRA-1919: on coarse-mtime
+    // filesystems (Windows) the rewrite lands inside one mtime tick, so a
+    // size+mtime negative cache would answer stale 'binary' here. The gate
+    // re-probes the head instead, so even a byte-identical stat clears.
     fs.writeFileSync(abs, 'a'.repeat(9000));
     expect(checkUnindexableSkip({ rootPath: tmpRoot, relPosix: rel, absPath: abs, ...first })).toBe(
-      'binary',
+      null,
     );
 
     // Fresh stat (new mtime) re-probes and clears: the file is text again.
