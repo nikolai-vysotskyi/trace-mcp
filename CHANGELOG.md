@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.33.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.32.0...v3.33.0) (2026-09-25)
+
+
+### Features
+
+* **gc:** TTL sweep for top-level orphan index DBs (TRA-1908) ([#1384](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1384)) ([e7b6936](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e7b69363de049d584eefab44e92d05545a1fe80b))
+* **mcp:** drop deprecated Gemini CLI client, keep Antigravity (TRA-1931) ([#1395](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1395)) ([c238d1d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c238d1db8bb76e673938152bbad99bce0969e241))
+
+
+### Bug Fixes
+
+* **daemon:** recover from SQLITE_CORRUPT_VTAB + guard bulk-index window (TRA-1923) ([#1392](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1392)) ([5c022cd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c022cdd81e4e36a0a134a0e19e752d4fea574f8))
+* **daemon:** sync exit breadcrumb + SIGHUP handler so no death is silent (TRA-1911) ([#1387](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1387)) ([8549a35](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8549a35eb6b856133d9ed795891af55b64c0703e))
+* **indexer:** always re-probe binary head instead of size+mtime negative cache (TRA-1919) ([#1391](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1391)) ([a493b16](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a493b16008be8a5d2b503d8c5606ec5adc551e33))
+* **indexer:** drop SQLite sidecars before stat/read, silence ENOENT race (TRA-1943) ([#1399](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1399)) ([97c004b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/97c004b04315007ccb6a11b1dcf16dacbc4e8e7c))
+* **indexer:** negative cache for oversized/binary hot reindex loop (TRA-1912) ([#1388](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1388)) ([7dd3dc0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7dd3dc0e597f43c2e9b637be6618f48242cc4dc2))
+* **index:** isolate branch-diverged same-remote checkouts from the shared DB (TRA-1916) ([#1390](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1390)) ([b1b540c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b1b540c094e28fca5ace435d0ab2f22bf6f151ba))
+* **proxy:** log worktree sharing + lock serve/proxy root parity (TRA-1915) ([#1389](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1389)) ([f5f709e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f5f709ebd2a9cbc56679120a944dfffc8e2bbaa6))
+
+
+### Documentation
+
+* **ops:** delta recheck 2026-09-25 day, MiniMax round 3 (TRA-1924) ([#1393](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1393)) ([16ed841](https://github.com/nikolai-vysotskyi/trace-mcp/commit/16ed841e03a2fb502d3f557b7c5fe6ee1997d723))
+* **ops:** delta recheck 2026-09-25 morning, threads silent (TRA-1909) ([#1386](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1386)) ([52f55dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52f55dd6fbaa07f585b4acde609f580d3c7a834c))
+* **ops:** delta recheck 2026-09-25 night, Nikolai rebased eltociear[#119](https://github.com/nikolai-vysotskyi/trace-mcp/issues/119) (TRA-1939) ([#1398](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1398)) ([dbfa689](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dbfa6899e51bef6e698e0805c00dc777ae4859f0))
+* **ops:** delta recheck 2026-09-25, competitor-research hit MaquinaTech/graph-indexer (TRA-1928) ([#1394](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1394)) ([c834cef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c834cef2bb33ddb033c563236b7f4baf7efb5d29))
+
 ## [3.32.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.31.5...v3.32.0) (2026-09-24)
 
 
