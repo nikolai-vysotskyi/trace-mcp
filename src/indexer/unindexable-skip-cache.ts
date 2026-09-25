@@ -19,8 +19,12 @@
  * - `oversize` holds regardless of growth: any current size above the cap is
  *   still doomed, so the verdict needs no size+mtime comparison — it clears
  *   only when the file shrinks back under the cap (or disappears).
- * - `binary` holds while size+mtime are unchanged; fresh content is
- *   re-probed (a journal rotated into text must become indexable again).
+ * - `binary` is always re-probed (≤ 8 KB head read): a size+mtime-only
+ *   negative cache goes stale on coarse-mtime filesystems (Windows: a
+ *   same-size rewrite inside one mtime tick keeps the old stat, so the
+ *   cached verdict outlives the content — TRA-1919). The head read is
+ *   microseconds next to the doomed pipeline it replaces, and the pipeline
+ *   already budgets "one stat plus at most one 8 KB head read" per path.
  *
  * Bounded on both axes like `recent-reindex-cache.ts`: ≤ 256 verdicts per
  * root (coldest evicted first — hot growing files re-record on every event
@@ -205,16 +209,12 @@ export function checkUnindexableSkip(check: UnindexableCheck): UnindexableReason
   const stale = verdicts.get(rootPath)?.get(relPosix);
   if (stale?.reason === 'oversize') dropVerdict(rootPath, relPosix);
 
-  // Binary gate with a size+mtime negative cache: an unchanged journal
-  // skips without any read; changed content is re-probed (rotation into
-  // text must clear the verdict).
+  // Binary gate: always re-probe the ≤ 8 KB head. A size+mtime negative
+  // cache is unsound here — on coarse-mtime filesystems (Windows) a
+  // same-size rewrite inside one mtime tick keeps the old stat, so a
+  // cached 'binary' would outlive rotated-into-text content (TRA-1919).
+  // The probe is microseconds next to the doomed pipeline it replaces.
   const cached = verdicts.get(rootPath)?.get(relPosix);
-  if (cached?.reason === 'binary' && cached.size === size && cached.mtimeMs === mtimeMs) {
-    // Refresh recency so the hot file survives bucket overflow.
-    recordVerdict(rootPath, relPosix, cached);
-    logger.debug({ file: relPosix, size }, 'Binary file detected, skipping (cached verdict)');
-    return 'binary';
-  }
   const binary = probeBinary(absPath, size);
   if (binary === null) return null;
   if (!binary) {
