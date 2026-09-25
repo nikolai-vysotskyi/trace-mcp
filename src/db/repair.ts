@@ -33,6 +33,31 @@ export interface RepairResult {
   affected: number;
 }
 
+/**
+ * True when `err` is a SQLite corruption failure (TRA-1923).
+ *
+ * better-sqlite3 surfaces these as `SQLITE_CORRUPT` (`code`) with an extended
+ * result code in `codeName` — `SQLITE_CORRUPT_VTAB` when the torn structure is
+ * an FTS5 index — and the message `database disk image is malformed`. Any one
+ * of the three signals counts: the `codeName` is lost when an error crosses a
+ * worker boundary as a plain object, and the message is the only signal left
+ * when a caller re-wraps the error.
+ */
+export function isCorruptDbError(err: unknown): boolean {
+  if (err !== null && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.codeName === 'string' && /SQLITE_CORRUPT/i.test(rec.codeName)) return true;
+    if (typeof rec.code === 'string' && /SQLITE_CORRUPT/i.test(rec.code)) return true;
+    // Plain-object error shapes (e.g. neverthrow Result.error) carry the
+    // SQLite text in .message without an Error prototype.
+    if (typeof rec.message === 'string' && /database disk image is malformed/i.test(rec.message)) {
+      return true;
+    }
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /database disk image is malformed/i.test(msg);
+}
+
 function tableExists(db: Database.Database, name: string): boolean {
   const r = db
     .prepare(`SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ? LIMIT 1`)
