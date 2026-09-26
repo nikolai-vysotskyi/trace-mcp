@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.33.0...v3.34.0) (2026-09-26)
+
+
+### Features
+
+* **clients:** per-file project configs, prompts card, Multica agents (TRA-1933) ([#1411](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1411)) ([94ff7af](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94ff7afb83bc105caf6acc159c48b78c0b0f6d4d))
+* **lab:** Benchmark Lab — measured arm runs in daemon and app (TRA-1951) ([#1403](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1403)) ([af933d0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af933d033b91eb130a62be79b508c151c9099d28))
+* **mcp:** per-client trace-mcp removal in CLI and app (TRA-1932) ([#1396](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1396)) ([0e8c01d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e8c01d26be919c0bd8208cfabe800edeabe2d6f))
+* **seo:** GEO-battery for AI-answer visibility, baseline 2026-09-25 (TRA-1947) ([#1401](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1401)) ([b808aba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b808aba188e435f975300563411f21a26215f3d9))
+
+
+### Bug Fixes
+
+* **indexer:** edges-driven file-projection joins + cross-thread stall watchdog (TRA-1957) ([#1406](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1406)) ([27ed9b6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27ed9b62551b50d6b434f233cf1ce9744c789bbe))
+* **launcher:** repoint healthy legacy symlink that misses current shim (TRA-1964) ([#1408](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1408)) ([7884f63](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7884f634c55cbb7ed8fa8caeda65eaf4be5cabd8))
+* **postinstall:** never downgrade live daemon from stale installs (TRA-1963) ([#1407](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1407)) ([69988cb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/69988cbacb7abcc796dc913525a9fcac8c95c29f))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-26, threads silent, sweep 1 genuine + 2 collisions (TRA-1955) ([#1405](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1405)) ([eaf2450](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eaf2450b2a0439cdaf47ac8a61c97c1eb3656208))
+* **ops:** eltociear PR [#119](https://github.com/nikolai-vysotskyi/trace-mcp/issues/119) rebased 2026-09-25 to 599, mergeable clean (TRA-1935) ([#1397](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1397)) ([0bc6c62](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0bc6c62f90803fcb4bd0eba5c2cdf3fab2b40b59))
+* **ops:** mention sweep weekly run + outreach hygiene, queue narrowed to 2 doors (TRA-1950) ([#1402](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1402)) ([f420f13](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f420f131043234508724c0cb65cf19ddf7ea5adc))
+* **ops:** outreach 2026-09-26 rebase note + jaimevalero row dedupe (TRA-1967) ([#1409](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1409)) ([307dc64](https://github.com/nikolai-vysotskyi/trace-mcp/commit/307dc643ae2023f8f14b4438c0b9f1215ff9ba09))
+* **vs:** batch 1 — ast-grep, Continue, Aider head-to-heads (TRA-1948) ([#1400](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1400)) ([97153d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/97153d7b42a3508fba3b3ec0981a51cd66f6b38e))
+* **vs:** batch 2 — Cody, ripwire, IDE-context head-to-heads (TRA-1948) ([#1410](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1410)) ([d74d200](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d74d2005dfacd403a81b895f1fee9bf029f06782))
+
 ## [3.33.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.32.0...v3.33.0) (2026-09-25)
 
 
