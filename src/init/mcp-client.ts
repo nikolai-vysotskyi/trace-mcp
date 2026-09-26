@@ -102,7 +102,7 @@ function buildMcpEntry(): { command: string } {
   return { command: getLauncherPath() };
 }
 
-type McpScope = 'global' | 'project';
+export type McpScope = 'global' | 'project';
 
 /**
  * Configure selected MCP clients to use trace-mcp.
@@ -1839,6 +1839,79 @@ export function getMcpClientStatuses(
       configExists: status.configPath ? fs.existsSync(status.configPath) : false,
     };
   });
+}
+
+/**
+ * Project-level prompt/hook state for the Clients screen (TRA-1933 Phase B).
+ *
+ * Read-only by construction: it never writes, only reports what
+ * `detectProject` (CLAUDE.md trace block) and the TRA-650 migration path
+ * (`<project>/.claude/settings.local.json` (or `.claw/…`) hook wiring) already know,
+ * plus the tweakcc prompt presence `init` grades levels on. The desktop app
+ * surfaces this next to the per-file client rows; every fix routes through
+ * the existing actions (re-run `init`, one-click redirect), so no new
+ * writers are introduced here.
+ */
+export interface ProjectPromptsStatus {
+  projectRoot: string;
+  claudeMdExists: boolean;
+  claudeMdHasTraceBlock: boolean;
+  agentsMdExists: boolean;
+  agentsMdHasTraceBlock: boolean;
+  /**
+   * Guard hook in project scope: `active` when a project-scoped
+   * `settings.local.json` carries a PreToolUse entry running
+   * `trace-mcp-guard`; `missing` otherwise (including when no such file
+   * exists at all — there is simply no project-scoped hook then).
+   */
+  projectHook: 'active' | 'missing';
+  /** The settings.local.json that carries the hook, else the first candidate checked. */
+  projectHookPath: string | null;
+  /** `init`'s own Max-level signal, machine-wide (tweakcc has no project layer). */
+  tweakccPrompts: boolean;
+}
+
+/** Markers `init` looks for — same pair `detectProject` grades on. */
+const TRACE_BLOCK_MARKERS = ['<!-- trace:start -->', '<!-- trace-mcp:start -->'];
+
+const GUARD_SCRIPT_NAME = 'trace-mcp-guard';
+
+function settingsLocalHasGuardHook(filePath: string): boolean {
+  let parsed: Record<string, unknown> | null;
+  try {
+    parsed = parseJsonc(fs.readFileSync(filePath, 'utf-8')) as Record<string, unknown> | null;
+  } catch {
+    return false;
+  }
+  const hooks = parsed?.hooks as Record<string, unknown[]> | undefined;
+  const entries = hooks?.PreToolUse;
+  if (!Array.isArray(entries)) return false;
+  return entries.some((h) =>
+    (h as { hooks?: { command?: string }[] }).hooks?.some(
+      (hh) => typeof hh.command === 'string' && hh.command.includes(GUARD_SCRIPT_NAME),
+    ),
+  );
+}
+
+export function getProjectPromptsStatus(projectRoot: string): ProjectPromptsStatus {
+  const root = path.resolve(projectRoot);
+  const claudeMd = readIfExists(path.join(root, 'CLAUDE.md'));
+  const agentsMd = readIfExists(path.join(root, 'AGENTS.md'));
+  const candidates = ['.claude', '.claw'].map((d) => path.join(root, d, 'settings.local.json'));
+  const existing = candidates.filter((p) => fs.existsSync(p));
+  const activePath = existing.find((p) => settingsLocalHasGuardHook(p)) ?? null;
+  return {
+    projectRoot: root,
+    claudeMdExists: claudeMd !== null,
+    claudeMdHasTraceBlock:
+      claudeMd !== null && TRACE_BLOCK_MARKERS.some((m) => claudeMd.includes(m)),
+    agentsMdExists: agentsMd !== null,
+    agentsMdHasTraceBlock:
+      agentsMd !== null && TRACE_BLOCK_MARKERS.some((m) => agentsMd.includes(m)),
+    projectHook: activePath ? 'active' : 'missing',
+    projectHookPath: activePath ?? existing[0] ?? null,
+    tweakccPrompts: hasTweakccPrompts(),
+  };
 }
 
 export function getConfigPath(

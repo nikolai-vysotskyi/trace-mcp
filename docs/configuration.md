@@ -961,6 +961,8 @@ The role → preset matrix used in the trace-mcp workspace itself (adjust to you
 
 If you can't read it back (agent actors can't), you can still recover the *set* of servers a past run had from Claude Code's own connection logs on the machine that ran it — `~/Library/Caches/claude-cli-nodejs/<encoded-workdir>/mcp-logs-<server>/` has one directory per connected server. Under `--strict-mcp-config` that listing is exactly the config's server set; only each server's argv is still unknown.
 
+The desktop app's MCP Clients screen shows this wiring read-only (Multica agents section): workspace-library assignment, custom-config presence, and the preset when the raw config is readable. Writing `mcp_config` from the app is intentionally not offered — use the `multica` CLI above.
+
 ---
 
 ## stdio vs HTTP — choosing your setup

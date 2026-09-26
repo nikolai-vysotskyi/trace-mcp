@@ -77,4 +77,39 @@ export const clients = {
   enablingRedirect: '켜는 중…',
   redirectEnabled: 'PreToolUse 리디렉션이 켜졌습니다 — 파일 읽기가 trace-mcp를 경유합니다',
   redirectFailed: '리디렉션 후크를 설치하지 못했습니다.',
+  /* TRA-1933 per-file visibility: one row per harness becomes global + project
+     file entries. The picker lives in the Supported section header and lists
+     the daemon's registered projects; "Global files only" is today's view. */
+  projectPickerLabel: 'Project files for',
+  scopeGlobalOnly: 'Global files only',
+  filesToggleShow: 'Show config files',
+  filesToggleHide: 'Hide config files',
+  scopeGlobal: 'Global',
+  scopeProject: 'Project',
+  globalOnlyNote: 'Global config only — no project layer for this client',
+  /* TRA-1933 Phase B: read-only project card (CLAUDE.md block, project hook,
+     tweakcc). File names stay inline in the component; only prose is keyed. */
+  projectPrompts: 'Project setup',
+  promptsHook: 'Project hook',
+  promptsTweakcc: 'tweakcc prompts',
+  valueBlockPresent: 'trace block present',
+  valueBlockPlain: 'no trace block',
+  valueAbsent: 'absent',
+  valueActive: 'active',
+  valueMissing: 'missing',
+  valueOn: 'on',
+  valueOff: 'off',
+  /* TRA-1933 Phase C: Multica agents, read-only. Wiring is reported as-is;
+     unknown is never guessed (a silent row is worse than an honest one). */
+  multicaAgents: 'Multica agents',
+  multicaUnavailable: 'multica CLI not found — install it to see workspace agents',
+  multicaNoAgents: 'No workspace agents found',
+  multicaTraceEnabled: 'trace enabled',
+  multicaTraceDisabled: 'trace disabled',
+  multicaTraceAbsent: 'no trace entry',
+  multicaTraceUnknown: 'trace state unknown',
+  multicaCustomHidden: 'custom config (not visible to this app)',
+  multicaInherited: 'inherits the machine setup',
+  multicaPreset: 'preset {{preset}}',
+  multicaManageNote: 'Read-only — manage wiring with the multica CLI',
 } as const;

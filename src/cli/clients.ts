@@ -22,13 +22,16 @@
  */
 
 import { Command } from 'commander';
+import path from 'node:path';
 import {
   configureMcpClients,
   getMcpClientStatuses,
+  getProjectPromptsStatus,
   MCP_CLIENT_PICKUP,
   removeMcpClients,
   type McpClientPickup,
   type McpClientStatus,
+  type ProjectPromptsStatus,
 } from '../init/mcp-client.js';
 import type { DetectedMcpClient, InitStepResult } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
@@ -43,8 +46,13 @@ export const clientsCommand = new Command('clients').description(
  * entries no longer use it at all (TRA-501), so a cwd with no root marker is
  * not a reason to fail: `findProjectRoot` throws there, which is exactly what
  * the desktop app hits when it shells out from inside a packaged bundle.
+ *
+ * TRA-1933: the app passes `--project` explicitly — its bundled cwd is never
+ * the project the user is looking at, so the cwd fallback must not be used
+ * when the caller names the root.
  */
-function resolveProjectRoot(): string {
+function resolveProjectRoot(explicit?: string): string {
+  if (explicit) return path.resolve(explicit);
   try {
     return findProjectRoot(process.cwd());
   } catch {
@@ -59,29 +67,32 @@ clientsCommand
   )
   .option('--json', 'Output machine-readable JSON')
   .option('--scope <scope>', 'Config scope: global | project', 'global')
+  .option('--project <path>', 'Project root for project scope (default: auto-detect from cwd)')
   .option(
     '--client <name>',
     'Restrict to one client (e.g. claude-code). Repeat by passing comma-separated names.',
   )
-  .action((opts: { json?: boolean; scope?: 'global' | 'project'; client?: string }) => {
-    const scope = opts.scope === 'project' ? 'project' : 'global';
-    const projectRoot = resolveProjectRoot();
-    const clientNames = opts.client
-      ? // biome-ignore lint/suspicious/noExplicitAny: validated downstream by getMcpClientStatuses
-        (opts.client
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean) as any[])
-      : undefined;
-    const statuses = getMcpClientStatuses(projectRoot, scope, clientNames);
+  .action(
+    (opts: { json?: boolean; scope?: 'global' | 'project'; project?: string; client?: string }) => {
+      const scope = opts.scope === 'project' ? 'project' : 'global';
+      const projectRoot = resolveProjectRoot(opts.project);
+      const clientNames = opts.client
+        ? // biome-ignore lint/suspicious/noExplicitAny: validated downstream by getMcpClientStatuses
+          (opts.client
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean) as any[])
+        : undefined;
+      const statuses = getMcpClientStatuses(projectRoot, scope, clientNames);
 
-    if (opts.json) {
-      console.log(JSON.stringify({ scope, projectRoot, statuses }, null, 2));
-      return;
-    }
+      if (opts.json) {
+        console.log(JSON.stringify({ scope, projectRoot, statuses }, null, 2));
+        return;
+      }
 
-    printHumanReport(scope, statuses);
-  });
+      printHumanReport(scope, statuses);
+    },
+  );
 
 clientsCommand
   .command('update')
@@ -94,14 +105,15 @@ clientsCommand
   )
   .option('--json', 'Output machine-readable JSON')
   .option('--scope <scope>', 'Config scope: global | project', 'global')
+  .option('--project <path>', 'Project root for project scope (default: auto-detect from cwd)')
   .option('--dry-run', 'Report what would be written without writing it')
   .action(
     (
       clients: string[],
-      opts: { json?: boolean; scope?: 'global' | 'project'; dryRun?: boolean },
+      opts: { json?: boolean; scope?: 'global' | 'project'; project?: string; dryRun?: boolean },
     ) => {
       const scope = opts.scope === 'project' ? 'project' : 'global';
-      const projectRoot = resolveProjectRoot();
+      const projectRoot = resolveProjectRoot(opts.project);
 
       const targets = (
         clients.length > 0
@@ -143,14 +155,15 @@ clientsCommand
   )
   .option('--json', 'Output machine-readable JSON')
   .option('--scope <scope>', 'Config scope: global | project', 'global')
+  .option('--project <path>', 'Project root for project scope (default: auto-detect from cwd)')
   .option('--dry-run', 'Report what would be removed without removing it')
   .action(
     (
       clients: string[],
-      opts: { json?: boolean; scope?: 'global' | 'project'; dryRun?: boolean },
+      opts: { json?: boolean; scope?: 'global' | 'project'; project?: string; dryRun?: boolean },
     ) => {
       const scope = opts.scope === 'project' ? 'project' : 'global';
-      const projectRoot = resolveProjectRoot();
+      const projectRoot = resolveProjectRoot(opts.project);
 
       /* `legacy` never comes out of getMcpClientStatuses today (a lingering
          legacy key reports as `stale` with reason `legacy-key`), but the
@@ -188,6 +201,36 @@ clientsCommand
       }
     },
   );
+
+clientsCommand
+  .command('prompts')
+  .description(
+    'Report project-level prompt/hook state (CLAUDE.md trace block, project settings.local.json hook, tweakcc). Read-only.',
+  )
+  .option('--json', 'Output machine-readable JSON')
+  .option('--project <path>', 'Project root to inspect (default: auto-detect from cwd)')
+  .action((opts: { json?: boolean; project?: string }) => {
+    const prompts = getProjectPromptsStatus(resolveProjectRoot(opts.project));
+
+    if (opts.json) {
+      console.log(JSON.stringify(prompts, null, 2));
+      return;
+    }
+
+    printPromptsReport(prompts);
+  });
+
+function printPromptsReport(p: ProjectPromptsStatus): void {
+  console.log(`Project prompts (${p.projectRoot})\n`);
+  const block = (exists: boolean, hasBlock: boolean) =>
+    !exists ? '[absent]' : hasBlock ? '[ok]    ' : '[plain] ';
+  console.log(`  CLAUDE.md  ${block(p.claudeMdExists, p.claudeMdHasTraceBlock)}  trace block`);
+  console.log(`  AGENTS.md  ${block(p.agentsMdExists, p.agentsMdHasTraceBlock)}  trace block`);
+  console.log(
+    `  hook       ${p.projectHook === 'active' ? '[ok]    ' : '[missing]'}  ${p.projectHookPath ?? 'no settings.local.json'}`,
+  );
+  console.log(`  tweakcc    ${p.tweakccPrompts ? '[ok]    ' : '[absent]'}  system prompts`);
+}
 
 function printDisconnectReport(targets: string[], steps: InitStepResult[]): void {
   if (targets.length === 0) {

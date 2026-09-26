@@ -11,6 +11,7 @@ import type { McpClientStatus } from '../../src/init/mcp-client.js';
 vi.mock('../../src/init/mcp-client.js', () => ({
   getMcpClientStatuses: vi.fn(),
   configureMcpClients: vi.fn(() => []),
+  getProjectPromptsStatus: vi.fn(),
   MCP_CLIENT_PICKUP: { cursor: 'restart-app', cline: 'hot-reload' },
 }));
 
@@ -19,11 +20,14 @@ vi.mock('../../src/project-root.js', () => ({
 }));
 
 const { clientsCommand } = await import('../../src/cli/clients.js');
-const { configureMcpClients, getMcpClientStatuses } = await import('../../src/init/mcp-client.js');
+const { configureMcpClients, getMcpClientStatuses, getProjectPromptsStatus } = await import(
+  '../../src/init/mcp-client.js'
+);
 const { findProjectRoot } = await import('../../src/project-root.js');
 
 const mockGetMcpClientStatuses = vi.mocked(getMcpClientStatuses);
 const mockConfigureMcpClients = vi.mocked(configureMcpClients);
+const mockGetProjectPromptsStatus = vi.mocked(getProjectPromptsStatus);
 const mockFindProjectRoot = vi.mocked(findProjectRoot);
 
 async function run(args: string[]): Promise<void> {
@@ -40,6 +44,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFindProjectRoot.mockReturnValue('/proj/current');
   mockConfigureMcpClients.mockReturnValue([]);
+  mockGetProjectPromptsStatus.mockReturnValue({
+    projectRoot: '/proj/current',
+    claudeMdExists: true,
+    claudeMdHasTraceBlock: true,
+    agentsMdExists: false,
+    agentsMdHasTraceBlock: false,
+    projectHook: 'missing',
+    projectHookPath: null,
+    tweakccPrompts: false,
+  });
   process.exitCode = undefined;
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
@@ -208,6 +222,18 @@ describe('clients update', () => {
     });
   });
 
+  /* TRA-1933: per-file Update from the app names the project root explicitly
+     (see the status --project test above for why the cwd cannot be trusted). */
+  it('passes an explicit --project root through to the writer', async () => {
+    await run(['update', 'cursor', '--scope', 'project', '--project', '/proj/other']);
+
+    expect(mockFindProjectRoot).not.toHaveBeenCalled();
+    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['cursor'], '/proj/other', {
+      scope: 'project',
+      dryRun: undefined,
+    });
+  });
+
   it('exits non-zero when a write failed', async () => {
     mockConfigureMcpClients.mockReturnValue([
       { target: '/home/.cursor/mcp.json', action: 'skipped', detail: 'Error: EACCES' },
@@ -306,5 +332,50 @@ describe('clients status --json', () => {
     expect(parsed.projectRoot).toBe('/proj/current');
     expect(parsed.statuses).toHaveLength(5);
     expect(parsed.statuses[0]).toEqual(SAMPLE_STATUSES[0]);
+  });
+
+  /* TRA-1933: the desktop app shells out from inside its bundle, whose cwd is
+     never the project on screen — an explicit `--project` must win over the
+     cwd auto-detect, and the app must not depend on markers existing there. */
+  it('prefers --project over the cwd auto-detect', async () => {
+    mockGetMcpClientStatuses.mockReturnValue(SAMPLE_STATUSES);
+
+    await run(['status', '--json', '--project', '/proj/other']);
+
+    expect(mockFindProjectRoot).not.toHaveBeenCalled();
+    expect(mockGetMcpClientStatuses).toHaveBeenCalledWith('/proj/other', 'global', undefined);
+    expect(JSON.parse(printed()).projectRoot).toBe('/proj/other');
+  });
+});
+
+describe('clients prompts', () => {
+  it('emits the project probe as JSON', async () => {
+    await run(['prompts', '--json', '--project', '/proj/other']);
+
+    expect(mockGetProjectPromptsStatus).toHaveBeenCalledWith('/proj/other');
+    const parsed = JSON.parse(printed());
+    expect(parsed).toMatchObject({
+      projectRoot: '/proj/current',
+      claudeMdExists: true,
+      claudeMdHasTraceBlock: true,
+      projectHook: 'missing',
+      tweakccPrompts: false,
+    });
+  });
+
+  it('auto-detects the project root when --project is omitted', async () => {
+    await run(['prompts', '--json']);
+
+    expect(mockGetProjectPromptsStatus).toHaveBeenCalledWith('/proj/current');
+  });
+
+  it('prints one line per prompt surface for humans', async () => {
+    await run(['prompts', '--project', '/proj/other']);
+
+    const out = printed();
+    expect(out).toContain('CLAUDE.md');
+    expect(out).toContain('AGENTS.md');
+    expect(out).toContain('hook');
+    expect(out).toContain('tweakcc');
   });
 });

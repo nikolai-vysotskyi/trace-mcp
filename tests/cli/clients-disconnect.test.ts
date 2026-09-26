@@ -105,6 +105,18 @@ describe('clients disconnect', () => {
     });
   });
 
+  /* TRA-1933: per-file Disconnect from the app names the project root
+     explicitly — the bundled cwd is never the project on screen. */
+  it('passes an explicit --project root through to the remover', async () => {
+    await run(['disconnect', 'cursor', '--scope', 'project', '--project', '/proj/other']);
+
+    expect(mockFindProjectRoot).not.toHaveBeenCalled();
+    expect(mockRemoveMcpClients).toHaveBeenCalledWith(['cursor'], '/proj/other', {
+      scope: 'project',
+      dryRun: undefined,
+    });
+  });
+
   it('stays zero on already_absent — the idempotent second run', async () => {
     mockRemoveMcpClients.mockReturnValue([
       { target: '/home/.cursor/mcp.json', action: 'already_absent', detail: 'cursor (global)' },

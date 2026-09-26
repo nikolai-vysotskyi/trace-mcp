@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('guess-first-project'),
   getMcpClientStatuses: (
     scope?: 'global' | 'project',
+    projectRoot?: string,
   ): Promise<{
     ok: boolean;
     error?: string;
@@ -61,7 +62,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
       /** TRA-1647 pickup code from `clients status --json`; absent on older CLIs. */
       pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
-  }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
+  }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global', projectRoot),
+  /** TRA-1933 Phase B: project prompt/hook probe. Read-only (`clients prompts`). */
+  getProjectPrompts: (projectRoot: string): Promise<{
+    ok: boolean;
+    error?: string;
+    prompts?: {
+      projectRoot: string;
+      claudeMdExists: boolean;
+      claudeMdHasTraceBlock: boolean;
+      agentsMdExists: boolean;
+      agentsMdHasTraceBlock: boolean;
+      projectHook: 'active' | 'missing';
+      projectHookPath: string | null;
+      tweakccPrompts: boolean;
+    };
+  }> => ipcRenderer.invoke('get-project-prompts', projectRoot),
+  /** TRA-1933 Phase C: Multica agents + trace wiring. Read-only, local CLI only. */
+  getMulticaAgents: (): Promise<{
+    ok: boolean;
+    available: boolean;
+    error?: string;
+    agents?: Array<{
+      id: string;
+      name: string;
+      status: string;
+      traceAssigned: boolean | null;
+      traceEnabled: boolean | null;
+      customConfig: 'none' | 'hidden' | 'present';
+      preset: string | null;
+    }>;
+  }> => ipcRenderer.invoke('get-multica-agents'),
   /** TRA-1698: install the PreToolUse redirect (guard hook) without a terminal. */
   installRedirectHook: (): Promise<{ ok: boolean; error?: string; verified?: boolean }> =>
     ipcRenderer.invoke('install-redirect-hook'),
@@ -71,11 +102,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('configure-mcp-client', clientName, level),
   /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
-  updateMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('update-mcp-clients', clientNames),
+  updateMcpClients: (
+    clientNames: string[],
+    scope?: 'global' | 'project',
+    projectRoot?: string,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('update-mcp-clients', clientNames, scope ?? 'global', projectRoot),
   /** TRA-1932: remove the trace-mcp entry. Hooks and shared settings stay untouched. */
-  disconnectMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('disconnect-mcp-clients', clientNames),
+  disconnectMcpClients: (
+    clientNames: string[],
+    scope?: 'global' | 'project',
+    projectRoot?: string,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('disconnect-mcp-clients', clientNames, scope ?? 'global', projectRoot),
   openProjectTab: (root: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-project-tab', root),
   onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => {
