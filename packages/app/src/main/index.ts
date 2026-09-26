@@ -12,6 +12,7 @@ import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './
 import { updateChannelFor } from './update-channel';
 import { detectMcpClients } from '../shared/mcp-detector';
 import { guessFirstProject } from '../shared/project-guess';
+import { getMulticaAgentWirings } from './multica-agents';
 
 // One update mechanism, or none — see update-channel.ts. Every update code path
 // below branches on this constant and nothing else.
@@ -366,7 +367,14 @@ ipcMain.handle('guess-first-project', async () => {
 // The app cannot tell a not-yet-migrated entry from a correct one without
 // knowing which key init writes in the version installed on this machine, and
 // a Migrate button whose click cannot clear the badge is worse than no badge.
-ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global') => {
+//
+// TRA-1933: `projectRoot` names the project the user is looking at. The CLI
+// used to derive it from its own cwd — inside the packaged bundle that is
+// never the project — so the renderer passes it explicitly and the CLI's
+// `--project` wins over the cwd auto-detect.
+ipcMain.handle(
+  'get-mcp-client-statuses',
+  async (_event, scope: string = 'global', projectRoot?: string) => {
   return new Promise<{
     ok: boolean;
     error?: string;
@@ -382,8 +390,18 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
       pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
     }>;
   }>((resolve) => {
+    const args = [
+      'clients',
+      'status',
+      '--json',
+      '--scope',
+      scope === 'project' ? 'project' : 'global',
+    ];
+    // Older CLIs predate `--project` (TRA-1933): passing it there would fail
+    // the probe, so it only goes out when the renderer named a root.
+    if (projectRoot) args.push('--project', projectRoot);
     execCli(
-      ['clients', 'status', '--json', '--scope', scope === 'project' ? 'project' : 'global'],
+      args,
       { timeout: 15_000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
         if (error) {
@@ -469,21 +487,38 @@ ipcMain.handle(
 // (`--skip-hooks` writes agent_behavior "off"; omitting it installs hooks and
 // tweakcc). `clients update` writes the entry and nothing else, which is what
 // the button says it does.
-ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
-  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-    execCli(
-      ['clients', 'update', ...clientNames, '--json'],
-      { timeout: 60_000, maxBuffer: 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
-          return;
-        }
-        resolve({ ok: true });
-      },
-    );
-  });
-});
+// TRA-1933: per-file Update/Disconnect from the Clients screen name the scope
+// and project root explicitly. Both default to the pre-TRA-1933 behaviour
+// (global, cwd-derived root), so older renderers keep working unchanged.
+function scopedClientArgs(
+  verb: 'update' | 'disconnect',
+  clientNames: string[],
+  scope: string = 'global',
+  projectRoot?: string,
+): string[] {
+  const args = ['clients', verb, ...clientNames, '--json', '--scope', scope === 'project' ? 'project' : 'global'];
+  if (projectRoot) args.push('--project', projectRoot);
+  return args;
+}
+
+ipcMain.handle(
+  'update-mcp-clients',
+  async (_event, clientNames: string[], scope: string = 'global', projectRoot?: string) => {
+    return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      execCli(
+        scopedClientArgs('update', clientNames, scope, projectRoot),
+        { timeout: 60_000, maxBuffer: 1024 * 1024 },
+        (error, stdout, stderr) => {
+          if (error) {
+            resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+            return;
+          }
+          resolve({ ok: true });
+        },
+      );
+    });
+  },
+);
 
 // IPC: remove the trace-mcp entry from one or more client configs (TRA-1932).
 //
@@ -491,20 +526,68 @@ ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
 // and CLAUDE.md are shared across the Claude family — disconnecting Cursor
 // must not rip the redirect out from under Claude Code — so `clients
 // disconnect` never touches them, and neither does this handler.
-ipcMain.handle('disconnect-mcp-clients', async (_event, clientNames: string[]) => {
-  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+ipcMain.handle(
+  'disconnect-mcp-clients',
+  async (_event, clientNames: string[], scope: string = 'global', projectRoot?: string) => {
+    return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      execCli(
+        scopedClientArgs('disconnect', clientNames, scope, projectRoot),
+        { timeout: 60_000, maxBuffer: 1024 * 1024 },
+        (error, stdout, stderr) => {
+          if (error) {
+            resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+            return;
+          }
+          resolve({ ok: true });
+        },
+      );
+    });
+  },
+);
+
+// IPC: project-level prompt/hook state for the Clients screen (TRA-1933
+// Phase B). Read-only: `clients prompts` never writes — the renderer shows
+// the CLAUDE.md block, the project settings.local.json hook and tweakcc next
+// to the per-file rows, and every fix routes through the existing actions.
+ipcMain.handle('get-project-prompts', async (_event, projectRoot: string) => {
+  return new Promise<{
+    ok: boolean;
+    error?: string;
+    prompts?: {
+      projectRoot: string;
+      claudeMdExists: boolean;
+      claudeMdHasTraceBlock: boolean;
+      agentsMdExists: boolean;
+      agentsMdHasTraceBlock: boolean;
+      projectHook: 'active' | 'missing';
+      projectHookPath: string | null;
+      tweakccPrompts: boolean;
+    };
+  }>((resolve) => {
     execCli(
-      ['clients', 'disconnect', ...clientNames, '--json'],
-      { timeout: 60_000, maxBuffer: 1024 * 1024 },
-      (error, stdout, stderr) => {
+      ['clients', 'prompts', '--json', '--project', projectRoot],
+      { timeout: 15_000, maxBuffer: 1024 * 1024 },
+      (error, stdout) => {
         if (error) {
-          resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+          resolve({ ok: false, error: error.message });
           return;
         }
-        resolve({ ok: true });
+        try {
+          resolve({ ok: true, prompts: JSON.parse(stdout) });
+        } catch (e) {
+          resolve({ ok: false, error: `Failed to parse CLI output: ${(e as Error).message}` });
+        }
       },
     );
   });
+});
+
+// IPC: Multica workspace agents and their trace-mcp wiring (TRA-1933 Phase C,
+// read-only first increment). Only the local `multica` CLI — no hosted
+// backend by architecture. Management (writing mcp_config from the app) is a
+// follow-up, not this handler.
+ipcMain.handle('get-multica-agents', async () => {
+  return getMulticaAgentWirings();
 });
 
 // IPC: install the PreToolUse redirect (guard hook) in one click (TRA-1698).

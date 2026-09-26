@@ -53,6 +53,7 @@ import {
   Menu,
   MenuItem,
   MenuSection,
+  PopUpButton,
   StatusDot,
   Toolbar,
   useMenuAnchor,
@@ -187,8 +188,49 @@ interface RichClientStatus {
   configExists?: boolean;
 }
 
+/**
+ * TRA-1933 Phase A: one file entry inside an expanded row. The main row stays
+ * the global file (unchanged); the disclosure below it carries the project
+ * file with its own status and actions — never a second full row, which would
+ * double the list.
+ */
+interface ProjectFileEntry {
+  status: ClientConfigStatus;
+  configPath: string | null;
+  configExists?: boolean;
+  staleReason?: string;
+  pickup?: ClientPickup | null;
+}
+
+/** TRA-1933 Phase B: `clients prompts --json` for the selected project. */
+interface ProjectPrompts {
+  projectRoot: string;
+  claudeMdExists: boolean;
+  claudeMdHasTraceBlock: boolean;
+  agentsMdExists: boolean;
+  agentsMdHasTraceBlock: boolean;
+  projectHook: 'active' | 'missing';
+  projectHookPath: string | null;
+  tweakccPrompts: boolean;
+}
+
+/** TRA-1933 Phase C: one Multica agent's trace wiring (read-only). */
+interface MulticaAgent {
+  id: string;
+  name: string;
+  /* The agent's running/idle state is intentionally not carried: nothing on
+     this screen uses it (TRA-1974), and dead fields rot. */
+  traceAssigned: boolean | null;
+  traceEnabled: boolean | null;
+  customConfig: 'none' | 'hidden' | 'present';
+  preset: string | null;
+}
+
 // ── Enforcement levels ────────────────────────────────────────────
 type EnforcementLevel = 'base' | 'standard' | 'max';
+
+/** TRA-1933: per-file actions address a scope, not just a client. */
+type FileScope = 'global' | 'project';
 
 const LEVELS: { value: EnforcementLevel; labelKey: string; hintKey: string }[] = [
   { value: 'base', labelKey: 'levelBase', hintKey: 'levelBaseHint' },
@@ -261,6 +303,28 @@ function sessionTitle(client: ClientInfo, fallback: string): string {
 
 function shortPath(p: string): string {
   return p.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+}
+
+/**
+ * TRA-1974 fix 1: picker labels must survive duplicate basenames (3×
+ * `trace-mcp` on a real machine). Bare basename when unique, `base · parent`
+ * on first collision, full path when even that collides. `PopUpButton` is a
+ * native select with no secondary text, so the label carries it all.
+ */
+function projectPickerLabel(root: string, roots: string[]): string {
+  const parts = (r: string) => r.split(/[/\\]/).filter(Boolean);
+  const base = (r: string) => parts(r).pop() ?? r;
+  const mine = base(root);
+  const clashes = roots.filter((r) => r !== root && base(r) === mine);
+  if (clashes.length === 0) return mine;
+  const parent = parts(root).slice(-2, -1)[0] ?? '';
+  const extended = parent ? `${mine} · ${parent}` : mine;
+  const stillClashes = clashes.some((r) => {
+    const rp = parts(r);
+    const rparent = rp.slice(-2, -1)[0] ?? '';
+    return (rparent ? `${base(r)} · ${rparent}` : base(r)) === extended;
+  });
+  return stillClashes ? root : extended;
 }
 
 // ── Section scaffolding (same idiom as Project Overview) ──────────
@@ -400,6 +464,7 @@ function SupportedClientRow({
   configuring,
   redirectBusy,
   last,
+  projectFile,
   onConnect,
   onConnectWithLevel,
   onUpdate,
@@ -452,11 +517,23 @@ function SupportedClientRow({
   /** The one-click redirect install is running (banner button spins, rows wait). */
   redirectBusy: boolean;
   last: boolean;
-  onConnect: () => void;
-  onConnectWithLevel: (level: EnforcementLevel) => void;
-  onUpdate: () => void;
+  /**
+   * TRA-1933 Phase A: the project file entry for the selected project, or
+   * null when no project is selected. The main row stays the global file;
+   * the disclosure below it carries this entry with its own status and
+   * actions at file level (not client level).
+   */
+  projectFile?: {
+    entry: ProjectFileEntry;
+    error?: string;
+    justWritten?: 'write' | 'disconnect' | null;
+    configuring: boolean;
+  } | null;
+  onConnect: (scope: FileScope) => void;
+  onConnectWithLevel: (level: EnforcementLevel, scope: FileScope) => void;
+  onUpdate: (scope: FileScope) => void;
   /** TRA-1932: remove the trace-mcp entry (hooks and shared settings stay). */
-  onDisconnect: () => void;
+  onDisconnect: (scope: FileScope) => void;
   /** TRA-1698: install the PreToolUse redirect without a terminal. */
   onEnableRedirect: () => void;
 }) {
@@ -465,16 +542,30 @@ function SupportedClientRow({
   const hasLevels = CLAUDE_CLIENTS.has(name);
   const levelMenu = useMenuAnchor();
   const [showSteps, setShowSteps] = useState(false);
+  /* TRA-1933: the project file disclosure. Closed by default — the global
+     row is the common case and the list must not double in height. */
+  const [filesOpen, setFilesOpen] = useState(false);
   /* TRA-1932: where the disconnect confirm popover anchors. Set from the
-     Disconnect button's click point; cleared on either choice. */
-  const [confirmDisconnectAt, setConfirmDisconnectAt] = useState<{ x: number; y: number } | null>(
-    null,
-  );
-  const askDisconnect = (e: React.MouseEvent) => {
-    setConfirmDisconnectAt({ x: e.clientX, y: e.clientY });
+     Disconnect button's click point; cleared on either choice. The scope
+     travels with it so a project-file Disconnect confirms the right file. */
+  const [confirmDisconnectAt, setConfirmDisconnectAt] = useState<{
+    x: number;
+    y: number;
+    scope: FileScope;
+  } | null>(null);
+  const askDisconnect = (scope: FileScope) => (e: React.MouseEvent) => {
+    setConfirmDisconnectAt({ x: e.clientX, y: e.clientY, scope });
   };
 
   const connected = status === 'up_to_date';
+  /* TRA-1974 fix 2: no disclosure when both scopes are empty. It would open
+     onto the global-only note, which is wrong there (no config anywhere, not
+     "global only") — and at 14+ empty chevrons the list is all noise.
+     "Globally configured, project missing" keeps its chevron: the project
+     Connect there is the valuable action. */
+  const EMPTY_SCOPE: ReadonlySet<ClientConfigStatus> = new Set(['missing', 'unmanageable']);
+  const showDisclosure =
+    projectFile != null && !(EMPTY_SCOPE.has(status) && EMPTY_SCOPE.has(projectFile.entry.status));
   /* Presence-only detection (Codex TOML): the entry is there, drift cannot be
      compared. It gets its own word, not "Connected" borrowed from a row we
      actually verified. */
@@ -485,7 +576,7 @@ function SupportedClientRow({
      answer already in the file with a fresh guess. */
   const handleConnect = () => {
     if (hasLevels) levelMenu.open();
-    else onConnect();
+    else onConnect('global');
   };
 
   /* One caption slot, and only when there is something to say. A failed write
@@ -538,6 +629,11 @@ function SupportedClientRow({
 
   return (
     <div
+      style={{
+        borderBottom: last && !filesOpen ? 'none' : '0.5px solid var(--separator)',
+      }}
+    >
+    <div
       className="flex items-center gap-2.5 px-3"
       style={{
         /* 44 bare, 48 with a caption — both on the 4pt grid. Padding used to
@@ -546,9 +642,22 @@ function SupportedClientRow({
            row carries a caption. TRA-1698: a hook second line counts as a
            caption for the same reason. */
         minHeight: caption || showEnableRedirect || showHookActive ? 48 : 44,
-        borderBottom: last ? 'none' : '0.5px solid var(--separator)',
       }}
     >
+      {/* TRA-1933: per-file disclosure. Absent entirely when no project is
+          selected, so the global-only view keeps today's exact layout. */}
+      {showDisclosure && (
+        <Button
+          variant="icon"
+          icon="chevron_right"
+          iconSize={14}
+          aria-label={filesOpen ? t('filesToggleHide') : t('filesToggleShow')}
+          title={filesOpen ? t('filesToggleHide') : t('filesToggleShow')}
+          aria-expanded={filesOpen}
+          style={filesOpen ? { transform: 'rotate(90deg)' } : undefined}
+          onClick={() => setFilesOpen((v) => !v)}
+        />
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-[13px] leading-4 truncate" style={{ color: 'var(--label)' }}>
           {label}
@@ -623,7 +732,7 @@ function SupportedClientRow({
           <Button
             size="small"
             disabled={configuring}
-            onClick={askDisconnect}
+            onClick={askDisconnect('global')}
             title={t('disconnectBody')}
           >
             {configuring ? t('disconnecting') : t('disconnect')}
@@ -635,10 +744,10 @@ function SupportedClientRow({
            binary. The verb says it, and the tooltip says why; the row used to
            say it a second time in a blue badge beside the same button. */
         <span className="flex items-center gap-1.5 shrink-0">
-          <Button disabled={configuring} onClick={onUpdate} title={t('legacyHint')}>
+          <Button disabled={configuring} onClick={() => onUpdate('global')} title={t('legacyHint')}>
             {configuring ? t('migrating') : t('migrate')}
           </Button>
-          <Button size="small" disabled={configuring} onClick={askDisconnect}>
+          <Button size="small" disabled={configuring} onClick={askDisconnect('global')}>
             {t('disconnect')}
           </Button>
         </span>
@@ -646,12 +755,12 @@ function SupportedClientRow({
         <span className="flex items-center gap-1.5 shrink-0">
           <Button
             disabled={configuring}
-            onClick={onUpdate}
+            onClick={() => onUpdate('global')}
             title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
           >
             {configuring ? t('updating') : t('update')}
           </Button>
-          <Button size="small" disabled={configuring} onClick={askDisconnect}>
+          <Button size="small" disabled={configuring} onClick={askDisconnect('global')}>
             {t('disconnect')}
           </Button>
         </span>
@@ -698,7 +807,7 @@ function SupportedClientRow({
               title={t(l.hintKey)}
               onClick={() => {
                 levelMenu.close();
-                onConnectWithLevel(l.value);
+                onConnectWithLevel(l.value, 'global');
               }}
             >
               {t(l.labelKey)}
@@ -720,12 +829,251 @@ function SupportedClientRow({
           body={t('disconnectBody')}
           confirmLabel={t('disconnectConfirm')}
           onConfirm={() => {
+            const scope = confirmDisconnectAt.scope;
             setConfirmDisconnectAt(null);
-            onDisconnect();
+            onDisconnect(scope);
           }}
           onCancel={() => setConfirmDisconnectAt(null)}
         />
       )}
+    </div>
+    {/* TRA-1933: the project file entry. Global actions live on the row
+        above; this disclosure carries the project file with its own status
+        and file-level actions — or the global-only note when the client has
+        no project layer (same config path in both scopes). */}
+    {showDisclosure && filesOpen && (
+      <ProjectFileSubRow
+        entry={projectFile.entry}
+        sameAsGlobal={projectFile.entry.configPath === configPath}
+        error={projectFile.error}
+        justWritten={projectFile.justWritten ?? null}
+        configuring={projectFile.configuring}
+        clientLabel={label}
+        onConnect={() => onConnect('project')}
+        onUpdate={() => onUpdate('project')}
+        onDisconnect={askDisconnect('project')}
+      />
+    )}
+    </div>
+  );
+}
+
+/**
+ * TRA-1933 Phase A: one project file inside an expanded client row.
+ *
+ * A compact second line under the global row — scope word, path, the file's
+ * own status and its own file-level actions. It mirrors the main row's verbs
+ * (Connect / Update / Migrate / Disconnect) but never the level menu: a
+ * project entry is created through `clients update`, which does not ask for
+ * an enforcement level, so there is nothing to choose here.
+ */
+function ProjectFileSubRow({
+  entry,
+  sameAsGlobal,
+  error,
+  justWritten,
+  configuring,
+  clientLabel,
+  onConnect,
+  onUpdate,
+  onDisconnect,
+}: {
+  entry: ProjectFileEntry;
+  /** Same path in both scopes — the client has no project layer. */
+  sameAsGlobal: boolean;
+  error?: string;
+  justWritten?: 'write' | 'disconnect' | null;
+  configuring: boolean;
+  clientLabel: string;
+  onConnect: () => void;
+  onUpdate: () => void;
+  onDisconnect: (e: React.MouseEvent) => void;
+}) {
+  const { t } = useTranslation('clients');
+  const restartHint = justWritten
+    ? justWritten === 'disconnect'
+      ? disconnectPickupSentence(t, entry.pickup, clientLabel)
+      : pickupSentence(t, entry.pickup, clientLabel)
+    : null;
+  const caption = error ?? restartHint ?? (entry.configPath ? shortPath(entry.configPath) : null);
+
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3"
+      style={{ minHeight: 44, paddingLeft: 38 }}
+    >
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-[12px] leading-4 truncate"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {t('scopeProject')}
+          {sameAsGlobal ? ` · ${t('globalOnlyNote')}` : caption ? ` · ${caption}` : ''}
+        </div>
+        {error && (
+          <div
+            className="flex items-center gap-1 text-[11px] leading-[13px] min-w-0"
+            style={{ color: 'var(--status-red)' }}
+          >
+            <Icon name="warning" size={12} className="shrink-0" />
+            <span className="truncate">{error}</span>
+          </div>
+        )}
+      </div>
+
+      {!sameAsGlobal &&
+        (entry.status === 'up_to_date' ? (
+          <span className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="flex items-center gap-1.5 text-[13px] leading-4"
+              style={{ color: 'var(--label-secondary)' }}
+            >
+              <StatusDot tone="green" />
+              {t('connected')}
+            </span>
+            <Button size="small" disabled={configuring} onClick={onDisconnect}>
+              {configuring ? t('disconnecting') : t('disconnect')}
+            </Button>
+          </span>
+        ) : entry.status === 'unknown' ? (
+          <span className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="flex items-center gap-1.5 text-[13px] leading-4"
+              style={{ color: 'var(--label-secondary)' }}
+            >
+              <StatusDot tone="neutral" />
+              {t('configured')}
+            </span>
+            <Button size="small" disabled={configuring} onClick={onDisconnect}>
+              {configuring ? t('disconnecting') : t('disconnect')}
+            </Button>
+          </span>
+        ) : entry.status === 'stale' ? (
+          <span className="flex items-center gap-1.5 shrink-0">
+            <Button
+              size="small"
+              disabled={configuring}
+              onClick={onUpdate}
+              title={entry.staleReason ? t('driftedField', { field: entry.staleReason }) : undefined}
+            >
+              {configuring ? t('updating') : t('update')}
+            </Button>
+            <Button size="small" disabled={configuring} onClick={onDisconnect}>
+              {t('disconnect')}
+            </Button>
+          </span>
+        ) : entry.status === 'legacy' ? (
+          <span className="flex items-center gap-1.5 shrink-0">
+            <Button size="small" disabled={configuring} onClick={onUpdate} title={t('legacyHint')}>
+              {configuring ? t('migrating') : t('migrate')}
+            </Button>
+            <Button size="small" disabled={configuring} onClick={onDisconnect}>
+              {t('disconnect')}
+            </Button>
+          </span>
+        ) : entry.status === 'missing' ? (
+          <Button size="small" disabled={configuring} onClick={onConnect}>
+            {configuring ? t('connecting') : t('connect')}
+          </Button>
+        ) : null)}
+    </div>
+  );
+}
+
+// ── TRA-1933 Phase B/C rows ───────────────────────────────────────────
+
+/** One read-only fact row (project prompts card, multica fallbacks). */
+function PromptRow({
+  label,
+  value,
+  detail,
+  last,
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+  last: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3"
+      style={{
+        minHeight: 40,
+        borderBottom: last ? 'none' : '0.5px solid var(--separator)',
+      }}
+    >
+      <div
+        className="flex-1 min-w-0 text-[13px] leading-4 truncate"
+        style={{ color: 'var(--label)' }}
+      >
+        {label}
+      </div>
+      <span
+        className="text-[12px] leading-4 truncate shrink-0"
+        style={{ color: 'var(--label-secondary)' }}
+        title={detail ?? value}
+      >
+        {value}
+        {detail ? ` · ${detail}` : null}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * TRA-1933 Phase C: one Multica agent's trace wiring. The wiring word is
+ * reported as-is — unknown is never guessed — and the note names the preset
+ * only when the raw config was actually readable (owner reads); a redacted
+ * custom config says exactly that instead of pretending.
+ */
+function MulticaAgentRow({ agent, last }: { agent: MulticaAgent; last: boolean }) {
+  const { t } = useTranslation('clients');
+  const wiring =
+    agent.traceEnabled === true
+      ? { tone: 'green' as const, word: t('multicaTraceEnabled') }
+      : agent.traceAssigned === false
+        ? { tone: 'neutral' as const, word: t('multicaTraceAbsent') }
+        : agent.traceEnabled === false
+          ? { tone: 'orange' as const, word: t('multicaTraceDisabled') }
+          : { tone: 'neutral' as const, word: t('multicaTraceUnknown') };
+  const note = agent.preset
+    ? t('multicaPreset', { preset: agent.preset })
+    : agent.customConfig === 'hidden'
+      ? t('multicaCustomHidden')
+      : agent.customConfig === 'none'
+        ? t('multicaInherited')
+        : null;
+
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3"
+      style={{
+        minHeight: note ? 48 : 44,
+        borderBottom: last ? 'none' : '0.5px solid var(--separator)',
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] leading-4 truncate" style={{ color: 'var(--label)' }}>
+          {agent.name}
+        </div>
+        {note && (
+          <div
+            className="text-[11px] leading-[13px] truncate"
+            style={{ color: 'var(--label-secondary)' }}
+            title={note}
+          >
+            {note}
+          </div>
+        )}
+      </div>
+      <span
+        className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
+        style={{ color: 'var(--label-secondary)' }}
+        title={note ?? wiring.word}
+      >
+        <StatusDot tone={wiring.tone} />
+        {wiring.word}
+      </span>
     </div>
   );
 }
@@ -821,10 +1169,28 @@ function ClaudeBlockedSheet({
 // ── Surface ───────────────────────────────────────────────────────
 export function Clients() {
   const { t } = useTranslation('clients');
-  const { clients, loading, connected, restarting, restartDaemon, fetchClients } = useDaemon();
+  const { clients, loading, connected, restarting, restartDaemon, fetchClients, projects } =
+    useDaemon();
   const [detected, setDetected] = useState<DetectedClient[]>([]);
   const [statuses, setStatuses] = useState<RichClientStatus[]>([]);
   const [detecting, setDetecting] = useState(true);
+  /**
+   * TRA-1933 Phase A: the project whose files the rows disclose. '' is
+   * today's view (global only). Roots come from the daemon's registered
+   * projects — the same list the Workspace owns — because the CLI can no
+   * longer be trusted to guess the project from its bundled cwd.
+   */
+  const [selectedProject, setSelectedProject] = useState('');
+  const projectRoots = (projects ?? []).map((p) => p.root).filter(Boolean);
+  const [projectStatuses, setProjectStatuses] = useState<RichClientStatus[]>([]);
+  /** TRA-1933 Phase B: read-only prompt probe for the selected project. */
+  const [prompts, setPrompts] = useState<ProjectPrompts | null>(null);
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const [promptsError, setPromptsError] = useState<string | null>(null);
+  /** TRA-1933 Phase C: Multica agents (workspace-wide, not per project). */
+  const [multicaAgents, setMulticaAgents] = useState<MulticaAgent[] | null>(null);
+  const [multicaAvailable, setMulticaAvailable] = useState(true);
+  const [multicaLoading, setMulticaLoading] = useState(true);
   const [configuringClient, setConfiguringClient] = useState<string | null>(null);
   /** Client name → what its last write said when it failed. */
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -851,6 +1217,7 @@ export function Clients() {
    */
   const [blockedClient, setBlockedClient] = useState<{
     name: string;
+    scope: FileScope;
     retry: 'update' | 'disconnect';
   } | null>(null);
   const closeBlocked = useCallback(() => setBlockedClient(null), []);
@@ -919,11 +1286,70 @@ export function Clients() {
     } finally {
       setDetecting(false);
     }
-  }, []);
+
+    /* TRA-1933 Phase A/B: the project layer. The root travels explicitly
+       (see the --project note in main/index.ts) — when nothing is selected
+       there is no project layer at all, not a guessed one. */
+    if (selectedProject) {
+      setPromptsLoading(true);
+      setPromptsError(null);
+      try {
+        const proj = await window.electronAPI?.getMcpClientStatuses?.('project', selectedProject);
+        setProjectStatuses(proj?.ok && proj.statuses ? proj.statuses : []);
+      } catch {
+        setProjectStatuses([]);
+      }
+      try {
+        const pr = await window.electronAPI?.getProjectPrompts?.(selectedProject);
+        if (pr?.ok && pr.prompts) setPrompts(pr.prompts);
+        else {
+          setPrompts(null);
+          setPromptsError(pr?.error ?? null);
+        }
+      } catch {
+        setPrompts(null);
+      } finally {
+        setPromptsLoading(false);
+      }
+    } else {
+      setProjectStatuses([]);
+      setPrompts(null);
+      setPromptsError(null);
+      setPromptsLoading(false);
+    }
+  }, [selectedProject]);
 
   useEffect(() => {
     detectClients();
   }, [detectClients]);
+
+  /* TRA-1933 Phase C: workspace agents are project-independent — one fetch
+     per mount/refresh, never per project selection. */
+  const fetchMulticaAgents = useCallback(async () => {
+    setMulticaLoading(true);
+    try {
+      const res = await window.electronAPI?.getMulticaAgents?.();
+      if (!res) {
+        setMulticaAgents(null);
+        setMulticaAvailable(false);
+      } else if (res.ok && res.agents) {
+        setMulticaAgents(res.agents);
+        setMulticaAvailable(true);
+      } else {
+        setMulticaAgents(null);
+        setMulticaAvailable(res.available);
+      }
+    } catch {
+      setMulticaAgents(null);
+      setMulticaAvailable(false);
+    } finally {
+      setMulticaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMulticaAgents();
+  }, [fetchMulticaAgents]);
 
   /* A write that failed says so on its row until the next attempt clears it.
      Swallowing the result is how a Connect button that could not run for four
@@ -942,15 +1368,34 @@ export function Clients() {
     return result?.ok === true;
   };
 
-  const handleConnect = async (clientName: string, level: EnforcementLevel = 'max') => {
-    setConfiguringClient(clientName);
+  /* TRA-1933: per-file actions address a scope, not just a client. State maps
+     (errors, justWritten, configuring) key on `name` for global and
+     `name:project` for the project file, so the two entries report
+     independently. */
+  const fileKey = (clientName: string, scope: FileScope) =>
+    scope === 'global' ? clientName : `${clientName}:project`;
+
+  const handleConnect = async (
+    clientName: string,
+    scope: FileScope = 'global',
+    level: EnforcementLevel = 'max',
+  ) => {
+    const key = fileKey(clientName, scope);
+    setConfiguringClient(key);
     try {
-      const result = await window.electronAPI?.configureMcpClient(clientName, level);
-      const ok = recordResult(clientName, result);
+      /* Project-scope Connect never re-runs setup: `init` has no scope, and
+         the level was already chosen for the global entry. `clients update`
+         with an explicit name creates the missing project entry through the
+         same writer — one code path for both scopes. */
+      const result =
+        scope === 'project'
+          ? await window.electronAPI?.updateMcpClients?.([clientName], 'project', selectedProject)
+          : await window.electronAPI?.configureMcpClient(clientName, level);
+      const ok = recordResult(key, result);
       if (!ok && isClaudeRunningError(result?.error))
-        setBlockedClient({ name: clientName, retry: 'update' });
+        setBlockedClient({ name: clientName, scope, retry: 'update' });
       if (ok) {
-        markWritten([clientName]);
+        markWritten([key]);
         await detectClients();
       }
     } finally {
@@ -958,15 +1403,19 @@ export function Clients() {
     }
   };
 
-  const handleUpdate = async (clientName: string) => {
-    setConfiguringClient(clientName);
+  const handleUpdate = async (clientName: string, scope: FileScope = 'global') => {
+    const key = fileKey(clientName, scope);
+    setConfiguringClient(key);
     try {
-      const result = await window.electronAPI?.updateMcpClients?.([clientName]);
-      const ok = recordResult(clientName, result);
+      const result =
+        scope === 'project'
+          ? await window.electronAPI?.updateMcpClients?.([clientName], 'project', selectedProject)
+          : await window.electronAPI?.updateMcpClients?.([clientName]);
+      const ok = recordResult(key, result);
       if (!ok && isClaudeRunningError(result?.error))
-        setBlockedClient({ name: clientName, retry: 'update' });
+        setBlockedClient({ name: clientName, scope, retry: 'update' });
       if (ok) {
-        markWritten([clientName]);
+        markWritten([key]);
         await detectClients();
       }
     } finally {
@@ -978,15 +1427,23 @@ export function Clients() {
      on the row (TRA-497); a Claude.app refusal opens the blocked sheet with
      a disconnect retry; success names the unload step in the caption until a
      manual refresh clears it. */
-  const handleDisconnect = async (clientName: string) => {
-    setConfiguringClient(clientName);
+  const handleDisconnect = async (clientName: string, scope: FileScope = 'global') => {
+    const key = fileKey(clientName, scope);
+    setConfiguringClient(key);
     try {
-      const result = await window.electronAPI?.disconnectMcpClients?.([clientName]);
-      const ok = recordResult(clientName, result, t('disconnectFailed'));
+      const result =
+        scope === 'project'
+          ? await window.electronAPI?.disconnectMcpClients?.(
+              [clientName],
+              'project',
+              selectedProject,
+            )
+          : await window.electronAPI?.disconnectMcpClients?.([clientName]);
+      const ok = recordResult(key, result, t('disconnectFailed'));
       if (!ok && isClaudeRunningError(result?.error))
-        setBlockedClient({ name: clientName, retry: 'disconnect' });
+        setBlockedClient({ name: clientName, scope, retry: 'disconnect' });
       if (ok) {
-        markWritten([clientName], 'disconnect');
+        markWritten([key], 'disconnect');
         await detectClients();
       }
     } finally {
@@ -1006,7 +1463,7 @@ export function Clients() {
         const result = await window.electronAPI?.updateMcpClients?.([name]);
         if (recordResult(name, result)) written.push(name);
         if (isClaudeRunningError(result?.error))
-          setBlockedClient({ name, retry: 'update' });
+          setBlockedClient({ name, scope: 'global', retry: 'update' });
       }
       markWritten(written);
     } finally {
@@ -1024,8 +1481,8 @@ export function Clients() {
     const blocked = blockedClient;
     setBlockedClient(null);
     if (!blocked) return;
-    if (blocked.retry === 'disconnect') void handleDisconnect(blocked.name);
-    else void handleUpdate(blocked.name);
+    if (blocked.retry === 'disconnect') void handleDisconnect(blocked.name, blocked.scope);
+    else void handleUpdate(blocked.name, blocked.scope);
   };
 
   /* TRA-1698: install the PreToolUse redirect without a terminal, then
@@ -1062,6 +1519,7 @@ export function Clients() {
     setRedirectError(null);
     detectClients();
     fetchClients();
+    fetchMulticaAgents();
   };
 
   /* The toolbar owns the pane and always renders — a surface that swaps its
@@ -1078,6 +1536,12 @@ export function Clients() {
   const statusMap = new Map<string, RichClientStatus>();
   for (const s of statuses) {
     statusMap.set(s.client, s);
+  }
+  /* TRA-1933 Phase A: the project layer, keyed the same way. Empty when no
+     project is selected — never a guess from the daemon's cwd. */
+  const projectStatusMap = new Map<string, RichClientStatus>();
+  for (const s of projectStatuses) {
+    projectStatusMap.set(s.client, s);
   }
 
   /**
@@ -1188,17 +1652,37 @@ export function Clients() {
           <Section
             title={t('supported')}
             action={
-              bucket.length > 1 && (
-                <Button
-                  size="small"
-                  disabled={bulk !== null || configuringClient !== null}
-                  onClick={() => handleUpdateAll(bucket)}
-                >
-                  {bulk
-                    ? t(bucketProgressKey, { done: bulk.done + 1, total: bulk.total })
-                    : `${bucketLabel} · ${bucket.length}`}
-                </Button>
-              )
+              <span className="flex items-center gap-2">
+                {/* TRA-1933: project picker. The daemon's registered projects —
+                    the only project roots the screen trusts (never the CLI's
+                    bundled cwd). Empty value is today's global-only view. */}
+                {projectRoots.length > 0 && (
+                  <PopUpButton
+                    options={[
+                      { value: '', label: t('scopeGlobalOnly') },
+                      ...projectRoots.map((root) => ({
+                        value: root,
+                        label: projectPickerLabel(root, projectRoots),
+                      })),
+                    ]}
+                    value={selectedProject}
+                    onChange={setSelectedProject}
+                    aria-label={t('projectPickerLabel')}
+                    title={selectedProject || t('projectPickerLabel')}
+                  />
+                )}
+                {bucket.length > 1 && (
+                  <Button
+                    size="small"
+                    disabled={bulk !== null || configuringClient !== null}
+                    onClick={() => handleUpdateAll(bucket)}
+                  >
+                    {bulk
+                      ? t(bucketProgressKey, { done: bulk.done + 1, total: bulk.total })
+                      : `${bucketLabel} · ${bucket.length}`}
+                  </Button>
+                )}
+              </span>
             }
           >
             <Card>
@@ -1207,6 +1691,8 @@ export function Clients() {
               ) : (
                 sortedClients.map((c, i) => {
                   const s = resolveStatus(c.name);
+                  const ps = selectedProject ? projectStatusMap.get(c.name) : undefined;
+                  const pKey = `${c.name}:project`;
                   return (
                     <SupportedClientRow
                       key={c.name}
@@ -1225,10 +1711,26 @@ export function Clients() {
                       }
                       redirectBusy={redirectBusy}
                       last={i === sortedClients.length - 1}
-                      onConnect={() => handleConnect(c.name)}
-                      onConnectWithLevel={(level) => handleConnect(c.name, level)}
-                      onUpdate={() => handleUpdate(c.name)}
-                      onDisconnect={() => handleDisconnect(c.name)}
+                      projectFile={
+                        ps
+                          ? {
+                              entry: {
+                                status: ps.status,
+                                configPath: ps.configPath,
+                                configExists: ps.configExists,
+                                staleReason: ps.staleReason,
+                                pickup: ps.pickup,
+                              },
+                              error: errors[pKey],
+                              justWritten: justWritten[pKey] ?? null,
+                              configuring: configuringClient === pKey,
+                            }
+                          : null
+                      }
+                      onConnect={(scope) => handleConnect(c.name, scope)}
+                      onConnectWithLevel={(level, scope) => handleConnect(c.name, scope, level)}
+                      onUpdate={(scope) => handleUpdate(c.name, scope)}
+                      onDisconnect={(scope) => handleDisconnect(c.name, scope)}
                       onEnableRedirect={handleEnableRedirect}
                       shimPath={shimPath}
                     />
@@ -1276,6 +1778,96 @@ export function Clients() {
             )}
           </Section>
 
+          {/* TRA-1933 Phase B: read-only project card. Only when a project is
+              selected — without one there is nothing project-scoped to say.
+              Every fix routes through existing actions (re-run init, the
+              redirect button above); this section writes nothing. */}
+          {selectedProject !== '' && (
+            <Section title={t('projectPrompts')}>
+              <Card>
+                {promptsLoading && !prompts ? (
+                  <SkeletonRows rows={4} label={t('detecting')} />
+                ) : prompts ? (
+                  <>
+                    <PromptRow
+                      label="CLAUDE.md"
+                      value={
+                        !prompts.claudeMdExists
+                          ? t('valueAbsent')
+                          : prompts.claudeMdHasTraceBlock
+                            ? t('valueBlockPresent')
+                            : t('valueBlockPlain')
+                      }
+                      last={false}
+                    />
+                    <PromptRow
+                      label="AGENTS.md"
+                      value={
+                        !prompts.agentsMdExists
+                          ? t('valueAbsent')
+                          : prompts.agentsMdHasTraceBlock
+                            ? t('valueBlockPresent')
+                            : t('valueBlockPlain')
+                      }
+                      last={false}
+                    />
+                    <PromptRow
+                      label={t('promptsHook')}
+                      value={
+                        prompts.projectHook === 'active' ? t('valueActive') : t('valueMissing')
+                      }
+                      detail={prompts.projectHookPath ? shortPath(prompts.projectHookPath) : null}
+                      last={false}
+                    />
+                    <PromptRow
+                      label={t('promptsTweakcc')}
+                      value={prompts.tweakccPrompts ? t('valueOn') : t('valueOff')}
+                      last
+                    />
+                  </>
+                ) : (
+                  <PromptRow
+                    label={t('projectPrompts')}
+                    value={promptsError ?? t('valueMissing')}
+                    last
+                  />
+                )}
+              </Card>
+            </Section>
+          )}
+
+          {/* TRA-1933 Phase C: Multica workspace agents, read-only. Wiring
+              comes from the local `multica` CLI only (no hosted backend);
+              management stays in that CLI — the section notes it and writes
+              nothing. */}
+          <Section title={t('multicaAgents')} count={multicaAgents?.length}>
+            <Card>
+              {multicaLoading && !multicaAgents ? (
+                <SkeletonRows rows={3} label={t('detecting')} />
+              ) : !multicaAvailable ? (
+                <PromptRow label={t('multicaAgents')} value={t('multicaUnavailable')} last />
+              ) : !multicaAgents || multicaAgents.length === 0 ? (
+                <PromptRow label={t('multicaAgents')} value={t('multicaNoAgents')} last />
+              ) : (
+                multicaAgents.map((a, i) => (
+                  <MulticaAgentRow
+                    key={a.id}
+                    agent={a}
+                    last={i === multicaAgents.length - 1}
+                  />
+                ))
+              )}
+            </Card>
+            {multicaAvailable && multicaAgents && multicaAgents.length > 0 && (
+              <div
+                className="px-3 py-1 text-[11px] leading-[13px]"
+                style={{ color: 'var(--label-secondary)' }}
+              >
+                {t('multicaManageNote')}
+              </div>
+            )}
+          </Section>
+
           <Section title={t('sessions')} count={sessions.length}>
             <Card>
               {loading && sessions.length === 0 ? (
@@ -1301,7 +1893,7 @@ export function Clients() {
         <ClaudeBlockedSheet
           clientLabel={CLIENT_LABELS[blockedClient.name] ?? blockedClient.name}
           mode={blockedClient.retry}
-          retrying={configuringClient === blockedClient.name}
+          retrying={configuringClient === fileKey(blockedClient.name, blockedClient.scope)}
           onRetry={retryBlocked}
           onClose={closeBlocked}
         />
