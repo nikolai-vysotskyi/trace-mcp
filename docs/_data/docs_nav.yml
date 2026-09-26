@@ -45,6 +45,12 @@
   url: /vs/continue.html
 - title: vs Aider
   url: /vs/aider.html
+- title: vs Cody
+  url: /vs/cody.html
+- title: vs ripwire
+  url: /vs/ripwire.html
+- title: vs IDE context
+  url: /vs/ide-context.html
 - title: PR review context benchmark
   url: /pr-context-benchmark.html
 - title: Cut Claude Code token usage

@@ -1,7 +1,7 @@
 ---
 title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
 description: "Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 88 frameworks, GitHub stars. Pick the one that fits your stack."
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Serena, Repomix and 20+ code graph MCP servers compared
@@ -172,6 +172,21 @@ Where it differs is licensing, prompt efficiency, framework semantics, and write
 
 [Aider](https://github.com/Aider-AI/aider) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0) is the terminal pair programmer everything else is measured against: repo map into the prompt, edit, lint/test retries, auto-commit with sensible messages, against almost any model including local ones. The map is the best "just give the model context" mechanism here, and on repos that fit in context it is simpler and often cheaper than any graph. Where it stops is edges and persistence: the map is rebuilt per session and the model re-derives structure from text, while the graph stores callers, impact and framework wiring as queryable edges with code-linked memory across sessions. Run the loop for edits; query the graph for the structural question before each one. Full head-to-head: [trace-mcp vs Aider](/vs/aider.html).
 
+### trace-mcp vs Cody — enterprise cloud search vs a local graph
+{: #vs-cody}
+
+Cody was Sourcegraph's AI assistant on hosted code search — and the status notice comes first: Free, Pro and Starter ended July 23, 2025, the `sourcegraph/cody` repository is a 404, and only Cody Enterprise for existing customers plus an archived snapshot ({{ site.data.competitors.cody.stars }} stars) remain. What Cody Enterprise still owns is org-wide search over local and remote repos with someone else operating the infrastructure — the one thing a local-first tool cannot offer. What trace-mcp offers instead is the index living with the code: no account, no per-seat meter, no code leaving the machine, with framework edges and cross-session memory the hosted assistant does not keep. Full head-to-head: [trace-mcp vs Cody](/vs/cody.html).
+
+### trace-mcp vs ripwire — the per-call map vs the stored graph
+{: #vs-ripwire}
+
+[ripwire](https://github.com/redhat-et/ripwire) (redhat-et/ripwire, {{ site.data.competitors.ripwire.stars }} stars, C++, Apache-2.0) is the ripgrep of AI context: a zero-dependency offline binary rendering a ranked map — signatures, callers, blast radius, tests-to-run, quality deltas — per invocation, with the MCP server deliberately optional because schemas cost context. It is also the best-argued peer here: published evals with the defeats named, per-edge honesty labels, verdict-style outputs for orchestrators. The gap is the narrowest on this site — per-call map versus persistent index, CLI pipe versus MCP core product, syntax-and-calls versus {{ site.data.counts.frameworks }} framework edges with an AST write path. Full head-to-head: [trace-mcp vs ripwire](/vs/ripwire.html).
+
+### trace-mcp vs IDE context — authored guidance vs derived structure
+{: #vs-ide-context}
+
+Cursor rules (`.cursor/rules`, team rules, `AGENTS.md`) and Copilot instructions (repo-wide file plus path-specific instruction files) are markdown guidance telling the agent how to work here — versioned, glob-scoped, team-enforceable, nearly free. No instruction file holds an edge: "check callers before editing" still sends the agent searching, while the graph answers in one call. Rules carry team judgement the code cannot contain; the graph carries resolved structure the rules cannot contain. Keep the rules; add the graph underneath. Full head-to-head: [trace-mcp vs IDE context](/vs/ide-context.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -185,6 +200,11 @@ last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
 ### Pass of September 26, 2026 — current
+
+- **Three new head-to-head spokes (TRA-1948 batch 2)**: [trace-mcp vs Cody](/vs/cody.html) (`sourcegraph/cody` is a 404; count from archived `sourcegraph/cody-public-snapshot`, {{ site.data.competitors.cody.stars }} stars, TypeScript, Apache-2.0 — Enterprise-only since July 23, 2025), [trace-mcp vs ripwire](/vs/ripwire.html) (redhat-et/ripwire, {{ site.data.competitors.ripwire.stars }} stars, C++, Apache-2.0, v0.6.3 — zero-dependency CLI map + optional MCP server, published evals with losses), [trace-mcp vs IDE context](/vs/ide-context.html) (conceptual — Cursor rules and Copilot instructions per their docs, no repo, no stars). Read via web fetch of each README/docs at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star re-check: ripwire 1.9K → **2.3K** (2,341). Hub subsections above written for the hub, not pasted from the spokes.
+- Rows for other projects were not re-checked in this pass and carry the September 11 figures.
+
+### Pass of September 26, 2026 (batch 1)
 
 - **Three new head-to-head spokes (TRA-1948 batch 1)**: [trace-mcp vs ast-grep](/vs/ast-grep.html) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT — structural search/lint/rewrite CLI, no MCP server in README), [trace-mcp vs Continue](/vs/continue.html) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0 — open-source coding agent, README states read-only after final 2.0.0), [trace-mcp vs Aider](/vs/aider.html) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0 — terminal pair programmer with repo map, no MCP server in README). Read via web fetch of each README at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star counts added to `docs/_data/competitors.yml`; hub subsections above written for the hub, not pasted from the spokes.
 - Rows for other projects were not re-checked in this pass and carry the September 11 figures.

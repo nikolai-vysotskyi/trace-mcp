@@ -973,6 +973,21 @@ Where it differs is licensing, prompt efficiency, framework semantics, and write
 
 [Aider](https://github.com/Aider-AI/aider) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0) is the terminal pair programmer everything else is measured against: repo map into the prompt, edit, lint/test retries, auto-commit with sensible messages, against almost any model including local ones. The map is the best "just give the model context" mechanism here, and on repos that fit in context it is simpler and often cheaper than any graph. Where it stops is edges and persistence: the map is rebuilt per session and the model re-derives structure from text, while the graph stores callers, impact and framework wiring as queryable edges with code-linked memory across sessions. Run the loop for edits; query the graph for the structural question before each one. Full head-to-head: [trace-mcp vs Aider](/vs/aider.html).
 
+### trace-mcp vs Cody — enterprise cloud search vs a local graph
+{: #vs-cody}
+
+Cody was Sourcegraph's AI assistant on hosted code search — and the status notice comes first: Free, Pro and Starter ended July 23, 2025, the `sourcegraph/cody` repository is a 404, and only Cody Enterprise for existing customers plus an archived snapshot ({{ site.data.competitors.cody.stars }} stars) remain. What Cody Enterprise still owns is org-wide search over local and remote repos with someone else operating the infrastructure — the one thing a local-first tool cannot offer. What trace-mcp offers instead is the index living with the code: no account, no per-seat meter, no code leaving the machine, with framework edges and cross-session memory the hosted assistant does not keep. Full head-to-head: [trace-mcp vs Cody](/vs/cody.html).
+
+### trace-mcp vs ripwire — the per-call map vs the stored graph
+{: #vs-ripwire}
+
+[ripwire](https://github.com/redhat-et/ripwire) (redhat-et/ripwire, {{ site.data.competitors.ripwire.stars }} stars, C++, Apache-2.0) is the ripgrep of AI context: a zero-dependency offline binary rendering a ranked map — signatures, callers, blast radius, tests-to-run, quality deltas — per invocation, with the MCP server deliberately optional because schemas cost context. It is also the best-argued peer here: published evals with the defeats named, per-edge honesty labels, verdict-style outputs for orchestrators. The gap is the narrowest on this site — per-call map versus persistent index, CLI pipe versus MCP core product, syntax-and-calls versus {{ site.data.counts.frameworks }} framework edges with an AST write path. Full head-to-head: [trace-mcp vs ripwire](/vs/ripwire.html).
+
+### trace-mcp vs IDE context — authored guidance vs derived structure
+{: #vs-ide-context}
+
+Cursor rules (`.cursor/rules`, team rules, `AGENTS.md`) and Copilot instructions (repo-wide file plus path-specific instruction files) are markdown guidance telling the agent how to work here — versioned, glob-scoped, team-enforceable, nearly free. No instruction file holds an edge: "check callers before editing" still sends the agent searching, while the graph answers in one call. Rules carry team judgement the code cannot contain; the graph carries resolved structure the rules cannot contain. Keep the rules; add the graph underneath. Full head-to-head: [trace-mcp vs IDE context](/vs/ide-context.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -986,6 +1001,11 @@ last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
 ### Pass of September 26, 2026 — current
+
+- **Three new head-to-head spokes (TRA-1948 batch 2)**: [trace-mcp vs Cody](/vs/cody.html) (`sourcegraph/cody` is a 404; count from archived `sourcegraph/cody-public-snapshot`, {{ site.data.competitors.cody.stars }} stars, TypeScript, Apache-2.0 — Enterprise-only since July 23, 2025), [trace-mcp vs ripwire](/vs/ripwire.html) (redhat-et/ripwire, {{ site.data.competitors.ripwire.stars }} stars, C++, Apache-2.0, v0.6.3 — zero-dependency CLI map + optional MCP server, published evals with losses), [trace-mcp vs IDE context](/vs/ide-context.html) (conceptual — Cursor rules and Copilot instructions per their docs, no repo, no stars). Read via web fetch of each README/docs at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star re-check: ripwire 1.9K → **2.3K** (2,341). Hub subsections above written for the hub, not pasted from the spokes.
+- Rows for other projects were not re-checked in this pass and carry the September 11 figures.
+
+### Pass of September 26, 2026 (batch 1)
 
 - **Three new head-to-head spokes (TRA-1948 batch 1)**: [trace-mcp vs ast-grep](/vs/ast-grep.html) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT — structural search/lint/rewrite CLI, no MCP server in README), [trace-mcp vs Continue](/vs/continue.html) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0 — open-source coding agent, README states read-only after final 2.0.0), [trace-mcp vs Aider](/vs/aider.html) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0 — terminal pair programmer with repo map, no MCP server in README). Read via web fetch of each README at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star counts added to `docs/_data/competitors.yml`; hub subsections above written for the hub, not pasted from the spokes.
 - Rows for other projects were not re-checked in this pass and carry the September 11 figures.
@@ -3481,6 +3501,249 @@ Yes — Aider driving edit-test-commit while the graph answers impact-before and
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
 - The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Continue](/vs/continue.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
 - [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# Cody alternative: trace-mcp vs Sourcegraph Cody
+
+Source: https://trace-mcp.com/vs/cody.html
+
+
+
+**TL;DR.** Cody was Sourcegraph's AI coding assistant — chat, completions and edits with context pulled from your whole codebase through their Search API, local and remote. Read the status notice first: Cody Free, Pro and Enterprise Starter were discontinued on July 23, 2025, the `sourcegraph/cody` repository itself returns 404, and what remains is Cody Enterprise for existing enterprise customers (plus an archived public snapshot at {{ site.data.competitors.cody.stars }} stars) while Sourcegraph's individual-developer energy moved to Amp. trace-mcp is the opposite bet: a persistent code graph (tree-sitter across {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, SQLite + FTS5) on your own machine — no account, no key, no per-seat bill, no code leaving the workstation.
+
+If your organisation already pays for Sourcegraph and wants one vendor indexing every repo, Cody Enterprise is the zero-setup answer. If you want the index to live with the code, read on.
+
+## Head-to-head
+
+| Capability | trace-mcp | Cody |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.cody.stars }} (archived snapshot) |
+| License | MIT | Apache-2.0 (snapshot); commercial Enterprise |
+| Written in | TypeScript | TypeScript (snapshot) |
+| What it is | persistent local graph over MCP | cloud assistant on hosted code search |
+| Where the index lives | your machine (SQLite) | Sourcegraph Cloud or self-hosted |
+| Needs account / key | ✗ | ✓ Enterprise plan |
+| Remote multi-repo search | ✓ cross-repo subprojects (local) | ✓ local + remote via Search API |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | not verified on reading date |
+| Impact analysis | ✓ reverse dependency traversal | not verified on reading date |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | not verified on reading date |
+| Refactoring write path | ✓ AST rename, move, extract, codemod | ✓ agent edits; batch changes for migrations |
+| Security scanning | ✓ OWASP Top-10 taint, SARIF 2.1.0 | ✗ (not its lane) |
+| Session memory | ✓ code-linked decisions, staleness-checked | conversation-scoped, not verified as code-linked |
+| Works offline | ✓ | ✗ by design |
+| Availability | actively maintained | Enterprise-only; repo 404 as of 2026-09-26 |
+
+Verified on September 26, 2026: `sourcegraph/cody` returns 404 on both web and API; stars and language from the archived `sourcegraph/cody-public-snapshot` via the GitHub API; plan status from Sourcegraph docs, changelog and Wikipedia (Free/Pro/Starter discontinued July 23, 2025; Amp spin-off December 2025). Cody's MCP surface and framework depth were not verifiable from the sources read on that date, so those cells read "not verified" rather than a guess.
+
+## When to pick Cody
+
+- **One vendor indexing every repo in the org.** Local and remote codebases through a single Search API, with enterprise access controls deciding what the assistant may see. A local-first tool indexes what is on your disk; Cody answers over what the company owns.
+- **Zero infrastructure of your own.** No index to build, no daemon to run, no SQLite files to keep fresh — Sourcegraph operates it. The per-seat price is the trade, and at enterprise scale it is often the cheaper trade.
+- **Migrations at org scale.** Agentic batch changes across hundreds of repositories is Sourcegraph's home turf — code search was built for exactly that before the assistant existed.
+- **IDE presence.** VS Code, JetBrains, Visual Studio and web, with completions in the editor rather than a tool call away from it.
+
+## When to pick trace-mcp
+
+- **The code cannot leave the machine.** No account, no key, no cloud round-trip, no per-seat meter. Regulated codebases and NDAs decide this one before any feature table.
+- **Framework semantics.** Route → handler, controller → template, model → table across {{ site.data.counts.frameworks }} integrations — stored edges, not search results the model must re-derive.
+- **Persistence across sessions and agents.** The graph and its code-linked decisions survive restarts and outlive any single assistant host; Cody's context is conversation-scoped.
+- **Past reading.** AST refactoring with import rewriting, verified dead-code removal, OWASP taint with SARIF, CI quality gates.
+- **Offline.** Planes, data centres without egress, laptops on hotel wifi — the index is already there.
+
+## The honest caveat
+
+Cody Enterprise at org scale is the single thing on this site a local tool cannot do: search and assist across every repository a company owns, with access controls, operated by someone else. If that is the job, this page is not going to talk you out of it.
+
+And the standing caveat on our side: **our default tool surface costs ~11.6K tokens before the agent asks anything**, and our security scanning ceiling (line-based CFG, lexical taint, type-aware pruning — not a dataflow engine) is stated on the [comparisons page](/comparisons.html), not hidden here.
+
+## FAQ
+
+**Is Sourcegraph Cody still available?**
+Only as Cody Enterprise for existing enterprise customers. Free, Pro and Starter ended July 23, 2025; the repo is a 404 with an archived snapshot; Amp carries the individual-developer effort. Check current pricing before adopting.
+
+**What is the core difference between Cody and trace-mcp?**
+Hosted search-plus-assistant versus a persistent local index. Cody pulls context from Sourcegraph infrastructure; trace-mcp stores the graph on your machine and serves it over MCP.
+
+**When is Cody the better pick?**
+Org-wide remote search, enterprise controls, zero own infrastructure, batch migrations — with someone else operating it.
+
+**Does Cody work offline?**
+No, by design. Ours does, entirely — {{ site.data.counts.languages }} tree-sitter languages with no toolchain and no network.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Aider](/vs/aider.html) · [vs ripwire](/vs/ripwire.html) · [vs IDE context](/vs/ide-context.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# ripwire alternative: trace-mcp vs ripwire
+
+Source: https://trace-mcp.com/vs/ripwire.html
+
+
+
+**TL;DR.** ripwire (`redhat-et/ripwire`, {{ site.data.competitors.ripwire.stars }} stars, Apache-2.0, C++) calls itself the ripgrep of AI context and earns the name: one self-contained offline binary, no API key, no embeddings, no index server, no daemon — a ranked map (signatures at a claimed 74.7% fewer bytes than bodies, callers, blast radius, tests-to-run, quality deltas) rendered per invocation, with the MCP server deliberately demoted to an optional second interface because "its verb schemas sit in your agent's context every session". trace-mcp is the mirror image: a persistent graph in SQLite + FTS5 served over MCP as the core product, with {{ site.data.counts.frameworks }} framework integrations, AST refactoring and code-linked memory across sessions.
+
+The honest summary is that ripwire is the best-argued page in this field — published evals with the losses included — and the gap between the two tools is narrower than on any other page here.
+
+## Head-to-head
+
+| Capability | trace-mcp | ripwire |
+|---|:---:|:---:|
+| **GitHub stars** | {{ site.data.competitors.trace_mcp.stars }} | {{ site.data.competitors.ripwire.stars }} |
+| License | MIT | Apache-2.0 |
+| Written in | TypeScript | C++ (C++23) |
+| Model | persistent index (SQLite + FTS5) | per-invocation ranked map |
+| Dependencies at runtime | Node.js | zero (single binary) |
+| Daemon / index server | embedded daemon + watcher | ✗ none |
+| Call graph | ✓ bidirectional, graph-based | ✓ ranked, deterministic, per-edge uncertainty labels |
+| Impact / blast radius | ✓ reverse dependency traversal | ✓ blast radius + tests-to-run |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ not stated in README on reading date |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | optional second interface; CLI-first |
+| Languages (parsed) | {{ site.data.counts.languages }} (tree-sitter) | 25 named in README |
+| Published evals with losses | ✓ PR benchmark with blind judge | ✓ LocBench slice + 48-question duel, defeats named |
+| Refactoring write tools | ✓ AST rename, move, extract, codemod | ✗ map + verdicts, no write path stated |
+| Security / quality | ✓ OWASP Top-10 taint, SARIF 2.1.0 | ✓ quality deltas, test gates (McCabe/Halstead lineage) |
+| Session memory | ✓ code-linked decisions, staleness-checked | `--recall` over notes; code-linking not stated |
+| Works offline, no API keys | ✓ | ✓ |
+
+Verified on September 26, 2026 against the ripwire README at `main` ({{ site.data.competitors.ripwire.stars }} stars, `redhat-et/ripwire`, v0.6.3) plus the GitHub API for stars, license and language. ripwire's benchmark figures (74.7% signature bytes, 0.25 s index, LocBench 58.3% vs 40.0%, 27–7–14 duel) are its own published claims, quoted as claims — not reproduced here.
+
+## When to pick ripwire
+
+Honest version, and it is the strongest "theirs" section on this site:
+
+- **Zero-dependency single binary.** No Node, no daemon, no index server, no watcher — one process that maps a repo in a claimed quarter-second and exits. Our embedded daemon and SQLite files are strictly more machinery.
+- **The CLI pipe is cheaper than any MCP surface.** No schemas in context, no 11.6K-token advertised surface — the agent pays per answer, never per session. ripwire says this explicitly in its own README, and it is right.
+- **Published evals with the losses.** A LocBench slice (58.3% vs 40.0% best alternative), a 48-question duel against a graph-database MCP server (won 27, lost 7, tied 14 — defeats named one by one), counterexamples published against itself, and a drift-check script that fails if the README disagrees with its own tables. Nobody else in this field documents losing; that is a reason to trust the wins.
+- **Per-edge honesty labels.** Uncertain calls drawn dashed, floors labelled floors, truncations disclosed, token budgets on the answer. Our resolution tiers are the same instinct; their per-edge rendering of it is better presentation than ours.
+- **Verdict-style outputs for orchestrators.** Quality delta, test gate, edit check — answers a lane can hand back instead of transcripts to re-read.
+- **The map visual.** A self-contained HTML graph coloured by complexity or churn, thresholds fixed so colours mean the same thing on every repo. We ship a desktop app; they ship a file.
+
+## When to pick trace-mcp
+
+- **Persistence across sessions and agents.** ripwire renders per invocation; our SQLite index is incremental, watched, and shared — with decisions linked to symbol IDs and verified non-stale at recall rather than notes recalled by relevance.
+- **Framework semantics.** Route → handler, controller → template, model → table across {{ site.data.counts.frameworks }} integrations. ripwire's README states no framework mapping on the reading date — syntax and calls, not wiring.
+- **The agent acts through the graph.** AST rename/move/extract/codemod with import rewriting and syntax verification, verified dead-code removal — ripwire states no write path.
+- **Any MCP client.** The graph serves Claude Code, Cursor, Codex and whatever ships next quarter through one surface; ripwire's MCP server is the optional interface, the CLI pipe the primary one.
+- **Full-text + embeddings + graph in one query path.** FTS5 with local ONNX embeddings composed with traversals, rather than a ranked map per call.
+
+## The honest caveat
+
+ripwire's duel section measures against "the leading graph-database code-context MCP server" without naming it in what we read — we do not know whether that server is us, and this page claims nothing about it either way. Their figures are quoted as their claims, with the methodology pointer (EVALS.md) attached so you can check rather than trust.
+
+And our standing ceiling, stated on the [comparisons page](/comparisons.html): line-based CFG, lexical taint with type-aware pruning — not a dataflow engine, and out of scope to become one. Against a peer whose quality lens cites fifty years of replicated results, that ceiling deserves stating plainly.
+
+## FAQ
+
+**What is the core difference between ripwire and trace-mcp?**
+Per-call ranked map versus persistent stored index. ripwire renders orientation per invocation over a pipe; trace-mcp keeps the graph in SQLite and serves it over MCP across turns.
+
+**Does ripwire have a call graph and impact analysis?**
+Yes — ranked deterministic call graph with per-edge uncertainty labels, blast radius, tests-to-run and quality deltas. Closest overlap with us on this site; the difference is persistence and framework depth.
+
+**What does ripwire do that trace-mcp does not?**
+Zero-dep binary, CLI pipe with no session surface cost, evals with published losses, per-edge honesty rendering, verdict outputs for orchestrators, HTML map export.
+
+**What does trace-mcp do that ripwire does not?**
+Cross-session persistent index, {{ site.data.counts.frameworks }} framework edges, AST write path with import rewriting, code-linked memory with staleness checks.
+
+**Can I use both?**
+Yes — ripwire CLI for cheap per-call orientation, trace-mcp graph for cross-session structure, framework edges and verified refactoring.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs Cody](/vs/cody.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Aider](/vs/aider.html) · [vs IDE context](/vs/ide-context.html)
+- [PR review context benchmark](/pr-context-benchmark.html) — measured input-token cost of code-review context on 60 merged pull requests.
+- [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
+- [Get started](/#install) — no configuration required.
+
+---
+
+# IDE context alternative: trace-mcp vs Cursor rules and Copilot instructions
+
+Source: https://trace-mcp.com/vs/ide-context.html
+
+
+
+**TL;DR.** Cursor rules (`.cursor/rules` with `description`/`globs`/`alwaysApply`, plus team rules and `AGENTS.md`) and Copilot instructions (the repo-wide copilot-instructions.md file in .github, plus path-specific .instructions.md files under .github/instructions) are the same idea in two IDEs: markdown guidance, versioned with the repo, telling the agent how to work here. trace-mcp is a different layer underneath: a persistent graph of what the code *is* — symbols, imports, call edges, {{ site.data.counts.frameworks }} framework integrations — served over MCP to any agent. Rules steer the session; the graph answers the structural questions inside it.
+
+This is a conceptual comparison — there is no single repository on the other side, so there is no star count and no version. Facts below are from Cursor docs and GitHub docs as read on September 26, 2026.
+
+## Head-to-head
+
+| Capability | trace-mcp | IDE rules (Cursor / Copilot) |
+|---|:---:|:---:|
+| What it is | computed code graph over MCP | authored markdown guidance for one agent |
+| Who writes it | the indexer (from your code) | you (conventions, intent, taste) |
+| Answers who-calls-this | ✓ one tool call, stored edges | ✗ can instruct the agent to check; holds no edges |
+| Impact analysis | ✓ reverse dependency traversal | ✗ |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
+| Per-file scoping | n/a (queries scope themselves) | ✓ globs (`**/*.py`), path-specific instruction files |
+| Team enforcement | n/a | ✓ team rules, enforced or optional |
+| MCP tools advertised (default) | 29 (~11.6K tok); {{ site.data.counts.tools }} on `full` | n/a — rules are prompt text; MCP servers attach per host |
+| Persists across sessions | ✓ SQLite index + code-linked memory | ✓ files persist; agent re-reads them per session |
+| Works across agents | ✓ any MCP client | partial — AGENTS.md travels; `.mdc` and team rules do not |
+| Refactoring write path | ✓ AST rename, move, extract, codemod | ✗ (the agent edits; rules only constrain it) |
+| Security scanning | ✓ OWASP Top-10 taint, SARIF 2.1.0 | ✗ |
+| Setup cost | index build, then instant queries | ~zero — a markdown file |
+
+Verified on September 26, 2026 against Cursor rules docs (`cursor.com/docs/rules`, `cursor.com/docs/context/rules`) and GitHub Copilot custom-instructions docs plus the VS Code agent-customization page. Cursor rule mechanics (`.mdc` frontmatter, four rule types, Always/Intelligent/Files/Manual application) and Copilot mechanics (repo-wide file, path-specific `.instructions.md`, organisation level) are as those pages state; anything beyond them is marked as guidance, not quoted fact.
+
+## When to pick IDE rules
+
+Honest version — and most teams should do all of this regardless of the graph:
+
+- **Conventions live in versioned markdown.** "Use named exports", "migrations need up *and* down", "never alter a column in place" — the Cursor docs' own examples. No index will ever contain your team's judgement; write it down where the agent reads it.
+- **Scoping is free and precise.** Globs attach guidance to exactly the files it governs; path-specific instruction files do the same for Copilot. Scoped text beats a global preamble on every session budget.
+- **Team-wide enforcement.** Team rules with enforced-vs-optional, organisation-level Copilot instructions — governance without a new tool to operate.
+- **Zero new machinery.** A markdown file needs no daemon, no index build, no MCP client. The cheapest context is the kind you already have.
+- **Portability where it exists.** `AGENTS.md` (and `CLAUDE.md`) travel across agents — Cursor reads them, and so does everything Claude-shaped. Rules written there outlive any single IDE.
+
+## When to pick trace-mcp
+
+- **Guidance cannot hold edges.** "Check callers before editing this" is good guidance; the resolved caller list is a graph answer. Rules point at the work, the graph does it.
+- **The question is transitive.** "Everything affected by changing this signature, filtered to route handlers" is not expressible as an instruction file — it is a traversal over stored edges.
+- **Framework wiring.** Route → handler, controller → template, model → table across {{ site.data.counts.frameworks }} integrations. No rule file models these; the graph stores them.
+- **Across agents and sessions.** The index and its code-linked decisions survive IDE switches, CLI sessions and CI runs; rules are re-read per session and `.mdc` files do not travel outside Cursor.
+- **Verified action.** AST refactoring with import rewriting, dead-code removal, OWASP taint with SARIF — the agent edits either way, but through the graph it verifies against resolved structure.
+
+## The honest caveat
+
+Rules win on cost and on content no tool can derive: a 200-line markdown file versioned in git beats any index for "how we work here", and at ~zero tokens of machinery it is the first thing every team should write — before us, not instead of us. The graph is the second layer, not the first.
+
+And our standing ceiling, stated on the [comparisons page](/comparisons.html): line-based CFG, lexical taint with type-aware pruning — not a dataflow engine, and out of scope to become one.
+
+## FAQ
+
+**What is the difference between IDE rules and a code graph?**
+Authored guidance versus derived structure. Rules tell the agent how to behave here; the graph answers what the code does. One you write, the other the indexer computes.
+
+**Do Cursor rules or Copilot instructions answer who-calls-this?**
+No. They can demand the agent check, but they hold no edges — the agent still searches. The graph stores the edges, so the question is one call.
+
+**Can trace-mcp replace my Cursor rules?**
+No. Rules carry team judgement the code cannot contain; the graph carries facts the rules cannot contain. Keep the rules; add the graph underneath.
+
+**Where does each one live?**
+Rules live with the repo and IDE (`.cursor/rules`, team dashboard, the Copilot instructions files, `AGENTS.md`); the graph lives beside the repo as SQLite, served over MCP to any agent.
+
+## Next steps
+
+- Learn how a persistent code graph reduces token costs on every turn: [Code graph MCP server](/code-graph-mcp.html).
+- Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs Repomix](/vs/repomix.html) · [vs Cody](/vs/cody.html) · [vs ripwire](/vs/ripwire.html) · [vs ast-grep](/vs/ast-grep.html) · [vs Aider](/vs/aider.html)
+- [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — rules-style tactics plus measured graph tactics.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
 
