@@ -218,7 +218,8 @@ interface ProjectPrompts {
 interface MulticaAgent {
   id: string;
   name: string;
-  status: string;
+  /* The agent's running/idle state is intentionally not carried: nothing on
+     this screen uses it (TRA-1974), and dead fields rot. */
   traceAssigned: boolean | null;
   traceEnabled: boolean | null;
   customConfig: 'none' | 'hidden' | 'present';
@@ -302,6 +303,28 @@ function sessionTitle(client: ClientInfo, fallback: string): string {
 
 function shortPath(p: string): string {
   return p.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+}
+
+/**
+ * TRA-1974 fix 1: picker labels must survive duplicate basenames (3×
+ * `trace-mcp` on a real machine). Bare basename when unique, `base · parent`
+ * on first collision, full path when even that collides. `PopUpButton` is a
+ * native select with no secondary text, so the label carries it all.
+ */
+function projectPickerLabel(root: string, roots: string[]): string {
+  const parts = (r: string) => r.split(/[/\\]/).filter(Boolean);
+  const base = (r: string) => parts(r).pop() ?? r;
+  const mine = base(root);
+  const clashes = roots.filter((r) => r !== root && base(r) === mine);
+  if (clashes.length === 0) return mine;
+  const parent = parts(root).slice(-2, -1)[0] ?? '';
+  const extended = parent ? `${mine} · ${parent}` : mine;
+  const stillClashes = clashes.some((r) => {
+    const rp = parts(r);
+    const rparent = rp.slice(-2, -1)[0] ?? '';
+    return (rparent ? `${base(r)} · ${rparent}` : base(r)) === extended;
+  });
+  return stillClashes ? root : extended;
 }
 
 // ── Section scaffolding (same idiom as Project Overview) ──────────
@@ -535,6 +558,14 @@ function SupportedClientRow({
   };
 
   const connected = status === 'up_to_date';
+  /* TRA-1974 fix 2: no disclosure when both scopes are empty. It would open
+     onto the global-only note, which is wrong there (no config anywhere, not
+     "global only") — and at 14+ empty chevrons the list is all noise.
+     "Globally configured, project missing" keeps its chevron: the project
+     Connect there is the valuable action. */
+  const EMPTY_SCOPE: ReadonlySet<ClientConfigStatus> = new Set(['missing', 'unmanageable']);
+  const showDisclosure =
+    projectFile != null && !(EMPTY_SCOPE.has(status) && EMPTY_SCOPE.has(projectFile.entry.status));
   /* Presence-only detection (Codex TOML): the entry is there, drift cannot be
      compared. It gets its own word, not "Connected" borrowed from a row we
      actually verified. */
@@ -615,7 +646,7 @@ function SupportedClientRow({
     >
       {/* TRA-1933: per-file disclosure. Absent entirely when no project is
           selected, so the global-only view keeps today's exact layout. */}
-      {projectFile && (
+      {showDisclosure && (
         <Button
           variant="icon"
           icon="chevron_right"
@@ -810,7 +841,7 @@ function SupportedClientRow({
         above; this disclosure carries the project file with its own status
         and file-level actions — or the global-only note when the client has
         no project layer (same config path in both scopes). */}
-    {projectFile && filesOpen && (
+    {showDisclosure && filesOpen && (
       <ProjectFileSubRow
         entry={projectFile.entry}
         sameAsGlobal={projectFile.entry.configPath === configPath}
@@ -1038,6 +1069,7 @@ function MulticaAgentRow({ agent, last }: { agent: MulticaAgent; last: boolean }
       <span
         className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
         style={{ color: 'var(--label-secondary)' }}
+        title={note ?? wiring.word}
       >
         <StatusDot tone={wiring.tone} />
         {wiring.word}
@@ -1630,14 +1662,13 @@ export function Clients() {
                       { value: '', label: t('scopeGlobalOnly') },
                       ...projectRoots.map((root) => ({
                         value: root,
-                        label:
-                          root.split(/[/\\]/).filter(Boolean).pop() ?? root,
+                        label: projectPickerLabel(root, projectRoots),
                       })),
                     ]}
                     value={selectedProject}
                     onChange={setSelectedProject}
                     aria-label={t('projectPickerLabel')}
-                    title={t('projectPickerLabel')}
+                    title={selectedProject || t('projectPickerLabel')}
                   />
                 )}
                 {bucket.length > 1 && (

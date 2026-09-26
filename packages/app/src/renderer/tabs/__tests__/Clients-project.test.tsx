@@ -16,6 +16,8 @@ const GLOBAL_STATUSES = [
   { client: 'claude-code', configPath: '/Users/x/.claude.json', status: 'up_to_date' },
   { client: 'cursor', configPath: '/Users/x/.cursor/mcp.json', status: 'up_to_date' },
   { client: 'claude-desktop', configPath: '/Users/x/claude.json', status: 'up_to_date' },
+  { client: 'continue', configPath: null, status: 'missing' },
+  { client: 'jetbrains-ai', configPath: null, status: 'unmanageable' },
 ];
 
 const PROJECT_STATUSES = [
@@ -23,6 +25,8 @@ const PROJECT_STATUSES = [
   { client: 'cursor', configPath: '/proj/a/.cursor/mcp.json', status: 'missing' },
   // Same path in both scopes — claude-desktop has no project layer.
   { client: 'claude-desktop', configPath: '/Users/x/claude.json', status: 'up_to_date' },
+  { client: 'continue', configPath: '/proj/a/.continue/mcpServers/mcp.json', status: 'missing' },
+  { client: 'jetbrains-ai', configPath: null, status: 'unmanageable' },
 ];
 
 const PROMPTS = {
@@ -69,7 +73,13 @@ vi.mock('../../hooks/useDaemon', () => ({
     restarting: false,
     restartDaemon: vi.fn(),
     fetchClients: vi.fn(),
-    projects: [{ root: '/proj/a', status: 'ready' }],
+    projects: [
+      { root: '/proj/a', status: 'ready' },
+      { root: '/x/trace-mcp', status: 'ready' },
+      { root: '/y/trace-mcp', status: 'ready' },
+      { root: '/m/sub/workdir', status: 'ready' },
+      { root: '/n/sub/workdir', status: 'ready' },
+    ],
   }),
 }));
 
@@ -176,6 +186,44 @@ it('names the global-only case instead of offering a second entry', async () => 
 
   expect(
     within(rowWrapper('Claude Desktop')).getByText(/Global config only — no project layer/),
+  ).toBeTruthy();
+});
+
+/* TRA-1974 fix 1: duplicate basenames are unusable in a native select, so the
+   label disambiguates (base · parent, full path on second collision) and the
+   control carries the full root as its title. */
+it('disambiguates duplicate project basenames in the picker', async () => {
+  render(<Clients />);
+  await screen.findByLabelText('Project files for');
+
+  const options = within(screen.getByLabelText('Project files for')).getAllByRole(
+    'option',
+  ) as HTMLOptionElement[];
+  const labels = options.map((o) => o.textContent);
+  expect(labels).toContain('a');
+  expect(labels).toContain('trace-mcp · x');
+  expect(labels).toContain('trace-mcp · y');
+  expect(labels).toContain('/m/sub/workdir');
+  expect(labels).toContain('/n/sub/workdir');
+});
+
+/* TRA-1974 fix 2: no disclosure when both scopes are empty — it would open
+   onto a note that is wrong there. A globally-connected row with a missing
+   project file keeps its chevron (the project Connect matters). */
+it('hides the disclosure where both scopes hold nothing', async () => {
+  await selectProject();
+
+  const continueRow = rowWrapper('Continue');
+  expect(
+    within(continueRow).queryByRole('button', { name: 'Show config files' }),
+  ).toBeNull();
+  const jbRow = rowWrapper('JetBrains AI Assistant');
+  expect(
+    within(jbRow).queryByRole('button', { name: 'Show config files' }),
+  ).toBeNull();
+  // Positive control: Cursor (global connected, project missing) keeps it.
+  expect(
+    within(rowWrapper('Cursor')).getByRole('button', { name: 'Show config files' }),
   ).toBeTruthy();
 });
 
