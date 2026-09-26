@@ -41,6 +41,7 @@ declare global {
       guessFirstProject: () => Promise<{ path: string; name: string } | null>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
+        projectRoot?: string,
       ) => Promise<{
         ok: boolean;
         error?: string;
@@ -58,6 +59,36 @@ declare global {
           pickup?: 'hot-reload' | 'reload-window' | 'restart-session' | 'restart-app' | null;
         }>;
       }>;
+      /** TRA-1933 Phase B: project prompt/hook probe. Read-only (`clients prompts`). */
+      getProjectPrompts?: (projectRoot: string) => Promise<{
+        ok: boolean;
+        error?: string;
+        prompts?: {
+          projectRoot: string;
+          claudeMdExists: boolean;
+          claudeMdHasTraceBlock: boolean;
+          agentsMdExists: boolean;
+          agentsMdHasTraceBlock: boolean;
+          projectHook: 'active' | 'missing';
+          projectHookPath: string | null;
+          tweakccPrompts: boolean;
+        };
+      }>;
+      /** TRA-1933 Phase C: Multica agents + trace wiring. Read-only, local CLI only. */
+      getMulticaAgents?: () => Promise<{
+        ok: boolean;
+        available: boolean;
+        error?: string;
+        agents?: Array<{
+          id: string;
+          name: string;
+          status: string;
+          traceAssigned: boolean | null;
+          traceEnabled: boolean | null;
+          customConfig: 'none' | 'hidden' | 'present';
+          preset: string | null;
+        }>;
+      }>;
       /** TRA-1698: install the PreToolUse redirect (guard hook) without a terminal. */
       installRedirectHook?: () => Promise<{ ok: boolean; error?: string; verified?: boolean }>;
       configureMcpClient: (
@@ -65,9 +96,17 @@ declare global {
         level: string,
       ) => Promise<{ ok: boolean; error?: string }>;
       /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
-      updateMcpClients: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
+      updateMcpClients: (
+        clientNames: string[],
+        scope?: 'global' | 'project',
+        projectRoot?: string,
+      ) => Promise<{ ok: boolean; error?: string }>;
       /** TRA-1932: remove the trace-mcp entry. Hooks and shared settings stay untouched. */
-      disconnectMcpClients?: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
+      disconnectMcpClients?: (
+        clientNames: string[],
+        scope?: 'global' | 'project',
+        projectRoot?: string,
+      ) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
