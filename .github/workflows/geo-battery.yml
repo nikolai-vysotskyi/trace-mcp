@@ -41,12 +41,18 @@ jobs:
           node scripts/geo-battery.mjs prompts > /dev/null
           node scripts/geo-battery.mjs report
 
+      # NOTE: `secrets.*` is NOT available in a step `if:` condition (see
+      # "Context availability" in the GitHub docs) — referencing it here makes
+      # the whole workflow fail compilation, which GitHub reports as an
+      # instant-failed run with 0 jobs on EVERY push (TRA-1986). The secret is
+      # passed through step `env:` instead, and `env` IS allowed in `if:`.
       - name: Live battery (paid, cached gaps only)
         if: >-
-          secrets.DATAFORSEO_LOGIN != '' &&
+          env.HAS_DATAFORSEO != '' &&
           (github.event_name == 'schedule' ||
            (github.event_name == 'workflow_dispatch' && inputs.live == 'true'))
         env:
+          HAS_DATAFORSEO: ${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           GEO_DATE: ${{ inputs.date }}
