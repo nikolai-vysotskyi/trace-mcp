@@ -61,10 +61,11 @@ tokensave:
   repo: aovestdipaperino/tokensave
   stars_exact: 625
   stars: "625"
+# Re-read 2026-09-26 (TRA-1948 batch 2): 1.9K -> 2.3K (2,341).
 ripwire:
   repo: redhat-et/ripwire
-  stars_exact: 1892
-  stars: "1.9K"
+  stars_exact: 2341
+  stars: "2.3K"
 aft:
   repo: cortexkit/aft
   stars_exact: 280
@@ -107,4 +108,11 @@ aider:
   repo: Aider-AI/aider
   stars_exact: 49187
   stars: "49.2K"
+
+# Re-read 2026-09-26 (TRA-1948 batch 2): sourcegraph/cody is a 404, so the
+# count comes from the archived public snapshot instead.
+cody:
+  repo: sourcegraph/cody-public-snapshot
+  stars_exact: 3806
+  stars: "3.8K"
 
