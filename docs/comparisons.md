@@ -1,7 +1,7 @@
 ---
 title: "MCP Code-Graph Tools Compared: Serena, Repomix + 20 More"
 description: "Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 88 frameworks, GitHub stars. Pick the one that fits your stack."
-updated: 2026-09-20
+updated: 2026-09-25
 ---
 
 # Serena, Repomix and 20+ code graph MCP servers compared
@@ -157,6 +157,21 @@ Where it differs is query ergonomics, framework depth, and code modification. Na
 
 Where it differs is licensing, prompt efficiency, framework semantics, and write capabilities. GitNexus is distributed under PolyForm Noncommercial 1.0.0, which strictly forbids commercial and enterprise usage without a proprietary commercial license, whereas trace-mcp is 100% permissive open-source under MIT. Its raw Cypher querying tool shifts query formulation onto the LLM, inviting prompt overhead and syntax hallucinations, while trace-mcp serves typed, schema-validated MCP tools. GitNexus requires native C++ Tree-sitter builds via `node-gyp-build`, whereas trace-mcp runs anywhere via WASM-sandboxed `web-tree-sitter`. GitNexus extracts syntax without deep framework semantics, whereas trace-mcp maps {{ site.data.counts.frameworks }} frameworks (route-to-handler, controller-to-template, ORM-to-table) and provides atomic AST refactoring write tools (`refactor_rename`, `refactor_extract`, `refactor_move`, `refactor_codemod`) and OWASP Top-10 taint analysis. Full head-to-head: [trace-mcp vs GitNexus](/vs/gitnexus.html).
 
+### trace-mcp vs ast-grep — pattern search vs a persistent graph
+{: #vs-ast-grep}
+
+[ast-grep](https://github.com/ast-grep/ast-grep) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT) is structural `grep`: patterns written as ordinary code with `$METAVAR` wildcards, matched against tree-sitter ASTs, rewritten in place, linted from YAML rules — multi-core, zero daemon, packaged on every installer. It is the sharpest tool in this field for shape-based rewrites ("every `x && x()` becomes `x?.()`"), and it wins that job outright against anything graph-shaped. What it has no answer for is the edge: no stored call graph, no transitive impact, no framework relations, no MCP surface — per-invocation scans rather than an index an agent queries across forty turns. Pick ast-grep for codemods and CI lint; pick the graph when the question is structural or the session is long. Full head-to-head: [trace-mcp vs ast-grep](/vs/ast-grep.html).
+
+### trace-mcp vs Continue — the agent vs the index it queries
+{: #vs-continue}
+
+[Continue](https://github.com/continuedev/continue) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0) is the pioneering open-source coding agent: VS Code extension, JetBrains plugin and CLI with bring-your-own-model configuration. Read its maintenance notice before adopting — the README states the repository is read-only after its final 2.0.0 release. The comparison is barely a rivalry: Continue is the loop you talk to, trace-mcp is the persistent graph ({{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} framework integrations, SQLite + FTS5) that any agent queries for scoped structural answers instead of re-reading files. If you run a maintained agent today, the graph composes with that one instead. Full head-to-head: [trace-mcp vs Continue](/vs/continue.html).
+
+### trace-mcp vs Aider — the terminal loop vs the graph beside it
+{: #vs-aider}
+
+[Aider](https://github.com/Aider-AI/aider) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0) is the terminal pair programmer everything else is measured against: repo map into the prompt, edit, lint/test retries, auto-commit with sensible messages, against almost any model including local ones. The map is the best "just give the model context" mechanism here, and on repos that fit in context it is simpler and often cheaper than any graph. Where it stops is edges and persistence: the map is rebuilt per session and the model re-derives structure from text, while the graph stores callers, impact and framework wiring as queryable edges with code-linked memory across sessions. Run the loop for edits; query the graph for the structural question before each one. Full head-to-head: [trace-mcp vs Aider](/vs/aider.html).
+
 ### If you are comparing two of the alternatives to each other
 
 Not every reader arrives having already picked us. [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) puts those two head-to-head on their own terms — packing versus indexing — with where each is honestly weak (Repomix computes nothing; codegraph leaves a larger context footprint and says so; neither one writes code; neither benchmark is third-party) and where trace-mcp sits between them.
@@ -169,7 +184,12 @@ carried forward; a project not in that file keeps the figure from the pass that
 last checked it, written with a `~`. Rows not named in a pass were not
 re-checked in it.
 
-### Pass of September 11, 2026 — current
+### Pass of September 26, 2026 — current
+
+- **Three new head-to-head spokes (TRA-1948 batch 1)**: [trace-mcp vs ast-grep](/vs/ast-grep.html) (ast-grep/ast-grep, {{ site.data.competitors.ast_grep.stars }} stars, Rust, MIT — structural search/lint/rewrite CLI, no MCP server in README), [trace-mcp vs Continue](/vs/continue.html) (continuedev/continue, {{ site.data.competitors.continue_dev.stars }} stars, TypeScript, Apache-2.0 — open-source coding agent, README states read-only after final 2.0.0), [trace-mcp vs Aider](/vs/aider.html) (Aider-AI/aider, {{ site.data.competitors.aider.stars }} stars, Python, Apache-2.0 — terminal pair programmer with repo map, no MCP server in README). Read via web fetch of each README at `main` plus the GitHub API for stars, license and language on September 26, 2026. Star counts added to `docs/_data/competitors.yml`; hub subsections above written for the hub, not pasted from the spokes.
+- Rows for other projects were not re-checked in this pass and carry the September 11 figures.
+
+### Pass of September 11, 2026
 
 - **Dedicated comparison page for GitNexus ({{ site.data.competitors.gitnexus.stars }} stars)**: added [trace-mcp vs GitNexus](/vs/gitnexus.html) comparing trace-mcp's permissive MIT license, {{ site.data.counts.frameworks }} framework semantic integrations, typed MCP tools, and AST refactoring write tools against GitNexus's LadybugDB, Leiden community clustering, and raw Cypher queries under PolyForm Noncommercial 1.0.0.
 - **First source read of grafel** (cajasmota/grafel, Go, MIT, v0.x, 15 stars), the top priority from the previous pass's queue. Read through the GitHub API at `main`: `go.mod`, `cmd/grafel/`, `internal/mcp/`, `internal/substrate/`, `internal/responseshapediff/`, `internal/tautology/`, `internal/stubdetector/`, `internal/mmapview.go`. Corrected language: written in **Go** (Go 1.23+ with cgo Tree-sitter), not Rust as assumed prior to source reading. It implements a multi-repo code knowledge graph daemon for AI agents with 22 MCP tools, in-memory/mmap graph substrate (`mmapview.go`), cross-repo HTTP payload drift (`response_shape_diff_tool`, `payload_drift_tool`), and static code quality canaries (`tautology_detector_tool`, `stub_detector_tool`). No AST refactoring, no framework route-to-handler mappings, no session decision memory. Findings and take-or-pass decisions are in the profiling depth tracker at the end of this page.

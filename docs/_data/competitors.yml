@@ -94,3 +94,17 @@ narsil_mcp:
   stars_exact: 183
   stars: "183"
 
+# Re-read 2026-09-26 (TRA-1948 batch 1): README + GitHub API.
+ast_grep:
+  repo: ast-grep/ast-grep
+  stars_exact: 16036
+  stars: "16K"
+continue_dev:
+  repo: continuedev/continue
+  stars_exact: 36028
+  stars: "36K"
+aider:
+  repo: Aider-AI/aider
+  stars_exact: 49187
+  stars: "49.2K"
+
