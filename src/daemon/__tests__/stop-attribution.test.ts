@@ -82,6 +82,29 @@ describe('daemon stop attribution (TRA-850)', () => {
     expect(record.via).toBe('postinstall-app: respawn with new binary');
   });
 
+  it('postinstall attribution carries versions and requester args (TRA-1963/TRA-1954)', () => {
+    const logPath = path.join(tmpHome, 'daemon.log');
+    logDaemonStopAttribution(
+      logPath,
+      'kickstart',
+      'postinstall-control-plane: pick up new binary',
+      {
+        requesterArgs: [],
+        candidateVersion: '3.33.0',
+        currentVersion: '3.32.0',
+        pkgRoot: '/usr/local/lib/node_modules/trace-mcp',
+      },
+    );
+
+    const [record] = readDaemonLog();
+    expect(record.msg).toBe('Daemon kickstart requested');
+    expect(record.managedBy).toBe('postinstall');
+    expect(record.requesterArgs).toEqual([]);
+    expect(record.candidateVersion).toBe('3.33.0');
+    expect(record.currentVersion).toBe('3.32.0');
+    expect(record.pkgRoot).toBe('/usr/local/lib/node_modules/trace-mcp');
+  });
+
   it('attribution never throws when daemon.log cannot be written', () => {
     expect(() =>
       logDaemonStopAttribution(path.join(tmpHome, 'nope', 'daemon.log'), 'stop', 'unwritable'),

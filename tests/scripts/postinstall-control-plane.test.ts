@@ -420,6 +420,123 @@ describe('postinstall-control-plane', () => {
     }
   });
 
+  // TRA-1963: a stale cached extract (npx `~/.npm/_npx/<hash>/...`) must not
+  // adopt the live daemon even when it is not under a tmp root — the tree
+  // can vanish with the next cache prune, and in the incident it carried an
+  // older version that downgraded :3741.
+  it('refuses to adopt the live daemon from a transient npx cache', () => {
+    // Must live outside /tmp: the shared-tmp rule would refuse it for the
+    // wrong reason. Staged under the real home instead (cleaned up below).
+    const base = fs.mkdtempSync(path.join(os.homedir(), 'trace-mcp-npxtest-'));
+    const fakePkg = path.join(base, '_npx', '6f1433a36d5760a4', 'node_modules', 'trace-mcp');
+    try {
+      // Sanity: this path is refused for the npx reason, not the tmp reason.
+      expect(isEphemeralInstallPath(fakePkg)).toBe(true);
+      expect(path.resolve(fakePkg).startsWith(`${path.resolve('/tmp')}/`)).toBe(false);
+      expect(path.resolve(fakePkg).startsWith(`${path.resolve('/private/tmp')}/`)).toBe(false);
+      stageFakePkg(fakePkg);
+
+      const fakeScript = path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs');
+      execFileSync(process.execPath, [fakeScript], {
+        env: buildEnv({ HOME: home, TRACE_MCP_DATA_DIR: home, CI: 'true' }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      });
+
+      expect(fs.existsSync(path.join(home, 'launcher.env'))).toBe(false);
+      expect(fs.existsSync(path.join(home, 'bin', 'trace'))).toBe(false);
+      const log = fs.readFileSync(path.join(home, 'postinstall.log'), 'utf-8');
+      expect(log).toMatch(/refusing to adopt live daemon from ephemeral install/);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  // TRA-1963: the 3.33.0 → 3.31.5 (stale npx cache) → 3.32.0 incident. A
+  // candidate older than the version backing the live daemon (per
+  // launcher.env) must leave launcher.env, the shim and launchd untouched.
+  it('refuses a candidate older than the live daemon (downgrade guard)', () => {
+    const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
+    try {
+      stageFakePkg(fakePkg);
+      // The candidate is stale: rewrite the staged package.json to 1.0.0.
+      fs.writeFileSync(
+        path.join(fakePkg, 'package.json'),
+        JSON.stringify({ name: 'trace-mcp', version: '1.0.0-stale' }),
+      );
+      // The live daemon serves 9.9.9-test (what stageFakePkg's launcher.env
+      // would have recorded on the install that adopted it).
+      const liveCli = path.join(fakePkg, 'dist', 'cli.js');
+      fs.writeFileSync(
+        path.join(home, 'launcher.env'),
+        '# Managed by trace-mcp postinstall — do not edit by hand.\n' +
+          `TRACE_MCP_NODE="/usr/local/bin/node"\n` +
+          `TRACE_MCP_CLI="${liveCli}"\n` +
+          `TRACE_MCP_VERSION="9.9.9-test"\n`,
+      );
+
+      const fakeScript = path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs');
+      execFileSync(process.execPath, [fakeScript], {
+        env: buildEnv({ HOME: home, TRACE_MCP_DATA_DIR: home, CI: 'true' }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      });
+
+      // launcher.env still names the live version; no shim was (re)installed.
+      const envContent = fs.readFileSync(path.join(home, 'launcher.env'), 'utf-8');
+      expect(envContent).toMatch(/^TRACE_MCP_VERSION="9\.9\.9-test"$/m);
+      expect(envContent).not.toMatch(/1\.0\.0-stale/);
+      expect(fs.existsSync(path.join(home, 'bin', 'trace'))).toBe(false);
+      const log = fs.readFileSync(path.join(home, 'postinstall.log'), 'utf-8');
+      expect(log).toMatch(/downgrade-refused/);
+      expect(log).toMatch(/TRA-1963/);
+    } finally {
+      fs.rmSync(fakePkg, { recursive: true, force: true });
+    }
+  });
+
+  // The guard must not block the normal path: a newer candidate over a live
+  // older version still adopts the daemon.
+  it('adopts a candidate newer than the live daemon', () => {
+    const fakePkg = mkStableTmp('trace-mcp-fakepkg-');
+    try {
+      stageFakePkg(fakePkg);
+      fs.writeFileSync(
+        path.join(home, 'launcher.env'),
+        '# Managed by trace-mcp postinstall — do not edit by hand.\n' +
+          `TRACE_MCP_NODE="/usr/local/bin/node"\n` +
+          `TRACE_MCP_CLI="/nowhere/cli.js"\n` +
+          `TRACE_MCP_VERSION="1.0.0-old"\n`,
+      );
+
+      const fakeScript = path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs');
+      execFileSync(process.execPath, [fakeScript], {
+        env: buildEnv({ HOME: home, TRACE_MCP_DATA_DIR: home, CI: 'true' }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      });
+
+      const envContent = fs.readFileSync(path.join(home, 'launcher.env'), 'utf-8');
+      expect(envContent).toMatch(/^TRACE_MCP_VERSION="9\.9\.9-test"$/m);
+      const shimName = process.platform === 'win32' ? 'trace.cmd' : 'trace';
+      expect(fs.existsSync(path.join(home, 'bin', shimName))).toBe(true);
+      const log = fs.readFileSync(path.join(home, 'postinstall.log'), 'utf-8');
+      expect(log).not.toMatch(/downgrade-refused/);
+    } finally {
+      fs.rmSync(fakePkg, { recursive: true, force: true });
+    }
+  });
+
+  // TRA-1963: a launchctl failure with empty stdout/stderr must still say why
+  // — `kickstart: failed ()` is undebuggable. The script now prefers stderr,
+  // then stdout, then the spawn error message, then the exit status.
+  it('never logs an empty launchctl failure reason', () => {
+    const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    expect(script).toContain('describeLaunchctlFailure');
+    expect(script).not.toMatch(/kickstart: \$\{kick\.ok \? 'ok' : `failed \(\$\{kick\.stderr/);
+    expect(script).not.toMatch(/failed \(\$\{kick\.stderr\.trim\(\)\}\)/);
+  });
+
   it('PLIST_VERSION constant matches src/daemon/lifecycle.ts', () => {
     const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');
     const lifecycle = fs.readFileSync(

@@ -455,6 +455,21 @@ function autoRegisterPatternMatches(absRoot: string, rawPattern: string): boolea
 }
 
 /**
+ * Transient `npx`/`npm exec` cache (TRA-1963):
+ * E.g. `/Users/n/.npm/_npx/6f1433a36d5760a4/node_modules/trace-mcp`.
+ *
+ * A `postinstall` running from here is a stale one-shot extract, not a real
+ * install: in the 2026-09-26 incident such a cache (3.31.5) adopted the live
+ * daemon and downgraded it from 3.33.0. Like the shared tmp roots below, a
+ * stable global install never lives under `_npx/`, and the extracted tree can
+ * vanish with the next cache prune — so it must never back the live daemon.
+ *
+ * Matched as a path segment (`/_npx/`), so a user directory merely containing
+ * those letters (`my_npx`, `_npx-backup`) does not match.
+ */
+const EPHEMERAL_NPX_CACHE_PATTERN = /[/\\]_npx[/\\]/i;
+
+/**
  * True when `installPath` is an install location that must never back the
  * live daemon (TRA-1807).
  *
@@ -465,6 +480,10 @@ function autoRegisterPatternMatches(absRoot: string, rawPattern: string): boolea
  * that vanishes with the run. The daemon kept serving from a deleted tree:
  * every tree-sitter WASM load failed with ENOENT and the extract pool
  * disabled itself permanently, with no self-recovery.
+ *
+ * TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`) to the
+ * same refusal: a stale cached extract downgraded the live daemon 3.33.0 →
+ * 3.31.5 → 3.32.0.
  *
  * This is the install-path twin of {@link isEphemeralProjectRoot}: it matches
  * the same one-shot run shapes, plus the shared tmp roots a stable global
@@ -482,7 +501,8 @@ export function isEphemeralInstallPath(installPath: string): boolean {
   if (
     EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
     EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
-    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs)
+    EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs) ||
+    EPHEMERAL_NPX_CACHE_PATTERN.test(abs)
   ) {
     return true;
   }

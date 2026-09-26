@@ -660,4 +660,16 @@ describe('postinstall-app.mjs daemon stop', () => {
 
     expect(log).not.toContain('Daemon stop requested');
   });
+
+  // TRA-1963: a stop from a transient npx cache is pure downtime — no new
+  // binary for the daemon to respawn with — so the hook must not bounce it.
+  it('leaves the daemon alone when run from a transient npx cache', async () => {
+    const pkg = path.join(tmp, '_npx', '6f1433a36d5760a4', 'node_modules', 'trace-mcp');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.cpSync(path.join(REPO_ROOT, 'scripts'), path.join(pkg, 'scripts'), { recursive: true });
+
+    const log = await runAndReadLog(path.join(pkg, 'scripts', 'postinstall-app.mjs'));
+
+    expect(log).not.toContain('Daemon stop requested');
+  });
 });

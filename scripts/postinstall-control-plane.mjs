@@ -22,8 +22,12 @@
  *   - TRACE_MCP_MANAGED_BY=launchd: skip (we're being run by launchd, don't recurse).
  *   - CI=true: skip launchd bootstrap (don't pollute CI machines).
  *   - Ephemeral install (agent-run sandbox under /tmp, /private/tmp,
- *     multica-task dirs, workdir checkouts): refuse to touch launcher.env,
- *     the shim, or launchd at all (TRA-1807).
+ *     multica-task dirs, workdir checkouts, transient npx `/_npx/` caches):
+ *     refuse to touch launcher.env, the shim, or launchd at all (TRA-1807,
+ *     TRA-1963).
+ *   - Downgrade guard (TRA-1963): a candidate older than the version backing
+ *     the live daemon (per launcher.env) never adopts it — launcher.env, the
+ *     shim and launchd are left untouched and the refusal is logged.
  *   - All errors swallowed and logged to ~/.trace/postinstall.log.
  *   - Daemon is NOT auto-started; only kickstarted if it was already loaded.
  *
@@ -184,10 +188,13 @@ function isDevCheckout() {
 
 // MUST match src/global.ts::isEphemeralInstallPath (TRA-1807). Mirrored here
 // as plain regexes because postinstall runs unbundled with no access to src/.
+// TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`): a stale
+// cached extract downgraded the live daemon 3.33.0 → 3.31.5.
 const EPHEMERAL_INSTALL_PATTERNS = [
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i,
   /[/\\]multica-task-\d+[/\\]/i,
   /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i,
+  /[/\\]_npx[/\\]/i,
 ];
 
 /**
@@ -226,6 +233,49 @@ function readPackageVersion() {
   } catch {
     return '0.0.0';
   }
+}
+
+// Mirror src/updater.ts::semverGt — numeric major.minor.patch, leading `v`
+// and prerelease/build suffixes ignored.
+function parseSemver(v) {
+  return String(v)
+    .replace(/[^\d.]/g, '')
+    .split('.')
+    .map((x) => parseInt(x, 10));
+}
+
+function semverGt(a, b) {
+  const [aMaj = 0, aMin = 0, aPat = 0] = parseSemver(a);
+  const [bMaj = 0, bMin = 0, bPat = 0] = parseSemver(b);
+  if (aMaj !== bMaj) return aMaj > bMaj;
+  if (aMin !== bMin) return aMin > bMin;
+  return aPat > bPat;
+}
+
+/**
+ * The version backing the live daemon right now (TRA-1963), read from the
+ * launcher.env the shim resolves — i.e. the binary :3741 actually runs.
+ * Falls back to that tree's package.json when the version line is missing.
+ * Null on a fresh install (no launcher.env yet), where any candidate may
+ * adopt the daemon.
+ */
+function readCurrentVersion() {
+  try {
+    const content = fs.readFileSync(LAUNCHER_ENV_PATH, 'utf-8');
+    const m = content.match(/^TRACE_MCP_VERSION="([^"]*)"/m);
+    const v = (m && m[1].trim()) || '';
+    if (v) return { version: v, source: 'launcher.env' };
+    const cliMatch = content.match(/^TRACE_MCP_CLI="([^"]*)"/m);
+    const cliPath = cliMatch && cliMatch[1].trim();
+    if (cliPath) {
+      const pkgPath = path.join(path.dirname(cliPath), '..', 'package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      if (pkg.version) return { version: String(pkg.version), source: 'launcher.env cli tree' };
+    }
+  } catch {
+    /* fresh install — no current version to protect */
+  }
+  return null;
 }
 
 function writeLauncherEnv(nodePath, cliPath, version) {
@@ -398,12 +448,37 @@ function installLegacyBinCompat(shimPath) {
 
 function runQuiet(file, args) {
   try {
-    execFileSync(file, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    return { ok: true, stderr: '' };
+    const stdout = execFileSync(file, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    return { ok: true, stdout: (stdout && stdout.toString && stdout.toString()) || '', stderr: '' };
   } catch (err) {
-    const stderr = (err && err.stderr && err.stderr.toString && err.stderr.toString()) || '';
-    return { ok: false, stderr };
+    const out = (v) => (v && v.toString && v.toString()) || '';
+    return {
+      ok: false,
+      stdout: out(err && err.stdout),
+      stderr: out(err && err.stderr),
+      // launchctl frequently fails with empty stdout AND stderr (the
+      // `kickstart: failed ()` of TRA-1963) — the Error message at least
+      // carries the command and exit status, so keep it as a last resort.
+      message: (err && err.message) || '',
+      status: (err && typeof err.status === 'number' && err.status) || null,
+    };
   }
+}
+
+/**
+ * One-line reason for a failed launchctl call that is never empty (TRA-1963).
+ * Prefers stderr, then stdout, then the spawn error message, then the exit
+ * status — so the install log always says *why* instead of `failed ()`.
+ */
+function describeLaunchctlFailure(result) {
+  const text = ((result && result.stderr) || '').trim() || ((result && result.stdout) || '').trim();
+  if (text) return text.split('\n').pop().trim();
+  if (result && result.message) {
+    const first = String(result.message).split('\n')[0].trim();
+    if (first) return first;
+  }
+  if (result && typeof result.status === 'number') return `exit ${result.status}`;
+  return 'unknown error';
 }
 
 function getLaunchdDomain() {
@@ -491,8 +566,13 @@ function isPlistLoaded() {
   return result.ok;
 }
 
-function bootoutPlist(domain) {
-  logDaemonStopAttribution(DAEMON_LOG_PATH, 'bootout', 'postinstall-control-plane: plist refresh');
+function bootoutPlist(domain, attribution) {
+  logDaemonStopAttribution(
+    DAEMON_LOG_PATH,
+    'bootout',
+    'postinstall-control-plane: plist refresh',
+    attribution,
+  );
   // Modern replacement for `launchctl unload`. Errors ignored — plist may not
   // currently be bootstrapped, which is fine.
   runQuiet('/bin/launchctl', ['bootout', domain, LAUNCHD_PLIST_PATH]);
@@ -524,14 +604,15 @@ function bootstrapPlist(domain) {
   // Fall back to legacy `load -w` for old macOS without bootstrap.
   const legacy = runQuiet('/bin/launchctl', ['load', '-w', LAUNCHD_PLIST_PATH]);
   if (legacy.ok) return { ok: true };
-  return { ok: false, error: result.stderr || legacy.stderr || 'bootstrap failed' };
+  return { ok: false, error: describeLaunchctlFailure(result) };
 }
 
-function kickstartPlist(domain) {
+function kickstartPlist(domain, attribution) {
   logDaemonStopAttribution(
     DAEMON_LOG_PATH,
     'kickstart',
     'postinstall-control-plane: pick up new binary',
+    attribution,
   );
   // -k kills the running instance first and resets the throttle so the new
   // binary is picked up.
@@ -564,7 +645,7 @@ function healthCheckAfterKickstart(port) {
   return { ok: false };
 }
 
-function refreshLaunchAgent(launcherShimPath) {
+function refreshLaunchAgent(launcherShimPath, attribution) {
   if (!IS_MAC) return;
   if (process.env.TRACE_MCP_MANAGED_BY === 'launchd') {
     log('launchd', 'skip (running under launchd, would recurse)');
@@ -587,8 +668,13 @@ function refreshLaunchAgent(launcherShimPath) {
   if (currentMarker && wasLoaded) {
     log('launchd', `plist v${PLIST_VERSION} already current and loaded`);
     // Even if current, kickstart so the freshly-installed binary swaps in.
-    const kick = kickstartPlist(domain);
-    log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
+    const kick = kickstartPlist(domain, attribution);
+    log(
+      'launchd',
+      kick.ok
+        ? `kickstart: ok (${attribution.currentVersion} → ${attribution.candidateVersion})`
+        : `kickstart: failed (${describeLaunchctlFailure(kick)})`,
+    );
     if (kick.ok) {
       const health = healthCheckAfterKickstart(DEFAULT_DAEMON_PORT);
       log(
@@ -602,7 +688,7 @@ function refreshLaunchAgent(launcherShimPath) {
   }
 
   // Need to write/refresh the plist.
-  if (plistExists) bootoutPlist(domain);
+  if (plistExists) bootoutPlist(domain, attribution);
 
   const plistContent = generatePlist(launcherShimPath, DEFAULT_DAEMON_PORT);
   try {
@@ -626,8 +712,13 @@ function refreshLaunchAgent(launcherShimPath) {
   // binary. On first install bootstrap itself starts the daemon, so a
   // kickstart would be a redundant restart.
   if (boot.ok && wasLoaded) {
-    const kick = kickstartPlist(domain);
-    log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
+    const kick = kickstartPlist(domain, attribution);
+    log(
+      'launchd',
+      kick.ok
+        ? `kickstart: ok (${attribution.currentVersion} → ${attribution.candidateVersion})`
+        : `kickstart: failed (${describeLaunchctlFailure(kick)})`,
+    );
   }
   // Verify daemon actually came up (either via bootstrap's RunAtLoad or via
   // kickstart). `bootstrap ok` / `kickstart ok` only mean launchd accepted
@@ -680,6 +771,32 @@ function main() {
   const version = readPackageVersion();
   log('paths', `node=${nodePath} cli=${cliPath} version=${version}`);
 
+  // TRA-1963: never adopt a binary older than the one backing the live
+  // daemon. A stale self-install (npx cache, an older global) used to
+  // overwrite launcher.env + the shim and kickstart launchd, downgrading
+  // :3741 and re-stamping every project's pendingReindexForVersion backwards.
+  // The check runs BEFORE anything is rewritten or stopped. Equal versions
+  // still proceed — reinstalling the same release is harmless.
+  const current = readCurrentVersion();
+  if (current && current.version && semverGt(current.version, version)) {
+    log(
+      'downgrade-refused',
+      `candidate ${version} from ${PKG_ROOT} is older than live ${current.version} (${current.source}) — launcher.env, shim and launchd left untouched (TRA-1963)`,
+    );
+    log('done', 'ok (downgrade refused)');
+    return;
+  }
+
+  // Attribution for any stop/kickstart below (TRA-1954 blind stops): who
+  // asked, with which argv, and which versions were in play — recorded both
+  // in daemon.log (via logDaemonStopAttribution) and postinstall.log.
+  const attribution = {
+    requesterArgs: process.argv.slice(2, 6),
+    candidateVersion: version,
+    currentVersion: (current && current.version) || 'unknown',
+    pkgRoot: PKG_ROOT,
+  };
+
   try {
     writeLauncherEnv(nodePath, cliPath, version);
     log('launcher.env', `wrote ${LAUNCHER_ENV_PATH}`);
@@ -707,7 +824,7 @@ function main() {
       log('launchd', `skip (daemon opt-out present at ${DAEMON_DISABLED_PATH})`);
     } else {
       try {
-        refreshLaunchAgent(shimPath);
+        refreshLaunchAgent(shimPath, attribution);
       } catch (err) {
         log('launchd', `failed: ${err.message || err}`);
       }
