@@ -49,9 +49,11 @@ jobs:
         env:
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
-        run: >-
-          node scripts/geo-battery.mjs run --yes
-          ${{ inputs.date != '' && format('--date {0}', inputs.date) || '' }}
+          GEO_DATE: ${{ inputs.date }}
+        run: |
+          args=(--yes)
+          if [ -n "$GEO_DATE" ]; then args+=(--date "$GEO_DATE"); fi
+          node scripts/geo-battery.mjs run "${args[@]}"
 
       # Only from master on schedule. A dispatch on a feature branch is how
       # this workflow is tested, and a test run must not write the durable
