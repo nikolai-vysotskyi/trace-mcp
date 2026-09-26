@@ -16,8 +16,12 @@ import fs from 'node:fs';
  * @param {string} logPath Absolute path to daemon.log.
  * @param {string} action What we are about to do, e.g. 'bootout', 'stop'.
  * @param {string} via Which code path asked for it.
+ * @param {Record<string, unknown>} [extra] Extra fields merged into the record —
+ *   postinstall passes `requesterArgs`, `candidateVersion`, `currentVersion`
+ *   and `pkgRoot` (TRA-1963/TRA-1954) so a stop can be told apart from every
+ *   other initiator without correlating a second log file.
  */
-export function logDaemonStopAttribution(logPath, action, via) {
+export function logDaemonStopAttribution(logPath, action, via, extra = {}) {
   try {
     const record = {
       level: 30,
@@ -28,6 +32,7 @@ export function logDaemonStopAttribution(logPath, action, via) {
       via,
       requesterPid: process.pid,
       requesterPpid: process.ppid,
+      ...extra,
       managedBy: 'postinstall',
       msg: `Daemon ${action} requested`,
     };
