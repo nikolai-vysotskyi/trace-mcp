@@ -575,7 +575,20 @@ function installLegacyBinCompat(): void {
     // existsSync follows the link: a symlink pointing at a target that is gone
     // is the one state that actually breaks clients, so it must not be mistaken
     // for a healthy delegation and skipped (TRA-910).
-    if (isSymlink(legacyPath) && fs.existsSync(legacyPath)) return; // already delegating
+    if (isSymlink(legacyPath) && fs.existsSync(legacyPath)) {
+      // "Healthy" is not "delegating": a relative link left by the pre-TRA-611
+      // layout (`trace-mcp -> trace`, resolving to the legacy copy next to it)
+      // is healthy but freezes legacy-path clients on whatever shim version the
+      // legacy dir holds — every later launcher fix misses them (TRA-1964,
+      // observed live). Only a link that resolves to the current launcher
+      // counts as already delegating; anything else falls through to the
+      // ownership check and repair below.
+      try {
+        if (fs.realpathSync(legacyPath) === fs.realpathSync(current)) return;
+      } catch {
+        /* unresolvable mid-race — fall through and repair below */
+      }
+    }
     const exists = fs.existsSync(legacyPath);
     if (
       !exists &&

@@ -178,6 +178,30 @@ describe.skipIf(process.platform === 'win32')('legacy bin compat', () => {
     expect(fs.realpathSync(legacyPath)).toBe(fs.realpathSync(getLauncherPath()));
   });
 
+  // TRA-1964. Observed live: `~/.trace-mcp/bin/trace-mcp -> trace`, a healthy
+  // relative link resolving to the legacy copy next to it rather than to
+  // `~/.trace/bin/trace`. The old `isSymlink && existsSync` check read that as
+  // "already delegating" and returned, so the legacy path froze at whatever
+  // shim version the legacy dir held and no later launcher fix could reach
+  // clients registered there. Only a link resolving to the current launcher
+  // counts as delegating.
+  it('repoints a healthy symlink that resolves to the legacy copy instead of the current launcher', () => {
+    installLauncher({ force: true });
+    const legacyCopy = path.join(path.dirname(legacyPath), 'trace');
+    fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+    fs.copyFileSync(getLauncherPath(), legacyCopy);
+    fs.rmSync(legacyPath, { force: true });
+    // The pre-TRA-611 shape: a relative link at the legacy path pointing at
+    // the copy beside it. Healthy (target exists) but not delegating.
+    fs.symlinkSync('trace', legacyPath);
+    expect(fs.existsSync(legacyPath)).toBe(true);
+    expect(fs.realpathSync(legacyPath)).not.toBe(fs.realpathSync(getLauncherPath()));
+
+    installLauncher({ force: true });
+
+    expect(fs.realpathSync(legacyPath)).toBe(fs.realpathSync(getLauncherPath()));
+  });
+
   it('does not link the legacy path to itself when it is the launcher home', () => {
     process.env.TRACE_MCP_HOME = path.join(home, '.trace-mcp');
     try {
