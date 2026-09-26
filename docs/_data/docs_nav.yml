@@ -39,6 +39,12 @@
   url: /vs/code-review-graph.html
 - title: Repomix vs codegraph
   url: /vs/repomix-vs-codegraph.html
+- title: vs ast-grep
+  url: /vs/ast-grep.html
+- title: vs Continue
+  url: /vs/continue.html
+- title: vs Aider
+  url: /vs/aider.html
 - title: PR review context benchmark
   url: /pr-context-benchmark.html
 - title: Cut Claude Code token usage
