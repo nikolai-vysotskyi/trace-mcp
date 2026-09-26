@@ -5,6 +5,7 @@
  * `../init/mcp-client.js` and `../project-root.js` mocked. No real MCP
  * client config files are read or written.
  */
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpClientStatus } from '../../src/init/mcp-client.js';
 
@@ -57,6 +58,10 @@ beforeEach(() => {
   process.exitCode = undefined;
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
+
+// OTHER_ROOT is POSIX-only as a literal: on Windows path.resolve() yields
+// a drive-qualified path, so resolve once and assert against that.
+const OTHER_ROOT = path.resolve('/proj/other');
 
 const SAMPLE_STATUSES: McpClientStatus[] = [
   {
@@ -225,10 +230,10 @@ describe('clients update', () => {
   /* TRA-1933: per-file Update from the app names the project root explicitly
      (see the status --project test above for why the cwd cannot be trusted). */
   it('passes an explicit --project root through to the writer', async () => {
-    await run(['update', 'cursor', '--scope', 'project', '--project', '/proj/other']);
+    await run(['update', 'cursor', '--scope', 'project', '--project', OTHER_ROOT]);
 
     expect(mockFindProjectRoot).not.toHaveBeenCalled();
-    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['cursor'], '/proj/other', {
+    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['cursor'], OTHER_ROOT, {
       scope: 'project',
       dryRun: undefined,
     });
@@ -340,19 +345,19 @@ describe('clients status --json', () => {
   it('prefers --project over the cwd auto-detect', async () => {
     mockGetMcpClientStatuses.mockReturnValue(SAMPLE_STATUSES);
 
-    await run(['status', '--json', '--project', '/proj/other']);
+    await run(['status', '--json', '--project', OTHER_ROOT]);
 
     expect(mockFindProjectRoot).not.toHaveBeenCalled();
-    expect(mockGetMcpClientStatuses).toHaveBeenCalledWith('/proj/other', 'global', undefined);
-    expect(JSON.parse(printed()).projectRoot).toBe('/proj/other');
+    expect(mockGetMcpClientStatuses).toHaveBeenCalledWith(OTHER_ROOT, 'global', undefined);
+    expect(JSON.parse(printed()).projectRoot).toBe(OTHER_ROOT);
   });
 });
 
 describe('clients prompts', () => {
   it('emits the project probe as JSON', async () => {
-    await run(['prompts', '--json', '--project', '/proj/other']);
+    await run(['prompts', '--json', '--project', OTHER_ROOT]);
 
-    expect(mockGetProjectPromptsStatus).toHaveBeenCalledWith('/proj/other');
+    expect(mockGetProjectPromptsStatus).toHaveBeenCalledWith(OTHER_ROOT);
     const parsed = JSON.parse(printed());
     expect(parsed).toMatchObject({
       projectRoot: '/proj/current',
@@ -370,7 +375,7 @@ describe('clients prompts', () => {
   });
 
   it('prints one line per prompt surface for humans', async () => {
-    await run(['prompts', '--project', '/proj/other']);
+    await run(['prompts', '--project', OTHER_ROOT]);
 
     const out = printed();
     expect(out).toContain('CLAUDE.md');

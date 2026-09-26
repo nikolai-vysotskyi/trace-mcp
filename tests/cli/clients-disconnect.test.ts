@@ -5,6 +5,7 @@
  * `../init/mcp-client.js` and `../project-root.js` mocked. No real MCP
  * client config files are read or written.
  */
+import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { McpClientStatus } from '../../src/init/mcp-client.js';
 
@@ -44,6 +45,10 @@ beforeEach(() => {
   process.exitCode = undefined;
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
+
+// OTHER_ROOT is POSIX-only as a literal: on Windows path.resolve() yields
+// a drive-qualified path, so resolve once and assert against that.
+const OTHER_ROOT = path.resolve('/proj/other');
 
 const SAMPLE_STATUSES: McpClientStatus[] = [
   {
@@ -108,10 +113,10 @@ describe('clients disconnect', () => {
   /* TRA-1933: per-file Disconnect from the app names the project root
      explicitly — the bundled cwd is never the project on screen. */
   it('passes an explicit --project root through to the remover', async () => {
-    await run(['disconnect', 'cursor', '--scope', 'project', '--project', '/proj/other']);
+    await run(['disconnect', 'cursor', '--scope', 'project', '--project', OTHER_ROOT]);
 
     expect(mockFindProjectRoot).not.toHaveBeenCalled();
-    expect(mockRemoveMcpClients).toHaveBeenCalledWith(['cursor'], '/proj/other', {
+    expect(mockRemoveMcpClients).toHaveBeenCalledWith(['cursor'], OTHER_ROOT, {
       scope: 'project',
       dryRun: undefined,
     });
