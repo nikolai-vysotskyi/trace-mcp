@@ -1,0 +1,95 @@
+# Weekly GEO-battery: 20 prompts x 4 models, AI-answer visibility tracker.
+#
+# Live runs cost a few USD (DataForSEO AI Optimization) and only happen when
+# the DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD secrets exist AND the run is either
+# the Monday schedule or a manual dispatch with live=true. Everything else —
+# prompt-list validation, history report — runs free on every trigger.
+# (TRA-1947)
+name: GEO battery
+
+on:
+  schedule:
+    - cron: '5 7 * * MON' # weekly, Monday morning UTC
+  workflow_dispatch:
+    inputs:
+      live:
+        description: 'Run the paid live battery (otherwise validation only)'
+        required: false
+        default: 'false'
+      date:
+        description: 'History date (YYYY-MM-DD, default: today)'
+        required: false
+        default: ''
+
+# Deny everything at the top level so a future job added here starts with no
+# token scopes; the one job that needs `contents: write` grants it to itself.
+permissions: {}
+
+jobs:
+  battery:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Validate prompt list and scorer (free, no secrets)
+        run: |
+          node scripts/geo-battery.mjs prompts > /dev/null
+          node scripts/geo-battery.mjs report
+
+      - name: Live battery (paid, cached gaps only)
+        if: >-
+          secrets.DATAFORSEO_LOGIN != '' &&
+          (github.event_name == 'schedule' ||
+           (github.event_name == 'workflow_dispatch' && inputs.live == 'true'))
+        env:
+          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+          GEO_DATE: ${{ inputs.date }}
+        run: |
+          args=(--yes)
+          if [ -n "$GEO_DATE" ]; then args+=(--date "$GEO_DATE"); fi
+          node scripts/geo-battery.mjs run "${args[@]}"
+
+      # Only from master on schedule. A dispatch on a feature branch is how
+      # this workflow is tested, and a test run must not write the durable
+      # record. Same orphan-branch pattern as ga4-snapshot.yml: history stays
+      # in the repo without asking anything of branch protection.
+      - name: Publish history to the geo-battery-data branch
+        if: github.event_name == 'schedule' && github.ref == 'refs/heads/master'
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- ops/geo-ranks-history)" ]; then
+            echo "unchanged; nothing to publish"
+            exit 0
+          fi
+          cp -r ops/geo-ranks-history /tmp/geo-ranks-history
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin geo-battery-data >/dev/null 2>&1; then
+            git fetch origin geo-battery-data
+            git checkout -B geo-battery-data origin/geo-battery-data
+          else
+            git checkout --orphan geo-battery-data
+            git rm -rf --cached . >/dev/null 2>&1 || true
+          fi
+          find . -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+          cp -r /tmp/geo-ranks-history ./geo-ranks-history
+          git add geo-ranks-history
+          git commit -m "chore(geo): battery snapshot $(date -u +%Y-%m-%d)"
+          git push origin geo-battery-data
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo '## GEO battery'
+            echo
+            node scripts/geo-battery.mjs report
+            echo
+            echo 'History: [geo-battery-data branch](https://github.com/nikolai-vysotskyi/trace-mcp/blob/geo-battery-data/geo-ranks-history)'
+          } >> "$GITHUB_STEP_SUMMARY"
