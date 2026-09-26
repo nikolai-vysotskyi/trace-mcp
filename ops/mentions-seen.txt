@@ -192,3 +192,19 @@ rogerchappel/mcpchangefeed
 # the direct analogue for hooks + output-rewrite. Internal doc, no audience, no contact path — competitor
 # signal only, ledger row added, no outreach:
 MaquinaTech/graph-indexer
+# ── Swept 2026-09-25 (TRA-1950, weekly sweep) ──
+# Collision, not a mention: their own TRACE project's "TRACE MCP Tools" Lambda
+# (trace-mcp-stack.json, trace-mcp-tools function, tower_id/energy telemetry).
+# Own acronym, zero shared code, stale since 2026-02-02:
+Sudeeparyan/TRACE
+# Collision, not a mention: their own binder-trace MCP server (bt-mcp,
+# binder_trace_status/enable/disable/events tools over kernel Binder capture).
+# Match is their own filename binder-trace-mcp.btcap. Kernel observability,
+# not code intelligence — not a competitor, no outreach:
+fuqiuluo/binder-trace
+# Genuine auto-index carrying us accurately (88 frameworks / 81 langs / 72.7%
+# PR figure, cached 2026-09-25): public/similar/nikolai-vysotskyi@trace-mcp.json
+# plus a similarity set naming codebase-memory-mcp, synapse-mcp,
+# roslyn-codelens-mcp. 0-star frontend for managing-awesome-lists, no
+# submission path, no audience — ledger row added, nothing to submit:
+jaimevalero/managing-awesome-lists-frontend
