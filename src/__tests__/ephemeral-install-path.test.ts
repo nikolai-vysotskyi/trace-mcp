@@ -3,6 +3,8 @@
  * `isEphemeralInstallPath` is the shared classifier behind the `serve-http`
  * fail-closed guard (src/cli.ts) and the postinstall refusal
  * (scripts/postinstall-control-plane.mjs, mirrored regexes — keep in sync).
+ * TRA-1963 added the transient npx cache (`~/.npm/_npx/<hash>/...`) to the
+ * same refusal after a stale cached extract downgraded the live daemon.
  */
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -42,12 +44,26 @@ describe('isEphemeralInstallPath (TRA-1807)', () => {
     ).toBe(true);
   });
 
+  it('refuses the transient _npx/ cache dir (TRA-1963 downgrade vector)', () => {
+    expect(
+      isEphemeralInstallPath(
+        '/Users/nikolai/.npm/_npx/6f1433a36d5760a4/node_modules/trace-mcp/dist/cli.js',
+      ),
+    ).toBe(true);
+    expect(isEphemeralInstallPath('/Users/n/.npm/_npx/abc/node_modules/trace-mcp')).toBe(true);
+  });
+
   it('does not confuse lookalikes (/tmpfoo, unbracketed multica-task)', () => {
     expect(isEphemeralInstallPath('/tmpfoo/trace-mcp')).toBe(false);
     expect(isEphemeralInstallPath('/private/tmp-backup/trace-mcp')).toBe(false);
     // The task-dir pattern keys on a numeric run id + trailing separator —
     // a user directory merely named "multica-task" is not ephemeral.
     expect(isEphemeralInstallPath('/Users/n/multica-task/dist/cli.js')).toBe(false);
+    // The npx pattern keys on the exact `/_npx/` segment — neighbours of the
+    // cache dir, or dirs that merely contain those letters, are stable.
+    expect(isEphemeralInstallPath('/Users/n/.npm/node_modules/trace-mcp')).toBe(false);
+    expect(isEphemeralInstallPath('/Users/n/my_npx/trace-mcp')).toBe(false);
+    expect(isEphemeralInstallPath('/Users/n/_npx-backup/trace-mcp')).toBe(false);
   });
 
   it('accepts stable installs', () => {

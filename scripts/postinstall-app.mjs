@@ -114,13 +114,36 @@ function installedIntoNodeModules() {
   return path.basename(path.dirname(pkgDir)) === 'node_modules';
 }
 
+// TRA-1963: a stop from a transient npx `/_npx/` cache (`npx -y trace-mcp`
+// extracts there) is pure downtime — there is no new binary for the daemon
+// to respawn with, and the extracted tree can vanish with the next cache
+// prune. Deliberately narrower than the control-plane ephemeral refusal:
+// this hook only restarts, never adopts, so only the always-stale cache
+// shape is skipped here.
+function isNpxCachePath(pkgDir) {
+  return /[/\\]_npx[/\\]/i.test(path.resolve(pkgDir));
+}
+
+function readCandidateVersion() {
+  try {
+    const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8'));
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function stopRunningDaemon() {
   if (!installedIntoNodeModules()) return;
+  const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  if (isNpxCachePath(pkgDir)) return;
   try {
     logDaemonStopAttribution(
       path.join(traceHomeDir(), 'daemon.log'),
       'stop',
       'postinstall-app: respawn with new binary',
+      { requesterArgs: process.argv.slice(2, 6), candidateVersion: readCandidateVersion() },
     );
     if (process.platform === 'darwin') {
       execFileSync(LAUNCHCTL_BIN, ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
