@@ -79,6 +79,7 @@ import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
 import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
+import { buildApiProjectsList } from './daemon/api-projects-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
@@ -1800,15 +1801,21 @@ program
         return;
       }
 
-      // Health endpoint — includes project status
+      // Health endpoint — includes project status.
+      // TRA-1996: this endpoint reports *residency* (in-memory truth for
+      // monitoring/autopilots), while `GET /api/projects` reports
+      // *index-readiness* (last-known `ready` for idle-unloaded roots, so the
+      // app's CTA reads "Reindex" — TRA-1052). The `status` values therefore
+      // intentionally differ for the same root; correlate via `resident`.
       if (req.method === 'GET' && url.pathname === '/health') {
         const loadedRoots = new Set<string>();
         const loaded: Array<{
           root: string;
           status: ManagedProject['status'] | 'unloaded' | 'missing';
+          resident: boolean;
         }> = projectManager.listProjects().map((p) => {
           loadedRoots.add(p.root);
-          return { root: p.root, status: p.status };
+          return { root: p.root, status: p.status, resident: true };
         });
         // TRA-1715: a loaded project whose root vanished (deleted task
         // workdir, unmounted volume) must never keep advertising its last
@@ -1820,7 +1827,7 @@ program
         // silently dropping them, so /health still reflects every registered root.
         for (const entry of listProjects()) {
           if (!loadedRoots.has(entry.root)) {
-            projects.push({ root: entry.root, status: 'unloaded' });
+            projects.push({ root: entry.root, status: 'unloaded', resident: false });
           }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2617,6 +2624,11 @@ program
       }
 
       // REST API: list projects
+      // TRA-1996: this endpoint reports *index-readiness* (last-known `ready`
+      // for idle-unloaded roots, so the app's CTA reads "Reindex" — TRA-1052),
+      // while `GET /health` reports *residency* (same root shows `unloaded`
+      // there). The `status` values intentionally differ; both surfaces now
+      // carry `resident` so callers correlate via that flag, not `status`.
       if (req.method === 'GET' && url.pathname === '/api/projects') {
         // Resident (in-memory) projects are a strict subset of what's
         // registered on disk — idle-unloaded projects and ones a daemon
@@ -2628,23 +2640,9 @@ program
         // indexed at least once to get registered, so 'ready' is the correct
         // last-known status until a resident reload (via
         // resolveProjectForRest, above) says otherwise over SSE.
-        const resident = new Map(projectManager.listProjects().map((p) => [p.root, p]));
-        const projects: { root: string; status: string; error?: string }[] = listProjects().map(
-          (entry) => {
-            const managed = resident.get(entry.root);
-            return managed
-              ? { root: managed.root, status: managed.status, error: managed.error }
-              : { root: entry.root, status: 'ready' };
-          },
-        );
-        // Resident projects the registry doesn't know about (read-mostly
-        // subprojects served with `persist: false` — see addProject()) still
-        // need to appear so their live status reaches the UI.
-        for (const managed of resident.values()) {
-          if (!projects.some((p) => p.root === managed.root)) {
-            projects.push({ root: managed.root, status: managed.status, error: managed.error });
-          }
-        }
+        // `resident: false` marks those last-known entries (see
+        // buildApiProjectsList) — pair with /health's `unloaded` for them.
+        const projects = buildApiProjectsList(projectManager.listProjects(), listProjects());
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ projects }));
         return;

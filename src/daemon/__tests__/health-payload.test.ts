@@ -72,4 +72,18 @@ describe('withMissingRoots (TRA-1715)', () => {
     withMissingRoots(input, () => false);
     expect(input).toEqual([{ root: '/gone', status: 'ready' }]);
   });
+
+  it('preserves the resident flag through the missing overlay (TRA-1996)', () => {
+    const out = withMissingRoots(
+      [
+        { root: '/live', status: 'ready', resident: true },
+        { root: '/evicted', status: 'unloaded', resident: false },
+      ],
+      () => true,
+    );
+    expect(out).toEqual([
+      { root: '/live', status: 'ready', resident: true },
+      { root: '/evicted', status: 'unloaded', resident: false },
+    ]);
+  });
 });
