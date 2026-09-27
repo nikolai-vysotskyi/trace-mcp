@@ -215,3 +215,9 @@ jaimevalero/managing-awesome-lists-frontend
 # figure is an upper bound on false positives). No submission path, no
 # audience — ledger row added, their thread never touched:
 NOMARJ/sigil
+# ── Swept 2026-09-28 (TRA-2022) ──
+# Genuine editorial scorecard (0★, single author, Hlido Editor review mirror):
+# scorecards/nikolai-vysotskyi-trace-mcp.json scores us 77/STEADY but quotes
+# the retired ~40-50%/up-to-99% range and "no data leaves your machine" with
+# no telemetry caveat. Ledger row added, their thread never touched:
+ankitkapur1992-hlido/hlido-public
