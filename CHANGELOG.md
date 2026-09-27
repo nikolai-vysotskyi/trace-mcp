@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.0...v3.34.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **ci:** gate GEO live battery via env, secrets unavailable in steps.if (TRA-1986) ([#1412](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1412)) ([f601628](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f601628b3e2565a967e10f123491361acd3d8b02))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-27, threads silent, sweep clean, tolkonepiu reminder recorded (TRA-1991) ([#1415](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1415)) ([4bb3322](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4bb332286f9343e0878fb87e19ce72ca0b2d44e7))
+
 ## [3.34.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.33.0...v3.34.0) (2026-09-26)
 
 
