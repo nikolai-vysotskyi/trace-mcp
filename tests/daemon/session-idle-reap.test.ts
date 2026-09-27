@@ -100,7 +100,9 @@ describe('dropSessionBookkeeping', () => {
     dropSessionBookkeeping('sid-orphan', deps);
 
     expect(dispose).toHaveBeenCalledOnce();
-    expect(deps.projectSessions.get(ROOT_A)?.has('sid-orphan')).toBe(false);
+    // TRA-2017: the drained root key is deleted outright (no empty-Set
+    // residue), so absence — not `has() === false` — is the assertion.
+    expect(deps.projectSessions.get(ROOT_A)?.has('sid-orphan') ?? false).toBe(false);
     expect(deps.sessionHandles.has('sid-orphan')).toBe(false);
     expect(deps.sessionClients.has('sid-orphan')).toBe(false);
     expect(deps.clients.has('client-1')).toBe(false);
@@ -117,8 +119,8 @@ describe('dropSessionBookkeeping', () => {
 
     dropSessionBookkeeping('sid-x', deps);
 
-    expect(deps.projectSessions.get(ROOT_A)?.has('sid-x')).toBe(false);
-    expect(deps.projectSessions.get(ROOT_B)?.has('sid-x')).toBe(false);
+    expect(deps.projectSessions.get(ROOT_A)?.has('sid-x') ?? false).toBe(false);
+    expect(deps.projectSessions.get(ROOT_B)?.has('sid-x') ?? false).toBe(false);
     expect(deps.projectSessions.get(ROOT_A)?.has('sid-sibling')).toBe(true);
     expect(deps.sessionClients.get('sid-sibling')).toBe('c-sib');
     expect(deps.clients.has('c-sib')).toBe(true);

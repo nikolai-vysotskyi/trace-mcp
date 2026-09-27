@@ -128,4 +128,34 @@ describe('ProjectResourcePool — daemon-wide shared resources', () => {
 
     pool.disposeAll();
   });
+
+  it('release() to zero forgets the entry (TRA-2017)', async () => {
+    const pool = await freshPool();
+    pool.acquire('/project-a', topologyEnabledConfig);
+    pool.acquire('/project-a', topologyEnabledConfig);
+    pool.acquire('/project-b', topologyEnabledConfig);
+    expect(pool.getTrackedProjectCount()).toBe(2);
+
+    pool.release('/project-a');
+    expect(pool.getRefCount('/project-a')).toBe(1);
+    expect(pool.getTrackedProjectCount()).toBe(2);
+
+    pool.release('/project-a');
+    // Zero-count entries are pruned: no unbounded per-root residue, and a
+    // stale nonzero count can never pin the project against idle-unload.
+    expect(pool.getRefCount('/project-a')).toBe(0);
+    expect(pool.getTrackedProjectCount()).toBe(1);
+
+    // Over-release and unknown roots stay safe no-ops.
+    pool.release('/project-a');
+    pool.release('/never-acquired');
+    expect(pool.getRefCount('/project-a')).toBe(0);
+    expect(pool.getTrackedProjectCount()).toBe(1);
+
+    // Re-acquire after prune works like a fresh entry.
+    pool.acquire('/project-a', topologyEnabledConfig);
+    expect(pool.getRefCount('/project-a')).toBe(1);
+
+    pool.disposeAll();
+  });
 });

@@ -137,12 +137,19 @@ export class ProjectResourcePool {
 
   /** Release a project session's reference. The shared resources stay open
    *  regardless — other projects, or a future reload of this one, still need
-   *  them; they only close in disposeAll(). */
+   *  them; they only close in disposeAll().
+   *
+   *  Entries that reach zero are removed (TRA-2017): otherwise every distinct
+   *  project root ever acquired leaves a zero-count entry behind for the
+   *  daemon's whole lifetime, and a stale nonzero entry pins the project
+   *  against idle-unload. getRefCount() still reads 0 for untracked roots. */
   release(projectRoot: string): void {
-    const entry = this.entries.get(ProjectResourcePool.key(projectRoot));
+    const key = ProjectResourcePool.key(projectRoot);
+    const entry = this.entries.get(key);
     if (!entry) return;
     entry.refCount = Math.max(0, entry.refCount - 1);
-    logger.debug({ projectRoot, refCount: entry.refCount }, 'Resource pool: released');
+    if (entry.refCount === 0) this.entries.delete(key);
+    else logger.debug({ projectRoot, refCount: entry.refCount }, 'Resource pool: released');
   }
 
   /** Forget a stopped project's own refcount bookkeeping. Idempotent. Does
@@ -178,5 +185,10 @@ export class ProjectResourcePool {
    *  ephemeral-sweep eviction, not the shared resources' lifecycle. */
   getRefCount(projectRoot: string): number {
     return this.entries.get(ProjectResourcePool.key(projectRoot))?.refCount ?? 0;
+  }
+
+  /** Distinct roots currently tracked — surfaced via GET /debug/memory. */
+  getTrackedProjectCount(): number {
+    return this.entries.size;
   }
 }

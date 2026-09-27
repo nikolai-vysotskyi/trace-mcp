@@ -20,6 +20,8 @@ interface JournalEntry {
   compact_result?: Record<string, unknown>;
   /** Estimated token size of the full response */
   result_tokens?: number;
+  /** UTF-8 byte size of compact_result (0 when absent) — backing the byte cap. */
+  compact_bytes?: number;
 }
 
 /**
@@ -62,6 +64,66 @@ export function summarizeToolParams(tool: string, params: Record<string, unknown
   // which then gets wrapped by the caller into the noisy 'tool("")' shape.
   if (keyStr.length === 0) return tool;
   return `${tool} ${keyStr}`;
+}
+
+/**
+ * UTF-8 byte size of a compact snapshot. `JSON.stringify(x).length` counts
+ * UTF-16 code units — up to 3x under the true size for Cyrillic/CJK content,
+ * which this repo's symbols and comments routinely contain (TRA-2017 review).
+ */
+function compactUtf8Size(compact: Record<string, unknown>): number {
+  return Buffer.byteLength(JSON.stringify(compact), 'utf8');
+}
+
+/**
+ * Shrink an oversized dedup snapshot to fit the per-snapshot budget
+ * (TRA-2017 review): halve the largest array payload (symbols / primary /
+ * nodes / ...) until it fits. Array order is stable, so the head — the part
+ * dedup readers actually use — survives. The trimmed snapshot carries
+ * `_truncated: { kept, total }` so the model never mistakes the served head
+ * for the whole result (`_result_count` keeps naming the pre-truncation
+ * total — statistics must stay honest about the original result). Returns
+ * undefined when there is nothing truncatable left (scalars-only snapshot
+ * that still doesn't fit); the caller then records metadata only and
+ * duplicate detection degrades from 'dedup' to 'warn' for that call.
+ *
+ * Never mutates the input: the under-cap fast path returns it as-is, the
+ * trim path works on a shallow copy. Returns the fitted snapshot with its
+ * already-computed UTF-8 size so the caller doesn't serialize twice.
+ */
+function truncateCompactToFit(
+  compact: Record<string, unknown>,
+  maxBytes: number,
+): { compact: Record<string, unknown> | undefined; bytes: number } {
+  const size = compactUtf8Size(compact);
+  if (size <= maxBytes) return { compact, bytes: size };
+  const trimmed: Record<string, unknown> = { ...compact };
+  // Arrays halved so far: key -> original length (for the _truncated marker).
+  const touched = new Map<string, number>();
+  // 64B slack: the _truncated marker added below must not push us back over.
+  for (;;) {
+    let biggestKey: string | null = null;
+    let biggestLen = 0;
+    for (const [key, value] of Object.entries(trimmed)) {
+      if (key === '_truncated') continue;
+      if (Array.isArray(value) && value.length > biggestLen) {
+        biggestKey = key;
+        biggestLen = value.length;
+      }
+    }
+    if (biggestKey === null || biggestLen <= 1) return { compact: undefined, bytes: 0 };
+    if (!touched.has(biggestKey)) touched.set(biggestKey, biggestLen);
+    trimmed[biggestKey] = (trimmed[biggestKey] as unknown[]).slice(0, Math.ceil(biggestLen / 2));
+    if (compactUtf8Size(trimmed) + 64 <= maxBytes) break;
+  }
+  let total = 0;
+  let kept = 0;
+  for (const [key, original] of touched) {
+    total += original;
+    kept += (trimmed[key] as unknown[]).length;
+  }
+  trimmed._truncated = { kept, total };
+  return { compact: trimmed, bytes: compactUtf8Size(trimmed) };
 }
 
 interface PrefetchBoost {
@@ -128,6 +190,29 @@ export class SessionJournal {
   private static readonly MAX_ENTRIES = 10_000;
   /** Drop the oldest 10% in one pass to amortise the splice cost. */
   private static readonly DROP_BATCH = 1_000;
+  /**
+   * Hard cap on retained dedup snapshots (TRA-2017). MAX_ENTRIES bounds the
+   * entry COUNT but a single compact_result can be tens of KB (a big file's
+   * outline, a context bundle) — 10k × ~40KB measured on a scratch daemon is
+   * ~400MB per long-lived agent session, and the daemon routinely holds ~10
+   * such sessions. When the budget is exceeded we strip compact_result from
+   * the oldest entries first (duplicate detection degrades gracefully from
+   * 'dedup' to 'warn'); entry metadata is untouched.
+   */
+  private static readonly MAX_COMPACT_BYTES = 5 * 1024 * 1024;
+  /**
+   * A single snapshot larger than the per-snapshot budget is truncated
+   * (largest array payload halved until it fits, marked with
+   * `_truncated: { kept, total }`), not stored whole — one giant bundle
+   * must not eat the whole session budget, but a trimmed snapshot still
+   * answers dedup with a compact reference instead of forcing full
+   * re-execution. Snapshots with nothing truncatable are skipped; the
+   * entry itself is still recorded, so warn-style duplicate detection keeps
+   * working.
+   */
+  private static readonly MAX_SINGLE_COMPACT_BYTES = 256 * 1024;
+  /** Running total of compact_bytes across retained entries. */
+  private compactBytes = 0;
 
   /**
    * Tools considered "independent, batchable" read-only lookups for Pattern 3
@@ -219,16 +304,37 @@ export class SessionJournal {
     const summary = this.buildSummary(tool, params);
     const hash = this.hash(tool, params);
 
+    // Byte-bound the dedup snapshots (TRA-2017): the entry-count cap alone
+    // lets a long session retain hundreds of MB of compact_result payloads.
+    let compact = opts?.compactResult;
+    let compactSize = 0;
+    if (compact && this.allHashes.has(hash)) {
+      // Repeat of an already-recorded call. checkDuplicate serves the FIRST
+      // entry's snapshot, so a fresh compact stored here would consume budget
+      // without ever being read — skip it, keep metadata only.
+      compact = undefined;
+    }
+    if (compact) {
+      const fitted = truncateCompactToFit(compact, SessionJournal.MAX_SINGLE_COMPACT_BYTES);
+      compact = fitted.compact;
+      compactSize = fitted.bytes;
+    }
+
     const entry: JournalEntry = {
       tool,
       params_hash: hash,
       params_summary: summary,
       result_count: resultCount,
       timestamp: Date.now(),
-      compact_result: opts?.compactResult,
+      compact_result: compact,
       result_tokens: opts?.resultTokens,
+      compact_bytes: compactSize,
     };
     this.entries.push(entry);
+    this.compactBytes += compactSize;
+    if (this.compactBytes > SessionJournal.MAX_COMPACT_BYTES) {
+      this.stripOldestCompacts();
+    }
 
     // Track file reads
     if (tool === 'get_symbol' || tool === 'get_outline') {
@@ -282,6 +388,7 @@ export class SessionJournal {
     this.allHashes.clear();
     this.zeroResultQueries.clear();
     this.taskContextTimestamps.length = 0;
+    this.compactBytes = 0;
     for (const entry of this.entries) {
       if (!this.allHashes.has(entry.params_hash)) {
         this.allHashes.set(entry.params_hash, entry);
@@ -292,7 +399,35 @@ export class SessionJournal {
       if (entry.tool === 'get_task_context' || entry.tool === 'get_feature_context') {
         this.taskContextTimestamps.push(entry.timestamp);
       }
+      this.compactBytes += entry.compact_bytes ?? 0;
     }
+  }
+
+  /**
+   * Strip compact_result from the oldest entries until the byte budget holds
+   * again (TRA-2017). Entry metadata stays — only the dedup short-circuit
+   * degrades (a repeat call warns instead of returning the stored snapshot).
+   * Each strip strictly reduces compactBytes, so this always terminates.
+   */
+  private stripOldestCompacts(): void {
+    for (const entry of this.entries) {
+      if (this.compactBytes <= SessionJournal.MAX_COMPACT_BYTES) break;
+      if (entry.compact_result) {
+        entry.compact_result = undefined;
+        this.compactBytes -= entry.compact_bytes ?? 0;
+        entry.compact_bytes = 0;
+      }
+    }
+  }
+
+  /** Live entry count — surfaced via GET /debug/memory (TRA-2017). */
+  getTotalEntries(): number {
+    return this.entries.length;
+  }
+
+  /** Live retained compact-snapshot bytes — surfaced via GET /debug/memory. */
+  getCompactBytes(): number {
+    return this.compactBytes;
   }
 
   /**
@@ -700,6 +835,7 @@ export class SessionJournal {
     this.filesRead.clear();
     this.zeroResultQueries.clear();
     this.taskContextTimestamps.length = 0;
+    this.compactBytes = 0;
     this.landmarkProvider = null;
   }
 }
