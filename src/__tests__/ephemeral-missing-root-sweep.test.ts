@@ -221,4 +221,24 @@ describe('sweepMissingRoots: no grace for a dead ephemeral workdir (TRA-1105)', 
     expect(newlyMissing).toEqual([]);
     expect(registry.listProjects()).toEqual([]);
   });
+
+  it('drops a missing Claude scratch-workspace root on the first sighting (TRA-1999)', () => {
+    const root = path.join(
+      tmpHome,
+      'scratch-workspaces',
+      'ebc30716-fe99-4dec-a364-2648f95b7459',
+      '83c85424-3333-4698-ad6f-9680b11c0184',
+      'scratch-2026-09-24-bd4302',
+    );
+    seedRegistry(root);
+    seedConfigSection(root);
+
+    // The order softGcSweep runs them in.
+    const { removed, newlyMissing } = registry.sweepMissingRoots(7);
+
+    expect(removed).toEqual([root]);
+    expect(newlyMissing).toEqual([]);
+    expect(registry.listProjects()).toEqual([]);
+    expect(configJsonc.pruneProjectConfigSections()).toEqual([root]);
+  });
 });

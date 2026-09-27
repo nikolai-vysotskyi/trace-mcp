@@ -189,6 +189,19 @@ const EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN =
   /[/\\]claude-\d+[/\\][^/\\]+[/\\][^/\\]+[/\\]scratchpad([/\\]|$)/i;
 
 /**
+ * Claude Code scratch-workspaces (TRA-1999):
+ * E.g. `~/Library/Application Support/Claude/scratch-workspaces/<uuid>/<uuid>/scratch-2026-09-24-bd4302`
+ * Same one-shot nature as the scratchpad above — an isolated run's checkout,
+ * abandoned in place when the run ends — but under a different container that
+ * the scratchpad pattern never matched. Found live: 15 such rows persisted in
+ * registry.json (each pinning an index DB and a .config.json section parsed on
+ * every server start), all implicit, Sep 15–24, never swept because no pattern
+ * recognised them.
+ */
+const EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN =
+  /[/\\]scratch-workspaces[/\\][^/\\]+[/\\][^/\\]+[/\\]scratch-[^/\\]+([/\\]|$)/i;
+
+/**
  * True when `root` is a one-shot agent-run checkout, in either layout the
  * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
  * {@link EPHEMERAL_TASK_DIR_PATTERN}), or matches a user-configured
@@ -207,6 +220,7 @@ export function isEphemeralProjectRoot(root: string): boolean {
     EPHEMERAL_WORKDIR_PATTERN.test(abs) ||
     EPHEMERAL_TASK_DIR_PATTERN.test(abs) ||
     EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN.test(abs) ||
+    EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN.test(abs) ||
     isUserExcludedProjectRoot(abs)
   );
 }

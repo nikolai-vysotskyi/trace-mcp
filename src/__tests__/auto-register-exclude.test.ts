@@ -130,6 +130,29 @@ describe('isUserExcludedProjectRoot (TRA-1881)', () => {
     ).toBe(true);
   });
 
+  it('treats Claude scratch-workspaces checkouts as ephemeral (TRA-1999)', () => {
+    writeGlobalConfig({});
+    // Observed live: ~/Library/Application Support/Claude/scratch-workspaces/<uuid>/<uuid>/scratch-<date>-<hash>
+    expect(
+      isEphemeralProjectRoot(
+        '/Users/n/Library/Application Support/Claude/scratch-workspaces/ebc30716-fe99-4dec-a364-2648f95b7459/83c85424-3333-4698-ad6f-9680b11c0184/scratch-2026-09-24-bd4302',
+      ),
+    ).toBe(true);
+    // Deeper roots below a scratch leaf are the same run.
+    expect(
+      isEphemeralProjectRoot(
+        '/Users/n/Library/Application Support/Claude/scratch-workspaces/ebc30716/83c85424/scratch-2026-09-24-bd4302/repo',
+      ),
+    ).toBe(true);
+    // Lookalikes stay persistent: the container without a scratch- leaf, and a
+    // project that merely mentions scratch-workspaces in its name.
+    expect(
+      isEphemeralProjectRoot('/Users/n/Library/Application Support/Claude/scratch-workspaces'),
+    ).toBe(false);
+    expect(isEphemeralProjectRoot('/Users/n/projects/my-scratch-workspaces-app')).toBe(false);
+    expect(isEphemeralProjectRoot('/Users/n/projects/scratch-app')).toBe(false);
+  });
+
   it('routes an excluded root DB to the ephemeral index dir', () => {
     const base = path.join(os.tmpdir(), 'trace-1881-db-gate');
     const stable = path.join(os.tmpdir(), 'trace-1881-stable-app');
