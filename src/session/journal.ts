@@ -20,7 +20,7 @@ interface JournalEntry {
   compact_result?: Record<string, unknown>;
   /** Estimated token size of the full response */
   result_tokens?: number;
-  /** JSON byte size of compact_result (0 when absent) — backing the byte cap. */
+  /** UTF-8 byte size of compact_result (0 when absent) — backing the byte cap. */
   compact_bytes?: number;
 }
 
@@ -64,6 +64,45 @@ export function summarizeToolParams(tool: string, params: Record<string, unknown
   // which then gets wrapped by the caller into the noisy 'tool("")' shape.
   if (keyStr.length === 0) return tool;
   return `${tool} ${keyStr}`;
+}
+
+/**
+ * UTF-8 byte size of a compact snapshot. `JSON.stringify(x).length` counts
+ * UTF-16 code units — up to 3x under the true size for Cyrillic/CJK content,
+ * which this repo's symbols and comments routinely contain (TRA-2017 review).
+ */
+function compactUtf8Size(compact: Record<string, unknown>): number {
+  return Buffer.byteLength(JSON.stringify(compact), 'utf8');
+}
+
+/**
+ * Shrink an oversized dedup snapshot to fit the per-snapshot budget
+ * (TRA-2017 review): halve the largest array payload (symbols / primary /
+ * nodes / ...) until it fits. Array order is stable, so the head — the part
+ * dedup readers actually use — survives. Returns undefined when there is
+ * nothing truncatable left (scalars-only snapshot that still doesn't fit);
+ * the caller then records metadata only and duplicate detection degrades
+ * from 'dedup' to 'warn' for that call.
+ */
+function truncateCompactToFit(
+  compact: Record<string, unknown>,
+  maxBytes: number,
+): Record<string, unknown> | undefined {
+  if (compactUtf8Size(compact) <= maxBytes) return compact;
+  const trimmed: Record<string, unknown> = { ...compact };
+  for (;;) {
+    let biggestKey: string | null = null;
+    let biggestLen = 0;
+    for (const [key, value] of Object.entries(trimmed)) {
+      if (Array.isArray(value) && value.length > biggestLen) {
+        biggestKey = key;
+        biggestLen = value.length;
+      }
+    }
+    if (biggestKey === null || biggestLen <= 1) return undefined;
+    trimmed[biggestKey] = (trimmed[biggestKey] as unknown[]).slice(0, Math.ceil(biggestLen / 2));
+    if (compactUtf8Size(trimmed) <= maxBytes) return trimmed;
+  }
 }
 
 interface PrefetchBoost {
@@ -141,9 +180,13 @@ export class SessionJournal {
    */
   private static readonly MAX_COMPACT_BYTES = 5 * 1024 * 1024;
   /**
-   * A single snapshot larger than this is never stored — one giant bundle
-   * must not eat the whole session budget. The entry itself is still
-   * recorded, so warn-style duplicate detection keeps working.
+   * A single snapshot larger than the per-snapshot budget is truncated
+   * (largest array payload halved until it fits), not stored whole — one
+   * giant bundle must not eat the whole session budget, but a trimmed
+   * snapshot still answers dedup with a compact reference instead of forcing
+   * full re-execution. Snapshots with nothing truncatable are skipped; the
+   * entry itself is still recorded, so warn-style duplicate detection keeps
+   * working.
    */
   private static readonly MAX_SINGLE_COMPACT_BYTES = 256 * 1024;
   /** Running total of compact_bytes across retained entries. */
@@ -242,14 +285,16 @@ export class SessionJournal {
     // Byte-bound the dedup snapshots (TRA-2017): the entry-count cap alone
     // lets a long session retain hundreds of MB of compact_result payloads.
     let compact = opts?.compactResult;
-    let compactSize = 0;
-    if (compact) {
-      compactSize = JSON.stringify(compact).length;
-      if (compactSize > SessionJournal.MAX_SINGLE_COMPACT_BYTES) {
-        compact = undefined;
-        compactSize = 0;
-      }
+    if (compact && this.allHashes.has(hash)) {
+      // Repeat of an already-recorded call. checkDuplicate serves the FIRST
+      // entry's snapshot, so a fresh compact stored here would consume budget
+      // without ever being read — skip it, keep metadata only.
+      compact = undefined;
     }
+    if (compact) {
+      compact = truncateCompactToFit(compact, SessionJournal.MAX_SINGLE_COMPACT_BYTES);
+    }
+    const compactSize = compact ? compactUtf8Size(compact) : 0;
 
     const entry: JournalEntry = {
       tool,
