@@ -325,7 +325,7 @@ CREATE INDEX IF NOT EXISTS idx_symbols_bases ON symbols(file_id)
 CREATE TABLE IF NOT EXISTS symbol_heritage (
     symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
     parent_name TEXT NOT NULL,
-    kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements', 'bases')),
+    kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements')),
     PRIMARY KEY (symbol_id, parent_name, kind)
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);
@@ -1892,7 +1892,7 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       CREATE TABLE IF NOT EXISTS symbol_heritage (
           symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
           parent_name TEXT NOT NULL,
-          kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements', 'bases')),
+          kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements')),
           PRIMARY KEY (symbol_id, parent_name, kind)
       );
       CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);

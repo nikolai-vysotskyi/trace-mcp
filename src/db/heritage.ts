@@ -19,7 +19,7 @@
 
 import type Database from 'better-sqlite3';
 
-export type HeritageKind = 'extends' | 'implements' | 'bases';
+export type HeritageKind = 'extends' | 'implements';
 
 export interface HeritageEntry {
   parentName: string;
@@ -43,7 +43,11 @@ function pushNames(out: HeritageEntry[], value: unknown, kind: HeritageKind): vo
  * Shapes per language plugin:
  * - TypeScript: `extends: string`, `implements: string[]`
  * - PHP: `extends: string[]`, `implements: string[]`
- * - Python: `bases: string[]`
+ *
+ * Python `bases` are deliberately NOT materialized here (TRA-2002 review):
+ * serving them through CHA fans get_call_graph output out ~16x on wide
+ * hierarchies, and that tradeoff needs its own budgeted PR. Downside parity
+ * with the pre-34 LIKE query, which never matched `bases` either.
  */
 export function extractHeritageEntries(metadata: unknown): HeritageEntry[] {
   if (!metadata || typeof metadata !== 'object') return [];
@@ -51,7 +55,6 @@ export function extractHeritageEntries(metadata: unknown): HeritageEntry[] {
   const out: HeritageEntry[] = [];
   pushNames(out, meta.extends, 'extends');
   pushNames(out, meta.implements, 'implements');
-  pushNames(out, meta.bases, 'bases');
   return out;
 }
 
@@ -71,13 +74,17 @@ function extractFromStoredJson(stored: string | null): HeritageEntry[] {
  * bypass the repository write path, exercising exactly this function).
  */
 export function backfillSymbolHeritage(db: Database.Database): number {
+  // NOTE: json_valid(metadata) must come first — json_extract throws
+  // SQLITE_ERROR (malformed JSON) on a single corrupt blob, which would abort
+  // the whole migration and brick every subsequent open (TRA-2002 review).
+  // symbols.metadata is bare TEXT with no CHECK, so legacy/hand-edited rows
+  // can be invalid; they backfill as empty.
   const rows = db
     .prepare(
       `SELECT id, metadata FROM symbols
-        WHERE metadata IS NOT NULL
+        WHERE json_valid(metadata)
           AND (json_extract(metadata, '$.extends') IS NOT NULL
-            OR json_extract(metadata, '$.implements') IS NOT NULL
-            OR json_extract(metadata, '$.bases') IS NOT NULL)`,
+            OR json_extract(metadata, '$.implements') IS NOT NULL)`,
     )
     .all() as { id: number; metadata: string | null }[];
   const insert = db.prepare(

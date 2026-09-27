@@ -13,7 +13,8 @@
  * 1. the query plan seeks `idx_symbol_heritage_parent` (no bare symbols scan),
  * 2. write-path sync keeps `symbol_heritage` in step with symbol writes,
  *    including upserts that remove heritage (no stale rows),
- * 3. the migration-34 backfill recovers rows written before the table existed.
+ * 3. the migration-34 backfill recovers rows written before the table existed
+ *    and skips corrupt metadata blobs instead of aborting the migration.
  */
 
 import type Database from 'better-sqlite3';
@@ -73,7 +74,7 @@ describe('symbol_heritage (TRA-2002)', () => {
     expect(lines.some((l) => /^SCAN s$/.test(l))).toBe(false);
   });
 
-  it('write path materializes extends (string + array), implements, and bases', () => {
+  it('write path materializes extends (string + array) and implements (array + scalar)', () => {
     const fileId = store.insertFile('src/h.ts', 'typescript', null, null);
     const insert = (name: string, metadata?: Record<string, unknown>) =>
       store.insertSymbol(fileId, {
@@ -87,7 +88,7 @@ describe('symbol_heritage (TRA-2002)', () => {
 
     insert('TsChild', { extends: 'Base' });
     insert('PhpChild', { extends: ['Base'], implements: ['IBase'] });
-    insert('PyChild', { bases: ['Base'] });
+    insert('ScalarImpl', { implements: 'IBase' });
     insert('Unrelated', { extends: 'Other' });
     insert('Plain');
 
@@ -96,10 +97,31 @@ describe('symbol_heritage (TRA-2002)', () => {
         .findImplementors('Base')
         .map((r) => r.name)
         .sort(),
-    ).toEqual(['PhpChild', 'PyChild', 'TsChild']);
-    expect(store.findImplementors('IBase').map((r) => r.name)).toEqual(['PhpChild']);
+    ).toEqual(['PhpChild', 'TsChild']);
+    expect(
+      store
+        .findImplementors('IBase')
+        .map((r) => r.name)
+        .sort(),
+    ).toEqual(['PhpChild', 'ScalarImpl']);
     expect(store.findImplementors('Nope')).toHaveLength(0);
     expect(heritageRows(store.db)).toHaveLength(5); // 1 + 2 + 1 + 1 + 0
+  });
+
+  it('python bases are deliberately not materialized (parity with the old LIKE query)', () => {
+    // TRA-2002 review: serving `bases` through CHA fans get_call_graph output
+    // out ~16x on wide hierarchies — deferred to a separate budgeted PR.
+    const fileId = store.insertFile('src/h.py', 'python', null, null);
+    store.insertSymbol(fileId, {
+      symbolId: 'src/h.py::PyChild#class',
+      name: 'PyChild',
+      kind: 'class' as never,
+      byteStart: 0,
+      byteEnd: 10,
+      metadata: { bases: ['Base'] },
+    });
+    expect(store.findImplementors('Base')).toHaveLength(0);
+    expect(heritageRows(store.db)).toHaveLength(0);
   });
 
   it('upsert that removes heritage clears stale rows', () => {
@@ -166,12 +188,28 @@ describe('symbol_heritage (TRA-2002)', () => {
         JSON.stringify({ implements: ['IBase'], extends: ['Base'] }),
       );
       raw.run(fileId.id, 'src/raw.ts::R3#class', 'R3', 'class', 0, 10, null);
+      // A corrupt blob (legacy/hand-edited DBs predate the json_valid guard).
+      // The expression indexes on symbols() evaluate json_extract at INSERT
+      // time and would reject this row first, so plant it the way such a row
+      // can only exist — written before those indexes did. The backfill must
+      // skip it, not abort the migration (TRA-2002 review item 1).
+      db.exec(`DROP INDEX idx_symbols_has_heritage;
+        DROP INDEX idx_symbols_exported;
+        DROP INDEX idx_symbols_call_sites;
+        DROP INDEX idx_symbols_type_refs;
+        DROP INDEX idx_symbols_bases;`);
+      raw.run(fileId.id, 'src/raw.ts::R4#class', 'R4', 'class', 0, 10, '{extends: "Base", ');
       expect(heritageRows(db)).toHaveLength(0);
 
       expect(backfillSymbolHeritage(db)).toBe(3);
       expect(heritageRows(db)).toHaveLength(3);
       const found = db.prepare(FIND_IMPLEMENTORS_SQL).all('Base') as { name: string }[];
       expect(found.map((r) => r.name).sort()).toEqual(['R1', 'R2']);
+      // The corrupt row survives untouched and stays invisible.
+      const corrupt = db.prepare('SELECT metadata FROM symbols WHERE name = ?').get('R4') as {
+        metadata: string;
+      };
+      expect(corrupt.metadata).toBe('{extends: "Base", ');
     } finally {
       db.close();
     }
