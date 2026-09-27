@@ -92,9 +92,37 @@ const OVERRIDES: Record<string, ToolAnnotations> = {
   mine_sessions: INDEX_MUTATING,
   refresh_co_changes: INDEX_MUTATING,
   detect_communities: INDEX_MUTATING,
+  // ── Index / decision-store mutation, defaulted to read-only before
+  // TRA-1988: each of these writes the index DB or decisions.db, so on a
+  // readonly snapshot handle they failed with SQLITE_READONLY instead of a
+  // retryable busy (see SnapshotBackend.mutatingToolName, which keys off
+  // this table — a tool that gains a write later is covered without
+  // touching that file).
+  snapshot_graph: INDEX_MUTATING,
+  pin: INDEX_MUTATING,
+  unpin: INDEX_MUTATING,
+  consolidate_decisions: INDEX_MUTATING,
+  build_decision_clusters: INDEX_MUTATING,
+  tune_decision_weights: INDEX_MUTATING,
+  regenerate_project_memo: INDEX_MUTATING,
+
+  // ── Destructive index repair (deletes data — see its DESTRUCTIVE note) ──
+  repair_index: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
 
   // ── Store mutation (not idempotent — creates new records) ──
   add_decision: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  // Writes a new decision row into decisions.db (see add_decision above).
+  remember_decision: {
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,

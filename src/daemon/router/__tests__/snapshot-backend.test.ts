@@ -127,6 +127,27 @@ describe('SnapshotBackend (TRA-948)', () => {
     expect(text).toContain('snapshot_readonly');
     expect(text).not.toContain('readonly database');
 
+    // Same for the tools that used to be mis-annotated as read-only
+    // (TRA-1988 review): each writes the index DB or decisions.db.
+    for (const [id, name] of [
+      [10, 'repair_index'],
+      [11, 'snapshot_graph'],
+      [12, 'pin'],
+      [13, 'remember_decision'],
+    ] as Array<[number, string]>) {
+      const busy = await sendAndWait(backend, {
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name, arguments: {} },
+      } as unknown as JSONRPCMessage);
+      expect(busy.error).toBeUndefined();
+      const busyText =
+        (busy.result as { content?: Array<{ text?: string }> })?.content?.[0]?.text ?? '';
+      expect(busyText).toContain('snapshot_readonly');
+      expect(busyText).not.toContain('readonly database');
+    }
+
     // Reads still pass through to the snapshot.
     const read = await sendAndWait(backend, {
       jsonrpc: '2.0',
