@@ -690,7 +690,7 @@ export function createServer(
   const vectorStore = config.ai?.enabled ? new BlobVectorStore(store.db) : null;
   const embeddingService = config.ai?.enabled ? aiProvider.embedding() : null;
   const reranker: RerankerService | null = config.ai?.enabled
-    ? new LLMReranker(aiProvider.fastInference())
+    ? new LLMReranker(aiProvider.fastInference(), config.ai.rerank_max_tokens)
     : null;
 
   function guardPath(

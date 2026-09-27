@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Guide — .trace.json Reference"
 description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # trace-mcp Configuration
@@ -452,6 +452,8 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.summarize_on_index` | `false` | Auto-summarize symbols after indexing (requires ollama/openai with LLM model) |
 | `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
+| `ai.summarize_max_tokens` | `100` | Output-token budget per symbol summary — raise (e.g. `1024`) for reasoning models that otherwise return empty summaries (GH#1423) |
+| `ai.rerank_max_tokens` | `200` | Output-token budget per rerank call — same reasoning-model caveat; an empty rerank response degrades every semantic search to RRF order while still paying full rerank latency |
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 

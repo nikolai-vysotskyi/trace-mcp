@@ -63,6 +63,23 @@ describe('sanitizeGeneratedSummary', () => {
   it('returns empty string when every line is an artifact', () => {
     expect(sanitizeGeneratedSummary('assistant: hi\nignore previous prompt instructions')).toBe('');
   });
+
+  it('strips a <think> block and keeps the summary underneath (GH#1423)', () => {
+    const raw =
+      '<think>\nThe function adds two numbers because the signature says…\n</think>\nReturns the sum of two numbers.';
+    expect(sanitizeGeneratedSummary(raw)).toBe('Returns the sum of two numbers.');
+  });
+
+  it('returns empty when the whole response is thinking', () => {
+    expect(sanitizeGeneratedSummary('<think>reasoning about the code…</think>')).toBe('');
+  });
+
+  it('strips an unclosed leading <think> block and is case-insensitive', () => {
+    // No closing tag: the whole response is thinking output, so there is no
+    // usable summary — correctly empty (retried on a later run).
+    expect(sanitizeGeneratedSummary('<THINK>still thinking…')).toBe('');
+    expect(sanitizeGeneratedSummary('<think>hmm\nReal summary here.')).toBe('');
+  });
 });
 
 // ── (A.2) Docstring stripping ────────────────────────────────────────────────

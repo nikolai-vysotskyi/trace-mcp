@@ -8,7 +8,16 @@ import type { InferenceService, RerankerService } from './interfaces.js';
 import { PROMPTS } from './prompts.js';
 
 export class LLMReranker implements RerankerService {
-  constructor(private inference: InferenceService) {}
+  constructor(
+    private inference: InferenceService,
+    /**
+     * Output-token budget per rerank call. Wired from
+     * `ai.rerank_max_tokens` (default 200); reasoning models need headroom
+     * or they return an empty body and every search degrades to RRF order
+     * while still paying full rerank latency (GH#1423).
+     */
+    private maxTokens: number = PROMPTS.rerank.maxTokens,
+  ) {}
 
   async rerank(
     query: string,
@@ -27,13 +36,20 @@ export class LLMReranker implements RerankerService {
       });
 
       const response = await this.inference.generate(prompt, {
-        maxTokens: PROMPTS.rerank.maxTokens,
+        maxTokens: this.maxTokens,
         temperature: PROMPTS.rerank.temperature,
       });
 
       const scores = this.parseScores(response, documents.length);
       if (!scores) {
-        logger.debug('Reranker: failed to parse scores, keeping original order');
+        // Warn, not debug: an empty/unparseable rerank response means every
+        // semantic search just paid full LLM latency for an RRF fallback.
+        // The classic cause is a reasoning model burning the output budget —
+        // see ai.rerank_max_tokens (GH#1423).
+        logger.warn(
+          { responseLength: response.length, expectedScores: documents.length },
+          'Reranker: failed to parse scores, keeping original order',
+        );
         return documents.slice(0, topK).map((d, i) => ({
           id: d.id,
           score: documents.length - i,

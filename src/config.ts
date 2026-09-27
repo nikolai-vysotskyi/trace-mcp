@@ -73,6 +73,21 @@ const AiConfigSchema = z
       .array(z.string())
       .default(['class', 'function', 'method', 'interface', 'trait', 'enum', 'type']),
     /**
+     * Output-token budget for one symbol summary. Reasoning ("thinking")
+     * models spend the budget on reasoning tokens first and return HTTP 200
+     * with an empty body when it runs out — which the pipeline treats as "no
+     * usable summary" and skips (GH#1423). Raise this (e.g. 1024) when
+     * summarizing behind such a model. Default 100.
+     */
+    summarize_max_tokens: z.number().int().positive().default(100),
+    /**
+     * Output-token budget for one rerank call. Same reasoning-model caveat
+     * as `summarize_max_tokens`: at 200 tokens a thinking model returns an
+     * empty body, the scores fail to parse, and every semantic search pays
+     * full rerank latency for an RRF fallback. Default 200.
+     */
+    rerank_max_tokens: z.number().int().positive().default(200),
+    /**
      * Whether to include docstrings / leading comment blocks in the source sent
      * to the summarizer. Default true (preserves existing behavior). Set false
      * to harden against indirect prompt injection: docstrings are free-form,

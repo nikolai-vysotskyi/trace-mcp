@@ -18,6 +18,13 @@ interface SummarizationConfig {
   /** Max parallel inference requests (default 1 = sequential). */
   concurrency: number;
   /**
+   * Output-token budget per summary. Overrides
+   * `PROMPTS.summarize_symbol.maxTokens` (default 100); wired from
+   * `ai.summarize_max_tokens` so reasoning models that burn the budget on
+   * thinking tokens can be given headroom.
+   */
+  maxTokens?: number;
+  /**
    * When false, leading docstrings / comment blocks are stripped from the
    * source before it is sent to the summarizer (IPI hardening — docstrings are
    * the highest-risk injection surface). Defaults to true, preserving the
@@ -77,6 +84,15 @@ export class SummarizationPipeline {
       completedAt: 0,
     });
 
+    /**
+     * Ids already sent to the provider this run. Empty responses are
+     * deliberately NOT stored (they retry on a later run once the model is
+     * fixed), so they stay `summary IS NULL` and the next fetch would
+     * re-select them — without this set, partial-progress batches re-bill
+     * those rows once per subsequent batch (GH#1423).
+     */
+    const attempted = new Set<number>();
+
     try {
       do {
         // Cooperative cancellation: bail out at batch boundaries instead of
@@ -88,7 +104,13 @@ export class SummarizationPipeline {
         batch = this.store.getUnsummarizedSymbols(this.config.kinds, this.config.batchSize);
         if (batch.length === 0) break;
 
-        const results = await this.summarizeBatch(batch, signal);
+        // Skip rows already billed this run — re-sending them only burns
+        // provider budget for a response we already know is unusable.
+        const fresh = batch.filter((sym) => !attempted.has(sym.id));
+        if (fresh.length === 0) break;
+        for (const sym of batch) attempted.add(sym.id);
+
+        const results = await this.summarizeBatch(fresh, signal);
         for (const { id, summary } of results) {
           this.store.updateSymbolSummary(id, summary);
           // Summary feeds buildEmbeddingText — drop any stale vector so the
@@ -102,6 +124,21 @@ export class SummarizationPipeline {
           { batch: batch.length, total: totalSummarized },
           'Summarization batch complete',
         );
+
+        if (results.length === 0) {
+          // Nothing in this batch was storable, so every row is still
+          // `summary IS NULL` and the next fetch would return this exact
+          // batch — the loop that re-billed one reporter's account ~261k
+          // times (GH#1423). Stop: the leftovers stay unsummarized and retry
+          // on a later run, and the degradation warning below can finally
+          // fire (it was unreachable while the loop never exited).
+          logger.warn(
+            { batchSize: fresh.length },
+            'Summarization batch produced no stored summaries — stopping this run ' +
+              'instead of re-billing the same symbols',
+          );
+          break;
+        }
       } while (batch.length === this.config.batchSize);
 
       this.maybeWarnSilentDegradation();
@@ -154,7 +191,7 @@ export class SummarizationPipeline {
         });
 
         const summary = await this.inferenceService.generate(prompt, {
-          maxTokens: template.maxTokens,
+          maxTokens: this.config.maxTokens ?? template.maxTokens,
           temperature: template.temperature,
           signal,
         });
@@ -219,7 +256,7 @@ export class SummarizationPipeline {
       },
       'AI summarizer returned successful responses with no usable summary for most symbols — ' +
         'likely a "thinking" model consuming the entire output budget on reasoning tokens. ' +
-        'Remedy: raise ai.summarize max tokens, or set ai.openaiExtraBody to disable thinking ' +
+        'Remedy: raise ai.summarize_max_tokens, or set ai.openaiExtraBody to disable thinking ' +
         '(e.g. { "reasoning_effort": "none" } / { "chat_template_kwargs": { "enable_thinking": false } }).',
     );
   }
