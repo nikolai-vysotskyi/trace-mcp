@@ -41,6 +41,12 @@ function sendAndWait(b: SnapshotBackend, msg: JSONRPCMessage): Promise<Record<st
 
 describe('SnapshotBackend (TRA-948)', () => {
   it('answers initialize and get_project_map from the snapshot without mutating it', async () => {
+    const seed = initializeDatabase(dbPath);
+    try {
+      seed.prepare("INSERT INTO files (path, indexed_at) VALUES ('a.ts', '2026-01-01')").run();
+    } finally {
+      seed.close();
+    }
     backend = new SnapshotBackend({
       projectRoot: tmpDir,
       config: TraceMcpConfigSchema.parse({}),
@@ -78,9 +84,88 @@ describe('SnapshotBackend (TRA-948)', () => {
       sharedDbPath: join(tmpDir, 'never-created.db'),
     });
     await expect(backend.start()).rejects.toThrow();
+    backend = null;
+  });
+
+  it('refuses start() on an empty shared DB so fresh projects fall through to local mode (TRA-1988)', async () => {
+    // beforeEach leaves a freshly-initialized DB with zero indexed files —
+    // exactly what project registration creates before the first index.
+    backend = new SnapshotBackend({
+      projectRoot: tmpDir,
+      config: TraceMcpConfigSchema.parse({}),
+      sharedDbPath: dbPath,
+    });
+    await expect(backend.start()).rejects.toThrow(/no indexed files/);
+    backend = null;
+    // The shared file itself is untouched and still usable.
+    expect(existsSync(dbPath)).toBe(true);
+  });
+
+  it('answers index-mutating tools with a retryable busy instead of SQLITE_READONLY (TRA-1988)', async () => {
+    // Seed a single file row so the snapshot has something worth serving.
+    const seed = initializeDatabase(dbPath);
+    try {
+      seed.prepare("INSERT INTO files (path, indexed_at) VALUES ('a.ts', '2026-01-01')").run();
+    } finally {
+      seed.close();
+    }
+    backend = new SnapshotBackend({
+      projectRoot: tmpDir,
+      config: TraceMcpConfigSchema.parse({}),
+      sharedDbPath: dbPath,
+    });
+    await backend.start();
+
+    const call = await sendAndWait(backend, {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'reindex', arguments: { force: true } },
+    } as unknown as JSONRPCMessage);
+    expect(call.error).toBeUndefined();
+    const text = (call.result as { content?: Array<{ text?: string }> })?.content?.[0]?.text ?? '';
+    expect(text).toContain('snapshot_readonly');
+    expect(text).not.toContain('readonly database');
+
+    // Same for the tools that used to be mis-annotated as read-only
+    // (TRA-1988 review): each writes the index DB or decisions.db.
+    for (const [id, name] of [
+      [10, 'repair_index'],
+      [11, 'snapshot_graph'],
+      [12, 'pin'],
+      [13, 'remember_decision'],
+    ] as Array<[number, string]>) {
+      const busy = await sendAndWait(backend, {
+        jsonrpc: '2.0',
+        id,
+        method: 'tools/call',
+        params: { name, arguments: {} },
+      } as unknown as JSONRPCMessage);
+      expect(busy.error).toBeUndefined();
+      const busyText =
+        (busy.result as { content?: Array<{ text?: string }> })?.content?.[0]?.text ?? '';
+      expect(busyText).toContain('snapshot_readonly');
+      expect(busyText).not.toContain('readonly database');
+    }
+
+    // Reads still pass through to the snapshot.
+    const read = await sendAndWait(backend, {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: { name: 'get_project_map', arguments: {} },
+    } as unknown as JSONRPCMessage);
+    expect(read.error).toBeUndefined();
+    expect(read.result).toBeTruthy();
   });
 
   it('leaves the shared DB file on disk and reusable after stop() — never deletes or locks it', async () => {
+    const seed = initializeDatabase(dbPath);
+    try {
+      seed.prepare("INSERT INTO files (path, indexed_at) VALUES ('a.ts', '2026-01-01')").run();
+    } finally {
+      seed.close();
+    }
     backend = new SnapshotBackend({
       projectRoot: tmpDir,
       config: TraceMcpConfigSchema.parse({}),

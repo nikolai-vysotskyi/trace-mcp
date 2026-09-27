@@ -100,8 +100,16 @@ beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'trace-mcp-snapshot-session-'));
   dbPath = join(tmpDir, 'shared.db');
   // Pre-create the index DB the way the daemon would (TRA-948 requirement 1:
-  // StdioSession must find it already sitting on disk at boot).
-  initializeDatabase(dbPath).close();
+  // StdioSession must find it already sitting on disk at boot) — with one
+  // indexed file, i.e. a snapshot actually worth serving. An empty (0-file)
+  // DB is a fresh registration, not an index, and the session skips the
+  // snapshot fast path for it (TRA-1988).
+  const seedDb = initializeDatabase(dbPath);
+  try {
+    seedDb.prepare("INSERT INTO files (path, indexed_at) VALUES ('a.ts', '2026-01-01')").run();
+  } finally {
+    seedDb.close();
+  }
   blackHole = await startBlackHoleServer();
 });
 

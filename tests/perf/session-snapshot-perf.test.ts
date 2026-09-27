@@ -78,7 +78,15 @@ let session: InstanceType<typeof StdioSession> | null = null;
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'trace-mcp-snapshot-perf-'));
   dbPath = join(tmpDir, 'shared.db');
-  initializeDatabase(dbPath).close();
+  // One indexed file: an empty (0-file) DB is a fresh registration, not an
+  // index, and the session skips the snapshot fast path for it (TRA-1988) —
+  // without this the test would measure the local-fallback path instead.
+  const seedDb = initializeDatabase(dbPath);
+  try {
+    seedDb.prepare("INSERT INTO files (path, indexed_at) VALUES ('a.ts', '2026-01-01')").run();
+  } finally {
+    seedDb.close();
+  }
   blackHole = await startBlackHoleServer();
 });
 

@@ -7,6 +7,7 @@ import type { TraceMcpConfig } from '../../config.js';
 import { Store } from '../../db/store.js';
 import { DECISIONS_DB_PATH, TOPOLOGY_DB_PATH } from '../../global.js';
 import { logger } from '../../logger.js';
+import { getToolAnnotations } from '../../server/tool-annotations.js';
 import { DecisionStore } from '../../memory/decision-store.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
 import { ProgressState } from '../../progress.js';
@@ -35,6 +36,12 @@ export interface SnapshotBackendOptions {
  * Opens `sharedDbPath` directly with no seed copy and no schema/migration pass
  * (unlike LocalBackend's owned session DB) — this file belongs to the daemon,
  * so start() is dominated by SQLite's open cost, not a page-by-page backup.
+ *
+ * Two guards keep the readonly handle from ever serving writes (TRA-1988):
+ * an empty shared DB refuses start() (a fresh registration's 0-file file is
+ * not a snapshot worth serving — the session falls through to a writable
+ * LocalBackend instead), and index-mutating tools answered here get a
+ * retryable `snapshot_readonly` busy instead of SQLITE_READONLY.
  */
 export class SnapshotBackend implements Backend {
   readonly kind = 'snapshot' as const;
@@ -71,6 +78,25 @@ export class SnapshotBackend implements Backend {
     const { sharedDbPath, projectRoot, config } = this.opts;
     // Readonly, no DDL/migrations — the daemon owns this file's schema.
     this.db = new Database(sharedDbPath, { readonly: true, fileMustExist: true });
+    // TRA-1988: an empty shared DB is not a snapshot worth serving. Project
+    // registration creates the file before anything is indexed, so on a
+    // fresh project this backend would otherwise answer the session's first
+    // mutating calls (an immediate `reindex`) from a readonly handle and
+    // fail them with SQLITE_READONLY. Refuse here — StdioSession's bootstrap
+    // already falls back to the full (writable LocalBackend) path when
+    // start() throws — instead of serving an empty index that can only fail
+    // writes. Mirrors seedSessionDbFromShared's empty guard (TRA-931).
+    if (countIndexedFiles(this.db) === 0) {
+      try {
+        this.db.close();
+      } catch {
+        /* best-effort */
+      }
+      this.db = null;
+      throw new Error(
+        'SnapshotBackend: shared DB holds no indexed files — skipping snapshot fast path',
+      );
+    }
     const store = new Store(this.db);
     const registry = PluginRegistry.createWithDefaults();
     const progress = new ProgressState(this.db);
@@ -186,7 +212,64 @@ export class SnapshotBackend implements Backend {
   }
 
   async send(msg: JSONRPCMessage): Promise<void> {
+    // TRA-1988: this backend holds a readonly handle onto a file it doesn't
+    // own — running an index-mutating tool here can only end in
+    // "attempt to write a readonly database". Answer those calls with the
+    // same retryable busy shape the writable backends use for their own
+    // transient states (reindex_in_progress, project_stopping) instead of
+    // letting the write hit SQLite. The real backend (proxy or local) takes
+    // over via swap() moments later and serves the retry for real. Reads
+    // pass through untouched — they are the reason this backend exists.
+    const mutatingTool = mutatingToolName(msg);
+    if (mutatingTool !== null) {
+      const id = (msg as unknown as { id: string | number }).id;
+      this.onmessage?.({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                status: 'busy',
+                error: 'snapshot_readonly',
+                tool: mutatingTool,
+                message:
+                  'Session is still starting on a read-only index snapshot; retry this call in a moment',
+              }),
+            },
+          ],
+          isError: true,
+        },
+      } as unknown as JSONRPCMessage);
+      return;
+    }
     if (!this.clientTransport) throw new Error('SnapshotBackend not started');
     await this.clientTransport.send(msg);
+  }
+}
+
+/**
+ * Name of the called tool when `msg` is a `tools/call` request for an
+ * index-mutating tool (TRA-1988), null otherwise. Tool mutability comes from
+ * the same central annotations the surface uses, so a tool that gains a
+ * write later is covered without touching this file.
+ */
+function mutatingToolName(msg: JSONRPCMessage): string | null {
+  const m = msg as unknown as { method?: unknown; params?: unknown; id?: unknown };
+  if (m.method !== 'tools/call') return null;
+  if (m.id === undefined || m.id === null) return null;
+  const name = (m.params as { name?: unknown } | undefined)?.name;
+  if (typeof name !== 'string' || name.length === 0) return null;
+  return getToolAnnotations(name).readOnlyHint === false ? name : null;
+}
+
+/** Rows in `files`, or 0 when the table is missing/unreadable (fresh DB). */
+function countIndexedFiles(db: Database.Database): number {
+  try {
+    const row = db.prepare('SELECT COUNT(*) AS n FROM files').get() as { n?: number } | undefined;
+    return row?.n ?? 0;
+  } catch {
+    return 0;
   }
 }
