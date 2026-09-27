@@ -61,6 +61,8 @@ const MIGRATION_TABLES_REQUIRED_IN_DDL: ReadonlyArray<{
   { table: 'runtime_spans', introducedIn: 12 },
   { table: 'runtime_services', introducedIn: 12 },
   { table: 'runtime_aggregates', introducedIn: 12 },
+  // v34 (TRA-2002) — materialized heritage edges for findImplementors
+  { table: 'symbol_heritage', introducedIn: 34 },
 ];
 
 describe('DDL/migration parity for fresh DB', () => {

@@ -148,7 +148,7 @@ describe('TRA-1541 trigram-merge', () => {
     const version = reopened
       .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
       .get() as { value: string };
-    expect(Number(version.value)).toBe(33);
+    expect(Number(version.value)).toBe(34);
     reopened.close();
   });
 

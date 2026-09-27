@@ -3,9 +3,10 @@ import * as os from 'node:os';
 import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
+import { backfillSymbolHeritage } from './heritage.js';
 import { installSlowStatementGuard } from './slow-statement.js';
 
-const SCHEMA_VERSION = 33;
+const SCHEMA_VERSION = 34;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -313,6 +314,21 @@ CREATE INDEX IF NOT EXISTS idx_symbols_type_refs ON symbols(file_id)
   WHERE json_extract(metadata, '$.typeRefs') IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_symbols_bases ON symbols(file_id)
   WHERE json_extract(metadata, '$.bases') IS NOT NULL;
+-- v34 (TRA-2002): materialized heritage edges. findImplementors used to run a
+-- leading-wildcard LIKE over json_extract(metadata, '$.implements'/'$.extends')
+-- on every symbol row — unindexable, 41s event-loop stalls + get_call_graph
+-- compute-budget blowouts (via CHA collectDescendants). One row per
+-- (symbol, parent-name) edge, maintained at write time by
+-- SymbolRepository.insertSymbol and backfilled for upgraded DBs by
+-- MIGRATIONS[34]. Mirrored there for upgraded-DB parity (byte-identical
+-- definitions).
+CREATE TABLE IF NOT EXISTS symbol_heritage (
+    symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+    parent_name TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements', 'bases')),
+    PRIMARY KEY (symbol_id, parent_name, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -1865,6 +1881,24 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     db.exec(`INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')`);
     ensureNameTriTriggers(db);
     db.exec('DROP TABLE IF EXISTS symbol_trigrams');
+  },
+  34: (db) => {
+    // TRA-2002: materialize heritage edges so findImplementors stops running
+    // a leading-wildcard LIKE scan over every symbol's metadata blob (41s
+    // event-loop stall in production, get_call_graph compute-budget blowout).
+    // Table + index mirror the top-of-file DDL block for fresh-DB parity
+    // (byte-identical definitions); then backfill from existing rows.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS symbol_heritage (
+          symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+          parent_name TEXT NOT NULL,
+          kind        TEXT NOT NULL CHECK (kind IN ('extends', 'implements', 'bases')),
+          PRIMARY KEY (symbol_id, parent_name, kind)
+      );
+      CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);
+    `);
+    const backfilled = backfillSymbolHeritage(db);
+    logger.info({ heritageEdges: backfilled }, 'Migration 34: backfilled symbol_heritage');
   },
 };
 

@@ -1,6 +1,18 @@
 import type Database from 'better-sqlite3';
 import type { RawSymbol } from '../../plugin-api/types.js';
+import { extractHeritageEntries } from '../heritage.js';
 import type { SymbolRow, SymbolWithFilePath } from '../types.js';
+
+/**
+ * Subclass/implementor lookup (TRA-2002). Served from the materialized
+ * `symbol_heritage` side table — an indexed equality seek on `parent_name`.
+ * Exported so the query-plan regression test pins this exact shape.
+ */
+export const FIND_IMPLEMENTORS_SQL = `SELECT DISTINCT s.*, f.path as file_path
+        FROM symbol_heritage h
+        JOIN symbols s ON s.id = h.symbol_id
+        JOIN files f ON s.file_id = f.id
+        WHERE h.parent_name = ?`;
 
 export class SymbolRepository {
   private readonly _stmts: {
@@ -8,6 +20,8 @@ export class SymbolRepository {
     bulkInsertSymbolNodesByFileId: Database.Statement;
     deleteSymbolsByFileId: Database.Statement;
     deleteSymbolNodesByFileId: Database.Statement;
+    deleteHeritageBySymbolId: Database.Statement;
+    insertHeritage: Database.Statement;
     getSymbolsByFileId: Database.Statement;
     getSymbolBySymbolId: Database.Statement;
     getSymbolByFqn: Database.Statement;
@@ -58,6 +72,14 @@ export class SymbolRepository {
       deleteSymbolNodesByFileId: db.prepare(
         `DELETE FROM nodes WHERE node_type = 'symbol'
          AND ref_id IN (SELECT id FROM symbols WHERE file_id = ?)`,
+      ),
+      // TRA-2002: materialized heritage rows for this symbol are refreshed on
+      // every write (delete + re-insert). Rows of deleted symbols vanish via
+      // the ON DELETE CASCADE FK on symbol_heritage.symbol_id.
+      deleteHeritageBySymbolId: db.prepare('DELETE FROM symbol_heritage WHERE symbol_id = ?'),
+      insertHeritage: db.prepare(
+        `INSERT OR IGNORE INTO symbol_heritage (symbol_id, parent_name, kind)
+         VALUES (?, ?, ?)`,
       ),
       getSymbolsByFileId: db.prepare('SELECT * FROM symbols WHERE file_id = ? ORDER BY byte_start'),
       getSymbolBySymbolId: db.prepare('SELECT * FROM symbols WHERE symbol_id = ?'),
@@ -131,7 +153,23 @@ export class SymbolRepository {
     }
     const symbolId = row.id;
     createNode('symbol', symbolId);
+    this.syncHeritage(symbolId, sym.metadata);
     return symbolId;
+  }
+
+  /**
+   * Refresh the materialized `symbol_heritage` rows for one symbol (TRA-2002).
+   * The delete is unconditional so an upsert that *removes* heritage (same
+   * symbol_id re-indexed without it) cannot leave stale parent rows behind;
+   * it is a single indexed seek and a no-op for the common heritage-less
+   * symbol. `sym.metadata` is the pre-stringify object, so extraction costs
+   * no extra JSON parse.
+   */
+  private syncHeritage(symbolId: number, metadata: unknown): void {
+    this._stmts.deleteHeritageBySymbolId.run(symbolId);
+    for (const e of extractHeritageEntries(metadata)) {
+      this._stmts.insertHeritage.run(symbolId, e.parentName, e.kind);
+    }
   }
 
   insertSymbols(
@@ -279,19 +317,17 @@ export class SymbolRepository {
       .all() as SymbolWithFilePath[];
   }
 
+  /**
+   * Subclasses / implementors of `name`, served from the materialized
+   * `symbol_heritage` side table (TRA-2002). The previous implementation ran
+   * a leading-wildcard `LIKE '%"Foo"%'` over `json_extract(metadata, ...)`
+   * on every symbol row — unindexable, 41s event-loop stalls in production.
+   * This is an indexed equality seek on `parent_name`; heritage rows are
+   * maintained at write time (see syncHeritage) and backfilled by migration
+   * 34. DISTINCT guards the pathological `extends X implements X` double row.
+   */
   findImplementors(name: string): SymbolWithFilePath[] {
-    return this.db
-      .prepare(
-        `SELECT s.*, f.path as file_path
-       FROM symbols s
-       JOIN files f ON s.file_id = f.id
-       WHERE s.metadata IS NOT NULL AND (
-         json_extract(s.metadata, '$.implements') LIKE '%"' || ? || '"%'
-         OR json_extract(s.metadata, '$.extends') LIKE '%"' || ? || '"%'
-         OR json_extract(s.metadata, '$.extends') = ?
-       )`,
-      )
-      .all(name, name, name) as SymbolWithFilePath[];
+    return this.db.prepare(FIND_IMPLEMENTORS_SQL).all(name) as SymbolWithFilePath[];
   }
 
   getSymbolsWithHeritage(fileIds?: number[]): (SymbolRow & { file_path: string })[] {
