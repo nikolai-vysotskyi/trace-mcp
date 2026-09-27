@@ -25,6 +25,9 @@ function stubDeps(overrides: Partial<Parameters<typeof buildMemoryReport>[0]> = 
     sessionClients: new Map<string, string>(),
     sessionLastSeen: new Map<string, number>(),
     registeredProjects: 0,
+    resourcePoolEntries: 0,
+    sessionJournalEntries: 0,
+    sessionJournalCompactBytes: 0,
     ...overrides,
   };
 }
@@ -126,5 +129,18 @@ describe('GET /debug/memory endpoint surface', () => {
     // not expose getBufferSize. The report must omit `telemetry` entirely.
     const report = buildMemoryReport(stubDeps());
     expect(report.telemetry).toBeUndefined();
+  });
+
+  it('exposes TRA-2017 journal/pool pressure gauges', () => {
+    const report = buildMemoryReport(
+      stubDeps({
+        resourcePoolEntries: 4,
+        sessionJournalEntries: 1234,
+        sessionJournalCompactBytes: 5678,
+      }),
+    );
+    expect(report.caches.resource_pool_entries).toBe(4);
+    expect(report.caches.session_journal_total_entries).toBe(1234);
+    expect(report.caches.session_journal_compact_bytes).toBe(5678);
   });
 });

@@ -3123,6 +3123,18 @@ program
       // Diagnostics: process memory + sizes of every known in-memory cache.
       // Symptom-driven leak debugging — keep response shape stable.
       if (req.method === 'GET' && url.pathname === '/debug/memory') {
+        // TRA-2017: aggregate live session-journal pressure (the byte-capped
+        // dedup store that dominates per-session heap on busy daemons).
+        let sessionJournalEntries = 0;
+        let sessionJournalCompactBytes = 0;
+        for (const handle of sessionHandles.values()) {
+          try {
+            sessionJournalEntries += handle.journal.getTotalEntries();
+            sessionJournalCompactBytes += handle.journal.getCompactBytes();
+          } catch {
+            /* a closing session's journal must not break diagnostics */
+          }
+        }
         const report = buildMemoryReport({
           clients,
           sseConnections,
@@ -3135,6 +3147,9 @@ program
           sessionClients,
           sessionLastSeen,
           registeredProjects: projectManager.listProjects().length,
+          resourcePoolEntries: resourcePool.getTrackedProjectCount(),
+          sessionJournalEntries,
+          sessionJournalCompactBytes,
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(report));

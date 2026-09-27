@@ -148,8 +148,13 @@ export function collectIdleSessions(
  * pool clamps at zero instead of tracking per-session ownership).
  */
 export function dropSessionBookkeeping(sid: string, deps: SessionBookkeepingDeps): void {
-  for (const sids of deps.projectSessions.values()) {
+  for (const [root, sids] of deps.projectSessions) {
     sids.delete(sid);
+    // TRA-2017: drop the root key once its set drains — otherwise every
+    // distinct transient root leaves an empty Set behind for the daemon's
+    // whole lifetime (full teardown already deletes the key; the sweep path
+    // must match it).
+    if (sids.size === 0) deps.projectSessions.delete(root);
   }
   deps.sessionTransports.delete(sid);
   const h = deps.sessionHandles.get(sid);

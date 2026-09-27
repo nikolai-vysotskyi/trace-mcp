@@ -20,6 +20,8 @@ interface JournalEntry {
   compact_result?: Record<string, unknown>;
   /** Estimated token size of the full response */
   result_tokens?: number;
+  /** JSON byte size of compact_result (0 when absent) — backing the byte cap. */
+  compact_bytes?: number;
 }
 
 /**
@@ -128,6 +130,24 @@ export class SessionJournal {
   private static readonly MAX_ENTRIES = 10_000;
   /** Drop the oldest 10% in one pass to amortise the splice cost. */
   private static readonly DROP_BATCH = 1_000;
+  /**
+   * Hard cap on retained dedup snapshots (TRA-2017). MAX_ENTRIES bounds the
+   * entry COUNT but a single compact_result can be tens of KB (a big file's
+   * outline, a context bundle) — 10k × ~40KB measured on a scratch daemon is
+   * ~400MB per long-lived agent session, and the daemon routinely holds ~10
+   * such sessions. When the budget is exceeded we strip compact_result from
+   * the oldest entries first (duplicate detection degrades gracefully from
+   * 'dedup' to 'warn'); entry metadata is untouched.
+   */
+  private static readonly MAX_COMPACT_BYTES = 5 * 1024 * 1024;
+  /**
+   * A single snapshot larger than this is never stored — one giant bundle
+   * must not eat the whole session budget. The entry itself is still
+   * recorded, so warn-style duplicate detection keeps working.
+   */
+  private static readonly MAX_SINGLE_COMPACT_BYTES = 256 * 1024;
+  /** Running total of compact_bytes across retained entries. */
+  private compactBytes = 0;
 
   /**
    * Tools considered "independent, batchable" read-only lookups for Pattern 3
@@ -219,16 +239,33 @@ export class SessionJournal {
     const summary = this.buildSummary(tool, params);
     const hash = this.hash(tool, params);
 
+    // Byte-bound the dedup snapshots (TRA-2017): the entry-count cap alone
+    // lets a long session retain hundreds of MB of compact_result payloads.
+    let compact = opts?.compactResult;
+    let compactSize = 0;
+    if (compact) {
+      compactSize = JSON.stringify(compact).length;
+      if (compactSize > SessionJournal.MAX_SINGLE_COMPACT_BYTES) {
+        compact = undefined;
+        compactSize = 0;
+      }
+    }
+
     const entry: JournalEntry = {
       tool,
       params_hash: hash,
       params_summary: summary,
       result_count: resultCount,
       timestamp: Date.now(),
-      compact_result: opts?.compactResult,
+      compact_result: compact,
       result_tokens: opts?.resultTokens,
+      compact_bytes: compactSize,
     };
     this.entries.push(entry);
+    this.compactBytes += compactSize;
+    if (this.compactBytes > SessionJournal.MAX_COMPACT_BYTES) {
+      this.stripOldestCompacts();
+    }
 
     // Track file reads
     if (tool === 'get_symbol' || tool === 'get_outline') {
@@ -282,6 +319,7 @@ export class SessionJournal {
     this.allHashes.clear();
     this.zeroResultQueries.clear();
     this.taskContextTimestamps.length = 0;
+    this.compactBytes = 0;
     for (const entry of this.entries) {
       if (!this.allHashes.has(entry.params_hash)) {
         this.allHashes.set(entry.params_hash, entry);
@@ -292,7 +330,35 @@ export class SessionJournal {
       if (entry.tool === 'get_task_context' || entry.tool === 'get_feature_context') {
         this.taskContextTimestamps.push(entry.timestamp);
       }
+      this.compactBytes += entry.compact_bytes ?? 0;
     }
+  }
+
+  /**
+   * Strip compact_result from the oldest entries until the byte budget holds
+   * again (TRA-2017). Entry metadata stays — only the dedup short-circuit
+   * degrades (a repeat call warns instead of returning the stored snapshot).
+   * Each strip strictly reduces compactBytes, so this always terminates.
+   */
+  private stripOldestCompacts(): void {
+    for (const entry of this.entries) {
+      if (this.compactBytes <= SessionJournal.MAX_COMPACT_BYTES) break;
+      if (entry.compact_result) {
+        entry.compact_result = undefined;
+        this.compactBytes -= entry.compact_bytes ?? 0;
+        entry.compact_bytes = 0;
+      }
+    }
+  }
+
+  /** Live entry count — surfaced via GET /debug/memory (TRA-2017). */
+  getTotalEntries(): number {
+    return this.entries.length;
+  }
+
+  /** Live retained compact-snapshot bytes — surfaced via GET /debug/memory. */
+  getCompactBytes(): number {
+    return this.compactBytes;
   }
 
   /**
@@ -700,6 +766,7 @@ export class SessionJournal {
     this.filesRead.clear();
     this.zeroResultQueries.clear();
     this.taskContextTimestamps.length = 0;
+    this.compactBytes = 0;
     this.landmarkProvider = null;
   }
 }

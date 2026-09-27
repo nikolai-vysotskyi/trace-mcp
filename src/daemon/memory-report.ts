@@ -38,6 +38,12 @@ export interface MemoryReportDeps {
   sessionLastSeen: { size: number };
   /** Registered project count (projectManager.listProjects().length). */
   registeredProjects: number;
+  /** Distinct roots currently tracked by the resource pool (TRA-2017). */
+  resourcePoolEntries: number;
+  /** Sum of SessionJournal entries across live sessions (TRA-2017). */
+  sessionJournalEntries: number;
+  /** Sum of retained compact-snapshot bytes across live journals (TRA-2017). */
+  sessionJournalCompactBytes: number;
 }
 
 export interface MemoryReportProcess {
@@ -62,6 +68,9 @@ export interface MemoryReportCaches {
   registered_projects: number;
   recent_reindex_total_entries: number;
   project_stats_cache_entries: number;
+  resource_pool_entries: number;
+  session_journal_total_entries: number;
+  session_journal_compact_bytes: number;
 }
 
 export interface MemoryReportTelemetry {
@@ -137,6 +146,9 @@ export function buildMemoryReport(deps: MemoryReportDeps): MemoryReport {
       registered_projects: deps.registeredProjects,
       recent_reindex_total_entries: recent.totalEntries,
       project_stats_cache_entries: stats.size,
+      resource_pool_entries: deps.resourcePoolEntries,
+      session_journal_total_entries: deps.sessionJournalEntries,
+      session_journal_compact_bytes: deps.sessionJournalCompactBytes,
     },
   };
   const telemetry = collectTelemetryBuffers();

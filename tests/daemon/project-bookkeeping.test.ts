@@ -12,9 +12,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  dropSessionBookkeeping,
   teardownProjectBookkeeping,
   type ClosableTransport,
   type DisposableHandle,
+  type SessionBookkeepingDeps,
   type TeardownDeps,
 } from '../../src/daemon/project-bookkeeping.js';
 
@@ -145,5 +147,48 @@ describe('teardownProjectBookkeeping', () => {
     expect(closeB).not.toHaveBeenCalled();
     expect(deps.progressUnsubscribers.has(ROOT_B)).toBe(true);
     expect(deps.projectSessions.get(ROOT_B)?.has('sid-b')).toBe(true);
+  });
+});
+
+describe('dropSessionBookkeeping (TRA-2017)', () => {
+  function makeSweepDeps(): SessionBookkeepingDeps {
+    return {
+      projectSessions: new Map<string, Set<string>>(),
+      sessionTransports: new Map(),
+      sessionHandles: new Map<string, DisposableHandle>(),
+      sessionClients: new Map<string, string>(),
+      clients: new Map<string, { project: string }>(),
+      sessionLastSeen: new Map<string, number>(),
+    };
+  }
+
+  it('deletes the root key once its session set drains', () => {
+    const deps = makeSweepDeps();
+    const dispose = vi.fn();
+    deps.projectSessions.set(ROOT_A, new Set(['sid-1', 'sid-2']));
+    deps.projectSessions.set(ROOT_B, new Set(['sid-3']));
+    deps.sessionHandles.set('sid-1', { dispose });
+    deps.sessionHandles.set('sid-2', { dispose });
+    deps.sessionLastSeen.set('sid-1', 1);
+    deps.sessionLastSeen.set('sid-2', 2);
+
+    dropSessionBookkeeping('sid-1', deps);
+    // One session left — the root key must survive.
+    expect(deps.projectSessions.get(ROOT_A)?.has('sid-2')).toBe(true);
+
+    dropSessionBookkeeping('sid-2', deps);
+    // Drained: no empty-Set residue for the daemon's lifetime.
+    expect(deps.projectSessions.has(ROOT_A)).toBe(false);
+    expect(deps.projectSessions.get(ROOT_B)?.has('sid-3')).toBe(true);
+    expect(deps.sessionHandles.has('sid-1')).toBe(false);
+    expect(deps.sessionLastSeen.has('sid-2')).toBe(false);
+    expect(dispose).toHaveBeenCalledTimes(2);
+  });
+
+  it('is idempotent for unknown sessions', () => {
+    const deps = makeSweepDeps();
+    deps.projectSessions.set(ROOT_A, new Set(['sid-1']));
+    expect(() => dropSessionBookkeeping('nope', deps)).not.toThrow();
+    expect(deps.projectSessions.get(ROOT_A)?.has('sid-1')).toBe(true);
   });
 });
