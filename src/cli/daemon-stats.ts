@@ -200,6 +200,12 @@ export function renderDaemonEvents(s: DaemonEventStats): string {
  * daemon and went local-mode inside the window, and why. A healthy fleet
  * shows ~0; a storm shows a spike in `proxy-initialize-timeout` — N sessions
  * timing out together on a loaded box.
+ *
+ * `proxy-send-transient` (TRA-1997) is not a local-mode fallback — the
+ * session stayed on the proxy — so it never feeds `total`/`perMin`. It is
+ * still shown on its own line: a night of transients with zero total is the
+ * signature of a starved-but-alive daemon, and hiding it would re-blind the
+ * QA pass that caught the shelf.
  */
 export function renderSessionFallbacks(
   s: SessionFallbackSummary | null,
@@ -207,7 +213,8 @@ export function renderSessionFallbacks(
 ): string {
   const lines: string[] = [];
   lines.push(`=== Session local-fallbacks (last ${windowLabel}) ===`);
-  if (!s || s.total === 0) {
+  const transient = s?.byReason['proxy-send-transient'] ?? 0;
+  if (!s || (s.total === 0 && transient === 0)) {
     lines.push('  (no local-mode fallbacks recorded in this window)');
     return lines.join('\n');
   }
@@ -216,6 +223,11 @@ export function renderSessionFallbacks(
   if (reasonKeys.length > 0) {
     const parts = reasonKeys.map((k) => `"${k}": ${s.byReason[k]}`);
     lines.push(`  by reason: { ${parts.join(', ')} }`);
+  }
+  if (transient > 0) {
+    lines.push(
+      `  (of which "proxy-send-transient": ${transient} stayed on proxy — failed sends while /health answered, no local backend built)`,
+    );
   }
   return lines.join('\n');
 }

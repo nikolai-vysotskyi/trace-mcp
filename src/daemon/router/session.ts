@@ -15,7 +15,7 @@ import { startParentDeathWatch } from '../../server/parent-death-watch.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { AutoRegisterNotice } from './auto-register-notice.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
-import { recordSessionFallback } from './fallback-stats.js';
+import { PROXY_SEND_TRANSIENT_REASON, recordSessionFallback } from './fallback-stats.js';
 import {
   computeProxyTimeoutMs,
   hasStartupProgressChanged,
@@ -53,6 +53,15 @@ const PKG_VERSION =
 const LIST_CHANGED = 'notifications/tools/list_changed';
 
 /**
+ * Consecutive live-/health send failures before a session concludes the
+ * daemon's MCP handler is wedged and promotes anyway (TRA-1997). One or two
+ * are a starved daemon; three in a row without a single answered frame is
+ * not. Any delivered result resets the streak (see the `sendToClient`
+ * closure), so spread-out blips never accumulate into a promotion.
+ */
+const PROXY_SEND_TRANSIENT_STREAK_LIMIT = 3;
+
+/**
  * Owes the client exactly one `tools/list_changed` per `load_tools` call that
  * un-hid a profile-suppressed tool (TRA-796).
  *
@@ -87,6 +96,21 @@ export class ListChangedDebt {
 function isInitializeRequest(msg: JSONRPCMessage): boolean {
   const m = msg as Record<string, unknown>;
   return m.method === 'initialize' && m.id !== undefined && m.id !== null;
+}
+
+/**
+ * Attribution label for a failed frame (TRA-1997): the tool a `tools/call`
+ * targeted, else the raw method (`tools/list`, `ping`, …). Mirrors
+ * ProxyBackend's private `toolCallName` — kept local so this thin module
+ * never imports the proxy's internals for a log line.
+ */
+function failedFrameTool(msg: JSONRPCMessage): string | undefined {
+  const m = msg as Record<string, unknown>;
+  if (m.method === 'tools/call') {
+    const name = (m.params as Record<string, unknown> | undefined)?.name;
+    if (typeof name === 'string') return name;
+  }
+  return typeof m.method === 'string' ? m.method : undefined;
 }
 
 export interface StdioSessionOptions {
@@ -233,6 +257,14 @@ export class StdioSession {
    * next poll and hang the session all over again.
    */
   private proxyDisabled = false;
+  /**
+   * Consecutive proxied sends that failed while /health still answered
+   * (TRA-1997). One such failure is a starved daemon and stays proxy; a streak
+   * of them is a wedged MCP handler (live /health, broken /mcp) and promotes
+   * to local with `proxyDisabled` set. Reset by any result frame the proxy
+   * delivers (see the `sendToClient` closure below) and by every backend swap.
+   */
+  private proxySendTransientStreak = 0;
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
@@ -251,6 +283,12 @@ export class StdioSession {
             void this.fallbackToLocal(id, 'proxy-initialize-error');
             return;
           }
+        }
+        // Any answered frame proves the active backend serves again — the
+        // transient streak only counts *consecutive* failures. Synthetic
+        // errors carry `error`, not `result`, so they never reset it.
+        if (Object.hasOwn(msg as object, 'result')) {
+          this.proxySendTransientStreak = 0;
         }
         return this.sendAndSettleListChanged(msg);
       },
@@ -782,8 +820,9 @@ export class StdioSession {
     this.clearInitializeWatchdog();
     if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
     // Count every proxy→local demotion so a fallback storm is visible in
-    // `daemon stats` instead of something to guess about (TRA-1605).
-    recordSessionFallback(reason);
+    // `daemon stats` instead of something to guess about (TRA-1605). The
+    // handshake frame is always `initialize` here, so only its id attributes.
+    recordSessionFallback(reason, undefined, { reqId: id });
     logger.warn(
       { id, reason, timeoutMs: baseMs },
       'StdioSession: daemon did not complete initialize — serving this session in local mode',
@@ -864,15 +903,61 @@ export class StdioSession {
    * is still collecting, arriving earlier and for free. Deliberately *not*
    * setting `proxyDisabled`: unlike a daemon that fails the handshake, one that
    * merely died deserves to be proxied to again once the watcher sees it back.
+   *
+   * TRA-1997: that evidence is ambiguous — a send also throws when the daemon
+   * is merely starved (bulk-index event-loop stalls of 2–80 s, TRA-1828),
+   * while /health still answers. Promoting on every such stall built a full
+   * local backend (better-sqlite3 + tree-sitter in-process) for ~95% of night
+   * sessions whose daemon never died. So a failed send first gets the same
+   * slow-vs-dead probe the handshake path uses: when /health answers, the
+   * daemon is alive-but-slow — record `proxy-send-transient`, stay on the
+   * proxy, and let the router fail just this one request. Only a silent
+   * daemon promotes to local.
+   *
+   * The exception is a *streak* of such failures: /health answering while
+   * /mcp keeps refusing is the wedged-handler case `proxyDisabled` exists
+   * for (SQLITE_CORRUPT_VTAB recovery, session-limit rejection, an
+   * unhandled exception in the handler). On the third consecutive transient
+   * the session promotes and sets `proxyDisabled`, so the watcher cannot
+   * re-adopt the same wedged daemon — without it the session would fail
+   * every request on the proxy forever, which the pre-TRA-1997 code healed
+   * on the first failure.
    */
   private async rescueFailedProxySend(msg: JSONRPCMessage, err: unknown): Promise<boolean> {
     const id = (msg as { id?: string | number }).id;
     if (id === undefined || id === null) return false;
     if (this.shuttingDown || this.proxyDisabled) return false;
     if (this.router.getActiveKind() !== 'proxy') return false;
-    recordSessionFallback('proxy-send-failed');
+    const detail = { tool: failedFrameTool(msg), reqId: id, err };
+    let readiness: Awaited<ReturnType<typeof probeProxyReadiness>> = null;
+    try {
+      readiness = await probeProxyReadiness(this.opts.daemonPort);
+    } catch {
+      readiness = null;
+    }
+    if (readiness && this.proxySendTransientStreak < PROXY_SEND_TRANSIENT_STREAK_LIMIT - 1) {
+      this.proxySendTransientStreak += 1;
+      recordSessionFallback(PROXY_SEND_TRANSIENT_REASON, undefined, detail);
+      logger.warn(
+        { id, tool: detail.tool, err: String(err), healthRttMs: readiness.rttMs },
+        'StdioSession: proxy send failed but the daemon answers /health — staying on proxy, failing only this request',
+      );
+      return false;
+    }
+    // The probe took up to ~500 ms; re-check before promoting — the session
+    // may have shut down or already swapped while we waited.
+    if (this.shuttingDown || this.proxyDisabled) return false;
+    if (this.router.getActiveKind() !== 'proxy') return false;
+    // A streak that reached the limit with /health still answering is a
+    // wedged MCP handler, not a starved one: promote, and block the watcher
+    // from swapping this session back onto the same daemon.
+    const wedged = readiness !== null;
+    if (wedged) {
+      this.proxyDisabled = true;
+    }
+    recordSessionFallback('proxy-send-failed', undefined, detail);
     logger.warn(
-      { id, err: String(err) },
+      { id, tool: detail.tool, err: String(err), wedged },
       'StdioSession: proxy send failed — promoting to local mode and replaying the request',
     );
     // Build before claiming the id, for the reason spelled out in
@@ -930,6 +1015,10 @@ export class StdioSession {
 
   private async swapTo(next: Backend, reason: string): Promise<void> {
     logger.info({ reason, to: next.kind }, 'StdioSession: swapping backend');
+    // A backend change ends whatever the previous one was doing — including
+    // a transient-failure streak, which counts consecutive failures on one
+    // backend only.
+    this.proxySendTransientStreak = 0;
     const prev = this.router.getActiveBackend();
     try {
       await this.router.swap(next);
