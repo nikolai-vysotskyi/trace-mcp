@@ -177,7 +177,8 @@ function collectAncestors(
 
 /**
  * Walk DOWN the class hierarchy, collecting descendant class symbol IDs.
- * Uses findImplementors which scans metadata.extends/implements.
+ * Uses findImplementors, served from the materialized symbol_heritage table
+ * (TRA-2002) — an indexed seek, not a metadata scan.
  */
 function collectDescendants(
   store: Store,
