@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  describeFallbackError,
   readSessionFallbacks,
   recordSessionFallback,
   summarizeSessionFallbacks,
@@ -40,6 +41,51 @@ describe('recordSessionFallback / readSessionFallbacks', () => {
     expect(typeof events[0].ts).toBe('number');
   });
 
+  it('round-trips attribution details (TRA-1997)', () => {
+    recordSessionFallback('proxy-send-failed', file, {
+      tool: 'get_call_graph',
+      reqId: 42,
+      err: new TypeError('fetch failed'),
+    });
+    const events = readSessionFallbacks(file);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      reason: 'proxy-send-failed',
+      tool: 'get_call_graph',
+      reqId: 42,
+      err: 'TypeError: fetch failed',
+    });
+  });
+
+  it('keeps the old line shape when no details are given', () => {
+    recordSessionFallback('daemon-disappeared', file);
+    const raw = fs.readFileSync(file, 'utf-8').trim();
+    expect(JSON.parse(raw)).toEqual({
+      ts: expect.any(Number),
+      reason: 'daemon-disappeared',
+      pid: process.pid,
+    });
+    expect(readSessionFallbacks(file)[0]).toEqual({
+      ts: expect.any(Number),
+      reason: 'daemon-disappeared',
+      pid: process.pid,
+    });
+  });
+
+  it('reads pre-attribution lines and ignores garbage in new fields', () => {
+    fs.writeFileSync(
+      file,
+      '{"ts":1,"reason":"proxy-send-failed","pid":7}\n' +
+        '{"ts":2,"reason":"proxy-send-transient","pid":7,"tool":"search","reqId":"a","err":"AbortError: aborted"}\n' +
+        '{"ts":3,"reason":"proxy-send-failed","pid":7,"tool":42,"reqId":null,"err":{}}\n',
+    );
+    const events = readSessionFallbacks(file);
+    expect(events).toHaveLength(3);
+    expect(events[0]).toEqual({ ts: 1, reason: 'proxy-send-failed', pid: 7 });
+    expect(events[1]).toMatchObject({ tool: 'search', reqId: 'a', err: 'AbortError: aborted' });
+    expect(events[2]).toEqual({ ts: 3, reason: 'proxy-send-failed', pid: 7 });
+  });
+
   it('reads nothing from a missing file (fresh machine)', () => {
     expect(readSessionFallbacks(path.join(dir, 'nope.jsonl'))).toEqual([]);
   });
@@ -68,6 +114,25 @@ describe('recordSessionFallback / readSessionFallbacks', () => {
     expect(events.length).toBeGreaterThan(4_900);
     // Newest entries survive the prune.
     expect(events[events.length - 1].reason).toBe(`reason-${5049 % 3}`);
+  });
+});
+
+describe('describeFallbackError', () => {
+  it('renders ClassName: message', () => {
+    expect(describeFallbackError(new TypeError('fetch failed'))).toBe('TypeError: fetch failed');
+  });
+
+  it('appends numeric codes and truncates long messages without stacks', () => {
+    const err = Object.assign(new Error(`${'x'.repeat(500)}\nsecond line`), { code: 404 });
+    const rendered = describeFallbackError(err);
+    expect(rendered).toContain('Error(404): ');
+    expect(rendered).not.toContain('second line');
+    expect(rendered!.length).toBeLessThanOrEqual(241);
+  });
+
+  it('returns undefined when there is no error', () => {
+    expect(describeFallbackError(undefined)).toBeUndefined();
+    expect(describeFallbackError(null)).toBeUndefined();
   });
 });
 

@@ -89,6 +89,21 @@ function isInitializeRequest(msg: JSONRPCMessage): boolean {
   return m.method === 'initialize' && m.id !== undefined && m.id !== null;
 }
 
+/**
+ * Attribution label for a failed frame (TRA-1997): the tool a `tools/call`
+ * targeted, else the raw method (`tools/list`, `ping`, …). Mirrors
+ * ProxyBackend's private `toolCallName` — kept local so this thin module
+ * never imports the proxy's internals for a log line.
+ */
+function failedFrameTool(msg: JSONRPCMessage): string | undefined {
+  const m = msg as Record<string, unknown>;
+  if (m.method === 'tools/call') {
+    const name = (m.params as Record<string, unknown> | undefined)?.name;
+    if (typeof name === 'string') return name;
+  }
+  return typeof m.method === 'string' ? m.method : undefined;
+}
+
 export interface StdioSessionOptions {
   projectRoot: string;
   indexRoot: string;
@@ -783,7 +798,10 @@ export class StdioSession {
     if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
     // Count every proxy→local demotion so a fallback storm is visible in
     // `daemon stats` instead of something to guess about (TRA-1605).
-    recordSessionFallback(reason);
+    recordSessionFallback(reason, undefined, {
+      tool: this.cachedInitialize ? failedFrameTool(this.cachedInitialize) : undefined,
+      reqId: id,
+    });
     logger.warn(
       { id, reason, timeoutMs: baseMs },
       'StdioSession: daemon did not complete initialize — serving this session in local mode',
@@ -864,15 +882,44 @@ export class StdioSession {
    * is still collecting, arriving earlier and for free. Deliberately *not*
    * setting `proxyDisabled`: unlike a daemon that fails the handshake, one that
    * merely died deserves to be proxied to again once the watcher sees it back.
+   *
+   * TRA-1997: that evidence is ambiguous — a send also throws when the daemon
+   * is merely starved (bulk-index event-loop stalls of 2–80 s, TRA-1828),
+   * while /health still answers. Promoting on every such stall built a full
+   * local backend (better-sqlite3 + tree-sitter in-process) for ~95% of night
+   * sessions whose daemon never died. So a failed send first gets the same
+   * slow-vs-dead probe the handshake path uses: when /health answers, the
+   * daemon is alive-but-slow — record `proxy-send-transient`, stay on the
+   * proxy, and let the router fail just this one request. Only a silent
+   * daemon promotes to local.
    */
   private async rescueFailedProxySend(msg: JSONRPCMessage, err: unknown): Promise<boolean> {
     const id = (msg as { id?: string | number }).id;
     if (id === undefined || id === null) return false;
     if (this.shuttingDown || this.proxyDisabled) return false;
     if (this.router.getActiveKind() !== 'proxy') return false;
-    recordSessionFallback('proxy-send-failed');
+    const detail = { tool: failedFrameTool(msg), reqId: id, err };
+    let readiness: Awaited<ReturnType<typeof probeProxyReadiness>> = null;
+    try {
+      readiness = await probeProxyReadiness(this.opts.daemonPort);
+    } catch {
+      readiness = null;
+    }
+    if (readiness) {
+      recordSessionFallback('proxy-send-transient', undefined, detail);
+      logger.warn(
+        { id, tool: detail.tool, err: String(err), healthRttMs: readiness.rttMs },
+        'StdioSession: proxy send failed but the daemon answers /health — staying on proxy, failing only this request',
+      );
+      return false;
+    }
+    // The probe took up to ~500 ms; re-check before promoting — the session
+    // may have shut down or already swapped while we waited.
+    if (this.shuttingDown || this.proxyDisabled) return false;
+    if (this.router.getActiveKind() !== 'proxy') return false;
+    recordSessionFallback('proxy-send-failed', undefined, detail);
     logger.warn(
-      { id, err: String(err) },
+      { id, tool: detail.tool, err: String(err) },
       'StdioSession: proxy send failed — promoting to local mode and replaying the request',
     );
     // Build before claiming the id, for the reason spelled out in
