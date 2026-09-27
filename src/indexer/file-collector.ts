@@ -4,6 +4,7 @@ import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
+import { isHotChurnPath } from '../utils/hot-churn.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { TraceignoreMatcher } from '../utils/traceignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
@@ -157,6 +158,12 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   // engine checkpoints, so the full walk keeps handing the extractor paths
   // that die ENOENT on open. Drop them from the walk itself.
   entries = entries.filter((e) => !isSqliteSidecarPath(e));
+
+  // TRA-2021: hot-churn runtime state (`gateway.heartbeat`, `cron/ticker_*`,
+  // `cron/.tick.lock`) — rewritten every ~30 s, never source. Drop from the
+  // walk itself so full reindexes never persist rows the watcher then
+  // pointlessly refreshes on every tick.
+  entries = entries.filter((e) => !isHotChurnPath(e));
 
   if (entries.length > maxFiles) {
     logger.warn(

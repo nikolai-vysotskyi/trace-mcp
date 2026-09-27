@@ -21,6 +21,7 @@ import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
+import { isHotChurnPath } from '../utils/hot-churn.js';
 import {
   DEFAULT_MAX_FILE_SIZE,
   isBinaryBuffer,
@@ -250,6 +251,15 @@ export class FileExtractor {
     // stating them is a race. Drop before any filesystem touch.
     if (isSqliteSidecarPath(relPath)) {
       logger.debug({ file: relPath }, 'SQLite sidecar skipped (not source)');
+      return { kind: 'skipped' };
+    }
+
+    // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
+    // `cron/ticker_*`, `cron/.tick.lock`) — rewritten every ~30 s, never
+    // source. The entry points above drop it before the extractor ever
+    // runs; this is the safety net for direct callers.
+    if (isHotChurnPath(relPath)) {
+      logger.debug({ file: relPath }, 'Hot-churn runtime state skipped (not source)');
       return { kind: 'skipped' };
     }
 

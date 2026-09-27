@@ -5,6 +5,7 @@ import type { IndexingPipeline, IndexingResult } from '../indexer/pipeline.js';
 import { beginReindex, isReindexing } from '../indexer/reindex-inflight.js';
 import { shouldSkipRecentReindex } from '../indexer/recent-reindex-cache.js';
 import { logger } from '../logger.js';
+import { isHotChurnPath } from '../utils/hot-churn.js';
 import { withLock } from '../utils/pid-lock.js';
 import { getReindexStats } from './reindex-stats.js';
 
@@ -23,7 +24,7 @@ export interface ReindexFileRequest {
 }
 
 export type ReindexFileResult =
-  | { ok: true; relPath: string; skippedRecent?: boolean }
+  | { ok: true; relPath: string; skippedRecent?: boolean; skippedChurn?: boolean }
   | { ok: false; status: 400 | 404 | 500; error: string }
   | { ok: false; status: 503; error: string; retryAfterSec: number };
 
@@ -164,6 +165,40 @@ export async function handleReindexFile(
     return { ok: false, status: 400, error: 'path is outside project root' };
   }
   const rel = path.sep === '\\' ? relRaw.split('\\').join('/') : relRaw;
+
+  // TRA-2021: hot-churn runtime state (`gateway.heartbeat`, `cron/ticker_*`,
+  // `cron/.tick.lock`) is rewritten every ~30 s with an unchanged content
+  // hash — indexing it only ever yields `skippedHash=true, indexed=0` after
+  // queueing behind the reindex lock (47 s worst case observed). Answer
+  // before `withLock` so the hook path never contends the lock for it. The
+  // HTTP layer still returns 204 — callers don't need to know the work was
+  // dropped.
+  if (isHotChurnPath(rel)) {
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    logger.info(
+      {
+        event: 'reindex-file',
+        project,
+        path: rel,
+        pathSource: 'http',
+        skippedRecent: false,
+        skippedHash: false,
+        skippedChurn: true,
+        indexed: 0,
+        elapsedMs,
+      },
+      'reindex-file telemetry',
+    );
+    getReindexStats().record({
+      pathSource: 'http',
+      skippedRecent: false,
+      skippedHash: false,
+      skippedChurn: true,
+      indexed: 0,
+      elapsedMs,
+    });
+    return { ok: true, relPath: rel, skippedChurn: true };
+  }
 
   // Phase 1.3 dedup: when a single Edit causes both the PostToolUse hook
   // and Claude's register_edit MCP call to fire, the second arrival within
