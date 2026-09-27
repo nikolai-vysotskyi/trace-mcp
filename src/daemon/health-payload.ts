@@ -20,6 +20,15 @@ export type HealthStatus = 'ok' | 'starting';
 export interface HealthProject {
   root: string;
   status: string;
+  /**
+   * Whether the project is currently resident in daemon memory (TRA-1996).
+   * `GET /health` reports *residency*: idle-unloaded roots show
+   * `status: "unloaded", resident: false`. `GET /api/projects` reports
+   * *index-readiness* instead (same root shows `status: "ready"` there as
+   * its last-known state, TRA-1052) — correlate the two surfaces via this
+   * flag, not via `status`.
+   */
+  resident?: boolean;
 }
 
 export interface HealthPayload {
