@@ -79,30 +79,51 @@ function compactUtf8Size(compact: Record<string, unknown>): number {
  * Shrink an oversized dedup snapshot to fit the per-snapshot budget
  * (TRA-2017 review): halve the largest array payload (symbols / primary /
  * nodes / ...) until it fits. Array order is stable, so the head — the part
- * dedup readers actually use — survives. Returns undefined when there is
- * nothing truncatable left (scalars-only snapshot that still doesn't fit);
- * the caller then records metadata only and duplicate detection degrades
- * from 'dedup' to 'warn' for that call.
+ * dedup readers actually use — survives. The trimmed snapshot carries
+ * `_truncated: { kept, total }` so the model never mistakes the served head
+ * for the whole result (`_result_count` keeps naming the pre-truncation
+ * total — statistics must stay honest about the original result). Returns
+ * undefined when there is nothing truncatable left (scalars-only snapshot
+ * that still doesn't fit); the caller then records metadata only and
+ * duplicate detection degrades from 'dedup' to 'warn' for that call.
+ *
+ * Never mutates the input: the under-cap fast path returns it as-is, the
+ * trim path works on a shallow copy. Returns the fitted snapshot with its
+ * already-computed UTF-8 size so the caller doesn't serialize twice.
  */
 function truncateCompactToFit(
   compact: Record<string, unknown>,
   maxBytes: number,
-): Record<string, unknown> | undefined {
-  if (compactUtf8Size(compact) <= maxBytes) return compact;
+): { compact: Record<string, unknown> | undefined; bytes: number } {
+  const size = compactUtf8Size(compact);
+  if (size <= maxBytes) return { compact, bytes: size };
   const trimmed: Record<string, unknown> = { ...compact };
+  // Arrays halved so far: key -> original length (for the _truncated marker).
+  const touched = new Map<string, number>();
+  // 64B slack: the _truncated marker added below must not push us back over.
   for (;;) {
     let biggestKey: string | null = null;
     let biggestLen = 0;
     for (const [key, value] of Object.entries(trimmed)) {
+      if (key === '_truncated') continue;
       if (Array.isArray(value) && value.length > biggestLen) {
         biggestKey = key;
         biggestLen = value.length;
       }
     }
-    if (biggestKey === null || biggestLen <= 1) return undefined;
+    if (biggestKey === null || biggestLen <= 1) return { compact: undefined, bytes: 0 };
+    if (!touched.has(biggestKey)) touched.set(biggestKey, biggestLen);
     trimmed[biggestKey] = (trimmed[biggestKey] as unknown[]).slice(0, Math.ceil(biggestLen / 2));
-    if (compactUtf8Size(trimmed) <= maxBytes) return trimmed;
+    if (compactUtf8Size(trimmed) + 64 <= maxBytes) break;
   }
+  let total = 0;
+  let kept = 0;
+  for (const [key, original] of touched) {
+    total += original;
+    kept += (trimmed[key] as unknown[]).length;
+  }
+  trimmed._truncated = { kept, total };
+  return { compact: trimmed, bytes: compactUtf8Size(trimmed) };
 }
 
 interface PrefetchBoost {
@@ -181,10 +202,11 @@ export class SessionJournal {
   private static readonly MAX_COMPACT_BYTES = 5 * 1024 * 1024;
   /**
    * A single snapshot larger than the per-snapshot budget is truncated
-   * (largest array payload halved until it fits), not stored whole — one
-   * giant bundle must not eat the whole session budget, but a trimmed
-   * snapshot still answers dedup with a compact reference instead of forcing
-   * full re-execution. Snapshots with nothing truncatable are skipped; the
+   * (largest array payload halved until it fits, marked with
+   * `_truncated: { kept, total }`), not stored whole — one giant bundle
+   * must not eat the whole session budget, but a trimmed snapshot still
+   * answers dedup with a compact reference instead of forcing full
+   * re-execution. Snapshots with nothing truncatable are skipped; the
    * entry itself is still recorded, so warn-style duplicate detection keeps
    * working.
    */
@@ -285,6 +307,7 @@ export class SessionJournal {
     // Byte-bound the dedup snapshots (TRA-2017): the entry-count cap alone
     // lets a long session retain hundreds of MB of compact_result payloads.
     let compact = opts?.compactResult;
+    let compactSize = 0;
     if (compact && this.allHashes.has(hash)) {
       // Repeat of an already-recorded call. checkDuplicate serves the FIRST
       // entry's snapshot, so a fresh compact stored here would consume budget
@@ -292,9 +315,10 @@ export class SessionJournal {
       compact = undefined;
     }
     if (compact) {
-      compact = truncateCompactToFit(compact, SessionJournal.MAX_SINGLE_COMPACT_BYTES);
+      const fitted = truncateCompactToFit(compact, SessionJournal.MAX_SINGLE_COMPACT_BYTES);
+      compact = fitted.compact;
+      compactSize = fitted.bytes;
     }
-    const compactSize = compact ? compactUtf8Size(compact) : 0;
 
     const entry: JournalEntry = {
       tool,

@@ -47,7 +47,7 @@ describe('SessionJournal compact byte cap', () => {
       lineStart: i * 10,
       lineEnd: i * 10 + 5,
     }));
-    const compact = { path: 'big.ts', language: 'typescript', symbols };
+    const compact = { path: 'big.ts', language: 'typescript', symbols, _result_count: 3000 };
     expect(Buffer.byteLength(JSON.stringify(compact), 'utf8')).toBeGreaterThan(MAX_SINGLE);
     j.record('get_outline', { path: 'big.ts' }, 3000, { compactResult: compact });
     // Head survives, trimmed to budget — dedup still answers a repeat.
@@ -59,6 +59,12 @@ describe('SessionJournal compact byte cap', () => {
     const kept = (dup?.compact_result?.symbols ?? []) as unknown[];
     expect(kept.length).toBeGreaterThan(0);
     expect(kept.length).toBeLessThan(symbols.length);
+    // The served head is marked: the model must not mistake it for the whole.
+    expect(dup?.compact_result?._truncated).toEqual({ kept: kept.length, total: symbols.length });
+    // ...while the count still names the pre-truncation total.
+    expect(dup?.compact_result?._result_count).toBe(3000);
+    // Input not mutated by the trim path.
+    expect(symbols.length).toBe(3000);
   });
 
   it('drops a scalars-only oversized snapshot but keeps the entry', () => {
