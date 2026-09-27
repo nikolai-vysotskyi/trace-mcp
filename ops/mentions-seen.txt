@@ -208,3 +208,10 @@ fuqiuluo/binder-trace
 # roslyn-codelens-mcp. 0-star frontend for managing-awesome-lists, no
 # submission path, no audience — ledger row added, nothing to submit:
 jaimevalero/managing-awesome-lists-frontend
+# ── Swept 2026-09-27 (TRA-2008, second pass same day) ──
+# Genuine corpus entry, not a listing: security-auditing CLI (5 stars, single
+# author) that ingested our 3.33.0 registry tarball into its MCP holdout corpus
+# and rated it CRITICAL alongside most vendor samples (their own doc: blocked
+# figure is an upper bound on false positives). No submission path, no
+# audience — ledger row added, their thread never touched:
+NOMARJ/sigil
