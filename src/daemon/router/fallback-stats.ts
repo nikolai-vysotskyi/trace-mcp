@@ -19,6 +19,14 @@ export const SESSION_FALLBACK_STATS_PATH = path.join(TRACE_MCP_HOME, 'session-fa
 /** Cap: prune oldest lines past this on write so the file can't grow forever. */
 const MAX_LINES = 5_000;
 
+/**
+ * A proxied send failed but /health still answered, so the session stayed on
+ * the proxy and no local backend was built (TRA-1997). Recorded for QA
+ * attribution, but excluded from the storm gauge — see
+ * `summarizeSessionFallbacks`.
+ */
+export const PROXY_SEND_TRANSIENT_REASON = 'proxy-send-transient';
+
 export interface SessionFallbackEvent {
   ts: number;
   /**
@@ -53,9 +61,14 @@ export interface SessionFallbackDetails {
 }
 
 export interface SessionFallbackSummary {
+  /**
+   * Sessions that actually went local-mode inside the window. Excludes
+   * `proxy-send-transient` (stayed on proxy — no local backend was built),
+   * which is still counted in `byReason` for attribution.
+   */
   total: number;
   byReason: Record<string, number>;
-  /** Fallbacks per minute over the summarized window — the storm gauge. */
+  /** Local-mode fallbacks per minute over the summarized window — the storm gauge. */
   perMin: number;
   /** Window length in ms the summary covers. */
   windowMs: number;
@@ -194,6 +207,10 @@ export function readSessionFallbacks(
  * Summarize fallbacks inside the window. `sinceMs` is a window *length*
  * (matches `daemon stats --since` / reindex-stats semantics), not an
  * absolute timestamp; omitted/<=0 means all-time.
+ *
+ * `proxy-send-transient` lines are attributed in `byReason` but excluded
+ * from `total`/`perMin`: no local backend was built for them, and counting
+ * them would turn the TRA-1605 storm gauge into a shelf gauge (TRA-1997).
  */
 export function summarizeSessionFallbacks(
   events: SessionFallbackEvent[],
@@ -207,7 +224,7 @@ export function summarizeSessionFallbacks(
   let total = 0;
   for (const e of events) {
     if (cutoff !== null && e.ts < cutoff) continue;
-    total++;
+    if (e.reason !== PROXY_SEND_TRANSIENT_REASON) total++;
     byReason[e.reason] = (byReason[e.reason] ?? 0) + 1;
   }
   const spanMs = windowMs > 0 ? windowMs : Math.max(1, nowMs - oldestTs(events, nowMs));

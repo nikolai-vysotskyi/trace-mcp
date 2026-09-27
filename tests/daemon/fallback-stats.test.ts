@@ -153,11 +153,24 @@ describe('summarizeSessionFallbacks', () => {
   it('filters outside the window', () => {
     const now = Date.now();
     const events = [
-      { ts: now - 2 * 3_600_000, reason: 'proxy-initialize-timeout', pid: 1 },
-      { ts: now, reason: 'proxy-initialize-timeout', pid: 2 },
+      { ts: now - 2 * 3_600_000, reason: 'proxy-send-failed', pid: 1 },
+      { ts: now, reason: 'proxy-send-failed', pid: 2 },
     ];
     expect(summarizeSessionFallbacks(events, { sinceMs: 3_600_000, nowMs: now }).total).toBe(1);
     expect(summarizeSessionFallbacks(events, { nowMs: now }).total).toBe(2);
+  });
+
+  it('excludes proxy-send-transient from the storm gauge but keeps it attributed (TRA-1997)', () => {
+    const now = Date.now();
+    const events = [
+      { ts: now - 1_000, reason: 'proxy-send-transient', pid: 1 },
+      { ts: now - 2_000, reason: 'proxy-send-transient', pid: 2 },
+      { ts: now - 3_000, reason: 'daemon-disappeared', pid: 3 },
+    ];
+    const s = summarizeSessionFallbacks(events, { sinceMs: 60_000, nowMs: now });
+    expect(s.total).toBe(1);
+    expect(s.perMin).toBeCloseTo(1, 5);
+    expect(s.byReason).toEqual({ 'proxy-send-transient': 2, 'daemon-disappeared': 1 });
   });
 });
 
@@ -183,5 +196,15 @@ describe('renderSessionFallbacks', () => {
     expect(renderSessionFallbacks(null, '24h')).toContain(
       '(no local-mode fallbacks recorded in this window)',
     );
+  });
+
+  it('names stayed-on-proxy transients instead of printing a false calm (TRA-1997)', () => {
+    const text = renderSessionFallbacks(
+      { total: 0, byReason: { 'proxy-send-transient': 300 }, perMin: 0, windowMs: 3_600_000 },
+      '1h',
+    );
+    expect(text).not.toContain('no local-mode fallbacks recorded');
+    expect(text).toContain('"proxy-send-transient": 300');
+    expect(text).toContain('stayed on proxy');
   });
 });

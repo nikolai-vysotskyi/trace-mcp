@@ -38,6 +38,7 @@ vi.mock('../../src/daemon/lifecycle.js', () => ({
 }));
 
 vi.mock('../../src/daemon/router/fallback-stats.js', () => ({
+  PROXY_SEND_TRANSIENT_REASON: 'proxy-send-transient',
   recordSessionFallback: (reason: string, _file?: string, details?: unknown) => {
     recorded.push({ reason, details });
   },
@@ -64,10 +65,29 @@ const { StdioSession } = await import('../../src/daemon/router/session.js');
 async function startStarvedDaemon(): Promise<{
   port: number;
   killMcp: () => void;
+  /** Answer the next POST /mcp once with a valid SSE result (streak reset). */
+  answerOnce: () => void;
   close: () => Promise<void>;
 }> {
   let mcpAlive = true;
+  let answerNext = false;
   const server = http.createServer((req, res) => {
+    if (req.url?.startsWith('/mcp') && req.method === 'POST' && answerNext) {
+      answerNext = false;
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        let id: unknown = null;
+        try {
+          id = (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { id?: unknown }).id;
+        } catch {
+          /* malformed — answer with null id */
+        }
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'close' });
+        res.end(`data: ${JSON.stringify({ jsonrpc: '2.0', id, result: { tools: [] } })}\n\n`);
+      });
+      return;
+    }
     req.resume();
     if (req.url === '/health' || req.url?.startsWith('/health')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -97,6 +117,9 @@ async function startStarvedDaemon(): Promise<{
     port,
     killMcp: () => {
       mcpAlive = false;
+    },
+    answerOnce: () => {
+      answerNext = true;
     },
     close: () =>
       new Promise<void>((resolve) => {
@@ -218,4 +241,98 @@ describe('rescueFailedProxySend slow-vs-dead gate (TRA-1997)', () => {
     expect(details.reqId).toBe(9);
     expect(String(details.err ?? '')).not.toHaveLength(0);
   }, 30_000);
+
+  it('a streak of live-/health failures promotes and pins proxy off (wedged handler)', async () => {
+    const daemon = await startStarvedDaemon();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const session = makeSession(daemon.port, stdin, stdout);
+    cleanup = async () => {
+      await session.shutdown('test');
+      await daemon.close();
+    };
+
+    const frames: unknown[] = [];
+    stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split('\n')) {
+        if (line.trim()) frames.push(JSON.parse(line));
+      }
+    });
+
+    await session.bootstrap();
+    // /health answers, every POST /mcp dies: the wedged-handler case.
+    daemon.killMcp();
+    const sendList = (id: number) =>
+      stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list', params: {} })}\n`);
+
+    // First two fail on the proxy; the third consecutive failure promotes.
+    sendList(31);
+    const first = (await waitFor(frames, isAnswer(31))) as Record<string, unknown>;
+    expect(first).toHaveProperty('error');
+    sendList(32);
+    const second = (await waitFor(frames, isAnswer(32))) as Record<string, unknown>;
+    expect(second).toHaveProperty('error');
+    sendList(33);
+    const third = (await waitFor(frames, isAnswer(33))) as Record<string, unknown>;
+    expect(third).toHaveProperty('result');
+
+    expect(recorded.map((r) => r.reason)).toEqual([
+      'proxy-send-transient',
+      'proxy-send-transient',
+      'proxy-send-failed',
+    ]);
+
+    // Promoted and pinned: the next frame is served locally, nothing re-adopts.
+    sendList(34);
+    const fourth = (await waitFor(frames, isAnswer(34))) as Record<string, unknown>;
+    expect(fourth).toHaveProperty('result');
+    expect(recorded).toHaveLength(3);
+  }, 60_000);
+
+  it('one answered frame resets the streak — spread-out blips never promote', async () => {
+    const daemon = await startStarvedDaemon();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const session = makeSession(daemon.port, stdin, stdout);
+    cleanup = async () => {
+      await session.shutdown('test');
+      await daemon.close();
+    };
+
+    const frames: unknown[] = [];
+    stdout.on('data', (chunk: Buffer) => {
+      for (const line of chunk.toString('utf8').split('\n')) {
+        if (line.trim()) frames.push(JSON.parse(line));
+      }
+    });
+
+    await session.bootstrap();
+    daemon.killMcp();
+    const sendList = (id: number) =>
+      stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list', params: {} })}\n`);
+
+    sendList(41);
+    const first = (await waitFor(frames, isAnswer(41))) as Record<string, unknown>;
+    expect(first).toHaveProperty('error');
+
+    // One success between failures: the streak restarts at zero.
+    daemon.answerOnce();
+    sendList(42);
+    const ok = (await waitFor(frames, isAnswer(42))) as Record<string, unknown>;
+    expect(ok).toHaveProperty('result');
+
+    sendList(43);
+    const third = (await waitFor(frames, isAnswer(43))) as Record<string, unknown>;
+    expect(third).toHaveProperty('error');
+    sendList(44);
+    const fourth = (await waitFor(frames, isAnswer(44))) as Record<string, unknown>;
+    expect(fourth).toHaveProperty('error');
+
+    // Two consecutive at most — still proxy, never promoted.
+    expect(recorded.map((r) => r.reason)).toEqual([
+      'proxy-send-transient',
+      'proxy-send-transient',
+      'proxy-send-transient',
+    ]);
+  }, 60_000);
 });
