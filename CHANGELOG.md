@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.1...v3.34.2) (2026-09-27)
+
+
+### Bug Fixes
+
+* **daemon:** document /health vs /api/projects status semantics, add resident flag ([#1416](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1416)) ([5678cb4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5678cb4eee9b556b0814cec9e03ed6aaa2252cb3))
+* **daemon:** gate proxy-send rescue on daemon liveness, attribute fallback lines (TRA-1997) ([#1418](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1418)) ([22d161a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/22d161a7c368285d7fcef84d42711e0c772586d6))
+* **db:** materialize heritage edges, kill findImplementors LIKE scan (TRA-2002) ([#1420](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1420)) ([f15ba7b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f15ba7b2930cbb947f65c7c0eafd05f2e98f3df8))
+* **registry:** treat Claude scratch-workspaces as ephemeral project roots (TRA-1999) ([#1419](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1419)) ([9082e97](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9082e97f2b865f82f478ad82a1a19804ad219cba))
+* **stdio:** reindex on fresh projects no longer hits readonly snapshot (TRA-1988) ([#1413](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1413)) ([a6e45e2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a6e45e26732a3af4fe8de2d8dd7d3780bdd63ab8))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-27, threads silent, sweep 1 genuine corpus entry (TRA-2008) ([#1421](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1421)) ([ca13140](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ca1314009aa9eec6795705de353d8d209eeb7f8e))
+* **ops:** day pass 2026-09-27, threads silent, sweep clean (TRA-2013) ([#1422](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1422)) ([617308d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/617308d535398d690b169b4d62a8446c84fd6271))
+
 ## [3.34.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.0...v3.34.1) (2026-09-27)
 
 
