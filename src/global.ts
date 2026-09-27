@@ -202,9 +202,11 @@ const EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN =
   /[/\\]scratch-workspaces[/\\][^/\\]+[/\\][^/\\]+[/\\]scratch-[^/\\]+([/\\]|$)/i;
 
 /**
- * True when `root` is a one-shot agent-run checkout, in either layout the
- * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN} and
- * {@link EPHEMERAL_TASK_DIR_PATTERN}), or matches a user-configured
+ * True when `root` is a one-shot agent-run checkout, in any layout the
+ * runtime uses (see {@link EPHEMERAL_WORKDIR_PATTERN},
+ * {@link EPHEMERAL_TASK_DIR_PATTERN},
+ * {@link EPHEMERAL_CLAUDE_SCRATCHPAD_PATTERN} and
+ * {@link EPHEMERAL_CLAUDE_SCRATCH_WORKSPACES_PATTERN}), or matches a user-configured
  * `auto_register.exclude` glob (GH#1371 / TRA-1881: throwaway worktrees,
  * bare-mirror checkouts, /tmp clones, CI gates). Such roots are never
  * persisted to registry.json — see the `_ephemeralEntries` note in
