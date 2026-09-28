@@ -50,7 +50,10 @@ const FATAL_74842 = {
 
 describe('getStallAlertsPath', () => {
   it('resolves the watchdog alert file inside the given index dir', () => {
-    expect(getStallAlertsPath('/tmp/idx')).toBe('/tmp/idx/stall-alerts.jsonl');
+    // path.join — never a '/' literal: the assertion must hold on Windows too.
+    expect(getStallAlertsPath(path.join(os.tmpdir(), 'idx'))).toBe(
+      path.join(os.tmpdir(), 'idx', 'stall-alerts.jsonl'),
+    );
   });
 });
 
