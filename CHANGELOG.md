@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.3...v3.34.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* **daemon:** last-will diagnosis on unclean start (TRA-2037) ([#1432](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1432)) ([707ddfb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/707ddfbce62a7e54ab97a5bc9cb325ded5717e72))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-28, second pass, threads silent, sweep clean (TRA-2049) ([#1439](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1439)) ([abcca8f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/abcca8f75b036929022a7ca5003f457bf002d6a3))
+
 ## [3.34.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.2...v3.34.3) (2026-09-28)
 
 
