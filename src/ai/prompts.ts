@@ -167,17 +167,21 @@ const INJECTION_LINE_PATTERNS: RegExp[] = [
  * echo injected instructions. We strip lines that look like injection artifacts
  * and drop any leftover fencing delimiter the model parroted back.
  *
- * Reasoning ("thinking") models additionally wrap chain-of-thought in
+ * Reasoning ("thinking") models additionally *prepend* chain-of-thought in
  * `<think>…</think>` (Qwen, DeepSeek, …). A response that is all thinking and
- * no summary would otherwise be stored as the summary; stripping the block
- * first either reveals the real one-liner underneath or correctly yields empty
+ * no summary would otherwise be stored as the summary; stripping the leading
+ * block either reveals the real one-liner underneath or correctly yields empty
  * (GH#1423).
+ *
+ * The match is anchored to the start of the response on purpose: a summary
+ * that merely *mentions* `<think>` mid-sentence (e.g. describing a chat
+ * template's tag handling) must be preserved verbatim.
  *
  * Returns the cleaned (trimmed) summary; may return an empty string if every
  * line looked like an artifact, in which case the caller should fall back to a
  * structural summary.
  */
-const THINK_BLOCK_RE = /<think\b[^>]*>[\s\S]*?(?:<\/think\s*>|$)/gi;
+const THINK_BLOCK_RE = /^\s*<think\b[^>]*>[\s\S]*?(?:<\/think\s*>|$)/i;
 
 export function sanitizeGeneratedSummary(raw: string): string {
   if (!raw) return '';

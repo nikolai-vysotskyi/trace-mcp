@@ -64,4 +64,18 @@ describe('CachedInferenceService', () => {
     await service.generate('test', { maxTokens: 100, temperature: 0.1 });
     expect(inner.generate).toHaveBeenCalledWith('test', { maxTokens: 100, temperature: 0.1 });
   });
+
+  it('treats different output budgets as different cache entries (GH#1423)', async () => {
+    const db = createDb();
+    const cache = new InferenceCache(db);
+    const inner = createMockInference();
+    const service = new CachedInferenceService(inner, cache, 'test-model');
+
+    await service.generate('test', { maxTokens: 100 });
+    await service.generate('test', { maxTokens: 100 });
+    expect(inner.generate).toHaveBeenCalledTimes(1); // same budget → hit
+
+    await service.generate('test', { maxTokens: 1024 });
+    expect(inner.generate).toHaveBeenCalledTimes(2); // new budget → miss
+  });
 });

@@ -136,6 +136,24 @@ describe('LLMReranker — output budget (GH#1423)', () => {
     expect(result.map((r) => r.id)).toEqual([1, 2]);
     // …but loudly: every search was paying full rerank latency for nothing.
     const messages = warnSpy.mock.calls.map((c) => JSON.stringify(c));
-    expect(messages.some((m) => m.includes('failed to parse scores'))).toBe(true);
+    const parseWarn = messages.find((m) => m.includes('failed to parse scores'));
+    expect(parseWarn).toBeDefined();
+    expect(parseWarn).toContain('ai.rerank_max_tokens');
+  });
+
+  it('throttles the parse-failure warn: loud a few times, then debug', async () => {
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => undefined as never);
+    try {
+      const inference = createMockInference('');
+      const reranker = new LLMReranker(inference);
+
+      for (let i = 0; i < 5; i++) {
+        await reranker.rerank('query', docs, 2);
+      }
+      expect(warnSpy).toHaveBeenCalledTimes(3);
+      expect(debugSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      debugSpy.mockRestore();
+    }
   });
 });

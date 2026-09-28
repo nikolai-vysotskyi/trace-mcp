@@ -7,7 +7,17 @@ import { logger } from '../logger.js';
 import type { InferenceService, RerankerService } from './interfaces.js';
 import { PROMPTS } from './prompts.js';
 
+/** How many parse-failure warns fire before the reranker drops to debug. */
+const MAX_PARSE_FAILURE_WARNS = 3;
+
 export class LLMReranker implements RerankerService {
+  /**
+   * Parse-failure warns already emitted. The dead-reranker condition persists
+   * for the life of the process, so warn loudly a few times and then drop to
+   * debug — a 200-search session must not produce 200 identical lines.
+   */
+  private parseFailureWarns = 0;
+
   constructor(
     private inference: InferenceService,
     /**
@@ -45,11 +55,24 @@ export class LLMReranker implements RerankerService {
         // Warn, not debug: an empty/unparseable rerank response means every
         // semantic search just paid full LLM latency for an RRF fallback.
         // The classic cause is a reasoning model burning the output budget —
-        // see ai.rerank_max_tokens (GH#1423).
-        logger.warn(
-          { responseLength: response.length, expectedScores: documents.length },
-          'Reranker: failed to parse scores, keeping original order',
-        );
+        // hence the actionable hint (GH#1423). Throttled: the condition
+        // persists per process, so only the first few are loud.
+        this.parseFailureWarns++;
+        if (this.parseFailureWarns <= MAX_PARSE_FAILURE_WARNS) {
+          logger.warn(
+            {
+              responseLength: response.length,
+              expectedScores: documents.length,
+              hint: 'raise ai.rerank_max_tokens',
+            },
+            'Reranker: failed to parse scores, keeping original order',
+          );
+        } else {
+          logger.debug(
+            { responseLength: response.length, expectedScores: documents.length },
+            'Reranker: failed to parse scores, keeping original order',
+          );
+        }
         return documents.slice(0, topK).map((d, i) => ({
           id: d.id,
           score: documents.length - i,

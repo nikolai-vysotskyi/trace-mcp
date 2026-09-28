@@ -92,7 +92,7 @@ describe('SummarizationPipeline', () => {
     expect(count).toBe(0);
   });
 
-  it('handles inference errors gracefully per symbol', async () => {
+  it('retries errored symbols within the run instead of abandoning them', async () => {
     seedSymbols(store);
     let callCount = 0;
     const inference: InferenceService = {
@@ -110,8 +110,10 @@ describe('SummarizationPipeline', () => {
     });
 
     const count = await pipeline.summarizeUnsummarized();
-    // First symbol fails, second succeeds
-    expect(count).toBe(1);
+    // First symbol fails transiently, second succeeds; the failed one is
+    // retried in-run (errored ids stay out of `attempted`) and then succeeds.
+    expect(count).toBe(2);
+    expect(inference.generate).toHaveBeenCalledTimes(3);
   });
 
   it('returns 0 when no unsummarized symbols exist', async () => {
@@ -295,5 +297,80 @@ describe('SummarizationPipeline — empty-batch termination (GH#1423)', () => {
     await pipeline.summarizeUnsummarized();
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((v) => v === PROMPTS.summarize_symbol.maxTokens)).toBe(true);
+  });
+
+  it('recovers from a transient whole-batch failure (review TRA-2026 finding 1)', async () => {
+    // Reviewer's A/B: batchSize 1, first call throws HTTP 429, provider
+    // healthy after — must summarize 5/5 in 6 calls, not 0/5 in 1.
+    seedFunctions(5);
+    let calls = 0;
+    const inference: InferenceService = {
+      generate: vi.fn(async () => {
+        calls++;
+        if (calls === 1) throw new Error('HTTP 429 Too Many Requests');
+        return 'Real summary.';
+      }),
+    };
+    const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
+      batchSize: 1,
+      kinds: ['function'],
+      concurrency: 1,
+    });
+
+    const count = await pipeline.summarizeUnsummarized();
+    expect(count).toBe(5);
+    expect(inference.generate).toHaveBeenCalledTimes(6);
+  });
+
+  it('aborts loudly after persistent whole-batch failures (no silent completed-at-0)', async () => {
+    seedFunctions(3);
+    const inference: InferenceService = {
+      generate: vi.fn(async () => {
+        throw new Error('HTTP 500 provider down');
+      }),
+    };
+    const progressUpdates: { phase?: string }[] = [];
+    const pipeline = new SummarizationPipeline(
+      store,
+      inference,
+      '/tmp/fake',
+      { batchSize: 2, kinds: ['function'], concurrency: 1 },
+      { update: (_t: string, s: { phase?: string }) => progressUpdates.push(s) } as never,
+    );
+
+    await expect(pipeline.summarizeUnsummarized()).rejects.toThrow(/after 3 attempts/);
+    // Initial try + 2 retries of the same 2-row batch, then abort — bounded.
+    expect(inference.generate).toHaveBeenCalledTimes(6);
+    // The run reports error, never a quiet `completed` at zero progress.
+    expect(progressUpdates.at(-1)?.phase).toBe('error');
+    expect(progressUpdates.some((u) => u.phase === 'completed')).toBe(false);
+  });
+
+  it('retries only the errored ids of a mixed batch', async () => {
+    seedFunctions(2);
+    // fn0 throws once then recovers; fn1 is silent-empty.
+    const seen = new Map<string, number>();
+    const inference: InferenceService = {
+      generate: vi.fn(async (prompt: string) => {
+        const name = /Name: (\S+)/.exec(prompt)?.[1] ?? '?';
+        const n = (seen.get(name) ?? 0) + 1;
+        seen.set(name, n);
+        if (name === 'fn0' && n === 1) throw new Error('HTTP 429');
+        if (name === 'fn0') return 'Recovered summary.';
+        return '';
+      }),
+    };
+    const pipeline = new SummarizationPipeline(store, inference, '/tmp/fake', {
+      batchSize: 2,
+      kinds: ['function'],
+      concurrency: 1,
+    });
+
+    const count = await pipeline.summarizeUnsummarized();
+    expect(count).toBe(1);
+    // Batch 1 bills fn0 (error) + fn1 (empty); retry bills fn0 only
+    // (fn1 is attempted); the leftover fn1 then trips the fresh-empty tail.
+    expect(inference.generate).toHaveBeenCalledTimes(3);
+    expect(billedNames(inference)).toEqual(['fn0', 'fn1', 'fn0']);
   });
 });
