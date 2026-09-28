@@ -10,10 +10,25 @@
  * Keep the response shape stable — clients (operators, ad-hoc memory
  * dashboards) depend on it. Add new fields, don't rename existing ones.
  */
+import { getHeapStatistics } from 'node:v8';
 import { __projectStatsCacheStats } from '../api/project-stats-routes.js';
 import { __recentReindexCacheStats } from '../indexer/recent-reindex-cache.js';
 import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import type { TelemetrySink } from '../telemetry/types.js';
+
+/** Cap for the per-session journal pressure list — bounds the response. */
+export const SESSION_JOURNAL_TOP_N = 10;
+
+export interface SessionJournalPressure {
+  sessionId: string;
+  entries: number;
+  compactBytes: number;
+}
+
+export interface LoadedProjectInfo {
+  root: string;
+  status: string;
+}
 
 export interface MemoryReportDeps {
   /** sessionId/clientId → TrackedClient map. Daemon-local. */
@@ -44,6 +59,21 @@ export interface MemoryReportDeps {
   sessionJournalEntries: number;
   /** Sum of retained compact-snapshot bytes across live journals (TRA-2017). */
   sessionJournalCompactBytes: number;
+  /**
+   * Per-session journal pressure (TRA-2061). The aggregates above can't tell
+   * "ten quiet sessions" from "one runaway session" — this list can. The
+   * builder sorts by compactBytes desc and keeps the top SESSION_JOURNAL_TOP_N.
+   */
+  sessionJournals: SessionJournalPressure[];
+  /** Currently resident projects (root + status) — TRA-2061. */
+  loadedProjects: LoadedProjectInfo[];
+  /** Daemon-lifetime descendant-wake bookkeeping size (ProjectManager). */
+  descendantWakeEntries: number;
+  /** Stalled-indexing warn-latch size (ProjectManager). */
+  stallWarnedRoots: number;
+  /** Main-thread tree-sitter cache footprint (TRA-1577, bounded 200 entries / 64MB). */
+  treeCacheEntries: number;
+  treeCacheApproxBytes: number;
 }
 
 export interface MemoryReportProcess {
@@ -52,6 +82,21 @@ export interface MemoryReportProcess {
   heapTotal: number;
   external: number;
   arrayBuffers: number;
+}
+
+/**
+ * V8 heap statistics (TRA-2061). The triage number is `used_ratio`:
+ * approaching 1.0 means the process is on a V8-OOM trajectory (JS leak);
+ * a huge RSS with a low ratio means native/mmap (SQLite, tree-sitter),
+ * not the JS heap.
+ */
+export interface MemoryReportHeap {
+  used: number;
+  total: number;
+  limit: number;
+  malloced: number;
+  peakMalloced: number;
+  usedRatio: number;
 }
 
 export interface MemoryReportCaches {
@@ -67,7 +112,12 @@ export interface MemoryReportCaches {
   sessionLastSeen: number;
   registered_projects: number;
   recent_reindex_total_entries: number;
+  recent_reindex_projects: number;
   project_stats_cache_entries: number;
+  tree_cache_entries: number;
+  tree_cache_approx_bytes: number;
+  descendant_wake_entries: number;
+  stall_warned_roots: number;
   resource_pool_entries: number;
   session_journal_total_entries: number;
   session_journal_compact_bytes: number;
@@ -80,8 +130,18 @@ export interface MemoryReportTelemetry {
 
 export interface MemoryReport {
   process: MemoryReportProcess;
+  /** V8 heap statistics — added TRA-2061, see MemoryReportHeap. */
+  heap: MemoryReportHeap;
   uptime_seconds: number;
   caches: MemoryReportCaches;
+  /**
+   * Per-session journal pressure, top SESSION_JOURNAL_TOP_N by compact bytes
+   * desc — added TRA-2061. Answers "which session holds the heap" when the
+   * totals above are high.
+   */
+  sessions_top: SessionJournalPressure[];
+  /** Currently resident projects — added TRA-2061. */
+  loaded_projects: LoadedProjectInfo[];
   telemetry?: MemoryReportTelemetry;
 }
 
@@ -117,12 +177,17 @@ function collectTelemetryBuffers(): MemoryReportTelemetry | undefined {
 
 /**
  * Build the `/debug/memory` payload. Pure — no I/O beyond the cheap
- * `process.memoryUsage()` and `process.uptime()` syscalls.
+ * `process.memoryUsage()`, `process.uptime()` and `v8.getHeapStatistics()`
+ * syscalls (plus the module-state cache stats readers).
  */
 export function buildMemoryReport(deps: MemoryReportDeps): MemoryReport {
   const mem = process.memoryUsage();
+  const heapStats = getHeapStatistics();
   const recent = __recentReindexCacheStats();
   const stats = __projectStatsCacheStats();
+  const sessionsTop = [...deps.sessionJournals]
+    .sort((a, b) => b.compactBytes - a.compactBytes || b.entries - a.entries)
+    .slice(0, SESSION_JOURNAL_TOP_N);
   const report: MemoryReport = {
     process: {
       rss: mem.rss,
@@ -130,6 +195,17 @@ export function buildMemoryReport(deps: MemoryReportDeps): MemoryReport {
       heapTotal: mem.heapTotal,
       external: mem.external,
       arrayBuffers: mem.arrayBuffers,
+    },
+    heap: {
+      used: heapStats.used_heap_size,
+      total: heapStats.total_heap_size,
+      limit: heapStats.heap_size_limit,
+      malloced: heapStats.malloced_memory,
+      peakMalloced: heapStats.peak_malloced_memory,
+      usedRatio:
+        heapStats.heap_size_limit > 0
+          ? Math.round((heapStats.used_heap_size / heapStats.heap_size_limit) * 1000) / 1000
+          : 0,
     },
     uptime_seconds: process.uptime(),
     caches: {
@@ -145,11 +221,18 @@ export function buildMemoryReport(deps: MemoryReportDeps): MemoryReport {
       sessionLastSeen: deps.sessionLastSeen.size,
       registered_projects: deps.registeredProjects,
       recent_reindex_total_entries: recent.totalEntries,
+      recent_reindex_projects: recent.projects,
       project_stats_cache_entries: stats.size,
+      tree_cache_entries: deps.treeCacheEntries,
+      tree_cache_approx_bytes: deps.treeCacheApproxBytes,
+      descendant_wake_entries: deps.descendantWakeEntries,
+      stall_warned_roots: deps.stallWarnedRoots,
       resource_pool_entries: deps.resourcePoolEntries,
       session_journal_total_entries: deps.sessionJournalEntries,
       session_journal_compact_bytes: deps.sessionJournalCompactBytes,
     },
+    sessions_top: sessionsTop,
+    loaded_projects: [...deps.loadedProjects],
   };
   const telemetry = collectTelemetryBuffers();
   if (telemetry) report.telemetry = telemetry;
