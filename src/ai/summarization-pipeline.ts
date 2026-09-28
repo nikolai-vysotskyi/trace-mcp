@@ -181,13 +181,30 @@ export class SummarizationPipeline {
             'Summarization batch hit provider errors — retrying the failed symbols',
           );
         } else {
-          // Persistently failing provider: abort loudly into `phase: 'error'`
-          // (the outer catch) rather than spinning on the same rows or
-          // misreporting `completed` at partial progress.
-          throw new Error(
-            `Summarization batch failed: ${errored.length} of ${fresh.length} provider ` +
-              `calls errored after ${MAX_ERRORED_BATCH_RETRIES + 1} attempts`,
+          // Retry budget exhausted. A run that stored nothing at all faces a
+          // dead-from-the-start provider: abort loudly into `phase: 'error'`
+          // (the outer catch) rather than spinning or misreporting
+          // `completed` at zero progress. But a run that DID progress (e.g.
+          // one poison-pill symbol with a prompt the provider always rejects
+          // among thousands of healthy ones) must not be rewritten as a
+          // failure: keep the progress with a loud warn and leave the
+          // leftovers `summary IS NULL` for the next run.
+          if (totalSummarized === 0) {
+            throw new Error(
+              `Summarization batch failed: ${errored.length} of ${fresh.length} provider ` +
+                `calls errored after ${MAX_ERRORED_BATCH_RETRIES + 1} attempts`,
+            );
+          }
+          logger.warn(
+            {
+              errorCount: errored.length,
+              summarized: totalSummarized,
+              attempts: MAX_ERRORED_BATCH_RETRIES + 1,
+            },
+            'Summarization stopping: some symbols errored persistently — kept progress, ' +
+              'leftovers stay unsummarized and retry on the next run',
           );
+          break;
         }
 
         // A short fetch means the queue is drained — unless errored ids are

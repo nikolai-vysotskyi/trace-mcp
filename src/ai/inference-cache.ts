@@ -16,8 +16,14 @@ export class InferenceCache {
   constructor(private db: Database.Database) {}
 
   private cacheKey(model: string, prompt: string, maxTokens?: number): string {
-    const budget = maxTokens == null ? '' : String(maxTokens);
-    return createHash('sha256').update(`${model}\0${budget}\0${prompt}`).digest('hex');
+    // Genuinely the legacy key when no budget is passed (not the budgeted
+    // shape with an empty segment): entries written before the budget existed
+    // must stay readable, or the first index after the upgrade re-bills every
+    // cached call.
+    if (maxTokens == null) {
+      return createHash('sha256').update(`${model}\0${prompt}`).digest('hex');
+    }
+    return createHash('sha256').update(`${model}\0${maxTokens}\0${prompt}`).digest('hex');
   }
 
   get(model: string, prompt: string, maxTokens?: number): string | null {

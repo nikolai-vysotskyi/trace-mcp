@@ -346,6 +346,35 @@ describe('SummarizationPipeline — empty-batch termination (GH#1423)', () => {
     expect(progressUpdates.some((u) => u.phase === 'completed')).toBe(false);
   });
 
+  it('keeps progress on a poison-pill symbol instead of failing the run (review round 2)', async () => {
+    // 60 symbols, batchSize 20, fn0 always throws (e.g. provider content
+    // filter on its prompt), the other 59 healthy: the run must resolve
+    // with 59 stored — not reject with phase `error` on a 98% done run.
+    seedFunctions(60);
+    const inference: InferenceService = {
+      generate: vi.fn(async (prompt: string) => {
+        if (/Name: fn0\b/.exec(prompt)) throw new Error('content filter');
+        return 'Real summary.';
+      }),
+    };
+    const progressUpdates: { phase?: string }[] = [];
+    const pipeline = new SummarizationPipeline(
+      store,
+      inference,
+      '/tmp/fake',
+      { batchSize: 20, kinds: ['function'], concurrency: 1 },
+      { update: (_t: string, s: { phase?: string }) => progressUpdates.push(s) } as never,
+    );
+
+    const count = await pipeline.summarizeUnsummarized();
+    expect(count).toBe(59);
+    // Every symbol billed once; the poison id billed on each attempt.
+    expect(inference.generate).toHaveBeenCalledTimes(66);
+    expect(progressUpdates.at(-1)?.phase).toBe('completed');
+    const messages = warnSpy.mock.calls.map((c) => JSON.stringify(c));
+    expect(messages.some((m) => m.includes('errored persistently'))).toBe(true);
+  });
+
   it('retries only the errored ids of a mixed batch', async () => {
     seedFunctions(2);
     // fn0 throws once then recovers; fn1 is silent-empty.

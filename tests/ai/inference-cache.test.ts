@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { InferenceCache } from '../../src/ai/inference-cache.js';
 
@@ -82,5 +83,19 @@ describe('InferenceCache', () => {
     // …and a budget-less read does not see budget-keyed entries.
     cache.set('model-a', 'prompt-2', 'budgeted', 100);
     expect(cache.get('model-a', 'prompt-2')).toBeNull();
+  });
+
+  it('still reads entries written by the pre-budget key format', () => {
+    // Genuine backward-compat pin: insert with the exact legacy key
+    // sha256(model + NUL + prompt), bypassing this revision's code, and
+    // require a budget-less read to hit it. A budgeted shape with an empty
+    // segment (model + NUL + NUL + prompt) hashes differently and would miss.
+    const legacyKey = createHash('sha256').update('model-a\0prompt-1').digest('hex');
+    const promptHash = createHash('sha256').update('prompt-1').digest('hex');
+    db.prepare(
+      `INSERT INTO inference_cache (cache_key, model, prompt_hash, response, created_at, ttl_days)
+       VALUES (?, 'model-a', ?, 'legacy-response', datetime('now'), 90)`,
+    ).run(legacyKey, promptHash);
+    expect(cache.get('model-a', 'prompt-1')).toBe('legacy-response');
   });
 });
