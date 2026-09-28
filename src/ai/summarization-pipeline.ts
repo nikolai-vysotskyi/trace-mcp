@@ -18,6 +18,13 @@ interface SummarizationConfig {
   /** Max parallel inference requests (default 1 = sequential). */
   concurrency: number;
   /**
+   * Output-token budget per summary. Overrides
+   * `PROMPTS.summarize_symbol.maxTokens` (default 100); wired from
+   * `ai.summarize_max_tokens` so reasoning models that burn the budget on
+   * thinking tokens can be given headroom.
+   */
+  maxTokens?: number;
+  /**
    * When false, leading docstrings / comment blocks are stripped from the
    * source before it is sent to the summarizer (IPI hardening — docstrings are
    * the highest-risk injection surface). Defaults to true, preserving the
@@ -27,6 +34,14 @@ interface SummarizationConfig {
 }
 
 const MAX_SOURCE_LINES = 80;
+
+/**
+ * How many times a batch whose provider calls all threw is retried before the
+ * run aborts loudly. A single transient failure (HTTP 429, brief disconnect)
+ * must not kill a 33k-symbol run, but a hard-down provider must not spin
+ * forever either — after the retries the run throws into `phase: 'error'`.
+ */
+const MAX_ERRORED_BATCH_RETRIES = 2;
 
 /**
  * Fraction of (provider-succeeded) symbols that may fall back to a generic
@@ -77,8 +92,24 @@ export class SummarizationPipeline {
       completedAt: 0,
     });
 
+    /**
+     * Ids that produced a provider *response* this run (storable or
+     * silent-empty alike). Empty responses are deliberately NOT stored (they
+     * retry on a later run once the model is fixed), so they stay
+     * `summary IS NULL` and the next fetch would re-select them — without
+     * this set, partial-progress batches re-bill those rows once per
+     * subsequent batch (GH#1423). Ids whose call *threw* are deliberately
+     * excluded: a transient 429 must be retried, not skipped.
+     */
+    const attempted = new Set<number>();
+    /** Consecutive zero-progress batches whose calls all threw (retry budget). */
+    let erroredBatchRetries = 0;
+
     try {
-      do {
+      // Intentionally `for (;;)` with explicit breaks rather than
+      // `while (batch.length === batchSize)`: an errored tail batch (shorter
+      // than batchSize) must still re-fetch to retry its failed symbols.
+      for (;;) {
         // Cooperative cancellation: bail out at batch boundaries instead of
         // running to completion when the owning project was already disposed.
         if (signal?.aborted) {
@@ -88,7 +119,18 @@ export class SummarizationPipeline {
         batch = this.store.getUnsummarizedSymbols(this.config.kinds, this.config.batchSize);
         if (batch.length === 0) break;
 
-        const results = await this.summarizeBatch(batch, signal);
+        // Skip rows already answered this run — re-sending them only burns
+        // provider budget for a response we already know is unusable.
+        const fresh = batch.filter((sym) => !attempted.has(sym.id));
+        if (fresh.length === 0) {
+          // Only reachable as a tail: every remaining unsummarized row was
+          // already billed-empty this run (a zero-progress batch breaks
+          // below before the next fetch). Nothing left to bill.
+          logger.debug('Summarization: remaining rows already attempted this run — stopping');
+          break;
+        }
+
+        const { results, errored } = await this.summarizeBatch(fresh, signal);
         for (const { id, summary } of results) {
           this.store.updateSymbolSummary(id, summary);
           // Summary feeds buildEmbeddingText — drop any stale vector so the
@@ -96,13 +138,80 @@ export class SummarizationPipeline {
           this.vectorStore?.delete(id);
           totalSummarized++;
         }
+        const erroredIds = new Set(errored);
+        for (const sym of fresh) {
+          if (!erroredIds.has(sym.id)) attempted.add(sym.id);
+        }
 
         this.progress?.update('summarization', { processed: totalSummarized });
         logger.debug(
           { batch: batch.length, total: totalSummarized },
           'Summarization batch complete',
         );
-      } while (batch.length === this.config.batchSize);
+
+        if (results.length > 0) {
+          erroredBatchRetries = 0;
+        } else if (errored.length === 0) {
+          // Nothing in this batch was storable, yet the provider answered
+          // every call: every row is still `summary IS NULL`, so the next
+          // fetch would return this exact batch — the loop that re-billed
+          // one reporter's account ~261k times (GH#1423). Stop: the leftovers
+          // stay unsummarized and retry on a later run, and the degradation
+          // warning below can finally fire (it was unreachable while the
+          // loop never exited).
+          logger.warn(
+            { batchSize: fresh.length },
+            'Summarization batch produced no stored summaries — stopping this run ' +
+              'instead of re-billing the same symbols',
+          );
+          break;
+        } else if (erroredBatchRetries < MAX_ERRORED_BATCH_RETRIES) {
+          // The provider *threw* instead of answering — a different failure
+          // from the silent-empty case above (typically a transient 429 or a
+          // brief disconnect). The errored ids were kept out of `attempted`,
+          // so the next fetch retries exactly them.
+          erroredBatchRetries++;
+          logger.warn(
+            {
+              batchSize: fresh.length,
+              errorCount: errored.length,
+              attempt: erroredBatchRetries,
+              maxAttempts: MAX_ERRORED_BATCH_RETRIES + 1,
+            },
+            'Summarization batch hit provider errors — retrying the failed symbols',
+          );
+        } else {
+          // Retry budget exhausted. A run that stored nothing at all faces a
+          // dead-from-the-start provider: abort loudly into `phase: 'error'`
+          // (the outer catch) rather than spinning or misreporting
+          // `completed` at zero progress. But a run that DID progress (e.g.
+          // one poison-pill symbol with a prompt the provider always rejects
+          // among thousands of healthy ones) must not be rewritten as a
+          // failure: keep the progress with a loud warn and leave the
+          // leftovers `summary IS NULL` for the next run.
+          if (totalSummarized === 0) {
+            throw new Error(
+              `Summarization batch failed: ${errored.length} of ${fresh.length} provider ` +
+                `calls errored after ${MAX_ERRORED_BATCH_RETRIES + 1} attempts`,
+            );
+          }
+          logger.warn(
+            {
+              errorCount: errored.length,
+              summarized: totalSummarized,
+              attempts: MAX_ERRORED_BATCH_RETRIES + 1,
+            },
+            'Summarization stopping: some symbols errored persistently — kept progress, ' +
+              'leftovers stay unsummarized and retry on the next run',
+          );
+          break;
+        }
+
+        // A short fetch means the queue is drained — unless errored ids are
+        // still pending retry (kept out of `attempted`, so the next fetch
+        // returns exactly them).
+        if (batch.length < this.config.batchSize && errored.length === 0) break;
+      }
 
       this.maybeWarnSilentDegradation();
 
@@ -125,8 +234,10 @@ export class SummarizationPipeline {
   private async summarizeBatch(
     symbols: ReturnType<Store['getUnsummarizedSymbols']>,
     signal?: AbortSignal,
-  ): Promise<{ id: number; summary: string }[]> {
+  ): Promise<{ results: { id: number; summary: string }[]; errored: number[] }> {
     const results: { id: number; summary: string }[] = [];
+    /** Ids whose provider call threw (vs. answered with unusable text). */
+    const errored: number[] = [];
     const template = PROMPTS.summarize_symbol;
     const concurrency = this.config.concurrency;
 
@@ -154,7 +265,7 @@ export class SummarizationPipeline {
         });
 
         const summary = await this.inferenceService.generate(prompt, {
-          maxTokens: template.maxTokens,
+          maxTokens: this.config.maxTokens ?? template.maxTokens,
           temperature: template.temperature,
           signal,
         });
@@ -180,6 +291,7 @@ export class SummarizationPipeline {
         this.silentFallbacks++;
       } catch (e) {
         logger.warn({ symbolId: sym.id, name: sym.name, error: e }, 'Failed to summarize symbol');
+        errored.push(sym.id);
       }
     };
 
@@ -196,7 +308,7 @@ export class SummarizationPipeline {
       }
     }
 
-    return results;
+    return { results, errored };
   }
 
   /**
@@ -219,7 +331,7 @@ export class SummarizationPipeline {
       },
       'AI summarizer returned successful responses with no usable summary for most symbols — ' +
         'likely a "thinking" model consuming the entire output budget on reasoning tokens. ' +
-        'Remedy: raise ai.summarize max tokens, or set ai.openaiExtraBody to disable thinking ' +
+        'Remedy: raise ai.summarize_max_tokens, or set ai.openaiExtraBody to disable thinking ' +
         '(e.g. { "reasoning_effort": "none" } / { "chat_template_kwargs": { "enable_thinking": false } }).',
     );
   }

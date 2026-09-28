@@ -411,6 +411,7 @@ export class LocalBackend implements Backend {
               ],
               concurrency: config.ai.concurrency ?? 1,
               summarizeFromDocstrings: config.ai.summarizeFromDocstrings,
+              maxTokens: config.ai.summarize_max_tokens,
             },
             this.progress,
             vectorStore,

@@ -588,6 +588,7 @@ export class ProjectManager {
           ],
           concurrency: config.ai!.concurrency ?? 1,
           summarizeFromDocstrings: config.ai!.summarizeFromDocstrings,
+          maxTokens: config.ai!.summarize_max_tokens,
         },
         progress,
         getVectorStore(),
