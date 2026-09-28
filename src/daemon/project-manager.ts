@@ -1749,9 +1749,39 @@ export class ProjectManager {
     return removed;
   }
 
-  /** Get a managed project by root path. */
+  /** Get a managed project by root path.
+   *
+   * TRA-2032: symlink aliases (`/tmp/x` vs `/private/tmp/x` on macOS) resolve
+   * to different `path.resolve` keys, so the same checkout 404'd when the
+   * caller spelled it differently from registration. On an exact miss, probe
+   * the realpath spelling too — read-only, exact hits keep priority, insertion
+   * keys are unchanged (still `managerKey()`), so no duplicate entries. The
+   * scan always runs (no `real === root` shortcut): the hook now posts
+   * canonical roots while the map keeps lexical keys, so only a
+   * realpath-to-realpath comparison matches every alias combination.
+   */
   getProject(root: string): ManagedProject | undefined {
-    return this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    const direct = this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    if (direct) return direct;
+    let real: string;
+    try {
+      real = fs.realpathSync(root);
+    } catch {
+      return undefined; // nothing on disk to resolve against
+    }
+    if (real !== root) {
+      const byReal = this.projects.get(managerKey(real)) ?? this.projects.get(real);
+      if (byReal) return byReal;
+    }
+    for (const [key, proj] of this.projects) {
+      if (key === managerKey(root) || key === root) continue;
+      try {
+        if (fs.realpathSync(key) === real) return proj;
+      } catch {
+        /* managed root gone — not a match */
+      }
+    }
+    return undefined;
   }
 
   /** Get all managed projects. */
@@ -1767,7 +1797,7 @@ export class ProjectManager {
    * isn't currently loaded.
    */
   touchActivity(root: string): void {
-    const managed = this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    const managed = this.getProject(root);
     if (managed) managed.lastAccessedAt = Date.now();
   }
 

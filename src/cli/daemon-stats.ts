@@ -7,6 +7,10 @@ export interface HookStatLine {
   path: 'daemon' | 'cli' | 'skipped';
   reason: string;
   wallclock_ms: number;
+  /** TRA-2032: present on lines written by hook v0.6+. Lets the next "hook
+   * always falls back" QA run correlate 404s to the missed root without
+   * touching the daemon. Absent on older lines. */
+  project?: string;
 }
 
 export interface PathStats {
@@ -60,6 +64,9 @@ export function parseHookStats(text: string): HookStatLine[] {
         path: obj.path,
         reason: obj.reason,
         wallclock_ms: obj.wallclock_ms,
+        ...(typeof obj.project === 'string' && obj.project.length > 0
+          ? { project: obj.project }
+          : {}),
       });
     } catch {
       // Skip malformed lines — JSONL tolerates them.

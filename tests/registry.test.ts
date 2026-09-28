@@ -463,6 +463,49 @@ describe('ephemeral workdirs are never persisted', () => {
   });
 });
 
+// TRA-2032: the hook posts a realpath'd root while the daemon registered the
+// symlinked spelling (or the reverse) — on macOS /tmp vs /private/tmp. The
+// lookup must tolerate the alias instead of 404ing into a cold CLI spawn.
+describe('symlink-alias tolerant lookup', () => {
+  it('resolves a symlinked spelling of a registered root', () => {
+    const repo = makeTmpRepo();
+    registerProject(repo);
+
+    const link = path.join(path.dirname(repo), 'repo-link');
+    fs.symlinkSync(repo, link, 'junction');
+    try {
+      expect(getProject(link)?.root).toBe(repo);
+      // The physical spelling resolves too, even when registration itself
+      // used an unresolved spelling (macOS /var vs /private/var).
+      expect(getProject(fs.realpathSync(repo))?.root).toBe(repo);
+    } finally {
+      fs.unlinkSync(link);
+    }
+  });
+
+  it('resolves the canonical spelling when registration used the alias', () => {
+    // The hook now always posts canonical roots while registration keeps the
+    // lexical spelling — this direction (stored alias, canonical request) is
+    // the one scratch checkouts under /tmp actually hit.
+    const repo = makeTmpRepo();
+    const link = path.join(path.dirname(repo), 'repo-link');
+    fs.symlinkSync(repo, link, 'junction');
+    try {
+      registerProject(link);
+      const canonical = fs.realpathSync(repo);
+      expect(path.resolve(canonical)).not.toBe(path.resolve(link));
+      expect(getProject(canonical)?.root).toBe(path.resolve(link));
+    } finally {
+      fs.unlinkSync(link);
+    }
+  });
+
+  it('still misses a truly unregistered root', () => {
+    const repo = makeTmpRepo();
+    expect(getProject(repo)).toBeNull();
+  });
+});
+
 // The case #487 missed: the checkout directory still exists, so nothing that
 // keys on presence will ever reclaim its index. Age off the DB itself does.
 describe('sweepEphemeralDbs', () => {

@@ -68,9 +68,12 @@ export function setupProject(
     // TRA-706: a deliberate `add`/`init` on an already auto-registered project
     // is still the moment the user claims it, so promote it out of the capped
     // implicit class even though there is nothing else left to set up.
+    // TRA-2032: promote under the stored spelling — `existing` may have
+    // matched via a symlink alias, and re-registering the as-given spelling
+    // would write a second row for the same checkout.
     const entry =
       opts?.explicit && !existing.explicit
-        ? registerProject(absRoot, { explicit: true })
+        ? registerProject(existing.root, { explicit: true })
         : existing;
     return {
       entry,

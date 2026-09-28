@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 vi.mock('../../src/logger.js', () => ({
   logger: {
@@ -13,6 +16,7 @@ vi.mock('../../src/logger.js', () => ({
 
 import { handleReindexFile } from '../../src/daemon/reindex-file-handler.js';
 import { __resetRecentReindexCache } from '../../src/indexer/recent-reindex-cache.js';
+import { logger } from '../../src/logger.js';
 
 interface FakePipeline {
   indexFiles: ReturnType<typeof vi.fn>;
@@ -54,6 +58,60 @@ describe('handleReindexFile', () => {
     expect(lockOpts.op).toBe('reindex-file-http');
   });
 
+  it('accepts a mixed symlink pair: stored project spelling + canonical file path (TRA-2032)', async () => {
+    // A pre-v0.6 hook posts an alias file path while the route normalized the
+    // project to the stored spelling (or vice versa) — the same on-disk file.
+    // The lexical containment check rejects it; the realpath retry must not.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-mixed-pair-'));
+    try {
+      const real = path.join(base, 'real');
+      fs.mkdirSync(path.join(real, 'src'), { recursive: true });
+      fs.writeFileSync(path.join(real, 'src', 'foo.ts'), '// test\n');
+      const link = path.join(base, 'link');
+      fs.symlinkSync(real, link, 'junction');
+
+      const indexFiles = vi.fn(async (_paths: string[]) => undefined);
+      const getProject = vi.fn((root: string) =>
+        root === link ? { pipeline: { indexFiles } } : undefined,
+      );
+      const lock = vi.fn(async (_opts: unknown, fn: () => Promise<unknown>) => fn());
+
+      const result = await handleReindexFile(
+        { project: link, path: path.join(fs.realpathSync(real), 'src', 'foo.ts') },
+        { getProject, lock },
+      );
+      expect(result).toEqual({ ok: true, relPath: 'src/foo.ts' });
+      expect(indexFiles).toHaveBeenCalledWith(['src/foo.ts']);
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it('still rejects a genuinely outside path even when symlinks exist (TRA-2032)', async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-mixed-pair-'));
+    try {
+      const real = path.join(base, 'real');
+      fs.mkdirSync(path.join(real, 'src'), { recursive: true });
+      const link = path.join(base, 'link');
+      fs.symlinkSync(real, link, 'junction');
+
+      const indexFiles = vi.fn(async (_paths: string[]) => undefined);
+      const getProject = vi.fn((root: string) =>
+        root === link ? { pipeline: { indexFiles } } : undefined,
+      );
+
+      const result = await handleReindexFile(
+        { project: link, path: '/etc/passwd' },
+        { getProject },
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.status).toBe(400);
+      expect(indexFiles).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it('accepts an absolute path under the project root', async () => {
     const deps = makeDeps({ project: '/tmp/proj-a' });
     const result = await handleReindexFile(
@@ -76,6 +134,22 @@ describe('handleReindexFile', () => {
       expect(result.error).toMatch(/not registered/);
     }
     expect(deps.indexFiles).not.toHaveBeenCalled();
+  });
+
+  it('logs the missed root on 404 so hook fallback storms stay diagnosable (TRA-2032)', async () => {
+    const deps = makeDeps();
+    await handleReindexFile(
+      { project: '/tmp/unknown-project', path: 'src/foo.ts' },
+      { getProject: deps.getProject, lock: deps.lock },
+    );
+    // info, not warn: a stuck config points every Edit here and warn would spam.
+    expect(logger.info).toHaveBeenCalledTimes(1);
+    const [meta, msg] = (logger.info as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
+    expect(meta.project).toBe('/tmp/unknown-project');
+    expect(String(msg)).toMatch(/not registered/);
   });
 
   it('returns 400 when project is missing', async () => {
