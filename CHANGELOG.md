@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.2...v3.34.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* **ai:** stop summarization re-billing the same batch forever (GH[#1423](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1423)) ([#1428](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1428)) ([77df0b9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/77df0b976dc71946c28a3de88f8538bee29d1a64))
+* **daemon:** byte-cap session journal snapshots, prune pool/bookkeeping residue (TRA-2017) ([#1424](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1424)) ([8aecc65](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8aecc656017c5d8a0b804b8ffa263a27b6056ee4))
+* **daemon:** tolerate symlink-alias project roots in reindex-file path (TRA-2032) ([#1431](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1431)) ([08a1981](https://github.com/nikolai-vysotskyi/trace-mcp/commit/08a19811e9001f39c9f745fa85622e90c86d8825))
+* **indexer:** drop hot-churn atomic tmp siblings before any lock work (TRA-2031) ([#1430](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1430)) ([490e240](https://github.com/nikolai-vysotskyi/trace-mcp/commit/490e2405dc4ed282573b0ad5277b896dced9ca54))
+* **indexer:** drop hot-churn runtime state before any lock work (TRA-2021) ([#1425](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1425)) ([6f1b257](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f1b257406a46cc744549da35f72abf05ae52739))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-28, threads silent, sweep 1 genuine scorecard (TRA-2022) ([#1429](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1429)) ([07cade9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/07cade92375563fe48e9c2aadfa249e58ca0f68c))
+
+
+### Tests
+
+* **daemon:** harden stall-watchdog quiet test against Windows jitter (TRA-2028) ([#1427](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1427)) ([2031115](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20311158db193516a7ba74b76b086fcb1e8ca153))
+
 ## [3.34.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.1...v3.34.2) (2026-09-27)
 
 
