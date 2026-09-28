@@ -255,7 +255,8 @@ export class FileExtractor {
     }
 
     // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
-    // `cron/ticker_*`, `cron/.tick.lock`) — rewritten every ~30 s, never
+    // `cron/ticker_*`, `cron/.tick.lock`, plus the TRA-2031 atomic tmp
+    // siblings) — rewritten every ~30 s, never
     // source. The entry points above drop it before the extractor ever
     // runs; this is the safety net for direct callers.
     if (isHotChurnPath(relPath)) {

@@ -447,8 +447,9 @@ export class FileWatcher {
           // race the unlink and log a doomed `Cannot read file` ENOENT).
           if (isSqliteSidecarPath(relPosix)) return false;
           // TRA-2021: hot-churn runtime state (`gateway.heartbeat` ~2
-          // rewrites/min, `cron/ticker_*` + `cron/.tick.lock`) — rewritten
-          // constantly, content hash unchanged, never source. Drop before
+          // rewrites/min, `cron/ticker_*` + `cron/.tick.lock`, plus the
+          // TRA-2031 atomic tmp siblings `cron/.hb_*.tmp` /
+          // `state/.gateway_*.tmp`) — rewritten constantly, content hash unchanged, never source. Drop before
           // debounce so it never wakes the pipeline (one project burned
           // ~250 s of indexer-elapsed per hour on these alone).
           if (isHotChurnPath(relPosix)) return false;
