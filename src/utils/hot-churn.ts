@@ -15,6 +15,12 @@
  * daemon). The tmp siblings are the same engine scratch, never source, so
  * they drop at the same entry points.
  *
+ * TRA-2057: same race, new prefix — `cache/.reasoning_caps_*.tmp`
+ * (atomic rewrite of `cache/reasoning_caps.json`, 4× ENOENT already on a
+ * daemon with the TRA-2031 fix; the TRA-2031 matcher never covered the
+ * `.reasoning_caps_` prefix or the `cache/` segment). Same narrowed
+ * treatment: exact dot-tmp prefix + a whole `cache` path segment.
+ *
  * They are engine scratch, never source — the same argument TRA-1943
  * applies to SQLite sidecars — so every indexing entry point drops them
  * before any stat/read/lock, mirroring `isSqliteSidecarPath`:
@@ -40,6 +46,8 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/cron/.gateway_*.tmp',
   '**/state/.hb_*.tmp',
   '**/state/.gateway_*.tmp',
+  // TRA-2057: atomic rewrite of `cache/reasoning_caps.json`.
+  '**/cache/.reasoning_caps_*.tmp',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
@@ -71,10 +79,18 @@ export function isHotChurnPath(p: string): boolean {
   // too often (`src/state/.env.tmp`, `app/state/.session.tmp`), and the
   // whole-segment rule (as in TRA-2021) keeps `cronjobs/`-style
   // substring dirs from matching.
+  // TRA-2057: same race for `cache/reasoning_caps.json`, written via
+  // `cache/.reasoning_caps_<rand>.tmp` + rename. Narrowed the same way:
+  // the exact `.reasoning_caps_` prefix under a whole `cache` segment,
+  // so `src/cache/.session.tmp` or `caches/`-style dirs never match.
   if (base.startsWith('.') && base.endsWith('.tmp')) {
-    if (!base.startsWith('.hb_') && !base.startsWith('.gateway_')) return false;
     const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
-    if (parents.includes('cron') || parents.includes('state')) return true;
+    if (
+      (base.startsWith('.hb_') || base.startsWith('.gateway_')) &&
+      (parents.includes('cron') || parents.includes('state'))
+    )
+      return true;
+    if (base.startsWith('.reasoning_caps_') && parents.includes('cache')) return true;
   }
   return false;
 }
