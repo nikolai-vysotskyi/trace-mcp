@@ -162,6 +162,53 @@ function sweepStaleSentinels(): void {
 }
 
 /**
+ * Delete every status sentinel belonging to one project root (TRA-2062).
+ *
+ * `removeProjectArtifacts` reclaimed the index DB, session DBs, topology and
+ * decision rows on project removal but left the `STATUS_DIR` sentinels behind,
+ * so every ephemeral agent workdir kept its
+ * `trace-mcp-{alive,consulted,status}-<hash>` files forever (187 stale-only
+ * hashes on the measured machine, same accumulation class as TRA-2016).
+ *
+ * Best-effort and idempotent: missing files are skipped, and deleting the
+ * sentinel of a root that still has a live server is self-healing — the next
+ * `flush()` (every 5–30s) recreates it, while readers treat a missing status
+ * as "MCP unavailable" fallback, never a hard error. Symlinks are never
+ * followed. The `$TMPDIR` copies are removed too, mirroring `stop()`.
+ *
+ * Bypass files (`trace-mcp-bypass-*`) are intentionally NOT touched: no writer
+ * in this repo names them per project hash, so there is no exact name to
+ * target and prefix-scanning would risk an unrelated file.
+ *
+ * @returns absolute paths actually removed (STATUS_DIR + $TMPDIR copies).
+ */
+export function deleteStatusSentinelsForRoot(projectRoot: string): string[] {
+  const hash = projectHash(path.resolve(projectRoot));
+  const names = [
+    `trace-mcp-status-${hash}.json`,
+    `trace-mcp-alive-${hash}`,
+    `trace-mcp-consulted-${hash}`,
+  ];
+  const removed: string[] = [];
+  for (const dir of [STATUS_DIR, os.tmpdir()]) {
+    for (const name of names) {
+      const full = path.join(dir, name);
+      try {
+        const st = fs.lstatSync(full);
+        if (st.isSymbolicLink()) continue;
+        if (st.isDirectory()) fs.rmSync(full, { recursive: true, force: true });
+        else if (st.isFile()) fs.unlinkSync(full);
+        else continue;
+        removed.push(full);
+      } catch {
+        /* missing, or vanished under us — fine */
+      }
+    }
+  }
+  return removed;
+}
+
+/**
  * Start writing the status sentinel for the given project.
  * Best-effort: any I/O error is swallowed — status is a hint, never a
  * hard requirement for tool execution.

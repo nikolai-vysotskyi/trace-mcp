@@ -74,7 +74,12 @@ import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
-import { pruneCommand, pruneIndexDir, sweepTopLevelOrphanDbs } from './cli/prune.js';
+import {
+  pruneCommand,
+  pruneIndexDir,
+  sweepOrphanStatusSentinels,
+  sweepTopLevelOrphanDbs,
+} from './cli/prune.js';
 import { removeCommand } from './cli/remove.js';
 import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
@@ -4333,6 +4338,33 @@ program
             }
           } catch (err) {
             logger.warn({ err }, 'sweepTopLevelOrphanDbs failed (non-fatal)');
+          }
+          try {
+            // TRA-2062: same story one dir over — status sentinels of razed
+            // workdirs were never removed by any deregistration path, so
+            // STATUS_DIR grew 3–4 files per agent run with no observer. The
+            // per-root deleter (removeProjectArtifacts/sweepMissingRoots)
+            // covers new removals; this gated orphan sweep drains the backlog
+            // (hash with no registry root and no index DB, past the TTL).
+            const statusResult = sweepOrphanStatusSentinels();
+            if (statusResult.removed.length > 0) {
+              logger.info(
+                { removedSentinels: statusResult.removed },
+                `Deleted ${statusResult.removed.length} orphaned status sentinel(s)`,
+              );
+            } else if (statusResult.scannedOrphans > 0) {
+              logger.info(
+                {
+                  orphanSentinels: statusResult.scannedOrphans,
+                  retainedWithinTtl: statusResult.retainedWithinTtl,
+                },
+                `Orphan status sweep: ${statusResult.scannedOrphans} orphaned sentinel(s) within TTL, nothing to delete`,
+              );
+            } else {
+              logger.debug('Orphan status sweep: no orphaned status sentinels present');
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepOrphanStatusSentinels failed (non-fatal)');
           }
           // TRA-527: same story one store over — subproject auto-sync wrote a
           // permanent row into the *global* topology DB per run workdir, and no

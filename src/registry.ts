@@ -23,6 +23,7 @@ import {
 } from './db-holders.js';
 import { initializeGuard } from './guard-init.js';
 import { isDangerousProjectRoot } from './dangerous-root.js';
+import { deleteStatusSentinelsForRoot } from './server/heartbeat.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 import { DB_FAMILY_SUFFIXES, deleteDbFamily } from './utils/db-family.js';
 import { readIfExists } from './utils/safe-fs.js';
@@ -957,6 +958,12 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
       if (entry.dbPath && !sharedWithSibling && !hasLiveHolderOrUnknown(entry.dbPath, root)) {
         deleteDbFamily(entry.dbPath);
       }
+      // TRA-2062: same litter as the missing-root branch below.
+      try {
+        deleteStatusSentinelsForRoot(root);
+      } catch {
+        /* best-effort */
+      }
       continue;
     }
 
@@ -992,6 +999,17 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
     delete reg.projects[root];
     removed.push(root);
     changed = true;
+
+    // TRA-2062: this path deregisters without removeProjectArtifacts, so the
+    // status sentinels need their own call — otherwise every swept workdir
+    // keeps its trace-mcp-{alive,consulted,status}-<hash> files forever.
+    // Runs even when the DB itself is kept below (shared/holder): sentinels
+    // are strictly per-root, and a still-live server recreates its own.
+    try {
+      deleteStatusSentinelsForRoot(root);
+    } catch {
+      /* best-effort */
+    }
 
     // TRA-1105: `dbPath` is not private to this row. `registerProject` points a
     // checkout at a sibling's DB when both resolve to the same git remote, and
