@@ -21,6 +21,11 @@ import {
   LAUNCHD_PLIST_PATH,
 } from '../global.js';
 import {
+  formatStallAlerts,
+  readRecentStallAlerts,
+  summarizeStallAlerts,
+} from '../daemon/unclean-stop.js';
+import {
   aggregateHookStats,
   fetchDaemonStats,
   parseDuration,
@@ -199,6 +204,10 @@ daemonCommand
         // Post-mortem (TRA-267): the daemon can vanish without writing anything
         // to daemon.log. launchd still knows how the last run ended.
         for (const line of formatLaunchdLastExit(getLaunchdLastExit())) console.log(line);
+        // TRA-2037: the stall watchdog's death breadcrumb lives outside
+        // daemon.log — surface it here so a down daemon's cause is one command away.
+        for (const line of formatStallAlerts(summarizeStallAlerts(readRecentStallAlerts())))
+          console.log(line);
       }
       if (disabled) {
         console.log(`  Auto-spawn: disabled (opt-out file: ${DAEMON_DISABLED_PATH})`);
@@ -216,6 +225,10 @@ daemonCommand
     console.log(`Daemon is running on port ${port}.`);
     // A KeepAlive restart hides the previous death — show how it ended.
     for (const line of formatLaunchdLastExit(getLaunchdLastExit())) console.log(line);
+    // TRA-2037: same hiding applies to the watchdog's own SIGKILL — the fatal
+    // line sits in stall-alerts.jsonl, not daemon.log.
+    for (const line of formatStallAlerts(summarizeStallAlerts(readRecentStallAlerts())))
+      console.log(line);
     if (health.version) console.log(`  Version: ${health.version}`);
     if (health.pid != null) console.log(`  PID: ${health.pid}`);
     if (health.uptime != null) {

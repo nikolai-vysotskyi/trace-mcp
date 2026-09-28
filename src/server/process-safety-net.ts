@@ -21,6 +21,7 @@
  */
 
 import { logger } from '../logger.js';
+import { noteDaemonShutdownReason } from '../daemon/exit-breadcrumb.js';
 
 let installed = false;
 
@@ -66,6 +67,10 @@ function guardLogSinks(): void {
   for (const stream of [process.stdout, process.stderr]) {
     stream.on('error', (err: NodeJS.ErrnoException) => {
       if (isBrokenPipe(err)) {
+        // TRA-2037: this exit runs the TRA-1911 `exit` breadcrumb, but with no
+        // reason noted it would land unattributed. Inert outside serve-http
+        // (the breadcrumb is only installed there).
+        noteDaemonShutdownReason('broken-pipe');
         process.exit(0);
       }
     });

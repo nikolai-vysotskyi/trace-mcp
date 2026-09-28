@@ -226,19 +226,46 @@ export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = pro
  * lives in the telemetry state file, which nothing else touches.
  *
  * Best-effort: never throws, and a failed write costs one data point.
+ *
+ * Returns true when the previous run never recorded a clean stop — i.e. this
+ * start follows an unclean death (SIGKILL, native crash, power loss). The
+ * daemon logs its last-will diagnosis off this (TRA-2037).
  */
-export function recordDaemonStart(env: NodeJS.ProcessEnv = process.env): void {
-  if (isDisabled(env)) return;
+export function recordDaemonStart(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (isDisabled(env)) return false;
   try {
     const state = loadOrCreateState();
+    const wasUnclean = state.daemonRunning === true;
     saveState({
       ...state,
       daemonStarts: (state.daemonStarts ?? 0) + 1,
-      daemonUncleanStops: (state.daemonUncleanStops ?? 0) + (state.daemonRunning ? 1 : 0),
+      daemonUncleanStops: (state.daemonUncleanStops ?? 0) + (wasUnclean ? 1 : 0),
       daemonRunning: true,
     });
+    return wasUnclean;
   } catch (err) {
     logger.debug({ err }, 'telemetry.daemon_start_record_failed');
+    return false;
+  }
+}
+
+/**
+ * Best-effort read of the daemon reliability counters for log lines that
+ * report them (TRA-2037 startup diagnosis). Never throws.
+ */
+export function readDaemonReliabilityCounters(env: NodeJS.ProcessEnv = process.env): {
+  starts: number;
+  uncleanStops: number;
+} {
+  try {
+    if (isDisabled(env)) return { starts: 0, uncleanStops: 0 };
+    const state = loadOrCreateState();
+    return {
+      starts: state.daemonStarts ?? 0,
+      uncleanStops: state.daemonUncleanStops ?? 0,
+    };
+  } catch {
+    return { starts: 0, uncleanStops: 0 };
   }
 }
 
