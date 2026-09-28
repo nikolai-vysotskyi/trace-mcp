@@ -13,6 +13,7 @@ import {
   checkDaemonRuntimeIntact,
   describeStopContext,
   ephemeralServeHttpRefusal,
+  getLaunchdLastExit,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -21,7 +22,14 @@ import {
 } from './daemon/lifecycle.js';
 import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/exit-breadcrumb.js';
 import {
+  logUncleanStopDiagnosis,
+  readRecentStallAlerts,
+  STALL_ALERTS_FILENAME,
+  summarizeStallAlerts,
+} from './daemon/unclean-stop.js';
+import {
   printTelemetryNoticeOnce,
+  readDaemonReliabilityCounters,
   recordDaemonCleanStop,
   recordDaemonStart,
 } from './telemetry/usage-ping.js';
@@ -1343,6 +1351,9 @@ program
     if (bindRefusal) {
       logger.error({ host, port }, bindRefusal);
       process.stderr.write(`${bindRefusal}\n`);
+      // TRA-2037: without this the refusal is a silent death — the pino line
+      // above is buffered and `process.exit()` can discard it.
+      noteDaemonShutdownReason('bind-host-refusal');
       process.exit(1);
     }
     if (!isLoopbackHost(host)) {
@@ -4049,7 +4060,23 @@ program
       // start would also leave the "running" flag set, so the next real start
       // would report an unclean stop that never happened — and the bind race is
       // exactly the situation this counter exists to measure.
-      recordDaemonStart();
+      const wasUncleanStart = recordDaemonStart();
+      if (wasUncleanStart) {
+        // TRA-2037: the previous run died without running a shutdown handler
+        // (SIGKILL, native crash, power loss), so daemon.log holds no reason —
+        // only the vitals trajectory before the gap. Log one warn carrying
+        // everything knowable post-mortem: counters, launchd's record, and the
+        // stall watchdog's death breadcrumb, if it fired. Only the process
+        // that won the bind race gets here, so a bind-race loser never logs
+        // a diagnosis for a death it did not inherit.
+        const counters = readDaemonReliabilityCounters();
+        logUncleanStopDiagnosis({
+          daemonStarts: counters.starts,
+          daemonUncleanStops: counters.uncleanStops,
+          launchdExit: getLaunchdLastExit(),
+          stallSummary: summarizeStallAlerts(readRecentStallAlerts()),
+        });
+      }
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
       // process, so a single poisoning event used to disarm the guard for the
       // rest of this daemon's life. Re-assert it periodically; the write is
@@ -4084,7 +4111,7 @@ program
         }
         try {
           stallWatchdog = new StallWatchdog({
-            alertFile: path.join(INDEX_DIR, 'stall-alerts.jsonl'),
+            alertFile: path.join(INDEX_DIR, STALL_ALERTS_FILENAME),
             checkIntervalMs: 1000,
             alertAfterMs: numEnv('TRACE_MCP_STALL_ALERT_MS', 10_000),
             fatalAfterMs: numEnv('TRACE_MCP_STALL_FATAL_MS', 180_000),
