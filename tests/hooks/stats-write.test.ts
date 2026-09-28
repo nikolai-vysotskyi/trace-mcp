@@ -36,6 +36,7 @@ function runHook(opts: {
   stdin: string;
   port?: number;
   sanitizePath?: boolean;
+  captureFile?: string;
 }): RunResult {
   // sanitizePath drops node_modules / system bin dirs that might have a real
   // trace-mcp installed, so the hook only sees the stubs we provide.
@@ -51,6 +52,7 @@ function runHook(opts: {
         TRACE_MCP_HOME: opts.traceHome,
         TRACE_MCP_DAEMON_PORT: String(opts.port ?? 65535),
         HOME: opts.traceHome,
+        ...(opts.captureFile ? { TRACE_HOOK_CAPTURE: opts.captureFile } : {}),
       },
       encoding: 'utf-8',
       // Generous: the hook is a shell script that spawns ~10 subprocesses, and
@@ -113,6 +115,42 @@ exit 7
   fs.writeFileSync(stubPath, body);
   fs.chmodSync(stubPath, 0o755);
   return stubPath;
+}
+
+/** Stub curl that captures the `-d` JSON payload, then answers 204. */
+function makeCapturingCurlStub(stubDir: string): string {
+  fs.mkdirSync(stubDir, { recursive: true });
+  const stubPath = path.join(stubDir, 'curl');
+  const body = `#!/usr/bin/env bash
+data=""
+prev=""
+for a in "$@"; do
+  if [[ "$prev" == "-d" ]]; then data="$a"; fi
+  prev="$a"
+done
+if [[ -n "\${TRACE_HOOK_CAPTURE:-}" ]]; then printf '%s' "$data" > "$TRACE_HOOK_CAPTURE"; fi
+echo "204"
+exit 0
+`;
+  fs.writeFileSync(stubPath, body);
+  fs.chmodSync(stubPath, 0o755);
+  return stubPath;
+}
+
+/**
+ * The dispatch is detached (TRA-694), so the capture file lands after the hook
+ * has already exited. Poll for it instead of reading once.
+ */
+function readCapture(captureFile: string, timeoutMs = 10_000): Record<string, unknown> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (fs.existsSync(captureFile)) {
+      const raw = fs.readFileSync(captureFile, 'utf-8');
+      if (raw.length > 0) return JSON.parse(raw) as Record<string, unknown>;
+    }
+    if (Date.now() > deadline) throw new Error(`no request captured to ${captureFile}`);
+    execSync('sleep 0.05');
+  }
 }
 
 /** Stub curl that never answers, to prove the hook does not wait on it. */
@@ -237,6 +275,33 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     const parsed = readLastStat(traceHome);
     expect(parsed.path).toBe('cli');
     expect(parsed.reason).toBe('404');
+  });
+
+  it('posts the canonical root and records it in stats (TRA-2032)', () => {
+    // The file is addressed through a symlink alias of the project dir
+    // (macOS /tmp vs /private/tmp). The hook must post one canonical
+    // spelling for root and file, and the stats line must carry the root so
+    // 404s stay correlatable without touching the daemon.
+    makeCapturingCurlStub(stubDir);
+    const captureFile = path.join(traceHome, 'capture.json');
+    const linkDir = path.join(tmpRoot, 'proj-link');
+    fs.symlinkSync(projectDir, linkDir, 'junction');
+    const filePath = path.join(linkDir, 'src', 'foo.ts');
+    const stdin = JSON.stringify({
+      tool_name: 'Edit',
+      tool_input: { file_path: filePath },
+    });
+    const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin, captureFile });
+    expectCleanExit(res);
+
+    const posted = readCapture(captureFile);
+    const canonicalRoot = fs.realpathSync(projectDir);
+    expect(posted.project).toBe(canonicalRoot);
+    expect(posted.path).toBe(path.join(canonicalRoot, 'src', 'foo.ts'));
+
+    const parsed = readLastStat(traceHome);
+    expect(parsed.path).toBe('daemon');
+    expect(parsed.project).toBe(canonicalRoot);
   });
 
   it('classifies a curl that prints 000 and exits non-zero as no-daemon', () => {

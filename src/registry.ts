@@ -566,7 +566,40 @@ export function getProject(root: string): RegistryEntry | null {
   const ephemeral = _ephemeralEntries.get(absRoot);
   if (ephemeral) return ephemeral;
   const reg = loadRegistry();
-  return reg.projects[absRoot] ?? null;
+  const hit = reg.projects[absRoot];
+  if (hit) return hit;
+  // TRA-2032: symlink aliases (`/tmp/x` vs `/private/tmp/x` on macOS) resolve
+  // to different `path.resolve` keys. Probe the realpath spelling on an exact
+  // miss — read-only, exact hits keep priority, registration keys unchanged.
+  // The scan is load-bearing, not the direct probe: registration itself may
+  // use an unresolved spelling (macOS `/var` vs `/private/var`), so the entry
+  // whose *realpath* matches is the match even when neither literal key does.
+  let real: string;
+  try {
+    real = fs.realpathSync(absRoot);
+  } catch {
+    return null; // nothing on disk to resolve against
+  }
+  if (real === absRoot) return null;
+  const byReal = _ephemeralEntries.get(real) ?? reg.projects[real];
+  if (byReal) return byReal;
+  for (const entry of _ephemeralEntries.values()) {
+    if (entry.root === absRoot || entry.root === real) continue;
+    try {
+      if (fs.realpathSync(entry.root) === real) return entry;
+    } catch {
+      /* entry root gone — not a match */
+    }
+  }
+  for (const key of Object.keys(reg.projects)) {
+    if (key === absRoot || key === real) continue;
+    try {
+      if (fs.realpathSync(key) === real) return reg.projects[key];
+    } catch {
+      /* entry root gone — not a match */
+    }
+  }
+  return null;
 }
 
 /**

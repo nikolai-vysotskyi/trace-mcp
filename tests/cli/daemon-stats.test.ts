@@ -30,6 +30,18 @@ describe('parseHookStats', () => {
   it('returns an empty array on empty input', () => {
     expect(parseHookStats('')).toEqual([]);
   });
+
+  it('keeps the optional project root (TRA-2032) and tolerates its absence', () => {
+    const lines = parseHookStats(
+      [
+        '{"ts":1000,"path":"cli","reason":"404","wallclock_ms":29,"project":"/tmp/x"}',
+        '{"ts":2000,"path":"cli","reason":"404","wallclock_ms":31}',
+      ].join('\n'),
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0].project).toBe('/tmp/x');
+    expect(lines[1].project).toBeUndefined();
+  });
 });
 
 describe('parseDuration', () => {

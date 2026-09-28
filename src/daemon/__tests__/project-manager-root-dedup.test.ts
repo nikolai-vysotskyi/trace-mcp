@@ -120,4 +120,28 @@ describe('ProjectManager root dedup (TRA-1608)', () => {
     expect(pm.getProject(`${dir}/`)).toBe(added);
     expect(() => pm.touchActivity(`${dir}/.`)).not.toThrow();
   }, 30_000);
+
+  it('getProject resolves symlink aliases to the same entry (TRA-2032)', async () => {
+    const { symlinkSync, realpathSync } = await import('node:fs');
+    const { ProjectManager } = await import('../project-manager.js');
+    const pm = new ProjectManager();
+    pmRef = pm;
+
+    const dir = makeProjectDir();
+    const added = await pm.addProject(dir);
+
+    // Explicit alias: <tmp>/proj-link -> <tmp>/proj. 'junction' keeps this
+    // working on Windows CI without elevated privileges.
+    const link = join(tmpHome, 'proj-link');
+    symlinkSync(dir, link, 'junction');
+
+    expect(pm.getProject(link)).toBe(added);
+    // The tmpdir itself may already be aliased (macOS /var -> /private/var);
+    // the physical spelling must resolve too.
+    expect(pm.getProject(realpathSync(dir))).toBe(added);
+
+    const before = added.lastAccessedAt;
+    expect(() => pm.touchActivity(link)).not.toThrow();
+    expect(added.lastAccessedAt).toBeGreaterThanOrEqual(before);
+  }, 30_000);
 });

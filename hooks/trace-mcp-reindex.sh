@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-reindex v0.5.0
+# trace-mcp-reindex v0.6.0
 # trace-mcp PostToolUse auto-reindex hook
 # Daemon-first: posts to the running daemon's /api/projects/reindex-file
 # endpoint via curl (no Node startup). Falls back to a cold subprocess
@@ -17,8 +17,21 @@
 #     itself on connection failure AND exits non-zero, so the old
 #     `|| echo "000"` appended a second one: HTTP_CODE became "000000", which
 #     matched no case arm and was recorded as `other`. Every connection
-#     failure in the history is mislabelled, and `no-daemon` — which the tests
+#   failure in the history is mislabelled, and `no-daemon` — which the tests
 #     believed they covered — never occurred once in 16,440 lines.
+#
+# v0.6 changes (TRA-2032 — daemon answered 404 project-not-registered on
+# nearly half of all dispatches):
+#   - Canonicalize PROJECT_ROOT and FILE_PATH through the same symlink
+#     resolution before posting. `path.resolve` on the daemon side never
+#     resolves symlinks, so on macOS the same checkout was `/tmp/x` to the
+#     hook and `/private/tmp/x` to the daemon (or the reverse) and every such
+#     Edit paid a cold CLI spawn. Both paths go through one spelling, or the
+#     daemon's lexical inside-root check would 400 a canonical root paired
+#     with an aliased file.
+#   - Record the project root on every stats line so the next "hook always
+#     falls back" QA run can correlate 404s to the missed root from the
+#     stats file alone (previously the line carried no root at all).
 
 set -euo pipefail
 
@@ -72,6 +85,27 @@ if [[ -z "$PROJECT_ROOT" ]]; then
 fi
 [[ -z "$PROJECT_ROOT" ]] && exit 0
 
+# TRA-2032: canonicalize symlink aliases (macOS /tmp -> /private/tmp) so the
+# posted root matches the spelling the daemon registered. realpath first
+# (ships on macOS 15+ and GNU), python3's non-strict realpath as the portable
+# fallback (never fails lexically, even for not-yet-existing paths), else keep
+# the path as-is. Runs in the detached dispatch, so a python3 spawn costs the
+# agent nothing.
+canon_path() {
+  local p="$1" out=""
+  out=$(realpath "$p" 2>/dev/null) || out=""
+  if [[ -z "$out" ]]; then
+    out=$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$p" 2>/dev/null) || out=""
+  fi
+  if [[ -z "$out" ]]; then
+    printf '%s' "$p"
+  else
+    printf '%s' "$out"
+  fi
+}
+PROJECT_ROOT=$(canon_path "$PROJECT_ROOT")
+FILE_PATH=$(canon_path "$FILE_PATH")
+
 # Daemon port: env override, then default 3741.
 PORT="${TRACE_MCP_DAEMON_PORT:-3741}"
 
@@ -120,6 +154,11 @@ write_stat() {
   # Callers already read the clock to close out WALL_MS — reuse it rather
   # than paying for another reading.
   local ts="$4"
+  # TRA-2032: the project root, so 404/respond-miss lines can be correlated to
+  # the missed root from the stats file alone.
+  local project="${5:-}"
+  local esc_project="${project//\\/\\\\}"
+  esc_project="${esc_project//\"/\\\"}"
   mkdir -p "$STATS_HOME" 2>/dev/null || return 0
   # Rotate when over ~10 MB. Truncate (not delete) so concurrent appenders
   # keep their fd alive; data loss is acceptable for telemetry.
@@ -145,8 +184,8 @@ write_stat() {
   # Single printf for atomic-ish append; JSONL tolerates interleaved whole lines.
   # Wrap in a subshell with stderr suppressed so bash's own redirection errors
   # (e.g. read-only stats dir) never leak to the caller.
-  ( printf '{"ts":%s,"path":"%s","reason":"%s","wallclock_ms":%s}\n' \
-      "$ts" "$path_kind" "$reason" "$wall_ms" >> "$STATS_FILE" ) 2>/dev/null || true
+  ( printf '{"ts":%s,"path":"%s","reason":"%s","wallclock_ms":%s,"project":"%s"}\n' \
+      "$ts" "$path_kind" "$reason" "$wall_ms" "$esc_project" >> "$STATS_FILE" ) 2>/dev/null || true
 }
 
 dispatch() {
@@ -170,7 +209,7 @@ dispatch() {
   WALL_MS=$((END_MS - START_MS))
 
   if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-    write_stat "daemon" "ok" "$WALL_MS" "$END_MS"
+    write_stat "daemon" "ok" "$WALL_MS" "$END_MS" "$PROJECT_ROOT"
     return 0
   fi
 
@@ -194,9 +233,9 @@ dispatch() {
   # misleading fake reindex time.
   if command -v trace-mcp >/dev/null 2>&1; then
     nohup trace-mcp index-file "$FILE_PATH" >/dev/null 2>&1 &
-    write_stat "cli" "$REASON" "$WALL_MS" "$END_MS"
+    write_stat "cli" "$REASON" "$WALL_MS" "$END_MS" "$PROJECT_ROOT"
   else
-    write_stat "skipped" "$REASON" "$WALL_MS" "$END_MS"
+    write_stat "skipped" "$REASON" "$WALL_MS" "$END_MS" "$PROJECT_ROOT"
   fi
 }
 

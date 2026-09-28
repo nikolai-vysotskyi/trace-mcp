@@ -128,6 +128,15 @@ export async function handleReindexFile(
 
   const managed = deps.getProject(project);
   if (!managed) {
+    // TRA-2032: this 404 used to be silent — the daemon logged nothing and the
+    // hook stats carry no root, so a whole class of "hook always falls back to
+    // cold CLI" failures was undiagnosable. Log the missed root (plus the
+    // alias spelling already probed by tolerant getters) so the next QA
+    // correlation is one grep away.
+    logger.warn(
+      { event: 'reindex-file', project, path: rawPath, pathSource: 'http' },
+      'reindex-file: project not registered',
+    );
     return { ok: false, status: 404, error: `project not registered: ${project}` };
   }
 

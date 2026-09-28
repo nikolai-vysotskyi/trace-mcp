@@ -250,6 +250,23 @@ function safeRealpath(p: string): string | null {
 }
 
 /**
+ * Symlink-alias spelling of `p` for tolerant project-root lookups (TRA-2032).
+ *
+ * `path.resolve` — which keys the project registry, the daemon's managed map
+ * and the hook's PROJECT_ROOT — never resolves symlinks, so on macOS the same
+ * checkout is `/tmp/x` to one caller and `/private/tmp/x` to another
+ * (`/tmp` symlinks to `/private/tmp`; same for any symlinked parent). Returns
+ * the realpath spelling when it differs from the as-given string, otherwise
+ * null (exact hit or unresolvable path — nothing extra to try). Read-only:
+ * never creates entries, only offers a second key to probe.
+ */
+export function realpathVariant(p: string): string | null {
+  const real = safeRealpath(p);
+  if (real === null || real === p) return null;
+  return real;
+}
+
+/**
  * Realpath of `abs` when it exists, otherwise the realpath of the nearest
  * existing ancestor with the missing remainder re-appended. Null when no
  * ancestor exists on disk (nothing to resolve symlinks against — the lexical

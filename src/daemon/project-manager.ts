@@ -39,6 +39,7 @@ import { SqliteTaskCache } from '../pipeline/index.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
 import { detectGitWorktree } from '../project-root.js';
+import { realpathVariant } from '../utils/security.js';
 import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
 import {
   clearPendingReindex,
@@ -1748,9 +1749,34 @@ export class ProjectManager {
     return removed;
   }
 
-  /** Get a managed project by root path. */
+  /** Get a managed project by root path.
+   *
+   * TRA-2032: symlink aliases (`/tmp/x` vs `/private/tmp/x` on macOS) resolve
+   * to different `path.resolve` keys, so the same checkout 404'd when the
+   * caller spelled it differently from registration. On an exact miss, probe
+   * the realpath spelling too — read-only, exact hits keep priority, insertion
+   * keys are unchanged (still `managerKey()`), so no duplicate entries. The
+   * scan is load-bearing: registration itself may use an unresolved spelling
+   * (macOS `/var` vs `/private/var`), so only a realpath-to-realpath
+   * comparison matches every alias combination.
+   */
   getProject(root: string): ManagedProject | undefined {
-    return this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    const direct = this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    if (direct) return direct;
+    const alt = realpathVariant(root);
+    if (!alt) return undefined;
+    const byReal = this.projects.get(managerKey(alt)) ?? this.projects.get(alt);
+    if (byReal) return byReal;
+    for (const [key, proj] of this.projects) {
+      if (key === managerKey(root) || key === root || key === managerKey(alt) || key === alt)
+        continue;
+      try {
+        if (fs.realpathSync(key) === alt) return proj;
+      } catch {
+        /* managed root gone — not a match */
+      }
+    }
+    return undefined;
   }
 
   /** Get all managed projects. */
@@ -1766,7 +1792,7 @@ export class ProjectManager {
    * isn't currently loaded.
    */
   touchActivity(root: string): void {
-    const managed = this.projects.get(managerKey(root)) ?? this.projects.get(root);
+    const managed = this.getProject(root);
     if (managed) managed.lastAccessedAt = Date.now();
   }
 

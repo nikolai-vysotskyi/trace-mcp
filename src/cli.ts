@@ -2731,16 +2731,24 @@ program
           res.end(JSON.stringify({ error: `invalid JSON body: ${(e as Error).message}` }));
           return;
         }
+        // TRA-2032: normalize symlink aliases (`/tmp/x` vs `/private/tmp/x`
+        // on macOS) to the registered spelling before touching anything else,
+        // so the reindex lock, the in-flight mark, the recent-dedup key and
+        // the idle clock all share one key with the MCP register_edit path.
+        // `getProject` is alias-tolerant; `.root` is the canonical spelling.
+        // Truly unregistered roots pass through unchanged and 404 below.
+        const preManaged = parsed?.project ? projectManager.getProject(parsed.project) : undefined;
+        const effectiveProject = preManaged?.root ?? parsed?.project;
         // The project may be registered but idle-unloaded (project_idle_unload_minutes) —
         // getProject() alone would see it as gone and handleReindexFile would
         // 404 (non-retryable). Mirror the /mcp auto-register path: kick off a
         // lazy reload and answer 503 + Retry-After so the hook falls back and
         // retries transparently, same UX as a still-warming cold-start project.
         const idleUnloadedRoot =
-          parsed?.project &&
-          !projectManager.getProject(parsed.project) &&
-          getProject(parsed.project)
-            ? parsed.project
+          effectiveProject &&
+          !projectManager.getProject(effectiveProject) &&
+          getProject(effectiveProject)
+            ? effectiveProject
             : undefined;
         if (idleUnloadedRoot) {
           void projectManager
@@ -2766,10 +2774,13 @@ program
           res.end(JSON.stringify({ error: `project not ready: reloading` }));
           return;
         }
-        pokeActivity(parsed.project);
-        const result = await handleReindexFile(parsed, {
-          getProject: (root) => projectManager.getProject(root),
-        });
+        pokeActivity(effectiveProject);
+        const result = await handleReindexFile(
+          { project: effectiveProject, path: parsed?.path },
+          {
+            getProject: (root) => projectManager.getProject(root),
+          },
+        );
         if (!result.ok) {
           // WHY Retry-After: the 503 branch fires when a project is still warming
           // on a cold daemon. Hook clients honour Retry-After and fall back to the

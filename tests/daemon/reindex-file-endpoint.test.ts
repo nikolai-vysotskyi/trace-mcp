@@ -13,6 +13,7 @@ vi.mock('../../src/logger.js', () => ({
 
 import { handleReindexFile } from '../../src/daemon/reindex-file-handler.js';
 import { __resetRecentReindexCache } from '../../src/indexer/recent-reindex-cache.js';
+import { logger } from '../../src/logger.js';
 
 interface FakePipeline {
   indexFiles: ReturnType<typeof vi.fn>;
@@ -76,6 +77,21 @@ describe('handleReindexFile', () => {
       expect(result.error).toMatch(/not registered/);
     }
     expect(deps.indexFiles).not.toHaveBeenCalled();
+  });
+
+  it('logs the missed root on 404 so hook fallback storms stay diagnosable (TRA-2032)', async () => {
+    const deps = makeDeps();
+    await handleReindexFile(
+      { project: '/tmp/unknown-project', path: 'src/foo.ts' },
+      { getProject: deps.getProject, lock: deps.lock },
+    );
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    const [meta, msg] = (logger.warn as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      Record<string, unknown>,
+      string,
+    ];
+    expect(meta.project).toBe('/tmp/unknown-project');
+    expect(String(msg)).toMatch(/not registered/);
   });
 
   it('returns 400 when project is missing', async () => {
