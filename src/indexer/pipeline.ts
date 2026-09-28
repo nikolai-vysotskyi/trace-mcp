@@ -1281,7 +1281,9 @@ export class IndexingPipeline {
         continue;
       }
       // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
-      // `cron/ticker_*`, `cron/.tick.lock`) — rewritten every ~30 s with
+      // `cron/ticker_*`, `cron/.tick.lock`, plus the TRA-2031 atomic tmp
+      // siblings `cron/.hb_*.tmp` / `state/.gateway_*.tmp`) — rewritten
+      // every ~30 s with
       // an unchanged content hash, so without this gate each event queued
       // behind the pipeline lock and reported lock-wait as reindex latency
       // (47 s worst case) while contributing `indexed: 0`. Dropped here —

@@ -517,7 +517,8 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // right after a 2069-file forced reindex (TRA-231).
       //
       // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
-      // `cron/ticker_*`, `cron/.tick.lock`) is rewritten every ~30 s with
+      // `cron/ticker_*`, `cron/.tick.lock`, plus the TRA-2031 atomic tmp
+      // siblings) is rewritten every ~30 s with
       // an unchanged content hash — running it through the reindex lock
       // only ever yields `skippedHash=true, indexed=0` after queueing.
       // Answer before `withLock` so explicit edits of these files never
