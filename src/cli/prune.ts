@@ -30,7 +30,11 @@ import {
   TRACE_MCP_HOME,
 } from '../global.js';
 import { logger } from '../logger.js';
-import { hasLiveHolderOrUnknown } from '../db-holders.js';
+import {
+  findOrphanHolderDirs,
+  hasLiveHolderOrUnknown,
+  sweepOrphanHolderDirs,
+} from '../db-holders.js';
 import {
   findEphemeralProjects,
   listProjects,
@@ -201,19 +205,35 @@ function addHashAnchor(
 
 function buildRegistryIndex(): RegistryHashIndex {
   const byHash = new Map<string, { root: string; exists: boolean }[]>();
-  for (const entry of listProjects()) {
+  const entries = listProjects();
+  // Standalone registry roots. A multi-root child that is ALSO registered on
+  // its own keeps its own DB live; a declared child with no standalone row
+  // has no canonical child DB (multi-root convert deletes those on the spot),
+  // so a child-hash DB file left on disk is a stale leftover, not live
+  // (TRA-2055: assetfeed/*, thewed-novakit, top100-laravel-upgrade).
+  const standaloneRoots = new Set(entries.map((e) => path.resolve(e.root)));
+  for (const entry of entries) {
     const absRoot = path.resolve(entry.root);
-    addHashAnchor(byHash, projectHash(absRoot), absRoot);
     // Entry-level `dbPath` hash — names in registry can drift from a fresh
     // path-based recompute (most notably: TRA-38 dbPath sharing, where a
     // second checkout's *own* path hashes to something no file on disk ever
     // used), but the DB the registry actually points at is canonical.
     const dbHash = extractHash(path.basename(entry.dbPath));
     if (dbHash) addHashAnchor(byHash, dbHash, absRoot);
-    // Multi-root: children also count as live anchors.
+    // Path-hash anchor only when it IS the canonical DB. For a TRA-38 shared
+    // entry the registry points at a sibling's DB (dbHash !== pathHash), so a
+    // path-hash-named file on disk is the stale pre-sharing predecessor
+    // (TRA-2055: trace-mcp-ad05ed8c4be8 vs canonical 6b30abaa68c1), not live.
+    const pathHash = projectHash(absRoot);
+    if (!dbHash || pathHash === dbHash) {
+      addHashAnchor(byHash, pathHash, absRoot);
+    }
+    // Multi-root: REGISTERED children also count as live anchors.
     if (entry.children) {
       for (const child of entry.children) {
-        addHashAnchor(byHash, projectHash(path.resolve(child)), path.resolve(child));
+        const absChild = path.resolve(child);
+        if (!standaloneRoots.has(absChild)) continue;
+        addHashAnchor(byHash, projectHash(absChild), absChild);
       }
     }
   }
@@ -383,8 +403,10 @@ export interface TopLevelOrphanSweepResult {
  * the watcher snapshot — a fresh snapshot means a live watcher still walks
  * that root, TRA-1714) stayed untouched for `maxAgeDays` is dead by the same
  * argument the ephemeral sweep applies. Registry matching is reused from
- * {@link scanIndexDir} (path hash + `dbPath` hash + multi-root children, so
- * TRA-38 shared-dbPath siblings count as live), session files keep their own
+ * {@link scanIndexDir} (canonical `dbPath` hash + path hash for non-shared
+ * entries + registered multi-root children, so TRA-38 shared-dbPath siblings
+ * count as live while stale pre-sharing predecessors do not — TRA-2055),
+ * session files keep their own
  * TTL (`session_active` never lands here), and a live holder marker vetoes
  * deletion — re-checked right before unlink for TOCTOU safety on top of the
  * `live` classification the scan already applies.
@@ -631,6 +653,16 @@ export function scanOrPruneTmpFiles(apply: boolean): {
   return { staleTmpFiles, removedTmpFiles };
 }
 
+export function scanOrPruneHolderDirs(apply: boolean): {
+  orphanHolderDirs: string[];
+  removedHolderDirs: string[];
+} {
+  const orphanHolderDirs = findOrphanHolderDirs(INDEX_DIR).map((g) => g.dir);
+  const removedHolderDirs =
+    apply && orphanHolderDirs.length > 0 ? sweepOrphanHolderDirs(INDEX_DIR) : [];
+  return { orphanHolderDirs, removedHolderDirs };
+}
+
 export const pruneCommand = new Command('prune')
   .description(
     'Audit ~/.trace-mcp/index for orphan/expired DBs (dry-run by default; use --apply to delete)',
@@ -687,6 +719,12 @@ export const pruneCommand = new Command('prune')
       // Orphan atomic-write tmp files in state directories
       const tmpFilesSummary = scanOrPruneTmpFiles(apply);
 
+      // TRA-2055: holders-only orphans — `.db.holders/` dirs whose stem `.db`
+      // is gone (deleted externally, or never created at the claimed stem).
+      // `findOrphanDbSidecars` never sees them (no WAL/SHM/snapshot beside
+      // them). Dry-run lists; --apply deletes.
+      const holdersSummary = scanOrPruneHolderDirs(apply);
+
       // TRA-1864: stem-less WAL/SHM/journal sidecars (+ snapshots) whose
       // `.db` is gone. `scanIndexDir` above only walks base `.db` files, so
       // without this these orphans are invisible to every other category.
@@ -739,6 +777,13 @@ export const pruneCommand = new Command('prune')
                 count: orphanSidecarCount,
                 freedBytes: orphanSidecarBytes,
                 deleted: orphanSwept.deleted,
+              },
+              orphanHolderDirs: {
+                count: apply
+                  ? holdersSummary.removedHolderDirs.length
+                  : holdersSummary.orphanHolderDirs.length,
+                removed: holdersSummary.removedHolderDirs,
+                dirs: apply ? [] : holdersSummary.orphanHolderDirs,
               },
             },
             null,
@@ -835,6 +880,20 @@ export const pruneCommand = new Command('prune')
           lines.push(`  ... and ${orphanSidecarCount - 10} more`);
         }
         p.note(lines.join('\n'), 'Orphan Sidecars');
+      }
+      if (
+        holdersSummary.orphanHolderDirs.length > 0 ||
+        holdersSummary.removedHolderDirs.length > 0
+      ) {
+        const heading = apply
+          ? `Removed ${holdersSummary.removedHolderDirs.length} orphaned index-DB holder dir(s) (stem .db gone):`
+          : `${holdersSummary.orphanHolderDirs.length} orphaned index-DB holder dir(s) (stem .db gone) — would remove:`;
+        const list = apply ? holdersSummary.removedHolderDirs : holdersSummary.orphanHolderDirs;
+        const lines = [heading, ...list.slice(0, 10).map((f) => `  ${shortPath(f)}`)];
+        if (list.length > 10) {
+          lines.push(`  ... and ${list.length - 10} more`);
+        }
+        p.note(lines.join('\n'), 'Orphan Holder Dirs');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');

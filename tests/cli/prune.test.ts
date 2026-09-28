@@ -186,6 +186,84 @@ describe('scanIndexDir', () => {
 
     expect(scanIndexDir()).toEqual([]);
   });
+
+  it('classifies a stale pre-sharing path-hash DB as orphan_unregistered (TRA-2055)', () => {
+    // TRA-38 shared entry: the registry points at a sibling's DB, so the
+    // path-hash-named predecessor left on disk is stale, not live.
+    const root = '/Users/x/projects/shared-app';
+    const pathHash = projectHash(path.resolve(root));
+    const canonicalHash = 'aaaaaaaaaaaa';
+    expect(canonicalHash).not.toBe(pathHash);
+    mockListProjects.mockReturnValue([
+      {
+        name: 'shared-app',
+        root,
+        dbPath: `/idx/shared-app-${canonicalHash}.db`,
+        lastIndexed: null,
+        addedAt: 'x',
+      },
+    ]);
+    mockReaddirSync.mockReturnValue([
+      `shared-app-${canonicalHash}.db`,
+      `shared-app-${pathHash}.db`,
+    ] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockStatSync.mockImplementation((p: fs.PathLike) => {
+      if (String(p).endsWith('.db')) return fakeStat(NOW - DAY_MS);
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    const candidates = scanIndexDir();
+    const byName = Object.fromEntries(candidates.map((c) => [c.basename, c.category]));
+    expect(byName[`shared-app-${canonicalHash}.db`]).toBe('live');
+    expect(byName[`shared-app-${pathHash}.db`]).toBe('orphan_unregistered');
+    expect(
+      candidates.find((c) => c.basename === `shared-app-${pathHash}.db`)?.registeredRoot,
+    ).toBeNull();
+  });
+
+  it('keeps a registered multi-root child live but orphans an unregistered child leftover (TRA-2055)', () => {
+    const parent = '/Users/x/projects/umbrella';
+    const childRegistered = '/Users/x/projects/umbrella/svc-a';
+    const childGhost = '/Users/x/projects/umbrella/svc-ghost';
+    const parentHash = projectHash(path.resolve(parent));
+    const childHash = projectHash(path.resolve(childRegistered));
+    const ghostHash = projectHash(path.resolve(childGhost));
+    mockListProjects.mockReturnValue([
+      {
+        name: 'umbrella',
+        root: parent,
+        dbPath: `/idx/umbrella-${parentHash}.db`,
+        lastIndexed: null,
+        addedAt: 'x',
+        type: 'multi-root',
+        children: [childRegistered, childGhost],
+      },
+      {
+        name: 'svc-a',
+        root: childRegistered,
+        dbPath: `/idx/svc-a-${childHash}.db`,
+        lastIndexed: null,
+        addedAt: 'x',
+      },
+    ]);
+    mockReaddirSync.mockReturnValue([
+      `umbrella-${parentHash}.db`,
+      `svc-a-${childHash}.db`,
+      `svc-ghost-${ghostHash}.db`,
+    ] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockStatSync.mockImplementation((p: fs.PathLike) => {
+      if (String(p).endsWith('.db')) return fakeStat(NOW - DAY_MS);
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    const candidates = scanIndexDir();
+    const byName = Object.fromEntries(candidates.map((c) => [c.basename, c.category]));
+    expect(byName[`umbrella-${parentHash}.db`]).toBe('live');
+    expect(byName[`svc-a-${childHash}.db`]).toBe('live');
+    expect(byName[`svc-ghost-${ghostHash}.db`]).toBe('orphan_unregistered');
+  });
 });
 
 describe('pruneIndexDir', () => {
