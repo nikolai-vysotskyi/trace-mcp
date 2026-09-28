@@ -6,7 +6,7 @@
  * the route handler calls — same code path, just with stub maps in deps.
  */
 import { describe, expect, it } from 'vitest';
-import { buildMemoryReport } from '../../src/daemon/memory-report.js';
+import { buildMemoryReport, SESSION_JOURNAL_TOP_N } from '../../src/daemon/memory-report.js';
 import {
   __recentReindexCacheStats,
   __resetRecentReindexCache,
@@ -28,6 +28,12 @@ function stubDeps(overrides: Partial<Parameters<typeof buildMemoryReport>[0]> = 
     resourcePoolEntries: 0,
     sessionJournalEntries: 0,
     sessionJournalCompactBytes: 0,
+    sessionJournals: [],
+    loadedProjects: [],
+    descendantWakeEntries: 0,
+    stallWarnedRoots: 0,
+    treeCacheEntries: 0,
+    treeCacheApproxBytes: 0,
     ...overrides,
   };
 }
@@ -142,5 +148,60 @@ describe('GET /debug/memory endpoint surface', () => {
     expect(report.caches.resource_pool_entries).toBe(4);
     expect(report.caches.session_journal_total_entries).toBe(1234);
     expect(report.caches.session_journal_compact_bytes).toBe(5678);
+  });
+
+  it('exposes V8 heap statistics with a bounded used_ratio (TRA-2061)', () => {
+    const report = buildMemoryReport(stubDeps());
+    expect(report.heap.used).toBeGreaterThan(0);
+    expect(report.heap.total).toBeGreaterThan(0);
+    expect(report.heap.limit).toBeGreaterThan(0);
+    expect(report.heap.malloced).toBeGreaterThanOrEqual(0);
+    expect(report.heap.peakMalloced).toBeGreaterThanOrEqual(0);
+    expect(report.heap.usedRatio).toBeGreaterThanOrEqual(0);
+    expect(report.heap.usedRatio).toBeLessThanOrEqual(1);
+  });
+
+  it('sessions_top is sorted by compact bytes desc and capped (TRA-2061)', () => {
+    const sessionJournals = Array.from({ length: SESSION_JOURNAL_TOP_N + 2 }, (_, i) => ({
+      sessionId: `s${i}`,
+      entries: i + 1,
+      compactBytes: (i + 1) * 100,
+    }));
+    const report = buildMemoryReport(stubDeps({ sessionJournals }));
+    expect(report.sessions_top).toHaveLength(SESSION_JOURNAL_TOP_N);
+    // Highest compactBytes first.
+    expect(report.sessions_top[0].sessionId).toBe(`s${SESSION_JOURNAL_TOP_N + 1}`);
+    for (let i = 1; i < report.sessions_top.length; i++) {
+      expect(report.sessions_top[i - 1].compactBytes).toBeGreaterThanOrEqual(
+        report.sessions_top[i].compactBytes,
+      );
+    }
+    // Deps order is untouched — the builder copies before sorting.
+    expect(sessionJournals[0].sessionId).toBe('s0');
+  });
+
+  it('passes through loaded projects and small-map counters (TRA-2061)', () => {
+    __resetRecentReindexCache();
+    const report = buildMemoryReport(
+      stubDeps({
+        loadedProjects: [
+          { root: '/a', status: 'ready' },
+          { root: '/b', status: 'indexing' },
+        ],
+        descendantWakeEntries: 3,
+        stallWarnedRoots: 1,
+        treeCacheEntries: 5,
+        treeCacheApproxBytes: 1024,
+      }),
+    );
+    expect(report.loaded_projects).toEqual([
+      { root: '/a', status: 'ready' },
+      { root: '/b', status: 'indexing' },
+    ]);
+    expect(report.caches.descendant_wake_entries).toBe(3);
+    expect(report.caches.stall_warned_roots).toBe(1);
+    expect(report.caches.tree_cache_entries).toBe(5);
+    expect(report.caches.tree_cache_approx_bytes).toBe(1024);
+    expect(report.caches.recent_reindex_projects).toBe(__recentReindexCacheStats().projects);
   });
 });

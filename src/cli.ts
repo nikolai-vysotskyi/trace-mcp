@@ -185,6 +185,7 @@ import { buildProjectFilesQuery } from './api/project-files-query.js';
 import { parseProjectSecurityQuery } from './api/project-security-query.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
+import { getTreeCacheStats } from './parser/tree-cache.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
@@ -3147,16 +3148,25 @@ program
       if (req.method === 'GET' && url.pathname === '/debug/memory') {
         // TRA-2017: aggregate live session-journal pressure (the byte-capped
         // dedup store that dominates per-session heap on busy daemons).
+        // TRA-2061: also keep the per-session rows — the totals above can't
+        // tell "ten quiet sessions" from "one runaway session".
         let sessionJournalEntries = 0;
         let sessionJournalCompactBytes = 0;
-        for (const handle of sessionHandles.values()) {
+        const sessionJournals: Array<{ sessionId: string; entries: number; compactBytes: number }> =
+          [];
+        for (const [sid, handle] of sessionHandles) {
           try {
-            sessionJournalEntries += handle.journal.getTotalEntries();
-            sessionJournalCompactBytes += handle.journal.getCompactBytes();
+            const entries = handle.journal.getTotalEntries();
+            const compactBytes = handle.journal.getCompactBytes();
+            sessionJournalEntries += entries;
+            sessionJournalCompactBytes += compactBytes;
+            sessionJournals.push({ sessionId: sid, entries, compactBytes });
           } catch {
             /* a closing session's journal must not break diagnostics */
           }
         }
+        const wakeSizes = projectManager.getWakeBookkeepingSizes();
+        const treeStats = getTreeCacheStats();
         const report = buildMemoryReport({
           clients,
           sseConnections,
@@ -3172,6 +3182,14 @@ program
           resourcePoolEntries: resourcePool.getTrackedProjectCount(),
           sessionJournalEntries,
           sessionJournalCompactBytes,
+          sessionJournals,
+          loadedProjects: projectManager
+            .listProjects()
+            .map((p) => ({ root: p.root, status: p.status })),
+          descendantWakeEntries: wakeSizes.descendantWakeEntries,
+          stallWarnedRoots: wakeSizes.stallWarnedRoots,
+          treeCacheEntries: treeStats.entries,
+          treeCacheApproxBytes: treeStats.approxBytes,
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(report));
