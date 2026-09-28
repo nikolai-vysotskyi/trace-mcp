@@ -483,6 +483,23 @@ describe('symlink-alias tolerant lookup', () => {
     }
   });
 
+  it('resolves the canonical spelling when registration used the alias', () => {
+    // The hook now always posts canonical roots while registration keeps the
+    // lexical spelling — this direction (stored alias, canonical request) is
+    // the one scratch checkouts under /tmp actually hit.
+    const repo = makeTmpRepo();
+    const link = path.join(path.dirname(repo), 'repo-link');
+    fs.symlinkSync(repo, link, 'junction');
+    try {
+      registerProject(link);
+      const canonical = fs.realpathSync(repo);
+      expect(path.resolve(canonical)).not.toBe(path.resolve(link));
+      expect(getProject(canonical)?.root).toBe(path.resolve(link));
+    } finally {
+      fs.unlinkSync(link);
+    }
+  });
+
   it('still misses a truly unregistered root', () => {
     const repo = makeTmpRepo();
     expect(getProject(repo)).toBeNull();

@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import fs from 'node:fs';
 import path from 'node:path';
 import { LOCKS_DIR, projectHash } from '../global.js';
 import type { IndexingPipeline, IndexingResult } from '../indexer/pipeline.js';
@@ -130,10 +131,10 @@ export async function handleReindexFile(
   if (!managed) {
     // TRA-2032: this 404 used to be silent — the daemon logged nothing and the
     // hook stats carry no root, so a whole class of "hook always falls back to
-    // cold CLI" failures was undiagnosable. Log the missed root (plus the
-    // alias spelling already probed by tolerant getters) so the next QA
-    // correlation is one grep away.
-    logger.warn(
+    // cold CLI" failures was undiagnosable. Log the missed root (at info, not
+    // warn: a stuck config points every Edit here and warn would spam) so the
+    // next QA correlation is one grep away.
+    logger.info(
       { event: 'reindex-file', project, path: rawPath, pathSource: 'http' },
       'reindex-file: project not registered',
     );
@@ -169,9 +170,25 @@ export async function handleReindexFile(
   const absInput = path.isAbsolute(rawPath) ? rawPath : path.resolve(projectRoot, rawPath);
   const normalized = path.resolve(absInput);
 
-  const relRaw = path.relative(projectRoot, normalized);
+  let relRaw = path.relative(projectRoot, normalized);
   if (relRaw.startsWith('..') || path.isAbsolute(relRaw)) {
-    return { ok: false, status: 400, error: 'path is outside project root' };
+    // TRA-2032: mixed symlink spellings — e.g. a pre-v0.6 hook posts an alias
+    // file path while the route already normalized the project to the stored
+    // spelling (or vice versa) — fail the lexical check for the same on-disk
+    // file. Retry confinement on realpaths; the resulting rel is identical
+    // under both spellings because symlinks resolve above the root.
+    let realRoot: string;
+    let realInput: string;
+    try {
+      realRoot = fs.realpathSync(projectRoot);
+      realInput = fs.realpathSync(normalized);
+    } catch {
+      return { ok: false, status: 400, error: 'path is outside project root' };
+    }
+    relRaw = path.relative(realRoot, realInput);
+    if (relRaw.startsWith('..') || path.isAbsolute(relRaw)) {
+      return { ok: false, status: 400, error: 'path is outside project root' };
+    }
   }
   const rel = path.sep === '\\' ? relRaw.split('\\').join('/') : relRaw;
 

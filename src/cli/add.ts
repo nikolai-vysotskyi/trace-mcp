@@ -338,7 +338,10 @@ export const addCommand = new Command('add')
       if (existing && !opts.force) {
         // TRA-706: naming it here is the user claiming the project, even though
         // the rest of `add` is a no-op — take it out of the implicit cap's class.
-        if (!existing.explicit) registerProject(projectRoot, { explicit: true });
+        // TRA-2032: promote under the stored spelling — `existing` may have
+        // matched via a symlink alias, and re-registering the as-given
+        // spelling would write a second row for the same checkout.
+        if (!existing.explicit) registerProject(existing.root, { explicit: true });
         // `add` on a registered project is nearly always "reindex it" — say so
         // instead of just refusing (GH #297).
         const hint = `Run \`trace-mcp index ${dir}\` to reindex, or --force to re-register.`;

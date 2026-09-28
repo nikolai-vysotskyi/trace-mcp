@@ -144,4 +144,21 @@ describe('ProjectManager root dedup (TRA-1608)', () => {
     expect(() => pm.touchActivity(link)).not.toThrow();
     expect(added.lastAccessedAt).toBeGreaterThanOrEqual(before);
   }, 30_000);
+
+  it('getProject resolves the canonical spelling when managed under the alias (TRA-2032)', async () => {
+    const { realpathSync, symlinkSync } = await import('node:fs');
+    const { ProjectManager } = await import('../project-manager.js');
+    const pm = new ProjectManager();
+    pmRef = pm;
+
+    const dir = makeProjectDir();
+    const link = join(tmpHome, 'proj-link');
+    symlinkSync(dir, link, 'junction');
+    const added = await pm.addProject(link);
+
+    const canonical = realpathSync(dir);
+    expect(canonical).not.toBe(link);
+    expect(pm.getProject(canonical)).toBe(added);
+    expect(pm.getProject(link)).toBe(added);
+  }, 30_000);
 });

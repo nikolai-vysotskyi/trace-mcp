@@ -155,10 +155,10 @@ write_stat() {
   # than paying for another reading.
   local ts="$4"
   # TRA-2032: the project root, so 404/respond-miss lines can be correlated to
-  # the missed root from the stats file alone.
+  # the missed root from the stats file alone. Built with jq (already a hard
+  # hook dependency for input parsing) so arbitrary bytes in the path can't
+  # break the JSONL line.
   local project="${5:-}"
-  local esc_project="${project//\\/\\\\}"
-  esc_project="${esc_project//\"/\\\"}"
   mkdir -p "$STATS_HOME" 2>/dev/null || return 0
   # Rotate when over ~10 MB. Truncate (not delete) so concurrent appenders
   # keep their fd alive; data loss is acceptable for telemetry.
@@ -181,11 +181,14 @@ write_stat() {
       : > "$STATS_FILE" 2>/dev/null || true
     fi
   fi
-  # Single printf for atomic-ish append; JSONL tolerates interleaved whole lines.
+  # Single jq for atomic-ish append; JSONL tolerates interleaved whole lines.
   # Wrap in a subshell with stderr suppressed so bash's own redirection errors
-  # (e.g. read-only stats dir) never leak to the caller.
-  ( printf '{"ts":%s,"path":"%s","reason":"%s","wallclock_ms":%s,"project":"%s"}\n' \
-      "$ts" "$path_kind" "$reason" "$wall_ms" "$esc_project" >> "$STATS_FILE" ) 2>/dev/null || true
+  # (e.g. read-only stats dir) never leak to the caller. `-c` keeps one event
+  # on one line — without it jq pretty-prints and the file stops being JSONL.
+  ( jq -nc --argjson ts "$ts" --arg path "$path_kind" --arg reason "$reason" \
+      --argjson wallclock_ms "$wall_ms" --arg project "$project" \
+      '{ts:$ts,path:$path,reason:$reason,wallclock_ms:$wallclock_ms,project:$project}' \
+      >> "$STATS_FILE" ) 2>/dev/null || true
 }
 
 dispatch() {
