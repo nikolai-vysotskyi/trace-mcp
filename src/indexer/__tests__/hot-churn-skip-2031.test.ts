@@ -10,17 +10,22 @@
  * Same "engine scratch, never source" argument: every indexing entry
  * point drops them before any stat/read/lock —
  *
- *  1. `isHotChurnPath` matches dot-tmp (`.*.tmp`) only under a whole
- *     `cron`/`state` path segment (a bare `*.tmp` is a real user source
- *     far too often; `cronjobs/`-style substring dirs never match).
- *  2. `collectFiles` (full walk) never lists them.
+ *  1. `isHotChurnPath` matches the observed `.hb_` / `.gateway_`
+ *     dot-tmp prefixes only, under a whole `cron`/`state` path segment
+ *     (a bare `*.tmp` — or any other dot-tmp — under `state/` is a real
+ *     user source far too often, e.g. `src/state/.env.tmp`;
+ *     `cronjobs/`-style substring dirs never match).
+ *  2. `collectFiles` (full walk) never lists them — belt-and-braces:
+ *     fast-glob runs with `dot: false`, so dotfiles are already excluded
+ *     before the filter; the filter covers a future `dot: true` walk.
  *  3. `FileWatcher` drops tmp-sibling events before debounce, so they
  *     never wake the pipeline at all.
  *  4. `handleReindexFile` (HTTP hook path) answers `skippedChurn`
  *     before `withLock`.
  *  5. Bare `cron`/`state` directory events stay dropped by the TRA-1649
- *     isDirectory guard in `filterIndexablePaths` (covered below — a
- *     `cron` mkdir event is a zero-work no-op, not a lock queue entry).
+ *     isDirectory guard in `filterIndexablePaths` — exercised below via
+ *     `indexFiles` (which calls it pre-lock), proving a `cron` mkdir
+ *     event is a zero-work no-op, not a lock queue entry.
  */
 import * as parcelWatcher from '@parcel/watcher';
 import Database from 'better-sqlite3';
@@ -81,6 +86,12 @@ describe('isHotChurnPath tmp siblings (TRA-2031)', () => {
     'cron/notes.tmp',
     'state/cache.tmp',
     'src/draft.tmp',
+    // Dot-tmp with any other prefix is a real user source too — the
+    // predicate only covers the observed `.hb_` / `.gateway_` siblings.
+    'cron/.random.tmp',
+    'state/.session.tmp',
+    'src/state/.env.tmp',
+    'app/state/.session.tmp',
     // Dot-tmp outside a whole `cron`/`state` segment is not churn.
     'src/.hb_x.tmp',
     'src/.gateway_y.tmp',
@@ -110,6 +121,8 @@ describe('collectFiles drops tmp siblings (TRA-2031)', () => {
   });
 
   it('lists sources but never atomic tmp siblings', async () => {
+    // First layer is fast-glob `dot: false` (dotfiles never listed); the
+    // `isHotChurnPath` filter asserted here is the second layer.
     mkdirSync(join(workDir, 'state'), { recursive: true });
     mkdirSync(join(workDir, 'cron'), { recursive: true });
     mkdirSync(join(workDir, 'src'), { recursive: true });
