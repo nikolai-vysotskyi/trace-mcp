@@ -83,12 +83,17 @@ describe('StallWatchdog (TRA-1957)', () => {
   }, 15_000);
 
   it('stays quiet while beats keep flowing', async () => {
-    const { alertFile } = start();
+    // TRA-2028: generous thresholds on purpose. The default 80 ms alert line
+    // tripped once on a loaded Windows runner (1/12252, stallMs 85 vs 80)
+    // when one sleep(10) beat gap stretched to 85 ms under full-suite load.
+    // A 500 ms line keeps the test's meaning (beats flowing => silence) while
+    // tolerating ~6x that jitter; duration is unchanged (fixed 300 ms window).
+    const { alertFile } = start({ alertAfterMs: 500, fatalAfterMs: 2000 });
     // Beat faster than the alert threshold for the whole window.
     const end = Date.now() + 300;
     while (Date.now() < end) {
       for (const w of watchdogs) w.beat();
-      await sleep(10);
+      await sleep(5);
     }
     await sleep(60);
     expect(readLines(alertFile)).toEqual([]);
