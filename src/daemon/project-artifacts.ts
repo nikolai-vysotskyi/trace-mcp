@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
+import { deleteStatusSentinelsForRoot } from '../server/heartbeat.js';
 import { DB_FAMILY_SUFFIXES } from '../utils/db-family.js';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
@@ -310,6 +311,17 @@ export function removeProjectArtifacts(
 
   // 5. Decisions DB project-scoped rows
   result.decisions = dropDecisionRows(absRoot, result);
+
+  // 6. Status sentinels (TRA-2062): heartbeat/status/consulted files for this
+  // root in STATUS_DIR (+ $TMPDIR copies). Unlike the index DB above these are
+  // strictly per-root (no TRA-38 sharing), so no sibling guard applies — and a
+  // live server recreates its own within one flush interval anyway.
+  try {
+    for (const f of deleteStatusSentinelsForRoot(absRoot)) result.deleted.push(f);
+  } catch (err) {
+    logger.error({ err, root: absRoot }, 'project-artifacts: status sentinel cleanup failed');
+    result.failures.push({ tier: 'status_sentinels', error: String(err) });
+  }
 
   logger.info(
     {

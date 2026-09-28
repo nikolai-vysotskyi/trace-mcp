@@ -24,8 +24,10 @@ import { Command } from 'commander';
 import {
   DECISIONS_DB_PATH,
   ensureGlobalDirs,
+  EPHEMERAL_INDEX_DIR,
   projectHash,
   projectName,
+  STATUS_DIR,
   TOPOLOGY_DB_PATH,
   TRACE_MCP_HOME,
 } from '../global.js';
@@ -42,6 +44,7 @@ import {
   unregisterProject,
 } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
+import { deleteStatusSentinelsForRoot } from '../server/heartbeat.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { DecisionStore } from '../memory/decision-store.js';
 import { sweepSessionFiles } from '../session/sweeper.js';
@@ -444,6 +447,132 @@ export function sweepTopLevelOrphanDbs(
   return { removed, scannedOrphans: orphans.length, retainedWithinTtl };
 }
 
+export interface OrphanStatusSweepResult {
+  /** Absolute sentinel paths actually deleted (files unlinked, consulted dirs removed). */
+  removed: string[];
+  /** Sentinel entries whose hash maps to no registry root and no index DB. */
+  scannedOrphans: number;
+  /** Of those, how many were kept because mtime is still inside the TTL. */
+  retainedWithinTtl: number;
+  /** Entries kept because the hash still belongs to a live project. */
+  retainedLive: number;
+}
+
+/** Default grace for a status sentinel with no project behind it (TRA-2062). */
+export const DEFAULT_ORPHAN_STATUS_TTL_DAYS = 1;
+
+/**
+ * TTL sweep for status sentinels whose project is gone (TRA-2062).
+ *
+ * The night QA contour (TRA-1709) found 866 files under `~/.trace/status/`
+ * with 187 stale-only project hashes — heartbeat files of long-deleted
+ * ephemeral agent workdirs. `sweepStaleSentinels` (heartbeat.ts) only collects
+ * by 7-day mtime, and no deregistration path removed them at all, so every
+ * agent workdir left 3–4 files behind forever.
+ *
+ * This is the gated backstop: a sentinel (`trace-mcp-status-<hash>.json`,
+ * `trace-mcp-alive-<hash>`, `trace-mcp-consulted-<hash>`) is dead only when
+ * its hash maps to NO registry root (path hash, canonical dbPath hash, or
+ * registered multi-root child) AND no index DB basename (top-level or
+ * `ephemeral/`) still carries it — and even then only past `maxAgeDays`, so a
+ * project mid-registration is never collected. A false positive is
+ * self-healing anyway: the next heartbeat flush (≤30s) recreates the file.
+ *
+ * Everything else in STATUS_DIR (daemon snapshot, bypass files, user files)
+ * is never matched and never touched.
+ */
+export function sweepOrphanStatusSentinels(
+  maxAgeDays = DEFAULT_ORPHAN_STATUS_TTL_DAYS,
+): OrphanStatusSweepResult {
+  const result: OrphanStatusSweepResult = {
+    removed: [],
+    scannedOrphans: 0,
+    retainedWithinTtl: 0,
+    retainedLive: 0,
+  };
+  let names: string[];
+  try {
+    names = fs.readdirSync(STATUS_DIR);
+  } catch {
+    return result; // never created — no server has run here
+  }
+
+  // Live hashes: every registered root's path hash + canonical dbPath hash +
+  // registered multi-root children (same anchor set scanIndexDir uses).
+  const liveHashes = new Set<string>();
+  try {
+    for (const entry of listProjects()) {
+      liveHashes.add(projectHash(path.resolve(entry.root)));
+      const dbHash = extractHash(path.basename(entry.dbPath));
+      if (dbHash) liveHashes.add(dbHash);
+      for (const child of entry.children ?? []) {
+        liveHashes.add(projectHash(path.resolve(child)));
+      }
+    }
+  } catch {
+    // Fail toward keeping: an unreadable registry must not cost live sentinels.
+    return result;
+  }
+
+  // Index-DB presence: a hash still carried by any DB basename (top-level or
+  // ephemeral/) belongs to a project, registered or mid-flight.
+  const indexHashes = new Set<string>();
+  for (const dir of [INDEX_DIR, EPHEMERAL_INDEX_DIR]) {
+    let files: string[];
+    try {
+      files = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.endsWith('.db')) continue;
+      const hash = extractHash(file);
+      if (hash) indexHashes.add(hash);
+    }
+  }
+
+  const cutoff = Date.now() - maxAgeDays * DAY_MS;
+  for (const name of names) {
+    const match = name.match(/^trace-mcp-(status|alive|consulted)-([0-9a-f]{12})(\.json)?$/i);
+    if (!match) continue;
+    // `status` always carries `.json`, `alive`/`consulted` never do — a name
+    // mixing those is not ours.
+    const kind = match[1].toLowerCase();
+    const hasJson = match[3] !== undefined;
+    if (kind === 'status' ? !hasJson : hasJson) continue;
+    const hash = match[2].toLowerCase();
+    if (liveHashes.has(hash) || indexHashes.has(hash)) {
+      result.retainedLive += 1;
+      continue;
+    }
+    result.scannedOrphans += 1;
+    const full = path.join(STATUS_DIR, name);
+    let mtimeMs = 0;
+    let isDir = false;
+    let isLink = false;
+    try {
+      const st = fs.lstatSync(full);
+      isLink = st.isSymbolicLink();
+      isDir = st.isDirectory();
+      mtimeMs = st.mtimeMs;
+    } catch {
+      continue; // raced away between readdir and sweep — keep it
+    }
+    if (isLink || mtimeMs >= cutoff) {
+      result.retainedWithinTtl += 1;
+      continue;
+    }
+    try {
+      if (isDir) fs.rmSync(full, { recursive: true, force: true });
+      else fs.unlinkSync(full);
+      result.removed.push(full);
+    } catch {
+      /* vanished under us — fine */
+    }
+  }
+  return result;
+}
+
 /** Self-check: walking projectHash + projectName here matches what indexer uses. */
 function shortPath(p: string): string {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
@@ -693,6 +822,17 @@ export const pruneCommand = new Command('prune')
         .filter((e) => !fs.existsSync(e.root))
         .map((e) => e.root);
       const removedRegistryRoots = apply ? pruneStaleProjects() : [];
+      // TRA-2062: pruneStaleProjects unregisters without removeProjectArtifacts,
+      // so drop each removed root's status sentinels here (best-effort).
+      if (apply) {
+        for (const root of removedRegistryRoots) {
+          try {
+            deleteStatusSentinelsForRoot(root);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
 
       // Ephemeral projects left over from past agent runs (>24h old)
       const staleEphemeralRoots = findEphemeralProjects().map((e) => e.root);
@@ -701,6 +841,12 @@ export const pruneCommand = new Command('prune')
         for (const root of staleEphemeralRoots) {
           unregisterProject(root);
           removedEphemeralRoots.push(root);
+          // TRA-2062: same litter as above.
+          try {
+            deleteStatusSentinelsForRoot(root);
+          } catch {
+            /* best-effort */
+          }
         }
       }
 
@@ -737,6 +883,15 @@ export const pruneCommand = new Command('prune')
       const orphanSidecarCount = apply
         ? orphanSwept.deleted.length
         : orphanFound.reduce((n, g) => n + g.files.length, 0);
+
+      // TRA-2062: status sentinels whose project is gone (no registry root, no
+      // index DB) past the TTL. --apply deletes and reports; dry-run skips —
+      // the stale-registry/ephemeral sections above already name the roots
+      // whose sentinels an apply would drop, and a delete-on-dry-run sweep
+      // would lie about "would remove".
+      const orphanStatusSwept = apply
+        ? sweepOrphanStatusSentinels()
+        : { removed: [], scannedOrphans: 0, retainedWithinTtl: 0, retainedLive: 0 };
 
       if (opts.json) {
         console.log(
@@ -784,6 +939,12 @@ export const pruneCommand = new Command('prune')
                   : holdersSummary.orphanHolderDirs.length,
                 removed: holdersSummary.removedHolderDirs,
                 dirs: apply ? [] : holdersSummary.orphanHolderDirs,
+              },
+              orphanStatusSentinels: {
+                removed: orphanStatusSwept.removed,
+                scannedOrphans: orphanStatusSwept.scannedOrphans,
+                retainedWithinTtl: orphanStatusSwept.retainedWithinTtl,
+                retainedLive: orphanStatusSwept.retainedLive,
               },
             },
             null,
@@ -894,6 +1055,16 @@ export const pruneCommand = new Command('prune')
           lines.push(`  ... and ${list.length - 10} more`);
         }
         p.note(lines.join('\n'), 'Orphan Holder Dirs');
+      }
+      if (apply && orphanStatusSwept.removed.length > 0) {
+        const lines = [
+          `Removed ${orphanStatusSwept.removed.length} orphaned status sentinel(s) (project gone, past TTL):`,
+          ...orphanStatusSwept.removed.slice(0, 10).map((f) => `  ${shortPath(f)}`),
+        ];
+        if (orphanStatusSwept.removed.length > 10) {
+          lines.push(`  ... and ${orphanStatusSwept.removed.length - 10} more`);
+        }
+        p.note(lines.join('\n'), 'Orphan Status Sentinels');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');
