@@ -5,6 +5,7 @@ import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
+import { HOT_CHURN_NATIVE_IGNORE_GLOBS, isHotChurnPath } from '../utils/hot-churn.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 
@@ -445,6 +446,12 @@ export class FileWatcher {
           // before debounce so it never wakes the pipeline (which would
           // race the unlink and log a doomed `Cannot read file` ENOENT).
           if (isSqliteSidecarPath(relPosix)) return false;
+          // TRA-2021: hot-churn runtime state (`gateway.heartbeat` ~2
+          // rewrites/min, `cron/ticker_*` + `cron/.tick.lock`) — rewritten
+          // constantly, content hash unchanged, never source. Drop before
+          // debounce so it never wakes the pipeline (one project burned
+          // ~250 s of indexer-elapsed per hour on these alone).
+          if (isHotChurnPath(relPosix)) return false;
           if (isExcluded(relPosix)) return false;
           if (isOwnedByDescendant?.(relPosix)) return false;
           if (gitignore.isIgnored(rel)) return false;
@@ -503,6 +510,10 @@ export class FileWatcher {
           ...[...traceignore.getSkipDirs()].map((d) => `**/${d}/**`),
           ...(config.exclude ?? []),
           ...descendantGlobs,
+          // TRA-2021: hot-churn runtime state, dropped natively before it
+          // ever crosses the native→JS boundary (the JS filter above stays
+          // authoritative — this list snapshots at subscribe-time).
+          ...HOT_CHURN_NATIVE_IGNORE_GLOBS,
         ],
       },
     );

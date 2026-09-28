@@ -17,6 +17,7 @@ import { shouldSkipRecentReindex } from '../../indexer/recent-reindex-cache.js';
 import { logger } from '../../logger.js';
 import type { ServerContext } from '../../server/types.js';
 import { LockError, withLock } from '../../utils/pid-lock.js';
+import { isHotChurnPath } from '../../utils/hot-churn.js';
 import { verifyDecision } from '../../memory/decision-verification.js';
 import { relativizeUnderRoot } from '../../utils/path-relativize.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
@@ -514,6 +515,52 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       // `get_index_health` reports. Without it, `progress.indexing` kept
       // showing whatever the last watcher batch did — "completed 276/276"
       // right after a 2069-file forced reindex (TRA-231).
+      //
+      // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
+      // `cron/ticker_*`, `cron/.tick.lock`) is rewritten every ~30 s with
+      // an unchanged content hash — running it through the reindex lock
+      // only ever yields `skippedHash=true, indexed=0` after queueing.
+      // Answer before `withLock` so explicit edits of these files never
+      // contend the lock either (the extractor/pipeline filters below stay
+      // as the safety net for anything that still arrives).
+      if (isHotChurnPath(dedupKey)) {
+        journal.record('register_edit', { file_path: filePath, skipped_churn: true }, 1);
+        const elapsedMs = Math.round(performance.now() - startedAt);
+        logger.info(
+          {
+            event: 'reindex-file',
+            project: projectRoot,
+            path: dedupKey,
+            pathSource: 'mcp',
+            skippedRecent: false,
+            skippedHash: false,
+            skippedChurn: true,
+            indexed: 0,
+            elapsedMs,
+          },
+          'reindex-file telemetry',
+        );
+        getReindexStats().record({
+          pathSource: 'mcp',
+          skippedRecent: false,
+          skippedHash: false,
+          skippedChurn: true,
+          indexed: 0,
+          elapsedMs,
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                status: 'skipped_churn',
+                file: filePath,
+                skipped_churn: true,
+              }),
+            },
+          ],
+        };
+      }
       //
       // TRA-1553: same teardown race as the `reindex` tool above — the daemon
       // never awaits this handler, so starting a pipeline run while the

@@ -6,6 +6,8 @@ export interface ReindexEvent {
   pathSource: 'http' | 'mcp' | 'watcher';
   skippedRecent: boolean;
   skippedHash: boolean;
+  /** TRA-2021: dropped as hot-churn runtime state before any lock/DB work. */
+  skippedChurn?: boolean;
   indexed: number;
   /** Indexing work only. See `queuedMs` — the two used to be summed here,
    *  which is how a 30 ms reindex reported hours of latency (TRA-935). */
@@ -19,6 +21,8 @@ export interface ReindexStatsSummary {
   total: number;
   fast_skipped_recent: number;
   fast_skipped_hash: number;
+  /** TRA-2021: hot-churn runtime-state drops (pre-lock, zero indexer work). */
+  fast_skipped_churn: number;
   indexed: number;
   errors: number;
   p50_ms: number;
@@ -47,6 +51,7 @@ export class ReindexStats {
       pathSource: event.pathSource,
       skippedRecent: event.skippedRecent,
       skippedHash: event.skippedHash,
+      skippedChurn: event.skippedChurn,
       indexed: event.indexed,
       elapsedMs: event.elapsedMs,
       queuedMs: event.queuedMs,
@@ -73,6 +78,7 @@ export class ReindexStats {
     const cutoff = sinceMs != null && sinceMs > 0 ? Date.now() - sinceMs : null;
     let recent = 0;
     let hash = 0;
+    let churn = 0;
     let indexed = 0;
     let errors = 0;
     const elapsed: number[] = [];
@@ -82,6 +88,7 @@ export class ReindexStats {
       if (cutoff != null && e.ts < cutoff) continue;
       total++;
       if (e.error) errors++;
+      else if (e.skippedChurn) churn++;
       else if (e.skippedRecent) recent++;
       else if (e.skippedHash) hash++;
       else if (e.indexed > 0) indexed++;
@@ -94,6 +101,7 @@ export class ReindexStats {
       total,
       fast_skipped_recent: recent,
       fast_skipped_hash: hash,
+      fast_skipped_churn: churn,
       indexed,
       errors,
       p50_ms: percentile(sorted, 0.5),

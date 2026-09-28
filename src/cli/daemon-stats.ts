@@ -157,6 +157,11 @@ export interface DaemonEventStats {
   total: number;
   fast_skipped_recent: number;
   fast_skipped_hash: number;
+  /**
+   * TRA-2021: hot-churn runtime-state drops. Optional so the CLI keeps
+   * rendering stats from older daemons that predate the counter.
+   */
+  fast_skipped_churn?: number;
   indexed: number;
   p50_ms: number;
   p95_ms: number;
@@ -190,6 +195,10 @@ export function renderDaemonEvents(s: DaemonEventStats): string {
   const pctOf = (n: number) => pct(n / s.total);
   lines.push(`  fast (skipped_recent): ${s.fast_skipped_recent} (${pctOf(s.fast_skipped_recent)})`);
   lines.push(`  fast (skipped_hash):   ${s.fast_skipped_hash} (${pctOf(s.fast_skipped_hash)})`);
+  const churn = s.fast_skipped_churn ?? 0;
+  if (churn > 0) {
+    lines.push(`  fast (skipped_churn):  ${churn} (${pctOf(churn)})`);
+  }
   lines.push(`  indexed:               ${s.indexed} (${pctOf(s.indexed)})`);
   lines.push(`  per-call: p50=${s.p50_ms}ms p95=${s.p95_ms}ms  queued p95=${s.p95_queued_ms}ms`);
   return lines.join('\n');
@@ -244,6 +253,7 @@ export async function fetchDaemonStats(port: number): Promise<DaemonEventStats |
       total: body.total ?? 0,
       fast_skipped_recent: body.fast_skipped_recent ?? 0,
       fast_skipped_hash: body.fast_skipped_hash ?? 0,
+      fast_skipped_churn: body.fast_skipped_churn ?? 0,
       indexed: body.indexed ?? 0,
       p50_ms: body.p50_ms ?? 0,
       p95_ms: body.p95_ms ?? 0,

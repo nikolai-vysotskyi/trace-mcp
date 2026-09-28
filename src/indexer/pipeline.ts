@@ -26,6 +26,7 @@ import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
+import { isHotChurnPath } from '../utils/hot-churn.js';
 import { validatePath } from '../utils/security.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
@@ -1277,6 +1278,16 @@ export class IndexingPipeline {
       // churn on them is a no-op instead of a doomed pipeline + warn.
       if (isSqliteSidecarPath(relPosix)) {
         logger.debug({ file: rel }, 'SQLite sidecar skipped in indexFiles');
+        continue;
+      }
+      // TRA-2021: hot-churn runtime state (`gateway.heartbeat`,
+      // `cron/ticker_*`, `cron/.tick.lock`) — rewritten every ~30 s with
+      // an unchanged content hash, so without this gate each event queued
+      // behind the pipeline lock and reported lock-wait as reindex latency
+      // (47 s worst case) while contributing `indexed: 0`. Dropped here —
+      // no lock, no DB — like every other pre-lock filter above.
+      if (isHotChurnPath(relPosix)) {
+        logger.debug({ file: rel }, 'Hot-churn runtime state skipped in indexFiles');
         continue;
       }
       // TRA-1649: the watcher enqueues directory paths (mkdir/create events
