@@ -220,4 +220,62 @@ describe('index-DB holders (TRA-304)', () => {
       expect(fs.existsSync(holders.holdersDir(entry.dbPath))).toBe(false);
     });
   });
+
+  describe('orphan holder dirs (TRA-2055)', () => {
+    it('lists holders dirs whose stem DB is gone and ignores live ones', () => {
+      const indexDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-holders-index-'));
+      try {
+        // Live DB + holders dir: not an orphan.
+        const liveDb = path.join(indexDir, 'live-0123456789ab.db');
+        fs.writeFileSync(liveDb, '');
+        mkdirp(holders.holdersDir(liveDb));
+        // Stem-less holders dirs (with and without markers): orphans.
+        const orphanFull = path.join(indexDir, 'ghost-0123456789ab.db');
+        mkdirp(`${orphanFull}.holders`);
+        write(path.join(`${orphanFull}.holders`, 'dead.json'), '{"pid":1}');
+        const orphanEmpty = path.join(indexDir, 'empty-abcdef123456.db');
+        mkdirp(`${orphanEmpty}.holders`);
+        // Noise: plain files and non-holders dirs are ignored.
+        fs.writeFileSync(path.join(indexDir, 'notes.txt'), 'x');
+        mkdirp(path.join(indexDir, 'random.dir'));
+
+        const found = holders.findOrphanHolderDirs(indexDir).map((g) => g.dir);
+        expect(found).toContain(`${orphanFull}.holders`);
+        expect(found).toContain(`${orphanEmpty}.holders`);
+        expect(found).not.toContain(holders.holdersDir(liveDb));
+      } finally {
+        fs.rmSync(indexDir, { recursive: true, force: true });
+      }
+    });
+
+    it('skips a stem-less holders dir while a live holder claims it', () => {
+      const indexDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-holders-index-'));
+      try {
+        const stem = path.join(indexDir, 'held-0123456789ab.db');
+        plantHolder(stem, path.join(tmpProjects, 'holder-root'));
+        const found = holders.findOrphanHolderDirs(indexDir).map((g) => g.dir);
+        expect(found).not.toContain(holders.holdersDir(stem));
+      } finally {
+        fs.rmSync(indexDir, { recursive: true, force: true });
+      }
+    });
+
+    it('sweep deletes only the orphan holders dirs', () => {
+      const indexDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-holders-index-'));
+      try {
+        const liveDb = path.join(indexDir, 'live-0123456789ab.db');
+        fs.writeFileSync(liveDb, '');
+        mkdirp(holders.holdersDir(liveDb));
+        const orphanStem = path.join(indexDir, 'ghost-0123456789ab.db');
+        mkdirp(`${orphanStem}.holders`);
+
+        const removed = holders.sweepOrphanHolderDirs(indexDir);
+        expect(removed).toEqual([`${orphanStem}.holders`]);
+        expect(fs.existsSync(`${orphanStem}.holders`)).toBe(false);
+        expect(fs.existsSync(holders.holdersDir(liveDb))).toBe(true);
+      } finally {
+        fs.rmSync(indexDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
