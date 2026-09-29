@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-09-28T06:57:36.393Z"
+updated: "2026-09-29T06:45:28.805Z"
 active_users:
-  day: 64
-  week: 169
-  month: 320
+  day: 60
+  week: 173
+  month: 321
   first_ping_date: "2026-08-29"
-  days_observed: 31
+  days_observed: 32
   month_window_full: true
-events_28d: 2031
+events_28d: 2060
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,13 +50,13 @@ events_28d: 2031
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 85233538
-  tokens_saved_raw: 110585102
-  usd_saved: 85.23
+  tokens_saved: 87654910
+  tokens_saved_raw: 113953552
+  usd_saved: 87.65
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 23
+  days: 24
   capped_days: 2
   raw_ratio: 1.3
   inflation_suspected: false
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 321
+  new_installs_28d: 317
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 20
+  retention_dau_mau_pct: 19
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,42 +159,42 @@ usage:
 # against `ops/arrivals.md` in private project repository before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 793
-  "upgrade": 722
-  "new": 321
-  "(not set)": 83
-  "downgrade": 60
-  "unknown": 50
+  "active": 822
+  "upgrade": 759
+  "new": 317
+  "(not set)": 78
+  "downgrade": 61
+  "unknown": 18
 by_version:
   "3.25.0": 75
   "3.23.2": 55
   "3.24.0": 49
   "3.31.2": 47
   "3.31.3": 46
+  "3.32.0": 44
   "3.27.1": 42
-  "3.32.0": 40
   "3.22.0": 38
   "3.26.0": 34
   "3.26.3": 32
   "3.28.0": 30
-  "3.10.0": 29
+  "3.34.1": 30
   "3.26.1": 29
   "3.15.0": 28
   "3.17.1": 28
   "3.31.5": 28
   "3.29.0": 27
-  "3.34.1": 26
   "3.11.0": 25
-  "3.31.1": 24
-  "3.33.0": 23
-  "3.8.0": 20
+  "3.31.1": 25
+  "3.33.0": 25
+  "3.34.3": 20
   "3.18.0": 19
   "3.14.0": 16
-  "3.31.4": 14
+  "3.31.4": 16
+  "3.10.0": 15
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,10 +212,10 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 750
-  below: 74
+  at_or_above: 783
+  below: 40
   unknown: 0
-  pct: 91
+  pct: 95
   readable: true
 
 # Which tool preset installs actually run, and how many tools that surface
@@ -258,23 +258,22 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 84
-  "(not set)": 73
+  "United Arab Emirates": 91
+  "(not set)": 68
   "United States": 26
   "Russia": 21
+  "China": 9
   "Thailand": 9
   "Brazil": 8
-  "Chile": 8
-  "China": 8
+  "Chile": 6
   "Germany": 6
   "Italy": 6
   "South Korea": 6
   "Poland": 5
-  "Sweden": 5
   "Denmark": 4
+  "Netherlands": 4
   "Australia": 3
   "Indonesia": 3
-  "Netherlands": 3
   "Spain": 3
   "Türkiye": 3
   "United Kingdom": 3
@@ -282,16 +281,17 @@ by_country:
   "Bangladesh": 2
   "France": 2
   "Hong Kong": 2
+  "New Zealand": 2
 by_client:
-  "unknown": 296
-  "claude-code": 77
-  "codex-mcp-client": 42
+  "unknown": 290
+  "claude-code": 78
+  "codex-mcp-client": 44
   "antigravity-client": 16
   "opencode": 13
-  "mcp": 11
+  "mcp": 12
+  "grok-shell-trace-mcp": 5
   "Visual Studio Code": 4
   "cursor-vscode": 4
-  "grok-shell-trace-mcp": 4
   "grok-shell-trace": 3
   "rmcp": 3
   "Cursor": 2
