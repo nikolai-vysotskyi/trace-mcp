@@ -70,3 +70,97 @@ describe('TopologyStore & DecisionStore WAL healing and leak prevention (TRA-123
     expect(existsSync(topoDbPath)).toBe(true);
   });
 });
+
+describe('Concurrent open never unlinks a live 0-byte WAL (TRA-2068, GH#1445)', () => {
+  let tmpDir: string;
+  let topoDbPath: string;
+  let decisionsDbPath: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'trace-wal-live-'));
+    topoDbPath = join(tmpDir, 'topology.db');
+    decisionsDbPath = join(tmpDir, 'decisions.db');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('TopologyStore: second opener keeps the live 0-byte WAL inode and shares data', () => {
+    const store1 = new TopologyStore(topoDbPath);
+    try {
+      store1.upsertService({
+        name: 'auth-service',
+        repoRoot: '/repo/auth',
+        dbPath: '/repo/auth/.trace/index.db',
+        serviceType: 'service',
+      });
+      // TRUNCATE checkpoint: the live WAL on disk is now 0 bytes — the exact
+      // state the old constructor unlinked from under live connections.
+      store1.db.pragma('wal_checkpoint(TRUNCATE)');
+      const walPath = `${topoDbPath}-wal`;
+      expect(existsSync(walPath)).toBe(true);
+      expect(statSync(walPath).size).toBe(0);
+      const inoBefore = statSync(walPath).ino;
+
+      const store2 = new TopologyStore(topoDbPath);
+      try {
+        // The WAL must not have been unlinked + recreated (new inode).
+        expect(existsSync(walPath)).toBe(true);
+        expect(statSync(walPath).ino).toBe(inoBefore);
+        // Both connections share one coherent database.
+        expect(store2.getService('auth-service')?.name).toBe('auth-service');
+        store2.upsertService({
+          name: 'billing-service',
+          repoRoot: '/repo/billing',
+          dbPath: '/repo/billing/.trace/index.db',
+          serviceType: 'service',
+        });
+        expect(store1.getService('billing-service')?.name).toBe('billing-service');
+        expect(store1.db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
+      } finally {
+        store2.close();
+      }
+    } finally {
+      store1.close();
+    }
+  });
+
+  it('DecisionStore: second opener keeps the live 0-byte WAL inode and shares data', () => {
+    const store1 = new DecisionStore(decisionsDbPath);
+    try {
+      store1.addDecision({
+        project_root: '/repo/app',
+        title: 'Use SQLite WAL',
+        content: 'High concurrency with WAL mode',
+        type: 'architecture',
+        source: 'test',
+      });
+      store1.db.pragma('wal_checkpoint(TRUNCATE)');
+      const walPath = `${decisionsDbPath}-wal`;
+      expect(existsSync(walPath)).toBe(true);
+      expect(statSync(walPath).size).toBe(0);
+      const inoBefore = statSync(walPath).ino;
+
+      const store2 = new DecisionStore(decisionsDbPath);
+      try {
+        expect(existsSync(walPath)).toBe(true);
+        expect(statSync(walPath).ino).toBe(inoBefore);
+        expect(store2.getStats().total).toBeGreaterThanOrEqual(1);
+        store2.addDecision({
+          project_root: '/repo/app',
+          title: 'Second decision',
+          content: 'Written through the second connection',
+          type: 'architecture',
+          source: 'test',
+        });
+        expect(store1.getStats().total).toBeGreaterThanOrEqual(2);
+        expect(store1.db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
+      } finally {
+        store2.close();
+      }
+    } finally {
+      store1.close();
+    }
+  });
+});
