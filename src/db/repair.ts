@@ -74,18 +74,37 @@ function dropOrphans(db: Database.Database): RepairResult {
       affected: 0,
     };
   }
+  let vecPruned = 0;
   const tx = db.transaction(() => {
     const info = db
       .prepare(`DELETE FROM symbol_embeddings WHERE symbol_id NOT IN (SELECT id FROM symbols)`)
       .run();
+    // GH#1447: the vec0 accelerator has no FK to `symbols` — prune its
+    // orphans too. Raw SQL (no extension load): throws when sqlite-vec is
+    // absent, in which case the rows are inert (ANN unavailable) — skip.
+    try {
+      if (tableExists(db, 'vec_symbol_embeddings')) {
+        vecPruned = db
+          .prepare(
+            `DELETE FROM vec_symbol_embeddings WHERE symbol_id NOT IN (SELECT id FROM symbols)`,
+          )
+          .run().changes;
+      }
+    } catch {
+      /* extension absent — vec0 unreadable, nothing to prune */
+    }
     return info.changes;
   });
   const affected = tx();
+  const detail =
+    vecPruned > 0
+      ? `Deleted ${affected} orphan embedding row(s) + ${vecPruned} vec0 orphan(s)`
+      : `Deleted ${affected} orphan embedding row(s)`;
   return {
     mode: 'drop-orphans',
     ok: true,
-    detail: `Deleted ${affected} orphan embedding row(s)`,
-    affected,
+    detail,
+    affected: affected + vecPruned,
   };
 }
 
