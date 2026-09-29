@@ -1,4 +1,5 @@
 import http from 'node:http';
+import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -6,6 +7,7 @@ import {
   DEFAULT_PROXY_INITIALIZE_TIMEOUT_MS,
   DEFAULT_PROXY_WARMUP_GRACE_MS,
   hasStartupProgressChanged,
+  isPortBound,
   PROXY_ABSOLUTE_MAX_MS,
   probeProxyReadiness,
   resolveProxyInitializeTimeout,
@@ -210,5 +212,84 @@ describe('probeProxyReadiness', () => {
   it('returns null on non-200 health', async () => {
     const port = await startHealthServer({ error: 'bad' }, 500);
     await expect(probeProxyReadiness(port)).resolves.toBeNull();
+  });
+});
+
+describe('alive-but-busy stall detection (GH#1448)', () => {
+  let close: (() => Promise<void>) | null = null;
+  afterEach(async () => {
+    await close?.();
+    close = null;
+  });
+
+  async function startBlackHoleServer(): Promise<number> {
+    // Accepts TCP but never answers HTTP — the stalled event loop shape:
+    // the kernel completes the handshake while the loop is parked.
+    const sockets = new Set<net.Socket>();
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.on('error', () => {});
+      socket.on('close', () => sockets.delete(socket));
+      // Hold the connection open without responding.
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    close = async () => {
+      for (const s of sockets) {
+        try {
+          s.destroy();
+        } catch {
+          /* ignore */
+        }
+      }
+      sockets.clear();
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        // Safety: never let a black-hole close pin the hook.
+        setTimeout(resolve, 2000).unref?.();
+      });
+    };
+    return (server.address() as AddressInfo).port;
+  }
+
+  it('isPortBound is true for a listener, false for a closed port', async () => {
+    const server = net.createServer((s) => {
+      s.on('error', () => {});
+      s.on('data', () => {});
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      await expect(isPortBound(port, 300)).resolves.toBe(true);
+    } finally {
+      try {
+        (server as unknown as { closeAllConnections?: () => void }).closeAllConnections?.();
+      } catch {
+        /* ignore */
+      }
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        setTimeout(resolve, 2000).unref?.();
+      });
+    }
+    await expect(isPortBound(port, 300)).resolves.toBe(false);
+  });
+
+  it('reports busy when TCP accepts but /health times out (stalled loop)', async () => {
+    const port = await startBlackHoleServer();
+    const r = await probeProxyReadiness(port, { healthTimeoutMs: 200, tcpTimeoutMs: 300 });
+    expect(r).toMatchObject({ reachable: true, starting: false, busy: true });
+  });
+
+  it('extends the deadline to base + grace for a busy daemon', () => {
+    const total = computeProxyTimeoutMs(
+      1_000,
+      { reachable: true, starting: false, rttMs: 500, busy: true },
+      20_000,
+    );
+    expect(total).toBe(21_000);
+  });
+
+  it('dead daemon still fast-fails (null keeps the base)', () => {
+    expect(computeProxyTimeoutMs(1_000, null, 20_000)).toBe(1_000);
   });
 });
