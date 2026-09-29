@@ -33,8 +33,16 @@
  * keeps the session waiting only while /health proves startup is converging
  * (its progress tuple changes between probes); a stalled startup falls back
  * to local mode at the first slice instead of burning the whole grace.
+ *
+ * GH#1448: bulk indexing can starve the daemon's event loop for seconds
+ * (median 2.8 s, max 75 s observed), so /health itself stops answering
+ * within its 500 ms client timeout. A TCP connect still succeeds — the
+ * kernel accepts while the loop is parked — which distinguishes
+ * alive-but-busy (port bound, /health timed out) from dead (port closed).
+ * The busy case extends up to the warmup cap like `starting`: waiting on
+ * the one shared daemon beats stampeding N sessions into local mode.
  */
-import { getDaemonHealth } from '../client.js';
+import net from 'node:net';
 
 /** Base budget, unchanged from the old fixed constant. */
 export const DEFAULT_PROXY_INITIALIZE_TIMEOUT_MS = 1_000;
@@ -106,7 +114,13 @@ function parseEnvInt(raw: string | undefined): number | undefined {
   return n;
 }
 
-/** What a /health probe learned, or null when the daemon is silent. */
+/** Client-side timeout for one /health fetch. Mirrors `getDaemonHealth`. */
+export const PROXY_HEALTH_TIMEOUT_MS = 500;
+
+/** Timeout for the TCP fallback probe that distinguishes busy from dead. */
+export const PROXY_TCP_TIMEOUT_MS = 500;
+
+/** What a /health probe learned, or null when the daemon is dead. */
 export interface ProxyReadiness {
   reachable: boolean;
   /** True while the daemon reports `status: "starting"` (warming up). */
@@ -115,6 +129,12 @@ export interface ProxyReadiness {
   rttMs: number;
   /** Startup progress from /health, present only while `starting`. */
   progress?: StartupProgress;
+  /**
+   * True when the port is bound but /health timed out — the daemon's event
+   * loop is stalled by bulk indexing, not dead (GH#1448). The kernel still
+   * accepts TCP while the loop is parked, so this is proof of life.
+   */
+  busy?: boolean;
 }
 
 /**
@@ -152,23 +172,89 @@ export function hasStartupProgressChanged(
 }
 
 /**
- * Probe the daemon's /health once. Returns null when nothing answers
- * (connection refused, timeout, non-200) — the dead-daemon case, which keeps
- * the base timeout. Never throws.
+ * True when something accepts TCP on `port` — the daemon process is alive
+ * and its listener is bound, even if its event loop is too stalled to
+ * answer HTTP. The kernel completes the handshake while the loop is parked,
+ * so this distinguishes alive-but-busy from dead (ECONNREFUSED). Never
+ * throws. Pure TCP, no HTTP — a few ms on localhost.
  */
-export async function probeProxyReadiness(port: number): Promise<ProxyReadiness | null> {
+export function isPortBound(
+  port: number,
+  timeoutMs: number = PROXY_TCP_TIMEOUT_MS,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const done = (v: boolean): void => {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.destroy();
+      } catch {
+        /* ignore */
+      }
+      resolve(v);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+    try {
+      socket.connect(port, '127.0.0.1');
+    } catch {
+      done(false);
+    }
+  });
+}
+
+/**
+ * Probe the daemon's /health once. Never throws.
+ *
+ * - 200: reachable (+ starting / progress when warming up).
+ * - Non-200 / malformed body: null. The loop answered, so this is not a
+ *   stall — it is an unhealthy daemon, and the dead-fast path applies.
+ * - Timeout / refused: TCP decides. Port bound → alive-but-busy (`busy`),
+ *   port closed → null (dead, keeps the base timeout).
+ */
+export async function probeProxyReadiness(
+  port: number,
+  opts?: { healthTimeoutMs?: number; tcpTimeoutMs?: number },
+): Promise<ProxyReadiness | null> {
   const start = Date.now();
+  const healthTimeoutMs = opts?.healthTimeoutMs ?? PROXY_HEALTH_TIMEOUT_MS;
+  const tcpTimeoutMs = opts?.tcpTimeoutMs ?? PROXY_TCP_TIMEOUT_MS;
   try {
-    const health = await getDaemonHealth(port);
-    if (!health) return null;
+    const res = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(healthTimeoutMs),
+    });
+    if (!res.ok) return null;
+    let health: { status?: unknown; progress?: { projectsReady: number; projectsTotal: number } };
+    try {
+      health = (await res.json()) as typeof health;
+    } catch {
+      return null;
+    }
+    if (!health || typeof health !== 'object') return null;
     return {
       reachable: true,
-      starting: health.status === 'starting',
+      starting: (health as { status?: string }).status === 'starting',
       rttMs: Date.now() - start,
       progress: readStartupProgress(health.progress),
     };
   } catch {
-    return null;
+    // Network error or health timeout — alive-but-busy or dead?
+    try {
+      const bound = await isPortBound(port, tcpTimeoutMs);
+      if (!bound) return null;
+      return {
+        reachable: true,
+        starting: false,
+        rttMs: Date.now() - start,
+        busy: true,
+      };
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -201,6 +287,9 @@ function readStartupProgress(
  *
  * - Silent daemon (null): base. Dead stays fast.
  * - Starting daemon: base + full warmup grace (capped). Wait, don't stampede.
+ * - Alive-but-busy (port bound, /health timed out — GH#1448): base + full
+ *   warmup grace (capped). A stalled loop still holds the shared daemon;
+ *   falling back would fork a full local backend per session behind GH#1445.
  * - Reachable daemon: base + RTT-scaled load extra (capped). Loaded gets room.
  */
 export function computeProxyTimeoutMs(
@@ -209,7 +298,7 @@ export function computeProxyTimeoutMs(
   warmupGraceMs: number,
 ): number {
   if (!readiness) return baseMs;
-  if (readiness.starting) {
+  if (readiness.starting || readiness.busy) {
     return Math.min(baseMs + Math.max(0, warmupGraceMs), PROXY_ABSOLUTE_MAX_MS);
   }
   const extra = Math.min(Math.max(0, readiness.rttMs) * LOAD_RTT_FACTOR, PROXY_MAX_LOAD_EXTRA_MS);

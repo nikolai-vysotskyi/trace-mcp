@@ -122,7 +122,7 @@ export const PROMPTS = {
   },
 
   rerank: {
-    version: 1,
+    version: 2,
     build: (v) => {
       return `Rate the relevance of each document to the query on a scale of 0-10.
 Query: ${v.query}
@@ -130,7 +130,7 @@ Query: ${v.query}
 Documents:
 ${v.documents}
 
-Respond with one score per line, in order: just the number, nothing else.`;
+Respond with one score per line as "N: score" (e.g. "1: 8"), in order. Just the pair, nothing else.`;
     },
     maxTokens: 200,
     temperature: 0.0,

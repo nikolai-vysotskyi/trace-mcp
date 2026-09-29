@@ -84,9 +84,18 @@ const AiConfigSchema = z
      * Output-token budget for one rerank call. Same reasoning-model caveat
      * as `summarize_max_tokens`: at 200 tokens a thinking model returns an
      * empty body, the scores fail to parse, and every semantic search pays
-     * full rerank latency for an RRF fallback. Default 200.
+     * full rerank latency for an RRF fallback. Default 200. Scaled up
+     * automatically when the candidate list needs more room
+     * (`max(base, n*6+32)`, GH#1442) — this stays the floor, never the cap.
      */
     rerank_max_tokens: z.number().int().positive().default(200),
+    /**
+     * Max documents sent to the LLM per rerank call. The RRF-fused head
+     * holds the best candidates, so the tail beyond the cap would only
+     * burn tokens. A `limit: 50` search sends `limit*2 = 100` candidates;
+     * larger limits are truncated to this head (GH#1442). Default 100.
+     */
+    rerank_max_candidates: z.number().int().positive().default(100),
     /**
      * Whether to include docstrings / leading comment blocks in the source sent
      * to the summarizer. Default true (preserves existing behavior). Set false

@@ -4298,7 +4298,8 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
 | `ai.summarize_max_tokens` | `100` | Output-token budget per symbol summary — raise (e.g. `1024`) for reasoning models that otherwise return empty summaries (GH#1423) |
-| `ai.rerank_max_tokens` | `200` | Output-token budget per rerank call — same reasoning-model caveat; an empty rerank response degrades every semantic search to RRF order while still paying full rerank latency |
+| `ai.rerank_max_tokens` | `200` | Output-token budget per rerank call — same reasoning-model caveat; an empty rerank response degrades every semantic search to RRF order while still paying full rerank latency. Scaled up automatically as `max(base, n*6+32)` for large candidate lists (GH#1442) |
+| `ai.rerank_max_candidates` | `100` | Max documents sent to the LLM per rerank call — the RRF-fused head is kept, the tail fills back in RRF order so large limits still return full rows (GH#1442) |
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 
@@ -5061,6 +5062,7 @@ supply it.
 | `ai.summarize_kinds` | string[] | `["class","function","method","interface","trait","enum","…` |
 | `ai.summarize_max_tokens` | number (> 0) | `100` |
 | `ai.rerank_max_tokens` | number (> 0) | `200` |
+| `ai.rerank_max_candidates` | number (> 0) | `100` |
 | `ai.summarizeFromDocstrings` | boolean | `true` |
 | `ai.openaiExtraBody` | object | `{}` |
 | `ai.concurrency` | number (≥ 1, ≤ 32) | `1` |
