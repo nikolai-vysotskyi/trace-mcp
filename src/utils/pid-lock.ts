@@ -43,6 +43,12 @@ export interface LockHolder {
   op: string;
   /** Wall-clock timestamp at acquire (ms). */
   started_at: number;
+  /**
+   * TRA-2091: trimmed acquirer stack captured at claim time so a later
+   * self-lock collision can say *who* took the lock, not just when.
+   * Optional for backward compat with locks written by older versions.
+   */
+  stack?: string;
 }
 
 export class LockError extends Error {
@@ -108,6 +114,38 @@ function processIsAlive(pid: number): boolean {
 }
 
 /**
+ * TRA-2091: trimmed acquirer stack for the lock payload. Keeps the frames
+ * below this module so the log points at the real claimant (reindex-file
+ * handler, register_edit, …), capped to avoid bloating the pid file.
+ */
+function captureAcquirerStack(limit = 8): string | undefined {
+  const raw = new Error('lock-acquire').stack;
+  if (!raw) return undefined;
+  const lines = raw.split('\n').slice(1);
+  const kept: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    // Skip our own frames — the claimant is above acquireLock/tryClaim/withLock.
+    if (t.includes('pid-lock.') || t.includes('captureAcquirerStack')) continue;
+    kept.push(t);
+    if (kept.length >= limit) break;
+  }
+  if (kept.length === 0) return undefined;
+  return kept.join('\n').slice(0, 2000);
+}
+
+/**
+ * TRA-2091: true when `holder` is this same process on this same host —
+ * i.e. the daemon contending with its own in-flight reindex rather than a
+ * foreign process. Such collisions are transient concurrency, not corruption,
+ * and callers should downgrade them to warn + retry instead of L50.
+ */
+export function isSelfLock(holder: LockHolder | null): boolean {
+  if (!holder) return false;
+  return holder.pid === process.pid && holder.hostname === os.hostname();
+}
+
+/**
  * Try to acquire `name`. Throws {@link LockError} when the lock is held by a
  * live process on the same host. Stale locks from dead processes (or from a
  * different host — we can't probe) are reclaimed automatically.
@@ -124,6 +162,7 @@ export function acquireLock(opts: AcquireOptions): LockHandle {
       started_at: Date.now(),
       hostname,
       op,
+      stack: captureAcquirerStack(),
     };
     // Atomic create+exclusive — fails with EEXIST if anyone else got there first.
     const tmp = `${filePath}.tmp.${process.pid}.${randomBytes(6).toString('hex')}`;
@@ -187,8 +226,13 @@ export function acquireLock(opts: AcquireOptions): LockHandle {
   const sameHost = holder.hostname === hostname;
   const alive = sameHost && processIsAlive(holder.pid);
   if (alive) {
+    const self = holder.pid === process.pid;
     throw new LockError(
-      `Lock held by pid=${holder.pid} (${holder.op}) on ${holder.hostname}, started ${new Date(holder.started_at).toISOString()}`,
+      `Lock held by pid=${holder.pid} (${holder.op}) on ${holder.hostname}, started ${new Date(holder.started_at).toISOString()}${
+        self
+          ? ' (self-lock: same process holds this lock — likely concurrent reindex on the same project)'
+          : ''
+      }`,
       holder,
     );
   }

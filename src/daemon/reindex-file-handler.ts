@@ -7,7 +7,7 @@ import { beginReindex, isReindexing } from '../indexer/reindex-inflight.js';
 import { shouldSkipRecentReindex } from '../indexer/recent-reindex-cache.js';
 import { logger } from '../logger.js';
 import { isHotChurnPath } from '../utils/hot-churn.js';
-import { withLock } from '../utils/pid-lock.js';
+import { isSelfLock, LockError, withLock } from '../utils/pid-lock.js';
 import { getReindexStats } from './reindex-stats.js';
 
 // TRA-1763: the in-flight registry lives in `indexer/reindex-inflight.ts` so
@@ -299,6 +299,51 @@ export async function handleReindexFile(
     return { ok: true, relPath: rel };
   } catch (err) {
     const elapsedMs = Math.round(performance.now() - startedAt);
+    // TRA-2091: lock contention (including self-lock: this same daemon pid
+    // already holding `<projectHash>-reindex` for an in-flight reindex) is
+    // transient concurrency, not a crash. Answer 503 + Retry-After so hook
+    // clients fall back to the local CLI path transparently (same contract
+    // as warming/stopping), and log at warn with holder attribution instead
+    // of L50.
+    if (err instanceof LockError) {
+      const holder = err.holder;
+      const selfLock = isSelfLock(holder);
+      logger.warn(
+        {
+          event: 'reindex-file',
+          project,
+          path: rel,
+          pathSource: 'http',
+          skippedRecent: false,
+          skippedHash: false,
+          indexed: 0,
+          elapsedMs,
+          lockBusy: true,
+          selfLock,
+          holder,
+          holderOp: holder?.op,
+          holderStartedAt: holder ? new Date(holder.started_at).toISOString() : undefined,
+          holderStack: holder?.stack,
+          err,
+          error: String(err),
+        },
+        selfLock ? 'reindex-file lock busy (self-lock, retry)' : 'reindex-file lock busy (retry)',
+      );
+      getReindexStats().record({
+        pathSource: 'http',
+        skippedRecent: false,
+        skippedHash: false,
+        indexed: 0,
+        elapsedMs,
+        error: true,
+      });
+      return {
+        ok: false,
+        status: 503,
+        error: `reindex_in_progress: ${err.message}`,
+        retryAfterSec: 5,
+      };
+    }
     logger.error(
       {
         event: 'reindex-file',
