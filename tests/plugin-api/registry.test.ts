@@ -111,4 +111,35 @@ describe('plugin registry', () => {
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().map((p) => p.manifest.name)).toEqual(['inertia']);
   });
+
+  it('caches framework detection per rootPath, not globally (GH#1441 regression)', () => {
+    // The daemon extract worker shares one registry across all project
+    // roots. A global (ctx-ignoring) cache returned the first project's
+    // frameworks for every later project → Laravel projects indexed with
+    // 0 routes/migrations when another framework was indexed first.
+    const registry = new PluginRegistry();
+    registry.registerFrameworkPlugin({
+      manifest: { name: 'laravel', version: '1.0.0', priority: 0 },
+      detect: (ctx) => ctx.rootPath === '/projects/laravel-app',
+      registerSchema: () => ({}),
+    });
+    const laravelCtx: ProjectContext = { rootPath: '/projects/laravel-app', configFiles: [] };
+    const nuxtCtx: ProjectContext = { rootPath: '/projects/nuxt-app', configFiles: [] };
+
+    expect(
+      registry
+        .getActiveFrameworkPlugins(laravelCtx)
+        ._unsafeUnwrap()
+        .map((p) => p.manifest.name),
+    ).toEqual(['laravel']);
+    // Second project must be detected on its own ctx, not served the cache.
+    expect(registry.getActiveFrameworkPlugins(nuxtCtx)._unsafeUnwrap()).toEqual([]);
+    // And the first project's cached result still holds.
+    expect(
+      registry
+        .getActiveFrameworkPlugins(laravelCtx)
+        ._unsafeUnwrap()
+        .map((p) => p.manifest.name),
+    ).toEqual(['laravel']);
+  });
 });

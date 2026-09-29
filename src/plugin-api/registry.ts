@@ -42,8 +42,12 @@ export class PluginRegistry {
   private frameworkPlugins: FrameworkPlugin[] = [];
   // O(1) extension → plugin lookup (built lazily on first query)
   private _extMap: Map<string, LanguagePlugin> | undefined;
-  // Cached framework detection results (invalidated by clearCaches)
-  private _activeFrameworkCache: TraceMcpResult<FrameworkPlugin[]> | undefined;
+  // Cached framework detection results, keyed by project rootPath
+  // (invalidated by clearCaches). A single registry is shared across
+  // projects in the daemon extract worker — a global cache poisons every
+  // project after the first (GH#1441: Laravel projects indexed with
+  // 0 routes/migrations when the first project used another framework).
+  private _activeFrameworkCache = new Map<string, TraceMcpResult<FrameworkPlugin[]>>();
 
   registerLanguagePlugin(plugin: LanguagePlugin): void {
     this.languagePlugins.push(plugin);
@@ -71,15 +75,17 @@ export class PluginRegistry {
   }
 
   getActiveFrameworkPlugins(ctx: ProjectContext): TraceMcpResult<FrameworkPlugin[]> {
-    if (this._activeFrameworkCache) return this._activeFrameworkCache;
+    const cached = this._activeFrameworkCache.get(ctx.rootPath);
+    if (cached) return cached;
     const active = this.frameworkPlugins.filter((p) => p.detect(ctx));
-    this._activeFrameworkCache = this.topologicalSort(active);
-    return this._activeFrameworkCache;
+    const sorted = this.topologicalSort(active);
+    this._activeFrameworkCache.set(ctx.rootPath, sorted);
+    return sorted;
   }
 
   /** Clear per-pipeline-run caches. Call at start of each indexing run. */
   clearCaches(): void {
-    this._activeFrameworkCache = undefined;
+    this._activeFrameworkCache.clear();
   }
 
   getAllFrameworkPlugins(): FrameworkPlugin[] {

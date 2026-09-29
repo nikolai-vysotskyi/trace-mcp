@@ -113,6 +113,70 @@ return new class extends Migration {
     });
   });
 
+  describe('closure return types + static (GH#1444 regression)', () => {
+    it('parses Schema::create with `: void` return type (strict_types projects)', () => {
+      const source = `<?php
+declare(strict_types=1);
+return new class extends Migration {
+    public function up(): void {
+        Schema::create('widgets', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+        });
+    }
+};`;
+      const { migrations } = extractMigrations(
+        source,
+        'database/migrations/2024_04_01_000000_create_widgets_table.php',
+      );
+      expect(migrations).toHaveLength(1);
+      expect(migrations[0].tableName).toBe('widgets');
+      expect(migrations[0].operation).toBe('create');
+      expect(migrations[0].columns!.map((c) => (c as any).name)).toContain('name');
+    });
+
+    it('parses Schema::create with `static function ... : void`', () => {
+      const source = `<?php
+declare(strict_types=1);
+return new class extends Migration {
+    public function up(): void {
+        Schema::create('gadgets', static function (Blueprint $table): void {
+            $table->id();
+            $table->string('label')->nullable();
+        });
+    }
+};`;
+      const { migrations } = extractMigrations(
+        source,
+        'database/migrations/2024_04_02_000000_create_gadgets_table.php',
+      );
+      expect(migrations).toHaveLength(1);
+      expect(migrations[0].tableName).toBe('gadgets');
+      const label = migrations[0].columns!.find((c) => (c as any).name === 'label');
+      expect(label).toBeDefined();
+      expect((label as any).nullable).toBe(true);
+    });
+
+    it('parses Schema::table with `: void` return type', () => {
+      const source = `<?php
+declare(strict_types=1);
+return new class extends Migration {
+    public function up(): void {
+        Schema::table('widgets', function (Blueprint $table): void {
+            $table->string('sku')->unique();
+        });
+    }
+};`;
+      const { migrations } = extractMigrations(
+        source,
+        'database/migrations/2024_04_03_000000_add_sku_to_widgets.php',
+      );
+      expect(migrations).toHaveLength(1);
+      expect(migrations[0].operation).toBe('alter');
+      expect(migrations[0].tableName).toBe('widgets');
+    });
+  });
+
   describe('Schema::drop', () => {
     it('parses drop table', () => {
       const source = `<?php
