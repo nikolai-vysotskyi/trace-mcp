@@ -50,6 +50,97 @@ export class EnvIndexer {
     }
   }
 
+  /**
+   * TRA-2067 (GH#1450): find indexed env rows the collector no longer owns.
+   *
+   * `selectOutOfScopeFiles` in pipeline.ts deliberately exempts `language
+   * 'env'` rows (the code walk never visits `.env` — default
+   * `config.exclude` hides them — so "not in scope" would otherwise wipe
+   * every env row on every full walk). That exemption leaked: an env file
+   * added to `ignore.patterns` / `.traceignore`, git-ignored afterwards, or
+   * deleted from disk kept its key names + comments in the index and kept
+   * being served via `get_env_vars` against an explicit user ignore.
+   *
+   * A row is stale when any gate the collect pass applies would now skip it
+   * (traceignore incl. `ignore.patterns`, descendant ownership, gitignore,
+   * non-env `config.exclude` patterns) or when it no longer exists on disk.
+   * Pure read — callers delete the returned ids via `store.deleteFile`
+   * (which cascades `env_vars` through `ON DELETE CASCADE`).
+   */
+  findStaleEnvFileIds(): number[] {
+    let rows: { id: number; path: string }[];
+    try {
+      rows = this.store
+        .getAllFiles()
+        .filter((f) => f.language === 'env')
+        .map((f) => ({ id: f.id, path: f.path }));
+    } catch {
+      return [];
+    }
+    if (rows.length === 0) return [];
+
+    const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+    const ownedByDescendant = descendantGlobs.length
+      ? picomatch(descendantGlobs, { dot: true })
+      : undefined;
+    // Same filter as the collect pass: default `config.exclude` carries
+    // `**/.env` patterns to keep env files out of the CODE index — those
+    // must not count as "excluded" here, only the non-env patterns the
+    // collector itself honours via fast-glob `ignore`.
+    const nonEnvExcludes = this.config.exclude.filter((p) => !isEnvFilePattern(p));
+    const isExcluded =
+      nonEnvExcludes.length > 0 ? picomatch(nonEnvExcludes, { dot: true }) : undefined;
+
+    const stale: number[] = [];
+    for (const row of rows) {
+      const relPosix = row.path.split(path.sep).join('/');
+      if (this.traceignore.isIgnored(relPosix)) {
+        stale.push(row.id);
+        continue;
+      }
+      if (ownedByDescendant?.(relPosix)) {
+        stale.push(row.id);
+        continue;
+      }
+      if (this.gitignore?.isIgnored(relPosix)) {
+        stale.push(row.id);
+        continue;
+      }
+      if (isExcluded?.(relPosix)) {
+        stale.push(row.id);
+        continue;
+      }
+      try {
+        const st = fs.statSync(path.resolve(this.rootPath, relPosix));
+        if (!st.isFile()) stale.push(row.id);
+      } catch {
+        // ENOENT / EACCES — gone from disk, retire the row.
+        stale.push(row.id);
+      }
+    }
+    return stale;
+  }
+
+  /**
+   * TRA-2067: delete the rows `findStaleEnvFileIds` reports. Best-effort —
+   * a locked/closed DB just means the next full walk retries. Returns the
+   * number of rows dropped.
+   */
+  pruneStaleEnvFiles(): number {
+    const ids = this.findStaleEnvFileIds();
+    if (ids.length === 0) return 0;
+    try {
+      this.store.db.transaction(() => {
+        for (const id of ids) this.store.deleteFile(id);
+      })();
+    } catch (err) {
+      logger.warn({ err }, 'Stale .env prune failed — skipping');
+      return 0;
+    }
+    logger.info({ removed: ids.length }, 'Dropped stale .env rows (ignored or deleted)');
+    return ids.length;
+  }
+
   private async indexEnvFilesUnsafe(force: boolean): Promise<void> {
     await initContentHasher();
     // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
@@ -77,7 +168,13 @@ export class EnvIndexer {
       suppressErrors: true,
     });
 
-    if (envPaths.length === 0) return;
+    // TRA-2067: prune even when the walk found nothing — an ignore rule
+    // that hides every .env file must still retire the rows the previous
+    // run wrote, otherwise the early return below re-leaks them forever.
+    if (envPaths.length === 0) {
+      this.pruneStaleEnvFiles();
+      return;
+    }
 
     logger.info({ count: envPaths.length }, 'Indexing .env files (keys only)');
 
@@ -163,5 +260,10 @@ export class EnvIndexer {
 
       logger.debug({ file: relPath, keys: entries.length }, '.env file indexed');
     }
+
+    // TRA-2067: retire rows the gates above now skip (newly ignored) or that
+    // vanished from disk. Runs on every env pass so the incremental-discovery
+    // fast path — which never calls `reconcileScope` — converges too.
+    this.pruneStaleEnvFiles();
   }
 }
