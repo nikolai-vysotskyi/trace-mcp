@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { VEC_TABLE_NAME } from '../../ai/vec-extension.js';
 import type { RawSymbol } from '../../plugin-api/types.js';
 import { extractHeritageEntries } from '../heritage.js';
 import type { SymbolRow, SymbolWithFilePath } from '../types.js';
@@ -241,8 +242,48 @@ export class SymbolRepository {
   }
 
   deleteSymbolsByFile(fileId: number): void {
+    // GH#1447: the sqlite-vec accelerator has no FK to `symbols`, so the
+    // delete below would orphan its rows forever (they eat ANN top-k slots).
+    // Collect the doomed ids first — every symbol-delete path funnels through
+    // here (reindex in FilePersister, file delete via Store.deleteFile).
+    const doomed = (
+      this.db.prepare('SELECT id FROM symbols WHERE file_id = ?').all(fileId) as {
+        id: number;
+      }[]
+    ).map((r) => r.id);
     this._stmts.deleteSymbolNodesByFileId.run(fileId);
     this._stmts.deleteSymbolsByFileId.run(fileId);
+    this.deleteVecRows(doomed);
+  }
+
+  /**
+   * Best-effort removal of accelerator rows for deleted symbols (GH#1447).
+   * Raw SQL on purpose: loading the sqlite-vec extension here would couple
+   * the repository to an optionalDependency, and the table may not exist
+   * (extension absent) or may be unreadable (DB file moved from a machine
+   * with the extension). Never throws — residual staleness self-heals on the
+   * next BlobVectorStore open via syncVecIndex.
+   */
+  private deleteVecRows(ids: number[]): void {
+    if (ids.length === 0) return;
+    try {
+      const exists = this.db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`)
+        .get(VEC_TABLE_NAME);
+      if (!exists) return;
+      // TRA-1005: chunk (same SQLITE_MAX_VARIABLE_NUMBER / V8 ceiling).
+      const CHUNK = 900;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        // vec0 integer pks must be bound as BigInt (see Vec0Index).
+        this.db
+          .prepare(`DELETE FROM ${VEC_TABLE_NAME} WHERE symbol_id IN (${placeholders})`)
+          .run(...chunk.map((id) => BigInt(id)));
+      }
+    } catch {
+      /* accelerator staleness self-heals via BlobVectorStore.syncVecIndex */
+    }
   }
 
   getSymbolsByFile(fileId: number): SymbolRow[] {

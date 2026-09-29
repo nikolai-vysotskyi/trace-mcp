@@ -1,7 +1,9 @@
 import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
+import { initializeDatabase } from '../../db/schema.js';
+import { Store } from '../../db/store.js';
 import { Vec0Index } from '../vec-extension.js';
-import { BlobVectorStore } from '../vector-store.js';
+import { BlobVectorStore, shouldRebuildVecIndex } from '../vector-store.js';
 
 // Is sqlite-vec actually installed + loadable here? It is an optionalDependency,
 // so CI/offline runs the brute-force path. The correctness tests below assert on
@@ -96,6 +98,110 @@ describe('BlobVectorStore vector search (ANN + brute-force parity)', () => {
       expect(store.search([1, 0, 0, 0], 1)[0].id).toBe(1);
     },
   );
+
+  describe('vec0 orphan cleanup (GH#1447)', () => {
+    function realDb(): { db: Database.Database; store: Store; vstore: BlobVectorStore } {
+      const db = initializeDatabase(':memory:');
+      const store = new Store(db);
+      const vstore = new BlobVectorStore(db);
+      vstore.setMeta('test-model', 3, 'test');
+      return { db, store, vstore };
+    }
+
+    function addFile(
+      store: Store,
+      rel: string,
+      names: string[],
+    ): { fileId: number; ids: number[] } {
+      const fileId = store.insertFile(rel, 'typescript', `hash-${rel}`, 10);
+      const ids = store.insertSymbols(
+        fileId,
+        names.map((name) => ({
+          name,
+          kind: 'function' as const,
+          symbolId: `${rel}::${name}#function`,
+          byteStart: 0,
+          byteEnd: 10,
+        })),
+      );
+      return { fileId, ids };
+    }
+
+    const vecCount = (db: Database.Database) =>
+      (db.prepare('SELECT COUNT(*) AS c FROM vec_symbol_embeddings').get() as { c: number }).c;
+
+    it("deleteSymbolsByFile removes vec0 rows for the file's symbols", () => {
+      const { db, store, vstore } = realDb();
+      try {
+        const { fileId, ids } = addFile(store, 'a.ts', ['foo', 'bar']);
+        for (const id of ids) vstore.insert(id, [1, 0, 0]);
+
+        store.deleteSymbolsByFile(fileId);
+
+        // BLOB rows follow via ON DELETE CASCADE; vec0 has no FK — it must
+        // be cleaned explicitly or orphans eat ANN top-k.
+        expect(vstore.count()).toBe(0);
+        expect(vstore.search([1, 0, 0], 5)).toEqual([]);
+        if (annAvailable) expect(vecCount(db)).toBe(0);
+      } finally {
+        db.close();
+      }
+    });
+
+    it('reopening prunes vec0 orphans left by pre-fix deletes (orphan direction)', () => {
+      const { db, store, vstore } = realDb();
+      try {
+        const a = addFile(store, 'a.ts', ['foo', 'bar']);
+        const b = addFile(store, 'b.ts', ['baz']);
+        for (const id of a.ids) vstore.insert(id, [1, 0, 0]);
+        for (const id of b.ids) vstore.insert(id, [0, 0, 1]);
+
+        // Simulate a pre-fix database: raw symbol delete cascades the BLOB
+        // rows but leaves vec0 orphans behind (vec 3 > blob 1 — the old
+        // `vec.count() >= count()` check called this "in sync").
+        db.prepare('DELETE FROM symbols WHERE file_id = ?').run(a.fileId);
+        expect(vstore.count()).toBe(1);
+
+        const reopened = new BlobVectorStore(db);
+        expect(reopened.count()).toBe(1);
+        if (annAvailable) {
+          expect(vecCount(db)).toBe(1);
+          // Deleted ids must not pollute ANN top-k.
+          const res = reopened.search([1, 0, 0], 5);
+          expect(res.some((r) => a.ids.includes(r.id))).toBe(false);
+        }
+      } finally {
+        db.close();
+      }
+    });
+
+    it('reopening with zero live symbols drops stale vec rows', () => {
+      const { db, store, vstore } = realDb();
+      try {
+        const { ids } = addFile(store, 'a.ts', ['foo']);
+        for (const id of ids) vstore.insert(id, [1, 0, 0]);
+
+        db.prepare('DELETE FROM symbols').run();
+
+        const reopened = new BlobVectorStore(db);
+        expect(reopened.count()).toBe(0);
+        expect(reopened.search([1, 0, 0], 5)).toEqual([]);
+      } finally {
+        db.close();
+      }
+    });
+
+    it('shouldRebuildVecIndex prefers rebuild only past the bloat threshold', () => {
+      // Below the absolute floor — prune row-by-row even at a high ratio.
+      expect(shouldRebuildVecIndex(999, 1)).toBe(false);
+      // At the ratio boundary — rebuild and compact the shadow chunks.
+      expect(shouldRebuildVecIndex(1000, 4000)).toBe(true);
+      expect(shouldRebuildVecIndex(30000, 70000)).toBe(true);
+      // Many orphans but a small share of a huge index — prune.
+      expect(shouldRebuildVecIndex(5000, 100000)).toBe(false);
+      expect(shouldRebuildVecIndex(0, 100)).toBe(false);
+    });
+  });
 
   it.skipIf(!annAvailable)('backfills the vec0 index from a pre-existing BLOB table', () => {
     // Simulate an index built before the ANN feature: write BLOB rows directly,

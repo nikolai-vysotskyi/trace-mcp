@@ -5,7 +5,24 @@
  */
 import type Database from 'better-sqlite3';
 import type { VectorStore } from './interfaces.js';
-import { Vec0Index } from './vec-extension.js';
+import { VEC_TABLE_NAME, Vec0Index } from './vec-extension.js';
+
+/**
+ * Fraction of the index that may be vec0 orphans before reconciliation
+ * rebuilds the accelerator from scratch (DROP + full backfill) instead of
+ * deleting orphan rows one by one (GH#1447). Row-by-row DELETEs leave dead
+ * weight in vec0 shadow chunks; past this ratio a rebuild is cheaper and
+ * compacts the chunks. The absolute floor keeps tiny transient drift (a few
+ * rows mid-reindex) on the cheap prune path.
+ */
+export const VEC_REBUILD_ORPHAN_RATIO = 0.2;
+export const VEC_REBUILD_MIN_ORPHANS = 1000;
+
+/** Pure rebuild-vs-prune decision for the vec0 reconciler (GH#1447). */
+export function shouldRebuildVecIndex(orphans: number, live: number): boolean {
+  if (orphans < VEC_REBUILD_MIN_ORPHANS) return false;
+  return orphans / (live + orphans) >= VEC_REBUILD_ORPHAN_RATIO;
+}
 
 const CREATE_TABLE = `
 CREATE TABLE IF NOT EXISTS symbol_embeddings (
@@ -79,25 +96,108 @@ export class BlobVectorStore implements VectorStore {
     this.db.exec(CREATE_TABLE);
   }
 
-  /** Backfill the ANN accelerator from the canonical BLOB table if it is behind. */
+  /**
+   * Backfill the ANN accelerator from the canonical BLOB table if it is behind.
+   *
+   * GH#1447: the old check (`vec.count() >= count()` → in sync) was blind in
+   * the orphan direction — deleted symbols inflate the vec count, so drift was
+   * undetectable and orphan vectors kept eating ANN top-k slots. Reconciliation
+   * now compares both directions (orphans pruned, missing backfilled).
+   */
   private syncVecIndex(): void {
     if (!this.vec) return;
     const dim = this.cachedDim ?? this.peekDim();
     if (dim == null) return; // no vectors yet — vec0 is created lazily on first insert
-    if (this.vec.count() >= this.count()) return; // already in sync
+    this.reconcileVecIndex(dim);
+  }
 
+  /**
+   * Reconcile the vec0 accelerator against the canonical BLOB table.
+   *
+   * Public so repair tooling and tests can invoke it directly. Never throws —
+   * the BLOB table stays canonical and search falls back to brute force.
+   */
+  reconcileVecIndex(dim?: number): { pruned: number; backfilled: number; rebuilt: boolean } {
+    const result = { pruned: 0, backfilled: 0, rebuilt: false };
+    if (!this.vec) return result;
+    const d = dim ?? this.cachedDim ?? this.peekDim() ?? undefined;
+    if (d == null) return result;
+    const live = this.count();
+    if (live === 0) {
+      // No live vectors: any accelerator row is an orphan (e.g. every symbol
+      // was deleted while vec0 survived). Drop the table so stale ids can't
+      // pollute ANN top-k; it is re-created lazily on the next insert.
+      if (this.vec.countOrphans() > 0) {
+        this.vec.clear();
+        result.rebuilt = true;
+      }
+      return result;
+    }
+    const orphans = this.vec.countOrphans();
+    const missing = this.vec.countMissing();
+    if (orphans === 0 && missing === 0) return result; // in sync, both directions
+    if (shouldRebuildVecIndex(orphans, live)) {
+      // Mass-delete bloat: row-by-row DELETEs leave dead weight in vec0
+      // shadow chunks (GH#1447 measured 6–12x vs live data). DROP + full
+      // backfill compacts them.
+      this.vec.clear();
+      result.rebuilt = true;
+      result.pruned = orphans;
+      result.backfilled = this.backfillAll(d);
+      return result;
+    }
+    if (orphans > 0) result.pruned = this.vec.pruneOrphans();
+    result.backfilled = missing < 0 ? this.backfillAll(d) : this.backfillMissing(d, live);
+    return result;
+  }
+
+  /** Full refill from the canonical table (idempotent delete-then-insert). */
+  private backfillAll(dim: number): number {
     // Read in chunks via all() (not iterate): better-sqlite3 forbids writing while a
     // read iterator is open on the same connection, and chunking bounds peak memory
     // for a large one-time backfill.
     const CHUNK = 1000;
+    let inserted = 0;
     const read = this.db.prepare(
       'SELECT symbol_id, embedding FROM symbol_embeddings ORDER BY symbol_id LIMIT ? OFFSET ?',
     );
     for (let offset = 0; ; offset += CHUNK) {
       const rows = read.all(CHUNK, offset) as { symbol_id: number; embedding: Buffer }[];
       if (rows.length === 0) break;
-      this.vec.backfill(rows, dim);
+      this.vec!.backfill(rows, dim);
+      inserted += rows.length;
     }
+    return inserted;
+  }
+
+  /**
+   * Backfill only the BLOB rows missing from vec0. Pages `LIMIT n` without
+   * OFFSET — the missing set shrinks as rows land, so OFFSET would skip rows.
+   * Iterations are capped at one full pass over the live set: if vec0 refuses
+   * rows (hiccup), the same set would return forever.
+   */
+  private backfillMissing(dim: number, live: number): number {
+    const CHUNK = 1000;
+    const maxIters = Math.ceil(live / CHUNK) + 1;
+    let inserted = 0;
+    for (let iter = 0; iter < maxIters; iter++) {
+      let rows: { symbol_id: number; embedding: Buffer }[];
+      try {
+        rows = this.db
+          .prepare(
+            'SELECT symbol_id, embedding FROM symbol_embeddings ' +
+              `WHERE symbol_id NOT IN (SELECT symbol_id FROM ${VEC_TABLE_NAME}) LIMIT ?`,
+          )
+          .all(CHUNK) as { symbol_id: number; embedding: Buffer }[];
+      } catch {
+        // vec0 refuses the membership scan — fall back to a full refill.
+        return this.backfillAll(dim);
+      }
+      if (rows.length === 0) break;
+      this.vec!.backfill(rows, dim);
+      inserted += rows.length;
+    }
+    return inserted;
   }
 
   /** Infer vector dimensionality from a stored BLOB (bytes / 4 = float32 count). */
