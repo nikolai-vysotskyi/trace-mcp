@@ -25,6 +25,22 @@ function isEnvFilePattern(pattern: string): boolean {
   return ENV_FILE_BASENAME.test(basename);
 }
 
+/**
+ * TRA-2067 finding 3: fast-glob prunes a whole *directory* for a bare
+ * directory pattern (e.g. `secrets`), while a bare
+ * `picomatch(pattern)(filePath)` probe only matches file paths. Test each
+ * ancestor segment too — that is what the glob's directory pruning amounts
+ * to. (Spelled without a globstar prefix here: that two-character sequence
+ * would terminate this block comment.)
+ */
+function matchesExclude(m: (p: string) => boolean, relPosix: string): boolean {
+  if (m(relPosix)) return true;
+  for (let i = relPosix.indexOf('/'); i > 0; i = relPosix.indexOf('/', i + 1)) {
+    if (m(relPosix.slice(0, i))) return true;
+  }
+  return false;
+}
+
 export class EnvIndexer {
   private traceignore: TraceignoreMatcher;
   private gitignore: GitignoreMatcher | undefined;
@@ -106,16 +122,21 @@ export class EnvIndexer {
         stale.push(row.id);
         continue;
       }
-      if (isExcluded?.(relPosix)) {
+      if (isExcluded && matchesExclude(isExcluded, relPosix)) {
         stale.push(row.id);
         continue;
       }
       try {
         const st = fs.statSync(path.resolve(this.rootPath, relPosix));
         if (!st.isFile()) stale.push(row.id);
-      } catch {
-        // ENOENT / EACCES — gone from disk, retire the row.
-        stale.push(row.id);
+      } catch (err) {
+        // Only confirmed deletions retire the row. Permission / transient
+        // I/O errors (EACCES, EMFILE, stale NFS handles) must never turn
+        // into data deletion — mirrors reconcileSubprojectIndex
+        // (src/subproject/reconcile-index.ts). EACCES rows stay until the
+        // path is readable again, when the hash gate re-indexes them.
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'ENOENT' || code === 'ENOTDIR') stale.push(row.id);
       }
     }
     return stale;

@@ -6,9 +6,12 @@
  * against an explicit user ignore.
  *
  * Covers: ignore.patterns prune, .traceignore prune, .gitignore prune,
- * deleted-from-disk prune, and the negative (still-owned .env survives).
+ * deleted-from-disk prune, bare-directory `config.exclude` prune, and the
+ * negatives (still-owned .env survives — including under the DEFAULT
+ * `config.exclude`, which hides .env files from the code index and pins
+ * the `isEnvFilePattern` filter).
  */
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -35,15 +38,24 @@ afterEach(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-function makePipeline(store: Store, ignorePatterns: string[] = []) {
+function makePipeline(store: Store, opts: { ignorePatterns?: string[]; exclude?: string[] } = {}) {
   const registry = new PluginRegistry();
   registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+  const { ignorePatterns = [], exclude = [] } = opts;
   const config = TraceMcpConfigSchema.parse({
     root: workDir,
     include: ['**/*.ts'],
-    exclude: [],
+    exclude,
     ignore: { patterns: ignorePatterns },
   });
+  return new IndexingPipeline(store, registry, config, workDir);
+}
+
+/** Pipeline with the DEFAULT config.exclude (hides .env files from the code index). */
+function makeDefaultPipeline(store: Store) {
+  const registry = new PluginRegistry();
+  registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+  const config = TraceMcpConfigSchema.parse({ root: workDir, include: ['**/*.ts'] });
   return new IndexingPipeline(store, registry, config, workDir);
 }
 
@@ -62,7 +74,7 @@ describe('TRA-2067 — ignored / deleted .env rows are dropped on reindex', () =
     expect(envKeys(store)).toContain('SECRET_KEY');
 
     // User ignores the file, then reindexes — rows must be gone.
-    await makePipeline(store, ['.env']).indexAll();
+    await makePipeline(store, { ignorePatterns: ['.env'] }).indexAll();
     expect(store.getFile('.env')).toBeUndefined();
     expect(envKeys(store)).toEqual([]);
     // Code rows are untouched by the env prune.
@@ -111,5 +123,54 @@ describe('TRA-2067 — ignored / deleted .env rows are dropped on reindex', () =
     writeFileSync(join(workDir, '.gitignore'), '.env\n');
     await makePipeline(store).indexAll();
     expect(store.getFile('.env')).toBeUndefined();
+  });
+
+  it('keeps a still-owned .env under the DEFAULT config.exclude', async () => {
+    // Pins the `isEnvFilePattern` filter in `findStaleEnvFileIds`: the
+    // default exclude list carries `**/.env` / `**/.env.*` (code-index
+    // hygiene), which must never count as "excluded" for the env collector.
+    // A regression there silently wipes the whole env index on reindex.
+    const store = new Store(initializeDatabase(':memory:'));
+
+    await makeDefaultPipeline(store).indexAll();
+    expect(store.getFile('.env')).toBeDefined();
+    expect(envKeys(store)).toContain('SECRET_KEY');
+
+    await makeDefaultPipeline(store).indexAll();
+    expect(store.getFile('.env'), 'default exclude must not count as excluded').toBeDefined();
+    expect(envKeys(store)).toContain('SECRET_KEY');
+  });
+
+  it('keeps env rows on transient stat errors (EACCES), unlike ENOENT', async () => {
+    // Only a confirmed deletion retires the row — an unreadable parent
+    // directory must not wipe an intact, still-owned file.
+    mkdirSync(join(workDir, 'locked'), { recursive: true });
+    writeFileSync(join(workDir, 'locked', '.env'), 'LOCKED_KEY=x\n');
+    const store = new Store(initializeDatabase(':memory:'));
+
+    await makePipeline(store).indexAll();
+    expect(store.getFile('locked/.env')).toBeDefined();
+
+    chmodSync(join(workDir, 'locked'), 0o000);
+    try {
+      await makePipeline(store).indexAll();
+      expect(store.getFile('locked/.env')).toBeDefined();
+    } finally {
+      chmodSync(join(workDir, 'locked'), 0o755);
+    }
+  });
+
+  it('drops env rows under a bare-directory config.exclude', async () => {
+    // fast-glob prunes whole directories for `exclude: ['secrets']`; the
+    // prune must reach the same verdict via ancestor-segment matching.
+    mkdirSync(join(workDir, 'secrets'), { recursive: true });
+    writeFileSync(join(workDir, 'secrets', '.env'), 'DEEP_SECRET=x\n');
+    const store = new Store(initializeDatabase(':memory:'));
+
+    await makePipeline(store).indexAll();
+    expect(store.getFile('secrets/.env')).toBeDefined();
+
+    await makePipeline(store, { exclude: ['secrets'] }).indexAll();
+    expect(store.getFile('secrets/.env')).toBeUndefined();
   });
 });
