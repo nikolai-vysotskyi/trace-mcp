@@ -9,9 +9,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
+import { openDatabaseWithWalRecovery } from '../shared/sqlite-open.js';
 import type { AuditLogger } from './decision-audit-log.js';
 import { MemoOperations } from './decision-store-memo-ops.js';
 import { ClusterOperations } from './decision-store-cluster-ops.js';
@@ -413,22 +414,12 @@ export class DecisionStore {
       memoHistoryLimit?: number;
     },
   ) {
-    // If a zero-byte WAL file exists on disk (e.g. from an abrupt truncate,
-    // incomplete checkpoint, or unlinked remnant), SQLite fails on open/pragma
-    // with SQLITE_IOERR_SHORT_READ because it cannot read the 32-byte WAL header.
-    // Clean up empty 0-byte sidecar files before initializing.
-    const walPath = `${dbPath}-wal`;
-    if (!opts?.readonly && fs.existsSync(walPath)) {
-      try {
-        if (fs.statSync(walPath).size === 0) {
-          fs.unlinkSync(walPath);
-        }
-      } catch {
-        /* best-effort */
-      }
-    }
-
-    this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
+    // TRA-2068 (GH#1445): never unlink a 0-byte WAL before opening — it is
+    // the normal state of a live WAL DB after a TRUNCATE checkpoint, and
+    // unlinking it under live connections diverges WAL inodes and corrupts
+    // the DB. Stale-WAL recovery (dead process, no -shm) happens inside
+    // openDatabaseWithWalRecovery, only after a SHORT_READ open failure.
+    this.db = openDatabaseWithWalRecovery(dbPath, { readonly: opts?.readonly ?? false });
     try {
       this.auditLogger = opts?.auditLogger ?? null;
       this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);

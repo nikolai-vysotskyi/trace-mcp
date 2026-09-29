@@ -49,8 +49,15 @@ function assertSafeSqliteIdentifier(name: string): void {
   }
 }
 
+/**
+ * Name of the sqlite-vec accelerator table over `symbol_embeddings`.
+ * Shared with the symbol-delete path (SymbolRepository removes vec rows for
+ * deleted symbols without loading the extension — vec0 has no FK to follow).
+ */
+export const VEC_TABLE_NAME = 'vec_symbol_embeddings';
+
 export class Vec0Index {
-  private readonly table = 'vec_symbol_embeddings';
+  private readonly table = VEC_TABLE_NAME;
   private dim: number | null = null;
   private ready = false;
 
@@ -120,6 +127,113 @@ export class Vec0Index {
       this.db.prepare(`DELETE FROM ${this.table} WHERE symbol_id = ?`).run(BigInt(id));
     } catch {
       /* ignore — stale accelerator row is harmless vs the canonical BLOB table */
+    }
+  }
+
+  /**
+   * Delete many accelerator rows at once (GH#1447: the symbol-delete path).
+   * No-ops when the table was never created. Never throws — a vec0 hiccup
+   * must never break indexing; residual staleness self-heals on the next
+   * BlobVectorStore open via syncVecIndex.
+   */
+  deleteMany(ids: number[]): void {
+    if (ids.length === 0) return;
+    if (!this.tableExists()) return;
+    try {
+      // TRA-1005: chunk — one `IN (?,...)` over the full array tops
+      // SQLITE_MAX_VARIABLE_NUMBER past ~32k symbols.
+      const CHUNK = 900;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        // vec0 integer pks must be bound as BigInt (see insert()).
+        this.db
+          .prepare(`DELETE FROM ${this.table} WHERE symbol_id IN (${placeholders})`)
+          .run(...chunk.map((id) => BigInt(id)));
+      }
+    } catch {
+      /* see delete() */
+    }
+  }
+
+  /** True when the vec0 table exists in this database. */
+  private tableExists(): boolean {
+    try {
+      const row = this.db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`)
+        .get(this.table);
+      return row !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Accelerator rows whose symbol no longer exists (GH#1447). Counts against
+   * `symbols` (not the BLOB table) so FK-OFF windows that orphaned BLOB rows
+   * too are still detected. Returns 0 when the table is absent/unreadable.
+   */
+  countOrphans(): number {
+    if (!this.tableExists()) return 0;
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM ${this.table} WHERE symbol_id NOT IN (SELECT id FROM symbols)`,
+        )
+        .get() as { c: number } | undefined;
+      return row?.c ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Cheap existence probe for the sync fast path — LIMIT 1, no full scan. */
+  hasOrphans(): boolean {
+    if (!this.tableExists()) return false;
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT 1 AS one FROM ${this.table} WHERE symbol_id NOT IN (SELECT id FROM symbols) LIMIT 1`,
+        )
+        .get();
+      return row !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Canonical BLOB rows with no accelerator row. Returns -1 when unknown (no
+   * vec table yet, or the vec0 module refuses the membership scan) — the
+   * caller then falls back to a full backfill.
+   */
+  countMissing(): number {
+    if (!this.tableExists()) return -1;
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM symbol_embeddings WHERE symbol_id NOT IN (SELECT symbol_id FROM ${this.table})`,
+        )
+        .get() as { c: number } | undefined;
+      return row?.c ?? -1;
+    } catch {
+      return -1;
+    }
+  }
+
+  /**
+   * Delete every accelerator row whose symbol no longer exists. Returns the
+   * number of rows removed (0 when absent/unreadable).
+   */
+  pruneOrphans(): number {
+    if (!this.tableExists()) return 0;
+    try {
+      const info = this.db
+        .prepare(`DELETE FROM ${this.table} WHERE symbol_id NOT IN (SELECT id FROM symbols)`)
+        .run();
+      return info.changes;
+    } catch {
+      return 0;
     }
   }
 

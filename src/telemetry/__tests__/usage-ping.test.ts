@@ -10,6 +10,7 @@ vi.mock('../../config.js', () => ({ loadGlobalConfigRaw: () => globalConfig }));
 import fs from 'node:fs';
 import {
   printTelemetryNoticeOnce,
+  readDaemonReliabilityCounters,
   recordDaemonCleanStop,
   recordDaemonStart,
   recordUsagePingClient,
@@ -333,7 +334,7 @@ describe('daemon reliability counters (TRA-671)', () => {
   it('counts a start, and counts the previous run as unclean when no clean stop was recorded', () => {
     const store = statefulFs(null);
 
-    recordDaemonStart(CONFIGURED_ENV);
+    expect(recordDaemonStart(CONFIGURED_ENV)).toBe(false);
     expect(store.read()).toMatchObject({
       daemonStarts: 1,
       daemonUncleanStops: 0,
@@ -341,18 +342,19 @@ describe('daemon reliability counters (TRA-671)', () => {
     });
 
     // Daemon dies to SIGKILL — no clean-stop record — and starts again.
-    recordDaemonStart(CONFIGURED_ENV);
+    expect(recordDaemonStart(CONFIGURED_ENV)).toBe(true);
     expect(store.read()).toMatchObject({ daemonStarts: 2, daemonUncleanStops: 1 });
+    expect(readDaemonReliabilityCounters(CONFIGURED_ENV)).toEqual({ starts: 2, uncleanStops: 1 });
   });
 
   it('does not count a start that followed a graceful shutdown', () => {
     const store = statefulFs(null);
 
-    recordDaemonStart(CONFIGURED_ENV);
+    expect(recordDaemonStart(CONFIGURED_ENV)).toBe(false);
     recordDaemonCleanStop(CONFIGURED_ENV);
     expect(store.read().daemonRunning).toBe(false);
 
-    recordDaemonStart(CONFIGURED_ENV);
+    expect(recordDaemonStart(CONFIGURED_ENV)).toBe(false);
     expect(store.read()).toMatchObject({ daemonStarts: 2, daemonUncleanStops: 0 });
   });
 

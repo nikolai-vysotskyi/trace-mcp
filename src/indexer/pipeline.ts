@@ -387,6 +387,11 @@ export interface ReconcilableFileRow {
  * Rows kept regardless of scope:
  *   - phantom/external package rows (no on-disk path by construction);
  *   - `.env` rows, which `EnvIndexer` writes on its own pass after this one.
+ *     Stale env rows (newly ignored via `ignore.patterns` / `.traceignore` /
+ *     `.gitignore`, descendant-owned, or deleted from disk) are retired by
+ *     `EnvIndexer.findStaleEnvFileIds` in `reconcileScope` below and at the
+ *     end of every env pass — see TRA-2067 (GH#1450). The exemption here only
+ *     protects env files the collector still owns.
  *
  * Refuses to act on a scope it cannot trust — an empty walk (glob failure,
  * unreadable root) or one truncated at `security.max_files`, where "not in
@@ -934,6 +939,17 @@ export class IndexingPipeline {
         { source: discovery.source },
         'Incremental discovery: zero changes — skipping pipeline',
       );
+      // TRA-2067 (GH#1450): this path never reconciles scope, so a newly
+      // ignored / deleted .env file would keep its keys in the index until
+      // the next periodic full walk. Pruning here is cheap (one scan over
+      // the handful of env rows, no writes when nothing is stale) and makes
+      // every indexAll converge. Fresh matchers: the ignore files may have
+      // changed since the last run built them (omitted args build fresh).
+      try {
+        new EnvIndexer(this.store, this.config, this.rootPath).pruneStaleEnvFiles();
+      } catch (err) {
+        logger.debug({ err }, 'Zero-change .env prune skipped (non-fatal)');
+      }
       // runPipeline's finally block is skipped on this path, but its global
       // cache invalidation is a contract callers rely on ("reindex ⇒ fresh
       // reads" — e.g. rows written outside the pipeline become visible).
@@ -1146,25 +1162,55 @@ export class IndexingPipeline {
       // maxFiles files is whole, not cut) and hides the pre-cap total.
       truncated,
     });
+    // TRA-2067 (GH#1450): `selectOutOfScopeFiles` exempts `language 'env'`
+    // rows, so an env file added to `ignore.patterns` / `.traceignore`,
+    // git-ignored afterwards, or deleted from disk kept its keys + comments
+    // in the index against an explicit user ignore. Retire exactly the env
+    // rows the collector no longer owns. Ungated on `truncated` / empty
+    // `inScope` on purpose: unlike the code scope above, this verdict never
+    // reads the walk — it re-applies the collector's own gates plus an
+    // existence check — so a cut-short walk cannot make it misfire.
+    let staleEnvIds: number[] = [];
+    try {
+      const envIndexer = new EnvIndexer(
+        this.store,
+        this.config,
+        this.rootPath,
+        this._traceignore,
+        this.gitignoreMatcher(),
+      );
+      staleEnvIds = envIndexer.findStaleEnvFileIds();
+    } catch (err) {
+      logger.debug({ err }, 'Stale .env lookup failed — keeping env rows (non-fatal)');
+    }
+    const allStale = [...staleIds, ...staleEnvIds];
+    // `_scopeRowsRemoved` keeps its code-only meaning: env rows carry no
+    // edges, so their removal must not force the edge-resolution pass the
+    // gate in `runPipeline` exists to trigger.
     this._scopeRowsRemoved = staleIds.length;
-    if (staleIds.length === 0) return 0;
+    if (allStale.length === 0) return 0;
     // TRA-1828: after an fs-drop storm the stale set can be thousands of
     // rows — one synchronous delete transaction over all of them held the
     // daemon's only thread (and /health with it). Chunked deletes with a
     // fair yield between chunks bound the stall to one chunk.
     const RECONCILE_DELETE_CHUNK = 200;
-    for (let i = 0; i < staleIds.length; i += RECONCILE_DELETE_CHUNK) {
+    for (let i = 0; i < allStale.length; i += RECONCILE_DELETE_CHUNK) {
       if (i > 0) await yieldToEventLoopFair();
-      const slice = staleIds.slice(i, i + RECONCILE_DELETE_CHUNK);
+      const slice = allStale.slice(i, i + RECONCILE_DELETE_CHUNK);
       this.store.db.transaction(() => {
         for (const id of slice) this.store.deleteFile(id);
       })();
     }
     logger.info(
-      { root: this.rootPath, removed: staleIds.length, inScope: inScope.length },
+      {
+        root: this.rootPath,
+        removed: allStale.length,
+        envRemoved: staleEnvIds.length,
+        inScope: inScope.length,
+      },
       'Dropped index rows for files no longer in scope',
     );
-    return staleIds.length;
+    return allStale.length;
   }
 
   /**

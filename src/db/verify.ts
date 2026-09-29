@@ -316,14 +316,35 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
         )
         .get() as { c: number };
       const orphans = r?.c ?? 0;
-      if (orphans === 0) {
+      // GH#1447: the vec0 accelerator has no FK — count its orphans too.
+      // Throws when sqlite-vec is absent (table unreadable); those rows are
+      // inert without ANN, so a failed probe just means "unknown", not clean.
+      let vecOrphans: number | null = null;
+      try {
+        if (tableExists(db, 'vec_symbol_embeddings')) {
+          const vr = db
+            .prepare(
+              'SELECT COUNT(*) AS c FROM vec_symbol_embeddings WHERE symbol_id NOT IN (SELECT id FROM symbols)',
+            )
+            .get() as { c: number };
+          vecOrphans = vr?.c ?? 0;
+        } else {
+          vecOrphans = 0;
+        }
+      } catch {
+        /* extension absent — vec0 not queryable */
+      }
+      const total = orphans + (vecOrphans ?? 0);
+      if (total === 0) {
         checks.push({ name: 'orphan_embeddings', status: 'ok', detail: 'No orphan embeddings' });
       } else {
+        const parts = [`${orphans} embedding row(s) reference deleted symbols`];
+        if ((vecOrphans ?? 0) > 0) parts.push(`${vecOrphans} vec0 orphan(s) eat ANN top-k`);
         checks.push({
           name: 'orphan_embeddings',
           status: 'warn',
-          detail: `${orphans} embedding row(s) reference deleted symbols`,
-          count: orphans,
+          detail: parts.join('; '),
+          count: total,
           suggested_repair: 'drop-orphans',
         });
       }

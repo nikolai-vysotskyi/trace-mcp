@@ -18,7 +18,6 @@ updates:
     commit-message:
       prefix: chore(deps)
       prefix-development: chore(deps-dev)
-      include: scope
     ignore:
       # @types/node tracks the minimum supported runtime, not the latest: a
       # major bump would type-check against APIs that do not exist on the
@@ -82,7 +81,6 @@ updates:
     commit-message:
       prefix: chore(app-deps)
       prefix-development: chore(app-deps-dev)
-      include: scope
     ignore:
       # Vite 8 switches the default bundler to Rolldown, which fails on
       # @cosmos.gl/graph's transitive `gl-bench` dep (stricter CJS default
@@ -137,7 +135,6 @@ updates:
     commit-message:
       prefix: chore(vscode-deps)
       prefix-development: chore(vscode-deps-dev)
-      include: scope
     ignore:
       # Same reasoning as the root manifest: @types/node tracks the minimum
       # supported runtime declared in `engines.node` (>=22), not the latest.
@@ -179,7 +176,6 @@ updates:
       - github-actions
     commit-message:
       prefix: chore(ci)
-      include: scope
     groups:
       # codeql-action's init / analyze / upload-sarif steps MUST move in
       # lockstep: a mixed version pair fails CodeQL with

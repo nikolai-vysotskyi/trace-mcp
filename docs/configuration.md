@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Guide — .trace.json Reference"
 description: "Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional."
-updated: 2026-09-27
+updated: 2026-09-29
 ---
 
 # trace-mcp Configuration
@@ -453,7 +453,8 @@ Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for s
 | `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
 | `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
 | `ai.summarize_max_tokens` | `100` | Output-token budget per symbol summary — raise (e.g. `1024`) for reasoning models that otherwise return empty summaries (GH#1423) |
-| `ai.rerank_max_tokens` | `200` | Output-token budget per rerank call — same reasoning-model caveat; an empty rerank response degrades every semantic search to RRF order while still paying full rerank latency |
+| `ai.rerank_max_tokens` | `200` | Output-token budget per rerank call — same reasoning-model caveat; an empty rerank response degrades every semantic search to RRF order while still paying full rerank latency. Scaled up automatically as `max(base, n*6+32)` for large candidate lists (GH#1442) |
+| `ai.rerank_max_candidates` | `100` | Max documents sent to the LLM per rerank call — the RRF-fused head is kept, the tail fills back in RRF order so large limits still return full rows (GH#1442) |
 | `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
 | `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
 

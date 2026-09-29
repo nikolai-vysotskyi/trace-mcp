@@ -644,9 +644,12 @@ export class StdioSession {
           baseMs,
           totalMs,
           starting: readiness.starting,
+          busy: readiness.busy ?? false,
           healthRttMs: readiness.rttMs,
         },
-        'StdioSession: daemon is loaded but reachable — extending the proxy handshake deadline',
+        readiness.busy
+          ? 'StdioSession: daemon port is bound but /health timed out (event-loop stall) — extending the proxy handshake deadline'
+          : 'StdioSession: daemon is loaded but reachable — extending the proxy handshake deadline',
       );
       return;
     }

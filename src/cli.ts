@@ -13,6 +13,7 @@ import {
   checkDaemonRuntimeIntact,
   describeStopContext,
   ephemeralServeHttpRefusal,
+  getLaunchdLastExit,
   logPreviousExit,
   PID_REASSERT_INTERVAL_MS,
   reassertOwnDaemonPidFile,
@@ -21,7 +22,14 @@ import {
 } from './daemon/lifecycle.js';
 import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/exit-breadcrumb.js';
 import {
+  logUncleanStopDiagnosis,
+  readRecentStallAlerts,
+  STALL_ALERTS_FILENAME,
+  summarizeStallAlerts,
+} from './daemon/unclean-stop.js';
+import {
   printTelemetryNoticeOnce,
+  readDaemonReliabilityCounters,
   recordDaemonCleanStop,
   recordDaemonStart,
 } from './telemetry/usage-ping.js';
@@ -66,7 +74,12 @@ import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
-import { pruneCommand, pruneIndexDir, sweepTopLevelOrphanDbs } from './cli/prune.js';
+import {
+  pruneCommand,
+  pruneIndexDir,
+  sweepOrphanStatusSentinels,
+  sweepTopLevelOrphanDbs,
+} from './cli/prune.js';
 import { removeCommand } from './cli/remove.js';
 import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
@@ -177,6 +190,7 @@ import { buildProjectFilesQuery } from './api/project-files-query.js';
 import { parseProjectSecurityQuery } from './api/project-security-query.js';
 import { buildSymbolsSearchQuery } from './api/symbols-search-query.js';
 import { buildMemoryReport } from './daemon/memory-report.js';
+import { getTreeCacheStats } from './parser/tree-cache.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
@@ -1343,6 +1357,9 @@ program
     if (bindRefusal) {
       logger.error({ host, port }, bindRefusal);
       process.stderr.write(`${bindRefusal}\n`);
+      // TRA-2037: without this the refusal is a silent death — the pino line
+      // above is buffered and `process.exit()` can discard it.
+      noteDaemonShutdownReason('bind-host-refusal');
       process.exit(1);
     }
     if (!isLoopbackHost(host)) {
@@ -3136,16 +3153,25 @@ program
       if (req.method === 'GET' && url.pathname === '/debug/memory') {
         // TRA-2017: aggregate live session-journal pressure (the byte-capped
         // dedup store that dominates per-session heap on busy daemons).
+        // TRA-2061: also keep the per-session rows — the totals above can't
+        // tell "ten quiet sessions" from "one runaway session".
         let sessionJournalEntries = 0;
         let sessionJournalCompactBytes = 0;
-        for (const handle of sessionHandles.values()) {
+        const sessionJournals: Array<{ sessionId: string; entries: number; compactBytes: number }> =
+          [];
+        for (const [sid, handle] of sessionHandles) {
           try {
-            sessionJournalEntries += handle.journal.getTotalEntries();
-            sessionJournalCompactBytes += handle.journal.getCompactBytes();
+            const entries = handle.journal.getTotalEntries();
+            const compactBytes = handle.journal.getCompactBytes();
+            sessionJournalEntries += entries;
+            sessionJournalCompactBytes += compactBytes;
+            sessionJournals.push({ sessionId: sid, entries, compactBytes });
           } catch {
             /* a closing session's journal must not break diagnostics */
           }
         }
+        const wakeSizes = projectManager.getWakeBookkeepingSizes();
+        const treeStats = getTreeCacheStats();
         const report = buildMemoryReport({
           clients,
           sseConnections,
@@ -3161,6 +3187,14 @@ program
           resourcePoolEntries: resourcePool.getTrackedProjectCount(),
           sessionJournalEntries,
           sessionJournalCompactBytes,
+          sessionJournals,
+          loadedProjects: projectManager
+            .listProjects()
+            .map((p) => ({ root: p.root, status: p.status })),
+          descendantWakeEntries: wakeSizes.descendantWakeEntries,
+          stallWarnedRoots: wakeSizes.stallWarnedRoots,
+          treeCacheEntries: treeStats.entries,
+          treeCacheApproxBytes: treeStats.approxBytes,
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(report));
@@ -4049,7 +4083,23 @@ program
       // start would also leave the "running" flag set, so the next real start
       // would report an unclean stop that never happened — and the bind race is
       // exactly the situation this counter exists to measure.
-      recordDaemonStart();
+      const wasUncleanStart = recordDaemonStart();
+      if (wasUncleanStart) {
+        // TRA-2037: the previous run died without running a shutdown handler
+        // (SIGKILL, native crash, power loss), so daemon.log holds no reason —
+        // only the vitals trajectory before the gap. Log one warn carrying
+        // everything knowable post-mortem: counters, launchd's record, and the
+        // stall watchdog's death breadcrumb, if it fired. Only the process
+        // that won the bind race gets here, so a bind-race loser never logs
+        // a diagnosis for a death it did not inherit.
+        const counters = readDaemonReliabilityCounters();
+        logUncleanStopDiagnosis({
+          daemonStarts: counters.starts,
+          daemonUncleanStops: counters.uncleanStops,
+          launchdExit: getLaunchdLastExit(),
+          stallSummary: summarizeStallAlerts(readRecentStallAlerts()),
+        });
+      }
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
       // process, so a single poisoning event used to disarm the guard for the
       // rest of this daemon's life. Re-assert it periodically; the write is
@@ -4084,7 +4134,7 @@ program
         }
         try {
           stallWatchdog = new StallWatchdog({
-            alertFile: path.join(INDEX_DIR, 'stall-alerts.jsonl'),
+            alertFile: path.join(INDEX_DIR, STALL_ALERTS_FILENAME),
             checkIntervalMs: 1000,
             alertAfterMs: numEnv('TRACE_MCP_STALL_ALERT_MS', 10_000),
             fatalAfterMs: numEnv('TRACE_MCP_STALL_FATAL_MS', 180_000),
@@ -4288,6 +4338,33 @@ program
             }
           } catch (err) {
             logger.warn({ err }, 'sweepTopLevelOrphanDbs failed (non-fatal)');
+          }
+          try {
+            // TRA-2062: same story one dir over — status sentinels of razed
+            // workdirs were never removed by any deregistration path, so
+            // STATUS_DIR grew 3–4 files per agent run with no observer. The
+            // per-root deleter (removeProjectArtifacts/sweepMissingRoots)
+            // covers new removals; this gated orphan sweep drains the backlog
+            // (hash with no registry root and no index DB, past the TTL).
+            const statusResult = sweepOrphanStatusSentinels();
+            if (statusResult.removed.length > 0) {
+              logger.info(
+                { removedSentinels: statusResult.removed },
+                `Deleted ${statusResult.removed.length} orphaned status sentinel(s)`,
+              );
+            } else if (statusResult.scannedOrphans > 0) {
+              logger.info(
+                {
+                  orphanSentinels: statusResult.scannedOrphans,
+                  retainedWithinTtl: statusResult.retainedWithinTtl,
+                },
+                `Orphan status sweep: ${statusResult.scannedOrphans} orphaned sentinel(s) within TTL, nothing to delete`,
+              );
+            } else {
+              logger.debug('Orphan status sweep: no orphaned status sentinels present');
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepOrphanStatusSentinels failed (non-fatal)');
           }
           // TRA-527: same story one store over — subproject auto-sync wrote a
           // permanent row into the *global* topology DB per run workdir, and no

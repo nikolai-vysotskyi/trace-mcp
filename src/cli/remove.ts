@@ -13,6 +13,7 @@ import { hasLiveHolderOrUnknown, releaseDbHolder } from '../db-holders.js';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import { findProjectRoot } from '../project-root.js';
 import { findParentProject, getProject, listProjects, unregisterProject } from '../registry.js';
+import { deleteStatusSentinelsForRoot } from '../server/heartbeat.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { deleteDbFamily } from '../utils/db-family.js';
 
@@ -104,6 +105,15 @@ export const removeCommand = new Command('remove')
     // Unregister
     unregisterProject(entry.root);
 
+    // TRA-2062: heartbeat/status/consulted sentinels are per-root — a removed
+    // project must not keep its STATUS_DIR files. A still-live server
+    // recreates its own within one flush interval.
+    try {
+      deleteStatusSentinelsForRoot(entry.root);
+    } catch {
+      /* best-effort */
+    }
+
     // Report
     if (opts.json) {
       console.log(
@@ -189,6 +199,12 @@ async function handleRemoveFromMultiRoot(
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
+    // TRA-2062: parent row is gone — drop its sentinels (best-effort).
+    try {
+      deleteStatusSentinelsForRoot(parent.root);
+    } catch {
+      /* best-effort */
+    }
 
     if (opts.json) {
       console.log(
@@ -226,6 +242,13 @@ async function handleRemoveFromMultiRoot(
     cleanTopology(parent.root);
     removeProjectConfig(parent.root);
     unregisterProject(parent.root);
+    // TRA-2062: parent row is gone — drop its sentinels. The excluded child
+    // keeps its own: it still exists on disk and may be live.
+    try {
+      deleteStatusSentinelsForRoot(parent.root);
+    } catch {
+      /* best-effort */
+    }
 
     if (opts.json) {
       console.log(
@@ -264,6 +287,12 @@ async function handleRemoveFromMultiRoot(
   cleanTopology(parent.root);
   removeProjectConfig(parent.root);
   unregisterProject(parent.root);
+  // TRA-2062: parent row is gone — drop its sentinels (see above).
+  try {
+    deleteStatusSentinelsForRoot(parent.root);
+  } catch {
+    /* best-effort */
+  }
 
   if (opts.json) {
     console.log(

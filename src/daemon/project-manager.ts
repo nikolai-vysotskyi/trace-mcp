@@ -1790,6 +1790,19 @@ export class ProjectManager {
   }
 
   /**
+   * Sizes of the small daemon-lifetime bookkeeping maps — surfaced via
+   * `GET /debug/memory` (TRA-2061). Both are bounded in practice
+   * (descendant-wake keys are registered nested roots, stall roots drain on
+   * recovery), so these counters are a tripwire, not a breakdown.
+   */
+  getWakeBookkeepingSizes(): { descendantWakeEntries: number; stallWarnedRoots: number } {
+    return {
+      descendantWakeEntries: this.lastDescendantWake.size,
+      stallWarnedRoots: this.warnedStallRoots.size,
+    };
+  }
+
+  /**
    * Record a request/watcher touch for `root`, resetting its idle-unload
    * clock. Call this at every point that routes work to a specific project
    * (session connect/close, REST reindex-file, watcher-driven reindex, etc —

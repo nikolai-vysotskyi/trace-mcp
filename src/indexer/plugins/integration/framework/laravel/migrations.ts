@@ -103,8 +103,12 @@ function extractSchemaCreate(
   timestamp: string | undefined,
   migrations: RawMigration[],
 ): void {
+  // GH#1444: closures may declare a return type
+  // (`function (Blueprint $table): void`) and/or `static` — both common in
+  // `strict_types` projects. The return type never contains `{`, so exclude
+  // it from the match instead of expecting `{` right after `)`.
   const regex =
-    /Schema::create\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
+    /Schema::create\s*\(\s*['"]([^'"]+)['"]\s*,\s*(?:static\s+)?function\s*\([^)]*\)\s*(?::\s*[^{]+?)?\{([\s\S]*?)\}\s*\)/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
@@ -128,7 +132,7 @@ function extractSchemaTable(
   migrations: RawMigration[],
 ): void {
   const regex =
-    /Schema::table\s*\(\s*['"]([^'"]+)['"]\s*,\s*function\s*\([^)]*\)\s*\{([\s\S]*?)\}\s*\)/g;
+    /Schema::table\s*\(\s*['"]([^'"]+)['"]\s*,\s*(?:static\s+)?function\s*\([^)]*\)\s*(?::\s*[^{]+?)?\{([\s\S]*?)\}\s*\)/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {

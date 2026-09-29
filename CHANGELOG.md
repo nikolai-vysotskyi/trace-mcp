@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.4...v3.34.5) (2026-09-29)
+
+
+### Bug Fixes
+
+* **daemon:** per-session/project breakdown in GET /debug/memory (TRA-2061) ([#1451](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1451)) ([3a7511d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a7511d392dfbd4cf7efddb2cc0f577100472db5))
+* **db:** stop unlinking live 0-byte WAL on open (TRA-2068) ([#1456](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1456)) ([21097ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/21097eccbd2081258af1fd626b428cc581d40063))
+* **embeddings:** clean vec0 orphans on symbol delete + two-way sync (TRA-2070) ([#1454](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1454)) ([d6459c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6459c76cf342275bf83102a10afb43eeb950fe8))
+* **indexer:** drop cache/.reasoning_caps_*.tmp hot-churn siblings (TRA-2057) ([#1446](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1446)) ([1faefb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1faefb2088b16f359092786e44331057614a6049))
+* **indexer:** drop ignored/deleted .env rows on reindex (TRA-2067) ([#1455](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1455)) ([b49bf82](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b49bf823efe5e2727eec5436155ece1585167a39))
+* **indexer:** per-project framework cache + migration closure return types (TRA-2069) ([#1458](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1458)) ([fbd08e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fbd08e72a7f6c6b7e9e63c5c7e5d652dfc6aab0c))
+* **prune:** canonical-only registry matching + orphan holders sweep (TRA-2055) ([#1443](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1443)) ([f3dc07c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f3dc07cde268d5afdc940c5201de157bc100746d))
+* **reranker,proxy:** numbered scores + scaled budget + busy-stall extension (TRA-2071) ([#1457](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1457)) ([db683c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db683c70e4117b969730eafa789ebdf1a3d3a55d))
+* **status:** clean heartbeat files of removed projects (TRA-2062) ([#1452](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1452)) ([5460392](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54603926f155ecc8010ff93168c8381cee1de4aa))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-29, second pass, threads silent, sweep clean (TRA-2082) ([#1460](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1460)) ([15de058](https://github.com/nikolai-vysotskyi/trace-mcp/commit/15de05877fb14c3296a890d4cd7c073905c519d0))
+* **ops:** day pass 2026-09-29, third pass, threads silent, sweep clean (TRA-2084) ([#1461](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1461)) ([fce4d76](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fce4d76f87b8bc0ae1bd07a3cdd45f0b534c2f75))
+* **ops:** day pass 2026-09-29, threads silent, sweep 1 collision (TRA-2079) ([#1459](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1459)) ([756b26d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/756b26d51ab62ed947ac8314f02fd54f2b224228))
+
+## [3.34.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.3...v3.34.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* **daemon:** last-will diagnosis on unclean start (TRA-2037) ([#1432](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1432)) ([707ddfb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/707ddfbce62a7e54ab97a5bc9cb325ded5717e72))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-28, second pass, threads silent, sweep clean (TRA-2049) ([#1439](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1439)) ([abcca8f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/abcca8f75b036929022a7ca5003f457bf002d6a3))
+
 ## [3.34.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.2...v3.34.3) (2026-09-28)
 
 
