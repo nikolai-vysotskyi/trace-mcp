@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.5...v3.34.6) (2026-09-30)
+
+
+### Bug Fixes
+
+* **daemon:** reindex-file lock contention returns 503 + warn with holder attribution (TRA-2091) ([#1462](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1462)) ([a71f162](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a71f162791082c59fa241a59903ad377e3a44bb8))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-28, threads silent, sweep clean (TRA-2045) ([#1438](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1438)) ([4e6ad42](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e6ad42c337e21655c45a8fdf48dc8b51abec005))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group across 1 directory with 6 updates ([#1466](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1466)) ([0dc3682](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0dc3682d3b8460dc771ed18d219ea49841b37f73))
+* **ci:** bump the github-actions-minor-patch group across 1 directory with 3 updates ([#1436](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1436)) ([edc8479](https://github.com/nikolai-vysotskyi/trace-mcp/commit/edc84798cadbd49f2afa133410be9587baa7b525))
+* **deps-dev:** bump the development-minor-patch group across 1 directory with 8 updates ([#1435](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1435)) ([fa13845](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fa138455930f2ec056c7a068fc2ce4e756dbeca7))
+* **deps:** bump the production-minor-patch group across 1 directory with 4 updates ([#1433](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1433)) ([1480f10](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1480f10b706e5968c391469100a95aedf2e5990b))
+* **vscode-deps-dev:** bump the development-minor-patch group across 1 directory with 3 updates ([#1437](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1437)) ([794c919](https://github.com/nikolai-vysotskyi/trace-mcp/commit/794c91975d2955ac935a22338c936e21299fcd90))
+
+
+### CI/CD
+
+* **dependabot:** drop include scope so titles parse as conventional commits (TRA-2097) ([#1464](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1464)) ([0ff5a1d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ff5a1dd1b473875c2a2e08e4ce1a83d1a95ac54))
+
 ## [3.34.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.4...v3.34.5) (2026-09-29)
 
 
