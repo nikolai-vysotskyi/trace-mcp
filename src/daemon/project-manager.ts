@@ -955,24 +955,51 @@ export class ProjectManager {
             const indexed = result?.indexed ?? 0;
             const skippedRows = result?.skipped ?? 0;
             const skippedHash = indexed === 0 && skippedRows > 0;
+            // TRA-2095: an aborted batch (project stopped/unloaded, ephemeral
+            // root vanished mid-batch) is one expected event, not N per-file
+            // failures — field case: 290 error lines for a single vanished
+            // /private/tmp root. One warn summary; genuine (non-abort) errors
+            // keep the per-file error lines below.
+            // NB: the null guard is load-bearing, not style — batches without
+            // errors must never resolve the IndexAbortedError binding, because
+            // test doubles of pipeline.js routinely omit that re-export
+            // (production always provides it via pipeline.ts).
+            const batchAborted =
+              watchErr !== undefined && watchErr !== null && watchErr instanceof IndexAbortedError;
+            if (batchAborted) {
+              logger.warn(
+                {
+                  event: 'reindex-file',
+                  project: projectRoot,
+                  pathSource: 'watcher',
+                  fileCount: toIndex.length,
+                  indexed: 0,
+                  elapsedMs,
+                  err: String(watchErr),
+                },
+                'reindex-file batch aborted (non-fatal — root stopped or vanished mid-batch)',
+              );
+            }
             for (const p of toIndex) {
               const relPosix = toRel(p);
               if (watchErr) {
-                logger.error(
-                  {
-                    event: 'reindex-file',
-                    project: projectRoot,
-                    path: relPosix,
-                    pathSource: 'watcher',
-                    skippedRecent: false,
-                    skippedHash: false,
-                    indexed: 0,
-                    elapsedMs,
-                    err: watchErr,
-                    error: String(watchErr),
-                  },
-                  'reindex-file telemetry (error)',
-                );
+                if (!batchAborted) {
+                  logger.error(
+                    {
+                      event: 'reindex-file',
+                      project: projectRoot,
+                      path: relPosix,
+                      pathSource: 'watcher',
+                      skippedRecent: false,
+                      skippedHash: false,
+                      indexed: 0,
+                      elapsedMs,
+                      err: watchErr,
+                      error: String(watchErr),
+                    },
+                    'reindex-file telemetry (error)',
+                  );
+                }
                 stats.record({
                   pathSource: 'watcher',
                   skippedRecent: false,
