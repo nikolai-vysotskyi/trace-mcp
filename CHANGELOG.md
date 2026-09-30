@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.6...v3.34.7) (2026-09-30)
+
+
+### Bug Fixes
+
+* **daemon:** collapse aborted watcher batch to one warn, drop per-file error lines (TRA-2095) ([#1468](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1468)) ([d567696](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d567696f106100e413d319ca0f62913806bbd310))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2105) ([#1467](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1467)) ([f4aeddb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f4aeddb6fd0ebc3cd9254f7ca5ba1cc4fdfd20e3))
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2110) ([#1475](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1475)) ([8b8113c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b8113c4cc97d048145e6432d0a52436aa386fb7))
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2112) ([#1476](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1476)) ([f9f92fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f9f92fba8e8c791a685e98ba552172276860fd41))
+
 ## [3.34.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.5...v3.34.6) (2026-09-30)
 
 
