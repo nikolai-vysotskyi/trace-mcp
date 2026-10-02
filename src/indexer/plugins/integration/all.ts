@@ -33,6 +33,7 @@ import { SQLAlchemyPlugin } from './orm/sqlalchemy/index.js';
 import { TypeORMPlugin } from './orm/typeorm/index.js';
 // --- messaging ---
 import { KafkaPlugin } from './messaging/kafka/index.js';
+import { TemporalPlugin } from './messaging/temporal/index.js';
 // --- realtime ---
 import { SocketIoPlugin } from './realtime/socketio/index.js';
 // --- state ---
@@ -157,6 +158,7 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new ZustandReduxPlugin(),
     // messaging
     new KafkaPlugin(),
+    new TemporalPlugin(),
     // realtime
     new SocketIoPlugin(),
     // testing

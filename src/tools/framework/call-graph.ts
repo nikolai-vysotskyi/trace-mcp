@@ -77,6 +77,10 @@ const CALL_EDGE_TYPES = new Set([
   'validates_with',
   'nest_injects',
   'graphql_resolves',
+  'temporal_executes_activity',
+  'temporal_sends_signal',
+  'temporal_executes_child_workflow',
+  'temporal_sends_update',
   // Import-based edges (fallback when no call edges exist)
   'esm_imports',
   'imports',

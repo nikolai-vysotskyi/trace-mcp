@@ -1,5 +1,5 @@
 ---
-title: "Supported Languages & Frameworks — 81 languages, 88 framework integrations"
+title: "Supported Languages & Frameworks — 81 languages, 89 framework integrations"
 description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages."
 updated: 2026-09-09
 ---
@@ -231,6 +231,7 @@ reference](tools-reference.md).
 | Plugin | What's extracted |
 |---|---|
 | **Celery** | Task definitions, routing, schedules |
+| **Temporal** | Workflow/activity/signal/query definitions, workflow → activity call edges (Python, TypeScript, Java, Go) |
 | **n8n** | Workflow nodes, connections, parameters, credentials |
 | **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
 | **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |

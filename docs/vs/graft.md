@@ -1,6 +1,6 @@
 ---
 title: "Graft Alternative: trace-mcp vs Graft for AI agents"
-description: "Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 88 frameworks, and AST refactoring."
+description: "Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 89 frameworks, and AST refactoring."
 updated: 2026-09-11
 ---
 
@@ -40,7 +40,7 @@ updated: 2026-09-11
           "name": "What is the core difference between Graft and trace-mcp?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Graft generates a plain-language knowledge graph by calling external LLMs (Anthropic Claude or OpenAI) and saving summaries as loose markdown files on disk. trace-mcp is a 100% local, deterministic code intelligence engine that indexes code in seconds using embedded Tree-sitter WASM and relational SQLite, with zero external API calls, zero token costs, 88 framework integrations, and AST refactoring write tools."
+            "text": "Graft generates a plain-language knowledge graph by calling external LLMs (Anthropic Claude or OpenAI) and saving summaries as loose markdown files on disk. trace-mcp is a 100% local, deterministic code intelligence engine that indexes code in seconds using embedded Tree-sitter WASM and relational SQLite, with zero external API calls, zero token costs, 89 framework integrations, and AST refactoring write tools."
           }
         },
         {
