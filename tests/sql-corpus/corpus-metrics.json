@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "description": "Canonical BrightChamps scripts/queries metrics — keep in sync with phase-2-spike-report.json via npm run sql-corpus:spike",
+  "corpus_root": "data-analytics-python/scripts/queries",
+  "files": 249,
+  "parse_status": { "ok": 196, "partial": 53, "failed": 0 },
+  "cte_count_ast": 1021,
+  "cte_count_regex_first_only": 171
+}

@@ -16,6 +16,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:recall": "vitest run tests/recall-harness/recall.test.ts",
+    "test:sql-corpus": "vitest run tests/sql-corpus/brightchamps-corpus.test.ts tests/sql-corpus/ast-spike.test.ts tests/sql-corpus/sql-plugin.test.ts tests/sql-corpus/sql-plugin-metadata.test.ts",
+    "sql-corpus:inventory": "node scripts/sql-corpus-inventory.mjs",
+    "sql-corpus:spike": "tsx scripts/sql-corpus-spike.ts",
+    "sql-partial:diagnostics": "tsx scripts/sql-partial-diagnostics.ts",
+    "sql-corpus:p2-inventory": "tsx scripts/sql-corpus-p2-inventory.ts",
+    "sql-python:loader-inventory": "tsx scripts/sql-python-loader-inventory.ts",
+    "sql-index:smoke": "tsx scripts/sql-index-smoke.ts",
+    "sql-index:cte-diff": "tsx scripts/sql-index-cte-diff.ts",
     "test:recall:report": "tsx tests/recall-harness/runner.ts",
     "eval:embeddings": "node scripts/embedding-eval/run.mjs",
     "typecheck": "tsc --noEmit",
@@ -54,7 +62,7 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@12.8.1",
   "license": "MIT",
   "author": "Nikolai Vysotskyi",
   "repository": {
@@ -154,39 +162,5 @@
     "adm-zip": ">=0.6.1",
     "body-parser": ">=2.3.0",
     "nanoid": ">=3.3.17"
-  },
-  "pnpm": {
-    "overrides": {
-      "zod": "4.3.6",
-      "qs": ">=6.16.0",
-      "protobufjs@<8.6.6": ">=8.6.6",
-      "hono": ">=4.13.5",
-      "@hono/node-server": ">=2.0.5",
-      "js-yaml": ">=4.3.2",
-      "undici": ">=8.9.0",
-      "vite": ">=8.0.16",
-      "esbuild": ">=0.28.1",
-      "sharp": ">=0.35.4",
-      "fast-uri": ">=4.1.4",
-      "ip-address": ">=10.5.1",
-      "adm-zip": ">=0.6.1",
-      "body-parser": ">=2.3.0",
-      "postcss": ">=8.5.23",
-      "nanoid": ">=3.3.17"
-    },
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "esbuild",
-      "simple-git-hooks"
-    ],
-    "supportedArchitectures": {
-      "os": [
-        "current"
-      ],
-      "cpu": [
-        "x64",
-        "arm64"
-      ]
-    }
   }
 }

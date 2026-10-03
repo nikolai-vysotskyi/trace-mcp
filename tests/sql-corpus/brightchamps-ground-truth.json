@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "corpus": "data-analytics-python/scripts/queries",
+  "trace_mcp_baseline_tag": "v3.34.6",
+  "fixtures": [
+    {
+      "id": "base_ownership",
+      "path": "booking_etl_queries/base_ownership.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "scoped", "line_start": 2 }, { "name": "emp_age", "line_start": 20 }],
+      "cte_reads": {
+        "scoped": [
+          { "relation": "brightchamps.demo_etl", "confidence": "deterministic" },
+          {
+            "relation": "{{SCHEMA_NAME}}.lead_assignment_etl",
+            "confidence": "template-dependent"
+          }
+        ],
+        "emp_age": [{ "relation": "prashashak.employees", "confidence": "deterministic" }]
+      },
+      "cte_deps": {},
+      "parameters": [":run_mode", ":id_list"],
+      "templates": ["{{SCHEMA_NAME}}"],
+      "aliases": [
+        { "alias": "de", "relation": "brightchamps.demo_etl" },
+        { "alias": "le", "relation": "{{SCHEMA_NAME}}.lead_assignment_etl" }
+      ],
+      "regex_baseline_ctes": ["scoped"]
+    },
+    {
+      "id": "incremental_list",
+      "path": "booking_etl_queries/incremental_list.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [
+        { "name": "base", "line_start": 2 },
+        { "name": "touched_parents", "line_start": 8 },
+        { "name": "keys", "line_start": 343 }
+      ],
+      "cte_reads": {
+        "base": [
+          {
+            "relation": "{{SCHEMA_NAME}}.booking_etl",
+            "confidence": "template-dependent"
+          }
+        ]
+      },
+      "cte_deps": {
+        "touched_parents": ["base"],
+        "keys": ["touched_parents"]
+      },
+      "parameters": [],
+      "templates": ["{{SCHEMA_NAME}}"],
+      "regex_baseline_ctes": ["base"]
+    },
+    {
+      "id": "payment_ledger",
+      "path": "accrued_deferred_monthly_ledger_queries/payment.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [],
+      "notes": "No WITH clause; nested SELECT/UNION only.",
+      "parameters": [":extract_start_dt", ":extract_end_dt"],
+      "templates": [],
+      "regex_baseline_ctes": []
+    },
+    {
+      "id": "penalty",
+      "path": "referral_penalty_classes_queries/penalty.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "touched", "line_start": 13 }, { "name": "ranked", "line_start": 20 }],
+      "features": ["jsonb", "window", "lateral"],
+      "parameters": [":start_date", ":end_date"],
+      "templates": [],
+      "regex_baseline_ctes": ["touched"]
+    },
+    {
+      "id": "lead_assignment",
+      "path": "lead_assignment_queries/lead_assignment.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "pay", "line_start": 2 }],
+      "features": ["distinct_on"],
+      "parameters": [":run_mode", ":id_list"],
+      "templates": [],
+      "regex_baseline_ctes": ["pay"]
+    },
+    {
+      "id": "row_calls_rigor_unnest",
+      "path": "Rigor Queries/calls_task_queries/row_calls_rigor_template.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "interval_lit", "window_over"],
+      "ctes": [
+        { "name": "day_order" },
+        { "name": "date_bounds" },
+        { "name": "team_data_raw" },
+        { "name": "team_data" },
+        { "name": "weekoff_source" },
+        { "name": "weekoff_exploded" },
+        { "name": "slots" },
+        { "name": "base" }
+      ],
+      "notes": "P2 inventory: UNNEST cluster (6/6 partial in corpus).",
+      "regex_baseline_ctes": ["day_order"]
+    },
+    {
+      "id": "us_calls_rigor_unnest",
+      "path": "Rigor Queries/calls_task_queries/us_calls_rigor_template.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "interval_lit", "window_over"],
+      "ctes": [
+        { "name": "day_order" },
+        { "name": "date_bounds" },
+        { "name": "team_data_raw" },
+        { "name": "team_data" },
+        { "name": "weekoff_source" },
+        { "name": "weekoff_exploded" },
+        { "name": "slots" },
+        { "name": "base" }
+      ],
+      "regex_baseline_ctes": ["day_order"]
+    },
+    {
+      "id": "uri_pool_historical_new_unnest",
+      "path": "uri_pool_historical_new.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "generate_series"],
+      "ctes": [
+        { "name": "onboarding" },
+        { "name": "merged_onboarding" },
+        { "name": "benchmark_classes" },
+        { "name": "default_benchmark_classes" },
+        { "name": "payment_computation" },
+        { "name": "date_series" },
+        { "name": "scbh_snapshots" },
+        { "name": "scbh_ranked" },
+        { "name": "scb_base" },
+        { "name": "scb_aggregated" },
+        { "name": "pc6_base" },
+        { "name": "credit_expiry_computation" },
+        { "name": "credit_expiry" },
+        { "name": "payment" },
+        { "name": "final_union" },
+        { "name": "final" },
+        { "name": "priority_map" }
+      ],
+      "regex_baseline_ctes": ["onboarding"]
+    },
+    {
+      "id": "uri_pool_historical_new_2906_unnest",
+      "path": "uri_pool_historical_new_2906.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "generate_series"],
+      "ctes": [
+        { "name": "onboarding" },
+        { "name": "merged_onboarding" },
+        { "name": "benchmark_classes" },
+        { "name": "default_benchmark_classes" },
+        { "name": "payment_computation" },
+        { "name": "date_series" },
+        { "name": "scbh_snapshots" },
+        { "name": "scbh_ranked" },
+        { "name": "scb_base" },
+        { "name": "scb_aggregated" },
+        { "name": "pc6_base" },
+        { "name": "credit_expiry_computation" },
+        { "name": "credit_expiry" },
+        { "name": "payment" },
+        { "name": "final_union" },
+        { "name": "first_payments" },
+        { "name": "final" },
+        { "name": "priority_map" }
+      ],
+      "regex_baseline_ctes": ["onboarding"]
+    },
+    {
+      "id": "uri_pool_incremental_unnest",
+      "path": "uri_pool_incremental.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "distinct_on", "double_colon_cast"],
+      "ctes": [
+        { "name": "benchmark_classes" },
+        { "name": "default_benchmark_classes" },
+        { "name": "onboarding" },
+        { "name": "yesterday_scb" },
+        { "name": "day_before_yesterday_scb" },
+        { "name": "merged_scbh" },
+        { "name": "merged_day_before_scbh" },
+        { "name": "payment_base" },
+        { "name": "payment_final" },
+        { "name": "new_pc6" },
+        { "name": "credit_expiry" },
+        { "name": "prev_uri_pool" },
+        { "name": "base" },
+        { "name": "ordered" },
+        { "name": "final_union" },
+        { "name": "priority_map" },
+        { "name": "final" }
+      ],
+      "regex_baseline_ctes": ["benchmark_classes"]
+    },
+    {
+      "id": "uri_pool_incremental_2906_unnest",
+      "path": "uri_pool_incremental_data_new_2906.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "partial",
+      "parse_status": "partial",
+      "features": ["unnest", "distinct_on", "double_colon_cast"],
+      "ctes": [
+        { "name": "benchmark_classes" },
+        { "name": "default_benchmark_classes" },
+        { "name": "onboarding" },
+        { "name": "yesterday_scb" },
+        { "name": "day_before_yesterday_scb" },
+        { "name": "merged_scbh" },
+        { "name": "merged_day_before_scbh" },
+        { "name": "payment_base" },
+        { "name": "payment_final" },
+        { "name": "new_pc6" },
+        { "name": "credit_expiry" },
+        { "name": "prev_uri_pool" },
+        { "name": "base" },
+        { "name": "base_scbh" },
+        { "name": "ordered" },
+        { "name": "first_payments" },
+        { "name": "final_union" },
+        { "name": "priority_map" },
+        { "name": "final" }
+      ],
+      "regex_baseline_ctes": ["benchmark_classes"]
+    }
+  ]
+}

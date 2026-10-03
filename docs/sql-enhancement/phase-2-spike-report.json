@@ -1,0 +1,19 @@
+{
+  "phase": 2,
+  "trace_mcp_version": "3.34.6",
+  "parser": "tree-sitter-sql (tree-sitter-wasm)",
+  "preprocessor": "template_mustache + python_format_braces + bind_param + pg_distinct_on_join + pg_materialized_cte + pg_ilike_to_like + pg_at_time_zone_fold",
+  "corpus_root": "/Users/ishansarkar/BrightChamps - Work/BitBucket/data-analytics-python/scripts/queries",
+  "elapsed_ms": 244,
+  "files": 249,
+  "parse_status": {
+    "ok": 196,
+    "partial": 53,
+    "failed": 0
+  },
+  "cte_count_ast": 1021,
+  "cte_count_regex_first_only": 171,
+  "baseline_inventory": "/Users/ishansarkar/BrightChamps - Work/BitBucket/trace-mcp/tests/sql-corpus/baseline-inventory.json",
+  "failures_sample": [],
+  "failure_total": 0
+}

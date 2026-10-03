@@ -1,0 +1,109 @@
+{
+  "corpus_root": "/Users/ishansarkar/BrightChamps - Work/BitBucket/data-analytics-python/scripts/queries",
+  "files": 249,
+  "features": [
+    {
+      "id": "recursive_cte",
+      "phase": "p2",
+      "pattern": "\\bWITH\\s+RECURSIVE\\b",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "returning",
+      "phase": "p2",
+      "pattern": "\\bRETURNING\\b",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "on_conflict",
+      "phase": "p2",
+      "pattern": "\\bON\\s+CONFLICT\\b",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "dollar_quote",
+      "phase": "p2",
+      "pattern": "\\$[a-zA-Z0-9_]*\\$",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "generate_series",
+      "phase": "p2",
+      "pattern": "\\bGENERATE_SERIES\\s*\\(",
+      "file_count": 17,
+      "parse_ok": 12,
+      "parse_partial": 5
+    },
+    {
+      "id": "unnest",
+      "phase": "p2",
+      "pattern": "\\bUNNEST\\s*\\(",
+      "file_count": 6,
+      "parse_ok": 0,
+      "parse_partial": 6
+    },
+    {
+      "id": "do_block",
+      "phase": "p2",
+      "pattern": "\\bDO\\s+\\$\\$",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "create_function",
+      "phase": "p2",
+      "pattern": "^\\s*CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "libpg_query_candidate",
+      "phase": "escalation",
+      "pattern": "\\bDISTINCT\\s+ON\\s*\\([^)]*::",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    },
+    {
+      "id": "trivial_invalid_sql",
+      "phase": "escalation",
+      "pattern": "^\\s*selec\\b",
+      "file_count": 0,
+      "parse_ok": 0,
+      "parse_partial": 0
+    }
+  ],
+  "files_with_features": {
+    "Rigor Queries/calls_task_queries/row_calls_rigor_template.sql": ["unnest"],
+    "Rigor Queries/calls_task_queries/us_calls_rigor_template.sql": ["unnest"],
+    "business_cost_temp_hub_operating_cost.sql": ["generate_series"],
+    "business_cost_temp_hub_rental_cost.sql": ["generate_series"],
+    "business_cost_temp_kaleyra_cost.sql": ["generate_series"],
+    "business_cost_temp_offline_marketing_cost.sql": ["generate_series"],
+    "business_cost_temp_operational_cost_pre_sales_cost.sql": ["generate_series"],
+    "business_cost_temp_zoom_cost.sql": ["generate_series"],
+    "sm_availabilty.sql": ["generate_series"],
+    "sm_availabilty_incremental.sql": ["generate_series"],
+    "student_course_churn_etl_historical.sql": ["generate_series"],
+    "student_course_churn_etl_historical_missed.sql": ["generate_series"],
+    "student_course_churn_pre_feb_active.sql": ["generate_series"],
+    "student_course_churn_pre_feb_completed.sql": ["generate_series"],
+    "teacher_utilization_queries/course_wise.sql": ["generate_series"],
+    "teacher_utilization_queries/region_wise.sql": ["generate_series"],
+    "uri_pool_historical.sql": ["generate_series"],
+    "uri_pool_historical_new.sql": ["generate_series", "unnest"],
+    "uri_pool_historical_new_2906.sql": ["generate_series", "unnest"],
+    "uri_pool_incremental.sql": ["unnest"],
+    "uri_pool_incremental_data_new_2906.sql": ["unnest"]
+  }
+}

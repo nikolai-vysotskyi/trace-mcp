@@ -1,0 +1,275 @@
+{
+  "benchmark_root": "/Users/ishansarkar/BrightChamps - Work/BitBucket/data-analytics-python",
+  "python_files_scanned": 892,
+  "pattern_totals": {
+    "read_sql_file": 52,
+    "render_sql_file": 11,
+    "load_query_sql": 26,
+    "load_sql_with_connectorx": 51,
+    "load_sql_with_benchmark": 7,
+    "sql_path_string": 87,
+    "path_join_sql": 1
+  },
+  "files_with_matches": 73,
+  "top_callers": [
+    {
+      "path": "scripts/teacher_hiring_metrics_etl.py",
+      "total": 13,
+      "load_sql_with_connectorx": 4,
+      "sql_path_string": 9
+    },
+    {
+      "path": "scripts/teacher_utilization/teacher_utilization_etl.py",
+      "total": 12,
+      "load_sql_with_connectorx": 4,
+      "sql_path_string": 8
+    },
+    {
+      "path": "scripts/unified_call_etl.py",
+      "total": 10,
+      "read_sql_file": 1,
+      "render_sql_file": 2,
+      "load_query_sql": 3,
+      "sql_path_string": 4
+    },
+    {
+      "path": "scripts/student_etl.py",
+      "total": 8,
+      "read_sql_file": 4,
+      "sql_path_string": 4
+    },
+    {
+      "path": "scripts/teacher_utilization/teacher_wise_logical_attr.py",
+      "total": 8,
+      "load_sql_with_connectorx": 4,
+      "sql_path_string": 4
+    },
+    {
+      "path": "scripts/lead_etl/extraction.py",
+      "total": 7,
+      "load_sql_with_connectorx": 7
+    },
+    {
+      "path": "scripts/uri_pool_etl_new_2906.py",
+      "total": 7,
+      "read_sql_file": 4,
+      "sql_path_string": 3
+    },
+    {
+      "path": "scripts/accrued_deferred/accrued_deferred_etl.py",
+      "total": 6,
+      "load_sql_with_benchmark": 6
+    },
+    {
+      "path": "scripts/demo_etl.py",
+      "total": 6,
+      "read_sql_file": 2,
+      "sql_path_string": 4
+    },
+    {
+      "path": "scripts/payment/payment_etl.py",
+      "total": 6,
+      "render_sql_file": 1,
+      "load_sql_with_connectorx": 5
+    },
+    {
+      "path": "scripts/paid_class_metrics_etl.py",
+      "total": 5,
+      "read_sql_file": 1,
+      "load_query_sql": 2,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/refund_etl.py",
+      "total": 5,
+      "read_sql_file": 2,
+      "sql_path_string": 2,
+      "path_join_sql": 1
+    },
+    {
+      "path": "services/sql_loader.py",
+      "total": 5,
+      "render_sql_file": 1,
+      "load_query_sql": 1,
+      "load_sql_with_connectorx": 2,
+      "load_sql_with_benchmark": 1
+    },
+    {
+      "path": "personal_space/optimization/student_etl_explain_probe.py",
+      "total": 4,
+      "sql_path_string": 4
+    },
+    {
+      "path": "scripts/address_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/demo_class_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/demo_project_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/expected_teacher_cost_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/lead_owner_attribution_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/paid_class_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/payment_attribution/payment_attribution_etl.py",
+      "total": 4,
+      "render_sql_file": 1,
+      "load_sql_with_connectorx": 3
+    },
+    {
+      "path": "scripts/reschedule_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/sm_availability.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/student_class_balance_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/teacher_utilization/teacher_lta_history_etl.py",
+      "total": 4,
+      "load_sql_with_connectorx": 2,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/uri_pool_etl.py",
+      "total": 4,
+      "read_sql_file": 1,
+      "sql_path_string": 3
+    },
+    {
+      "path": "scripts/uri_probability_etl.py",
+      "total": 4,
+      "load_query_sql": 4
+    },
+    {
+      "path": "services/incremental_source_guardrail.py",
+      "total": 4,
+      "render_sql_file": 3,
+      "load_sql_with_connectorx": 1
+    },
+    {
+      "path": "scripts/lead_assignment/lead_assignment_etl.py",
+      "total": 3,
+      "render_sql_file": 1,
+      "load_sql_with_connectorx": 2
+    },
+    {
+      "path": "scripts/marketing_etl/marketing_etl.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/rigor_alerts/leads_vs_dc_rigor_alerts.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/rigor_alerts/row_calls_rigor_alerts.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/rigor_alerts/us_calls_rigor_alerts.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "load_query_sql": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/student_churn_etl.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/student_course_churn_etl.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "scripts/teacher_etl.py",
+      "total": 3,
+      "read_sql_file": 1,
+      "sql_path_string": 2
+    },
+    {
+      "path": "docs/simulate_demo_incremental.py",
+      "total": 2,
+      "read_sql_file": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/accrued_deferred_etl_daily.py",
+      "total": 2,
+      "read_sql_file": 1,
+      "sql_path_string": 1
+    },
+    {
+      "path": "scripts/addons/addon_etl.py",
+      "total": 2,
+      "load_sql_with_connectorx": 2
+    },
+    {
+      "path": "scripts/booking_etl/extraction.py",
+      "total": 2,
+      "load_sql_with_connectorx": 2
+    }
+  ],
+  "phase4_edge_proposal": {
+    "type": "loads_sql",
+    "from": "python symbol or file",
+    "to": "scripts/queries/*.sql file node",
+    "resolution": "resolve string literal / Path(...) under repo root"
+  }
+}

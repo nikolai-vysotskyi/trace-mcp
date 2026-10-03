@@ -494,6 +494,9 @@ jobs:
       - name: Test (integration + daemon)
         run: pnpm exec vitest run tests/integration tests/daemon --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
+      - name: Test (sql corpus)
+        run: pnpm run test:sql-corpus
+
       - name: Job summary
         if: always()
         run: |
