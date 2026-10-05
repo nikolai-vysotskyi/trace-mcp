@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# trace-mcp-worktree v0.2.0
+# trace-mcp-worktree v0.3.0
 # trace-mcp WorktreeCreate / WorktreeRemove hook
 #
 # WorktreeCreate: ensures the *main* repo's index is ready, then exits.
 #   The serve command automatically detects the worktree and shares the main
 #   repo's DB — no separate full re-index needed.
 #
-# WorktreeRemove: no-op.  The main repo's DB is unaffected.
+# WorktreeRemove: asks a running daemon to drop the worktree's branch index
+#   (the copy of the main index the daemon keeps per live worktree, GH #1481).
+#   Best-effort: no daemon, no copy, or an old daemon — nothing happens, and
+#   the daemon's own GC removes the copy once the worktree is gone. The main
+#   repo's DB is never touched.
 #
 # Install: add to ~/.claude/settings.json or .claude/settings.local.json
 # See README.md for setup instructions.
@@ -103,8 +107,16 @@ case "$EVENT" in
     ;;
 
   WorktreeRemove|worktree_remove|remove)
-    # The main repo's DB is shared — do not delete it.
-    # Nothing to clean up.
+    # The main repo's DB is shared — do not delete it. Only the worktree's
+    # branch index goes; the daemon matches it by the sidecar it wrote.
+    if command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+      PORT="${TRACE_MCP_DAEMON_PORT:-3741}"
+      ENC=$(jq -rn --arg p "$WORKTREE_PATH" '$p|@uri' 2>/dev/null || true)
+      if [[ -n "$ENC" ]]; then
+        curl -sS --max-time 2 -o /dev/null -X DELETE \
+          "http://127.0.0.1:${PORT}/api/projects/worktree?project=${ENC}" 2>/dev/null || true
+      fi
+    fi
     ;;
 esac
 
