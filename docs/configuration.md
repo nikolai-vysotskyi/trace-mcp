@@ -168,7 +168,8 @@ the worktree delta re-indexed into it.
    a watcher batch takes (edge resolution and the deferred reconcile, embeddings and
    summaries when AI is on).
 3. **Serve.** While the copy is being built the session works as described above (main
-   index, `stale_on_branch`); its first calls wait up to `initial_wait_ms` for the copy.
+   index, `stale_on_branch`); its first calls wait for the copy, together up to
+   `initial_wait_ms` counted from the session's first call.
    From then on index tools answer from the copy — `stale_on_branch` is set only for a
    file edited after the copy last re-indexed it — and `get_index_health` reports
    `worktree.served_from: "branch_index"`. Session tools (journal, state, memory, pins,

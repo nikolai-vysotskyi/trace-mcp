@@ -92,7 +92,10 @@ const execFileAsync = promisify(execFile);
 export interface WorktreeIndexSettings {
   /** Master switch. Off: worktree sessions behave exactly as in #1483. */
   enabled: boolean;
-  /** How long the first calls of a session wait for a copy still being built. */
+  /**
+   * How long a session's first calls wait for a copy still being built,
+   * counted from the session's first call (one budget for all of them).
+   */
   initialWaitMs: number;
   /** How long a call waits for the delta re-check before answering anyway. */
   syncWaitMs: number;
@@ -764,7 +767,6 @@ interface Entry {
   link: WorktreeLink;
   current: BranchIndex | null;
   building: Promise<BranchIndex | null> | null;
-  buildStartedAt: number;
   retryAt: number;
   lastError: string | null;
 }
@@ -811,7 +813,16 @@ export class WorktreeIndexManager {
     const entry = this.entryFor(link);
     if (entry.current) entry.current.lastUsedAt = this.now();
     this.ensureBuilding(entry);
-    return { resolve: () => this.resolve(link).catch(() => null) };
+    // The session's first calls share one `initialWaitMs` budget, counted
+    // from its first call — not from when the build started, which may be
+    // long before (another session) or a while before (a slow client).
+    let waitUntil: number | null = null;
+    return {
+      resolve: () => {
+        waitUntil ??= this.now() + this.settings.initialWaitMs;
+        return this.resolve(link, waitUntil).catch(() => null);
+      },
+    };
   }
 
   private entryFor(link: WorktreeLink): Entry {
@@ -821,7 +832,6 @@ export class WorktreeIndexManager {
         link,
         current: null,
         building: null,
-        buildStartedAt: 0,
         retryAt: 0,
         lastError: null,
       };
@@ -830,8 +840,14 @@ export class WorktreeIndexManager {
     return entry;
   }
 
-  /** The ready copy for `link`, or null to answer from the canonical index. */
-  async resolve(link: WorktreeLink): Promise<WorktreeIndexTarget | null> {
+  /**
+   * The ready copy for `link`, or null to answer from the canonical index.
+   * While no copy is ready, waits for the build until `waitUntil`.
+   */
+  async resolve(
+    link: WorktreeLink,
+    waitUntil: number = this.now() + this.settings.initialWaitMs,
+  ): Promise<WorktreeIndexTarget | null> {
     if (!this.settings.enabled || this.stopped) return null;
     const entry = this.entryFor(link);
     const now = this.now();
@@ -846,8 +862,7 @@ export class WorktreeIndexManager {
     }
     const building = this.ensureBuilding(entry);
     if (!building) return null;
-    const remaining = entry.buildStartedAt + this.settings.initialWaitMs - now;
-    const built = await waitFor(building, remaining);
+    const built = await waitFor(building, waitUntil - now);
     return built && built.state === 'ready' ? built.target() : null;
   }
 
@@ -883,7 +898,6 @@ export class WorktreeIndexManager {
     const canonical = this.deps.getCanonical(entry.link.canonicalRoot);
     if (!canonical || canonical.status !== 'ready' || !canonical.db.open) return null;
     if (realpathOr(canonical.root) !== entry.link.canonicalRoot) return null;
-    entry.buildStartedAt = now;
     const building = this.build(entry, canonical, opts.reason ?? 'first_use')
       .catch((err) => {
         entry.lastError = String(err);

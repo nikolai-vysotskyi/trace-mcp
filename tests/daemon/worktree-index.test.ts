@@ -27,6 +27,7 @@ import {
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { beginReindex } from '../../src/indexer/reindex-inflight.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { ProgressState } from '../../src/progress.js';
 import { createServer } from '../../src/server/server.js';
@@ -143,8 +144,12 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  function manager(over: Partial<WorktreeIndexSettings> = {}): WorktreeIndexManager {
+  function manager(
+    over: Partial<WorktreeIndexSettings> = {},
+    now?: () => number,
+  ): WorktreeIndexManager {
     const m = new WorktreeIndexManager({
+      now,
       settings: {
         ...DEFAULT_WORKTREE_INDEX_SETTINGS,
         enabled: true,
@@ -416,6 +421,22 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     const outline = await call('get_outline', { path: 'src/lib.ts' });
     // No wait budget: this call is answered from the canonical index, flagged.
     expect(flagged(outline.json)).toContain('src/lib.ts');
+  });
+
+  it("counts the initial wait from the session's first call, not from the build start", async () => {
+    let clock = Date.now();
+    const m = manager({ initialWaitMs: 20_000 }, () => clock);
+    // Hold the copy before its backup step: the canonical index is "busy".
+    const release = beginReindex(main);
+    cleanups.push(release);
+    const call = await session(m);
+    // The session sat idle for a minute before its first call; the build it
+    // started is still running.
+    clock += 60_000;
+    setTimeout(release, 200);
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    expect(JSON.stringify(outline.json)).toContain('newName');
+    expect(flagged(outline.json)).toEqual([]);
   });
 
   it('refuses a delta above the limit and stays on the canonical index', async () => {
