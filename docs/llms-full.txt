@@ -4048,7 +4048,10 @@ Daemon-wide settings, in the global config:
 ```
 
 A copy costs disk about the size of the main index and, while loaded, one SQLite
-connection, a pipeline and a tool-host server in the daemon. Not covered: the stdio
+connection, a pipeline and a tool-host server in the daemon. When `max_loaded` copies are
+open, a new worktree takes the slot of the least recently used copy that has been idle for
+a minute; a copy serving a live session is never evicted, so the newcomer answers from the
+main index (flagged) and tries again 30 seconds later. Not covered: the stdio
 local fallback (no daemon) and a worktree registered as a project of its own keep the
 behaviour above; the Windows `WorktreeRemove` hook does not call the daemon (GC still
 removes the copy).

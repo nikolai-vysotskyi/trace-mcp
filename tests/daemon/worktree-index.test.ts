@@ -541,6 +541,83 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(dbFiles()).toEqual([]);
   });
 
+  describe('max_loaded', () => {
+    let wt2: string;
+    let clock: number;
+    beforeEach(() => {
+      wt2 = path.join(tmp, 'wt2');
+      git(main, 'worktree', 'add', '-q', '-b', 'feat2', wt2);
+      write(wt2, 'src/added2.ts', 'export function second() {}\n');
+      clock = Date.now();
+    });
+    const slotManager = () => manager({ maxLoaded: 1 }, { now: () => clock, slotWaitMs: 2_000 });
+    const served = async (call: Awaited<ReturnType<typeof session>>) =>
+      ((await call('get_index_health')).json.worktree as Json).served_from;
+
+    it('counts a copy still building against the limit', async () => {
+      const m = slotManager();
+      // Both builds start before either copy is ready.
+      const first = await session(m, wt);
+      const second = await session(m, wt2);
+      const answers = await Promise.all([served(first), served(second)]);
+      expect(answers.sort()).toEqual(['branch_index', 'canonical_index']);
+      expect(m.stats().loaded).toBe(1);
+    });
+
+    it('never evicts a copy serving a live session', async () => {
+      const m = slotManager();
+      const first = await session(m, wt);
+      expect(await served(first)).toBe('branch_index');
+      const second = await session(m, wt2);
+      expect(await served(second)).toBe('canonical_index');
+      expect(await served(first)).toBe('branch_index');
+      expect(m.stats().loaded).toBe(1);
+    });
+
+    it('retries soon after a refusal and takes the slot once the holder is idle', async () => {
+      const m = slotManager();
+      const first = await session(m, wt);
+      expect(await served(first)).toBe('branch_index');
+      const second = await session(m, wt2);
+      expect(await served(second)).toBe('canonical_index');
+      // Two minutes on: the first copy is idle, the refusal is behind us.
+      // (This session's initial wait is spent: it switches once the copy is
+      // ready, without waiting for it.)
+      clock += 2 * 60_000;
+      let answer = await served(second);
+      for (let i = 0; i < 100 && answer !== 'branch_index'; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        answer = await served(second);
+      }
+      expect(answer).toBe('branch_index');
+      expect(m.stats().loaded).toBe(1);
+    });
+
+    it('waits for an idle copy to finish its running call, then evicts it', async () => {
+      const m = slotManager();
+      const first = await session(m, wt);
+      expect(await served(first)).toBe('branch_index');
+      const entries = (m as unknown as { entries: Map<string, { current: BranchIndex }> }).entries;
+      const index = entries.get(wt)!.current;
+      let release!: () => void;
+      const held = new Promise<void>((r) => (release = r));
+      const handlers = (
+        index as unknown as { handle: { toolHandlers: Map<string, () => Promise<unknown>> } }
+      ).handle.toolHandlers;
+      handlers.set('slow', async () => {
+        await held;
+        return { content: [{ type: 'text', text: '{}' }] };
+      });
+      const running = index.run('slow', {});
+      clock += 2 * 60_000;
+      setTimeout(release, 200);
+      const second = await session(m, wt2);
+      expect(await served(second)).toBe('branch_index');
+      await running;
+      expect(m.stats().loaded).toBe(1);
+    });
+  });
+
   it('with the feature off behaves exactly like the canonical worktree session', async () => {
     const m = manager({ enabled: false });
     expect(m.routeFor(main, wt)).toBeNull();

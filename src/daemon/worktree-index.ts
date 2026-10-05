@@ -210,8 +210,20 @@ const CANONICAL_QUIET_WAIT_MS = 5_000;
 /** Retry delay after a failed build (git error, canonical not ready, …). */
 const BUILD_RETRY_MS = 60_000;
 
-/** Retry delay after a build refused by a size limit. */
+/** Retry delay after a build refused by a size limit (delta, disk). */
 const BUILD_REFUSED_RETRY_MS = 10 * 60_000;
+
+/**
+ * Retry delay after a build refused for want of a slot (`max_loaded`):
+ * short, a slot frees as soon as another copy goes idle.
+ */
+const SLOT_RETRY_MS = 30_000;
+
+/** A copy used this recently serves a live session: never evicted for another. */
+const LIVE_MS = 60_000;
+
+/** How long a build waits for an evictable copy's running calls to finish. */
+const SLOT_WAIT_MS = 5_000;
 
 /** Rebuild instead of re-indexing when more than this many files left the delta. */
 const REBUILD_REVERTED_MIN = 200;
@@ -405,6 +417,8 @@ export interface WorktreeIndexManagerDeps {
   dir?: string;
   /** Override of `CANONICAL_QUIET_WAIT_MS` (tests). */
   canonicalQuietWaitMs?: number;
+  /** Override of `SLOT_WAIT_MS` (tests). */
+  slotWaitMs?: number;
   /** Version stamped into the sidecar. A different version rebuilds. */
   version?: string;
   now?: () => number;
@@ -820,6 +834,11 @@ interface Entry {
   link: WorktreeLink;
   current: BranchIndex | null;
   building: Promise<BranchIndex | null> | null;
+  /**
+   * The build under way holds a `max_loaded` slot from the moment it got one
+   * until it ends, so concurrent builds cannot overshoot the limit.
+   */
+  slotReserved: boolean;
   retryAt: number;
   lastError: string | null;
 }
@@ -935,6 +954,7 @@ export class WorktreeIndexManager {
         link,
         current: null,
         building: null,
+        slotReserved: false,
         retryAt: 0,
         lastError: null,
       };
@@ -1021,14 +1041,20 @@ export class WorktreeIndexManager {
       })
       .finally(() => {
         entry.building = null;
+        entry.slotReserved = false;
       });
     entry.building = building;
     return building;
   }
 
-  private refuse(entry: Entry, reason: string, detail: Record<string, unknown>): null {
+  private refuse(
+    entry: Entry,
+    reason: string,
+    detail: Record<string, unknown>,
+    retryMs = BUILD_REFUSED_RETRY_MS,
+  ): null {
     entry.lastError = reason;
-    entry.retryAt = this.now() + BUILD_REFUSED_RETRY_MS;
+    entry.retryAt = this.now() + retryMs;
     logger.info(
       { worktree: entry.link.worktreeRoot, reason, ...detail },
       'Branch index not built — serving the canonical index',
@@ -1052,8 +1078,8 @@ export class WorktreeIndexManager {
         limit: this.settings.maxDeltaFiles,
       });
     }
-    if (!this.makeRoomForLoad(entry)) {
-      return this.refuse(entry, 'max_loaded', { limit: this.settings.maxLoaded });
+    if (!(await this.makeRoomForLoad(entry))) {
+      return this.refuse(entry, 'max_loaded', { limit: this.settings.maxLoaded }, SLOT_RETRY_MS);
     }
 
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
@@ -1242,23 +1268,45 @@ export class WorktreeIndexManager {
     return pick;
   }
 
-  /** Close idle copies until another one fits under `maxLoaded`. */
-  private makeRoomForLoad(except: Entry): boolean {
-    const loaded = [...this.entries.values()].filter(
-      (e) => e !== except && e.current && e.current.state === 'ready',
-    );
-    // The copy `except` already holds is replaced, not added.
-    const willHold = loaded.length + 1;
-    let excess = willHold - this.settings.maxLoaded;
-    if (excess <= 0) return true;
-    loaded.sort((a, b) => a.current!.lastUsedAt - b.current!.lastUsedAt);
-    for (const e of loaded) {
-      if (excess <= 0) break;
-      if (e.current!.busy || e.building) continue;
-      void this.unload(e);
-      excess--;
+  /**
+   * Get `except` a `maxLoaded` slot, closing copies that are not serving a
+   * live session (least recently used first) when the copies open, closing
+   * or reserved by other builds fill them. A copy used in the last `LIVE_MS`
+   * is never evicted — two worktrees taking the slot from each other on every
+   * call would rebuild forever; the newcomer answers from the canonical
+   * index until a slot frees. An evictable copy with calls still running is
+   * waited for (bounded). On success the slot is reserved for this build.
+   */
+  private async makeRoomForLoad(except: Entry): Promise<boolean> {
+    const waitBy = performance.now() + (this.deps.slotWaitMs ?? SLOT_WAIT_MS);
+    for (;;) {
+      const others = [...this.entries.values()].filter((e) => e !== except);
+      const holds = (e: Entry) =>
+        (e.current && e.current.state !== 'closed') || e.slotReserved ? 1 : 0;
+      // The copy `except` already holds is replaced, not added.
+      const used = others.reduce((n, e) => n + holds(e), 0) + this.retiring.size;
+      if (used + 1 <= this.settings.maxLoaded) {
+        except.slotReserved = true;
+        return true;
+      }
+      const now = this.now();
+      const evictable = others
+        .filter(
+          (e) =>
+            e.current?.state === 'ready' && !e.building && now - e.current.lastUsedAt >= LIVE_MS,
+        )
+        .sort((a, b) => a.current!.lastUsedAt - b.current!.lastUsedAt);
+      const idle = evictable.find((e) => !e.current!.busy);
+      if (idle) {
+        await this.unload(idle);
+        continue;
+      }
+      // Only copies busy with a call (or still closing) could free a slot.
+      if ((evictable.length === 0 && this.retiring.size === 0) || performance.now() >= waitBy) {
+        return false;
+      }
+      await delay(50);
     }
-    return excess <= 0;
   }
 
   /** Delete unloaded copies, least recently used first, until a new one fits. */
