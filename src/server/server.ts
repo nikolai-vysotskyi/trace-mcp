@@ -91,10 +91,7 @@ import {
 } from '../worktree-delta.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
-import {
-  WORKTREE_SESSION_LOCAL_EXTRA_TOOLS,
-  type WorktreeIndexRoute,
-} from './worktree-index-route.js';
+import type { WorktreeIndexRoute } from './worktree-index-route.js';
 import { buildInstructions } from './instructions.js';
 import { installRetiredToolHints } from './retired-tools.js';
 import { createToolFilter, resolveSessionPreset } from './tool-filter.js';
@@ -665,34 +662,35 @@ export function createServer(
   // therefore no behaviour change at all) for a main checkout.
   const worktreeLink = toolHost ? null : resolveWorktreeLink(projectRoot, deps?.worktreeRoot);
 
-  // Tools that stay on this session's server even when a branch index answers
-  // the rest: everything the session/state/memory/knowledge/cross-project
-  // modules register (filled in below, read per call).
-  const sessionLocalTools = new Set<string>(WORKTREE_SESSION_LOCAL_EXTRA_TOOLS);
   const loadWorktreeDelta = worktreeLink
     ? () => getWorktreeDelta(worktreeLink).catch(() => null)
     : undefined;
 
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
-  const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
-    installToolGate(
-      server,
-      config,
-      activePreset,
-      savings,
-      journal,
-      j,
-      extractResultCount,
-      extractCompactResult,
-      stripMetaFields,
-      projectRoot,
-      (success) => heartbeat.recordToolCall(success),
-      deps?.onJournalEntry,
-      deps?.sessionId,
-      loadWorktreeDelta,
-      deps?.worktreeIndex,
-      (name) => sessionLocalTools.has(name),
-    );
+  const {
+    _originalTool,
+    registeredToolNames,
+    ungatedToolNames,
+    toolHandlers,
+    deferredTools,
+    isSessionLocalTool,
+  } = installToolGate(
+    server,
+    config,
+    activePreset,
+    savings,
+    journal,
+    j,
+    extractResultCount,
+    extractCompactResult,
+    stripMetaFields,
+    projectRoot,
+    (success) => heartbeat.recordToolCall(success),
+    deps?.onJournalEntry,
+    deps?.sessionId,
+    loadWorktreeDelta,
+    deps?.worktreeIndex,
+  );
 
   if (presetName !== 'full') {
     logger.info(
@@ -825,7 +823,7 @@ export function createServer(
     sessionId: deps?.sessionId,
     getWorktreeDelta: loadWorktreeDelta,
     worktreeIndex: deps?.worktreeIndex,
-    isSessionLocalTool: (name) => sessionLocalTools.has(name),
+    isSessionLocalTool,
     worktreeIndexInfo: deps?.worktreeIndexInfo,
   };
 
@@ -856,15 +854,6 @@ export function createServer(
     }
   }
 
-  // Records every tool `register` adds as session-local (see sessionLocalTools).
-  const registerSessionLocal = (register: () => void): void => {
-    const before = new Set([...toolHandlers.keys(), ...deferredTools.keys()]);
-    register();
-    for (const name of [...toolHandlers.keys(), ...deferredTools.keys()]) {
-      if (!before.has(name)) sessionLocalTools.add(name);
-    }
-  };
-
   registerCoreTools(server, ctx);
   registerNavigationTools(server, ctx);
   registerFrameworkTools(server, ctx);
@@ -872,12 +861,12 @@ export function createServer(
   registerGitTools(server, ctx);
   registerRefactoringTools(server, ctx);
   registerAdvancedTools(server, ctx);
-  registerSessionLocal(() => registerProjectsTools(server, ctx));
+  registerProjectsTools(server, ctx);
   registerQualityTools(server, ctx);
-  registerSessionLocal(() => registerMemoryTools(server, ctx));
-  registerSessionLocal(() => registerKnowledgeTools(server, ctx));
-  registerSessionLocal(() => registerStateTools(server, ctx));
-  registerSessionLocal(() => registerSessionTools(server, metaCtx));
+  registerMemoryTools(server, ctx);
+  registerKnowledgeTools(server, ctx);
+  registerStateTools(server, ctx);
+  registerSessionTools(server, metaCtx);
 
   // Must run after the last registration: the SDK installs its `tools/call`
   // handler lazily on the first `server.tool(...)` (TRA-412).

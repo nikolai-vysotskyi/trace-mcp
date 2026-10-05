@@ -176,7 +176,9 @@ the worktree delta re-indexed into it.
    From then on index tools answer from the copy — `stale_on_branch` is set only for a
    file edited after the copy last re-indexed it — and `get_index_health` reports
    `worktree.served_from: "branch_index"`. Session tools (journal, state, memory, pins,
-   cross-project calls) stay on the session.
+   cross-project calls) stay on the session: each tool declares its scope where its
+   annotations live (`src/server/tool-annotations.ts`), and a tool that declares none
+   stays on the session.
 
 The copy has no file watcher. Each call re-checks the delta (the same two-second cache) and
 re-indexes what changed, and `POST /api/projects/reindex-file` for a file in the worktree

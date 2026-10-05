@@ -18,6 +18,7 @@ import {
   stampAlwaysLoad,
   type WrappedToolResponse,
 } from './tool-gate-helpers.js';
+import { getToolStateScope, type ToolStateScope } from './tool-annotations.js';
 import { createToolFilter } from './tool-filter.js';
 import type { ToolResponse } from './types.js';
 import type { WorktreeDelta } from '../worktree-delta.js';
@@ -48,6 +49,12 @@ interface ToolGateResult {
   toolHandlers: Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>;
   /** Tools outside the active preset, registered-but-disabled and loadable. */
   deferredTools: Map<string, DeferredTool>;
+  /**
+   * Whether a registered tool keeps answering from this session's server in
+   * a worktree session with a branch index — its `ToolStateScope`, recorded
+   * when it was registered. Unknown names count as session-local.
+   */
+  isSessionLocalTool: (name: string) => boolean;
 }
 
 /**
@@ -82,7 +89,6 @@ export function installToolGate(
   sessionId?: string,
   getWorktreeDelta?: () => Promise<WorktreeDelta | null>,
   worktreeIndex?: WorktreeIndexRoute,
-  isSessionLocalTool?: (name: string) => boolean,
 ): ToolGateResult {
   const descriptionOverrides = config.tools?.descriptions ?? {};
   const schemaTransformConfig: SchemaTransformConfig = {
@@ -107,6 +113,10 @@ export function installToolGate(
     (params: Record<string, unknown>) => Promise<ToolResponse>
   >();
   const deferredTools = new Map<string, DeferredTool>();
+  // Worktree scope per registered tool (tool-annotations.ts, read at
+  // registration like the MCP annotations).
+  const toolScopes = new Map<string, ToolStateScope>();
+  const isSessionLocalTool = (name: string): boolean => toolScopes.get(name) !== 'index';
 
   /** Build the per-call context threaded into the wrapped callback. */
   const gatedCallbackContext = (name: string): GatedCallbackContext => ({
@@ -135,6 +145,7 @@ export function installToolGate(
     // `load_tools` so a hard exclusion can never be escalated back in.
     const allowed = toolAllowed(name);
     if (allowed) registeredToolNames.push(name);
+    toolScopes.set(name, getToolStateScope(name));
 
     // Transform description + input schema (overrides, verbosity, compaction).
     applySchemaTransforms(args, schemaTransformConfig);
@@ -245,5 +256,6 @@ export function installToolGate(
     ungatedToolNames,
     toolHandlers,
     deferredTools,
+    isSessionLocalTool,
   };
 }

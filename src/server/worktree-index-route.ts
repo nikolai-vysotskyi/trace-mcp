@@ -38,15 +38,6 @@ export interface WorktreeIndexRoute {
 }
 
 /**
- * Tools that keep answering from the session's own server even when a branch
- * index is ready, on top of every tool registered by the session, state,
- * memory, knowledge and cross-project modules (collected at registration in
- * `createServer`). Ranking pins are per-project state that must survive a
- * rebuild of the copy.
- */
-export const WORKTREE_SESSION_LOCAL_EXTRA_TOOLS: readonly string[] = ['pin', 'unpin', 'list_pins'];
-
-/**
  * Wrap a tool callback so it runs on `target` and falls back to `fallback`
  * when the branch index cannot answer. `onDelegated` fires when the branch
  * index produced the response.
