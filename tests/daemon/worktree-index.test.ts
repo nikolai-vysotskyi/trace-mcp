@@ -286,7 +286,7 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
       'export function newName(): number {\n  return 1;\n}\nexport function lateFn() {}\n',
     );
     const before = digest(canonical.db);
-    const res = await m.reindexFile(wt, path.join(wt, 'src/lib.ts'));
+    const res = await m.reindexFile(wt, path.join(wt, 'src/lib.ts'), { wait: true });
     expect(res).toEqual({ ok: true, relPath: 'src/lib.ts' });
     const late = await call('search', { query: 'lateFn' });
     expect(names(late.json)).toContain('lateFn');

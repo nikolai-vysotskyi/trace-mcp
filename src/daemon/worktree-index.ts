@@ -202,8 +202,13 @@ const LOCK_RETRY_DELAY_MS = 50;
 /** Leftover `.tmp` copies older than this are swept. */
 const STALE_TMP_MS = 60 * 60_000;
 
-/** How long a `POST reindex-file` waits for its file to land in the copy. */
-const REINDEX_FILE_WAIT_MS = 1_500;
+/**
+ * How long a `POST reindex-file` waits for its file to land in the copy. The
+ * PostToolUse hook gives the request 2 s; past this the re-index continues in
+ * the background. `?wait=1` callers get `REINDEX_FILE_WAIT_FULL_MS` instead.
+ */
+const REINDEX_FILE_WAIT_MS = 1_000;
+const REINDEX_FILE_WAIT_FULL_MS = 30_000;
 
 const SWEEP_INTERVAL_MS = 60_000;
 const GC_INTERVAL_MS = 30 * 60_000;
@@ -1137,7 +1142,11 @@ export class WorktreeIndexManager {
    * copy does not exist yet — left to the build, which reads the worktree as
    * it is. Never writes the canonical DB.
    */
-  async reindexFile(project: string, rawPath: string): Promise<WorktreeReindexResult | null> {
+  async reindexFile(
+    project: string,
+    rawPath: string,
+    opts: { wait?: boolean } = {},
+  ): Promise<WorktreeReindexResult | null> {
     if (!this.settings.enabled || this.stopped) return null;
     const found = findLinkedWorktree(project);
     if (!found) return null;
@@ -1166,7 +1175,7 @@ export class WorktreeIndexManager {
     index.lastUsedAt = this.now();
     await waitFor(
       index.reindexPaths([relPosix]).catch(() => undefined),
-      REINDEX_FILE_WAIT_MS,
+      opts.wait ? REINDEX_FILE_WAIT_FULL_MS : REINDEX_FILE_WAIT_MS,
     );
     return { ok: true, relPath: relPosix };
   }

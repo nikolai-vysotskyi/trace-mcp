@@ -2866,7 +2866,9 @@ program
         // A linked worktree that is not a project of its own: the edit belongs
         // in that worktree's branch index, never in the canonical DB.
         if (!preManaged && typeof parsed?.project === 'string' && typeof parsed.path === 'string') {
-          const routed = await worktreeIndexManager.reindexFile(parsed.project, parsed.path);
+          const routed = await worktreeIndexManager.reindexFile(parsed.project, parsed.path, {
+            wait: ['1', 'true'].includes(url.searchParams.get('wait') ?? ''),
+          });
           if (routed) {
             if (routed.ok) {
               res.writeHead(204);
