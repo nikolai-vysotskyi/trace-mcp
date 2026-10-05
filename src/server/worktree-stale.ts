@@ -80,11 +80,25 @@ export function markStaleOnBranch(payload: unknown, delta: WorktreeDelta): strin
   return [...found];
 }
 
-/** One-line warning for `_warnings`; null when no delta file was involved. */
-export function staleOnBranchWarning(files: readonly string[]): string | null {
+/**
+ * One-line warning for `_warnings`; null when no delta file was involved.
+ * `pending`: the session is served from a branch index and these files were
+ * edited after it last re-indexed them.
+ */
+export function staleOnBranchWarning(
+  files: readonly string[],
+  kind: 'canonical' | 'pending' = 'canonical',
+): string | null {
   if (files.length === 0) return null;
   const shown = files.slice(0, WARNING_LIST_LIMIT);
   const more = files.length > shown.length ? ` (+${files.length - shown.length} more)` : '';
+  if (kind === 'pending') {
+    return (
+      `Worktree: ${files.length} file(s) in this result changed after the branch index last ` +
+      `re-indexed them (marked stale_on_branch; re-indexing is under way). Read them from disk: ` +
+      `${shown.join(', ')}${more}.`
+    );
+  }
   return (
     `Worktree: ${files.length} file(s) in this result changed on this branch and the shared index ` +
     `holds the canonical version (marked stale_on_branch). Read them from disk: ${shown.join(', ')}${more}.`

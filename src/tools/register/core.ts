@@ -52,6 +52,9 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       const result = getIndexHealth(store, config, projectRoot);
       const worktreeDelta = ctx.getWorktreeDelta ? await ctx.getWorktreeDelta() : null;
       if (worktreeDelta) result.worktree = summarizeWorktreeDelta(worktreeDelta);
+      // The server hosting a branch index describes that index instead.
+      const branchIndex = ctx.worktreeIndexInfo?.();
+      if (branchIndex) result.worktree = branchIndex;
       if (ctx.progress) {
         result.progress = ctx.progress.snapshot();
       }

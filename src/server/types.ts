@@ -17,7 +17,8 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import type { StateEngine } from '../state/state-engine.js';
 import type { TopologyStore } from '../topology/topology-db.js';
-import type { WorktreeDelta } from '../worktree-delta.js';
+import type { WorktreeDelta, WorktreeDeltaSummary } from '../worktree-delta.js';
+import type { WorktreeIndexRoute } from './worktree-index-route.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
@@ -133,6 +134,19 @@ export interface ServerContext {
    * (cached, never rejects). Absent in a main checkout.
    */
   getWorktreeDelta?: () => Promise<WorktreeDelta | null>;
+  /**
+   * Present only for a worktree session the daemon can serve from a branch
+   * index (GH #1481 step 2). `batch` dispatches its sub-calls through it the
+   * same way the tool gate does.
+   */
+  worktreeIndex?: WorktreeIndexRoute;
+  /** Tools that always run on this session's own server, even with a branch index. */
+  isSessionLocalTool?: (name: string) => boolean;
+  /**
+   * Set on the server that hosts a branch index: what `get_index_health`
+   * reports about it under `worktree`.
+   */
+  worktreeIndexInfo?: () => WorktreeDeltaSummary | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */

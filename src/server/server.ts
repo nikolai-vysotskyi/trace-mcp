@@ -84,9 +84,17 @@ import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
 import { validatePath } from '../utils/security.js';
-import { getWorktreeDelta, resolveWorktreeLink } from '../worktree-delta.js';
+import {
+  getWorktreeDelta,
+  resolveWorktreeLink,
+  type WorktreeDeltaSummary,
+} from '../worktree-delta.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
+import {
+  WORKTREE_SESSION_LOCAL_EXTRA_TOOLS,
+  type WorktreeIndexRoute,
+} from './worktree-index-route.js';
 import { buildInstructions } from './instructions.js';
 import { installRetiredToolHints } from './retired-tools.js';
 import { createToolFilter, resolveSessionPreset } from './tool-filter.js';
@@ -297,6 +305,21 @@ export interface ServerDeps {
    * own root is a linked worktree needs no hint.
    */
   worktreeRoot?: string;
+  /**
+   * Branch index route for this worktree session (GH #1481 step 2): once the
+   * daemon's copy of the canonical index for this worktree is ready, tool
+   * calls are answered from it. Absent for every other session.
+   */
+  worktreeIndex?: WorktreeIndexRoute;
+  /**
+   * This server only hosts tool handlers for another session (the daemon's
+   * branch index server): it never talks to a client, so it writes no status
+   * sentinel, no session snapshot file and resolves no worktree delta of its
+   * own — the session that dispatches to it owns all of that.
+   */
+  toolHost?: boolean;
+  /** For a tool-host server: what `get_index_health` reports under `worktree`. */
+  worktreeIndexInfo?: () => WorktreeDeltaSummary | null;
 }
 
 /**
@@ -393,7 +416,8 @@ export function createServer(
   const journal = new SessionJournal();
   const sessionStartedAt = new Date().toISOString();
   const snapshotPath = getSnapshotPath(projectRoot);
-  journal.enablePeriodicSnapshot(snapshotPath);
+  const toolHost = deps?.toolHost === true;
+  if (!toolHost) journal.enablePeriodicSnapshot(snapshotPath);
 
   // Observability bridge (P13): replace the process-wide noop sink with one
   // configured from `telemetry.observability`. Lazy/async — spans buffer in
@@ -535,7 +559,7 @@ export function createServer(
     }
     // Write final snapshot for PreCompact hook
     try {
-      journal.flushSnapshotFile(snapshotPath);
+      if (!toolHost) journal.flushSnapshotFile(snapshotPath);
     } catch {
       /* best-effort */
     }
@@ -630,12 +654,21 @@ export function createServer(
   // Records tool-call counters + last successful call timestamp so the v0.8+
   // hook can distinguish "process up but MCP channel stalled" from a healthy
   // server, and the desktop app can render the project status badge.
-  const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
+  // A tool host serves no client, so it must not claim the sentinel: the guard
+  // hook would take a fresh one for the worktree path as a live session there.
+  const heartbeat = toolHost
+    ? { stop: () => {}, recordToolCall: (_success: boolean) => {} }
+    : startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
   // Linked worktree served from the canonical checkout's index: resolve the
   // files the branch changed so answers about them can be flagged. Null (and
   // therefore no behaviour change at all) for a main checkout.
-  const worktreeLink = resolveWorktreeLink(projectRoot, deps?.worktreeRoot);
+  const worktreeLink = toolHost ? null : resolveWorktreeLink(projectRoot, deps?.worktreeRoot);
+
+  // Tools that stay on this session's server even when a branch index answers
+  // the rest: everything the session/state/memory/knowledge/cross-project
+  // modules register (filled in below, read per call).
+  const sessionLocalTools = new Set<string>(WORKTREE_SESSION_LOCAL_EXTRA_TOOLS);
   const loadWorktreeDelta = worktreeLink
     ? () => getWorktreeDelta(worktreeLink).catch(() => null)
     : undefined;
@@ -657,6 +690,8 @@ export function createServer(
       deps?.onJournalEntry,
       deps?.sessionId,
       loadWorktreeDelta,
+      deps?.worktreeIndex,
+      (name) => sessionLocalTools.has(name),
     );
 
   if (presetName !== 'full') {
@@ -789,6 +824,9 @@ export function createServer(
     onJournalEntry: deps?.onJournalEntry,
     sessionId: deps?.sessionId,
     getWorktreeDelta: loadWorktreeDelta,
+    worktreeIndex: deps?.worktreeIndex,
+    isSessionLocalTool: (name) => sessionLocalTools.has(name),
+    worktreeIndexInfo: deps?.worktreeIndexInfo,
   };
 
   const metaCtx: MetaContext = {
@@ -818,6 +856,15 @@ export function createServer(
     }
   }
 
+  // Records every tool `register` adds as session-local (see sessionLocalTools).
+  const registerSessionLocal = (register: () => void): void => {
+    const before = new Set([...toolHandlers.keys(), ...deferredTools.keys()]);
+    register();
+    for (const name of [...toolHandlers.keys(), ...deferredTools.keys()]) {
+      if (!before.has(name)) sessionLocalTools.add(name);
+    }
+  };
+
   registerCoreTools(server, ctx);
   registerNavigationTools(server, ctx);
   registerFrameworkTools(server, ctx);
@@ -825,12 +872,12 @@ export function createServer(
   registerGitTools(server, ctx);
   registerRefactoringTools(server, ctx);
   registerAdvancedTools(server, ctx);
-  registerProjectsTools(server, ctx);
+  registerSessionLocal(() => registerProjectsTools(server, ctx));
   registerQualityTools(server, ctx);
-  registerMemoryTools(server, ctx);
-  registerKnowledgeTools(server, ctx);
-  registerStateTools(server, ctx);
-  registerSessionTools(server, metaCtx);
+  registerSessionLocal(() => registerMemoryTools(server, ctx));
+  registerSessionLocal(() => registerKnowledgeTools(server, ctx));
+  registerSessionLocal(() => registerStateTools(server, ctx));
+  registerSessionLocal(() => registerSessionTools(server, metaCtx));
 
   // Must run after the last registration: the SDK installs its `tools/call`
   // handler lazily on the first `server.tool(...)` (TRA-412).

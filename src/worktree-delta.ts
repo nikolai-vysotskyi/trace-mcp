@@ -81,6 +81,23 @@ export interface WorktreeDeltaSummary {
   untracked: string[];
   /** True when any list above was cut at {@link WORKTREE_DELTA_SUMMARY_LIMIT}. */
   truncated: boolean;
+  /**
+   * Which index answers this session: the canonical checkout's (results for
+   * the files listed here describe the canonical version) or the worktree's
+   * own branch index (a copy of the canonical index with this delta
+   * re-indexed into it).
+   */
+  served_from: 'canonical_index' | 'branch_index';
+  /** Set when served from a branch index: the copy this session answers from. */
+  branch_index?: {
+    /** Canonical HEAD the copy was taken at. */
+    canonical_head_at_copy: string;
+    built_at: string;
+    /** Files edited after the copy last re-indexed them (capped at 50). */
+    pending: string[];
+    /** Files the copy has re-indexed from the worktree so far. */
+    reindexed_files: number;
+  };
   note: string;
 }
 
@@ -310,6 +327,7 @@ export function worktreeDeltaSize(delta: WorktreeDelta): number {
 export function summarizeWorktreeDelta(
   delta: WorktreeDelta,
   limit: number = WORKTREE_DELTA_SUMMARY_LIMIT,
+  servedFrom: WorktreeDeltaSummary['served_from'] = 'canonical_index',
 ): WorktreeDeltaSummary {
   const cut = (xs: string[]): string[] => (xs.length > limit ? xs.slice(0, limit) : xs);
   const truncated =
@@ -325,9 +343,14 @@ export function summarizeWorktreeDelta(
     deleted: cut(delta.deleted),
     untracked: cut(delta.untracked),
     truncated,
+    served_from: servedFrom,
     note:
-      'This session is served from the canonical checkout index. Files listed here differ on this ' +
-      'worktree: index results for them describe the canonical version (flagged stale_on_branch), ' +
-      'and untracked files are not indexed at all. Read these files from disk.',
+      servedFrom === 'branch_index'
+        ? 'This session is served from a branch index: a copy of the canonical checkout index with ' +
+          'the files listed here re-indexed from this worktree, so results describe the branch. A ' +
+          'file whose latest edit has not been re-indexed yet is flagged stale_on_branch.'
+        : 'This session is served from the canonical checkout index. Files listed here differ on this ' +
+          'worktree: index results for them describe the canonical version (flagged stale_on_branch), ' +
+          'and untracked files are not indexed at all. Read these files from disk.',
   };
 }

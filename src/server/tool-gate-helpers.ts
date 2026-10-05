@@ -25,6 +25,7 @@ import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
 import { encodeWire, type WireFormat } from './wire-format.js';
 import type { WorktreeDelta } from '../worktree-delta.js';
+import { delegateToWorktreeIndex, type WorktreeIndexRoute } from './worktree-index-route.js';
 import { markStaleOnBranch, staleOnBranchWarning } from './worktree-stale.js';
 
 /** Shape of a tool response coming back from a wrapped callback. */
@@ -239,6 +240,14 @@ export interface GatedCallbackContext {
    * Undefined everywhere else, which leaves responses untouched.
    */
   getWorktreeDelta?: () => Promise<WorktreeDelta | null>;
+  /**
+   * Set only for a worktree session the daemon can serve from a branch index
+   * (GH #1481 step 2): once that index is ready, the tool runs there instead
+   * of on this session's (canonical) index.
+   */
+  worktreeIndex?: WorktreeIndexRoute;
+  /** Tools that always run on this session's own server (session state, memory, …). */
+  isSessionLocalTool?: (name: string) => boolean;
 }
 
 /** Emit a journal-broadcast entry for the most recent journal record. */
@@ -392,6 +401,7 @@ function enrichResponse(
   originalParamSnapshot: Record<string, unknown>,
   appliedDefaults: ReturnType<typeof applyBudgetDefaults>,
   worktreeDelta: WorktreeDelta | null,
+  worktreeStaleKind: 'canonical' | 'pending' = 'canonical',
 ): void {
   const optHint = ctx.journal.getOptimizationHint(ctx.name, params);
   // We synthesize a top-level `_warnings` array whenever budget defaults
@@ -417,7 +427,7 @@ function enrichResponse(
     const synthesized = buildClampWarnings(ctx.name, originalParamSnapshot, appliedDefaults, obj);
     const warnings = [...existing, ...synthesized];
     if (worktreeDelta) {
-      const stale = staleOnBranchWarning(markStaleOnBranch(obj, worktreeDelta));
+      const stale = staleOnBranchWarning(markStaleOnBranch(obj, worktreeDelta), worktreeStaleKind);
       if (stale) warnings.push(stale);
     }
     if (warnings.length > 0) obj._warnings = warnings;
@@ -465,10 +475,24 @@ export function createGatedCallback(
     // Mark files as consulted via trace-mcp (read by guard hook)
     if (ctx.projectRoot) markToolConsultation(ctx.projectRoot, ctx.name, params);
 
+    // Worktree session with a ready branch index: the tool answers from the
+    // branch index. Everything else in this wrapper (journal, savings,
+    // enrichment) stays with the session. No route — no change at all.
+    const worktreeTarget =
+      ctx.worktreeIndex && !ctx.isSessionLocalTool?.(ctx.name)
+        ? await ctx.worktreeIndex.resolve()
+        : null;
+    let delegated = false;
+    const toolCb = worktreeTarget
+      ? delegateToWorktreeIndex(worktreeTarget, ctx.name, originalCb, () => {
+          delegated = true;
+        })
+      : originalCb;
+
     // Dedup check
     const dupInfo = ctx.journal.checkDuplicate(ctx.name, params);
     if (dupInfo) {
-      return handleDuplicate(ctx, dupInfo, params, cbArgs, originalCb);
+      return handleDuplicate(ctx, dupInfo, params, cbArgs, toolCb);
     }
 
     // Normal path
@@ -477,11 +501,12 @@ export function createGatedCallback(
       'tool.name': ctx.name,
     });
     // Started before the handler so the git work overlaps it; only a non-error
-    // response waits for it. Resolvers never reject.
-    const worktreeDeltaPending = ctx.getWorktreeDelta?.();
+    // response waits for it. Resolvers never reject. Not needed when the
+    // branch index answers: its results describe the branch already.
+    const worktreeDeltaPending = worktreeTarget ? undefined : ctx.getWorktreeDelta?.();
     let result: unknown;
     try {
-      result = await originalCb(...cbArgs);
+      result = await toolCb(...cbArgs);
     } catch (err) {
       const throwLatency = Date.now() - normalStart;
       telemetrySpan.setAttribute('duration_ms', throwLatency);
@@ -533,10 +558,24 @@ export function createGatedCallback(
     });
 
     // Only a worktree session has a resolver; everywhere else this stays null
-    // and the response is built exactly as before.
-    const worktreeDelta =
-      worktreeDeltaPending && !resultObj?.isError ? await worktreeDeltaPending : null;
-    enrichResponse(ctx, resultObj, params, originalParamSnapshot, appliedDefaults, worktreeDelta);
+    // and the response is built exactly as before. A branch-index answer is
+    // flagged only for files whose latest edit it has not re-indexed yet; a
+    // fallback to the session's own handler is flagged like before.
+    let worktreeDelta: WorktreeDelta | null = null;
+    if (!resultObj?.isError) {
+      if (delegated) worktreeDelta = worktreeTarget?.pending() ?? null;
+      else if (worktreeDeltaPending) worktreeDelta = await worktreeDeltaPending;
+      else if (worktreeTarget && ctx.getWorktreeDelta) worktreeDelta = await ctx.getWorktreeDelta();
+    }
+    enrichResponse(
+      ctx,
+      resultObj,
+      params,
+      originalParamSnapshot,
+      appliedDefaults,
+      worktreeDelta,
+      delegated ? 'pending' : 'canonical',
+    );
     applyWireFormat(resultObj, effectiveFormat);
 
     // Scored last, on the bytes that actually go over the wire: `enrichResponse`
