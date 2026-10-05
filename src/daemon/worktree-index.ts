@@ -433,7 +433,8 @@ interface SyncPlan {
   reverted: number;
 }
 
-class BranchIndex {
+/** One copy: its DB, pipeline and tool-host server. Exported for tests. */
+export class BranchIndex {
   state: IndexState = 'opening';
   readonly worktreeRoot: string;
   readonly canonicalRoot: string;
@@ -709,8 +710,13 @@ class BranchIndex {
     }
   }
 
+  /**
+   * Run `tool` on the copy. Undefined — the caller answers from the canonical
+   * index — once the copy is retiring: a call accepted then (a batch's next
+   * sub-call) could still be running when the DB closes under it.
+   */
   async run(tool: string, params: Record<string, unknown>): Promise<ToolResponse | undefined> {
-    if (this.state !== 'ready' && this.state !== 'retiring') return undefined;
+    if (this.state !== 'ready') return undefined;
     const handler = this.handle?.toolHandlers.get(tool);
     if (!handler) return undefined;
     this.inflight++;
@@ -752,14 +758,25 @@ class BranchIndex {
   async close(opts: { drainMs?: number } = {}): Promise<void> {
     if (this.state === 'closed') return;
     this.state = 'retiring';
-    if (this.inflight > 0) {
+    // No new calls start now (`run` refuses them); wait for the running ones.
+    const drainBy = performance.now() + (opts.drainMs ?? RETIRE_DRAIN_MS);
+    while (this.inflight > 0) {
+      const left = drainBy - performance.now();
+      if (left <= 0) {
+        logger.warn(
+          { root: this.worktreeRoot, inflight: this.inflight },
+          'Branch index closed with calls still running',
+        );
+        break;
+      }
       await waitFor(
         new Promise<void>((resolve) => {
           this.drained = resolve;
         }),
-        opts.drainMs ?? RETIRE_DRAIN_MS,
+        left,
       );
     }
+    this.drained = null;
     await waitFor(this.chain, 5_000);
     this.state = 'closed';
     this.cancelAI?.();
@@ -891,9 +908,7 @@ export class WorktreeIndexManager {
       current.lastUsedAt = now;
       await waitFor(this.syncEntry(entry, current), this.settings.syncWaitMs);
       const served = entry.current;
-      return served && (served.state === 'ready' || served.state === 'retiring')
-        ? served.target()
-        : null;
+      return served && served.state === 'ready' ? served.target() : null;
     }
     const building = this.ensureBuilding(entry);
     if (!building) return null;
