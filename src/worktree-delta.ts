@@ -88,16 +88,8 @@ export interface WorktreeDeltaSummary {
    * re-indexed into it).
    */
   served_from: 'canonical_index' | 'branch_index';
-  /** Set when served from a branch index: the copy this session answers from. */
-  branch_index?: {
-    /** Canonical HEAD the copy was taken at. */
-    canonical_head_at_copy: string;
-    built_at: string;
-    /** Files edited after the copy last re-indexed them (capped at 50). */
-    pending: string[];
-    /** Files the copy has re-indexed from the worktree so far. */
-    reindexed_files: number;
-  };
+  /** Set when the daemon keeps (or is building) a branch index for this worktree. */
+  branch_index?: BranchIndexInfo;
   note: string;
 }
 
@@ -323,12 +315,40 @@ export function worktreeDeltaSize(delta: WorktreeDelta): number {
   return delta.modified.length + delta.deleted.length + delta.untracked.length;
 }
 
-/** Compact, size-bounded form of the delta for health and API payloads. */
+/**
+ * A linked worktree's branch index as `get_index_health` and
+ * `GET /api/projects/worktree` report it (`WorktreeIndexManager.describe`).
+ */
+export interface BranchIndexInfo {
+  /**
+   * `ready`: the copy answers. `building`: no copy yet, one is being built.
+   * `opening`/`retiring`/`closed`: a copy coming up or going away. `none`:
+   * no copy (not built yet, refused or failed — see `last_error`).
+   */
+  state: 'none' | 'building' | 'opening' | 'ready' | 'retiring' | 'closed';
+  /** HEAD the canonical index had indexed when the copy was taken (no copy: absent). */
+  canonical_head_at_copy?: string;
+  built_at?: string;
+  /** Files edited after the copy last re-indexed them (capped at 50). */
+  pending: string[];
+  /** Files the copy has re-indexed from the worktree so far. */
+  reindexed_files: number;
+  /** Why the last build did not produce a copy, when it did not. */
+  last_error?: string;
+}
+
+/**
+ * Compact, size-bounded form of the delta for health and API payloads.
+ * `served_from` follows `branchIndex`: a ready copy answers, otherwise the
+ * canonical index does.
+ */
 export function summarizeWorktreeDelta(
   delta: WorktreeDelta,
   limit: number = WORKTREE_DELTA_SUMMARY_LIMIT,
-  servedFrom: WorktreeDeltaSummary['served_from'] = 'canonical_index',
+  branchIndex: BranchIndexInfo | null = null,
 ): WorktreeDeltaSummary {
+  const servedFrom: WorktreeDeltaSummary['served_from'] =
+    branchIndex?.state === 'ready' ? 'branch_index' : 'canonical_index';
   const cut = (xs: string[]): string[] => (xs.length > limit ? xs.slice(0, limit) : xs);
   const truncated =
     delta.modified.length > limit || delta.deleted.length > limit || delta.untracked.length > limit;
@@ -344,6 +364,7 @@ export function summarizeWorktreeDelta(
     untracked: cut(delta.untracked),
     truncated,
     served_from: servedFrom,
+    ...(branchIndex ? { branch_index: branchIndex } : {}),
     note:
       servedFrom === 'branch_index'
         ? 'This session is served from a branch index: a copy of the canonical checkout index with ' +

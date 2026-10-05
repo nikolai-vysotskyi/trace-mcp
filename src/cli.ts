@@ -2317,14 +2317,11 @@ program
           res.end(JSON.stringify({ error: 'git could not compute the worktree delta' }));
           return;
         }
-        const branchIndex = worktreeIndexManager.describe(link);
-        const servedFrom = branchIndex?.state === 'ready' ? 'branch_index' : 'canonical_index';
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
-          JSON.stringify({
-            ...summarizeWorktreeDelta(delta, undefined, servedFrom),
-            ...(branchIndex ? { branch_index: branchIndex } : {}),
-          }),
+          JSON.stringify(
+            summarizeWorktreeDelta(delta, undefined, worktreeIndexManager.describe(link)),
+          ),
         );
         return;
       }

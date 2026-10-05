@@ -79,6 +79,7 @@ import {
   getWorktreeDelta,
   resolveWorktreeLink,
   summarizeWorktreeDelta,
+  type BranchIndexInfo,
   type WorktreeDelta,
   type WorktreeDeltaSummary,
   type WorktreeLink,
@@ -774,18 +775,20 @@ export class BranchIndex {
     };
   }
 
+  /** `get_index_health`'s `worktree` section as this copy's tool host reports it. */
   info(): WorktreeDeltaSummary | null {
     const delta = this.lastDelta;
     if (!delta) return null;
-    return {
-      ...summarizeWorktreeDelta(delta, undefined, 'branch_index'),
-      branch_index: {
-        canonical_head_at_copy: this.canonicalHead,
-        built_at: new Date(this.builtAt).toISOString(),
-        pending: [...this.pendingPaths].slice(0, 50),
-        reindexed_files: this.applied.size,
-      },
-    };
+    return summarizeWorktreeDelta(delta, undefined, this.owner.describeIndex(this));
+  }
+
+  /** Files whose latest edit is not in the copy yet (capped at 50). */
+  pendingFiles(): string[] {
+    return [...this.pendingPaths].slice(0, 50);
+  }
+
+  get reindexedFiles(): number {
+    return this.applied.size;
   }
 
   /**
@@ -847,6 +850,20 @@ export class BranchIndex {
 }
 
 // ─── Manager ───────────────────────────────────────────────────────
+
+/** One shape for both reports of a branch index (see `BranchIndexInfo`). */
+function branchIndexInfo(entry: Entry | null, index: BranchIndex | null): BranchIndexInfo {
+  // Absent rather than null: tool responses drop null fields, and both
+  // reports must read the same.
+  return {
+    state: index?.state ?? (entry?.building ? 'building' : 'none'),
+    ...(index ? { canonical_head_at_copy: index.canonicalHead } : {}),
+    ...(index?.builtAt ? { built_at: new Date(index.builtAt).toISOString() } : {}),
+    pending: index?.pendingFiles() ?? [],
+    reindexed_files: index?.reindexedFiles ?? 0,
+    ...(entry?.lastError ? { last_error: entry.lastError } : {}),
+  };
+}
 
 interface Entry {
   link: WorktreeLink;
@@ -1418,20 +1435,18 @@ export class WorktreeIndexManager {
     return { ok: true, relPath: relPosix };
   }
 
-  /** What `GET /api/projects/worktree` adds about the copy, or null. */
-  describe(link: WorktreeLink): Record<string, unknown> | null {
+  /**
+   * The branch index of `link` — what `GET /api/projects/worktree` and the
+   * copy's own `get_index_health` report — or null when the daemon has none.
+   */
+  describe(link: WorktreeLink): BranchIndexInfo | null {
     const entry = this.entries.get(link.worktreeRoot);
-    if (!entry) return null;
-    const current = entry.current;
-    return {
-      state: current?.state ?? (entry.building ? 'building' : 'none'),
-      building: entry.building !== null,
-      db_path: current?.dbPath ?? null,
-      canonical_head_at_copy: current?.canonicalHead ?? null,
-      built_at: current?.builtAt ? new Date(current.builtAt).toISOString() : null,
-      pending: current?.pendingDelta()?.modified.length ?? 0,
-      last_error: entry.lastError,
-    };
+    return entry ? branchIndexInfo(entry, entry.current) : null;
+  }
+
+  /** `describe` from inside a copy: that copy, whether or not it is still current. */
+  describeIndex(index: BranchIndex): BranchIndexInfo {
+    return branchIndexInfo(this.entries.get(index.worktreeRoot) ?? null, index);
   }
 
   /**

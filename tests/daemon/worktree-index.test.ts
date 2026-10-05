@@ -33,7 +33,11 @@ import { beginReindex } from '../../src/indexer/reindex-inflight.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { ProgressState } from '../../src/progress.js';
 import { createServer } from '../../src/server/server.js';
-import { clearWorktreeDeltaCache } from '../../src/worktree-delta.js';
+import {
+  clearWorktreeDeltaCache,
+  getWorktreeDelta,
+  summarizeWorktreeDelta,
+} from '../../src/worktree-delta.js';
 
 type Json = Record<string, unknown>;
 
@@ -230,6 +234,23 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     const files = fs.readdirSync(snapshotsDir);
     expect(files.some((f) => f.endsWith('.db'))).toBe(true);
     expect(files.some((f) => f.endsWith('.json'))).toBe(true);
+  });
+
+  it('reports the copy the same way over HTTP as in get_index_health', async () => {
+    const m = manager();
+    const call = await session(m);
+    const health = (await call('get_index_health')).json.worktree as Json;
+    const link = { worktreeRoot: wt, canonicalRoot: main };
+    // What GET /api/projects/worktree serializes.
+    const http = JSON.parse(
+      JSON.stringify(
+        summarizeWorktreeDelta((await getWorktreeDelta(link))!, undefined, m.describe(link)),
+      ),
+    ) as Json;
+    expect(http).toEqual(health);
+    expect(http.served_from).toBe('branch_index');
+    expect(http.branch_index).toMatchObject({ state: 'ready', pending: [] });
+    expect(http.branch_index).not.toHaveProperty('last_error');
   });
 
   it('answers search, find_usages and get_change_impact for the branch', async () => {
