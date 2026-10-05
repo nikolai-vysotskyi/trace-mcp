@@ -147,9 +147,11 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
   function manager(
     over: Partial<WorktreeIndexSettings> = {},
     now?: () => number,
+    canonicalQuietWaitMs?: number,
   ): WorktreeIndexManager {
     const m = new WorktreeIndexManager({
       now,
+      canonicalQuietWaitMs,
       settings: {
         ...DEFAULT_WORKTREE_INDEX_SETTINGS,
         enabled: true,
@@ -359,6 +361,50 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(names(renamed.json)).toContain('newName');
     const mainOnly = await call('search', { query: 'mainOnly' });
     expect(names(mainOnly.json)).not.toContain('mainOnly');
+  });
+
+  it('stamps the copy with what the canonical index indexed, not its git HEAD', async () => {
+    const indexedHead = git(main, 'rev-parse', 'HEAD');
+    // A pull the canonical watcher has not picked up yet.
+    write(main, 'src/mainonly.ts', 'export function mainOnly() {}\n');
+    git(main, 'add', '-A');
+    git(main, 'commit', '-q', '-m', 'main moves');
+    const gitHead = git(main, 'rev-parse', 'HEAD');
+    const m = manager({}, undefined, 300);
+    const call = await session(m);
+    const atCopy = async () => {
+      clearWorktreeDeltaCache();
+      const health = (await call('get_index_health')).json;
+      return ((health.worktree as Json).branch_index as Json).canonical_head_at_copy;
+    };
+    expect(await atCopy()).toBe(indexedHead);
+    // Not a reason to rebuild while the canonical index stays where it is.
+    expect(await atCopy()).toBe(indexedHead);
+    const first = dbFiles();
+    expect(first).toHaveLength(1);
+    expect(first[0]).toContain(indexedHead.slice(0, 12));
+
+    // The watcher batch lands: now the copy is behind, and is rebuilt.
+    await canonical.pipeline.indexFiles(['src/mainonly.ts']);
+    const deadline = Date.now() + 15_000;
+    let head: unknown = indexedHead;
+    while (Date.now() < deadline && head !== gitHead) {
+      head = await atCopy();
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(head).toBe(gitHead);
+  });
+
+  it('waits for the canonical index to catch up with its HEAD before copying', async () => {
+    write(main, 'src/mainonly.ts', 'export function mainOnly() {}\n');
+    git(main, 'add', '-A');
+    git(main, 'commit', '-q', '-m', 'main moves');
+    const gitHead = git(main, 'rev-parse', 'HEAD');
+    const m = manager();
+    const call = await session(m);
+    setTimeout(() => void canonical.pipeline.indexFiles(['src/mainonly.ts']), 300);
+    const health = (await call('get_index_health')).json;
+    expect(((health.worktree as Json).branch_index as Json).canonical_head_at_copy).toBe(gitHead);
   });
 
   it('keeps syncing the old copy while a rebuild for a moved HEAD is refused', async () => {

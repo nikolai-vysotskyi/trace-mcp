@@ -4007,7 +4007,10 @@ the worktree delta re-indexed into it.
    it holds no long lock, never blocks the main index's writer and picks up its WAL. The
    copy lives in `<data dir>/index/worktrees/` as
    `<name>-<hash of the worktree path>-<main HEAD>-<stamp>.db` plus a `.json` sidecar
-   naming the worktree, the main checkout and the HEAD the copy was taken at.
+   naming the worktree, the main checkout and the HEAD the main index had indexed when
+   the copy was taken. The copy waits (up to 5 s) for the main index to finish a run and
+   to catch up with its git HEAD, so a pull whose watcher batch is still pending is not
+   copied half-way.
 2. **Re-index the delta.** The modified and untracked files are re-indexed into the copy
    with the worktree as root, deleted ones are removed, through the same incremental path
    a watcher batch takes (edge resolution and the deferred reconcile, embeddings and
@@ -4023,8 +4026,8 @@ the worktree delta re-indexed into it.
 The copy has no file watcher. Each call re-checks the delta (the same two-second cache) and
 re-indexes what changed, and `POST /api/projects/reindex-file` for a file in the worktree
 (the PostToolUse hook) writes into the copy, never into the main index. The copy is
-rebuilt when the main HEAD moves past the one it was taken at (the old copy keeps serving
-until the new one is ready), unloaded after `idle_unload_minutes` without use (the file
+rebuilt once the main index has indexed a HEAD past the one it was taken at (the old copy
+keeps serving, and keeps following the worktree, until the new one is ready), unloaded after `idle_unload_minutes` without use (the file
 stays and is reused while the main HEAD matches), deleted by the `WorktreeRemove` hook
 (`DELETE /api/projects/worktree?project=<worktree root>`), and garbage-collected once the
 worktree directory is gone or `git worktree list` no longer names it.

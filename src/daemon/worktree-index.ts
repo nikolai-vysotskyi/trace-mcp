@@ -30,8 +30,9 @@
  * worktree is gone. Sessions in a main checkout never reach this module.
  *
  * Files: `<INDEX_DIR>/worktrees/<name>-<hash(worktree)>-<canonical HEAD>-<stamp>.db`
- * plus a `.json` sidecar naming the worktree, the canonical checkout and HEAD
- * the copy was taken at — what GC and reuse after a restart read.
+ * plus a `.json` sidecar naming the worktree, the canonical checkout and the
+ * HEAD the canonical index had indexed when the copy was taken (its
+ * `index_head_sha`, not the git HEAD) — what GC and reuse after a restart read.
  */
 
 import { execFile } from 'node:child_process';
@@ -39,7 +40,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
-import type Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import {
   BlobVectorStore,
   CachedInferenceService,
@@ -178,7 +179,7 @@ export interface SnapshotMeta {
   schema: number;
   worktree_root: string;
   canonical_root: string;
-  /** Canonical HEAD the copy was taken at. */
+  /** HEAD the canonical index had indexed when the copy was taken. */
   canonical_head: string;
   /** trace-mcp version that wrote the copy; another version rebuilds. */
   version: string;
@@ -199,7 +200,11 @@ const SIDECARS = ['', '-wal', '-shm', '-journal'];
 /** Pages copied per backup step: 4 MB with the 4 KB page size, a few ms per turn. */
 const BACKUP_PAGES_PER_STEP = 1024;
 
-/** How long to wait for the canonical pipeline to go quiet before copying anyway. */
+/**
+ * How long to wait, before copying anyway, for the canonical index to go
+ * quiet and to have indexed its current git HEAD (a watcher batch after a
+ * pull or checkout may still be in its debounce).
+ */
 const CANONICAL_QUIET_WAIT_MS = 5_000;
 
 /** Retry delay after a failed build (git error, canonical not ready, …). */
@@ -313,6 +318,34 @@ function statSignature(abs: string): string {
   }
 }
 
+/**
+ * The git HEAD an index last finished indexing at (`index_head_sha`, stamped
+ * by every pipeline run), or null when it has none.
+ */
+function readIndexedHead(db: Database.Database): string | null {
+  try {
+    const row = db.prepare("SELECT value FROM repo_metadata WHERE key = 'index_head_sha'").get() as
+      | { value: string }
+      | undefined;
+    return row?.value || null;
+  } catch {
+    return null;
+  }
+}
+
+/** `readIndexedHead` of a DB file not otherwise open (a fresh backup). */
+function readIndexedHeadOfFile(dbPath: string): string | null {
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    return readIndexedHead(db);
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
 async function waitFor<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
   if (ms <= 0) return undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -370,6 +403,8 @@ export interface WorktreeIndexManagerDeps {
   sharedServerDeps?: (config: TraceMcpConfig) => ServerDeps;
   /** Directory holding the copies. Default `<INDEX_DIR>/worktrees`. */
   dir?: string;
+  /** Override of `CANONICAL_QUIET_WAIT_MS` (tests). */
+  canonicalQuietWaitMs?: number;
   /** Version stamped into the sidecar. A different version rebuilds. */
   version?: string;
   now?: () => number;
@@ -871,7 +906,14 @@ export class WorktreeIndexManager {
     try {
       const delta = await getWorktreeDelta(entry.link);
       if (!delta || index.state !== 'ready') return;
-      const headMoved = delta.canonicalHead !== index.canonicalHead;
+      // What the canonical index has indexed, not its git HEAD: right after a
+      // pull the watcher has not caught up, and a copy taken then would
+      // carry the old content under the new HEAD's name.
+      const canonical = this.deps.getCanonical(entry.link.canonicalRoot);
+      const canonicalHead = canonical?.db.open
+        ? (readIndexedHead(canonical.db) ?? delta.canonicalHead)
+        : index.canonicalHead;
+      const headMoved = canonicalHead !== index.canonicalHead;
       if (headMoved) {
         // The canonical index moved on: files the branch shares with the new
         // HEAD are stale in this copy and in no delta. Keep serving it until
@@ -948,7 +990,7 @@ export class WorktreeIndexManager {
     }
 
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
-    let file = this.findReusable(link, delta.canonicalHead);
+    let file = this.findReusable(link, readIndexedHead(canonical.db) ?? delta.canonicalHead);
     let copyMs = 0;
     let reused = true;
     if (!file) {
@@ -1009,24 +1051,39 @@ export class WorktreeIndexManager {
     return index;
   }
 
-  /** Online backup of the canonical DB into a fresh copy for `link`. */
+  /**
+   * Online backup of the canonical DB into a fresh copy for `link`, stamped
+   * with the HEAD the canonical index had indexed when the copy was taken
+   * (`gitHead` only when the index records none).
+   */
   private async copyCanonical(
     link: WorktreeLink,
     canonical: CanonicalSource,
-    canonicalHead: string,
+    gitHead: string,
   ): Promise<SnapshotFile> {
     const created = this.now();
-    const base = `${snapshotPrefix(link.worktreeRoot)}${canonicalHead.slice(0, 12)}-${created.toString(36)}`;
-    const dbPath = path.join(this.dir, `${base}.db`);
-    const metaPath = path.join(this.dir, `${base}.json`);
-    const tmp = `${dbPath}.tmp`;
+    const stamp = created.toString(36);
+    const tmp = path.join(this.dir, `${snapshotPrefix(link.worktreeRoot)}${stamp}.db.tmp`);
     removeDbFiles(tmp);
-    // Copy between canonical pipeline runs when we can: the backup never
-    // blocks them, but a copy taken mid-run carries a half-written pass.
-    const quietBy = performance.now() + CANONICAL_QUIET_WAIT_MS;
-    while (isReindexing(canonical.root) && performance.now() < quietBy) await delay(100);
+    // Copy between canonical pipeline runs, once the canonical index has
+    // caught up with its git HEAD, when we can: the backup never blocks the
+    // canonical writer, but a copy taken mid-run carries a half-written pass,
+    // and one taken before the watcher batch of a pull the old content.
+    const quietBy = performance.now() + (this.deps.canonicalQuietWaitMs ?? CANONICAL_QUIET_WAIT_MS);
+    while (performance.now() < quietBy) {
+      const indexed = readIndexedHead(canonical.db);
+      if (!isReindexing(canonical.root) && (indexed === null || indexed === gitHead)) break;
+      await delay(100);
+    }
+    let canonicalHead = gitHead;
+    let dbPath = '';
     try {
       await canonical.db.backup(tmp, { progress: () => BACKUP_PAGES_PER_STEP });
+      canonicalHead = readIndexedHeadOfFile(tmp) ?? gitHead;
+      dbPath = path.join(
+        this.dir,
+        `${snapshotPrefix(link.worktreeRoot)}${canonicalHead.slice(0, 12)}-${stamp}.db`,
+      );
       for (const suffix of ['-wal', '-shm']) {
         if (fs.existsSync(tmp + suffix)) fs.renameSync(tmp + suffix, dbPath + suffix);
       }
@@ -1038,9 +1095,10 @@ export class WorktreeIndexManager {
       }
     } catch (err) {
       removeDbFiles(tmp);
-      removeDbFiles(dbPath);
+      if (dbPath) removeDbFiles(dbPath);
       throw err;
     }
+    const metaPath = dbPath.replace(/\.db$/, '.json');
     const meta: SnapshotMeta = {
       schema: META_SCHEMA,
       worktree_root: link.worktreeRoot,
