@@ -575,7 +575,7 @@ class BranchIndex {
       if (this.state !== 'ready' && this.state !== 'opening') return 0;
       this.lastDelta = delta;
       const plan = this.plan(delta);
-      await this.apply(plan, false);
+      await this.apply(plan);
       return plan.reverted;
     });
     this.chain = run.then(
@@ -597,13 +597,13 @@ class BranchIndex {
         signatures.set(rel, sig);
         (sig === 'absent' ? remove : index).push(rel);
       }
-      await this.apply({ index, remove, signatures, reverted: 0 }, false);
+      await this.apply({ index, remove, signatures, reverted: 0 });
     });
     this.chain = run.catch(() => undefined);
     return run;
   }
 
-  private async apply(plan: SyncPlan, locked: boolean): Promise<void> {
+  private async apply(plan: SyncPlan): Promise<void> {
     const pipeline = this.pipeline;
     if (!pipeline || (plan.index.length === 0 && plan.remove.length === 0)) return;
     for (const p of [...plan.index, ...plan.remove]) this.pendingPaths.add(p);
@@ -612,8 +612,7 @@ class BranchIndex {
       if (plan.index.length > 0) await pipeline.indexFiles(plan.index);
     };
     try {
-      if (locked) await work();
-      else await this.withReindexLock(work);
+      await this.withReindexLock(work);
       for (const [rel, sig] of plan.signatures) this.applied.set(rel, sig);
       for (const p of [...plan.index, ...plan.remove]) this.pendingPaths.delete(p);
       this.metaDirty = true;
