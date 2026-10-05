@@ -314,7 +314,7 @@ supply it.
 | `daemon_idle_exit_minutes` | number (≥ 0, ≤ 1440) | `15` |
 | `project_idle_unload_minutes` | number (≥ 0, ≤ 1440) | `30` |
 | `worktree_index` | object | — |
-| `worktree_index.enabled` | boolean | `true` |
+| `worktree_index.enabled` | boolean | `false` |
 | `worktree_index.initial_wait_ms` | number (≥ 0, ≤ 60000) | `3000` |
 | `worktree_index.sync_wait_ms` | number (≥ 0, ≤ 60000) | `1000` |
 | `worktree_index.idle_unload_minutes` | number (≥ 0, ≤ 1440) | `30` |

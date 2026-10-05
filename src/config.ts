@@ -868,7 +868,8 @@ const VaultConfigSchema = z
  * resolves its settings with these defaults and bounds instead of a copy.
  */
 export const WorktreeIndexConfigSchema = z.object({
-  enabled: z.boolean().default(true),
+  /** Opt-in: a copy costs disk and daemon memory per live worktree. */
+  enabled: z.boolean().default(false),
   /** How long the first calls of a session wait for a copy still being built. */
   initial_wait_ms: z.number().int().min(0).max(60_000).default(3_000),
   /** How long a call waits for re-indexing files edited since the last call. */
@@ -1128,7 +1129,8 @@ export const TraceMcpConfigSchema = z.object({
    * re-indexes the branch delta into the copy, and from then on the session's
    * tools answer from the copy. `enabled: false` (or
    * `TRACE_MCP_WORKTREE_INDEX=0`) keeps every worktree session on the main
-   * index. See docs/configuration.md, "Linked worktrees".
+   * index. Opt-in: off unless `enabled: true` (or `TRACE_MCP_WORKTREE_INDEX=1`).
+   * See docs/configuration.md, "Linked worktrees".
    */
   worktree_index: WorktreeIndexConfigSchema.optional(),
   /**

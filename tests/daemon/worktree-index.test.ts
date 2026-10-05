@@ -145,7 +145,12 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
 
   function manager(over: Partial<WorktreeIndexSettings> = {}): WorktreeIndexManager {
     const m = new WorktreeIndexManager({
-      settings: { ...DEFAULT_WORKTREE_INDEX_SETTINGS, initialWaitMs: 30_000, ...over },
+      settings: {
+        ...DEFAULT_WORKTREE_INDEX_SETTINGS,
+        enabled: true,
+        initialWaitMs: 30_000,
+        ...over,
+      },
       getCanonical: (root) => (path.resolve(root) === main ? canonical : undefined),
       dir: snapshotsDir,
       version: 'test',
@@ -387,6 +392,13 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
   it('with the feature off behaves exactly like the canonical worktree session', async () => {
     const m = manager({ enabled: false });
     expect(m.routeFor(main, wt)).toBeNull();
+    // Off is also what a daemon without a worktree_index section gets.
+    const byDefault = new WorktreeIndexManager({
+      settings: resolveWorktreeIndexSettings(undefined, {}),
+      getCanonical: () => canonical,
+      dir: snapshotsDir,
+    });
+    expect(byDefault.routeFor(main, wt)).toBeNull();
     const call = await session(m);
     const outline = await call('get_outline', { path: 'src/lib.ts' });
     expect(flagged(outline.json)).toContain('src/lib.ts');
@@ -418,6 +430,10 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
 describe('resolveWorktreeIndexSettings', () => {
   it('defaults, overrides and the env switch', () => {
     expect(resolveWorktreeIndexSettings(undefined, {})).toEqual(DEFAULT_WORKTREE_INDEX_SETTINGS);
+    // Opt-in: off unless the config or the env turns it on.
+    expect(DEFAULT_WORKTREE_INDEX_SETTINGS.enabled).toBe(false);
+    expect(resolveWorktreeIndexSettings({}, {}).enabled).toBe(false);
+    expect(resolveWorktreeIndexSettings({}, { TRACE_MCP_WORKTREE_INDEX: '1' }).enabled).toBe(true);
     // The defaults are the config schema's, not a second copy.
     const schemaDefaults = TraceMcpConfigSchema.parse({ worktree_index: {} }).worktree_index!;
     expect(DEFAULT_WORKTREE_INDEX_SETTINGS.initialWaitMs).toBe(schemaDefaults.initial_wait_ms);

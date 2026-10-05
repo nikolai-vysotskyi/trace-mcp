@@ -152,8 +152,9 @@ the index).
 ### Linked worktrees: branch index
 
 Flags fix reading, but callers, usages and change impact still walk edges stored in the
-main index. So the HTTP daemon also keeps a **branch index** per live worktree: a copy of
-the main checkout's index with the worktree delta re-indexed into it.
+main index. With `worktree_index.enabled: true` (opt-in, off by default) the HTTP daemon
+also keeps a **branch index** per live worktree: a copy of the main checkout's index with
+the worktree delta re-indexed into it.
 
 1. **Copy.** On the first session for a worktree (a stdio proxy routing a worktree to its
    main checkout sends `?worktree=`), the daemon copies the main index with SQLite's
@@ -186,7 +187,7 @@ Daemon-wide settings, in the global config:
 
 ```jsonc
 "worktree_index": {
-  "enabled": true,          // false (or TRACE_MCP_WORKTREE_INDEX=0): main index only, as above
+  "enabled": false,         // opt-in; true (or TRACE_MCP_WORKTREE_INDEX=1) turns it on
   "initial_wait_ms": 3000,  // how long the first calls wait for a copy being built
   "sync_wait_ms": 1000,     // how long a call waits for re-indexing recent edits
   "idle_unload_minutes": 30,
