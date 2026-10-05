@@ -836,6 +836,12 @@ export class WorktreeIndexManager {
    * same worktree waits for them (`settleRetiring`).
    */
   private readonly retiring = new Map<string, { root: string; done: Promise<void> }>();
+  /**
+   * Worktree roots whose copies are being dropped (WorktreeRemove, GC), with
+   * a count of the drops under way: no entry — and so no build — is created
+   * for them until the files are gone.
+   */
+  private readonly dropping = new Map<string, number>();
   private readonly dir: string;
   private readonly version: string;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -906,8 +912,8 @@ export class WorktreeIndexManager {
     const link = resolveWorktreeLink(canonicalRoot, worktreeHint);
     if (!link) return null;
     const entry = this.entryFor(link);
-    if (entry.current) entry.current.lastUsedAt = this.now();
-    this.ensureBuilding(entry);
+    if (entry?.current) entry.current.lastUsedAt = this.now();
+    if (entry) this.ensureBuilding(entry);
     // The session's first calls share one `initialWaitMs` budget, counted
     // from its first call — not from when the build started, which may be
     // long before (another session) or a while before (a slow client).
@@ -920,7 +926,9 @@ export class WorktreeIndexManager {
     };
   }
 
-  private entryFor(link: WorktreeLink): Entry {
+  /** The entry for `link`, created on demand; null while its copies are being dropped. */
+  private entryFor(link: WorktreeLink): Entry | null {
+    if (this.dropping.has(link.worktreeRoot)) return null;
     let entry = this.entries.get(link.worktreeRoot);
     if (!entry || entry.link.canonicalRoot !== link.canonicalRoot) {
       entry = {
@@ -945,6 +953,7 @@ export class WorktreeIndexManager {
   ): Promise<WorktreeIndexTarget | null> {
     if (!this.settings.enabled || this.stopped) return null;
     const entry = this.entryFor(link);
+    if (!entry) return null;
     const now = this.now();
     const current = entry.current;
     if (current && current.state === 'ready') {
@@ -1330,9 +1339,9 @@ export class WorktreeIndexManager {
     if (isHotChurnPath(relPosix)) return { ok: true, relPath: relPosix, skippedChurn: true };
 
     const entry = this.entryFor(link);
-    const index = entry.current;
-    if (!index || index.state !== 'ready') {
-      this.ensureBuilding(entry);
+    const index = entry?.current;
+    if (!entry || !index || index.state !== 'ready') {
+      if (entry) this.ensureBuilding(entry);
       return { ok: true, relPath: relPosix };
     }
     index.lastUsedAt = this.now();
@@ -1366,20 +1375,44 @@ export class WorktreeIndexManager {
    */
   async drop(worktreePath: string): Promise<number> {
     const candidates = new Set([path.resolve(worktreePath), realpathOr(worktreePath)]);
-    for (const [key, entry] of [...this.entries]) {
-      if (!candidates.has(key)) continue;
-      this.entries.delete(key);
-      await entry.building?.catch(() => null);
-      if (entry.current) await this.retire(entry.current, { drainMs: 5_000 });
-    }
-    let dropped = 0;
-    for (const f of this.listSnapshots()) {
-      if (!candidates.has(f.meta.worktree_root)) continue;
-      this.deleteFile(f.dbPath, f.metaPath);
-      dropped++;
-    }
+    const dropped = await this.whileDropping(candidates, () => {
+      let n = 0;
+      for (const f of this.listSnapshots()) {
+        if (!candidates.has(f.meta.worktree_root)) continue;
+        this.deleteFile(f.dbPath, f.metaPath);
+        n++;
+      }
+      return n;
+    });
     if (dropped > 0) logger.info({ worktree: worktreePath, dropped }, 'Branch index dropped');
     return dropped;
+  }
+
+  /**
+   * Close every copy of the worktrees in `roots` — after any build under way
+   * finishes, and with no new entry or build allowed meanwhile — then run
+   * `remove` (deleting the files) before builds are allowed again.
+   */
+  private async whileDropping<T>(roots: Set<string>, remove: () => T): Promise<T> {
+    for (const root of roots) this.dropping.set(root, (this.dropping.get(root) ?? 0) + 1);
+    try {
+      for (const [key, entry] of [...this.entries]) {
+        if (!roots.has(key)) continue;
+        await entry.building?.catch(() => null);
+        const index = entry.current;
+        entry.current = null;
+        if (index) await this.retire(index, { drainMs: 5_000 });
+        if (this.entries.get(key) === entry) this.entries.delete(key);
+      }
+      for (const root of roots) await this.settleRetiring(root);
+      return remove();
+    } finally {
+      for (const root of roots) {
+        const n = (this.dropping.get(root) ?? 1) - 1;
+        if (n > 0) this.dropping.set(root, n);
+        else this.dropping.delete(root);
+      }
+    }
   }
 
   /**
@@ -1390,7 +1423,6 @@ export class WorktreeIndexManager {
    */
   async gc(): Promise<string[]> {
     const deleted: string[] = [];
-    const loaded = this.loadedPaths();
     const lists = new Map<string, Set<string> | null>();
     for (const f of this.listSnapshots()) {
       const wt = f.meta.worktree_root;
@@ -1407,15 +1439,10 @@ export class WorktreeIndexManager {
         if (listed && !listed.has(wt)) gone = true;
       }
       if (!gone) continue;
-      const entry = this.entries.get(wt);
-      if (entry) {
-        this.entries.delete(wt);
-        if (entry.current) await this.retire(entry.current, { drainMs: 5_000 });
-      } else if (loaded.has(f.dbPath)) {
-        continue;
-      }
-      this.deleteFile(f.dbPath, f.metaPath);
-      deleted.push(f.dbPath);
+      await this.whileDropping(new Set([wt]), () => {
+        this.deleteFile(f.dbPath, f.metaPath);
+        deleted.push(f.dbPath);
+      });
     }
     // Leftovers: interrupted copies and DBs whose sidecar was lost.
     let names: string[] = [];

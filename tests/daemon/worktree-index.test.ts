@@ -521,6 +521,26 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     ).toEqual([]);
   });
 
+  it('starts no copy for a worktree while its copies are being dropped', async () => {
+    const m = manager({ initialWaitMs: 0 }, { canonicalQuietWaitMs: 30_000 });
+    // Hold the build before its backup step: the canonical index is "busy".
+    const release = beginReindex(main);
+    cleanups.push(release);
+    const call = await session(m);
+    expect(m.stats().building).toBe(1);
+
+    const dropping = m.drop(wt);
+    // A call arriving meanwhile is answered from the canonical index and
+    // must not start a second build the drop would then pull files from.
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    expect(flagged(outline.json)).toContain('src/lib.ts');
+    release();
+    expect(await dropping).toBe(1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(m.stats()).toMatchObject({ loaded: 0, building: 0 });
+    expect(dbFiles()).toEqual([]);
+  });
+
   it('with the feature off behaves exactly like the canonical worktree session', async () => {
     const m = manager({ enabled: false });
     expect(m.routeFor(main, wt)).toBeNull();
