@@ -992,30 +992,41 @@ export class WorktreeIndexManager {
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     let file = this.findReusable(link, readIndexedHead(canonical.db) ?? delta.canonicalHead);
     let copyMs = 0;
-    let reused = true;
-    if (!file) {
-      reused = false;
-      const estimate = fileBytes(canonical.db.name);
-      if (!this.makeRoomOnDisk(estimate, link.worktreeRoot)) {
-        return this.refuse(entry, 'disk_limit', {
-          estimateBytes: estimate,
-          limitBytes: this.settings.maxDiskBytes,
-        });
+    let reused = file !== null;
+    let index: BranchIndex;
+    let td: number;
+    for (;;) {
+      if (!file) {
+        reused = false;
+        const estimate = fileBytes(canonical.db.name);
+        if (!this.makeRoomOnDisk(estimate, link.worktreeRoot)) {
+          return this.refuse(entry, 'disk_limit', {
+            estimateBytes: estimate,
+            limitBytes: this.settings.maxDiskBytes,
+          });
+        }
+        const tc = performance.now();
+        file = await this.copyCanonical(link, canonical, delta.canonicalHead);
+        copyMs = Math.round(performance.now() - tc);
       }
-      const tc = performance.now();
-      file = await this.copyCanonical(link, canonical, delta.canonicalHead);
-      copyMs = Math.round(performance.now() - tc);
-    }
-
-    const index = new BranchIndex(this, file, this.now());
-    const td = performance.now();
-    try {
-      index.open(canonical.config, this.deps);
-      await index.sync(delta);
-    } catch (err) {
-      await index.close({ drainMs: 0 });
-      if (!reused) this.deleteFile(file.dbPath, file.metaPath);
-      throw err;
+      index = new BranchIndex(this, file, this.now());
+      td = performance.now();
+      try {
+        index.open(canonical.config, this.deps);
+        await index.sync(delta);
+        break;
+      } catch (err) {
+        await index.close({ drainMs: 0 });
+        // A copy that fails to open or sync is not kept: a reused one would
+        // be picked again, and fail again, on every retry.
+        this.deleteFile(file.dbPath, file.metaPath);
+        if (!reused) throw err;
+        logger.warn(
+          { error: serializeError(err), dbPath: file.dbPath, worktree: link.worktreeRoot },
+          'Reused branch index unusable — deleted, copying afresh',
+        );
+        file = null;
+      }
     }
     const deltaMs = Math.round(performance.now() - td);
     if (this.stopped) {

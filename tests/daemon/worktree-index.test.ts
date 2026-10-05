@@ -455,6 +455,25 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(dbFiles()).toEqual([]);
   });
 
+  it('replaces a reused copy that no longer opens', async () => {
+    const first = manager();
+    await (await session(first))('get_index_health');
+    await first.shutdown();
+    const [corrupt] = dbFiles();
+    // Damaged on disk while the daemon was down.
+    fs.writeFileSync(path.join(snapshotsDir, corrupt), 'not a database'.repeat(512));
+    for (const suffix of ['-wal', '-shm']) {
+      fs.rmSync(path.join(snapshotsDir, corrupt + suffix), { force: true });
+    }
+    const m = manager();
+    const call = await session(m);
+    const health = (await call('get_index_health')).json;
+    expect((health.worktree as Json).served_from).toBe('branch_index');
+    const now = dbFiles();
+    expect(now).toHaveLength(1);
+    expect(now[0]).not.toBe(corrupt);
+  });
+
   it('drops the copy on request (WorktreeRemove hook)', async () => {
     const m = manager();
     const call = await session(m);
