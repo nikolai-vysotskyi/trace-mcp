@@ -22,10 +22,12 @@ import type { WorktreeIndexRoute } from './worktree-index-route.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
-/** Name → gated handler map for in-process tool dispatch without a second MCP
- *  transport/session. Populated by `installToolGate` inside `createServer()`
- *  and exposed on `ServerHandle.toolHandlers` — the same map the `batch` tool
- *  (session.ts) already uses for same-project dispatch. */
+/** Name → handler map for in-process tool dispatch without a second MCP
+ *  transport/session. The handlers are the tools' own callbacks, NOT the
+ *  gated ones: a caller skips the gate's journal, savings, dedup and
+ *  enrichment and does its own accounting. Populated by `installToolGate`
+ *  inside `createServer()` and exposed on `ServerHandle.toolHandlers` — the
+ *  same map the `batch` tool (session.ts) uses for same-project dispatch. */
 export type ToolHandlerMap = Map<
   string,
   (params: Record<string, unknown>) => Promise<ToolResponse>

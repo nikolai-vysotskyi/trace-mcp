@@ -331,8 +331,9 @@ export interface ServerHandle {
    */
   journal: SessionJournal;
   /**
-   * Name → gated handler map for in-process tool dispatch without a second MCP
-   * transport/session. Same map the `batch` tool uses for same-project calls;
+   * Name → handler map (the tools' own callbacks, before the gate) for
+   * in-process tool dispatch without a second MCP transport/session. Same
+   * map the `batch` tool uses for same-project calls;
    * `call_project_tool`'s cross-project relay (src/daemon/project-relay.ts)
    * looks up a DIFFERENT project's server by this field instead of opening a
    * second live MCP connection.
