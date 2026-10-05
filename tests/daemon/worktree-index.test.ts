@@ -361,6 +361,31 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(names(mainOnly.json)).not.toContain('mainOnly');
   });
 
+  it('keeps syncing the old copy while a rebuild for a moved HEAD is refused', async () => {
+    // The branch delta is 4 files; the main-only file below makes it 5.
+    const m = manager({ maxDeltaFiles: 4 });
+    const call = await session(m);
+    await call('get_index_health');
+    expect(dbFiles()).toHaveLength(1);
+
+    write(main, 'src/mainonly.ts', 'export function mainOnly() {}\n');
+    git(main, 'add', '-A');
+    git(main, 'commit', '-q', '-m', 'main moves');
+    await canonical.pipeline.indexFiles(['src/mainonly.ts']);
+    clearWorktreeDeltaCache();
+    await call('get_index_health'); // notices the move; the rebuild is refused
+
+    write(
+      wt,
+      'src/added.ts',
+      'export function addedFn(): number {\n  return 4;\n}\nexport function afterMove() {}\n',
+    );
+    clearWorktreeDeltaCache();
+    const res = await call('search', { query: 'afterMove' });
+    expect(names(res.json)).toContain('afterMove');
+    expect(dbFiles()).toHaveLength(1);
+  });
+
   it('reuses the copy after an unload and drops it once the worktree is removed', async () => {
     const m = manager({ idleUnloadMs: 1 });
     const call = await session(m);

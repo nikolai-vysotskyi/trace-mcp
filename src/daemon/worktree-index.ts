@@ -871,15 +871,17 @@ export class WorktreeIndexManager {
     try {
       const delta = await getWorktreeDelta(entry.link);
       if (!delta || index.state !== 'ready') return;
-      if (delta.canonicalHead !== index.canonicalHead) {
+      const headMoved = delta.canonicalHead !== index.canonicalHead;
+      if (headMoved) {
         // The canonical index moved on: files the branch shares with the new
         // HEAD are stale in this copy and in no delta. Keep serving it until
-        // the new copy is ready.
+        // the new copy is ready — and keep it in line with the worktree
+        // meanwhile: the rebuild can be refused (limits) or fail, and then
+        // this copy is what answers for a while.
         this.ensureBuilding(entry, { replace: true, reason: 'canonical_head_moved' });
-        return;
       }
       const reverted = await index.sync(delta);
-      if (reverted > REBUILD_REVERTED_MIN && reverted > worktreeDeltaSize(delta)) {
+      if (!headMoved && reverted > REBUILD_REVERTED_MIN && reverted > worktreeDeltaSize(delta)) {
         this.ensureBuilding(entry, { replace: true, reason: 'delta_shrank' });
       }
     } catch (err) {
