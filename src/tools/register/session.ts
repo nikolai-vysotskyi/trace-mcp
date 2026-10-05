@@ -43,6 +43,7 @@ import { runLoadTools } from '../../server/tool-surface.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { getDeadCodeV2 } from '../refactoring/dead-code.js';
 import { markStaleOnBranch, staleOnBranchWarning } from '../../server/worktree-stale.js';
+import type { WorktreeIndexTarget } from '../../server/worktree-index-route.js';
 import type { WorktreeDelta } from '../../worktree-delta.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
@@ -963,7 +964,15 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       // Sub-calls bypass the gate, so route them to a ready branch index and
       // flag worktree-changed files here too. Without a branch index the
       // canonical delta is resolved once, as before.
-      const worktreeTarget = worktreeIndex ? await worktreeIndex.resolve() : null;
+      // Resolved on the first sub-call that can use it: a batch of
+      // session-local tools never waits for the branch index.
+      let worktreeTarget: WorktreeIndexTarget | null | undefined;
+      const loadWorktreeTarget = async (): Promise<WorktreeIndexTarget | null> => {
+        if (worktreeTarget === undefined) {
+          worktreeTarget = worktreeIndex ? await worktreeIndex.resolve() : null;
+        }
+        return worktreeTarget;
+      };
       let canonicalDelta: WorktreeDelta | null | undefined;
       const loadCanonicalDelta = async (): Promise<WorktreeDelta | null> => {
         if (canonicalDelta === undefined) {
@@ -990,14 +999,12 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         try {
           savings.recordCall(call.tool);
           const subStart = Date.now();
-          const branchResponse =
-            worktreeTarget && !isSessionLocalTool?.(call.tool)
-              ? await worktreeTarget.run(call.tool, call.args)
-              : undefined;
+          const target =
+            worktreeIndex && !isSessionLocalTool?.(call.tool) ? await loadWorktreeTarget() : null;
+          const branchResponse = target ? await target.run(call.tool, call.args) : undefined;
           const response = branchResponse ?? (await handler(call.args));
-          const worktreeDelta = branchResponse
-            ? worktreeTarget!.pending()
-            : await loadCanonicalDelta();
+          const worktreeDelta =
+            branchResponse && target ? target.pending() : await loadCanonicalDelta();
           const subLatency = Date.now() - subStart;
           // Parse the JSON text from the response to embed inline
           const text = response.content?.[0]?.text;

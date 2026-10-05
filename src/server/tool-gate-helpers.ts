@@ -475,11 +475,17 @@ export function createGatedCallback(
     // Mark files as consulted via trace-mcp (read by guard hook)
     if (ctx.projectRoot) markToolConsultation(ctx.projectRoot, ctx.name, params);
 
+    // Dedup check
+    const dupInfo = ctx.journal.checkDuplicate(ctx.name, params);
+    const answeredFromJournal = dupInfo?.action === 'dedup' && !!dupInfo.compact_result;
+
     // Worktree session with a ready branch index: the tool answers from the
     // branch index. Everything else in this wrapper (journal, savings,
     // enrichment) stays with the session. No route — no change at all.
+    // Resolved only for a call that runs a handler: resolving can wait for a
+    // delta sync or the initial build, which a deduplicated reply never needs.
     const worktreeTarget =
-      ctx.worktreeIndex && !ctx.isSessionLocalTool?.(ctx.name)
+      ctx.worktreeIndex && !answeredFromJournal && !ctx.isSessionLocalTool?.(ctx.name)
         ? await ctx.worktreeIndex.resolve()
         : null;
     let delegated = false;
@@ -489,8 +495,6 @@ export function createGatedCallback(
         })
       : originalCb;
 
-    // Dedup check
-    const dupInfo = ctx.journal.checkDuplicate(ctx.name, params);
     if (dupInfo) {
       return handleDuplicate(ctx, dupInfo, params, cbArgs, toolCb);
     }

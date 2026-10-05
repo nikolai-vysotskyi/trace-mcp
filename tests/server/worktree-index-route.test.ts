@@ -138,6 +138,25 @@ describe('worktree index route', () => {
     expect(resolves()).toBe(0);
   });
 
+  it('answers a deduplicated repeat without resolving the branch index', async () => {
+    const { target, ran } = fakeTarget();
+    const { call, resolves } = await connect(target);
+    await call('get_outline', { path: 'src/a.ts' });
+    expect(resolves()).toBe(1);
+    const again = await call('get_outline', { path: 'src/a.ts' });
+    expect(again.json).toHaveProperty('_dedup');
+    // Resolving can wait for a sync or the build; a journal reply needs neither.
+    expect(resolves()).toBe(1);
+    expect(ran).toEqual(['get_outline']);
+  });
+
+  it('does not resolve the branch index for a batch of session-local tools', async () => {
+    const { target } = fakeTarget();
+    const { call, resolves } = await connect(target);
+    await call('batch', { calls: [{ tool: 'trace_state_list', args: {} }] });
+    expect(resolves()).toBe(0);
+  });
+
   it('routes batch sub-calls the same way', async () => {
     const { target, ran } = fakeTarget(['src/a.ts']);
     const { call } = await connect(target);
