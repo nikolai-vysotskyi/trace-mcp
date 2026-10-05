@@ -16,12 +16,14 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type TraceMcpConfig, TraceMcpConfigSchema } from '../../src/config.js';
 import {
+  BranchIndex,
   DEFAULT_WORKTREE_INDEX_SETTINGS,
   resolveWorktreeIndexSettings,
   WorktreeIndexManager,
+  type WorktreeIndexManagerDeps,
   type WorktreeIndexSettings,
 } from '../../src/daemon/worktree-index.js';
 import { initializeDatabase } from '../../src/db/schema.js';
@@ -146,12 +148,10 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
 
   function manager(
     over: Partial<WorktreeIndexSettings> = {},
-    now?: () => number,
-    canonicalQuietWaitMs?: number,
+    deps: Partial<WorktreeIndexManagerDeps> = {},
   ): WorktreeIndexManager {
     const m = new WorktreeIndexManager({
-      now,
-      canonicalQuietWaitMs,
+      ...deps,
       settings: {
         ...DEFAULT_WORKTREE_INDEX_SETTINGS,
         enabled: true,
@@ -325,7 +325,8 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
   });
 
   it('rebuilds when the canonical HEAD moves past the copy', async () => {
-    const m = manager();
+    const dropped: string[] = [];
+    const m = manager({}, { dropPoolRoot: (root) => dropped.push(root) });
     const call = await session(m);
     await call('get_index_health');
     const first = dbFiles();
@@ -355,6 +356,8 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     const now = dbFiles();
     expect(now).toHaveLength(1);
     expect(now[0]).not.toBe(first[0]);
+    // Closing the old copy leaves the worktree's shared caches to the new one.
+    expect(dropped).toEqual([]);
     // The branch still sees its rename, and now the main-only file (in the
     // delta: the branch does not have it, so it is deleted from the copy).
     const renamed = await call('search', { query: 'newName' });
@@ -370,7 +373,7 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     git(main, 'add', '-A');
     git(main, 'commit', '-q', '-m', 'main moves');
     const gitHead = git(main, 'rev-parse', 'HEAD');
-    const m = manager({}, undefined, 300);
+    const m = manager({}, { canonicalQuietWaitMs: 300 });
     const call = await session(m);
     const atCopy = async () => {
       clearWorktreeDeltaCache();
@@ -455,6 +458,40 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(dbFiles()).toEqual([]);
   });
 
+  it('does not reopen a copy that is still closing', async () => {
+    const m = manager({ idleUnloadMs: 1 });
+    const call = await session(m);
+    await call('get_index_health');
+    const entries = (m as unknown as { entries: Map<string, { current: BranchIndex | null }> })
+      .entries;
+    const old = entries.get(wt)!.current!;
+    // Hold the old copy in its close: a re-index pass is still running.
+    let release!: () => void;
+    Object.assign(old, { chain: new Promise<void>((r) => (release = r)) });
+    const statesAtOpen: string[] = [];
+    const open = BranchIndex.prototype.open;
+    const spy = vi.spyOn(BranchIndex.prototype, 'open').mockImplementation(function (
+      this: BranchIndex,
+      ...args
+    ) {
+      statesAtOpen.push(old.state);
+      return open.apply(this, args);
+    });
+    cleanups.push(() => spy.mockRestore());
+
+    await new Promise((r) => setTimeout(r, 5));
+    const sweeping = m.sweepIdle();
+    const answer = call('search', { query: 'newName' });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(old.state).toBe('retiring');
+    release();
+    expect(await sweeping).toEqual([wt]);
+    expect(names((await answer).json)).toContain('newName');
+    // The file was reopened only once the old connection was closed.
+    expect(statesAtOpen).toEqual(['closed']);
+    expect(dbFiles()).toHaveLength(1);
+  });
+
   it('replaces a reused copy that no longer opens', async () => {
     const first = manager();
     await (await session(first))('get_index_health');
@@ -515,7 +552,7 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
 
   it("counts the initial wait from the session's first call, not from the build start", async () => {
     let clock = Date.now();
-    const m = manager({ initialWaitMs: 20_000 }, () => clock);
+    const m = manager({ initialWaitMs: 20_000 }, { now: () => clock });
     // Hold the copy before its backup step: the canonical index is "busy".
     const release = beginReindex(main);
     cleanups.push(release);

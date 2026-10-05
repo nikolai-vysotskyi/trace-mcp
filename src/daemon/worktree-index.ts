@@ -412,6 +412,8 @@ export interface WorktreeIndexManagerDeps {
 
 export interface WorktreeIndexStats {
   loaded: number;
+  /** Copies closing (still open until their in-flight calls finish). */
+  retiring: number;
   building: number;
   on_disk: number;
   disk_bytes: number;
@@ -754,7 +756,11 @@ export class BranchIndex {
     };
   }
 
-  /** Stop serving and close. Waits (bounded) for calls already running. */
+  /**
+   * Stop serving and close. Waits (bounded) for calls already running. The
+   * manager closes copies through `retire`, which keeps the file counted as
+   * open until this resolves.
+   */
   async close(opts: { drainMs?: number } = {}): Promise<void> {
     if (this.state === 'closed') return;
     this.state = 'retiring';
@@ -803,13 +809,8 @@ export class BranchIndex {
     this.handle = null;
     this.pipeline = null;
     this.db = null;
-    clearProjectReindexCache(this.worktreeRoot);
-    try {
-      dropTreeCacheScope(this.worktreeRoot);
-    } catch {
-      /* best-effort */
-    }
-    this.owner.dropPoolRoot(this.worktreeRoot);
+    // Caches keyed by the worktree root are the manager's to drop
+    // (`releaseRoot`): another copy of the same worktree may be using them.
   }
 }
 
@@ -829,6 +830,12 @@ interface Entry {
  */
 export class WorktreeIndexManager {
   private readonly entries = new Map<string, Entry>();
+  /**
+   * Copies closing, by DB path. Still open until their close resolves: GC,
+   * disk eviction and reuse must leave the file alone, and a new copy of the
+   * same worktree waits for them (`settleRetiring`).
+   */
+  private readonly retiring = new Map<string, { root: string; done: Promise<void> }>();
   private readonly dir: string;
   private readonly version: string;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -848,8 +855,44 @@ export class WorktreeIndexManager {
     return this.deps.now?.() ?? Date.now();
   }
 
-  dropPoolRoot(root: string): void {
-    this.deps.dropPoolRoot?.(root);
+  /** Close `index`, counting its file as open until it is closed. Never rejects. */
+  private retire(index: BranchIndex, opts: { drainMs?: number } = {}): Promise<void> {
+    const pending = this.retiring.get(index.dbPath);
+    if (pending) return pending.done;
+    const done = index
+      .close(opts)
+      .catch((err) => logger.debug({ err, dbPath: index.dbPath }, 'Branch index close failed'))
+      .finally(() => {
+        if (this.retiring.get(index.dbPath)?.done === done) this.retiring.delete(index.dbPath);
+        this.releaseRoot(index.worktreeRoot);
+      });
+    this.retiring.set(index.dbPath, { root: index.worktreeRoot, done });
+    return done;
+  }
+
+  /** Wait for copies of `worktreeRoot` still closing. */
+  private async settleRetiring(worktreeRoot: string): Promise<void> {
+    const closing = [...this.retiring.values()].filter((r) => r.root === worktreeRoot);
+    await Promise.all(closing.map((r) => r.done));
+  }
+
+  /**
+   * Drop the caches keyed by a worktree root once no copy of it is open or
+   * closing: they are shared by every copy of that worktree, and a rebuild
+   * closes the old copy while the new one already serves.
+   */
+  private releaseRoot(worktreeRoot: string): void {
+    const entry = this.entries.get(worktreeRoot);
+    if (entry?.current && entry.current.state !== 'closed') return;
+    if (entry?.building) return;
+    for (const r of this.retiring.values()) if (r.root === worktreeRoot) return;
+    clearProjectReindexCache(worktreeRoot);
+    try {
+      dropTreeCacheScope(worktreeRoot);
+    } catch {
+      /* best-effort */
+    }
+    this.deps.dropPoolRoot?.(worktreeRoot);
   }
 
   /**
@@ -1005,6 +1048,9 @@ export class WorktreeIndexManager {
     }
 
     fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    // An unloaded copy of this worktree may still be closing: reuse its file
+    // once it is closed rather than open a second connection on it.
+    await this.settleRetiring(link.worktreeRoot);
     let file = this.findReusable(link, readIndexedHead(canonical.db) ?? delta.canonicalHead);
     let copyMs = 0;
     let reused = file !== null;
@@ -1031,7 +1077,7 @@ export class WorktreeIndexManager {
         await index.sync(delta);
         break;
       } catch (err) {
-        await index.close({ drainMs: 0 });
+        await this.retire(index, { drainMs: 0 });
         // A copy that fails to open or sync is not kept: a reused one would
         // be picked again, and fail again, on every retry.
         this.deleteFile(file.dbPath, file.metaPath);
@@ -1045,7 +1091,7 @@ export class WorktreeIndexManager {
     }
     const deltaMs = Math.round(performance.now() - td);
     if (this.stopped) {
-      await index.close({ drainMs: 0 });
+      await this.retire(index, { drainMs: 0 });
       return null;
     }
     index.markReady(this.now());
@@ -1056,7 +1102,7 @@ export class WorktreeIndexManager {
     entry.lastError = null;
     entry.retryAt = 0;
     if (previous && previous !== index) {
-      void previous.close().then(() => {
+      void this.retire(previous).then(() => {
         if (previous.dbPath !== index.dbPath) this.deleteFile(previous.dbPath, previous.metaPath);
       });
     }
@@ -1159,7 +1205,7 @@ export class WorktreeIndexManager {
   }
 
   private loadedPaths(): Set<string> {
-    const out = new Set<string>();
+    const out = new Set<string>(this.retiring.keys());
     for (const entry of this.entries.values()) {
       if (entry.current && entry.current.state !== 'closed') out.add(entry.current.dbPath);
     }
@@ -1242,11 +1288,13 @@ export class WorktreeIndexManager {
 
   private async unload(entry: Entry): Promise<void> {
     const index = entry.current;
+    if (!index) return;
     entry.current = null;
-    if (this.entries.get(entry.link.worktreeRoot) === entry && !entry.building) {
+    await this.retire(index);
+    // Only now: until the close is done the file counts as open (`retiring`).
+    if (this.entries.get(entry.link.worktreeRoot) === entry && !entry.current && !entry.building) {
       this.entries.delete(entry.link.worktreeRoot);
     }
-    if (index) await index.close();
   }
 
   /**
@@ -1322,7 +1370,7 @@ export class WorktreeIndexManager {
       if (!candidates.has(key)) continue;
       this.entries.delete(key);
       await entry.building?.catch(() => null);
-      if (entry.current) await entry.current.close({ drainMs: 5_000 });
+      if (entry.current) await this.retire(entry.current, { drainMs: 5_000 });
     }
     let dropped = 0;
     for (const f of this.listSnapshots()) {
@@ -1362,7 +1410,7 @@ export class WorktreeIndexManager {
       const entry = this.entries.get(wt);
       if (entry) {
         this.entries.delete(wt);
-        if (entry.current) await entry.current.close({ drainMs: 5_000 });
+        if (entry.current) await this.retire(entry.current, { drainMs: 5_000 });
       } else if (loaded.has(f.dbPath)) {
         continue;
       }
@@ -1429,6 +1477,7 @@ export class WorktreeIndexManager {
     const files = this.listSnapshots();
     return {
       loaded,
+      retiring: this.retiring.size,
       building,
       on_disk: files.length,
       disk_bytes: files.reduce((sum, f) => sum + fileBytes(f.dbPath), 0),
@@ -1467,8 +1516,9 @@ export class WorktreeIndexManager {
     await Promise.all(
       entries.map(async (entry) => {
         await waitFor(entry.building ?? Promise.resolve(null), 2_000);
-        if (entry.current) await entry.current.close({ drainMs: 2_000 });
+        if (entry.current) await this.retire(entry.current, { drainMs: 2_000 });
       }),
     );
+    await Promise.all([...this.retiring.values()].map((r) => r.done));
   }
 }
