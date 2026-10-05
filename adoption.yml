@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-10-04T08:22:03.294Z"
+updated: "2026-10-05T07:02:45.134Z"
 active_users:
-  day: 2
-  week: 125
-  month: 294
+  day: 0
+  week: 112
+  month: 285
   first_ping_date: "2026-08-29"
-  days_observed: 37
+  days_observed: 38
   month_window_full: true
-events_28d: 2111
+events_28d: 2102
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,9 +50,9 @@ events_28d: 2111
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 113250288
-  tokens_saved_raw: 137497407
-  usd_saved: 113.25
+  tokens_saved: 113905665
+  tokens_saved_raw: 138152784
+  usd_saved: 113.91
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 254
+  new_installs_28d: 229
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 1
+  retention_dau_mau_pct: 0
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,31 +159,30 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 992
-  "upgrade": 722
-  "new": 254
-  "(not set)": 72
+  "active": 1026
+  "upgrade": 707
+  "new": 229
+  "(not set)": 70
   "downgrade": 65
-  "unknown": 6
+  "unknown": 3
 by_version:
   "3.25.0": 75
-  "3.34.6": 64
-  "3.23.2": 55
+  "3.34.6": 68
   "3.24.0": 49
   "3.31.3": 49
   "3.32.0": 49
   "3.31.2": 47
+  "3.23.2": 46
   "3.34.4": 46
   "3.27.1": 42
   "3.26.0": 34
   "3.26.3": 33
   "3.34.1": 32
   "3.34.3": 31
-  "3.22.0": 30
   "3.26.1": 30
   "3.28.0": 30
   "3.31.5": 28
@@ -193,6 +192,7 @@ by_version:
   "3.31.4": 17
   "3.34.2": 15
   "3.31.0": 11
+  "3.22.0": 9
   "3.30.1": 9
   "3.30.0": 8
 
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 862
+  at_or_above: 836
   below: 0
   unknown: 0
   pct: 100
@@ -258,37 +258,37 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 87
-  "(not set)": 59
+  "United Arab Emirates": 86
+  "(not set)": 55
   "United States": 25
-  "Russia": 20
-  "China": 9
+  "Russia": 19
+  "China": 10
   "Thailand": 9
-  "Brazil": 8
-  "South Korea": 6
+  "Brazil": 7
   "Chile": 5
   "Germany": 5
   "Netherlands": 5
   "Poland": 5
+  "South Korea": 5
   "Italy": 4
   "Australia": 3
   "Indonesia": 3
   "Spain": 3
   "Bangladesh": 2
+  "Canada": 2
   "France": 2
-  "New Zealand": 2
   "Slovenia": 2
   "Sweden": 2
   "Switzerland": 2
   "Türkiye": 2
   "United Kingdom": 2
 by_client:
-  "unknown": 235
-  "claude-code": 76
+  "unknown": 211
+  "claude-code": 74
   "codex-mcp-client": 42
   "antigravity-client": 17
-  "mcp": 14
-  "opencode": 13
+  "mcp": 15
+  "opencode": 14
   "grok-shell-trace-mcp": 5
   "Visual Studio Code": 4
   "cursor-vscode": 4
@@ -300,11 +300,11 @@ by_client:
   "local-agent-mode-trace": 2
   "trace-mcp-insights": 2
   "(not set)": 1
+  "Cline": 1
   "b7-measure": 1
   "boaz": 1
   "check": 1
   "commandcode": 1
   "copilot-cli": 1
   "dev.warp.Warp-Stable": 1
-  "factory-cli": 1
-  "freebuff-desktop": 1
+  "dsh-mcp-client": 1
