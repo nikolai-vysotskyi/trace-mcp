@@ -48,7 +48,11 @@ import {
   InferenceCache,
 } from '../ai/index.js';
 import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
-import type { TraceMcpConfig } from '../config.js';
+import {
+  type TraceMcpConfig,
+  type WorktreeIndexConfig,
+  WorktreeIndexConfigSchema,
+} from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { INDEX_DIR, LOCKS_DIR, projectHash, projectName } from '../global.js';
@@ -104,21 +108,46 @@ export interface WorktreeIndexSettings {
   maxDeltaFiles: number;
 }
 
-export const DEFAULT_WORKTREE_INDEX_SETTINGS: Readonly<WorktreeIndexSettings> = Object.freeze({
-  enabled: true,
-  initialWaitMs: 3_000,
-  syncWaitMs: 1_000,
-  idleUnloadMs: 30 * 60_000,
-  maxLoaded: 3,
-  maxSnapshots: 8,
-  maxDiskBytes: 8 * 1024 * 1024 * 1024,
-  maxDeltaFiles: 2_000,
-});
+function toSettings(c: WorktreeIndexConfig): WorktreeIndexSettings {
+  return {
+    enabled: c.enabled,
+    initialWaitMs: c.initial_wait_ms,
+    syncWaitMs: c.sync_wait_ms,
+    idleUnloadMs: c.idle_unload_minutes * 60_000,
+    maxLoaded: c.max_loaded,
+    maxSnapshots: c.max_snapshots,
+    maxDiskBytes: c.max_disk_mb * 1024 * 1024,
+    maxDeltaFiles: c.max_delta_files,
+  };
+}
 
-function num(value: unknown, min: number, max: number): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
-    ? value
-    : undefined;
+/** The config schema's defaults, in the manager's units. */
+export const DEFAULT_WORKTREE_INDEX_SETTINGS: Readonly<WorktreeIndexSettings> = Object.freeze(
+  toSettings(WorktreeIndexConfigSchema.parse({})),
+);
+
+/**
+ * Parse with the config schema; a key that fails validation is dropped so it
+ * takes its default while the valid keys still apply (the daemon reads the
+ * global config raw and must not refuse to start over one bad value).
+ */
+function parseSection(raw: unknown): WorktreeIndexConfig {
+  const input: Record<string, unknown> =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...(raw as object) } : {};
+  for (;;) {
+    const parsed = WorktreeIndexConfigSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+    const bad = new Set(parsed.error.issues.map((issue) => issue.path[0]));
+    let dropped = false;
+    for (const key of bad) {
+      if (typeof key === 'string' && key in input) {
+        delete input[key];
+        dropped = true;
+      }
+    }
+    if (!dropped) return WorktreeIndexConfigSchema.parse({});
+    logger.warn({ keys: [...bad] }, 'Invalid worktree_index settings ignored (defaults used)');
+  }
 }
 
 /**
@@ -130,24 +159,11 @@ export function resolveWorktreeIndexSettings(
   raw: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): WorktreeIndexSettings {
-  const d = DEFAULT_WORKTREE_INDEX_SETTINGS;
-  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  let enabled = typeof o.enabled === 'boolean' ? o.enabled : d.enabled;
+  const settings = toSettings(parseSection(raw));
   const envSwitch = env.TRACE_MCP_WORKTREE_INDEX?.trim().toLowerCase();
-  if (envSwitch === '0' || envSwitch === 'off' || envSwitch === 'false') enabled = false;
-  else if (envSwitch === '1' || envSwitch === 'on' || envSwitch === 'true') enabled = true;
-  const idleMin = num(o.idle_unload_minutes, 0, 1440);
-  const diskMb = num(o.max_disk_mb, 0, 1_048_576);
-  return {
-    enabled,
-    initialWaitMs: num(o.initial_wait_ms, 0, 60_000) ?? d.initialWaitMs,
-    syncWaitMs: num(o.sync_wait_ms, 0, 60_000) ?? d.syncWaitMs,
-    idleUnloadMs: idleMin !== undefined ? idleMin * 60_000 : d.idleUnloadMs,
-    maxLoaded: Math.floor(num(o.max_loaded, 1, 64) ?? d.maxLoaded),
-    maxSnapshots: Math.floor(num(o.max_snapshots, 1, 256) ?? d.maxSnapshots),
-    maxDiskBytes: diskMb !== undefined ? diskMb * 1024 * 1024 : d.maxDiskBytes,
-    maxDeltaFiles: Math.floor(num(o.max_delta_files, 1, 1_000_000) ?? d.maxDeltaFiles),
-  };
+  if (envSwitch === '0' || envSwitch === 'off' || envSwitch === 'false') settings.enabled = false;
+  else if (envSwitch === '1' || envSwitch === 'on' || envSwitch === 'true') settings.enabled = true;
+  return settings;
 }
 
 // ─── Snapshot files ────────────────────────────────────────────────

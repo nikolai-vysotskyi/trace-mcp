@@ -418,6 +418,13 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
 describe('resolveWorktreeIndexSettings', () => {
   it('defaults, overrides and the env switch', () => {
     expect(resolveWorktreeIndexSettings(undefined, {})).toEqual(DEFAULT_WORKTREE_INDEX_SETTINGS);
+    // The defaults are the config schema's, not a second copy.
+    const schemaDefaults = TraceMcpConfigSchema.parse({ worktree_index: {} }).worktree_index!;
+    expect(DEFAULT_WORKTREE_INDEX_SETTINGS.initialWaitMs).toBe(schemaDefaults.initial_wait_ms);
+    expect(DEFAULT_WORKTREE_INDEX_SETTINGS.enabled).toBe(schemaDefaults.enabled);
+    expect(DEFAULT_WORKTREE_INDEX_SETTINGS.maxDiskBytes).toBe(
+      schemaDefaults.max_disk_mb * 1024 * 1024,
+    );
     const s = resolveWorktreeIndexSettings(
       { enabled: true, idle_unload_minutes: 5, max_disk_mb: 100, max_loaded: 0 },
       {},
@@ -426,6 +433,16 @@ describe('resolveWorktreeIndexSettings', () => {
     expect(s.maxDiskBytes).toBe(100 * 1024 * 1024);
     // Out of range falls back to the default.
     expect(s.maxLoaded).toBe(DEFAULT_WORKTREE_INDEX_SETTINGS.maxLoaded);
+    // Bounds and types are the config schema's: a fraction where it wants an
+    // integer is invalid too, and only that key falls back.
+    const fractional = resolveWorktreeIndexSettings(
+      { initial_wait_ms: 1500.5, max_loaded: 2.5, max_snapshots: 4 },
+      {},
+    );
+    expect(fractional.initialWaitMs).toBe(DEFAULT_WORKTREE_INDEX_SETTINGS.initialWaitMs);
+    expect(fractional.maxLoaded).toBe(DEFAULT_WORKTREE_INDEX_SETTINGS.maxLoaded);
+    expect(fractional.maxSnapshots).toBe(4);
+    expect(resolveWorktreeIndexSettings('nonsense', {})).toEqual(DEFAULT_WORKTREE_INDEX_SETTINGS);
     expect(
       resolveWorktreeIndexSettings({ enabled: true }, { TRACE_MCP_WORKTREE_INDEX: '0' }).enabled,
     ).toBe(false);

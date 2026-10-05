@@ -863,6 +863,30 @@ const VaultConfigSchema = z
  * of the symbols extracted. The plugins themselves work fine — a project that
  * wants them adds `**\/*.json` (etc.) to its own `include`.
  */
+/**
+ * `worktree_index` of the global config (GH #1481). Exported so the daemon
+ * resolves its settings with these defaults and bounds instead of a copy.
+ */
+export const WorktreeIndexConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** How long the first calls of a session wait for a copy still being built. */
+  initial_wait_ms: z.number().int().min(0).max(60_000).default(3_000),
+  /** How long a call waits for re-indexing files edited since the last call. */
+  sync_wait_ms: z.number().int().min(0).max(60_000).default(1_000),
+  /** Unload a copy unused for this long (it stays on disk for reuse). 0 disables. */
+  idle_unload_minutes: z.number().min(0).max(1440).default(30),
+  /** Copies held open at once. */
+  max_loaded: z.number().int().min(1).max(64).default(3),
+  /** Copies kept on disk. */
+  max_snapshots: z.number().int().min(1).max(256).default(8),
+  /** Total size of the copies on disk, in MB. 0 disables the limit. */
+  max_disk_mb: z.number().int().min(0).max(1_048_576).default(8_192),
+  /** A worktree whose delta has more files than this gets no copy. */
+  max_delta_files: z.number().int().min(1).max(1_000_000).default(2_000),
+});
+
+export type WorktreeIndexConfig = z.infer<typeof WorktreeIndexConfigSchema>;
+
 export const DATA_ONLY_LANGUAGES = ['json', 'xml', 'ini'] as const;
 
 /**
@@ -1106,25 +1130,7 @@ export const TraceMcpConfigSchema = z.object({
    * `TRACE_MCP_WORKTREE_INDEX=0`) keeps every worktree session on the main
    * index. See docs/configuration.md, "Linked worktrees".
    */
-  worktree_index: z
-    .object({
-      enabled: z.boolean().default(true),
-      /** How long the first calls of a session wait for a copy still being built. */
-      initial_wait_ms: z.number().int().min(0).max(60_000).default(3_000),
-      /** How long a call waits for re-indexing files edited since the last call. */
-      sync_wait_ms: z.number().int().min(0).max(60_000).default(1_000),
-      /** Unload a copy unused for this long (it stays on disk for reuse). 0 disables. */
-      idle_unload_minutes: z.number().min(0).max(1440).default(30),
-      /** Copies held open at once. */
-      max_loaded: z.number().int().min(1).max(64).default(3),
-      /** Copies kept on disk. */
-      max_snapshots: z.number().int().min(1).max(256).default(8),
-      /** Total size of the copies on disk, in MB. 0 disables the limit. */
-      max_disk_mb: z.number().int().min(0).max(1_048_576).default(8_192),
-      /** A worktree whose delta has more files than this gets no copy. */
-      max_delta_files: z.number().int().min(1).max(1_000_000).default(2_000),
-    })
-    .optional(),
+  worktree_index: WorktreeIndexConfigSchema.optional(),
   /**
    * How many registered projects the HTTP daemon loads eagerly at startup,
    * most-recently-indexed first. The rest stay registered and load lazily on
