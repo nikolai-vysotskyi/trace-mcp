@@ -246,6 +246,14 @@ const STALE_TMP_MS = 60 * 60_000;
 const REINDEX_FILE_WAIT_MS = 1_000;
 const REINDEX_FILE_WAIT_FULL_MS = 30_000;
 
+/**
+ * A sync re-plans (stats every delta path) only for a new delta or after
+ * this long: `getWorktreeDelta` hands every call within its TTL the same
+ * delta, and a burst of calls must not stat a large delta each time.
+ */
+const PLAN_TTL_MS = 2_000;
+const STAT_BATCH = 64;
+
 const SWEEP_INTERVAL_MS = 60_000;
 const GC_INTERVAL_MS = 30 * 60_000;
 const GC_FIRST_DELAY_MS = 30_000;
@@ -356,6 +364,26 @@ function readIndexedHeadOfFile(dbPath: string): string | null {
   } finally {
     db?.close();
   }
+}
+
+/** `statSignature` without blocking the event loop, a bounded batch at a time. */
+async function statSignatures(root: string, rels: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < rels.length; i += STAT_BATCH) {
+    const batch = rels.slice(i, i + STAT_BATCH);
+    const sigs = await Promise.all(
+      batch.map(async (rel) => {
+        try {
+          const st = await fs.promises.stat(path.join(root, rel));
+          return st.isFile() ? `${st.mtimeMs}:${st.size}` : 'absent';
+        } catch {
+          return 'absent';
+        }
+      }),
+    );
+    batch.forEach((rel, j) => out.set(rel, sigs[j]));
+  }
+  return out;
 }
 
 async function waitFor<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
@@ -475,6 +503,9 @@ export class BranchIndex {
   private aiRun: (() => void) | null = null;
   private cancelAI: (() => void) | null = null;
   private metaDirty = false;
+  /** The delta the last completed pass planned from, and when. */
+  private plannedDelta: WorktreeDelta | null = null;
+  private plannedAt = 0;
   private readonly lockName: string;
 
   constructor(
@@ -587,37 +618,19 @@ export class BranchIndex {
   }
 
   /** Decide what the copy must re-index to match `delta` and the worktree on disk. */
-  private plan(delta: WorktreeDelta): SyncPlan {
+  private async plan(delta: WorktreeDelta): Promise<SyncPlan> {
+    const inDelta = new Set([...delta.modified, ...delta.untracked, ...delta.deleted]);
+    // Files that left the delta (reverted, or merged into the canonical HEAD)
+    // still hold their branch version in the copy: re-index them from disk.
+    const left = [...this.applied.keys()].filter((rel) => !inDelta.has(rel));
+    const signatures = await statSignatures(this.worktreeRoot, [...inDelta, ...left]);
     const index: string[] = [];
     const remove: string[] = [];
-    const signatures = new Map<string, string>();
-    const consider = (rel: string): string => {
-      const sig = statSignature(path.join(this.worktreeRoot, rel));
-      signatures.set(rel, sig);
-      if (this.applied.get(rel) !== sig) (sig === 'absent' ? remove : index).push(rel);
-      return sig;
-    };
-    const inDelta = new Set<string>();
-    for (const rel of delta.modified) {
-      inDelta.add(rel);
-      consider(rel);
-    }
-    for (const rel of delta.untracked) {
-      inDelta.add(rel);
-      consider(rel);
-    }
-    for (const rel of delta.deleted) {
-      inDelta.add(rel);
-      consider(rel);
-    }
-    // Files that left the delta (reverted, or merged into the canonical HEAD):
-    // the copy still holds their branch version. Re-index them from disk.
     let reverted = 0;
-    for (const rel of this.applied.keys()) {
-      if (inDelta.has(rel)) continue;
-      const before = index.length + remove.length;
-      consider(rel);
-      if (index.length + remove.length > before) reverted++;
+    for (const [rel, sig] of signatures) {
+      if (this.applied.get(rel) === sig) continue;
+      (sig === 'absent' ? remove : index).push(rel);
+      if (!inDelta.has(rel)) reverted++;
     }
     return { index, remove, signatures, reverted };
   }
@@ -644,9 +657,14 @@ export class BranchIndex {
   sync(delta: WorktreeDelta): Promise<number> {
     const run = this.chain.then(async () => {
       if (this.state !== 'ready' && this.state !== 'opening') return 0;
+      const now = this.owner.now();
+      if (delta === this.plannedDelta && now - this.plannedAt < PLAN_TTL_MS) return 0;
       this.lastDelta = delta;
-      const plan = this.plan(delta);
+      const plan = await this.plan(delta);
       await this.apply(plan);
+      // Only once applied: a failed pass is re-planned by the next call.
+      this.plannedDelta = delta;
+      this.plannedAt = now;
       return plan.reverted;
     });
     this.chain = run.then(

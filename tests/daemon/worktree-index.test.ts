@@ -324,6 +324,42 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(names(res.json)).toContain('sneaky');
   });
 
+  it('re-checks the delta without blocking stats, once per delta', async () => {
+    const m = manager();
+    const call = await session(m);
+    await call('get_index_health');
+    clearWorktreeDeltaCache();
+    const inWorktree = (p: unknown) => String(p).startsWith(path.join(wt, 'src'));
+    // Synchronous stats made by the delta re-check itself (tools reading
+    // file freshness for their results are another matter).
+    const blocking: string[] = [];
+    const realStatSync = fs.statSync;
+    const sync = vi.spyOn(fs, 'statSync').mockImplementation(((
+      ...a: Parameters<typeof fs.statSync>
+    ) => {
+      if (
+        inWorktree(a[0]) &&
+        /BranchIndex\.(plan|sync)|statSignature/.test(new Error().stack ?? '')
+      ) {
+        blocking.push(String(a[0]));
+      }
+      return realStatSync(...a);
+    }) as typeof fs.statSync);
+    const async_ = vi.spyOn(fs.promises, 'stat');
+    cleanups.push(() => {
+      sync.mockRestore();
+      async_.mockRestore();
+    });
+    await call('search', { query: 'newName' });
+    expect(blocking).toEqual([]);
+    const planned = async_.mock.calls.filter(([p]) => inWorktree(p)).length;
+    expect(planned).toBeGreaterThan(0);
+    // Same delta (still cached): no second pass over the files.
+    await call('search', { query: 'addedFn' });
+    await call('get_outline', { path: 'src/lib.ts' });
+    expect(async_.mock.calls.filter(([p]) => inWorktree(p)).length).toBe(planned);
+  });
+
   it('rebuilds when the canonical HEAD moves past the copy', async () => {
     const dropped: string[] = [];
     const m = manager({}, { dropPoolRoot: (root) => dropped.push(root) });
