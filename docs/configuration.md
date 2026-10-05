@@ -149,6 +149,60 @@ Nothing changes in a main checkout. Uncommitted edits in the main checkout itsel
 part of the delta, and untracked files are reported but cannot be flagged (they are not in
 the index).
 
+### Linked worktrees: branch index
+
+Flags fix reading, but callers, usages and change impact still walk edges stored in the
+main index. So the HTTP daemon also keeps a **branch index** per live worktree: a copy of
+the main checkout's index with the worktree delta re-indexed into it.
+
+1. **Copy.** On the first session for a worktree (a stdio proxy routing a worktree to its
+   main checkout sends `?worktree=`), the daemon copies the main index with SQLite's
+   online backup, a few MB per event-loop turn through the main project's own connection:
+   it holds no long lock, never blocks the main index's writer and picks up its WAL. The
+   copy lives in `<data dir>/index/worktrees/` as
+   `<name>-<hash of the worktree path>-<main HEAD>-<stamp>.db` plus a `.json` sidecar
+   naming the worktree, the main checkout and the HEAD the copy was taken at.
+2. **Re-index the delta.** The modified and untracked files are re-indexed into the copy
+   with the worktree as root, deleted ones are removed, through the same incremental path
+   a watcher batch takes (edge resolution and the deferred reconcile, embeddings and
+   summaries when AI is on).
+3. **Serve.** While the copy is being built the session works as described above (main
+   index, `stale_on_branch`); its first calls wait up to `initial_wait_ms` for the copy.
+   From then on index tools answer from the copy — `stale_on_branch` is set only for a
+   file edited after the copy last re-indexed it — and `get_index_health` reports
+   `worktree.served_from: "branch_index"`. Session tools (journal, state, memory, pins,
+   cross-project calls) stay on the session.
+
+The copy has no file watcher. Each call re-checks the delta (the same two-second cache) and
+re-indexes what changed, and `POST /api/projects/reindex-file` for a file in the worktree
+(the PostToolUse hook) writes into the copy, never into the main index. The copy is
+rebuilt when the main HEAD moves past the one it was taken at (the old copy keeps serving
+until the new one is ready), unloaded after `idle_unload_minutes` without use (the file
+stays and is reused while the main HEAD matches), deleted by the `WorktreeRemove` hook
+(`DELETE /api/projects/worktree?project=<worktree root>`), and garbage-collected once the
+worktree directory is gone or `git worktree list` no longer names it.
+
+Daemon-wide settings, in the global config:
+
+```jsonc
+"worktree_index": {
+  "enabled": true,          // false (or TRACE_MCP_WORKTREE_INDEX=0): main index only, as above
+  "initial_wait_ms": 3000,  // how long the first calls wait for a copy being built
+  "sync_wait_ms": 1000,     // how long a call waits for re-indexing recent edits
+  "idle_unload_minutes": 30,
+  "max_loaded": 3,          // copies held open at once
+  "max_snapshots": 8,       // copies kept on disk
+  "max_disk_mb": 8192,      // total size of the copies (0: no limit)
+  "max_delta_files": 2000   // a larger delta gets no copy
+}
+```
+
+A copy costs disk about the size of the main index and, while loaded, one SQLite
+connection, a pipeline and a tool-host server in the daemon. Not covered: the stdio
+local fallback (no daemon) and a worktree registered as a project of its own keep the
+behaviour above; the Windows `WorktreeRemove` hook does not call the daemon (GC still
+removes the copy).
+
 ### Config merge order
 
 1. **Global defaults** — `~/.trace/.config.json` (or `~/.trace-mcp/.config.json` fallback)
