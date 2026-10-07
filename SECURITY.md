@@ -172,12 +172,18 @@ All security checks return structured `TraceMcpResult` values with a dedicated `
 Transitive advisories are pinned to patched versions via `overrides` in `package.json`, so fixes apply even when upstream packages have not yet released a bump:
 
 * `protobufjs >= 8.6.6` — closes the prototype-pollution RCE (GHSA-xq3m-2v4x-88gg) reachable through the optional `@huggingface/transformers` → `onnxruntime-web` chain.
-* `hono >= 4.12.25` and `@hono/node-server >= 2.0.5` — closes cookie, `ipRestriction`, `serveStatic`, and `toSSG` path-traversal advisories reachable through `@modelcontextprotocol/sdk`.
+* `hono >= 4.13.12` and `@hono/node-server >= 2.0.5` — closes cookie, `ipRestriction`, `serveStatic`, `toSSG`, and `hono/jsx` XSS (GHSA-hxh3-vqpv-xpqv) advisories reachable through `@modelcontextprotocol/sdk`.
 * `vite >= 8.0.16` — closes the dev-server `fs.deny` bypass, `.map` path traversal, and WS file-read advisories reachable through `vitest`.
 * `fast-uri >= 4.1.3` — closes four host-confusion / SSRF advisories reachable through `@modelcontextprotocol/sdk` → `ajv`.
 * `qs >= 6.16.0` — closes the array-limit bypass and DoS advisories reachable through `@modelcontextprotocol/sdk` → `express` → `body-parser`.
+* `proxy-addr >= 2.0.8` — closes IP spoofing via IPv4-mapped IPv6 trust subnet (GHSA-jqcg-44mw-7w3h) reachable through `@modelcontextprotocol/sdk` → `express`.
+* `sharp >= 0.35.5` — closes memory corruption / RCE in librsvg dependency (GHSA-wq5f-xc86-pv6w) reachable through optional `@huggingface/transformers` and `packages/app`.
+* `source-map-js >= 1.2.2` — closes event-loop denial of service via indexed source-map section offsets (GHSA-68fv-2mgg-jv7q) reachable through `@vue/compiler-sfc`.
+* `@modelcontextprotocol/sdk >= 1.31.0` — closes OAuth client credential redirection (GHSA-6qxp-vccf-f47h).
 
-The **0 vulnerabilities** invariant is enforced, not assumed: the `audit` job in `.github/workflows/ci.yml` runs `pnpm audit --prod --audit-level=moderate` on every push and PR, and a `moderate`-or-worse advisory in the production tree fails the build. An advisory we consciously accept is recorded in `pnpm.auditConfig.ignoreGhsas` in `package.json` — next to the `overrides`, so the exception is written down rather than remembered.
+The **0 vulnerabilities** invariant is enforced, not assumed: the `audit` job in `.github/workflows/ci.yml` runs `pnpm audit --prod --audit-level=moderate` on every push and PR, and a `moderate`-or-worse advisory in the production tree fails the build. An advisory we consciously accept is recorded in `pnpm.auditConfig.ignoreGhsas` in `package.json` — next to the `overrides`, so the exception is written down rather than remembered:
+
+* `braces <= 3.0.3` (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687) — stack exhaustion via deeply nested patterns in recursive AST walkers. Reached transitively through `fast-glob` → `micromatch`. No upstream patch exists in the npm ecosystem (`patched_versions: "<0.0.0"`). In trace-mcp, glob patterns are evaluated against internal codebase file trees rather than unauthenticated network endpoints. Recorded in `pnpm.auditConfig.ignoreGhsas` until upstream publishes a patched release.
 
 ---
 
