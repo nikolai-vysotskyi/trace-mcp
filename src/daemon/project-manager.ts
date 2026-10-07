@@ -999,15 +999,17 @@ export class ProjectManager {
                     },
                     'reindex-file telemetry (error)',
                   );
+                  // Expected batch aborts have one warn summary above and no
+                  // per-file failures in /api/stats or daemon stats.
+                  stats.record({
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash: false,
+                    indexed: 0,
+                    elapsedMs,
+                    error: true,
+                  });
                 }
-                stats.record({
-                  pathSource: 'watcher',
-                  skippedRecent: false,
-                  skippedHash: false,
-                  indexed: 0,
-                  elapsedMs,
-                  error: true,
-                });
               } else {
                 logger.info(
                   {
