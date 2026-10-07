@@ -16,7 +16,7 @@ export interface DaemonWatcherOptions {
  * Strategy:
  *   - Poll every pollIntervalMs (default 10s).
  *   - When observed state differs from the last reported state, start a stability timer.
- *   - Only emit onStableChange if the new state persists across all polls for stabilityMs.
+ *   - Confirm /health again when stabilityMs expires before emitting the change.
  *   - If the state flips back before the stability window closes, cancel — no event.
  *
  * Initial state (first poll) is reported without delay so startup is fast.
@@ -92,21 +92,32 @@ export class PollingDaemonWatcher implements DaemonWatcher {
     if (this.stabilityTimer) clearTimeout(this.stabilityTimer);
     this.stabilityTimer = setTimeout(() => {
       this.stabilityTimer = null;
-      if (this.stopped) return;
-      if (this.pendingState !== null && this.pendingState !== this.currentReported) {
-        const next = this.pendingState;
-        const prev = this.currentReported;
-        this.currentReported = next;
-        logger.info({ from: prev, to: next }, 'DaemonWatcher: stable state change');
-        for (const cb of this.subscribers) {
-          try {
-            cb(next);
-          } catch (err) {
-            logger.warn({ err }, 'DaemonWatcher: subscriber threw');
-          }
-        }
-      }
+      void this.confirmStableChange(state);
     }, this.stabilityMs);
     this.stabilityTimer.unref?.();
+  }
+
+  private async confirmStableChange(expected: boolean): Promise<void> {
+    if (this.stopped || this.pendingState !== expected || this.currentReported === expected) return;
+    // A blocked event loop can delay both the interval poll and this timer.
+    // One failed 500 ms /health probe is not evidence of 30 seconds of outage.
+    const confirmed = await isDaemonRunning(this.port).catch(() => false);
+    if (this.stopped || this.pendingState !== expected || this.currentReported === expected) return;
+    if (confirmed !== expected) {
+      if (this.stabilityTimer) clearTimeout(this.stabilityTimer);
+      this.stabilityTimer = null;
+      this.pendingState = this.currentReported;
+      return;
+    }
+    const prev = this.currentReported;
+    this.currentReported = expected;
+    logger.info({ from: prev, to: expected }, 'DaemonWatcher: stable state change');
+    for (const cb of this.subscribers) {
+      try {
+        cb(expected);
+      } catch (err) {
+        logger.warn({ err }, 'DaemonWatcher: subscriber threw');
+      }
+    }
   }
 }

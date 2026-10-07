@@ -109,6 +109,21 @@ describe('ProjectManager root dedup (TRA-1608)', () => {
     expect(watcherStartRoots[0]).toBe(dir);
   }, 30_000);
 
+  it('concurrent adds of one checkout share setup and one watcher', async () => {
+    const { ProjectManager } = await import('../project-manager.js');
+    const pm = new ProjectManager();
+    pmRef = pm;
+    const dir = makeProjectDir();
+
+    const projects = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => pm.addProject(i % 2 ? dir : `${dir}/`)),
+    );
+
+    expect(projects.every((project) => project === projects[0])).toBe(true);
+    expect(pm.listProjects()).toHaveLength(1);
+    expect(watcherStartRoots).toEqual([dir]);
+  }, 30_000);
+
   it('getProject resolves alternate spellings to the same entry', async () => {
     const { ProjectManager } = await import('../project-manager.js');
     const pm = new ProjectManager();

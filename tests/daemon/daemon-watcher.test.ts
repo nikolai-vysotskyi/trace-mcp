@@ -68,6 +68,47 @@ describe('PollingDaemonWatcher', () => {
     w.stop();
   });
 
+  it('rechecks health before declaring the daemon disappeared after a stalled polling window', async () => {
+    mocked.mockResolvedValue(true);
+    const w = new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 1000, stabilityMs: 300 });
+    const seen: boolean[] = [];
+    w.onStableChange((s) => seen.push(s));
+    await w.start();
+
+    mocked.mockResolvedValueOnce(false).mockResolvedValue(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(mocked).toHaveBeenCalledTimes(3); // initial, missed health, confirmation
+    expect(seen).toEqual([]);
+    expect(w.getCurrentState()).toBe(true);
+    w.stop();
+  });
+
+  it('keeps concurrent clients on the daemon through one missed health window', async () => {
+    mocked.mockResolvedValue(true);
+    const watchers = Array.from(
+      { length: 31 },
+      () => new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 1000, stabilityMs: 300 }),
+    );
+    const fallbacks: boolean[] = [];
+    for (const watcher of watchers) {
+      watcher.onStableChange((active) => {
+        if (!active) fallbacks.push(active);
+      });
+    }
+    await Promise.all(watchers.map((watcher) => watcher.start()));
+    mocked.mockResolvedValueOnce(false);
+    // Each client's first poll fails during the checkout-sized load spike.
+    for (let i = 1; i < watchers.length; i++) mocked.mockResolvedValueOnce(false);
+    mocked.mockResolvedValue(true);
+    await vi.advanceTimersByTimeAsync(1300);
+
+    expect(fallbacks).toHaveLength(0);
+    expect(watchers.every((watcher) => watcher.getCurrentState())).toBe(true);
+    watchers.forEach((watcher) => watcher.stop());
+  });
+
   it('emits a second change when state stabilizes again in opposite direction', async () => {
     mocked.mockResolvedValue(true);
     const w = new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 50, stabilityMs: 200 });
