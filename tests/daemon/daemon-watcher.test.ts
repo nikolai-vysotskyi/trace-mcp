@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { PollingDaemonWatcher } from '../../src/daemon/router/daemon-watcher.js';
+import { MessageRouter } from '../../src/daemon/router/message-router.js';
+import type { Backend } from '../../src/daemon/router/types.js';
 
 // Mock the daemon client module so we can control what isDaemonRunning returns.
 vi.mock('../../src/daemon/client.js', () => {
@@ -92,21 +95,56 @@ describe('PollingDaemonWatcher', () => {
       () => new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 1000, stabilityMs: 300 }),
     );
     const fallbacks: boolean[] = [];
+    const replies: number[] = [];
+    const routers = watchers.map(() => {
+      const router = new MessageRouter({
+        sendToClient: (msg) => replies.push((msg as { id: number }).id),
+      });
+      const proxy: Backend = {
+        kind: 'proxy',
+        async start() {},
+        async stop() {},
+        async send(msg: JSONRPCMessage) {
+          const id = (msg as { id?: number }).id;
+          if (id !== undefined) {
+            proxy.onmessage?.({ jsonrpc: '2.0', id, result: { servedBy: 'proxy' } });
+          }
+        },
+      };
+      router.setInitialBackend(proxy);
+      return router;
+    });
+    const sendRound = async (offset: number) => {
+      await Promise.all(
+        routers.map((router, i) =>
+          router.ingestFromClient({
+            jsonrpc: '2.0',
+            id: offset + i,
+            method: 'ping',
+            params: {},
+          }),
+        ),
+      );
+    };
     for (const watcher of watchers) {
       watcher.onStableChange((active) => {
         if (!active) fallbacks.push(active);
       });
     }
     await Promise.all(watchers.map((watcher) => watcher.start()));
+    await sendRound(1);
     mocked.mockResolvedValueOnce(false);
     // Each client's first poll fails during the checkout-sized load spike.
     for (let i = 1; i < watchers.length; i++) mocked.mockResolvedValueOnce(false);
     mocked.mockResolvedValue(true);
     await vi.advanceTimersByTimeAsync(1300);
+    await sendRound(32);
 
     expect(fallbacks).toHaveLength(0);
     expect(watchers.every((watcher) => watcher.getCurrentState())).toBe(true);
+    expect(replies.sort((a, b) => a - b)).toEqual(Array.from({ length: 62 }, (_, i) => i + 1));
     watchers.forEach((watcher) => watcher.stop());
+    await Promise.all(routers.map((router) => router.shutdown()));
   });
 
   it('emits a second change when state stabilizes again in opposite direction', async () => {
