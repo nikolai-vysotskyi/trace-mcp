@@ -88,6 +88,37 @@ describe('PollingDaemonWatcher', () => {
     w.stop();
   });
 
+  it('discards an old confirmation after recovery starts a new outage window', async () => {
+    mocked.mockResolvedValue(true);
+    const w = new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 100, stabilityMs: 50 });
+    const seen: boolean[] = [];
+    w.onStableChange((s) => seen.push(s));
+    await w.start();
+
+    let resolveOld: (state: boolean) => void = () => {};
+    mocked.mockResolvedValueOnce(false).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(150); // first outage reaches its confirmation probe
+    expect(mocked).toHaveBeenCalledTimes(3);
+
+    mocked.mockResolvedValue(true);
+    await vi.advanceTimersByTimeAsync(50); // recovery cancels the first outage
+    expect(mocked).toHaveBeenCalledTimes(4);
+    mocked.mockResolvedValue(false);
+    await vi.advanceTimersByTimeAsync(100); // a new outage starts its own window
+    expect(mocked).toHaveBeenCalledTimes(5);
+
+    resolveOld(false); // stale result must not confirm the new window
+    await vi.advanceTimersByTimeAsync(1);
+    expect(seen).toEqual([]);
+    expect(w.getCurrentState()).toBe(true);
+    w.stop();
+  });
+
   it('keeps concurrent clients on the daemon through one missed health window', async () => {
     mocked.mockResolvedValue(true);
     const watchers = Array.from(
