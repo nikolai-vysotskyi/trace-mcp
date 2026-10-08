@@ -30,6 +30,7 @@ export class PollingDaemonWatcher implements DaemonWatcher {
   private currentReported: boolean | null = null;
   private pendingState: boolean | null = null;
   private stabilityGeneration = 0;
+  private confirmingGeneration: number | null = null;
   private subscribers: Array<(state: boolean) => void> = [];
   private stopped = false;
 
@@ -85,8 +86,11 @@ export class PollingDaemonWatcher implements DaemonWatcher {
       return;
     }
 
-    if (state === this.pendingState && this.stabilityTimer) {
-      // Still pending same new state — timer is already running, let it finish.
+    if (
+      state === this.pendingState &&
+      (this.stabilityTimer || this.confirmingGeneration === this.stabilityGeneration)
+    ) {
+      // The timer or its confirmation probe is still running for this window.
       return;
     }
 
@@ -96,43 +100,48 @@ export class PollingDaemonWatcher implements DaemonWatcher {
     if (this.stabilityTimer) clearTimeout(this.stabilityTimer);
     this.stabilityTimer = setTimeout(() => {
       this.stabilityTimer = null;
+      this.confirmingGeneration = generation;
       void this.confirmStableChange(state, generation);
     }, this.stabilityMs);
     this.stabilityTimer.unref?.();
   }
 
   private async confirmStableChange(expected: boolean, generation: number): Promise<void> {
-    if (
-      this.stopped ||
-      generation !== this.stabilityGeneration ||
-      this.currentReported === expected
-    )
-      return;
-    // A blocked event loop can delay both the interval poll and this timer.
-    // One failed 500 ms /health probe is not evidence of 30 seconds of outage.
-    const confirmed = await isDaemonRunning(this.port).catch(() => false);
-    if (
-      this.stopped ||
-      generation !== this.stabilityGeneration ||
-      this.currentReported === expected
-    )
-      return;
-    if (confirmed !== expected) {
-      if (this.stabilityTimer) clearTimeout(this.stabilityTimer);
-      this.stabilityTimer = null;
-      this.pendingState = this.currentReported;
-      this.stabilityGeneration++;
-      return;
-    }
-    const prev = this.currentReported;
-    this.currentReported = expected;
-    logger.info({ from: prev, to: expected }, 'DaemonWatcher: stable state change');
-    for (const cb of this.subscribers) {
-      try {
-        cb(expected);
-      } catch (err) {
-        logger.warn({ err }, 'DaemonWatcher: subscriber threw');
+    try {
+      if (
+        this.stopped ||
+        generation !== this.stabilityGeneration ||
+        this.currentReported === expected
+      )
+        return;
+      // A blocked event loop can delay both the interval poll and this timer.
+      // One failed 500 ms /health probe is not evidence of 30 seconds of outage.
+      const confirmed = await isDaemonRunning(this.port).catch(() => false);
+      if (
+        this.stopped ||
+        generation !== this.stabilityGeneration ||
+        this.currentReported === expected
+      )
+        return;
+      if (confirmed !== expected) {
+        if (this.stabilityTimer) clearTimeout(this.stabilityTimer);
+        this.stabilityTimer = null;
+        this.pendingState = this.currentReported;
+        this.stabilityGeneration++;
+        return;
       }
+      const prev = this.currentReported;
+      this.currentReported = expected;
+      logger.info({ from: prev, to: expected }, 'DaemonWatcher: stable state change');
+      for (const cb of this.subscribers) {
+        try {
+          cb(expected);
+        } catch (err) {
+          logger.warn({ err }, 'DaemonWatcher: subscriber threw');
+        }
+      }
+    } finally {
+      if (this.confirmingGeneration === generation) this.confirmingGeneration = null;
     }
   }
 }

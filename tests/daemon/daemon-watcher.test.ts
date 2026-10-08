@@ -119,6 +119,32 @@ describe('PollingDaemonWatcher', () => {
     w.stop();
   });
 
+  it('keeps a valid confirmation through another failed poll', async () => {
+    mocked.mockResolvedValue(true);
+    const w = new PollingDaemonWatcher({ port: 1234, pollIntervalMs: 100, stabilityMs: 50 });
+    const seen: boolean[] = [];
+    w.onStableChange((s) => seen.push(s));
+    await w.start();
+
+    let resolveConfirmation: (state: boolean) => void = () => {};
+    mocked.mockResolvedValueOnce(false).mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveConfirmation = resolve;
+        }),
+    );
+    await vi.advanceTimersByTimeAsync(150); // confirmation starts
+    expect(mocked).toHaveBeenCalledTimes(3);
+    mocked.mockResolvedValue(false);
+    await vi.advanceTimersByTimeAsync(50); // another failed poll during confirmation
+    expect(mocked).toHaveBeenCalledTimes(4);
+
+    resolveConfirmation(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(seen).toEqual([false]);
+    w.stop();
+  });
+
   it('keeps concurrent clients on the daemon through one missed health window', async () => {
     mocked.mockResolvedValue(true);
     const watchers = Array.from(
