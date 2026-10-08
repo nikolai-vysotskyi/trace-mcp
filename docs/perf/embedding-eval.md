@@ -7,7 +7,7 @@ noindex: true
 # Embedding eval (TRA-1539)
 
 - generated: `2026-09-16T09:41:56.137Z`
-- machine: Apple M5 Max / 128GB / darwin arm64, node v22.22.3
+- machine: darwin arm64, node v22.22.3
 - corpus: 616 code-symbol docs, 24 labeled description→code queries
 
 | model | dim | load ms | dl MB | ms/text | ms/query | ΔRSS load MB | ΔRSS embed MB | R@1 | R@5 | R@10 | MRR |

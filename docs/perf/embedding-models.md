@@ -14,7 +14,7 @@ is the recommended opt-in for retrieval quality; `Xenova/bge-m3` (q8) is a
 heavy opt-in only. mmBERT stays rejected (MLM backbone, no embedding
 fine-tune — see issue). This doc records the numbers behind that call.
 
-## Result (final run, Apple M5 Max / 128 GB, node 22, batch 16)
+## Result (final run, macOS arm64, node 22, batch 16)
 
 Corpus: 616 code-symbol docs auto-built from `src/` (`scripts/embedding-eval/corpus.mjs`,
 same `kind + name + signature + comment` text the indexer embeds).
@@ -83,7 +83,7 @@ Both paths are pinned by `src/ai/__tests__/embedding-pipeline-provider-mismatch.
   end-to-end gains will be smaller than this embedding-level delta.
 - bge-m3 ran under mean pooling (what our provider does); its native CLS
   pooling may read slightly better.
-- Absolute ms/load/RSS are M5 Max numbers — relative ranking transfers,
+- Absolute ms/load/RSS are measurements from one macOS arm64 host — relative ranking transfers,
   absolute values don't. ΔRSS-load across separate processes was noisy
   (same-model runs differed 2×); only bge-m3's GB-scale spike is directional.
 

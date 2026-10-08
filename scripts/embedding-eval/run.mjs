@@ -190,7 +190,7 @@ async function main() {
 
   const report = {
     generated_at: new Date().toISOString(),
-    machine: `${os.cpus()[0]?.model || '?'} / ${(os.totalmem() / 1073741824).toFixed(0)}GB / ${os.platform()} ${os.arch()}`,
+    machine: `${os.platform()} ${os.arch()}`,
     node: process.version,
     corpus_docs: corpus.length,
     query_count: queries.length,
