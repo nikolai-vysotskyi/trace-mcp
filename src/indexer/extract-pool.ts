@@ -55,7 +55,7 @@ export interface ExtractRequest {
 }
 
 export type ExtractResponse =
-  | { kind: 'skipped'; reason?: 'binary' | 'oversize' | string }
+  | { kind: 'skipped'; reason?: 'binary' | 'oversize' }
   // WHY: hash-hit in the worker path — main thread must update mtime since
   // the worker has no DB handle. Without this the cheap mtime fast-path
   // never kicks in on the next run after a hash-hit.

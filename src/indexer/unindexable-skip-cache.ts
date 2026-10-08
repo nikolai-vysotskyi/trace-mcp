@@ -226,6 +226,76 @@ export function checkUnindexableSkip(check: UnindexableCheck): UnindexableReason
   return 'binary';
 }
 
+export interface UnindexableSkipStats {
+  roots: number;
+  totalEntries: number;
+  byReason: {
+    binary: number;
+    oversize: number;
+  };
+}
+
+export interface UnindexableVerdictInfo {
+  relPath: string;
+  reason: UnindexableReason;
+  size: number;
+  mtimeMs: number;
+}
+
+/**
+ * Diagnostics accessor: inspect aggregated counts of unindexable skip verdicts.
+ */
+export function getUnindexableSkipStats(rootPath?: string): UnindexableSkipStats {
+  let binary = 0;
+  let oversize = 0;
+  let total = 0;
+  if (rootPath) {
+    const bucket = verdicts.get(rootPath);
+    if (bucket) {
+      for (const v of bucket.values()) {
+        total++;
+        if (v.reason === 'binary') binary++;
+        else if (v.reason === 'oversize') oversize++;
+      }
+    }
+    return {
+      roots: bucket ? 1 : 0,
+      totalEntries: total,
+      byReason: { binary, oversize },
+    };
+  }
+  for (const bucket of verdicts.values()) {
+    for (const v of bucket.values()) {
+      total++;
+      if (v.reason === 'binary') binary++;
+      else if (v.reason === 'oversize') oversize++;
+    }
+  }
+  return {
+    roots: verdicts.size,
+    totalEntries: total,
+    byReason: { binary, oversize },
+  };
+}
+
+/**
+ * Diagnostics accessor: returns list of unindexable file verdicts recorded for a root.
+ */
+export function getUnindexableVerdicts(rootPath: string): UnindexableVerdictInfo[] {
+  const bucket = verdicts.get(rootPath);
+  if (!bucket) return [];
+  const result: UnindexableVerdictInfo[] = [];
+  for (const [relPath, v] of bucket.entries()) {
+    result.push({
+      relPath,
+      reason: v.reason,
+      size: v.size,
+      mtimeMs: v.mtimeMs,
+    });
+  }
+  return result;
+}
+
 /** Test hook — clears verdicts, warn gates, and the entry-set cache. */
 export function resetUnindexableSkipCacheForTests(): void {
   verdicts.clear();

@@ -204,8 +204,10 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
     try {
       for (let i = 0; i < 3; i++) {
         const r = await pipeline.indexFiles([abs]);
-        expect(r.totalFiles).toBe(0);
+        expect(r.totalFiles).toBe(1);
         expect(r.indexed).toBe(0);
+        expect(r.skipped).toBe(1);
+        expect(r.skippedOversize).toBe(1);
         expect(r.errors).toBe(0);
         expect(store.getFile(rel.split(path.sep).join('/')), 'no row must be created').toBeFalsy();
         fs.appendFileSync(abs, `${'y'.repeat(100_000)}\n`);
@@ -222,7 +224,9 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
     fs.writeFileSync(abs, `${'x'.repeat(1_200_000)}\n`);
     try {
       const dropped = await pipeline.indexFiles([abs]);
-      expect(dropped.totalFiles).toBe(0);
+      expect(dropped.totalFiles).toBe(1);
+      expect(dropped.skipped).toBe(1);
+      expect(dropped.skippedOversize).toBe(1);
 
       fs.writeFileSync(abs, '{"ok":true}\n');
       const flowed = await pipeline.indexFiles([abs]);

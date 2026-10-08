@@ -18,9 +18,14 @@ import type { TraceMcpConfig } from '../../src/config.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 import { resetFileTooLargeWarnDedupForTests } from '../../src/indexer/file-extractor.js';
-import { resetUnindexableSkipCacheForTests } from '../../src/indexer/unindexable-skip-cache.js';
+import {
+  getUnindexableSkipStats,
+  getUnindexableVerdicts,
+  resetUnindexableSkipCacheForTests,
+} from '../../src/indexer/unindexable-skip-cache.js';
 import { logger } from '../../src/logger.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { getIndexHealth } from '../../src/tools/project/project.js';
 import { initContentHasher } from '../../src/util/hash.js';
 import { createTestStore, createTmpDir, removeTmpDir } from '../test-utils.js';
 
@@ -159,11 +164,21 @@ describe('TRA-2273 — Expected skip logging level & batch aggregation', () => {
 
     try {
       // First pass
-      await pipeline.indexFiles([binFile, largeFile]);
+      const r1 = await pipeline.indexFiles([binFile, largeFile]);
+      expect(r1.totalFiles).toBe(2);
+      expect(r1.indexed).toBe(0);
+      expect(r1.skipped).toBe(2);
+      expect(r1.skippedBinary).toBe(1);
+      expect(r1.skippedOversize).toBe(1);
 
       // Second pass (repeated event on growing file and same binary)
       fs.appendFileSync(largeFile, `${'z'.repeat(100_000)}\n`);
-      await pipeline.indexFiles([binFile, largeFile]);
+      const r2 = await pipeline.indexFiles([binFile, largeFile]);
+      expect(r2.totalFiles).toBe(2);
+      expect(r2.indexed).toBe(0);
+      expect(r2.skipped).toBe(2);
+      expect(r2.skippedBinary).toBe(1);
+      expect(r2.skippedOversize).toBe(1);
 
       expect(warnSpy).not.toHaveBeenCalled();
 
@@ -173,6 +188,92 @@ describe('TRA-2273 — Expected skip logging level & batch aggregation', () => {
         ([, msg]) => typeof msg === 'string' && msg.includes('repeat suppressed'),
       );
       expect(repeatCalls.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await pipeline.dispose();
+    }
+  });
+
+  it('indexFiles accounts skipped binary and oversize counters on repeated calls and surfaces in diagnostics', async () => {
+    const store = createTestStore();
+    const config = makeConfig();
+    const pipeline = new IndexingPipeline(store, makeRegistry(), config, tmpRoot);
+
+    const binFile = path.join(tmpRoot, 'model.pt');
+    const binBuf = Buffer.alloc(1024);
+    binBuf[0] = 0;
+    fs.writeFileSync(binFile, binBuf);
+
+    const largeFile = path.join(tmpRoot, 'scratch.jsonl');
+    fs.writeFileSync(largeFile, `${'a'.repeat(1_200_000)}\n`);
+
+    const normalFile = path.join(tmpRoot, 'src', 'app.ts');
+    fs.mkdirSync(path.dirname(normalFile), { recursive: true });
+    fs.writeFileSync(normalFile, 'export const ready = true;\n');
+
+    try {
+      // 1. Calling indexFiles twice with the same binary file:
+      const b1 = await pipeline.indexFiles([binFile]);
+      expect(b1.totalFiles).toBe(1);
+      expect(b1.indexed).toBe(0);
+      expect(b1.skipped).toBe(1);
+      expect(b1.skippedBinary).toBe(1);
+      expect(b1.skippedOversize).toBeUndefined();
+
+      const b2 = await pipeline.indexFiles([binFile]);
+      expect(b2.totalFiles).toBe(1);
+      expect(b2.indexed).toBe(0);
+      expect(b2.skipped).toBe(1);
+      expect(b2.skippedBinary).toBe(1);
+      expect(b2.skippedOversize).toBeUndefined();
+
+      // 2. Calling indexFiles twice with the same oversized file:
+      const o1 = await pipeline.indexFiles([largeFile]);
+      expect(o1.totalFiles).toBe(1);
+      expect(o1.indexed).toBe(0);
+      expect(o1.skipped).toBe(1);
+      expect(o1.skippedOversize).toBe(1);
+      expect(o1.skippedBinary).toBeUndefined();
+
+      const o2 = await pipeline.indexFiles([largeFile]);
+      expect(o2.totalFiles).toBe(1);
+      expect(o2.indexed).toBe(0);
+      expect(o2.skipped).toBe(1);
+      expect(o2.skippedOversize).toBe(1);
+      expect(o2.skippedBinary).toBeUndefined();
+
+      // 3. Mixed batch with normal file and unindexables:
+      const m1 = await pipeline.indexFiles([binFile, largeFile, normalFile]);
+      expect(m1.totalFiles).toBe(3);
+      expect(m1.indexed).toBe(1);
+      expect(m1.skipped).toBe(2);
+      expect(m1.skippedBinary).toBe(1);
+      expect(m1.skippedOversize).toBe(1);
+
+      // Re-running mixed batch: normal file is unchanged (skipped by mtime prefilter), unindexables skipped
+      const m2 = await pipeline.indexFiles([binFile, largeFile, normalFile]);
+      expect(m2.totalFiles).toBe(3);
+      expect(m2.indexed).toBe(0);
+      expect(m2.skipped).toBe(3); // 1 unchanged prefiltered + 1 binary + 1 oversize
+      expect(m2.skippedBinary).toBe(1);
+      expect(m2.skippedOversize).toBe(1);
+
+      // 4. Verify diagnostics accessor
+      const stats = getUnindexableSkipStats(tmpRoot);
+      expect(stats.totalEntries).toBe(2);
+      expect(stats.byReason.binary).toBe(1);
+      expect(stats.byReason.oversize).toBe(1);
+
+      const verdicts = getUnindexableVerdicts(tmpRoot);
+      expect(verdicts).toHaveLength(2);
+      expect(verdicts.map((v) => v.reason).sort()).toEqual(['binary', 'oversize']);
+
+      // 5. Verify getIndexHealth surfaces unindexableSkips
+      const health = getIndexHealth(store, config, tmpRoot);
+      expect(health.unindexableSkips).toEqual({
+        total: 2,
+        binary: 1,
+        oversize: 1,
+      });
     } finally {
       await pipeline.dispose();
     }
