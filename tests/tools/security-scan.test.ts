@@ -1016,16 +1016,14 @@ function isAvailable(command: string) {
     // including 'low', so we just check no critical.
   });
 
-  test('command_injection: execSync(`taskkill /PID ${pid}`) with numeric pid is downgraded', () => {
+  test('command_injection: execSync(`taskkill /PID ${process.pid}`) with process.pid is downgraded', () => {
     writeFile(
       store,
       'src/daemon/kill.ts',
       `
 import { execSync } from 'node:child_process';
-function readDaemonPid(): number { return 1234; }
 function stop() {
-  const pid = readDaemonPid();
-  execSync(\`taskkill /PID \${pid} /T /F\`);
+  execSync(\`taskkill /PID \${process.pid} /T /F\`);
 }
 `,
       'typescript',

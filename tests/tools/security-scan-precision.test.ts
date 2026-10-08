@@ -379,7 +379,7 @@ function handle(req) {
     expect(def.suppressed_low_confidence).toBe(0);
   });
 
-  test('demotes ps when local variable is assigned from proven local pid (process.pid)', () => {
+  test('does not demote ps when pid is in a local variable even if assigned from process.pid', () => {
     writeFile(
       store,
       'scripts/rss-var.mjs',
@@ -392,13 +392,11 @@ function check() {
       'javascript',
     );
     const def = scan(['command_injection']);
-    expect(def.findings).toHaveLength(0);
-    expect(def.suppressed_low_confidence).toBe(1);
-
-    const all = scan(['command_injection'], { includeLow: true });
-    expect(all.findings).toHaveLength(1);
-    expect(all.findings[0].confidence).toBe('low');
-    expect(all.findings[0].severity).toBe('low');
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
   });
 
   test('does not demote ps when variable is reassigned to untrusted input', () => {
@@ -551,6 +549,186 @@ function stop(req) {
       `
 function handle(pid = process.pid) {
   execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes ps -p ${1234} numeric literal queries to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/rss-lit.mjs',
+      `
+const rss = () => Number(execSync(\`ps -o rss= -p \${1234}\`).toString().trim()) / 1024;
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('demotes taskkill /PID ${process.pid} to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/kill-self.mjs',
+      `
+execSync(\`taskkill /PID \${process.pid} /T /F\`);
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('demotes taskkill /PID ${1234} numeric literal to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/kill-lit.mjs',
+      `
+execSync(\`taskkill /PID \${1234} /T /F\`);
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('does not demote ps when multiple statements on one line reassign pid', () => {
+    writeFile(
+      store,
+      'src/handlers/multistmt.js',
+      `
+function handle(req) {
+  let pid = process.pid; pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when closure mutates outer pid variable', () => {
+    writeFile(
+      store,
+      'src/handlers/closure-write.js',
+      `
+function handle(req) {
+  let pid = process.pid;
+  const set = (r) => { pid = r.query.pid; };
+  set(req);
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when method has default parameters', () => {
+    writeFile(
+      store,
+      'src/handlers/method-default.js',
+      `
+class Service {
+  kill(pid = defaults(), opts = defaults()) {
+    execSync(\`ps -o rss= -p \${pid}\`);
+  }
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when pid is iterated in for...of loop', () => {
+    writeFile(
+      store,
+      'src/handlers/for-loop.js',
+      `
+function handle(req) {
+  for (const pid of req.body.pids) {
+    execSync(\`ps -o rss= -p \${pid}\`);
+  }
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when untrusted interpolation is present alongside process.pid', () => {
+    writeFile(
+      store,
+      'scripts/ps-multi.mjs',
+      `
+function run(untrusted) {
+  execSync(\`ps -o rss= -p \${process.pid} \${untrusted}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when pid is in a variable even if assigned from process.pid', () => {
+    writeFile(
+      store,
+      'scripts/kill-var.mjs',
+      `
+function stop() {
+  const pid = process.pid;
+  execSync(\`taskkill /PID \${pid} /T /F\`);
 }
 `,
       'javascript',
