@@ -599,6 +599,14 @@ export async function applyCodemod(
     requestedEngine === 'ast' || (requestedEngine === 'auto' && looksLikeAstPattern(pattern));
 
   // 2. Glob files
+  // GHSA-vfj7-8cjw-p6xm: micromatch/braces can exhaust the stack while
+  // expanding a caller-supplied pattern. Keep brace syntax away from fast-glob
+  // until the upstream package has a fix.
+  if (filePattern.includes('{') || filePattern.includes('}')) {
+    result.error = 'Brace syntax is not supported in file_pattern; use a glob without braces.';
+    return result;
+  }
+
   let files: string[];
   try {
     files = fg.sync(filePattern, {
