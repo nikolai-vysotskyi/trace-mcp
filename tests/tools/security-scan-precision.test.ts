@@ -401,6 +401,168 @@ function check() {
     expect(all.findings[0].severity).toBe('low');
   });
 
+  test('does not demote ps when variable is reassigned to untrusted input', () => {
+    writeFile(
+      store,
+      'src/handlers/reassign.js',
+      `
+function handle(req) {
+  let pid = process.pid;
+  pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when fallback || operator is used on RHS', () => {
+    writeFile(
+      store,
+      'src/handlers/fallback.js',
+      `
+function handle(req) {
+  const pid = process.pid || req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when number + fallback || operator is used on RHS', () => {
+    writeFile(
+      store,
+      'src/handlers/num-fallback.js',
+      `
+function handle(req) {
+  const pid = 0 || req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when safe pid is in another function in the same file', () => {
+    writeFile(
+      store,
+      'src/handlers/other-func.js',
+      `
+function safe() {
+  const pid = process.pid;
+  return pid;
+}
+function unsafe(req) {
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when two declarations are on the same line', () => {
+    writeFile(
+      store,
+      'src/handlers/multi-decl.js',
+      `
+function handle(req) {
+  let pid; const n = 5;
+  pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when child is an arbitrary object', () => {
+    writeFile(
+      store,
+      'src/handlers/child-obj.js',
+      `
+function handle(req) {
+  const child = req.body;
+  const pid = child.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when pid is reassigned to untrusted input', () => {
+    writeFile(
+      store,
+      'src/handlers/taskkill-reassign.js',
+      `
+function readDaemonPid() { return 1234; }
+function stop(req) {
+  let pid = readDaemonPid();
+  pid = req.query.pid;
+  execSync(\`taskkill /PID \${pid} /T /F\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when pid is a function parameter with default value', () => {
+    writeFile(
+      store,
+      'src/handlers/param-default.js',
+      `
+function handle(pid = process.pid) {
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
   // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------

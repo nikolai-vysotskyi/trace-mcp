@@ -1083,6 +1083,170 @@ function hasFixedAuthority(line: string, lines: string[], fromLine: number): boo
   return resolved.endsWith('/') || after === '/' || after === '?' || after === '#' || after === '';
 }
 
+const SAFE_PID_RHS_RE = /^(?:process\.pid|readDaemonPid\s*\(\s*\)|-?\d+)$/;
+
+/**
+ * Find the closing line of a block started at `startLine`.
+ */
+function findBlockClose(lines: string[], startLine: number): number {
+  let depth = 0;
+  let hasOpened = false;
+  let stringDelim: string | null = null;
+  for (let i = startLine; i < lines.length; i++) {
+    const l = lines[i];
+    for (let j = 0; j < l.length; j++) {
+      const ch = l[j];
+      if (stringDelim) {
+        if (ch === '\\') {
+          j++;
+          continue;
+        }
+        if (ch === stringDelim) stringDelim = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') {
+        stringDelim = ch;
+        continue;
+      }
+      if (ch === '{') {
+        depth++;
+        hasOpened = true;
+      } else if (ch === '}') {
+        depth--;
+        if (hasOpened && depth === 0) {
+          return i;
+        }
+      }
+    }
+  }
+  return lines.length - 1;
+}
+
+/**
+ * Find the [startLine, endLine] range for the function/method enclosing `targetLine`.
+ * If targetLine is at top level, returns [0, lines.length - 1].
+ */
+function findEnclosingScope(lines: string[], targetLine: number): [number, number] {
+  for (let i = targetLine; i >= 0; i--) {
+    if (BLOCK_OPENER_RE.test(lines[i])) {
+      const close = findBlockClose(lines, i);
+      if (close >= targetLine) {
+        return [i, close];
+      }
+    }
+  }
+  return [0, lines.length - 1];
+}
+
+/**
+ * Fail-closed analysis of whether `ident` is proven to hold a local process PID
+ * without any external taint or reassignment.
+ */
+function isProvenLocalPidBinding(lines: string[], fromLine: number, ident: string): boolean {
+  // Direct interpolation of global process.pid or a numeric literal.
+  if (ident === 'process.pid') return true;
+  if (/^-?\d+$/.test(ident)) return true;
+
+  // Property access on any other object (e.g. child.pid, req.query.pid) is not proven local.
+  if (ident.includes('.') || !/^[A-Za-z_$][\w$]*$/.test(ident)) {
+    return false;
+  }
+
+  const [scopeStart, scopeEnd] = findEnclosingScope(lines, fromLine);
+
+  // Check if ident is declared as a parameter in the enclosing function header.
+  if (scopeStart > 0 || BLOCK_OPENER_RE.test(lines[0])) {
+    const header = lines.slice(scopeStart, Math.min(scopeStart + 5, scopeEnd + 1)).join('\n');
+    const braceIdx = header.indexOf('{');
+    const parenOpen = header.indexOf('(');
+    const parenClose = header.indexOf(')');
+    if (parenOpen !== -1 && parenClose !== -1 && (braceIdx === -1 || parenClose < braceIdx)) {
+      const paramsText = header.slice(parenOpen + 1, parenClose);
+      if (new RegExp(`\\b${ident}\\b`).test(paramsText)) {
+        return false;
+      }
+    }
+  }
+
+  let safeAssignmentFound = false;
+  const identMention = new RegExp(`\\b${ident}\\b`);
+  const declAssignRe = new RegExp(
+    `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${ident}\\s*(?::\\s*[^=;]+)?=\\s*(.+)$`,
+  );
+  const uninitDeclRe = new RegExp(
+    `^\\s*(?:const|let|var)\\s+${ident}\\s*(?::\\s*[^=;]+)?\\s*;?\\s*$`,
+  );
+  const plainAssignRe = new RegExp(`^\\s*${ident}\\s*=\\s*(.+)$`);
+  const declKeywordRe = new RegExp(`\\b(?:const|let|var)\\s+${ident}\\b`);
+  const unsafeModifyRe = new RegExp(
+    `(?:^|[^\\w$.])${ident}\\s*(?:\\+=|-=|\\*=|\\/=|\\|\\|=|&&=|\\?\\?=|=(?!=|>))`,
+  );
+  const destructureAssignRe = new RegExp(`[\\{\\[][^=}]*\\b${ident}\\b[^=]*[\\}\\]]\\s*=(?!=|>)`);
+
+  for (let i = scopeStart; i <= scopeEnd; i++) {
+    const rawLine = lines[i];
+    if (!identMention.test(rawLine)) continue;
+    if (i === fromLine) continue;
+
+    // If this line is inside a nested function, ignore it.
+    const [nestedStart, nestedEnd] = findEnclosingScope(lines, i);
+    if (nestedStart !== scopeStart || nestedEnd !== scopeEnd) {
+      continue;
+    }
+
+    const l = rawLine.trim();
+
+    // Check for destructuring assignments (e.g. { pid } = req.body)
+    if (destructureAssignRe.test(l)) {
+      return false;
+    }
+
+    // Check for declaration with assignment
+    const declMatch = declAssignRe.exec(l);
+    if (declMatch) {
+      const rhs = declMatch[1].replace(/;.*$/, '').trim();
+      if (!SAFE_PID_RHS_RE.test(rhs)) {
+        return false;
+      }
+      if (i < fromLine) {
+        safeAssignmentFound = true;
+      }
+      continue;
+    }
+
+    // Check for uninitialized declaration
+    if (uninitDeclRe.test(l)) {
+      continue;
+    }
+
+    // Check for plain assignment statement
+    const plainMatch = plainAssignRe.exec(l);
+    if (plainMatch) {
+      const rhs = plainMatch[1].replace(/;.*$/, '').trim();
+      if (!SAFE_PID_RHS_RE.test(rhs)) {
+        return false;
+      }
+      if (i < fromLine) {
+        safeAssignmentFound = true;
+      }
+      continue;
+    }
+
+    // If line mentions const/let/var ident but didn't match declAssign or uninitDecl,
+    // it's a multi-declaration line or invalid syntax — fail closed!
+    if (declKeywordRe.test(l)) {
+      return false;
+    }
+
+    // Any other assignment-like modification to ident
+    if (unsafeModifyRe.test(l)) {
+      return false;
+    }
+  }
+
+  return safeAssignmentFound;
+}
+
 /**
  * Identify low-risk command_injection shapes. Returns one of:
  *  - "open"     — GUI file-open commands (open/xdg-open/start) with a path arg,
@@ -1102,46 +1266,25 @@ function classifyCommandInjection(
   }
   // `which X` — argument controls only which binary is looked up.
   if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{/.test(line)) return 'which';
-  // `taskkill /PID X` — check whether the interpolated value is a numeric literal,
-  // or bound to a proven local process PID (process.pid / child.pid / worker.pid / readDaemonPid() / numeric literal).
+
+  // `taskkill /PID X` — check whether the interpolated value is a proven local process PID.
   const tk =
     /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+\/PID\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
       line,
     );
-  if (tk) {
-    const ident = tk[1];
-    if (/^(?:process\.pid|child\.pid|worker\.pid)$/.test(ident)) return 'taskkill';
-    if (/^-?\d+$/.test(ident)) return 'taskkill';
-    if (!ident.includes('.')) {
-      const pidAssignRe = new RegExp(
-        `(?:const|let|var)\\s+${ident}\\b[^=]*=\\s*(?:readDaemonPid\\b|process\\.pid\\b|child\\.pid\\b|worker\\.pid\\b|childProcess\\.pid\\b|\\b\\d+\\b)`,
-      );
-      for (let i = 0; i < lines.length; i++) {
-        if (i === fromLine) continue;
-        if (pidAssignRe.test(lines[i])) return 'taskkill';
-      }
-    }
+  if (tk && isProvenLocalPidBinding(lines, fromLine, tk[1])) {
+    return 'taskkill';
   }
-  // `ps ... -p X` (or `--pid X`) — check whether the interpolated value is a numeric literal,
-  // or bound to a proven local process PID (process.pid / child.pid / worker.pid / readDaemonPid() / numeric literal).
+
+  // `ps ... -p X` (or `--pid X`) — check whether the interpolated value is a proven local process PID.
   const ps =
     /(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`]*?(?:-p|--pid)\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
       line,
     );
-  if (ps) {
-    const ident = ps[1];
-    if (/^(?:process\.pid|child\.pid|worker\.pid)$/.test(ident)) return 'ps';
-    if (/^-?\d+$/.test(ident)) return 'ps';
-    if (!ident.includes('.')) {
-      const pidAssignRe = new RegExp(
-        `(?:const|let|var)\\s+${ident}\\b[^=]*=\\s*(?:readDaemonPid\\b|process\\.pid\\b|child\\.pid\\b|worker\\.pid\\b|childProcess\\.pid\\b|\\b\\d+\\b)`,
-      );
-      for (let i = 0; i < lines.length; i++) {
-        if (i === fromLine) continue;
-        if (pidAssignRe.test(lines[i])) return 'ps';
-      }
-    }
+  if (ps && isProvenLocalPidBinding(lines, fromLine, ps[1])) {
+    return 'ps';
   }
+
   return null;
 }
 
