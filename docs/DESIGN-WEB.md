@@ -810,8 +810,10 @@ the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
 and never an architecture the visitor is left to guess at.
 
 **Keep the measurement complete below the hero** (TRA-2265). The first tile in
-`.metrics-strip-grid` shows the saving and its denominator; `.metrics-evidence`
-follows the tiles with all four quality figures from the same run. Every number,
+`.metrics-strip-grid` shows the saving and its denominator; `.metrics-strip-proof`
+follows that tile in DOM order. It spans the grid on desktop and sits directly
+under the first tile on mobile, before the other two metrics. Its
+`.metrics-evidence` holds all four quality figures from the same run. Every number,
 including the comparison where we lose, has the same emphasis. The installation
 scope note follows in `.metrics-boundary`, still before the methods footnotes.
 The hero has no benchmark prose or installation paragraph.

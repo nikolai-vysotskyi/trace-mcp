@@ -768,6 +768,8 @@ updated: 2026-10-08
       border-left: 1px solid var(--border);
     }
     .metrics-strip-item:first-child { border-left: none; }
+    .metrics-strip-item:nth-child(3) { grid-column: 2; grid-row: 1; }
+    .metrics-strip-item:nth-child(4) { grid-column: 3; grid-row: 1; }
     .metrics-strip-value {
       font-family: var(--font-mono);
       font-size: clamp(22px, 2.6vw, 28px);
@@ -783,15 +785,20 @@ updated: 2026-10-08
       text-transform: uppercase;
       color: var(--text-secondary);
     }
+    .metrics-strip-proof {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      padding: 24px 32px;
+      border-top: 1px solid var(--border);
+    }
     .metrics-evidence, .metrics-boundary {
       max-width: 900px;
-      margin: 20px 0 0;
       font-size: 15px;
       line-height: 1.5;
     }
     .metrics-evidence { color: var(--text-primary); }
     .metrics-evidence .accent-text { color: var(--text-display); }
-    .metrics-boundary { color: var(--text-secondary); }
+    .metrics-boundary { color: var(--text-secondary); margin-top: 20px; }
     .metrics-evidence a, .metrics-boundary a {
       border-bottom: 1px solid var(--border-visible);
     }
@@ -828,8 +835,11 @@ updated: 2026-10-08
         border-top: 1px solid var(--border);
       }
       .metrics-strip-item:first-child { border-top: none; }
+      .metrics-strip-item:nth-child(3), .metrics-strip-item:nth-child(4),
+      .metrics-strip-proof { grid-column: auto; grid-row: auto; }
       .metrics-strip-value { flex-shrink: 0; font-size: 18px; }
       .metrics-strip-label { font-size: 10px; }
+      .metrics-strip-proof { padding: 14px 0 18px; }
       .metrics-evidence, .metrics-boundary { font-size: 14px; }
       .metrics-strip-foot { margin-top: 18px; font-size: 10px; }
     }
@@ -2356,6 +2366,22 @@ updated: 2026-10-08
           <span class="metrics-strip-value">{{ site.data.pr_context_bench.median_savings_pct }}%</span>
           <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
         </div>
+        <!-- TRA-2265: the first screen stays one claim and one action. The measured
+             saving, its quality comparison and the installation boundary live together
+             below the hero, where they remain visible without pushing out the CTA. -->
+        <div class="metrics-strip-proof">
+          <p class="metrics-evidence">
+            Cheaper is not better, so the same PRs were reviewed twice and scored blind:
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
+            <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
+          </p>
+          <p class="metrics-boundary">
+            We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
+          </p>
+        </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">{{ site.data.response_tokens.reduction_pct }}%</span>
           <span class="metrics-strip-label">Fewer tokens than the file reads they replace, across {{ site.data.response_tokens.calls_weighted }} real tool calls on one machine &mdash; measured responses, estimated baseline</span>
@@ -2365,20 +2391,6 @@ updated: 2026-10-08
           <span class="metrics-strip-label">Tools we measured that cost <em>more</em> than what they replace &mdash; published, not hidden</span>
         </div>
       </div>
-      <!-- TRA-2265: the first screen stays one claim and one action. The measured
-           saving, its quality comparison and the installation boundary live together
-           below the hero, where they remain visible without pushing out the CTA. -->
-      <p class="metrics-evidence">
-        Cheaper is not better, so the same PRs were reviewed twice and scored blind:
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
-        <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
-      </p>
-      <p class="metrics-boundary">
-        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
-      </p>
       <!-- TRA-647: the first tile is the only figure here taken on code we do not
            own, so it leads and it says where it came from. The other two are our
            own instrumentation and are labelled as such rather than dropped. -->
