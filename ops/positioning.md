@@ -136,14 +136,18 @@ earlier the same day, re-measured in TRA-1141), not the
 code; `docs/perf/pr-context-loss-classes.md` has the account). The correction
 does not change what the number is for
 (`docs/_data/pr_context_bench.json`, 60 merged PRs across 6 repos that are not
-ours). It is the only measurement we have on other people's code, it is a
-measurement of the graph, and it stays the headline evidence under the new
-headline claim. TRA-647 was already about getting it in front of arrivals; this
-does not compete with it.
+ours). It is the only measurement we have on other people's code and a
+measurement of the graph. TRA-2265 places it in the first metrics tile, directly
+below the install-first hero, with the blind quality result beside it. The hero
+keeps a short H1 and the exact position sentence above the download action;
+moving the proof below the fold does not separate saving from quality.
 
 ## The boundary, carried with the claim
 
-Not a footnote. The same sentence, or the one immediately after it.
+Not a footnote. On the homepage, the scope note sits in the metrics strip
+immediately after the benchmark and quality result, with the Max-tier exception
+linked. On other surfaces, carry it with the position sentence or immediately
+after it.
 
 **We change configuration the user could change themselves. We do not patch the
 client's binary, intercept its traffic, or rewrite its files.** That line is the

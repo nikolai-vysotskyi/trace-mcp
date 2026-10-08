@@ -643,9 +643,6 @@ updated: 2026-09-21
     }
     .hero-headline {
       font-family: var(--font-body);
-      /* 60px/900px is the pair that breaks the headline into 3 balanced lines
-         (27, 27, 26 chars) at desktop (>=1200px) and 4 lines at 390px.
-         Measured in headless Chrome; re-measure if the wording changes. */
       font-size: clamp(36px, 5.2vw, 60px);
       font-weight: 400;
       line-height: 1.05;
@@ -663,38 +660,6 @@ updated: 2026-09-21
       color: var(--text-primary);
       font-weight: 400;
     }
-    /* The payoff half of the subtitle separates on colour, not weight — a second
-       weight here would spend a budget slot on what one shade already says. */
-    .hero-desc .accent-text { color: var(--text-display); }
-    /* Two lines sit under the claim and they are not the same kind of sentence,
-       so they no longer share one class (TRA-1143). `.hero-evidence` is the other
-       half of the measurement — the quality result that says the cheap context was
-       worth having — and it carries the claim's own shade and the same
-       `.accent-text` treatment on its numbers, so the two read as one body of
-       evidence at two sizes. `.hero-boundary` is a scope note about what the
-       product does to your machine; that one is genuinely the quiet half and stays
-       a step down in shade. They were identical at 15px/--text-secondary, which
-       made the result that answers "is it worse?" look like the small print
-       underneath the number it qualifies. Size still separates evidence from
-       claim; shade now groups them. */
-    .hero-evidence, .hero-boundary {
-      margin: 14px auto 0;
-      max-width: 660px;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-    .hero-evidence { color: var(--text-primary); }
-    .hero-evidence .accent-text { color: var(--text-display); }
-    .hero-boundary { color: var(--text-secondary); }
-    /* The one declinable exception to the boundary gets the same quiet link
-       treatment as .hero-alt below (TRA-979): monochrome underline, never the
-       accent — the scope note is not an action. */
-    .hero-boundary a {
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--border-visible);
-      transition: color 200ms ease-out, border-color 200ms ease-out;
-    }
-    .hero-boundary a:hover { color: var(--text-display); border-color: var(--text-display); }
     /* The three mono caps rows of the hero — eyebrow above the headline, the
        alternative platforms under the button, the trust line at the fold — are one
        treatment at three opacities, not three components. Only the distance from the
@@ -770,7 +735,6 @@ updated: 2026-09-21
       .hero { padding: 64px 0 40px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
-      .hero-evidence, .hero-boundary { margin-top: 12px; font-size: 14px; }
       /* Full width, one button: on a phone the download is a target, not a pill
          floating in the middle of a 390px row. */
       .hero-cta { margin-top: 28px; }
@@ -810,6 +774,8 @@ updated: 2026-09-21
       border-left: 1px solid var(--border);
     }
     .metrics-strip-item:first-child { border-left: none; }
+    .metrics-strip-item:nth-child(3) { grid-column: 2; grid-row: 1; }
+    .metrics-strip-item:nth-child(4) { grid-column: 3; grid-row: 1; }
     .metrics-strip-value {
       font-family: var(--font-mono);
       font-size: clamp(22px, 2.6vw, 28px);
@@ -825,6 +791,25 @@ updated: 2026-09-21
       text-transform: uppercase;
       color: var(--text-secondary);
     }
+    .metrics-strip-proof {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      padding: 24px 32px;
+      border-top: 1px solid var(--border);
+    }
+    .metrics-strip-proof > p { max-width: 760px; }
+    .metrics-strip-evidence, .metrics-strip-boundary {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .metrics-strip-evidence { color: var(--text-primary); }
+    .metrics-strip-evidence .accent-text { color: var(--text-display); }
+    .metrics-strip-boundary { color: var(--text-secondary); margin-top: 12px; }
+    .metrics-strip-proof a {
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .metrics-strip-proof a:hover { color: var(--text-display); border-color: var(--text-display); }
     .metrics-strip-foot {
       margin-top: 16px;
       font-family: var(--font-mono);
@@ -858,8 +843,12 @@ updated: 2026-09-21
         border-top: 1px solid var(--border);
       }
       .metrics-strip-item:first-child { border-top: none; }
+      .metrics-strip-item:nth-child(3), .metrics-strip-item:nth-child(4),
+      .metrics-strip-proof { grid-column: auto; grid-row: auto; }
       .metrics-strip-value { flex-shrink: 0; font-size: 18px; }
       .metrics-strip-label { font-size: 10px; }
+      .metrics-strip-proof { padding: 14px 0 18px; }
+      .metrics-strip-evidence, .metrics-strip-boundary { font-size: 14px; }
       .metrics-strip-foot { margin-top: 18px; font-size: 10px; }
     }
 
@@ -2315,52 +2304,13 @@ updated: 2026-09-21
         <span>MIT</span>
       </p>
 
-      <!-- The position sentence, verbatim from ops/positioning.md and identical on
-           README.md's first screen, the banner PNGs and _config.yml's description:
-           two paraphrases of one claim read as two claims to anything extracting
-           them. Do not narrow it back to the graph — that is what the old headline
-           ("Precomputed code intelligence for AI coding agents") did, and the
-           category term lives on the title and the Product View heading instead
-           (tests/docs/category-term.test.ts). -->
+      <!-- Keep the exact position sentence below a short headline. The measured
+           benchmark and product boundary sit with the first metric below. -->
       <h1 class="hero-headline">
-        trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.
+        Make context reusable.
       </h1>
-
-      <!-- The evidence, not a second claim. Same verbatim number as README.md's
-           first screen and the metrics tile below. -->
       <p class="hero-desc">
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request</span> &mdash;
-        median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own.
-      </p>
-
-      <!-- TRA-1122: the saving never travels alone. The same PRs were reviewed twice
-           and scored blind, and that half is what says the cheap context was worth
-           having — a page that publishes only the saving asks the reader to take the
-           rest on trust. Reuses .hero-boundary rather than adding a class: same
-           treatment, same measure, one less thing in the hero to keep in step.
-           Gated by tests/docs/readme-claims.test.ts.
-
-           TRA-1143: `.hero-evidence`, not `.hero-boundary`. Both classes rendered
-           identically, so the half that answers "is the thinner context worse?" was
-           set in the same grey as the scope note below it and read as small print
-           under the saving. Its four numbers take the claim's own `.accent-text`
-           treatment for the same reason. -->
-      <p class="hero-evidence">
-        Cheaper is not better, so the same PRs were reviewed twice and scored blind:
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
-        <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
-      </p>
-
-      <!-- The honesty boundary travels with the claim, not as a footnote further down
-           the page (ops/positioning.md &sect; The boundary, carried with the claim).
-           TRA-979: the boundary alone overclaims for Max-tier users — `trace init`
-           runs a third-party patcher for them — so the one declinable exception
-           travels with it, linked to the audited tier table. -->
-      <p class="hero-boundary">
-        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
+        trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.
       </p>
 
       <div class="hero-cta">
@@ -2421,6 +2371,21 @@ updated: 2026-09-21
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">{{ site.data.pr_context_bench.median_savings_pct }}%</span>
           <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
+        </div>
+        <!-- The benchmark's quality result travels with its saving; the product
+             scope note follows here, where it remains adjacent to the proof. -->
+        <div class="metrics-strip-proof">
+          <p class="metrics-strip-evidence">
+            The same PRs were reviewed twice and scored blind:
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading;
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
+            <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity against the preregistered bar</a>.
+          </p>
+          <p class="metrics-strip-boundary">
+            We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
+          </p>
         </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">{{ site.data.response_tokens.reduction_pct }}%</span>

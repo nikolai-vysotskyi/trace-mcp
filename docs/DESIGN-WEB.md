@@ -807,27 +807,21 @@ the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
 (Intel)`, `Download for Windows` — never a platform the page has not confirmed
 and never an architecture the visitor is left to guess at.
 
-**Three body sizes under the headline, and shade says which kind of sentence
-it is** (TRA-1143). `.hero-desc` is the claim — 19px, `--text-primary`, its
-number at `--text-display` through `.accent-text`. `.hero-evidence` is the
-other half of the same measurement, the quality result that says the cheap
-context was worth having — 15px, but `--text-primary` too, with its four
-numbers on the same `.accent-text`. `.hero-boundary` is the scope note about
-what the product does to your machine — 15px, `--text-secondary`.
+**The first screen stays short.** The eyebrow, a short headline, the exact
+position sentence, the download button, platform links, npm install command and
+trust line are the entire hero. The benchmark number, denominator, blind quality
+result and scope note live in the metrics strip immediately below. Do not add a
+second evidence paragraph above the button. The metric and its quality comparison
+must remain adjacent: the saving alone is not the claim.
 
-Size separates evidence from claim; shade groups them and drops the scope note
-out. Getting this wrong is not a nuance: for one release the evidence and the
-scope note shared `.hero-boundary` and rendered identically at
-15px/`--text-secondary`, so the answer to "is the thinner context worse?" was
-set in the same grey as a legal boundary and read as small print under the
-number it qualifies. The saving was loud and the proof it had not been bought
-with worse reviews was quiet — the exact shape the page exists to avoid.
-
-**A number that qualifies a claim gets the claim's own emphasis, on both
-sides of the comparison.** All four of `.hero-evidence`'s figures take
-`.accent-text`, including the ones where we lose: `0.80 false positives per PR
-against 0.58` is us being worse, and it is set as brightly as the half we win.
-Dimming the losing number is how a comparison becomes a boast.
+In the metrics strip, the first tile names the PR-review saving and denominator.
+`.metrics-strip-proof` follows that tile in the grid, spanning the row on desktop
+and sitting directly under the tile on mobile, before the other metrics. Its
+quality comparison uses `--text-primary`, and all four figures use
+`--text-display`, including the two figures where trace-mcp loses. The scope
+note uses `--text-secondary` and links to the Max-tier `tweakcc` disclosure.
+Neither proof nor scope belongs in the hero merely because a later edit changes
+their wording; control the total above-the-fold density, not each block alone.
 
 **Three mono caps rows, one treatment, three greys.** `.hero-eyebrow`
 (`--text-secondary`, above the headline, carrying the service label and the
@@ -862,16 +856,11 @@ inversion and survives it: an outlined box next to a solid block of the
 opposite end still reads as a second button when the two sit side by side. Off macOS and Windows it
 gains `.is-primary` and is the hero's only action.
 
-**The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
-`max-width: 900px` breaks the current wording (`trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.`)
-into exactly three balanced lines at 1440px and 1200px:
-- `trace-mcp indexes what your` (27 chars)
-- `agent keeps re-reading, and` (27 chars)
-- `serves the answer instead.` (26 chars)
-At 390px, `clamp(30px, 8vw, 44px)` over `100%` breaks it into four lines
-(131px height): `trace-mcp indexes` / `what your agent keeps` /
-`re-reading, and serves` / `the answer instead.`. Change the wording,
-re-measure the line count at 1440px and at 390px.
+**Measure the headline and the action together.** Keep the headline short
+enough to read in one or two lines at 1440px and at 390px. Keep the exact
+position sentence immediately below it; this is the one line of explanation,
+not a place for benchmark methodology. After any wording or spacing change,
+measure `.hero-cta` and `.hero-trust` in a headless browser at both widths.
 
 **The mono caps row stacks below 700px, and is never a wrapped flex row on a
 phone** (TRA-607, inherited by `.hero-note` in TRA-738). A `flex-wrap` row of
@@ -888,25 +877,13 @@ never lands on a separator.
 one tested step wider than the failure. Inline behaviour is what you get above
 700px, not at it.
 
-**The first screen fits a 13" laptop, and that is a measurement.** Measured
-on the **live published page** at 1440×900 — `getBoundingClientRect().top`
-plus `scrollY`, document coordinates: the button top sits at 630px and the
-trust line at 841px, with the metrics strip below the fold.
-
-Take the figure on `trace-mcp.com`, not on a local preview, and say which you
-took. Without a Jekyll build there is no faithful local render of this page —
-a Liquid-lite substitution reads roughly 48px lower on every hero element than
-the live page does, so a preview number recorded here as the baseline is a
-regression the next run will chase and not find. The rule is the button, not
-the hero — a first screen whose button falls below 900px is a regression
-however good it looks at 1440×1080.
-
-Re-measure `getBoundingClientRect()` on `.hero-cta` and `.hero-trust` after any
-change to the headline wording, either paragraph, or the hero's padding. The
-figures here have been refreshed once already (TRA-1143): they read 483px and
-656px from before the evidence line existed, which made a stale record look
-like a passing check. If you change the hero and do not re-measure, the next
-run reads your numbers as the truth.
+**The first screen fits a 13" laptop, and that is a measurement.** At
+1440×900 the button and install command must be visible without scrolling;
+verify the same at 390×844 on mobile. Check the actual rendered page in a
+headless, isolated browser after changing the headline, description or hero
+spacing. Record viewport, source (live or local), `.hero-cta` top and
+`.hero-install` bottom. A local Liquid substitution is an approximation, so
+do not record its coordinates as a live-site baseline.
 
 ---
 
