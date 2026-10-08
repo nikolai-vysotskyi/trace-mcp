@@ -318,7 +318,7 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 
 | Surface | Change | Note |
 |---|---|---|
-| `docs/index.html` hero + metrics | **Updated (TRA-2265).** Hero headline keeps the sentence; benchmark figure, full quality comparison and boundary are together in the first section below it | Eyebrow and compact first screen kept. Category term stays on the `<title>` and the Product View heading, not the hero |
+| `docs/index.html` hero + metrics | **Updated after Nikolai's TRA-2265 feedback.** Short H1, verbatim position sentence as the one supporting line, then installer and app screenshot; benchmark figure, quality comparison and boundary are together below the screenshot | The long sentence remains readable and crawlable without occupying the display headline. Category term stays on the `<title>` and the Product View heading |
 | `README.md` first screen + banner PNGs | **Done (TRA-918).** Same sentence, verbatim, plus the boundary line | Banner regenerated from `scripts/gen-readme-banner.mjs` — the tagline lives in that script, not in the PNG |
 | `docs/_config.yml` `description` | **Done (TRA-918).** Sentence first, then the category term; no hand-typed number | Feeds meta description on every page, so it is cut to 155 characters |
 | Site IA | Two second-level entries, one per door; door 2 has no page today | The real gap; see Doors |
