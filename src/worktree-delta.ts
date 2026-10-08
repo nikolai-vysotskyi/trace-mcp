@@ -261,6 +261,11 @@ export function clearWorktreeDeltaCache(): void {
   cache.clear();
 }
 
+/** Forget one worktree's cached delta (an edit was just reported for it). */
+export function invalidateWorktreeDelta(link: WorktreeLink): void {
+  cache.delete(cacheKey(link));
+}
+
 /**
  * Cached {@link computeWorktreeDelta}: concurrent callers share one in-flight
  * computation, and a result is reused for `ttlMs`. Never rejects.
@@ -329,7 +334,10 @@ export interface BranchIndexInfo {
   /** HEAD the canonical index had indexed when the copy was taken (no copy: absent). */
   canonical_head_at_copy?: string;
   built_at?: string;
-  /** Files edited after the copy last re-indexed them (capped at 50). */
+  /**
+   * Files the copy may be behind on: edited after it last re-indexed them,
+   * or named by a delta it has not planned against yet (capped at 50).
+   */
   pending: string[];
   /** Files the copy has re-indexed from the worktree so far. */
   reindexed_files: number;

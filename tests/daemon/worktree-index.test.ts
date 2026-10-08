@@ -222,6 +222,36 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
       String((i.symbol as Json | undefined)?.name ?? i.name),
     );
 
+  /** src/lib.ts with one more function: the edit the tests below report or hide. */
+  const LATE_LIB =
+    'export function newName(): number {\n  return 1;\n}\nexport function lateFn() {}\n';
+
+  /**
+   * A `git` on PATH that sleeps `delayMs` (and exits `exitCode` instead of
+   * running git, when given) — for the daemon and the session alike, since
+   * both spawn git through `process.env`. Restored after the manager has
+   * shut down: the cleanup is registered before `manager()`.
+   */
+  function slowGit(delayMs: number, exitCode?: number) {
+    const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf-8' }).stdout.trim();
+    const dir = path.join(tmp, 'git-shim');
+    fs.mkdirSync(dir, { recursive: true });
+    const body =
+      exitCode === undefined
+        ? `#!/bin/sh\nsleep ${delayMs / 1000}\nexec "${realGit}" "$@"\n`
+        : `#!/bin/sh\nexit ${exitCode}\n`;
+    fs.writeFileSync(path.join(dir, 'git'), body, { mode: 0o755 });
+    const realPath = process.env.PATH;
+    cleanups.push(() => {
+      process.env.PATH = realPath;
+    });
+    return {
+      enable: () => {
+        process.env.PATH = `${dir}${path.delimiter}${realPath}`;
+      },
+    };
+  }
+
   it('copies without touching the canonical index', async () => {
     const before = digest(canonical.db);
     const m = manager();
@@ -313,11 +343,7 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     const m = manager();
     const call = await session(m);
     await call('get_index_health');
-    write(
-      wt,
-      'src/lib.ts',
-      'export function newName(): number {\n  return 1;\n}\nexport function lateFn() {}\n',
-    );
+    write(wt, 'src/lib.ts', LATE_LIB);
     const before = digest(canonical.db);
     const res = await m.reindexFile(wt, path.join(wt, 'src/lib.ts'), { wait: true });
     expect(res).toEqual({ ok: true, relPath: 'src/lib.ts' });
@@ -726,6 +752,113 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     const renamed = await call('search', { query: 'newName' });
     expect(names(renamed.json)).not.toContain('newName');
     expect(dbFiles()).toEqual([]);
+  });
+
+  /**
+   * The copy answers after `sync_wait_ms` even while its delta re-check is
+   * still working out which files changed. Until the plan exists every file
+   * the delta names is flagged: a stale answer must not read as current.
+   */
+  it('flags the delta files while the re-check is still planning past sync_wait_ms', async () => {
+    const m = manager({ syncWaitMs: 50 });
+    const call = await session(m);
+    await call('get_index_health');
+    // An edit the hook did not report, right before the call.
+    write(wt, 'src/lib.ts', LATE_LIB);
+    clearWorktreeDeltaCache();
+    // Hold the planning stat pass past the budget.
+    const realStat = fs.promises.stat;
+    const stat = vi.spyOn(fs.promises, 'stat').mockImplementation((async (
+      ...a: Parameters<typeof fs.promises.stat>
+    ) => {
+      if (String(a[0]).startsWith(path.join(wt, 'src'))) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return realStat(...a);
+    }) as typeof fs.promises.stat);
+    cleanups.push(() => stat.mockRestore());
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    // Served from the copy (branch content), which has not re-indexed the edit.
+    expect(JSON.stringify(outline.json)).toContain('newName');
+    expect(JSON.stringify(outline.json)).not.toContain('lateFn');
+    expect(flagged(outline.json)).toContain('src/lib.ts');
+    expect(String(outline.json._warnings)).toContain('re-indexing is under way');
+    stat.mockRestore();
+    // Once the held sync lands, the edit is in the copy and nothing is flagged.
+    await vi.waitFor(
+      async () => {
+        const late = await call('search', { query: 'lateFn' });
+        expect(names(late.json)).toContain('lateFn');
+        expect(flagged(late.json)).toEqual([]);
+      },
+      { timeout: 5_000, interval: 100 },
+    );
+  });
+
+  /**
+   * The delta is awaited in full (the canonical handler would wait for the
+   * same computation), so a slow git costs the branch content nothing: the
+   * answer is either fresh or flagged.
+   */
+  it('cannot answer unmarked while a slow git holds the delta past sync_wait_ms', async () => {
+    const shim = slowGit(100);
+    const m = manager({ syncWaitMs: 50 });
+    const call = await session(m);
+    await call('get_index_health');
+    write(wt, 'src/lib.ts', LATE_LIB);
+    clearWorktreeDeltaCache();
+    shim.enable();
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    expect(JSON.stringify(outline.json)).toContain('newName');
+    if (!JSON.stringify(outline.json).includes('lateFn')) {
+      expect(flagged(outline.json)).toContain('src/lib.ts');
+    }
+  });
+
+  it('flags everything it knows of when git cannot compute the delta', async () => {
+    const shim = slowGit(0, 128);
+    const m = manager({ syncWaitMs: 50 });
+    const call = await session(m);
+    await call('get_index_health');
+    write(wt, 'src/lib.ts', LATE_LIB);
+    clearWorktreeDeltaCache();
+    shim.enable();
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    expect(JSON.stringify(outline.json)).toContain('newName');
+    expect(JSON.stringify(outline.json)).not.toContain('lateFn');
+    expect(flagged(outline.json)).toContain('src/lib.ts');
+  });
+
+  it('reports a refused copy on reindex-file and keeps flagging the file from the delta', async () => {
+    const m = manager({ maxDeltaFiles: 1 });
+    const call = await session(m);
+    await call('search', { query: 'newName' });
+    write(wt, 'src/lib.ts', LATE_LIB);
+    const res = await m.reindexFile(wt, path.join(wt, 'src/lib.ts'));
+    expect(res).toEqual({ ok: true, relPath: 'src/lib.ts', noCopy: 'delta_too_large' });
+    expect(dbFiles()).toEqual([]);
+    // Nothing was queued, and nothing had to be: the canonical answer flags it.
+    const outline = await call('get_outline', { path: 'src/lib.ts' });
+    expect(flagged(outline.json)).toContain('src/lib.ts');
+    expect(String(outline.json._warnings)).toContain('holds the canonical version');
+  });
+
+  it('answers reindex-file at once while the copy is still building, then serves the edit', async () => {
+    const m = manager();
+    // Hold the copy before its backup step: the canonical index is "busy".
+    const release = beginReindex(main);
+    cleanups.push(release);
+    const call = await session(m);
+    write(wt, 'src/lib.ts', LATE_LIB);
+    const t0 = Date.now();
+    const res = await m.reindexFile(wt, path.join(wt, 'src/lib.ts'));
+    expect(res).toEqual({ ok: true, relPath: 'src/lib.ts', noCopy: 'copy_building' });
+    expect(Date.now() - t0).toBeLessThan(500);
+    expect(dbFiles()).toEqual([]);
+    release();
+    const late = await call('search', { query: 'lateFn' });
+    expect(names(late.json)).toContain('lateFn');
+    expect(flagged(late.json)).toEqual([]);
   });
 });
 

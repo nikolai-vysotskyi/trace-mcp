@@ -2867,12 +2867,17 @@ program
             wait: ['1', 'true'].includes(url.searchParams.get('wait') ?? ''),
           });
           if (routed) {
-            if (routed.ok) {
-              res.writeHead(204);
-              res.end();
-            } else {
+            if (!routed.ok) {
               res.writeHead(routed.status, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: routed.error }));
+            } else if (routed.noCopy) {
+              res.writeHead(202, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({ status: 'no_copy', reason: routed.noCopy, path: routed.relPath }),
+              );
+            } else {
+              res.writeHead(204);
+              res.end();
             }
             return;
           }

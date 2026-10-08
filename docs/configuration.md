@@ -181,8 +181,16 @@ the worktree delta re-indexed into it.
    stays on the session.
 
 The copy has no file watcher. Each call re-checks the delta (the same two-second cache) and
-re-indexes what changed, and `POST /api/projects/reindex-file` for a file in the worktree
-(the PostToolUse hook) writes into the copy, never into the main index. The copy is
+re-indexes what changed, waiting up to `sync_wait_ms` for the re-index. A call that outruns
+the budget is not answered as current: until the re-check has worked out which of the
+delta's files changed, every one of them is flagged `stale_on_branch`, afterwards only
+those still being re-indexed; when git cannot compute the delta, the copy flags everything
+it knows of. `POST /api/projects/reindex-file` for a file in the worktree (the PostToolUse
+hook) writes into the copy, never into the main index. While no copy is ready (still being
+built, refused by a limit below, main index not ready) the daemon answers `202` with
+`{"status": "no_copy", "reason": …}` and queues nothing: the file is in the git delta from
+then on, so the main index answers flagged until a copy exists, and the copy being built
+reads the worktree as it is. The copy is
 rebuilt once the main index has indexed a HEAD past the one it was taken at (the old copy
 keeps serving, and keeps following the worktree, until the new one is ready), unloaded after `idle_unload_minutes` without use (the file
 stays and is reused while the main HEAD matches), deleted by the `WorktreeRemove` hook

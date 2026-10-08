@@ -77,12 +77,14 @@ import {
   computeWorktreeDelta,
   findLinkedWorktree,
   getWorktreeDelta,
+  invalidateWorktreeDelta,
   resolveWorktreeLink,
   summarizeWorktreeDelta,
   type BranchIndexInfo,
   type WorktreeDelta,
   type WorktreeDeltaSummary,
   type WorktreeLink,
+  worktreeDeltaPaths,
   worktreeDeltaSize,
 } from '../worktree-delta.js';
 import { serializeError } from './log-error.js';
@@ -463,7 +465,14 @@ export interface WorktreeIndexStats {
 }
 
 export type WorktreeReindexResult =
-  | { ok: true; relPath: string; skippedChurn?: boolean }
+  /**
+   * `noCopy`: no copy took the edit and none was queued — why
+   * (`copy_building`, a refusal such as `delta_too_large`,
+   * `canonical_not_ready`, `dropping`). The file is in the git delta from
+   * now on: canonical answers flag it until a copy exists, and the next copy
+   * plans from that delta.
+   */
+  | { ok: true; relPath: string; skippedChurn?: boolean; noCopy?: string }
   | { ok: false; status: 400; error: string };
 
 // ─── One copy ──────────────────────────────────────────────────────
@@ -497,6 +506,17 @@ export class BranchIndex {
   /** Path → stat signature of what the copy last indexed from the worktree. */
   private readonly applied = new Map<string, string>();
   private readonly pendingPaths = new Set<string>();
+  /**
+   * Files a sync accepted but not yet planned may be behind on — its delta
+   * plus everything an earlier pass applied — and how many such syncs there
+   * are. The plan is what tells the changed files apart; a call served
+   * before it exists must not read as current. Cleared once no sync is
+   * unplanned.
+   */
+  private readonly coarsePending = new Set<string>();
+  private unplanned = 0;
+  /** The delta could not be computed: answer, flagged for everything known, until a sync plans. */
+  private unverified = false;
   private chain: Promise<void> = Promise.resolve();
   private inflight = 0;
   private drained: (() => void) | null = null;
@@ -636,33 +656,78 @@ export class BranchIndex {
     return { index, remove, signatures, reverted };
   }
 
-  /** Files whose re-index is still running, as a delta for `markStaleOnBranch`. */
+  /**
+   * Files the copy may be behind on, as a delta for `markStaleOnBranch`:
+   * those whose re-index is still running, those a not-yet-planned sync may
+   * touch and, while the delta could not be computed, everything the last
+   * delta or an earlier pass named. Null when nothing is in flight.
+   */
   pendingDelta(): WorktreeDelta | null {
-    if (this.pendingPaths.size === 0) return null;
+    if (this.pendingPaths.size === 0 && this.coarsePending.size === 0 && !this.unverified) {
+      return null;
+    }
+    const paths = new Set(this.pendingPaths);
+    for (const p of this.coarsePending) paths.add(p);
+    if (this.unverified) {
+      if (this.lastDelta) for (const p of worktreeDeltaPaths(this.lastDelta)) paths.add(p);
+      for (const p of this.applied.keys()) paths.add(p);
+    }
+    if (paths.size === 0) return null;
     return {
       worktreeRoot: this.worktreeRoot,
       canonicalRoot: this.canonicalRoot,
       worktreeHead: this.lastDelta?.worktreeHead ?? '',
       canonicalHead: this.canonicalHead,
-      modified: [...this.pendingPaths],
+      modified: [...paths],
       deleted: [],
       untracked: [],
       computedAt: this.lastDelta?.computedAt ?? 0,
     };
   }
 
+  /** git could not compute the delta for a call: flag everything known until a sync plans one. */
+  markUnverified(): void {
+    this.unverified = true;
+  }
+
+  private settleUnplanned(): void {
+    if (--this.unplanned === 0) this.coarsePending.clear();
+  }
+
   /**
    * Bring the copy in line with `delta`. Serialized per copy; resolves to the
    * number of files that left the delta and changed (the rebuild signal).
+   * The delta's files count as pending from this call, not from when the
+   * chain reaches it, and narrow to the plan's files once that exists.
    */
   sync(delta: WorktreeDelta): Promise<number> {
+    this.unplanned++;
+    for (const p of worktreeDeltaPaths(delta)) this.coarsePending.add(p);
+    for (const p of this.applied.keys()) this.coarsePending.add(p);
     const run = this.chain.then(async () => {
-      if (this.state !== 'ready' && this.state !== 'opening') return 0;
+      if (this.state !== 'ready' && this.state !== 'opening') {
+        this.settleUnplanned();
+        return 0;
+      }
       const now = this.owner.now();
-      if (delta === this.plannedDelta && now - this.plannedAt < PLAN_TTL_MS) return 0;
+      if (delta === this.plannedDelta && now - this.plannedAt < PLAN_TTL_MS) {
+        this.settleUnplanned();
+        return 0;
+      }
       this.lastDelta = delta;
-      const plan = await this.plan(delta);
-      await this.apply(plan);
+      let plan: SyncPlan;
+      try {
+        plan = await this.plan(delta);
+      } catch (err) {
+        this.settleUnplanned();
+        throw err;
+      }
+      // `apply` marks the plan's files before its first await, so the coarse
+      // set can go as soon as it is called.
+      const applying = this.apply(plan);
+      this.unverified = false;
+      this.settleUnplanned();
+      await applying;
       // Only once applied: a failed pass is re-planned by the next call.
       this.plannedDelta = delta;
       this.plannedAt = now;
@@ -696,7 +761,8 @@ export class BranchIndex {
   private async apply(plan: SyncPlan): Promise<void> {
     const pipeline = this.pipeline;
     if (!pipeline || (plan.index.length === 0 && plan.remove.length === 0)) return;
-    for (const p of [...plan.index, ...plan.remove]) this.pendingPaths.add(p);
+    const files = [...plan.index, ...plan.remove];
+    for (const p of files) this.pendingPaths.add(p);
     const work = async () => {
       if (plan.remove.length > 0) pipeline.deleteFiles(plan.remove);
       if (plan.index.length > 0) await pipeline.indexFiles(plan.index);
@@ -704,16 +770,18 @@ export class BranchIndex {
     try {
       await this.withReindexLock(work);
       for (const [rel, sig] of plan.signatures) this.applied.set(rel, sig);
-      for (const p of [...plan.index, ...plan.remove]) this.pendingPaths.delete(p);
+      for (const p of files) this.pendingPaths.delete(p);
       this.metaDirty = true;
       this.aiRun?.();
     } catch (err) {
-      // Left pending: the next routed call re-plans and retries.
+      // Left pending, and recorded as never verified: the next plan re-checks
+      // such a file even when no delta names it any more.
+      for (const p of files) if (!this.applied.has(p)) this.applied.set(p, 'unknown');
       logger.warn(
         {
           error: serializeError(err),
           root: this.worktreeRoot,
-          files: plan.index.length + plan.remove.length,
+          files: files.length,
         },
         'Branch index re-index failed (will retry on the next call)',
       );
@@ -769,9 +837,15 @@ export class BranchIndex {
   }
 
   target(): WorktreeIndexTarget {
+    // `pending` is read once the handler has returned; a sync that completes
+    // meanwhile must not hide what the handler read from the copy before it.
+    let before: WorktreeDelta | null = null;
     return {
-      run: (tool, params) => this.run(tool, params),
-      pending: () => this.pendingDelta(),
+      run: (tool, params) => {
+        before = this.pendingDelta();
+        return this.run(tool, params);
+      },
+      pending: () => mergePending(before, this.pendingDelta()),
     };
   }
 
@@ -784,7 +858,7 @@ export class BranchIndex {
 
   /** Files whose latest edit is not in the copy yet (capped at 50). */
   pendingFiles(): string[] {
-    return [...this.pendingPaths].slice(0, 50);
+    return (this.pendingDelta()?.modified ?? []).slice(0, 50);
   }
 
   get reindexedFiles(): number {
@@ -852,6 +926,13 @@ export class BranchIndex {
 // ─── Manager ───────────────────────────────────────────────────────
 
 /** One shape for both reports of a branch index (see `BranchIndexInfo`). */
+/** Union of two `pendingDelta` snapshots (everything they name is in `modified`). */
+function mergePending(a: WorktreeDelta | null, b: WorktreeDelta | null): WorktreeDelta | null {
+  if (!a) return b;
+  if (!b || b.modified.length === 0) return a;
+  return { ...b, modified: [...new Set([...a.modified, ...b.modified])] };
+}
+
 function branchIndexInfo(entry: Entry | null, index: BranchIndex | null): BranchIndexInfo {
   // Absent rather than null: tool responses drop null fields, and both
   // reports must read the same.
@@ -1000,7 +1081,13 @@ export class WorktreeIndexManager {
 
   /**
    * The ready copy for `link`, or null to answer from the canonical index.
-   * While no copy is ready, waits for the build until `waitUntil`.
+   * While no copy is ready, waits for the build until `waitUntil`. A ready
+   * copy answers after its delta re-check, which waits up to `syncWaitMs`
+   * for the re-index: from the moment the delta is in hand the copy flags
+   * every file it may be behind on, so a call that outruns the budget is
+   * still honest. The delta itself is awaited in full — the canonical
+   * handler would await the same shared computation, so answering from
+   * there would cost the same and say less.
    */
   async resolve(
     link: WorktreeLink,
@@ -1010,24 +1097,36 @@ export class WorktreeIndexManager {
     const entry = this.entryFor(link);
     if (!entry) return null;
     const now = this.now();
-    const current = entry.current;
-    if (current && current.state === 'ready') {
-      current.lastUsedAt = now;
-      await waitFor(this.syncEntry(entry, current), this.settings.syncWaitMs);
-      const served = entry.current;
-      return served && served.state === 'ready' ? served.target() : null;
+    let index = entry.current;
+    if (!index || index.state !== 'ready') {
+      const building = this.ensureBuilding(entry);
+      if (!building) return null;
+      const built = await waitFor(building, waitUntil - now);
+      if (!built || built.state !== 'ready') return null;
+      index = built;
     }
-    const building = this.ensureBuilding(entry);
-    if (!building) return null;
-    const built = await waitFor(building, waitUntil - now);
-    return built && built.state === 'ready' ? built.target() : null;
+    index.lastUsedAt = this.now();
+    const delta = await getWorktreeDelta(entry.link);
+    const synced = entry.current;
+    if (!synced || synced.state !== 'ready') return null;
+    if (!delta) {
+      // git could not answer: the copy flags everything it knows of.
+      synced.markUnverified();
+      return synced.target();
+    }
+    await waitFor(this.syncEntry(entry, synced, delta), this.settings.syncWaitMs);
+    const served = entry.current;
+    if (!served || served.state !== 'ready') return null;
+    // A rebuild swapped the copy during the wait: it synced its own
+    // build-time delta, not this one — flagged coarsely until it has.
+    if (served !== synced) void served.sync(delta).catch(() => undefined);
+    return served.target();
   }
 
-  /** Re-check the delta and apply it, or schedule a rebuild. Never rejects. */
-  private async syncEntry(entry: Entry, index: BranchIndex): Promise<void> {
+  /** Apply `delta` to `index`, or schedule a rebuild. Never rejects. */
+  private async syncEntry(entry: Entry, index: BranchIndex, delta: WorktreeDelta): Promise<void> {
     try {
-      const delta = await getWorktreeDelta(entry.link);
-      if (!delta || index.state !== 'ready') return;
+      if (index.state !== 'ready') return;
       // What the canonical index has indexed, not its git HEAD: right after a
       // pull the watcher has not caught up, and a copy taken then would
       // carry the old content under the new HEAD's name.
@@ -1424,8 +1523,23 @@ export class WorktreeIndexManager {
     const entry = this.entryFor(link);
     const index = entry?.current;
     if (!entry || !index || index.state !== 'ready') {
-      if (entry) this.ensureBuilding(entry);
-      return { ok: true, relPath: relPosix };
+      // No copy to take the edit, and nothing to queue: the file is in the
+      // git delta from now on, so the canonical answers flag it until a copy
+      // exists, and the copy being built (or the next one) plans from that
+      // delta and reads the worktree as it is. Drop the cached delta so the
+      // very next call sees the edit. Reported, never failed: the hook's
+      // fallback for a non-2xx is a cold `index-file` into a stray DB keyed
+      // by the worktree root.
+      invalidateWorktreeDelta(link);
+      const building = entry ? this.ensureBuilding(entry) : null;
+      const noCopy = !entry
+        ? 'dropping'
+        : building
+          ? 'copy_building'
+          : this.now() < entry.retryAt && entry.lastError
+            ? entry.lastError
+            : 'canonical_not_ready';
+      return { ok: true, relPath: relPosix, noCopy };
     }
     index.lastUsedAt = this.now();
     await waitFor(
