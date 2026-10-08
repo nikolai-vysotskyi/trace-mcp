@@ -101,7 +101,10 @@ export const GUARD_HOOK_VERSION = '0.13.0';
 // 0.5.0 (TRA-694): the reindex dispatch is detached, so an edit no longer
 // blocks the agent on the daemon round trip. Existing installs must be
 // rewritten to pick it up.
-export const REINDEX_HOOK_VERSION = '0.5.0';
+// 0.7.0 (#1480): a curl timeout after a successful connect is recorded as
+// `daemon`/`timeout` and no longer spawns the cold `index-file` fallback.
+// (0.6.0 shipped in the script header only; this constant had stayed at 0.5.0.)
+export const REINDEX_HOOK_VERSION = '0.7.0';
 export const PRECOMPACT_HOOK_VERSION = '0.3.0';
 export const WORKTREE_HOOK_VERSION = '0.3.0';
 export const SESSION_START_HOOK_VERSION = '0.2.0';

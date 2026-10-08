@@ -496,7 +496,7 @@ async function triggerDaemonReindex(
   projectRoot: string,
   filePath: string,
 ): Promise<void> {
-  const res = await fetch(`http://127.0.0.1:${port}/api/projects/reindex-file`, {
+  const res = await fetch(`http://127.0.0.1:${port}/api/projects/reindex-file?wait=1`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ project: projectRoot, path: filePath }),

@@ -79,6 +79,18 @@ describe('aggregateHookStats', () => {
     expect(agg.reasons['no-daemon']).toBe(3);
   });
 
+  it('counts daemon-path timeouts as a reason but not daemon ok lines (#1480)', () => {
+    const lines = parseHookStats(
+      [
+        '{"ts":1000,"path":"daemon","reason":"ok","wallclock_ms":7}',
+        '{"ts":2000,"path":"daemon","reason":"timeout","wallclock_ms":2012}',
+      ].join('\n'),
+    );
+    const agg = aggregateHookStats(lines, { sinceMs: null });
+    expect(agg.daemon.count).toBe(2);
+    expect(agg.reasons).toEqual({ timeout: 1 });
+  });
+
   it('filters by sinceMs', () => {
     const lines = parseHookStats(FIXTURE);
     const agg = aggregateHookStats(lines, { sinceMs: 5000 });

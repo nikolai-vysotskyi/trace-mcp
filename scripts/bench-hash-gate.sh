@@ -77,7 +77,7 @@ import json, subprocess, time
 body = json.dumps({'project': '$WORK_DIR', 'path': '$file'})
 t0 = time.perf_counter()
 r = subprocess.run(['curl','-fsS','-X','POST','-H','Content-Type: application/json',
-                    '-d',body,'http://127.0.0.1:${PORT}/api/projects/reindex-file'],
+                    '-d',body,'http://127.0.0.1:${PORT}/api/projects/reindex-file?wait=1'],
                    capture_output=True, text=True)
 t1 = time.perf_counter()
 print(int((t1-t0)*1000))

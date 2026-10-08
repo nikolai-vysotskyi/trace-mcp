@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# trace-mcp-reindex v0.6.0
+# trace-mcp-reindex v0.7.0
 # trace-mcp PostToolUse auto-reindex hook
 # Daemon-first: posts to the running daemon's /api/projects/reindex-file
 # endpoint via curl (no Node startup). Falls back to a cold subprocess
 # only when the daemon is unreachable.
 #
 # v0.5 changes (TRA-694 — the dispatch no longer blocks the agent):
-#   - Notifying the daemon that a file changed is fire-and-forget: reindexing
-#     is asynchronous on the daemon side and nothing here consumes the result.
+#   - Notifying the daemon that a file changed is fire-and-forget: nothing
+#     here consumes the result. (Until #1480 the daemon answered only after
+#     the reindex had finished; see v0.7.)
 #     Yet the curl ran in the foreground, so every edit paid its round trip —
 #     p50 372 ms on the happy path, and the full `--max-time 2` ceiling
 #     whenever the daemon was up but not answering. Measured over 16,440
@@ -32,6 +33,21 @@
 #   - Record the project root on every stats line so the next "hook always
 #     falls back" QA run can correlate 404s to the missed root from the
 #     stats file alone (previously the line carried no root at all).
+#
+# v0.7 changes (#1480 — a healthy daemon was recorded as `no-daemon`):
+#   - The daemon now answers 202 once the request is queued, instead of after
+#     the incremental reindex. On a ~27k-symbol project that reindex took
+#     ~2.4 s, so nearly every edit hit `--max-time 2`, was classified
+#     `no-daemon`, and spawned a cold `trace-mcp index-file` for a file the
+#     daemon was already indexing.
+#   - A curl timeout AFTER the TCP connect succeeded (exit 28 with
+#     `num_connects` >= 1) means the daemon has the request; it is recorded as
+#     `daemon`/`timeout` and no CLI fallback is spawned. A refused or timed
+#     out connect is still `no-daemon`, and so is a daemon that died mid
+#     request (SIGKILL closes the socket: curl exits 52/56, not 28). The
+#     connect test is `num_connects`, not `time_connect`: curl before 7.61
+#     prints time_connect with three decimals, so a localhost connect reads
+#     as 0.000.
 
 set -euo pipefail
 
@@ -197,13 +213,18 @@ dispatch() {
   START_MS=$(now_ms)
 
   # Try daemon first — single curl, ~5 ms RTT. No Node startup.
-  # `-w '%{http_code}'` yields "000" on any pre-HTTP failure (refused,
-  # timeout, DNS). curl's exit status is deliberately ignored: the code it
-  # printed is the whole signal, and `|| echo` here corrupts it (see v0.5).
-  HTTP_CODE=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -X POST \
+  # `-w '%{http_code} %{num_connects}'` yields "000" on any pre-HTTP failure
+  # (refused, timeout, DNS) and num_connects 0 when the TCP connect never
+  # completed. The printed code is the main signal and `|| echo` here corrupts
+  # it (see v0.5); the exit status only tells a timeout apart (see v0.7).
+  local CURL_OUT CURL_RC CONNECTS
+  CURL_OUT=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code} %{num_connects}' -X POST \
       -H 'Content-Type: application/json' \
       -d "$(jq -n --arg p "$PROJECT_ROOT" --arg f "$FILE_PATH" '{project:$p,path:$f}')" \
-      "http://127.0.0.1:${PORT}/api/projects/reindex-file" 2>/dev/null) || true
+      "http://127.0.0.1:${PORT}/api/projects/reindex-file" 2>/dev/null) && CURL_RC=0 || CURL_RC=$?
+  HTTP_CODE="${CURL_OUT%% *}"
+  CONNECTS=""
+  [[ "$CURL_OUT" == *" "* ]] && CONNECTS="${CURL_OUT#* }"
   # Empty means curl is missing or died before writing anything — same
   # observable state as a refused connection.
   [[ -z "$HTTP_CODE" ]] && HTTP_CODE="000"
@@ -216,9 +237,16 @@ dispatch() {
     return 0
   fi
 
-  # Classify failure for stats. 000 = no daemon / connection refused / timeout
-  # (curl exits before HTTP). Distinguish timeout via curl exit code is fiddly
-  # under set -e; we collapse "couldn't connect" into no-daemon.
+  # v0.7 (#1480): timed out (curl exit 28) after the connect succeeded — the
+  # daemon has the request and will run it. A cold `index-file` here would
+  # only index the same file a second time.
+  if [[ "$CURL_RC" == "28" && "$CONNECTS" =~ ^[0-9]+$ && "$CONNECTS" -ge 1 ]]; then
+    write_stat "daemon" "timeout" "$WALL_MS" "$END_MS" "$PROJECT_ROOT"
+    return 0
+  fi
+
+  # Classify failure for stats. 000 here = the connect itself failed or timed
+  # out (refused, no listener) — a timeout after connect returned above.
   case "$HTTP_CODE" in
     400) REASON="400" ;;
     404) REASON="404" ;;

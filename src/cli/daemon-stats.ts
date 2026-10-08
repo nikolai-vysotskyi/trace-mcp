@@ -98,7 +98,10 @@ export function aggregateHookStats(
 
   for (const l of filtered) {
     buckets[l.path].push(l.wallclock_ms);
-    if (l.path !== 'daemon') {
+    // Hook v0.7+ records a daemon that took the request but outran curl's
+    // timeout as `daemon`/`timeout` (#1480) — count it, or it would hide
+    // inside the daemon path's latency with no reason attached.
+    if (l.path !== 'daemon' || l.reason !== 'ok') {
       reasons[l.reason] = (reasons[l.reason] ?? 0) + 1;
     }
   }

@@ -91,6 +91,7 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
+import { describeIndexFileOutcome, dispatchIndexFile } from './cli/index-file.js';
 import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
 import { buildApiProjectsList } from './daemon/api-projects-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
@@ -99,6 +100,7 @@ import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
 import {
+  acceptReindexFile,
   beginReindex,
   countReindexingProjects,
   handleReindexFile,
@@ -2738,7 +2740,14 @@ program
 
       // REST API: incremental single-file reindex (called by the PostToolUse hook
       // and by `trace-mcp index-file` once the daemon is up — see plan-indexer-perf §1.1).
+      // #1480: by default the request is validated, queued under the reindex
+      // lock and answered 202 before the indexing runs — answering after it
+      // made every edit on a large project outrun the hook's 2 s timeout.
+      // `?wait=1` keeps the old contract (204 after the work, 503/500 on
+      // failure) for callers that need the result, e.g. the bench scripts.
       if (req.method === 'POST' && url.pathname === '/api/projects/reindex-file') {
+        const waitParam = url.searchParams.get('wait');
+        const waitForResult = waitParam === '1' || waitParam === 'true';
         let parsed: { project?: string; path?: string };
         try {
           const body = await collectBody(req);
@@ -2792,12 +2801,11 @@ program
           return;
         }
         pokeActivity(effectiveProject);
-        const result = await handleReindexFile(
-          { project: effectiveProject, path: parsed?.path },
-          {
-            getProject: (root) => projectManager.getProject(root),
-          },
-        );
+        const reindexRequest = { project: effectiveProject, path: parsed?.path };
+        const reindexDeps = { getProject: (root: string) => projectManager.getProject(root) };
+        const result = waitForResult
+          ? await handleReindexFile(reindexRequest, reindexDeps)
+          : acceptReindexFile(reindexRequest, reindexDeps);
         if (!result.ok) {
           // WHY Retry-After: the 503 branch fires when a project is still warming
           // on a cold daemon. Hook clients honour Retry-After and fall back to the
@@ -2808,6 +2816,11 @@ program
           }
           res.writeHead(result.status, headers);
           res.end(JSON.stringify({ error: result.error }));
+          return;
+        }
+        if (result.queued) {
+          res.writeHead(202, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'queued', path: result.relPath }));
           return;
         }
         res.writeHead(204);
@@ -4462,7 +4475,11 @@ program
   .command('index-file')
   .description('Incrementally reindex a single file (called by the PostToolUse auto-reindex hook)')
   .argument('<file>', 'Absolute or relative path to the file to reindex')
-  .action(async (file: string) => {
+  .option(
+    '--wait',
+    'Wait for a running daemon to finish the reindex instead of returning once it is queued (benchmarks)',
+  )
+  .action(async (file: string, opts: { wait?: boolean }) => {
     const resolvedFile = path.resolve(file);
     if (!fs.existsSync(resolvedFile)) {
       process.exit(0); // file may have been deleted — exit silently
@@ -4475,53 +4492,47 @@ program
       process.exit(0); // not inside a known project — skip silently
     }
 
-    // Daemon-first path: avoids a cold Node + WASM + plugin spawn (~300-500 ms)
-    // when the long-running daemon already has everything warm. See plan-indexer-perf §1.1.
-    if (await isDaemonRunning(DEFAULT_DAEMON_PORT).catch(() => false)) {
-      try {
-        const res = await fetch(
-          `http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/projects/reindex-file`,
+    const outcome = await dispatchIndexFile(resolvedFile, projectRoot, {
+      daemonRunning: () => isDaemonRunning(DEFAULT_DAEMON_PORT),
+      postToDaemon: () =>
+        fetch(
+          `http://127.0.0.1:${DEFAULT_DAEMON_PORT}/api/projects/reindex-file${opts.wait ? '?wait=1' : ''}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ project: projectRoot, path: resolvedFile }),
-            signal: AbortSignal.timeout(2000),
+            // A queued request is answered in milliseconds; --wait covers the
+            // whole reindex, which takes seconds on a large project.
+            signal: AbortSignal.timeout(opts.wait ? 120_000 : 2000),
           },
-        );
-        if (res.ok) {
-          logger.debug(
-            { file: resolvedFile, projectRoot, status: res.status },
-            'index-file proxied to daemon',
-          );
-          process.exit(0);
+        ),
+      // Same spelling the daemon keys its reindex lock by (TRA-2032 aliases).
+      lockRoot: getProject(projectRoot)?.root ?? projectRoot,
+      indexLocally: async () => {
+        const configResult = await loadConfig(projectRoot);
+        if (configResult.isErr()) return;
+        const config = configResult.value;
+
+        const dbPath = resolveDbPath(projectRoot);
+        ensureGlobalDirs();
+
+        const db = initializeDatabase(dbPath);
+        const store = new Store(db);
+        const registry = PluginRegistry.createWithDefaults();
+
+        const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+        try {
+          await pipeline.indexFiles([resolvedFile]);
+        } finally {
+          await pipeline.dispose();
+          db.close();
         }
-        logger.warn(
-          { file: resolvedFile, projectRoot, status: res.status },
-          'Daemon reindex-file rejected request — falling back to local indexing',
-        );
-      } catch (e) {
-        logger.warn(
-          { file: resolvedFile, projectRoot, err: (e as Error).message },
-          'Daemon reindex-file failed — falling back to local indexing',
-        );
-      }
-    }
-
-    const configResult = await loadConfig(projectRoot);
-    if (configResult.isErr()) process.exit(0);
-    const config = configResult.value;
-
-    const dbPath = resolveDbPath(projectRoot);
-    ensureGlobalDirs();
-
-    const db = initializeDatabase(dbPath);
-    const store = new Store(db);
-    const registry = PluginRegistry.createWithDefaults();
-
-    const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
-    await pipeline.indexFiles([resolvedFile]);
-    await pipeline.dispose();
-    db.close();
+      },
+    });
+    const { exitCode, message } = describeIndexFileOutcome(outcome, resolvedFile, projectRoot);
+    if (message) process.stderr.write(`${message}\n`);
+    // Local indexing ends by itself once the pipeline is disposed.
+    if (outcome !== 'local') process.exit(exitCode);
   });
 
 program
