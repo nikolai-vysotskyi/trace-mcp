@@ -340,6 +340,67 @@ function run(untrusted) {
     expect(findings[0].confidence).toBe('high');
   });
 
+  test('does not demote ps when pid comes from external input (req.query.pid) assigned to variable', () => {
+    writeFile(
+      store,
+      'src/handlers/process.js',
+      `
+function handle(req) {
+  const value = req.query.pid;
+  execSync(\`ps -o rss= -p \${value}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when req.query.pid is interpolated directly', () => {
+    writeFile(
+      store,
+      'src/handlers/process-direct.js',
+      `
+function handle(req) {
+  execSync(\`ps -o rss= -p \${req.query.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes ps when local variable is assigned from proven local pid (process.pid)', () => {
+    writeFile(
+      store,
+      'scripts/rss-var.mjs',
+      `
+function check() {
+  const pid = process.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
   // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------

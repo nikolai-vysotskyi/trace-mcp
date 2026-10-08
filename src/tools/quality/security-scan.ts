@@ -1103,43 +1103,43 @@ function classifyCommandInjection(
   // `which X` — argument controls only which binary is looked up.
   if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{/.test(line)) return 'which';
   // `taskkill /PID X` — check whether the interpolated value is a numeric literal,
-  // or bound to one of `pid` / `process.pid` / `child.pid` in the same function.
+  // or bound to a proven local process PID (process.pid / child.pid / worker.pid / readDaemonPid() / numeric literal).
   const tk =
     /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+\/PID\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
       line,
     );
   if (tk) {
     const ident = tk[1];
-    if (/^(?:process\.pid|child\.pid)$/.test(ident)) return 'taskkill';
+    if (/^(?:process\.pid|child\.pid|worker\.pid)$/.test(ident)) return 'taskkill';
     if (/^-?\d+$/.test(ident)) return 'taskkill';
-    // Look upward in the same file for `const ident = readDaemonPid()` or
-    // a numeric assignment — pragmatic heuristic.
-    const headIdent = ident.split('.')[0];
-    const pidAssignRe = new RegExp(
-      `(?:const|let|var)\\s+${headIdent}\\b[^=]*=\\s*(?:readDaemonPid|process\\.pid|child\\.pid|\\d+|.+\\.pid\\b)`,
-    );
-    for (let i = 0; i < lines.length; i++) {
-      if (i === fromLine) continue;
-      if (pidAssignRe.test(lines[i])) return 'taskkill';
+    if (!ident.includes('.')) {
+      const pidAssignRe = new RegExp(
+        `(?:const|let|var)\\s+${ident}\\b[^=]*=\\s*(?:readDaemonPid\\b|process\\.pid\\b|child\\.pid\\b|worker\\.pid\\b|childProcess\\.pid\\b|\\b\\d+\\b)`,
+      );
+      for (let i = 0; i < lines.length; i++) {
+        if (i === fromLine) continue;
+        if (pidAssignRe.test(lines[i])) return 'taskkill';
+      }
     }
   }
   // `ps ... -p X` (or `--pid X`) — check whether the interpolated value is a numeric literal,
-  // or bound to one of `pid` / `process.pid` / `child.pid` in the same function.
+  // or bound to a proven local process PID (process.pid / child.pid / worker.pid / readDaemonPid() / numeric literal).
   const ps =
     /(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`]*?(?:-p|--pid)\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
       line,
     );
   if (ps) {
     const ident = ps[1];
-    if (/^(?:process\.pid|child\.pid)$/.test(ident)) return 'ps';
+    if (/^(?:process\.pid|child\.pid|worker\.pid)$/.test(ident)) return 'ps';
     if (/^-?\d+$/.test(ident)) return 'ps';
-    const headIdent = ident.split('.')[0];
-    const pidAssignRe = new RegExp(
-      `(?:const|let|var)\\s+${headIdent}\\b[^=]*=\\s*(?:readDaemonPid|process\\.pid|child\\.pid|\\d+|.+\\.pid\\b)`,
-    );
-    for (let i = 0; i < lines.length; i++) {
-      if (i === fromLine) continue;
-      if (pidAssignRe.test(lines[i])) return 'ps';
+    if (!ident.includes('.')) {
+      const pidAssignRe = new RegExp(
+        `(?:const|let|var)\\s+${ident}\\b[^=]*=\\s*(?:readDaemonPid\\b|process\\.pid\\b|child\\.pid\\b|worker\\.pid\\b|childProcess\\.pid\\b|\\b\\d+\\b)`,
+      );
+      for (let i = 0; i < lines.length; i++) {
+        if (i === fromLine) continue;
+        if (pidAssignRe.test(lines[i])) return 'ps';
+      }
     }
   }
   return null;
