@@ -3179,3 +3179,39 @@ Audited read-only via API, nothing written outside this file.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Night pass, 2026-10-08 (TRA-2270): open threads silent, sweep clean (0 new), numtide packaging analysis, competitor pulse
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads: `nearform/lastlight#372` (10-05 cliftonc cross-ref to #434 noting ACP runtime stdio MCP, quiet, no reply needed), `narumiruna/pi-extensions#1204` (closed 10-07 by maintainer), `redproof#50`, `kilocode#13843`, `kilocode#12707`, `atlas#105`, `slopstop#633`, `Dokploy/mcp#81`, `nanocoder#1197`, `facebook/pyrefly#4583`, `mattbutlerengineering/ai-tooling#585`, `pr-agent#2499`. All quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All hits matched `ops/mentions-seen.txt`. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Distribution & packaging intelligence — `numtide/llm-agents.nix` & `yzfly/Awesome-MCP-ZH`:**
+- Cross-referencing `MinishLab/semble` citations revealed `numtide/llm-agents.nix` (2,076★, 283 forks), a major Nix packaging flakes repository by Numtide with daily automated updates. They package `code-review-graph`, `codegraph`, `semble`, `gitnexus`, and `multica`. Analyzed their derivation structure: packages use `buildNpmPackage` or `stdenv.mkDerivation` with `pnpmDeps`/`makeWrapper`. Worth tracking for downstream Linux/Nix agent packagers alongside `sudosubin/agents.nix`.
+- Checked `yzfly/Awesome-MCP-ZH` (7,714★, 882 forks, curated MCP list in Chinese). Maintainer `yzfly` previously merged our PR #44 in `awesome-context-engineering` with zero pushback. Confirmed trace-mcp is not listed and no PR was submitted. Catalog moratorium firmly applies (zero attributable GA4 acquisitions), so no submission is made; kept on radar for post-moratorium.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★ (+2 today, was 186 in TRA-2268), 24 forks, pushed 2026-10-08.
+- `MinishLab/semble`: 6,192★, 273 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,980★ (+8 since TRA-2268, was 31,972), 2,928 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,751★, 1,573 forks.
+- `oraios/serena`: 30,105★, 2,048 forks.
+- `DeusData/codebase-memory-mcp`: 46,151★, 3,796 forks.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
