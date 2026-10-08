@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from '../_zod-helpers.js';
@@ -23,6 +24,8 @@ import {
   storeObservation,
 } from '../../../observation-pack.js';
 import { emptyIndexHint, fallbackOutline } from '../../navigation/zero-index.js';
+import { isDangerousProjectRoot } from '../../../dangerous-root.js';
+import { listProjects, resolveRegisteredAncestor } from '../../../registry.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
 import { buildEmptyResultNote } from '../../shared/empty-note.js';
 import { compactOutlineSymbols, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
@@ -53,6 +56,121 @@ async function autoIndexOnDemand(ctx: ServerContext, filePath: string): Promise<
     // Best-effort: fall through and let the caller re-check the store.
   }
   return true;
+}
+
+interface ResolvedProjectFile {
+  projectRoot: string;
+  relPath: string;
+  absPath: string;
+}
+
+/**
+ * When get_outline runs on a session root that doesn't hold the file (specifically
+ * a root session such as projectRoot === '/' from a desktop client),
+ * locate candidate registered projects where filePath exists on disk.
+ *
+ * Scoping rules (TRA-2243 / Reviewer E):
+ * - If filePath is absolute: verify exists, resolve to registered ancestor.
+ * - If filePath is relative: must explicitly start with the target project's basename,
+ *   a registered multi-root child's basename, or a registered sibling worktree's directory name.
+ * - Bare relative paths (e.g. "package.json", "shared.ts") must NEVER match across arbitrary projects.
+ */
+function resolveFileInRegisteredProjects(
+  filePath: string,
+  _currentProjectRoot: string,
+): ResolvedProjectFile | null {
+  if (path.isAbsolute(filePath)) {
+    const abs = path.resolve(filePath);
+    if (fs.existsSync(abs)) {
+      try {
+        if (fs.statSync(abs).isFile()) {
+          const ancestor = resolveRegisteredAncestor(abs);
+          return ancestor
+            ? {
+                projectRoot: ancestor.root,
+                relPath: path.relative(ancestor.root, abs),
+                absPath: abs,
+              }
+            : { projectRoot: path.dirname(abs), relPath: path.basename(abs), absPath: abs };
+        }
+      } catch {
+        /* stat failed */
+      }
+    }
+    return null;
+  }
+
+  // Relative path must contain a directory separator to match a project prefix.
+  // Bare paths (e.g. "shared.ts", "package.json") cannot be safely mapped to an arbitrary project.
+  const hasSep = filePath.includes('/') || (path.sep !== '/' && filePath.includes(path.sep));
+  if (!hasSep) {
+    return null;
+  }
+
+  const projects = listProjects();
+  for (const p of projects) {
+    // 1. File path starts with project's basename (e.g. "trace-mcp/src/index.ts")
+    const base = path.basename(p.root);
+    if (filePath.startsWith(base + '/') || filePath.startsWith(base + path.sep)) {
+      const subRel = filePath.slice(base.length + 1);
+      const candSub = path.resolve(p.root, subRel);
+      if (fs.existsSync(candSub)) {
+        try {
+          if (fs.statSync(candSub).isFile()) {
+            return { projectRoot: p.root, relPath: subRel, absPath: candSub };
+          }
+        } catch {}
+      }
+    }
+
+    // 2. File path starts with child's basename in multi-root setups
+    if (p.children) {
+      for (const c of p.children) {
+        const baseC = path.basename(c);
+        if (filePath.startsWith(baseC + '/') || filePath.startsWith(baseC + path.sep)) {
+          const subRel = filePath.slice(baseC.length + 1);
+          const candSub = path.resolve(c, subRel);
+          if (fs.existsSync(candSub)) {
+            try {
+              if (fs.statSync(candSub).isFile()) {
+                return { projectRoot: c, relPath: subRel, absPath: candSub };
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+
+    // 3. Sibling worktrees: path starts with sibling directory name under p.root's parent
+    // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
+    const firstSlash = filePath.indexOf('/');
+    const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
+    const splitIdx =
+      firstSlash !== -1 && firstSep !== -1
+        ? Math.min(firstSlash, firstSep)
+        : firstSlash !== -1
+          ? firstSlash
+          : firstSep;
+    if (splitIdx > 0) {
+      const firstSegment = filePath.slice(0, splitIdx);
+      const subRel = filePath.slice(splitIdx + 1);
+      const candSiblingDir = path.resolve(path.dirname(p.root), firstSegment);
+      // Only match if candSiblingDir is actually a registered project root or ancestor
+      const anc = resolveRegisteredAncestor(candSiblingDir);
+      if (anc && path.resolve(anc.root) === path.resolve(candSiblingDir)) {
+        const candFile = path.resolve(candSiblingDir, subRel);
+        if (fs.existsSync(candFile)) {
+          try {
+            if (fs.statSync(candFile).isFile()) {
+              return { projectRoot: anc.root, relPath: subRel, absPath: candFile };
+            }
+          } catch {}
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -160,9 +278,9 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_outline',
-    'Get all symbols for a file (signatures only, no bodies) — cheaper than Read for understanding a file before editing. Follow up with get_symbol to read one symbol\'s source. `nested: true` expands large top-level symbols (default ≥100 LOC) into inner declarations, each carrying `parentId` + `depth` (max 3). Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Supports `output_format: "toon"`.',
+    'Get all symbols for a file (signatures only, no bodies) — cheaper than Read for understanding a file before editing. Follow up with get_symbol to read one symbol\'s source. `nested: true` expands large top-level symbols (default ≥100 LOC) into inner declarations, each carrying `parentId` + `depth` (max 3). Accepts project-relative or absolute file paths. For files in other registered projects, use call_project_tool. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Supports `output_format: "toon"`.',
     {
-      path: z.string().max(512).describe('Relative file path'),
+      path: z.string().max(512).describe('Relative file path from project root (or absolute path)'),
       detail_level: DetailLevelSchema,
       nested: z
         .boolean()
@@ -210,24 +328,80 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
             ],
           };
         } catch {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: j({
-                  error: 'File not found or unreadable (index is empty)',
-                  path: filePath,
-                  // TRA-1737: name the empty root so the caller sees the
-                  // session-CWD vs project-root mismatch instead of looping
-                  // get_outline → BLOCKED Read.
-                  projectRoot,
-                  indexFiles: 0,
-                }),
-              },
-            ],
-            isError: true,
-          };
+          // Direct read failed (e.g. session started at '/' with relative path)
         }
+
+        const isRootSession = projectRoot === '/' || isDangerousProjectRoot(projectRoot) !== null;
+
+        // Try candidate registered projects where filePath exists, ONLY if this is a root session.
+        // Legitimate project roots with 0 indexed files must not leak files from other projects.
+        const resolved = isRootSession
+          ? resolveFileInRegisteredProjects(filePath, projectRoot)
+          : null;
+        if (resolved) {
+          if (ctx.projectRelay) {
+            try {
+              const targetServer = await ctx.projectRelay.openProject(resolved.projectRoot);
+              const handler = targetServer?.toolHandlers?.get('get_outline');
+              if (handler) {
+                const relayed = await handler({
+                  path: resolved.relPath,
+                  detail_level,
+                  nested,
+                  min_loc_for_nesting,
+                  output_format,
+                });
+                if (relayed && !relayed.isError) {
+                  return relayed;
+                }
+              }
+            } catch {
+              /* best-effort relay */
+            }
+          }
+
+          try {
+            const fbResult = fallbackOutline(resolved.projectRoot, resolved.relPath);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: encode({
+                    ...fbResult,
+                    _hint: `Resolved path to registered project '${resolved.projectRoot}'. Empty index for session root '${projectRoot}' (0 files). Use call_project_tool or connect directly to '${resolved.projectRoot}'.`,
+                  }),
+                },
+              ],
+            };
+          } catch {
+            /* fall through */
+          }
+        }
+        const registered = listProjects().map((p) => p.root);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                error: 'File not found or unreadable (index is empty)',
+                path: filePath,
+                projectRoot,
+                indexFiles: 0,
+                ...(isRootSession
+                  ? {
+                      reason: 'filesystem_root_session',
+                      message: `Session is running at filesystem root ('${projectRoot}'). Relative paths cannot be resolved because no repository is bound to this session.`,
+                      registeredProjects: registered,
+                      help: 'Provide an absolute file path, or call list_projects and use call_project_tool(project=..., tool="get_outline", args={ path: ... }), or configure your client with a project directory.',
+                    }
+                  : {
+                      help: 'Empty index for this project. Run reindex, or verify that the file exists relative to the project root.',
+                    }),
+              }),
+            },
+          ],
+          isError: true,
+        };
       }
 
       const outlineOpts = {
@@ -239,6 +413,72 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       let autoIndexed = false;
       let existsOnDisk = false;
       if (result.isErr() && result.error.code === 'NOT_FOUND') {
+        // Check if path belongs to a registered descendant project
+        const absPath = path.isAbsolute(filePath)
+          ? path.resolve(filePath)
+          : path.resolve(projectRoot, normalizedPath);
+        const descendant = resolveRegisteredAncestor(absPath);
+        if (descendant && path.resolve(descendant.root) !== path.resolve(projectRoot)) {
+          const descendantRelPath = path.relative(descendant.root, absPath);
+          if (ctx.projectRelay) {
+            try {
+              const targetServer = await ctx.projectRelay.openProject(descendant.root);
+              const handler = targetServer?.toolHandlers?.get('get_outline');
+              if (handler) {
+                const relayed = await handler({
+                  path: descendantRelPath,
+                  detail_level,
+                  nested,
+                  min_loc_for_nesting,
+                  output_format,
+                });
+                if (relayed && !relayed.isError) {
+                  return relayed;
+                }
+              }
+            } catch {
+              /* best-effort relay */
+            }
+          }
+
+          if (fs.existsSync(absPath)) {
+            try {
+              const fbResult = fallbackOutline(descendant.root, descendantRelPath);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: encode({
+                      ...fbResult,
+                      _hint: `File belongs to registered descendant project '${descendant.root}'. Use call_project_tool(project="${descendant.root}", tool="get_outline", args={ path: "${descendantRelPath}" }) for indexed symbols.`,
+                    }),
+                  },
+                ],
+              };
+            } catch {
+              /* fall through */
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  error: {
+                    code: 'DESCENDANT_PROJECT',
+                    message: `File '${normalizedPath}' belongs to registered descendant project '${descendant.root}'.`,
+                    descendantRoot: descendant.root,
+                    path: descendantRelPath,
+                    help: `Use call_project_tool(project="${descendant.root}", tool="get_outline", args={ path: "${descendantRelPath}" })`,
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
         existsOnDisk = await autoIndexOnDemand(ctx, normalizedPath);
         if (existsOnDisk) {
           result = await getFileOutline(store, normalizedPath, outlineOpts);
