@@ -108,4 +108,63 @@ describe('EmbeddingPipeline', () => {
     const count = await pipeline.indexUnembedded();
     expect(count).toBe(0);
   });
+
+  // A reindex of the file can commit while the provider call is in flight.
+  function embeddingWithMidFlightWrite(write: () => void): EmbeddingService {
+    let done = false;
+    return {
+      ...createMockEmbedding(),
+      async embedBatch(texts: string[]) {
+        if (!done) {
+          done = true;
+          write();
+        }
+        return texts.map(() => [0.1, 0.2, 0.3]);
+      },
+    };
+  }
+
+  it('keeps the rest of the batch when a symbol is deleted mid-flight', async () => {
+    db.pragma('foreign_keys = ON');
+    const service = embeddingWithMidFlightWrite(() => db.exec('DELETE FROM symbols WHERE id = 2'));
+    const pipeline = new EmbeddingPipeline(store, service, vectorStore);
+
+    const count = await pipeline.indexUnembedded();
+
+    expect(count).toBe(2);
+    expect(vectorStore.count()).toBe(2);
+    expect(pipeline.getLastRunDiagnostics().failedBatches).toBe(0);
+  });
+
+  it('does not attach a stale vector to a symbol that reused the id', async () => {
+    const calls: string[][] = [];
+    let first = true;
+    const service: EmbeddingService = {
+      ...createMockEmbedding(),
+      async embedBatch(texts: string[]) {
+        calls.push(texts);
+        if (first) {
+          first = false;
+          db.exec(`
+            DELETE FROM symbols WHERE id = 3;
+            INSERT INTO symbols (id, file_id, symbol_id, name, kind, fqn, signature, byte_start, byte_end)
+              VALUES (3, 1, 'sym-3b', 'Qux', 'method', 'App.Qux', 'qux(): void', 200, 300);
+          `);
+        }
+        return texts.map((t) => [t.length, 0, 0]);
+      },
+    };
+    const pipeline = new EmbeddingPipeline(store, service, vectorStore);
+
+    expect(await pipeline.indexUnembedded()).toBe(3);
+    // Id 3 was skipped in the first batch and embedded from its own text in the next.
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toEqual(['method App.Qux qux(): void']);
+    const row = db.prepare('SELECT embedding FROM symbol_embeddings WHERE symbol_id = 3').get() as {
+      embedding: Buffer;
+    };
+    expect(new Float32Array(row.embedding.buffer, row.embedding.byteOffset, 3)[0]).toBe(
+      'method App.Qux qux(): void'.length,
+    );
+  });
 });

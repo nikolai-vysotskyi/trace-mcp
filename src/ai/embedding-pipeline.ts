@@ -415,11 +415,43 @@ export class EmbeddingPipeline {
       const embeddings = await this.embeddingService.embedBatch(texts, undefined, signal);
       // The provider answered — reachable, regardless of how many vectors came back.
       this.succeededThisProcess = true;
+      // The provider round trip is async, so a reindex of the same file can
+      // commit in between: the symbol row is gone (its INSERT then fails the
+      // FOREIGN KEY on symbol_embeddings and used to abort the whole batch,
+      // discarding vectors already paid for and counting toward the breaker),
+      // or its id was reused by a different symbol (symbols.id has no
+      // AUTOINCREMENT) that would silently get this stale vector. Store a
+      // vector only if the row still produces the text that was embedded;
+      // anything skipped is still unembedded and is picked up by the next run.
+      const current = this.store.db.prepare(
+        'SELECT name, fqn, kind, signature, summary FROM symbols WHERE id = ?',
+      );
+      let skippedStale = 0;
       for (let i = 0; i < embeddings.length; i++) {
-        if (embeddings[i].length > 0) {
-          this.vectorStore.insert(unembedded[i].id, embeddings[i]);
-          indexed++;
+        if (embeddings[i].length === 0) continue;
+        const row = current.get(unembedded[i].id) as
+          | Parameters<typeof buildEmbeddingText>[0]
+          | undefined;
+        if (!row || buildEmbeddingText(row) !== texts[i]) {
+          skippedStale++;
+          continue;
         }
+        try {
+          this.vectorStore.insert(unembedded[i].id, embeddings[i]);
+        } catch (e) {
+          // Another connection (CLI, second pipeline on the same DB) can still
+          // delete the row between the check and the INSERT.
+          if (!isForeignKeyViolation(e)) throw e;
+          skippedStale++;
+          continue;
+        }
+        indexed++;
+      }
+      if (skippedStale > 0) {
+        logger.debug(
+          { skippedStale, batch: unembedded.length },
+          'Embedding batch: skipped symbols changed or deleted while the provider call was in flight',
+        );
       }
       // Reset breaker on any successful batch.
       if (this.consecutiveFailures > 0 || this.breakerNotified) {
@@ -530,4 +562,10 @@ function buildEmbeddingText(symbol: {
   if (symbol.signature) parts.push(symbol.signature);
   if (symbol.summary) parts.push(symbol.summary);
   return parts.join(' ');
+}
+
+function isForeignKeyViolation(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  if ((e as { code?: unknown }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return true;
+  return /FOREIGN KEY constraint failed/i.test(e.message);
 }
