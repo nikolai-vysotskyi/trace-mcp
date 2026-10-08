@@ -60,7 +60,7 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
     return { root: tmpRoot, include: ['**/*'], exclude: [], plugins: [] };
   }
 
-  it('a growing oversized file stays skipped; warn fires once, repeats go to debug', () => {
+  it('a growing oversized file stays skipped; logs at debug, zero warnings, repeats suppressed', () => {
     const rel = path.join('scratchpad', 'channel_discovery', 'account_actions.jsonl');
     const abs = path.join(tmpRoot, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -75,9 +75,10 @@ describe('TRA-1912 — unindexable-skip negative cache', () => {
       fs.appendFileSync(abs, `${'y'.repeat(100_000)}\n`);
     }
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(debugSpy).toHaveBeenCalledTimes(2);
-    const [meta, msg] = warnSpy.mock.calls[0] as [Record<string, unknown>, string];
+    // TRA-2273: Expected skips must not log at warn level.
+    expect(warnSpy).toHaveBeenCalledTimes(0);
+    expect(debugSpy).toHaveBeenCalledTimes(3);
+    const [meta, msg] = debugSpy.mock.calls[0] as [Record<string, unknown>, string];
     expect(msg).toBe('File too large, skipping');
     expect(meta).toMatchObject({ file: rel.split(path.sep).join('/'), limit: 1_048_576 });
     expect(meta['size']).toBeGreaterThan(1_048_576);

@@ -85,12 +85,12 @@ function logOnce(
 ): void {
   const key = verdictKey(rootPath, relPosix, reason);
   if (warned.has(key)) {
-    logger.debug({ file: relPosix }, `${message} (repeat suppressed)`);
+    logger.debug({ file: relPosix, rootPath }, `${message} (repeat suppressed)`);
     return;
   }
   if (warned.size >= MAX_WARN_KEYS) warned.clear();
   warned.add(key);
-  logger.warn(meta, message);
+  logger.debug(meta, message);
 }
 
 function recordVerdict(rootPath: string, relPosix: string, verdict: Verdict): void {

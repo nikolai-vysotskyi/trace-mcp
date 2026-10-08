@@ -122,6 +122,10 @@ export interface IndexingResult {
    * incremental drift, not the synchronous initial pass).
    */
   changedFileIds?: number[];
+  /** TRA-2273: Aggregated count of files skipped due to binary content. */
+  skippedBinary?: number;
+  /** TRA-2273: Aggregated count of files skipped due to exceeding file size cap. */
+  skippedOversize?: number;
 }
 
 /**
