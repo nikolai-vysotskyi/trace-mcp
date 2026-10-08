@@ -13,6 +13,13 @@
  */
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Streaming tests mock fetch; keep SSRF validation deterministic too, so they
+// do not depend on the CI runner resolving public provider hostnames.
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: vi.fn(async () => [{ address: '8.8.8.8', family: 4 }]) },
+}));
+
 import {
   buildSystemPrompt,
   createAnthropicProvider,

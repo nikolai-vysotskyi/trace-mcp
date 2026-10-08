@@ -330,6 +330,8 @@ export function pLimit(n: number) {
 
 export class ProjectManager {
   private projects = new Map<string, ManagedProject>();
+  /** Join callers arriving while setup is still awaiting config or watcher subscription. */
+  private pendingAdds = new Map<string, Promise<ManagedProject>>();
   /** Singleton, shared across every managed project. Bounds the daemon's
    *  worker thread count regardless of project count. Lazy-init on the first
    *  addProject() so we can read the project's config for sizing. */
@@ -398,13 +400,24 @@ export class ProjectManager {
     projectRoot: string,
     opts?: { watch?: boolean; persist?: boolean },
   ): Promise<ManagedProject> {
-    // TRA-1608: canonicalize first — every downstream use (map key,
-    // managed.root, pipeline/watcher roots, registry lookups) then refers to
-    // one filesystem root by one string. See managerKey().
     projectRoot = managerKey(projectRoot);
+    const pending = this.pendingAdds.get(projectRoot);
+    if (pending) return pending;
     const existing = this.projects.get(projectRoot);
     if (existing) return existing;
+    const run = this.addProjectOnce(projectRoot, opts);
+    this.pendingAdds.set(projectRoot, run);
+    try {
+      return await run;
+    } finally {
+      this.pendingAdds.delete(projectRoot);
+    }
+  }
 
+  private async addProjectOnce(
+    projectRoot: string,
+    opts?: { watch?: boolean; persist?: boolean },
+  ): Promise<ManagedProject> {
     // Read-mostly mode (a registered subproject served on-demand): index once,
     // no fs watcher, no registry.json / config-file writes. Stays in-memory for
     // the daemon's lifetime but is never restored as a watched project on the
@@ -505,7 +518,7 @@ export class ProjectManager {
 
     this.ensureShared(config);
 
-    const progress = new ProgressState(db);
+    const progress = new ProgressState(db, projectRoot);
     // Daemon path: use the SQLite-backed task cache so pass outputs persist on
     // disk and never accumulate in the long-running daemon's heap. The
     // pipeline never owns this cache — the project's `db` does, and is
@@ -753,9 +766,13 @@ export class ProjectManager {
       managed.status = 'ready';
       managed.initialIndexPromise = Promise.resolve();
     } else {
-      managed.initialIndexPromise = this.indexAllLimit!(() =>
-        pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal }),
-      )
+      managed.initialIndexPromise = this.indexAllLimit!(() => {
+        logger.info(
+          { projectRoot, reason: 'project-load', discovery: 'auto', forced: needsForcedReindex },
+          'Project indexAll starting',
+        );
+        return pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal });
+      })
         .then(async () => {
           managed.status = 'ready';
           updateLastIndexed(projectRoot);
@@ -999,15 +1016,17 @@ export class ProjectManager {
                     },
                     'reindex-file telemetry (error)',
                   );
+                  // Expected batch aborts have one warn summary above and no
+                  // per-file failures in /api/stats or daemon stats.
+                  stats.record({
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash: false,
+                    indexed: 0,
+                    elapsedMs,
+                    error: true,
+                  });
                 }
-                stats.record({
-                  pathSource: 'watcher',
-                  skippedRecent: false,
-                  skippedHash: false,
-                  indexed: 0,
-                  elapsedMs,
-                  error: true,
-                });
               } else {
                 logger.info(
                   {
@@ -1099,13 +1118,52 @@ export class ProjectManager {
             // historical answer is suspect for exactly this window.
             // TRA-1017: same stop signal as the initial index — a rescan
             // racing a shutdown must not start an uncancellable run.
-            const run = () =>
-              pipeline.indexAll(false, {
+            const run = (force = false) => {
+              logger.info(
+                {
+                  projectRoot,
+                  reason: 'watcher-dropped-events',
+                  discovery: 'full-walk',
+                  forced: force,
+                },
+                'Project indexAll starting',
+              );
+              return pipeline.indexAll(force, {
                 discovery: 'full-walk',
                 signal: indexAbortController.signal,
               });
+            };
             const limit = this.indexAllLimit;
-            await (limit ? limit(run) : run());
+            const boundedRun = (force = false) => (limit ? limit(() => run(force)) : run(force));
+            try {
+              try {
+                await boundedRun();
+              } catch (err) {
+                if (!isForeignKeyError(err)) throw err;
+                // A dropped-event walk must repair the same stale symbol rows
+                // that the initial-index path repairs. Otherwise FileWatcher
+                // only logs the failure and leaves a stale project advertised
+                // as ready until another drop happens.
+                logger.warn(
+                  { projectRoot, error: String(err) },
+                  'Dropped-event rescan hit FOREIGN KEY violation — retrying with force=true',
+                );
+                await boundedRun(true);
+              }
+              if (
+                managed.status === 'error' &&
+                managed.error?.startsWith('Dropped-event rescan failed:')
+              ) {
+                managed.status = 'ready';
+                managed.error = undefined;
+              }
+            } catch (err) {
+              if (!(err instanceof IndexAbortedError)) {
+                managed.status = 'error';
+                managed.error = `Dropped-event rescan failed: ${String(err)}`;
+              }
+              throw err;
+            }
           },
         },
       );

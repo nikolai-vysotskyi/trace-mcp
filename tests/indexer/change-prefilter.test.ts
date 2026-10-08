@@ -280,6 +280,8 @@ describe('selectChangedFiles — mtime+size prefilter', () => {
     write('src/big.ts', `// pad\n${'y'.repeat(2 * 1024 * 1024)}\n`);
     const r = await pipeline.indexAll();
     expect(r.indexed).toBe(1);
-    expect(r.errors).toBe(1);
+    expect(r.skipped).toBe(1);
+    expect(r.skippedOversize).toBe(1);
+    expect(r.errors).toBe(0);
   });
 });

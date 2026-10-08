@@ -83,7 +83,7 @@ r = subprocess.run(
 t1 = time.perf_counter()
 print(int((t1 - t0) * 1000))
 sys.exit(r.returncode)
-' "$body" "http://127.0.0.1:${PORT}/api/projects/reindex-file"
+' "$body" "http://127.0.0.1:${PORT}/api/projects/reindex-file?wait=1"
 }
 
 daemon_up() {

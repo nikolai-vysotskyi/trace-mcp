@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-09-16T09:41:56.137Z",
-  "machine": "Apple M5 Max / 128GB / darwin arm64",
+  "machine": "darwin arm64",
   "node": "v22.22.3",
   "corpus_docs": 616,
   "query_count": 24,

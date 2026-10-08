@@ -107,6 +107,19 @@ function insertFunction(
 }
 
 describe('TRA-1848: apply_codemod file_pattern confinement', () => {
+  it('rejects brace globs before expansion, including in dry-run mode', async () => {
+    const sb = createSandbox();
+    for (const filePattern of ['{a,b}.js', `${'{a,'.repeat(40)}a.js${'}'.repeat(40)}`]) {
+      for (const dryRun of [false, true]) {
+        const result = await applyCodemod(sb.root, 'main', 'MAIN_X', filePattern, { dryRun });
+        expect(result.success).toBe(false);
+        expect(result.error ?? '').toMatch(/brace.*file_pattern/i);
+        expect(result.files_modified).toEqual([]);
+      }
+    }
+    expect(fs.readFileSync(path.join(sb.root, 'a.js'), 'utf-8')).not.toContain('MAIN_X');
+  });
+
   it('refuses a file_pattern escaping the root (apply mode, no write outside)', async () => {
     const sb = createSandbox();
     const result = await applyCodemod(sb.root, 'outer', 'OUTER_X', '../outside/*.js', {
