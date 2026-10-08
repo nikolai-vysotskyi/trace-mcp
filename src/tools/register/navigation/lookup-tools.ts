@@ -65,9 +65,15 @@ interface ResolvedProjectFile {
 }
 
 /**
- * When get_outline runs on a session root that doesn't hold the file (e.g.
- * projectRoot === '/' from a desktop client, or an empty/different session root),
+ * When get_outline runs on a session root that doesn't hold the file (specifically
+ * a root session such as projectRoot === '/' from a desktop client),
  * locate candidate registered projects where filePath exists on disk.
+ *
+ * Scoping rules (TRA-2243 / Reviewer E):
+ * - If filePath is absolute: verify exists, resolve to registered ancestor.
+ * - If filePath is relative: must explicitly start with the target project's basename,
+ *   a registered multi-root child's basename, or a registered sibling worktree's directory name.
+ * - Bare relative paths (e.g. "package.json", "shared.ts") must NEVER match across arbitrary projects.
  */
 function resolveFileInRegisteredProjects(
   filePath: string,
@@ -94,39 +100,16 @@ function resolveFileInRegisteredProjects(
     return null;
   }
 
+  // Relative path must contain a directory separator to match a project prefix.
+  // Bare paths (e.g. "shared.ts", "package.json") cannot be safely mapped to an arbitrary project.
+  const hasSep = filePath.includes('/') || (path.sep !== '/' && filePath.includes(path.sep));
+  if (!hasSep) {
+    return null;
+  }
+
   const projects = listProjects();
   for (const p of projects) {
-    // 1. Direct relative path inside registered root
-    const cand = path.resolve(p.root, filePath);
-    if (fs.existsSync(cand)) {
-      try {
-        if (fs.statSync(cand).isFile()) {
-          const anc = resolveRegisteredAncestor(cand) ?? p;
-          return { projectRoot: anc.root, relPath: path.relative(anc.root, cand), absPath: cand };
-        }
-      } catch {}
-    }
-
-    // 2. Direct relative path inside multi-root children
-    if (p.children) {
-      for (const c of p.children) {
-        const candChild = path.resolve(c, filePath);
-        if (fs.existsSync(candChild)) {
-          try {
-            if (fs.statSync(candChild).isFile()) {
-              const anc = resolveRegisteredAncestor(candChild) ?? { root: c };
-              return {
-                projectRoot: anc.root,
-                relPath: path.relative(anc.root, candChild),
-                absPath: candChild,
-              };
-            }
-          } catch {}
-        }
-      }
-    }
-
-    // 3. File path starts with project's basename
+    // 1. File path starts with project's basename (e.g. "trace-mcp/src/index.ts")
     const base = path.basename(p.root);
     if (filePath.startsWith(base + '/') || filePath.startsWith(base + path.sep)) {
       const subRel = filePath.slice(base.length + 1);
@@ -140,7 +123,7 @@ function resolveFileInRegisteredProjects(
       }
     }
 
-    // 4. File path starts with child's basename
+    // 2. File path starts with child's basename in multi-root setups
     if (p.children) {
       for (const c of p.children) {
         const baseC = path.basename(c);
@@ -158,20 +141,32 @@ function resolveFileInRegisteredProjects(
       }
     }
 
-    // 5. Sibling worktrees (e.g. repo-pr-1 next to repo)
-    const candParent = path.resolve(path.dirname(p.root), filePath);
-    if (fs.existsSync(candParent)) {
-      try {
-        if (fs.statSync(candParent).isFile()) {
-          const anc = resolveRegisteredAncestor(candParent);
-          const root = anc ? anc.root : path.dirname(candParent);
-          return {
-            projectRoot: root,
-            relPath: path.relative(root, candParent),
-            absPath: candParent,
-          };
+    // 3. Sibling worktrees: path starts with sibling directory name under p.root's parent
+    // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
+    const firstSlash = filePath.indexOf('/');
+    const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
+    const splitIdx =
+      firstSlash !== -1 && firstSep !== -1
+        ? Math.min(firstSlash, firstSep)
+        : firstSlash !== -1
+          ? firstSlash
+          : firstSep;
+    if (splitIdx > 0) {
+      const firstSegment = filePath.slice(0, splitIdx);
+      const subRel = filePath.slice(splitIdx + 1);
+      const candSiblingDir = path.resolve(path.dirname(p.root), firstSegment);
+      // Only match if candSiblingDir is actually a registered project root or ancestor
+      const anc = resolveRegisteredAncestor(candSiblingDir);
+      if (anc && path.resolve(anc.root) === path.resolve(candSiblingDir)) {
+        const candFile = path.resolve(candSiblingDir, subRel);
+        if (fs.existsSync(candFile)) {
+          try {
+            if (fs.statSync(candFile).isFile()) {
+              return { projectRoot: anc.root, relPath: subRel, absPath: candFile };
+            }
+          } catch {}
         }
-      } catch {}
+      }
     }
   }
 
@@ -336,8 +331,13 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
           // Direct read failed (e.g. session started at '/' with relative path)
         }
 
-        // Try candidate registered projects where filePath exists
-        const resolved = resolveFileInRegisteredProjects(filePath, projectRoot);
+        const isRootSession = projectRoot === '/' || isDangerousProjectRoot(projectRoot) !== null;
+
+        // Try candidate registered projects where filePath exists, ONLY if this is a root session.
+        // Legitimate project roots with 0 indexed files must not leak files from other projects.
+        const resolved = isRootSession
+          ? resolveFileInRegisteredProjects(filePath, projectRoot)
+          : null;
         if (resolved) {
           if (ctx.projectRelay) {
             try {
@@ -377,8 +377,6 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
             /* fall through */
           }
         }
-
-        const isRootSession = projectRoot === '/' || isDangerousProjectRoot(projectRoot) !== null;
         const registered = listProjects().map((p) => p.root);
         return {
           content: [

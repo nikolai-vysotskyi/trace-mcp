@@ -293,4 +293,97 @@ describe('get_outline — descendant projects and root sessions (TRA-2243)', () 
     expect(body.registeredProjects).toBeDefined();
     expect(body.help).toContain('Provide an absolute file path');
   });
+
+  it('prevents cross-project leak: ordinary project with 0 files does not match bare path from unrelated project', async () => {
+    const sessionDir = path.join(tmpDir, 'session-proj');
+    const unrelatedDir = path.join(tmpDir, 'unrelated-proj');
+    fs.mkdirSync(sessionDir, { recursive: true });
+    fs.mkdirSync(unrelatedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(unrelatedDir, 'shared.ts'),
+      'export class SecretFromOtherProject {}\n',
+    );
+    registerProject(sessionDir);
+    registerProject(unrelatedDir);
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: sessionDir, include: ['**/*.ts'], exclude: [], plugins: [] },
+        projectRoot: sessionDir,
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Calling get_outline on session project with bare "shared.ts"
+      const res = await handler({ path: 'shared.ts' });
+      expect(res.isError).toBe(true);
+      const body = JSON.parse(res.content[0].text);
+      expect(body.error).toBe('File not found or unreadable (index is empty)');
+      expect(body.reason).toBeUndefined(); // NOT a root session
+      expect(body.symbols).toBeUndefined();
+    } finally {
+      unregisterProject(unrelatedDir);
+      unregisterProject(sessionDir);
+    }
+  });
+
+  it('prevents cross-project leak: root session does not match bare path without project prefix', async () => {
+    const unrelatedDir = path.join(tmpDir, 'unrelated-proj2');
+    fs.mkdirSync(unrelatedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(unrelatedDir, 'shared.ts'),
+      'export class SecretFromOtherProject2 {}\n',
+    );
+    registerProject(unrelatedDir);
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Bare path on root session without project prefix must fail with diagnostic
+      const resBare = await handler({ path: 'shared.ts' });
+      expect(resBare.isError).toBe(true);
+      const bodyBare = JSON.parse(resBare.content[0].text);
+      expect(bodyBare.reason).toBe('filesystem_root_session');
+      expect(bodyBare.symbols).toBeUndefined();
+
+      // Scoped path with project prefix succeeds
+      const resScoped = await handler({ path: 'unrelated-proj2/shared.ts' });
+      expect(resScoped.isError).toBeFalsy();
+      const bodyScoped = JSON.parse(resScoped.content[0].text);
+      expect(
+        bodyScoped.symbols.some((s: { name: string }) => s.name === 'SecretFromOtherProject2'),
+      ).toBe(true);
+    } finally {
+      unregisterProject(unrelatedDir);
+    }
+  });
 });
