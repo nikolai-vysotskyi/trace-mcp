@@ -112,6 +112,8 @@ describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
   it('collapses an aborted batch into one warn line and zero error lines', async () => {
     mode.current = 'abort';
     const { root, files } = await addProjectWithWatcher();
+    const { getReindexStats } = await import('../reindex-stats.js');
+    const before = getReindexStats().summarize();
     vi.clearAllMocks();
 
     // The batch still rejects to the watcher after telemetry (existing
@@ -125,6 +127,7 @@ describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
     expect(payload.project).toBe(root);
     expect(payload.fileCount).toBe(3);
     expect(String(msg).toLowerCase()).toContain('abort');
+    expect(getReindexStats().summarize().errors - before.errors).toBe(0);
     // TRA-1854: 60s, not 30s — cold daemon-graph import on a loaded
     // windows-latest runner eats most of a smaller cap (same family as TRA-1839).
   }, 60_000);
@@ -132,11 +135,14 @@ describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
   it('keeps per-file error lines for a genuine (non-abort) batch failure', async () => {
     mode.current = 'error';
     const { files } = await addProjectWithWatcher();
+    const { getReindexStats } = await import('../reindex-stats.js');
+    const before = getReindexStats().summarize();
     vi.clearAllMocks();
 
     await expect(captured.cb!(files)).rejects.toThrow('disk boom');
 
     expect(loggerMocks.error).toHaveBeenCalledTimes(3);
     expect(loggerMocks.warn).not.toHaveBeenCalled();
+    expect(getReindexStats().summarize().errors - before.errors).toBe(3);
   }, 60_000);
 });
