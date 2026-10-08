@@ -38,16 +38,12 @@ describe('docs landing page — macOS download button', () => {
     expect(html).not.toMatch(/trace-mcp-\d+\.\d+\.\d+[-\w]*\.(dmg|zip)/);
   });
 
-  it('offers the other platforms under the button, not as a choice in front of it', () => {
-    // The alternatives are a quiet row below the single button (TRA-738), and they
-    // are links, so a visitor without JS still reaches every build.
-    const alt = html.match(/<p class="hero-alt">[\s\S]*?<\/p>/)?.[0];
-    expect(alt, 'no .hero-alt row in docs/index.html').toBeDefined();
-    expect(alt!).toMatch(/data-alt-1/);
-    expect(alt!).toMatch(/data-alt-2/);
-    expect(alt!).toMatch(/all downloads/);
-    // Every one of them points somewhere real without JavaScript.
-    expect(alt!.match(/href="https:\/\/github\.com[^"]+"/g)?.length).toBe(3);
+  it('keeps all platform downloads one click away without JavaScript', () => {
+    const more = html.match(/<a class="hero-more"[^>]*>[\s\S]*?<\/a>/)?.[0];
+    expect(more, 'no all-downloads link next to the install command').toBeDefined();
+    expect(more).toMatch(
+      /href="https:\/\/github\.com\/nikolai-vysotskyi\/trace-mcp\/releases\/latest"/,
+    );
   });
 
   it('resolves a Windows installer too, not only a DMG (TRA-738)', () => {
