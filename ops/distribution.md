@@ -114,6 +114,7 @@ Rules for keeping it honest:
 | [cesarschutz/claude-code-kit](https://github.com/cesarschutz/claude-code-kit) | **Yes — third-party, we did not write it and did not submit it** (1★, 0 forks) | Marketplace/template kit for Claude Code plugins in Portuguese. In `07-mcps.md` under "Código e repositórios", lists `trace-mcp` alongside `github-official`, `serena`, `jupyter` | Curated listing in an independent plugin kit. Nothing to submit. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
 | [drguptavivek/DigitVA](https://github.com/drguptavivek/DigitVA) | **Yes — third-party user adoption, we did not submit it** (0★, 0 forks) | Clinical autopsy platform by author of `fundus_img_xtract`. In `handoff.md`, agent instructions note: "Code search: semble first. trace-mcp is broken (binary missing)." | Nothing to submit and do not ping. Key insight: second repo by same practitioner mandating trace-mcp in handoff, but hit an environment issue where trace-mcp binary was missing. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
 | [midnight000spark/dharma-toolkit](https://github.com/midnight000spark/dharma-toolkit) | **Yes — third-party evaluation, we did not submit it** (0★, 0 forks) | Project architecture records D-47 and F-72 evaluate trace-mcp 3.31.4 on Dart/Flutter codebase: noted regex-only symbol parsing for Dart and absence of Flutter framework integration, postponing adoption | Nothing to submit and do not ping. Direct user evaluation signal: validates roadmap priorities regarding framework/language depth outside JS/TS/Python. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [FlorianBruniaux/claude-code-ultimate-guide](https://github.com/FlorianBruniaux/claude-code-ultimate-guide) | **Evaluated — premier editorial surface, candidate for submission** (6,125★, 803 forks, active daily) | The most authoritative Claude Code guide and ecosystem reference (430K+ lines). Has two direct target sections: `guide/ecosystem/mcp-servers-ecosystem.md` under `### Code search & analysis` (currently listing only Grepai and Semble) and `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration", listing code-review-graph, jCodeMunch, and mcp-server-tree-sitter) | Highly curated, active editorial maintainer (Florian Bruniaux) who reviews and merges external tool PRs (e.g. #84 YYLO, #86 swe-mux). trace-mcp fills their explicit documented gap between Grepai (requires Ollama) and Semble (Model2Vec CPU, no call graph or AST symbols): 100% CPU-local, zero external service/Ollama, AST-based symbol graph + call hierarchy across 88 frameworks and 81 languages, 72.7% token reduction on PR reviews. Documented as candidate for next cycle | 2026-10-08 |
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
 
@@ -3131,6 +3132,47 @@ Audited via API, read-only, nothing written outside this file, `ops/mentions-see
 
 **Competitor pulse (no touch):**
 - `tirth8205/code-review-graph`: 31,972★ (+15 since TRA-2245), 2,928 forks, pushed 2026-10-06.
+- `nikolai-vysotskyi/trace-mcp`: 186★, 24 forks, pushed 2026-10-08.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Day pass, 2026-10-08 evening (TRA-2268): open threads re-audit, DigitVA environment root cause, FlorianBruniaux guide analysis
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads: `redproof#50`, `kilocode#13843`, `kilocode#12707`, `atlas#105`, `slopstop#633`, `Dokploy/mcp#81`, `nanocoder#1197`, `lastlight#372`, `facebook/pyrefly#4583`, `narumiruna/pi-extensions#1204`, `mattbutlerengineering/ai-tooling#585`, `pr-agent#2499`. All quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Telemetry & user adoption deep dive — `drguptavivek/DigitVA`:**
+- In the morning sweep (TRA-2264), `drguptavivek/DigitVA` surfaced with handoff note: `"Code search: semble first. trace-mcp is broken (binary missing)."`.
+- Audited author's repositories (`DYNAMIC`, `fundus_img_xtract`, `DigitVA`):
+  - In `fundus_img_xtract/handoff/01_GUARDRAILS.md`, the author explicitly mandates: `Use trace-mcp before code exploration, as required by AGENTS.md.`
+  - In `DigitVA`, the repository is a pure Python / uv codebase running in Docker (`minerva_app_service`).
+  - Root cause of "binary missing": in containerized Python/uv workflows lacking Node.js or `npm`/`npx` in the container's `$PATH`, executing `trace-mcp` or `npx trace-mcp serve` fails with `ENOENT` / binary missing. The agent then fell back to `MinishLab/semble` (installed via `pip install semble`).
+  - Key finding: user adoption is strong (multiple practitioner projects mandating trace-mcp), but Python-only containerized environments need either Node in the base image or a standalone binary distribution to avoid this failure mode.
+
+**Surface discovery & architectural mapping — `FlorianBruniaux/claude-code-ultimate-guide` (6,125★, 803 forks):**
+- Thorough audit of the premier Claude Code reference guide on GitHub:
+  - `guide/ecosystem/mcp-servers-ecosystem.md` lines 854–1052 (`### Code search & analysis`): currently covers Grepai (requires Ollama + nomic-embed-text) and Semble (Model2Vec CPU, no call graph analysis). The guide explicitly notes: *"When to choose Semble over Grepai: You want semantic code search but do not run Ollama locally... Choose Grepai when call graph analysis is essential; Semble does not offer this capability."*
+  - `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration"): lists Option C1 `mcp-server-tree-sitter` (unmaintained, no license), Option C2 `code-review-graph` (SQLite-backed, PR reviews), Option C3 `jCodeMunch` ($79/$349 commercial license).
+  - `docs/resource-evaluations/tree-sitter-progressive-code-exploration.md`: evaluates the AST progressive exploration pattern (Alex Newman / Aider repo map pattern) with high score (4/5).
+  - trace-mcp directly bridges this exact documented gap: AST call graph, symbol graph, and framework awareness across 88 frameworks and 81 languages, running 100% CPU-local with zero external services/Ollama, MIT licensed, and measured 72.7% token reduction on PR review.
+  - Recorded in the distribution registry table as candidate surface.
+
+**Competitor pulse (no touch):**
+- `MinishLab/semble`: 6,192★, 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,972★, 2,928 forks, pushed 2026-10-06.
 - `nikolai-vysotskyi/trace-mcp`: 186★, 24 forks, pushed 2026-10-08.
 
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
