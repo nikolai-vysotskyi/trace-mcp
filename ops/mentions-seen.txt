@@ -229,3 +229,29 @@ ankitkapur1992-hlido/hlido-public
 # internal "trace" event fixtures, not our project. Codex-agent harness
 # (1★, single author), no audience, nothing to submit, thread never touched:
 peterbamuhigire/chwezi-engine-agents
+
+# ── Swept 2026-10-08 (TRA-2264, unblocked after gh auth renewal) ──
+# Collision, not a mention: Go project building its own binary `cmd/trace-mcp/main.go`
+# exposing trace tools for Aleutian trace service over stdio. Own binary, zero shared code:
+aleutian-ai/trace
+# Genuine third-party: Portuguese marketplace/template kit for Claude Code plugins (1★).
+# Lists trace-mcp in 07-mcps.md under "Código e repositórios":
+cesarschutz/claude-code-kit
+# Collision / crawler artifact: data/2026-09-28-chinese-amap-fleet/village-join/our-domains.txt
+# contains trace-mcp.com in a large domain list from web crawl / AMAP fleet study:
+christopherwoodall/silent-locus
+# Genuine user adoption: clinical autopsy project by author of fundus_img_xtract.
+# handoff.md notes: "Code search: semble first. trace-mcp is broken (binary missing).":
+drguptavivek/DigitVA
+# Genuine catalog listing: merged 2026-09-30 (PR #119), live in README.md and README_JA.md:
+eltociear/awesome-AI-driven-development
+# Genuine third-party: archived Claude Code skill registry data pipeline (23★, 10 forks).
+# Mirrored trace-mcp, trace-mcp-codemod, and trace-mcp-refactoring skills in other/trace-mcp/:
+majiayu000/claude-skill-registry-data
+# Genuine user evaluation: Russian project documenting architectural decision D-47 / F-72
+# (evaluated trace-mcp 3.31.4 on Dart/Flutter, noted regex-only symbols for Dart):
+midnight000spark/dharma-toolkit
+# Genuine third-party packaging: Nixpkgs overlay for AI agent skills (16★, 2 forks).
+# Packages nikolai-vysotskyi/trace-mcp v3.34.6 in data/agent-skills/ and data/claude-code-marketplaces/:
+sudosubin/agents.nix
+

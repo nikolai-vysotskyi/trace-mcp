@@ -33,6 +33,14 @@
 
 set -euo pipefail
 
+export GH_PROMPT_DISABLED=1
+export GIT_TERMINAL_PROMPT=0
+
+if ! gh auth status >/dev/null 2>&1; then
+  echo "gh is not authenticated or token has expired" >&2
+  exit 1
+fi
+
 cd "$(dirname "$0")/.."
 SEEN="ops/mentions-seen.txt"
 record=false
