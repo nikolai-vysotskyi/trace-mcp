@@ -19,15 +19,24 @@ import { join } from 'node:path';
 
 let activeIndexAll = 0;
 let peakIndexAll = 0;
+let failNextRescanWithFk = false;
+let failForcedRescanWithFk = false;
+const forceFlags: boolean[] = [];
 const rescanCallbacks: Array<() => Promise<void>> = [];
 
 vi.mock('../../indexer/pipeline.js', () => {
   class FakeIndexingPipeline {
-    async indexAll() {
+    async indexAll(force = false) {
+      forceFlags.push(force);
       activeIndexAll++;
       peakIndexAll = Math.max(peakIndexAll, activeIndexAll);
       await new Promise((r) => setTimeout(r, 20));
       activeIndexAll--;
+      if (failNextRescanWithFk && !force) {
+        failNextRescanWithFk = false;
+        throw new Error('FOREIGN KEY constraint failed');
+      }
+      if (failForcedRescanWithFk && force) throw new Error('FOREIGN KEY constraint failed');
       return { totalFiles: 0, indexed: 0, skipped: 0, errors: 0, durationMs: 0 };
     }
     async indexFiles() {
@@ -36,7 +45,7 @@ vi.mock('../../indexer/pipeline.js', () => {
     deleteFiles() {}
     async dispose() {}
   }
-  return { IndexingPipeline: FakeIndexingPipeline };
+  return { IndexingPipeline: FakeIndexingPipeline, IndexAbortedError: class extends Error {} };
 });
 
 vi.mock('../../indexer/watcher.js', () => {
@@ -70,6 +79,9 @@ let pmRef: { shutdown(): Promise<void> } | undefined;
 beforeEach(() => {
   activeIndexAll = 0;
   peakIndexAll = 0;
+  failNextRescanWithFk = false;
+  failForcedRescanWithFk = false;
+  forceFlags.length = 0;
   rescanCallbacks.length = 0;
   tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-rescan-gate-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
@@ -92,6 +104,39 @@ afterEach(async () => {
 }, 30_000);
 
 describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
+  it('retries a dropped-event rescan after a foreign-key failure', async () => {
+    const { ProjectManager } = await import('../project-manager.js');
+    const pm = new ProjectManager();
+    pmRef = pm;
+    const dir = join(tmpHome, 'repo-fk');
+    mkdirSync(dir, { recursive: true });
+    await pm.addProject(dir);
+    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'));
+    expect(rescanCallbacks).toHaveLength(1);
+
+    forceFlags.length = 0;
+    failNextRescanWithFk = true;
+    await expect(rescanCallbacks[0]()).resolves.toBeUndefined();
+
+    expect(forceFlags).toEqual([false, true]);
+    expect(pm.getProject(dir)?.status).toBe('ready');
+  }, 60_000);
+
+  it('marks the project unhealthy if the forced retry also fails', async () => {
+    const { ProjectManager } = await import('../project-manager.js');
+    const pm = new ProjectManager();
+    pmRef = pm;
+    const dir = join(tmpHome, 'repo-persistent-fk');
+    mkdirSync(dir, { recursive: true });
+    await pm.addProject(dir);
+    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'));
+
+    failNextRescanWithFk = true;
+    failForcedRescanWithFk = true;
+    await expect(rescanCallbacks[0]()).rejects.toThrow('FOREIGN KEY constraint failed');
+    expect(pm.getProject(dir)?.status).toBe('error');
+  }, 60_000);
+
   it('caps concurrent rescans at parallel_initial_index, not at project count', async () => {
     const { ProjectManager } = await import('../project-manager.js');
     const pm = new ProjectManager();

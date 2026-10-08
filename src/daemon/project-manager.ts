@@ -1118,23 +1118,52 @@ export class ProjectManager {
             // historical answer is suspect for exactly this window.
             // TRA-1017: same stop signal as the initial index — a rescan
             // racing a shutdown must not start an uncancellable run.
-            const run = () => {
+            const run = (force = false) => {
               logger.info(
                 {
                   projectRoot,
                   reason: 'watcher-dropped-events',
                   discovery: 'full-walk',
-                  forced: false,
+                  forced: force,
                 },
                 'Project indexAll starting',
               );
-              return pipeline.indexAll(false, {
+              return pipeline.indexAll(force, {
                 discovery: 'full-walk',
                 signal: indexAbortController.signal,
               });
             };
             const limit = this.indexAllLimit;
-            await (limit ? limit(run) : run());
+            const boundedRun = (force = false) => (limit ? limit(() => run(force)) : run(force));
+            try {
+              try {
+                await boundedRun();
+              } catch (err) {
+                if (!isForeignKeyError(err)) throw err;
+                // A dropped-event walk must repair the same stale symbol rows
+                // that the initial-index path repairs. Otherwise FileWatcher
+                // only logs the failure and leaves a stale project advertised
+                // as ready until another drop happens.
+                logger.warn(
+                  { projectRoot, error: String(err) },
+                  'Dropped-event rescan hit FOREIGN KEY violation — retrying with force=true',
+                );
+                await boundedRun(true);
+              }
+              if (
+                managed.status === 'error' &&
+                managed.error?.startsWith('Dropped-event rescan failed:')
+              ) {
+                managed.status = 'ready';
+                managed.error = undefined;
+              }
+            } catch (err) {
+              if (!(err instanceof IndexAbortedError)) {
+                managed.status = 'error';
+                managed.error = `Dropped-event rescan failed: ${String(err)}`;
+              }
+              throw err;
+            }
           },
         },
       );
