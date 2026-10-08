@@ -5,7 +5,7 @@
  * the safety signal removed, so a precision fix cannot silently cost recall.
  */
 import { execSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, test } from 'vitest';
@@ -302,6 +302,42 @@ export function openReport(outputPath: string): void {
     expect(findings).toHaveLength(1);
     expect(findings[0].rule_id).toBe('CWE-78');
     expect(findings[0].severity).toBe('critical');
+  });
+
+  test('demotes ps -p ${process.pid} queries to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/rss.mjs',
+      `
+const rss = () => Number(execSync(\`ps -o rss= -p \${process.pid}\`).toString().trim()) / 1024;
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('still detects ps with an untrusted arbitrary command or non-pid interpolation', () => {
+    writeFile(
+      store,
+      'scripts/ps-bad.mjs',
+      `
+function run(untrusted) {
+  execSync(\`ps \${untrusted}\`);
+}
+`,
+      'javascript',
+    );
+    const findings = scan(['command_injection']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('critical');
+    expect(findings[0].confidence).toBe('high');
   });
 
   // -------------------------------------------------------------------

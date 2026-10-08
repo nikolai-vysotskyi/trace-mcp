@@ -1088,13 +1088,14 @@ function hasFixedAuthority(line: string, lines: string[], fromLine: number): boo
  *  - "open"     — GUI file-open commands (open/xdg-open/start) with a path arg,
  *  - "which"    — `which X` lookup (read-only PATH probe),
  *  - "taskkill" — Windows `taskkill /PID X` with a numeric/pid-bound arg,
+ *  - "ps"       — POSIX `ps ... -p X` with a numeric/pid-bound arg,
  *  - null       — no known safe shape.
  */
 function classifyCommandInjection(
   line: string,
   lines: string[],
   fromLine: number,
-): 'open' | 'which' | 'taskkill' | null {
+): 'open' | 'which' | 'taskkill' | 'ps' | null {
   // Match fixed-verb GUI openers.
   if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+/.test(line)) {
     return 'open';
@@ -1120,6 +1121,25 @@ function classifyCommandInjection(
     for (let i = 0; i < lines.length; i++) {
       if (i === fromLine) continue;
       if (pidAssignRe.test(lines[i])) return 'taskkill';
+    }
+  }
+  // `ps ... -p X` (or `--pid X`) — check whether the interpolated value is a numeric literal,
+  // or bound to one of `pid` / `process.pid` / `child.pid` in the same function.
+  const ps =
+    /(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`]*?(?:-p|--pid)\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
+      line,
+    );
+  if (ps) {
+    const ident = ps[1];
+    if (/^(?:process\.pid|child\.pid)$/.test(ident)) return 'ps';
+    if (/^-?\d+$/.test(ident)) return 'ps';
+    const headIdent = ident.split('.')[0];
+    const pidAssignRe = new RegExp(
+      `(?:const|let|var)\\s+${headIdent}\\b[^=]*=\\s*(?:readDaemonPid|process\\.pid|child\\.pid|\\d+|.+\\.pid\\b)`,
+    );
+    for (let i = 0; i < lines.length; i++) {
+      if (i === fromLine) continue;
+      if (pidAssignRe.test(lines[i])) return 'ps';
     }
   }
   return null;
@@ -1414,6 +1434,11 @@ export function scanSecurity(
                 confidence = 'low';
                 fixOverride =
                   '`taskkill /PID X` argument bound to a known numeric PID; verify the source of the PID.';
+              } else if (cmdShape === 'ps') {
+                severity = 'low';
+                confidence = 'low';
+                fixOverride =
+                  '`ps -p X` argument bound to a known numeric PID; verify the source of the PID.';
               }
             }
 
