@@ -3215,3 +3215,50 @@ Audited read-only via API, nothing written outside this file.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+### Day pass, 2026-10-09 (TRA-2275): thread re-audit, Dokploy progress, clean mention sweep, competitor intelligence (Semble multi-harness subagents, Serena symlink CVE, DSH)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads:
+  - `Dokploy/mcp#81`: new comment 2026-10-08 20:56Z by contributor `moataz-hjaiji` announcing an upcoming PR implementing the meta-tool `dokploy-loadTools` with single `notifications/tools/list_changed` and tool descriptor results, specifically crediting Nikolai (`@nikolai-vysotskyi`)'s insight about clients slow to re-read `tools/list`. Proposal is moving into community implementation; no reply needed.
+  - `nearform/lastlight#372`: quiet since 10-05.
+  - `narumiruna/pi-extensions#1204`: closed 10-07 by maintainer.
+  - `Nano-Collective/nanocoder#1197`, `facebook/pyrefly#4583`, `mattbutlerengineering/ai-tooling#585`, `qodo-ai/pr-agent#2499`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`: all quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All hits matched `ops/mentions-seen.txt`. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Competitor intelligence & architectural observations:**
+- `MinishLab/semble`:
+  - Issue #290: Detailed breakdown of tool naming conventions and tool-gating across 13 coding agent platforms (Claude Code `mcp__<server>__<tool>`, Gemini CLI `mcp_<tool>`, Qwen Code `mcp__<server>__<tool>`, Copilot `<server>/<tool>`, Kiro `mcp_<tool>`, Command Code `mcp__<server>__<tool>` + `shell_command`, Reasonix `mcp__<server>__<tool>`, OpenCode/Kilo permissions). Shows that subagents across these platforms default to CLI execution unless explicitly tool-gated.
+  - Issue #288: Subprocess leaks under uv when invoked via MCP (`uv tool upgrade` / unreleased uv processes).
+  - Issue #287: Tool name prefix discrepancy between documentation (`mcp__semble__search`) and registration (`semble__search`).
+- `oraios/serena`:
+  - Issue #2144: Critical security vulnerability report: file tools rely on lexical `os.path.normpath` path confinement rather than resolving realpaths, allowing in-tree symlinks pointing outside the project root to read/write arbitrary filesystem files (`~/.ssh`, `/etc/passwd`).
+  - Architectural comparison: `trace-mcp`'s `validateWritePath` (`src/utils/security.ts`) already implements mandatory realpath ancestor confinement and rejects writing through symlinks, making trace-mcp inherently immune to this vulnerability class.
+- `tirth8205/code-review-graph`:
+  - Issue #1100: Proposal for DeepSeek Harness (DSH) native integration via Cordis YAML patch layer and structured read-only edit plans.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★, 24 forks, pushed 2026-10-08.
+- `MinishLab/semble`: 6,191★ (-1), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,984★ (+4 since TRA-2270), 2,929 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,756★ (+5), 1,574 forks, pushed 2026-10-03.
+- `oraios/serena`: 30,105★, 2,049 forks, pushed 2026-10-08.
+- `DeusData/codebase-memory-mcp`: 46,163★ (+12), 3,796 forks, pushed 2026-10-07.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
