@@ -771,142 +771,52 @@ read it too — the media query alone will not catch it.
 
 ## 8. The landing hero
 
-Numbered last because §1–§7 were written before this section existed; renumbering
-would break the `§` references inside this file and the one in `docs/index.html`.
-Read it as the landing-page counterpart to §2.
+This section is the landing-page counterpart to §2. The first screen answers two
+questions in order: what trace-mcp does for an agent, then how to install it.
+The visual proof is an actual app screenshot, immediately below the action.
 
-**Centred, one column, and this order** (TRA-738, from Nikolai's mock): eyebrow →
-headline → one line of what it is → one button → the platforms it is not offering
-→ the npm box → the trust line at the fold. That is the whole first screen.
-Anything else belongs below the fold or one click away, and the burden is on the
-addition, not on the removal.
+**One short headline, one precise sentence, one primary action.** The H1 is
+`Read once. Reuse the answer.` It is short enough to read as a single thought
+at desktop width. The line below it carries the position sentence verbatim:
+`trace-mcp indexes what your agent keeps re-reading, and serves the answer
+instead.` That sentence also appears in the README, generated banner and site
+description; edit those surfaces together if the position changes. Do not
+stretch it back into a three-line display headline. TRA-2265 showed that moving
+the benchmark paragraphs below the fold did not fix the wall of text while the
+H1 itself still occupied three lines.
 
-The list of what used to sit here is the point: a service label
-(`/ Recomputation → Reuse · AI Execution Layer`), a version + licence row, a
-two-sentence description, two actions of different natures, an
-alternative-architecture link, and a three-item trust row — eight blocks above
-the fold where Ollama, the reference, has three. Left-aligned, they read as a
-paragraph the visitor had to finish before finding the download.
+**The cobalt download button is the only primary action.** Without JavaScript
+it links to `/releases/latest`; with JavaScript it resolves a direct macOS arm64,
+macOS x64 or Windows x64 installer and names the exact platform. The npm copy
+button and `All downloads` link share one quiet utility row beneath it. Linux
+has no packaged installer, so its npm button gains the primary treatment and
+the download button is removed. Alternative builds remain one click away on
+the releases page without JavaScript.
 
-**Centred, and this is the one place on the site where it is.** §2.7 prefers
-asymmetry, and it is right everywhere there is a second column to balance
-against. There is none here: one sentence and one button, alone, off to the
-left, with the whole right half empty is not asymmetry, it is a page that
-started and gave up. `.hero { text-align: center }` plus `margin: 0 auto` on
-`.hero-headline` (900px) and `.hero-desc` (660px).
+**Show the product before the metrics.** The existing graph explorer screenshot
+is the next section after the hero, with matching light and dark captures from
+Electron. It is cropped within the frame, never stretched, and the mobile crop
+removes the frame caption so the graph stays legible. The benchmark strip follows
+the screenshot. Its first saving figure is immediately paired with the full
+quality comparison and the installation boundary, which remain visible in the
+document and linked to their methods. No benchmark paragraph or installation
+scope note belongs in the hero.
 
-**One action. The button.** `.btn .btn-primary .btn-lg` — an `--accent-solid`
-cobalt fill under a white label, 5.46:1 in both themes. It shipped red until
-TRA-739 (§0 is why it is not red), then spent one release as a full inversion,
-which fixed the meaning but read as one more monochrome slab on a monochrome
-page and stopped being the loudest thing on the screen. Cobalt is the system
-accent (§0) and this button is the main place it is spent. It ships labelled `Download` pointing at `/releases/latest` so it works
-without JS (TRA-440), and `resolveDownload()` narrows it to a single file and
-renames it only once it has found that file in the release JSON. The label names
-the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
-(Intel)`, `Download for Windows` — never a platform the page has not confirmed
-and never an architecture the visitor is left to guess at.
+**Do not add decoration to fill space.** The former eyebrow repeated version
+and licence already available elsewhere; the client and trust row repeated
+facts lower on the page. Both made the screen busy without helping the install
+decision. Space belongs to the headline, action and graph screenshot. Avoid
+adding another pill, badge, animation or abstract diagram above the screenshot.
 
-**Three body sizes under the headline, and shade says which kind of sentence
-it is** (TRA-1143). `.hero-desc` is the claim — 19px, `--text-primary`, its
-number at `--text-display` through `.accent-text`. `.hero-evidence` is the
-other half of the same measurement, the quality result that says the cheap
-context was worth having — 15px, but `--text-primary` too, with its four
-numbers on the same `.accent-text`. `.hero-boundary` is the scope note about
-what the product does to your machine — 15px, `--text-secondary`.
-
-Size separates evidence from claim; shade groups them and drops the scope note
-out. Getting this wrong is not a nuance: for one release the evidence and the
-scope note shared `.hero-boundary` and rendered identically at
-15px/`--text-secondary`, so the answer to "is the thinner context worse?" was
-set in the same grey as a legal boundary and read as small print under the
-number it qualifies. The saving was loud and the proof it had not been bought
-with worse reviews was quiet — the exact shape the page exists to avoid.
-
-**A number that qualifies a claim gets the claim's own emphasis, on both
-sides of the comparison.** All four of `.hero-evidence`'s figures take
-`.accent-text`, including the ones where we lose: `0.80 false positives per PR
-against 0.58` is us being worse, and it is set as brightly as the half we win.
-Dimming the losing number is how a comparison becomes a boast.
-
-**Three mono caps rows, one treatment, three greys.** `.hero-eyebrow`
-(`--text-secondary`, above the headline, carrying the service label and the
-version + licence the old two-column `.hero-meta` used to spend a whole row on),
-`.hero-alt` (`--text-secondary`, the platforms the button is not offering) and
-`.hero-trust` (`--text-disabled`, at the fold). Distance from the button and
-grey level are the only things separating them; do not give any of them their
-own font size, weight or border.
-
-**Platform detection covers macOS arm64, macOS x64 and Windows x64** (TRA-738).
-It used to `btn.remove()` on everything that was not a Mac, which left every
-Windows visitor with no button at all while the release had shipped
-`trace-mcp.Setup.<version>.exe` since v3.14.0. arm64-unless-proven-Intel is the
-Mac default and stays that way. On Linux the button is still removed — the
-release has no installer to offer there, and the npm line below is the whole
-install path.
-
-**`.hero-alt` holds exactly the platforms the button is not offering**, plus
-`all downloads`. On an Apple Silicon Mac that is `Intel Mac · Windows · all
-downloads`; on Windows, both Macs. Each is a direct link to a file once JS has
-resolved the release, and a link to the releases page before that — never a
-question the visitor has to answer before downloading (TRA-440).
-
-**`.hero-install` is a `<button>`, and it sits on its own row below the
-button, not beside it.** A `<span onclick>` gave the copy action no tab stop,
-no focus ring and nothing for a screen reader; the `$` is `aria-hidden`, the
-`copy` label is `aria-live="polite"` so `copied` is announced. It keeps its
-technical 8px box on `--surface` — but side by side with the filled pill that box
-read as a second button of equal weight, which is what this hero keeps being
-pulled back into, so it is a full row down instead. That verdict predates the
-inversion and survives it: an outlined box next to a solid block of the
-opposite end still reads as a second button when the two sit side by side. Off macOS and Windows it
-gains `.is-primary` and is the hero's only action.
-
-**The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
-`max-width: 900px` breaks the current wording (`trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.`)
-into exactly three balanced lines at 1440px and 1200px:
-- `trace-mcp indexes what your` (27 chars)
-- `agent keeps re-reading, and` (27 chars)
-- `serves the answer instead.` (26 chars)
-At 390px, `clamp(30px, 8vw, 44px)` over `100%` breaks it into four lines
-(131px height): `trace-mcp indexes` / `what your agent keeps` /
-`re-reading, and serves` / `the answer instead.`. Change the wording,
-re-measure the line count at 1440px and at 390px.
-
-**The mono caps row stacks below 700px, and is never a wrapped flex row on a
-phone** (TRA-607, inherited by `.hero-note` in TRA-738). A `flex-wrap` row of
-mono caps always fails the same way: it wraps mid-list and a `.dot` separator
-ends the line. Measured on the last box of each line, not judged by eye — on
-the row this replaced a dot was the rightmost box at 660, 600, 520, 430, 390,
-360 and 320px, and at none of 700, 760, 820, 900, 1024 or 1440px. This is §9's
-"no label breaks into fragments" rule one section up the page. At 700px and
-below all three rows keep their dots hidden and their gaps tightened, so a wrap
-never lands on a separator.
-
-`@media (max-width: 700px)` includes 700px itself, so the stacked form starts
-*at* 700px while the defect it fixes starts just below — the rule is applied
-one tested step wider than the failure. Inline behaviour is what you get above
-700px, not at it.
-
-**The first screen fits a 13" laptop, and that is a measurement.** Measured
-on the **live published page** at 1440×900 — `getBoundingClientRect().top`
-plus `scrollY`, document coordinates: the button top sits at 630px and the
-trust line at 841px, with the metrics strip below the fold.
-
-Take the figure on `trace-mcp.com`, not on a local preview, and say which you
-took. Without a Jekyll build there is no faithful local render of this page —
-a Liquid-lite substitution reads roughly 48px lower on every hero element than
-the live page does, so a preview number recorded here as the baseline is a
-regression the next run will chase and not find. The rule is the button, not
-the hero — a first screen whose button falls below 900px is a regression
-however good it looks at 1440×1080.
-
-Re-measure `getBoundingClientRect()` on `.hero-cta` and `.hero-trust` after any
-change to the headline wording, either paragraph, or the hero's padding. The
-figures here have been refreshed once already (TRA-1143): they read 483px and
-656px from before the evidence line existed, which made a stale record look
-like a passing check. If you change the hero and do not re-measure, the next
-run reads your numbers as the truth.
+**Measure the full composition.** TRA-2265's second local headless preview,
+with Jekyll front matter stripped, placed the desktop CTA at y=252 and the app
+view at y=428 on 1440×900; the benchmark strip began below the fold at y=1049.
+At 390×844 the CTA was at y=236 and the app view at y=426, with no horizontal
+overflow. These are preview coordinates, not the published-page baseline; measure
+the live page after release. Check both themes and both viewport sizes whenever
+headline copy, hero spacing, the utility row or screenshot crop changes. Keep
+focus visible on download, npm copy and other downloads, and retain reduced
+motion support.
 
 ---
 
@@ -1084,13 +994,10 @@ it per-mechanism — graph, decision memory, mirrors, guard — re-creates the "
 products in one binary" reading the block exists to prevent. A new mechanism
 joins an existing card's copy or it does not go here.
 
-**It sits below the metrics strip, not above it.** §8's first screen is a
-measurement: hero, then the metrics strip already showing underneath at
-1440×900. Anything inserted between the two moves that measurement, and this
-block is not first-screen material — it is where a reader goes after the
-evidence, not before it. Measured after the change: `.hero` and
-`.metrics-strip` occupy exactly the bands they did before, and `.doors` starts
-at the metrics strip's bottom edge.
+**It sits below the metrics strip.** The first screen now ends with the app
+view, followed by the metrics and their quality proof (§8). The two doors
+explain installation surfaces after that evidence. They are not first-screen
+material and must not be inserted between the hero and app view.
 
 **No section number and no `.section-meta`.** It is a band like `.trust-strip`
 and `.app-banner`, not a numbered chapter — numbering it would renumber the

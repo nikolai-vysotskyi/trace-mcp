@@ -14,6 +14,11 @@
 #   C) Curl direct             — lower bound: pure HTTP RTT to the new
 #      /api/projects/reindex-file endpoint.
 #
+# Every scenario measures the reindex itself: B and C ask the daemon to answer
+# after the work (`index-file --wait`, `?wait=1`). Without that the daemon
+# answers 202 once the file is queued (#1480) and B/C would time the queueing,
+# not the reindex A pays for.
+#
 # Prints p50/p95/mean wallclock per scenario.
 
 set -euo pipefail
@@ -84,7 +89,7 @@ if daemon_up; then
 else
   COLD_SAMPLES=""
   for i in $(seq 1 "$ITERS"); do
-    ms=$(time_ms node "$CLI" index-file "$TARGET_FILE")
+    ms=$(time_ms node "$CLI" index-file --wait "$TARGET_FILE")
     COLD_SAMPLES+="$ms "
     printf "  iter %2d: %4d ms\n" "$i" "$ms"
   done
@@ -111,10 +116,10 @@ if ! daemon_up; then
   HOT_SAMPLES=""
 else
   # Warm up so the project is registered.
-  time_ms node "$CLI" index-file "$TARGET_FILE" >/dev/null
+  time_ms node "$CLI" index-file --wait "$TARGET_FILE" >/dev/null
   HOT_SAMPLES=""
   for i in $(seq 1 "$ITERS"); do
-    ms=$(time_ms node "$CLI" index-file "$TARGET_FILE")
+    ms=$(time_ms node "$CLI" index-file --wait "$TARGET_FILE")
     HOT_SAMPLES+="$ms "
     printf "  iter %2d: %4d ms\n" "$i" "$ms"
   done
@@ -138,7 +143,7 @@ else
   CURL_SAMPLES=""
   for i in $(seq 1 "$ITERS"); do
     ms=$(time_ms curl -fsS -X POST -H 'Content-Type: application/json' \
-      -d "$BODY" "http://127.0.0.1:${PORT}/api/projects/reindex-file")
+      -d "$BODY" "http://127.0.0.1:${PORT}/api/projects/reindex-file?wait=1")
     CURL_SAMPLES+="$ms "
     printf "  iter %2d: %4d ms\n" "$i" "$ms"
   done

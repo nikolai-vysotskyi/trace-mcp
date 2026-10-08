@@ -41,7 +41,7 @@ describe('TRA-1841 — File too large warn is deduped per path', () => {
     });
   }
 
-  it('repeated reconciles of the same growing file warn once, repeats go to debug', async () => {
+  it('repeated reconciles of the same growing file log once at debug, repeats are suppressed', async () => {
     const rel = path.join('scratchpad', 'channel_discovery', 'account_actions.jsonl');
     const abs = path.join(tmpRoot, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -55,35 +55,42 @@ describe('TRA-1841 — File too large warn is deduped per path', () => {
     // Three reconciles; the file grows between them (live scraper appends).
     for (let i = 0; i < 3; i++) {
       const r = await extractor.extract(rel, false);
-      expect(r.kind).toBe('error');
+      expect(r.kind).toBe('skipped');
       fs.appendFileSync(abs, `${'y'.repeat(100_000)}\n`);
     }
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(debugSpy).toHaveBeenCalledTimes(2);
+    // TRA-2273: Expected skips must not log at warn level.
+    expect(warnSpy).toHaveBeenCalledTimes(0);
+    expect(debugSpy).toHaveBeenCalledTimes(3);
 
-    // The surviving warn stays informative: path + size + limit.
-    const [meta, msg] = warnSpy.mock.calls[0] as [Record<string, unknown>, string];
+    // The first debug log stays informative: path + size + limit.
+    const [meta, msg] = debugSpy.mock.calls[0] as [Record<string, unknown>, string];
     expect(msg).toBe('File too large, skipping');
     expect(meta).toMatchObject({ file: rel, size: 1_200_001, limit: 1_048_576 });
+
+    // Subsequent logs mark repeat suppressed.
+    const [, repeatMsg] = debugSpy.mock.calls[1] as [Record<string, unknown>, string];
+    expect(repeatMsg).toBe('File too large, skipping (repeat suppressed)');
   });
 
-  it('distinct paths warn independently', async () => {
+  it('distinct paths log at debug independently with zero warnings', async () => {
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
-    vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
     const extractor = makeExtractor();
 
     for (const rel of ['big-a.jsonl', 'big-b.jsonl']) {
       fs.writeFileSync(path.join(tmpRoot, rel), `${'z'.repeat(1_100_000)}\n`);
       const r = await extractor.extract(rel, false);
-      expect(r.kind).toBe('error');
+      expect(r.kind).toBe('skipped');
     }
-    // Second pass over both: no new warns.
+    // Second pass over both: repeats suppressed.
     for (const rel of ['big-a.jsonl', 'big-b.jsonl']) {
       const r = await extractor.extract(rel, false);
-      expect(r.kind).toBe('error');
+      expect(r.kind).toBe('skipped');
     }
 
-    expect(warnSpy).toHaveBeenCalledTimes(2);
+    // TRA-2273: zero warnings emitted.
+    expect(warnSpy).toHaveBeenCalledTimes(0);
+    expect(debugSpy).toHaveBeenCalledTimes(4);
   });
 });

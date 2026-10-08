@@ -76,7 +76,7 @@ Rules for keeping it honest:
 | `trace-mcp.vi.softonic.com/mcp` | **Yes — scraped, not submitted** | Unknown — all of `*.softonic.com` answers HTTP 412 to a scripted fetch (four UA/header variants, 2026-09-04) | **Nothing to do, and do not open this door.** Found because Search Console names it as one of exactly two external URLs linking `trace-mcp.com` (TRA-792). A download portal that wraps third-party installers in its own; we control nothing on that page. Do not submit, do not link, do not chase the other locales | 2026-09-04 |
 | [tolkonepiu/best-of-mcp-servers](https://github.com/tolkonepiu/best-of-mcp-servers) | **Submitted, not merged** — [PR #384](https://github.com/tolkonepiu/best-of-mcp-servers/pull/384), opened 2026-08-29 | One entry in `projects.yaml`; a scheduled bot commits the rendered README ("Best-of update", last one 2026-09-02) | PR adding a `projects.yaml` block; `yamllint` is the only check and it passed on ours. **The door is slow, not closed, and the numbers say don't push:** 12 other `Add project:` PRs are open, the oldest from 2026-08-27, and across all of 2026 only four external project-add PRs were merged at all (#52, #120, #161, #299) — #299 took 39 days. Zero maintainer activity on ours. The one allowed reminder went out 2026-09-26 ("Still applies cleanly against the current projects.yaml, yamllint passes. Leaving it with you for whenever the next batch of project adds gets triaged") — reminder budget spent, no further pings, leave it. **This row was missing until 2026-09-05** — the submission was made on 2026-08-29 and never recorded, which is exactly the failure the rules at the top of this file describe | 2026-09-27 |
 | [axisrow/trace-mcp-plugin](https://github.com/axisrow/trace-mcp-plugin) via [etopro/plugin-marketplace](https://github.com/etopro/plugin-marketplace) | **Yes — third-party, we did not submit it** | A Claude Code plugin (MIT, 0★, created 2026-08-01) that wraps our CLI: `/trace-mcp-install`, `/trace-mcp-measure`, `/trace-mcp-uninstall`, plus a saved benchmark baseline for a re-measure a week later. Listed in the `etopro-plugins` marketplace (2★) as `trace-mcp`. README is in Russian and links our repo | Nothing to submit, and **the value here is not the listing**. The author read `dist/cli.js` at 1.46.2 and filed two issues about our behaviour in his own tracker — [#4](https://github.com/axisrow/trace-mcp-plugin/issues/4) (the daemon auto-registers every project root an MCP client connects from; he watched 9 projects appear in the registry within a day of one install) and [#5](https://github.com/axisrow/trace-mcp-plugin/issues/5) (installation places hooks without asking). #4 re-verified against 3.17.1 and filed upstream as [#936](https://github.com/nikolai-vysotskyi/trace-mcp/issues/936), credited to him; answered once in his thread with the current gate list and the `remove --keep-db` cleanup. **Found by GitHub issue search for our own name, not by any directory** — the same channel that found `mattbutlerengineering/ai-tooling` | 2026-09-05 |
-| [eltociear/awesome-AI-driven-development](https://github.com/eltociear/awesome-AI-driven-development) | **Submitted, not merged** — [PR #119](https://github.com/eltociear/awesome-AI-driven-development/pull/119), opened 2026-09-06 | One line each in `README.md` and `README_JA.md`, section `MCP Servers & Integrations`, appended after `codebase-memory-mcp`; plus the tool count in both headers, 594 → 595 at submission, rebased 2026-09-15 to 596 → 597 after the maintainer's Sillage sync (#115, #117) made the PR unmergeable, rebased 2026-09-25 to 598 → 599 after the MulmoTerminal sync (#127) did it again — MERGEABLE/CLEAN after the push, entry lines untouched both times, only the header count moves | PR to both READMEs, format in `CONTRIBUTING.md`, PR template filled in EN+JA. 531★, no account, no scanner, no payment, no ownership badge. **Unlike the other two awesome-lists we are queued in, this maintainer actually merges external PRs**: of the last 15 closed PRs, 14 were merged, all from outside contributors, turnaround 1–16 days — that is the only list on this table where a self-submission is the normal way in rather than a lottery ticket. Placed in the MCP section, not `Code Analysis & Search`: Serena, `codebase-memory-mcp`, SymDex and CogniLayer are all in the MCP section, while Code Analysis is mostly context-packing CLIs. The entry claims 81 languages and cross-language framework edges and no savings number, per the TRA-880 rule. Nudge of 2026-09-20 sent ("leaving it with you"); do not comment again — the nudge's "merges cleanly" line is already stale and a correction would cost a second notification for zero maintainer value. Rebase again only if dirty near a merge signal, not daily. Tracked in TRA-1030 | 2026-09-25 |
+| [eltociear/awesome-AI-driven-development](https://github.com/eltociear/awesome-AI-driven-development) | **Yes — merged 2026-09-30** ([PR #119](https://github.com/eltociear/awesome-AI-driven-development/pull/119), opened 2026-09-06, merged by maintainer) | One line each in `README.md` and `README_JA.md`, section `MCP Servers & Integrations`, after `codebase-memory-mcp` — verified live 2026-09-30 in both files via API (EN + JA entry text renders, links our repo). Tool count in both headers moved 594 → 595 at submission, rebased 2026-09-15 to 596 → 597 after the Sillage sync (#115, #117), rebased 2026-09-25 to 598 → 599 after the MulmoTerminal sync (#127) — entry lines untouched throughout, final header count 599 | PR to both READMEs, format in `CONTRIBUTING.md`, PR template filled in EN+JA. 531★, no account, no scanner, no payment, no ownership badge. The only list on this table where a self-submission is the normal way in rather than a lottery ticket — and it held: merged 2026-09-30 14:44Z (24 days after opening) with zero review rounds. Live entry verified. Tracked in TRA-1030 | 2026-09-30 |
 | [ai-boost/awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) | **Submitted, not merged** — [PR #240](https://github.com/ai-boost/awesome-harness-engineering/pull/240), opened 2026-09-05 | One line in `README.md`, section `Context Delivery & Compaction`, which already holds `codebase-memory-mcp`, `Token Savior`, `MinishLab/semble`, `headroom`, `Graft` and `context-mode` — the densest concentration of our nearest neighbours found on any single list (4,005★, 490 forks) | PR to README, format documented in `CONTRIBUTING.md` and `AGENTS.md` (`- [Title](URL) — 1–2 sentence note`), no account, no scanner, no payment. **But the queue says the PR is not how entries land:** `ai-boost` commits one new entry per day himself (20 of the last 20 commits are his, "Add X to Y section"), while ~40 external PRs sit open, two have ever been merged (#2 in April, #66 on 2026-07-22) and two were closed. Ours is therefore a low-probability ticket on a high-value list, not a submission with a queue position. Rebased 2026-09-15 after the maintainer's daily self-add (LangChain context-modes entry) made the PR unmergeable — one-line conflict, ours kept last in section. Expect this to recur while the PR sits open; rebase again only if it goes dirty a second time close to a merge signal, not daily. Do not ping. Re-read 2026-10-05 | 2026-09-15 |
 | [yzfly/awesome-context-engineering](https://github.com/yzfly/awesome-context-engineering) | **Yes — merged 2026-09-20** ([PR #44](https://github.com/yzfly/awesome-context-engineering/pull/44), opened 2026-09-05, merged by `yzfly`) | One line each in `README.md` (line 292, verified live) and `README_CN.md` (line 275, verified live), section `Memory & Compression` / `记忆与压缩`, next to `lean-ctx`, `headroom` and `skillreaper` | PR to both READMEs — `CONTRIBUTING.md` requires the English and Chinese versions to stay in sync, so an entry that touches one file only is incomplete. **This is the door with a real merge rate in this class:** five external PRs merged in the two weeks to 2026-08-30, three of them in one batch, authors unaffiliated with the maintainer. The merge rate held: quiet since 2026-08-30, then ours merged 2026-09-20 with zero comments and zero review rounds. Nothing owed — a thank-you would only cost a notification | 2026-09-20 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
@@ -109,6 +109,12 @@ Rules for keeping it honest:
 | [jaimevalero/managing-awesome-lists-frontend](https://github.com/jaimevalero/managing-awesome-lists-frontend) | **Yes — third-party, we did not write it and did not submit it** (0★, 0 forks, no license, pushed daily) | `public/similar/nikolai-vysotskyi@trace-mcp.json`: generated similarity record, cached 2026-09-25 — our description current ("88 framework integrations, 81 languages, 72.7% fewer input tokens", matching `counts.yml`), plus a similarity set naming `codebase-memory-mcp`, `synapse-mcp`, `roslyn-codelens-mcp`, `tribeunal/mcp-server` and `drhalto/agentmako`. Frontend for the `managing-awesome-lists` app (`managing-awesome-lists.vercel.app`) | Nothing to submit and nothing to correct — static JSON for a list-management frontend, no submission path, no audience. Value is twofold: the sixth zero-cost auto surface (no run spent), and the similarity set is a free consideration-set reading — the company our category keeps when a machine clusters it. Found by `scripts/mention-sweep.sh` 2026-09-25 | 2026-09-25 |
 | [NOMARJ/sigil](https://github.com/NOMARJ/sigil) | **Yes — third-party, we did not write it and did not submit it** (5★, 2 forks, single author, Python, pushed 2026-09-27) | An automated security-auditing CLI for agent tooling ("quarantine-first workflow for repos, packages, and agent tooling"). `evaluation_results/corpora/mcp_holdout_manifest.json` carries `io.github.nikolai-vysotskyi/trace-mcp` at 3.33.0 (registry npm tarball, published 2026-09-25) as one of its held-out registry-MCP samples; the holdout run (`mcp_holdout_sigil-main`) rates our package CRITICAL with 1,644 findings | Nothing to submit and nothing to dispute — evaluation corpus, no submission path, no audience. Two things worth knowing rather than fixing. (1) The seventh zero-cost downstream record minted by the registry publish with no run spent — the mechanism keeps working. (2) The verdict is not a singling-out: the neighbouring corpus samples rate the same way (`newrelic-experimental/preflight` CRITICAL, `nrwl/nx-console` CRITICAL), and their own calibration doc calls the blocked figure "an upper bound on false positives" (post-calibration clean-corpus blocked rate 22.5%). A quarantine-first scanner flagging postinstall-bearing npm packages is expected, not news — but if the Security posture ever wants a worked example of how third-party MCP scanners read us, this corpus names the rule IDs per sample. Do not open an issue; a correction request to someone's benchmark corpus is an outgoing message with no reader. Found by `scripts/mention-sweep.sh` 2026-09-27 | 2026-09-27 |
 | [ankitkapur1992-hlido/hlido-public](https://github.com/ankitkapur1992-hlido/hlido-public) | **Yes — third-party, we did not write it and did not submit it** (0★, 0 forks, single author, MIT) | Machine-readable review scorecard `scorecards/nikolai-vysotskyi-trace-mcp.json` (Hlido Editor, dated 2026-09-27): score 77/STEADY — agent-native design praised, headline token claims flagged as unverified. **Copy is stale two ways**: quotes the retired "~40–50% average, up to 94–99%" range (gone from master since TRA-904, 2026-09-05) and "no data leaves your machine" with no telemetry caveat (TRA-1013 class) | Nothing to submit and nothing to dispute — editorial scorecard, no submission path, no audience. Value is as evidence: the third generative derivative after Arnon-hs and vybe-vault carrying retired claims, which is the "retiring a bad claim does not retire its derivatives" note working again. Do not open an issue. Found by `scripts/mention-sweep.sh` 2026-09-28 | 2026-09-28 |
+| [sudosubin/agents.nix](https://github.com/sudosubin/agents.nix) | **Yes — third-party, we did not write it and did not submit it** (16★, 2 forks, MIT, pushed daily) | Nixpkgs overlay for AI agent skills from skills.sh and skillsdirectory.com. Automatically packages `nikolai-vysotskyi/trace-mcp` v3.34.6 in `data/agent-skills/` and `data/claude-code-marketplaces/` with sha256 hash, exposing skills `trace-mcp`, `trace-mcp-codemod`, `trace-mcp-pre-commit`, `trace-mcp-refactoring` | Nothing to submit and nothing to correct — downstream automated Nix packaging, no submission path. Value is distribution evidence: trace-mcp skills are being packaged and distributed into the Nix ecosystem automatically. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [majiayu000/claude-skill-registry-data](https://github.com/majiayu000/claude-skill-registry-data) | **Yes — third-party, we did not write it and did not submit it** (23★, 10 forks, MIT) | Archived Claude Code skill files and metadata consumed by the Claude Skills Registry pipeline. Mirrored `trace-mcp`, `trace-mcp-codemod`, and `trace-mcp-refactoring` skills in `other/trace-mcp/` | Nothing to submit and nothing to correct — skill registry pipeline mirror. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [cesarschutz/claude-code-kit](https://github.com/cesarschutz/claude-code-kit) | **Yes — third-party, we did not write it and did not submit it** (1★, 0 forks) | Marketplace/template kit for Claude Code plugins in Portuguese. In `07-mcps.md` under "Código e repositórios", lists `trace-mcp` alongside `github-official`, `serena`, `jupyter` | Curated listing in an independent plugin kit. Nothing to submit. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [drguptavivek/DigitVA](https://github.com/drguptavivek/DigitVA) | **Yes — third-party user adoption, we did not submit it** (0★, 0 forks) | Clinical autopsy platform by author of `fundus_img_xtract`. In `handoff.md`, agent instructions note: "Code search: semble first. trace-mcp is broken (binary missing)." | Nothing to submit and do not ping. Key insight: second repo by same practitioner mandating trace-mcp in handoff, but hit an environment issue where trace-mcp binary was missing. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [midnight000spark/dharma-toolkit](https://github.com/midnight000spark/dharma-toolkit) | **Yes — third-party evaluation, we did not submit it** (0★, 0 forks) | Project architecture records D-47 and F-72 evaluate trace-mcp 3.31.4 on Dart/Flutter codebase: noted regex-only symbol parsing for Dart and absence of Flutter framework integration, postponing adoption | Nothing to submit and do not ping. Direct user evaluation signal: validates roadmap priorities regarding framework/language depth outside JS/TS/Python. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
+| [FlorianBruniaux/claude-code-ultimate-guide](https://github.com/FlorianBruniaux/claude-code-ultimate-guide) | **Evaluated — premier editorial surface, candidate for submission** (6,125★, 803 forks, active daily) | The most authoritative Claude Code guide and ecosystem reference (430K+ lines). Has two direct target sections: `guide/ecosystem/mcp-servers-ecosystem.md` under `### Code search & analysis` (currently listing only Grepai and Semble) and `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration", listing code-review-graph, jCodeMunch, and mcp-server-tree-sitter) | Highly curated, active editorial maintainer (Florian Bruniaux) who reviews and merges external tool PRs (e.g. #84 YYLO, #86 swe-mux). trace-mcp fills their explicit documented gap between Grepai (requires Ollama) and Semble (Model2Vec CPU, no call graph or AST symbols): 100% CPU-local, zero external service/Ollama, AST-based symbol graph + call hierarchy across 88 frameworks and 81 languages, 72.7% token reduction on PR reviews. Documented as candidate for next cycle | 2026-10-08 |
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
 
@@ -162,6 +168,8 @@ Day pass 2026-09-30 (TRA-2105): all seven threads re-verified read-only with com
 Day pass 2026-09-30 (TRA-2110, second pass same day): all seven threads re-verified read-only via API two hours after TRA-2105 — every `updated_at` matches exactly, nothing waits for us anywhere. `eltociear#119` open, MERGEABLE/CLEAN, updated 09-25 (our rebase; no maintainer movement); `GetBindu#195` open, CLEAN, untouched since 09-20; `hermes#395` open, untouched since 09-20; `tolkonepiu#384` open, CLEAN, updated 09-26 (our reminder, no reply); `ai-boost#240` open, still `dirty`/CONFLICTING since 09-14, left alone per wontfix-spend (re-read 2026-10-05); `hesreallyhim#2871` open, untouched since 09-18 (bot validation only); `nix#606` open with no maintainer reply (one comment, ours). No new arrivals reading this pass (TRA-2105 re-read `ops/arrivals.md` two hours earlier, conclusion unchanged) — moratorium holds, no new submission. Mention sweep (both passes) ran clean — nothing outside `ops/mentions-seen.txt`. Competitor pulse (no touch): `tirth8205/code-review-graph` at 31,865★, `pushed_at` still 2026-09-18 — stars grow, triage stands still. Separately: `iansmith/slopstop#633` still silence, 24 days, one comment (ours); `sosalejandro/atlas#105` last activity 09-07, nothing owed. No pings sent, no PRs opened, no submissions: the moratorium holds.
 
 Day pass 2026-09-30 (TRA-2112, third pass same day): all seven threads re-verified read-only via API — every `updated_at` matches TRA-2110 exactly (eltociear#119 09-25, GetBindu#195 09-20, hermes#395 09-20, tolkonepiu#384 09-26, ai-boost#240 09-14 dirty, hesreallyhim#2871 09-18, nix#606 09-20), nothing waits for us anywhere. Queue signals, no action: eltociear's last merge still 09-23 (#121/#127, seven days quiet); GetBindu's still 09-26 (external #226); hermes triaged today (#450 closed, #454/#455 opened 09-29/09-30 — queue moves without us, standing no-ping rule holds). `ops/arrivals.md` (private) re-read: seven consecutive windows with zero directory arrivals, moratorium holds, no new submission. Mention sweep (both passes) ran clean — nothing outside `ops/mentions-seen.txt`. Competitor pulse (no touch): `tirth8205/code-review-graph` at 31,871★ (+6 since TRA-2110), `pushed_at` still 2026-09-18 — stars grow, triage stands still. Separately: `iansmith/slopstop#633` still silence, 24 days, one comment (ours); `sosalejandro/atlas#105` last activity 09-07, nothing owed. No pings sent, no PRs opened, no submissions: the moratorium holds.
+
+Day pass 2026-09-30 (TRA-2114, fourth pass same day): **eltociear#119 MERGED 2026-09-30 14:44Z** — the queue's best door paid out 24 days after opening, zero review rounds, entry verified live in both `README.md` and `README_JA.md` via API (row above updated, TRA-1030 can close). Remaining six threads re-verified read-only via API, nothing waits for us anywhere: `GetBindu#195` open, CLEAN, untouched since 09-20 (maintainer's last merge still 09-26, external #226); `hermes#395` open, untouched since 09-20; `tolkonepiu#384` open, CLEAN, updated 09-26 (our reminder, no reply, budget spent); `ai-boost#240` open, still `dirty` since 09-14, left alone per wontfix-spend (re-read 2026-10-05); `hesreallyhim#2871` open, untouched since 09-18 (bot validation only); `nix#606` open with no maintainer reply (one comment, ours). `ops/arrivals.md` (private) re-read: conclusion unchanged, moratorium holds, no new submission. Mention sweep (`scripts/mention-sweep.sh`, both passes) found one repo outside `ops/mentions-seen.txt` — `eltociear/awesome-AI-driven-development` itself, the merge commit of our own entry — expected, no new surface, nothing to record. Competitor pulse (no touch): `tirth8205/code-review-graph` at 31,875★ (+4 since TRA-2112), `pushed_at` still 2026-09-18. Separately: `iansmith/slopstop#633` still silence, 24 days, one comment (ours); `sosalejandro/atlas#105` last activity 09-07, nothing owed. No pings sent, no PRs opened, no new submissions.
 
 Sweep cadence from here: the weekly run is a step of the GitHub Distribution & Outreach autopilot brief (added TRA-1950) — `scripts/mention-sweep.sh`, read the matched file before recording anything, genuine surfaces get a row in this file in the same change, everything else gets a seen-list line, and чужие threads are never written to on a sweep hit alone.
 
@@ -3089,6 +3097,168 @@ Audited via API, read-only, nothing written outside this file and `ops/mentions-
 This run's day pass landed on a stale checkout: the three sweep hits above were already classified by the TRA-1950 weekly sweep (#1402) and recorded in #1405 — they were "new" only against the stale seen-list. This pass independently re-read all three matched files at source and reaches the same verdicts (one genuine auto-index, two collisions), so no duplicate rows or seen-list lines were added; the corroboration stands as the second pair of eyes. (It also deduped the jaimevalero table row, which #1405 had landed twice.)
 
 Thread deltas since TRA-1955, all read-only: `MiniMax-AI/MiniMax-Code-Plugins#54` moved 09-25T01:30 → 09-26T00:28 — the movement is Nikolai's own sixth review round, all 6 comments his; his lane, not touched. Everything else matches TRA-1955 exactly (all 8 submissions + 12 comment threads rechecked). `tolkonepiu#384`: the 26.09 ping-window expiry was decided as no-ping — a reminder into a queue that merged 4 project-adds in all of 2026 is noise; no new embargo needed. `slopstop#633`: the TRA-1090 deferral lifted (closed, released v3.23.2) — a draft reminder (method, not pitch) is staged in TRA-1031 for Lead Engineer review, unsent pending that gate.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Day pass, 2026-10-08 (TRA-2264): sweep unblocked after gh auth renewal, 5 genuine surfaces + 2 collisions + 1 merged seen
+
+Audited via API, read-only, nothing written outside this file, `ops/mentions-seen.txt`, and `scripts/mention-sweep.sh`.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`. Table row updated from submitted to merged.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads: `redproof#50` (09-21), `kilocode#13843` (10-05 maintainer follow-ups, internal Cygwin/Fedora fixes), `kilocode#12707` (09-07), `atlas#105` (09-07), `slopstop#633` (09-06, deliberately not bumped), `Dokploy/mcp#81` (09-05), `nanocoder#1197` (10-07 third-party eval notes), `lastlight#372` (10-05 cliftonc cross-ref to #434 noting ACP runtime stdio MCP, no reply needed), `facebook/pyrefly#4583` (09-07), `narumiruna/pi-extensions#1204` (closed 10-07 by maintainer, won't merge benchmark), `mattbutlerengineering/ai-tooling#585` (09-04), `pr-agent#2499` (09-14). `deslop#173` CLOSED 09-08, unchanged.
+- Zero incoming maintainer inquiries. No outreach pings or PRs opened (0 of 5 budget used).
+
+**Mention sweep (`scripts/mention-sweep.sh`, both passes): unblocked and executed.**
+8 repos surfaced:
+1. `sudosubin/agents.nix` (16★, 2 forks): genuine third-party packaging. Nixpkgs overlay for AI agent skills packaging `nikolai-vysotskyi/trace-mcp` v3.34.6 with sha256 hash. Table row + seen-list added.
+2. `majiayu000/claude-skill-registry-data` (23★, 10 forks): genuine third-party registry pipeline mirroring trace-mcp skills. Table row + seen-list added.
+3. `cesarschutz/claude-code-kit` (1★): genuine third-party Claude Code plugin marketplace/kit listing trace-mcp under "Código e repositórios". Table row + seen-list added.
+4. `drguptavivek/DigitVA` (0★): genuine user adoption by author of `fundus_img_xtract`. Handoff notes: "Code search: semble first. trace-mcp is broken (binary missing)." Second project mandating trace-mcp in agent handoff. Table row + seen-list added.
+5. `midnight000spark/dharma-toolkit` (0★): genuine user evaluation. Architectural decision D-47 / F-72 evaluated trace-mcp 3.31.4 on Dart/Flutter. Table row + seen-list added.
+6. `eltociear/awesome-AI-driven-development`: genuine catalog listing merged 2026-09-30, seen-list added.
+7. `aleutian-ai/trace`: collision (their own Go binary `cmd/trace-mcp/main.go`). Seen-list added.
+8. `christopherwoodall/silent-locus`: collision / crawler artifact (`our-domains.txt` domain list). Seen-list added.
+
+**Tooling hardening:**
+- `scripts/mention-sweep.sh`: added `GH_PROMPT_DISABLED=1`, `GIT_TERMINAL_PROMPT=0`, and fast-fail auth check `gh auth status` so headless runs never block on terminal prompt.
+
+**Competitor pulse (no touch):**
+- `tirth8205/code-review-graph`: 31,972★ (+15 since TRA-2245), 2,928 forks, pushed 2026-10-06.
+- `nikolai-vysotskyi/trace-mcp`: 186★, 24 forks, pushed 2026-10-08.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Day pass, 2026-10-08 evening (TRA-2268): open threads re-audit, DigitVA environment root cause, FlorianBruniaux guide analysis
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads: `redproof#50`, `kilocode#13843`, `kilocode#12707`, `atlas#105`, `slopstop#633`, `Dokploy/mcp#81`, `nanocoder#1197`, `lastlight#372`, `facebook/pyrefly#4583`, `narumiruna/pi-extensions#1204`, `mattbutlerengineering/ai-tooling#585`, `pr-agent#2499`. All quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Telemetry & user adoption deep dive — `drguptavivek/DigitVA`:**
+- In the morning sweep (TRA-2264), `drguptavivek/DigitVA` surfaced with handoff note: `"Code search: semble first. trace-mcp is broken (binary missing)."`.
+- Audited author's repositories (`DYNAMIC`, `fundus_img_xtract`, `DigitVA`):
+  - In `fundus_img_xtract/handoff/01_GUARDRAILS.md`, the author explicitly mandates: `Use trace-mcp before code exploration, as required by AGENTS.md.`
+  - In `DigitVA`, the repository is a pure Python / uv codebase running in Docker (`minerva_app_service`).
+  - Root cause of "binary missing": in containerized Python/uv workflows lacking Node.js or `npm`/`npx` in the container's `$PATH`, executing `trace-mcp` or `npx trace-mcp serve` fails with `ENOENT` / binary missing. The agent then fell back to `MinishLab/semble` (installed via `pip install semble`).
+  - Key finding: user adoption is strong (multiple practitioner projects mandating trace-mcp), but Python-only containerized environments need either Node in the base image or a standalone binary distribution to avoid this failure mode.
+
+**Surface discovery & architectural mapping — `FlorianBruniaux/claude-code-ultimate-guide` (6,125★, 803 forks):**
+- Thorough audit of the premier Claude Code reference guide on GitHub:
+  - `guide/ecosystem/mcp-servers-ecosystem.md` lines 854–1052 (`### Code search & analysis`): currently covers Grepai (requires Ollama + nomic-embed-text) and Semble (Model2Vec CPU, no call graph analysis). The guide explicitly notes: *"When to choose Semble over Grepai: You want semantic code search but do not run Ollama locally... Choose Grepai when call graph analysis is essential; Semble does not offer this capability."*
+  - `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration"): lists Option C1 `mcp-server-tree-sitter` (unmaintained, no license), Option C2 `code-review-graph` (SQLite-backed, PR reviews), Option C3 `jCodeMunch` ($79/$349 commercial license).
+  - `docs/resource-evaluations/tree-sitter-progressive-code-exploration.md`: evaluates the AST progressive exploration pattern (Alex Newman / Aider repo map pattern) with high score (4/5).
+  - trace-mcp directly bridges this exact documented gap: AST call graph, symbol graph, and framework awareness across 88 frameworks and 81 languages, running 100% CPU-local with zero external services/Ollama, MIT licensed, and measured 72.7% token reduction on PR review.
+  - Recorded in the distribution registry table as candidate surface.
+
+**Competitor pulse (no touch):**
+- `MinishLab/semble`: 6,192★, 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,972★, 2,928 forks, pushed 2026-10-06.
+- `nikolai-vysotskyi/trace-mcp`: 186★, 24 forks, pushed 2026-10-08.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Night pass, 2026-10-08 (TRA-2270): open threads silent, sweep clean (0 new), numtide packaging analysis, competitor pulse
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads: `nearform/lastlight#372` (10-05 cliftonc cross-ref to #434 noting ACP runtime stdio MCP, quiet, no reply needed), `narumiruna/pi-extensions#1204` (closed 10-07 by maintainer), `redproof#50`, `kilocode#13843`, `kilocode#12707`, `atlas#105`, `slopstop#633`, `Dokploy/mcp#81`, `nanocoder#1197`, `facebook/pyrefly#4583`, `mattbutlerengineering/ai-tooling#585`, `pr-agent#2499`. All quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All hits matched `ops/mentions-seen.txt`. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Distribution & packaging intelligence — `numtide/llm-agents.nix` & `yzfly/Awesome-MCP-ZH`:**
+- Cross-referencing `MinishLab/semble` citations revealed `numtide/llm-agents.nix` (2,076★, 283 forks), a major Nix packaging flakes repository by Numtide with daily automated updates. They package `code-review-graph`, `codegraph`, `semble`, `gitnexus`, and `multica`. Analyzed their derivation structure: packages use `buildNpmPackage` or `stdenv.mkDerivation` with `pnpmDeps`/`makeWrapper`. Worth tracking for downstream Linux/Nix agent packagers alongside `sudosubin/agents.nix`.
+- Checked `yzfly/Awesome-MCP-ZH` (7,714★, 882 forks, curated MCP list in Chinese). Maintainer `yzfly` previously merged our PR #44 in `awesome-context-engineering` with zero pushback. Confirmed trace-mcp is not listed and no PR was submitted. Catalog moratorium firmly applies (zero attributable GA4 acquisitions), so no submission is made; kept on radar for post-moratorium.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★ (+2 today, was 186 in TRA-2268), 24 forks, pushed 2026-10-08.
+- `MinishLab/semble`: 6,192★, 273 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,980★ (+8 since TRA-2268, was 31,972), 2,928 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,751★, 1,573 forks.
+- `oraios/serena`: 30,105★, 2,048 forks.
+- `DeusData/codebase-memory-mcp`: 46,151★, 3,796 forks.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Day pass, 2026-10-09 (TRA-2275): thread re-audit, Dokploy progress, clean mention sweep, competitor intelligence (Semble multi-harness subagents, Serena symlink CVE, DSH)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: verified merged 2026-09-30 14:44Z. Live in both `README.md` and `README_JA.md`.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- Comment threads:
+  - `Dokploy/mcp#81`: new comment 2026-10-08 20:56Z by contributor `moataz-hjaiji` announcing an upcoming PR implementing the meta-tool `dokploy-loadTools` with single `notifications/tools/list_changed` and tool descriptor results, specifically crediting Nikolai (`@nikolai-vysotskyi`)'s insight about clients slow to re-read `tools/list`. Proposal is moving into community implementation; no reply needed.
+  - `nearform/lastlight#372`: quiet since 10-05.
+  - `narumiruna/pi-extensions#1204`: closed 10-07 by maintainer.
+  - `Nano-Collective/nanocoder#1197`, `facebook/pyrefly#4583`, `mattbutlerengineering/ai-tooling#585`, `qodo-ai/pr-agent#2499`, `iansmith/slopstop#633`, `sosalejandro/atlas#105`: all quiet, zero incoming maintainer inquiries.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All hits matched `ops/mentions-seen.txt`. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Competitor intelligence & architectural observations:**
+- `MinishLab/semble`:
+  - Issue #290: Detailed breakdown of tool naming conventions and tool-gating across 13 coding agent platforms (Claude Code `mcp__<server>__<tool>`, Gemini CLI `mcp_<tool>`, Qwen Code `mcp__<server>__<tool>`, Copilot `<server>/<tool>`, Kiro `mcp_<tool>`, Command Code `mcp__<server>__<tool>` + `shell_command`, Reasonix `mcp__<server>__<tool>`, OpenCode/Kilo permissions). Shows that subagents across these platforms default to CLI execution unless explicitly tool-gated.
+  - Issue #288: Subprocess leaks under uv when invoked via MCP (`uv tool upgrade` / unreleased uv processes).
+  - Issue #287: Tool name prefix discrepancy between documentation (`mcp__semble__search`) and registration (`semble__search`).
+- `oraios/serena`:
+  - Issue #2144: Critical security vulnerability report: file tools rely on lexical `os.path.normpath` path confinement rather than resolving realpaths, allowing in-tree symlinks pointing outside the project root to read/write arbitrary filesystem files (`~/.ssh`, `/etc/passwd`).
+  - Architectural comparison: `trace-mcp`'s `validateWritePath` (`src/utils/security.ts`) already implements mandatory realpath ancestor confinement and rejects writing through symlinks, making trace-mcp inherently immune to this vulnerability class.
+- `tirth8205/code-review-graph`:
+  - Issue #1100: Proposal for DeepSeek Harness (DSH) native integration via Cordis YAML patch layer and structured read-only edit plans.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★, 24 forks, pushed 2026-10-08.
+- `MinishLab/semble`: 6,191★ (-1), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,984★ (+4 since TRA-2270), 2,929 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,756★ (+5), 1,574 forks, pushed 2026-10-03.
+- `oraios/serena`: 30,105★, 2,049 forks, pushed 2026-10-08.
+- `DeusData/codebase-memory-mcp`: 46,163★ (+12), 3,796 forks, pushed 2026-10-07.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 

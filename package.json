@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "3.34.6",
+  "version": "3.34.8",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 88 framework integrations, 81 languages, 72.7% fewer input tokens to review a pull request, comprehension at parity",
   "type": "module",
@@ -95,7 +95,7 @@
   "dependencies": {
     "@ast-grep/napi": "^0.45.0",
     "@clack/prompts": "^1.2.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@parcel/watcher": "^2.5.6",
     "@toon-format/toon": "4.1.1",
     "@vue/compiler-sfc": "^3.5.32",
@@ -142,37 +142,46 @@
   "overrides": {
     "protobufjs": ">=8.6.6",
     "qs": ">=6.16.0",
-    "hono": ">=4.12.25",
+    "hono": ">=4.13.12",
     "@hono/node-server": ">=2.0.5",
     "js-yaml": "^4.3.2",
     "vite": "$vite",
     "undici": ">=8.9.0",
     "esbuild": ">=0.28.1",
-    "sharp": ">=0.35.0",
+    "sharp": ">=0.35.5",
     "fast-uri": ">=4.1.4",
     "ip-address": ">=10.5.1",
     "adm-zip": ">=0.6.1",
     "body-parser": ">=2.3.0",
-    "nanoid": ">=3.3.17"
+    "nanoid": ">=3.3.17",
+    "proxy-addr": ">=2.0.8",
+    "source-map-js": ">=1.2.2"
   },
   "pnpm": {
     "overrides": {
       "zod": "4.3.6",
       "qs": ">=6.16.0",
       "protobufjs@<8.6.6": ">=8.6.6",
-      "hono": ">=4.13.5",
+      "hono": ">=4.13.12",
       "@hono/node-server": ">=2.0.5",
       "js-yaml": ">=4.3.2",
       "undici": ">=8.9.0",
       "vite": ">=8.0.16",
       "esbuild": ">=0.28.1",
-      "sharp": ">=0.35.4",
+      "sharp": ">=0.35.5",
       "fast-uri": ">=4.1.4",
       "ip-address": ">=10.5.1",
       "adm-zip": ">=0.6.1",
       "body-parser": ">=2.3.0",
       "postcss": ">=8.5.23",
-      "nanoid": ">=3.3.17"
+      "nanoid": ">=3.3.17",
+      "proxy-addr": ">=2.0.8",
+      "source-map-js": ">=1.2.2"
+    },
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",

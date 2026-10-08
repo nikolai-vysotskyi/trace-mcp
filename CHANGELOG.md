@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.34.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.7...v3.34.8) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ai:** skip stale vectors when symbols change during embedding ([#1491](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1491)) ([01fdaa6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/01fdaa6f6f3ad2dd8637c7cc6337ce846b184a73))
+* **daemon:** answer reindex-file once queued, stop hook and CLI double-indexing ([#1484](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1484)) ([bad4e39](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bad4e393c987f0c8e9a1915fad68cd2181f5f402))
+* **daemon:** deduplicate project setup and confirm health loss (TRA-2248) ([#1497](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1497)) ([185ff9d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/185ff9d48db215ff08374b8d74093b3648f9e296))
+* **daemon:** exclude watcher aborts from reindex errors ([#1496](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1496)) ([c393b3a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c393b3ae3f32a4c25ee053be8b8fccd9fe69447c))
+* **security:** resolve production audit vulnerabilities and document braces exception (TRA-2247) ([#1498](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1498)) ([eb915d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb915d397bbe63e3c824b6e78514d4bee02841e9))
+* **tools:** resolve get_outline from root sessions (TRA-2243) ([#1495](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1495)) ([c774b40](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c774b403031679fa7d64c0559e9342fce3c0c779))
+
+
+### Documentation
+
+* **distribution:** record 2026-10-08 sweep, classify 8 repos and harden mention-sweep (TRA-2264) ([#1502](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1502)) ([b19083c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b19083cd9ede7a67861ce37310a65eea604a511c))
+* **ops:** day pass 2026-10-08 evening, threads re-audit, DigitVA analysis, FlorianBruniaux guide (TRA-2268) ([#1507](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1507)) ([a1e60eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1e60eb6d7a4fd470a445d8518db762918a7b799))
+* **ops:** eltociear[#119](https://github.com/nikolai-vysotskyi/trace-mcp/issues/119) merged 2026-09-30, six threads silent, sweep clean (TRA-2114) ([e2c349b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e2c349b3858e99d43b5f5298afe299e707208000))
+* **ops:** night pass 2026-10-08, threads re-audit, mention sweep clean, numtide analysis (TRA-2270) ([#1508](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1508)) ([23a10ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23a10abf58cb693e5bd217415ad3d71069b5c9f7))
+* **perf:** omit local hardware details from embedding eval (TRA-2239) ([#1492](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1492)) ([62478be](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62478bedb1e5d3713f84e011d7f95f01a00af079))
+* **site:** restore compact homepage hero (TRA-2265) ([#1503](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1503)) ([fd9c306](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd9c3067ca04108919e70f7ced2793c7c2d40e15))
+* **site:** show concise claim and product view in hero (TRA-2265) ([#1505](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1505)) ([86f3fec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/86f3fecefcc77f49defd3f2a65004be082e872e7))
+
+## [3.34.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.6...v3.34.7) (2026-09-30)
+
+
+### Bug Fixes
+
+* **daemon:** collapse aborted watcher batch to one warn, drop per-file error lines (TRA-2095) ([#1468](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1468)) ([d567696](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d567696f106100e413d319ca0f62913806bbd310))
+
+
+### Documentation
+
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2105) ([#1467](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1467)) ([f4aeddb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f4aeddb6fd0ebc3cd9254f7ca5ba1cc4fdfd20e3))
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2110) ([#1475](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1475)) ([8b8113c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b8113c4cc97d048145e6432d0a52436aa386fb7))
+* **ops:** day pass 2026-09-30, threads silent, sweep clean (TRA-2112) ([#1476](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1476)) ([f9f92fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f9f92fba8e8c791a685e98ba552172276860fd41))
+
 ## [3.34.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.5...v3.34.6) (2026-09-30)
 
 

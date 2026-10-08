@@ -4,7 +4,7 @@
 # `updated:` is stamped from git by `pnpm docs:sitemap`, same as the doc pages,
 # and feeds the SoftwareApplication dateModified (TRA-419).
 layout: null
-updated: 2026-09-21
+updated: 2026-10-08
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -526,6 +526,9 @@ updated: 2026-09-21
       .nav-links a:not(.primary) { display: none; }
       .nav-status { display: none; }
     }
+    @media (max-width: 450px) {
+      .nav-links a.primary { display: none; }
+    }
 
     /* ── Theme toggle (mechanical segmented switch) ── */
     .theme-toggle {
@@ -631,112 +634,58 @@ updated: 2026-09-21
     .btn:hover .arrow { transform: translateX(3px); }
 
     /* ── Hero ── */
-    /* Centred, four elements deep (TRA-738). The asymmetric left-aligned stack this
-       replaces is the composition §2.7 prefers, and it is the wrong one for a first
-       screen whose whole job is one sentence and one button — with nothing in the
-       right half to balance it, the page read as a paragraph the visitor had to
-       finish before finding the download. */
     .hero {
-      padding: 112px 0 64px;
+      padding: 96px 0 56px;
       position: relative;
       text-align: center;
     }
     .hero-headline {
       font-family: var(--font-body);
-      /* 60px/900px is the pair that breaks the headline into 3 balanced lines
-         (27, 27, 26 chars) at desktop (>=1200px) and 4 lines at 390px.
-         Measured in headless Chrome; re-measure if the wording changes. */
-      font-size: clamp(36px, 5.2vw, 60px);
-      font-weight: 400;
-      line-height: 1.05;
-      letter-spacing: -0.025em;
+      font-size: clamp(40px, 5.2vw, 68px);
+      font-weight: 500;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
       color: var(--text-display);
-      max-width: 900px;
+      max-width: 1040px;
       margin: 0 auto;
       overflow-wrap: break-word;
     }
     .hero-desc {
-      margin: 28px auto 0;
-      max-width: 660px;
-      font-size: 19px;
-      line-height: 1.55;
-      color: var(--text-primary);
-      font-weight: 400;
-    }
-    /* The payoff half of the subtitle separates on colour, not weight — a second
-       weight here would spend a budget slot on what one shade already says. */
-    .hero-desc .accent-text { color: var(--text-display); }
-    /* Two lines sit under the claim and they are not the same kind of sentence,
-       so they no longer share one class (TRA-1143). `.hero-evidence` is the other
-       half of the measurement — the quality result that says the cheap context was
-       worth having — and it carries the claim's own shade and the same
-       `.accent-text` treatment on its numbers, so the two read as one body of
-       evidence at two sizes. `.hero-boundary` is a scope note about what the
-       product does to your machine; that one is genuinely the quiet half and stays
-       a step down in shade. They were identical at 15px/--text-secondary, which
-       made the result that answers "is it worse?" look like the small print
-       underneath the number it qualifies. Size still separates evidence from
-       claim; shade now groups them. */
-    .hero-evidence, .hero-boundary {
-      margin: 14px auto 0;
-      max-width: 660px;
-      font-size: 15px;
-      line-height: 1.5;
-    }
-    .hero-evidence { color: var(--text-primary); }
-    .hero-evidence .accent-text { color: var(--text-display); }
-    .hero-boundary { color: var(--text-secondary); }
-    /* The one declinable exception to the boundary gets the same quiet link
-       treatment as .hero-alt below (TRA-979): monochrome underline, never the
-       accent — the scope note is not an action. */
-    .hero-boundary a {
+      max-width: 680px;
+      margin: 24px auto 0;
+      font-family: var(--font-body);
+      font-size: 18px;
+      line-height: 1.45;
       color: var(--text-secondary);
-      border-bottom: 1px solid var(--border-visible);
-      transition: color 200ms ease-out, border-color 200ms ease-out;
     }
-    .hero-boundary a:hover { color: var(--text-display); border-color: var(--text-display); }
-    /* The three mono caps rows of the hero — eyebrow above the headline, the
-       alternative platforms under the button, the trust line at the fold — are one
-       treatment at three opacities, not three components. Only the distance from the
-       button and the grey level separate them. */
-    .hero-eyebrow, .hero-alt, .hero-trust {
+    .hero-utility {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 20px;
+    }
+    .hero-more {
       font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
+      font-size: 11px;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
-      display: flex; flex-wrap: wrap; gap: 12px;
-      align-items: center; justify-content: center;
-    }
-    .hero-eyebrow .dot, .hero-alt .dot, .hero-trust .dot {
-      width: 3px; height: 3px; border-radius: 50%;
-      background: var(--border-visible);
-      display: inline-block;
-    }
-    .hero-eyebrow { color: var(--text-secondary); margin-bottom: 40px; }
-    .hero-alt { color: var(--text-secondary); margin-top: 20px; }
-    .hero-alt a {
       color: var(--text-secondary);
       border-bottom: 1px solid var(--border-visible);
       transition: color 200ms ease-out, border-color 200ms ease-out;
     }
-    .hero-alt a:hover { color: var(--text-display); border-color: var(--text-display); }
-    /* At the fold, a step quieter than the row above it: it is reassurance the visitor
-       reads after deciding, not part of the decision. */
-    .hero-trust { color: var(--text-disabled); margin-top: 40px; }
+    .hero-more:hover { color: var(--text-display); border-color: var(--text-display); }
     .hero-cta {
-      margin-top: 44px;
+      margin-top: 32px;
       display: flex; gap: 12px;
       justify-content: center;
     }
-    /* The second install path, and the only one off macOS and Windows. A technical 8px
-       box, not a pill, and a full row below the button rather than beside it: side by
-       side the two read as two buttons of equal weight, which is what this hero keeps
-       being pulled back into. */
+    /* The CLI path is a quiet utility beside the installer, and the primary
+       action on platforms without a packaged installer. */
     .hero-install {
-      margin-top: 24px;
       display: inline-flex; align-items: center; gap: 14px;
-      min-height: 52px;
-      padding: 0 20px;
+      min-height: 44px;
+      padding: 0 16px;
       background: var(--surface);
       border: 1px solid var(--border-visible);
       border-radius: 8px;
@@ -768,26 +717,14 @@ updated: 2026-09-21
     .hero-install:hover .copy { color: var(--text-display); }
     @media (max-width: 700px) {
       .hero { padding: 64px 0 40px; }
-      .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
+      .hero-headline { font-size: clamp(36px, 8vw, 48px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
-      .hero-evidence, .hero-boundary { margin-top: 12px; font-size: 14px; }
       /* Full width, one button: on a phone the download is a target, not a pill
          floating in the middle of a 390px row. */
       .hero-cta { margin-top: 28px; }
       .hero-cta .btn { flex: 1; padding: 16px 22px; font-size: 11px; justify-content: center; }
-      /* `width: 100%` and not `display: flex` alone — a <button> sizes to its content
-         even as a flex container, so without it the box stops 76px short of the
-         full-width button above it (measured at 390px: 274 vs 350). */
-      .hero-install { display: flex; width: 100%; margin-top: 16px; font-size: 12px; padding: 0 14px; gap: 10px; }
-      /* Wrapped, a mono caps row ends a line on a `.dot` at every tested width below
-         the breakpoint (TRA-607), so on a phone these stay rows but lose their
-         separators and tighten up. The eyebrow and the trust line still fit two
-         items per line at 390px; only the dots have to go. */
-      .hero-eyebrow, .hero-alt, .hero-trust { font-size: 11px; gap: 10px 14px; }
-      .hero-eyebrow { margin-bottom: 24px; }
-      .hero-alt { margin-top: 16px; }
-      .hero-trust { margin-top: 28px; }
-      .hero-eyebrow .dot, .hero-alt .dot, .hero-trust .dot { display: none; }
+      .hero-utility { flex-direction: column; gap: 12px; }
+      .hero-install { display: flex; width: 100%; font-size: 12px; padding: 0 14px; gap: 10px; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
@@ -810,6 +747,8 @@ updated: 2026-09-21
       border-left: 1px solid var(--border);
     }
     .metrics-strip-item:first-child { border-left: none; }
+    .metrics-strip-item:nth-child(3) { grid-column: 2; grid-row: 1; }
+    .metrics-strip-item:nth-child(4) { grid-column: 3; grid-row: 1; }
     .metrics-strip-value {
       font-family: var(--font-mono);
       font-size: clamp(22px, 2.6vw, 28px);
@@ -824,6 +763,23 @@ updated: 2026-09-21
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text-secondary);
+    }
+    .metrics-strip-proof {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      padding: 24px 32px;
+      border-top: 1px solid var(--border);
+    }
+    .metrics-evidence, .metrics-boundary {
+      max-width: 900px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .metrics-evidence { color: var(--text-primary); }
+    .metrics-evidence .accent-text { color: var(--text-display); }
+    .metrics-boundary { color: var(--text-secondary); margin-top: 20px; }
+    .metrics-evidence a, .metrics-boundary a {
+      border-bottom: 1px solid var(--border-visible);
     }
     .metrics-strip-foot {
       margin-top: 16px;
@@ -858,8 +814,12 @@ updated: 2026-09-21
         border-top: 1px solid var(--border);
       }
       .metrics-strip-item:first-child { border-top: none; }
+      .metrics-strip-item:nth-child(3), .metrics-strip-item:nth-child(4),
+      .metrics-strip-proof { grid-column: auto; grid-row: auto; }
       .metrics-strip-value { flex-shrink: 0; font-size: 18px; }
       .metrics-strip-label { font-size: 10px; }
+      .metrics-strip-proof { padding: 14px 0 18px; }
+      .metrics-evidence, .metrics-boundary { font-size: 14px; }
       .metrics-strip-foot { margin-top: 18px; font-size: 10px; }
     }
 
@@ -1571,9 +1531,9 @@ updated: 2026-09-21
       .footer-bottom { flex-direction: column; gap: 16px; align-items: flex-start; }
     }
 
-    /* ── App banner + gallery ── */
+    /* ── App view + gallery ── */
     .app-banner {
-      padding: 0 0 96px;
+      padding: 0 0 64px;
       border-top: none;
     }
     .app-frame {
@@ -1605,6 +1565,17 @@ updated: 2026-09-21
       display: block;
       width: 100%;
       height: auto;
+    }
+    .app-banner .app-frame img {
+      height: clamp(340px, 34vw, 480px);
+      object-fit: cover;
+      object-position: center 50%;
+    }
+    @media (max-width: 700px) {
+      .app-banner { padding-bottom: 40px; }
+      .app-banner .app-frame { padding: 0; }
+      .app-banner .app-frame-meta { display: none; }
+      .app-banner .app-frame img { height: 300px; height: min(370px, 44svh); }
     }
     /* `img.` — the class alone loses to `.app-frame img` and both appearances render. */
     img.theme-dark-only { display: none; }
@@ -2300,68 +2271,12 @@ updated: 2026-09-21
   <section class="hero" style="border-top: none;">
     <div class="container">
 
-      <!-- Centred, one column, and this order (TRA-738, to Nikolai's mock): eyebrow →
-           headline → one line of what it is → one button → the two quiet rows →
-           the trust line at the fold. It replaces eight left-aligned blocks: a service
-           label, a version/licence row, a two-sentence description, two actions of
-           different natures, an alt-architecture link and a three-item trust row.
-           The eyebrow is the old service label and the old version/licence row folded
-           into the single line the mock has. -->
-      <p class="hero-eyebrow">
-        <span>Recomputation &rarr; Reuse</span>
-        <span class="dot"></span>
-        <span>v<span data-version>&hellip;</span></span>
-        <span class="dot"></span>
-        <span>MIT</span>
-      </p>
-
-      <!-- The position sentence, verbatim from ops/positioning.md and identical on
-           README.md's first screen, the banner PNGs and _config.yml's description:
-           two paraphrases of one claim read as two claims to anything extracting
-           them. Do not narrow it back to the graph — that is what the old headline
-           ("Precomputed code intelligence for AI coding agents") did, and the
-           category term lives on the title and the Product View heading instead
-           (tests/docs/category-term.test.ts). -->
       <h1 class="hero-headline">
-        trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.
+        Read once. Reuse the answer.
       </h1>
-
-      <!-- The evidence, not a second claim. Same verbatim number as README.md's
-           first screen and the metrics tile below. -->
-      <p class="hero-desc">
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request</span> &mdash;
-        median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own.
-      </p>
-
-      <!-- TRA-1122: the saving never travels alone. The same PRs were reviewed twice
-           and scored blind, and that half is what says the cheap context was worth
-           having — a page that publishes only the saving asks the reader to take the
-           rest on trust. Reuses .hero-boundary rather than adding a class: same
-           treatment, same measure, one less thing in the hero to keep in step.
-           Gated by tests/docs/readme-claims.test.ts.
-
-           TRA-1143: `.hero-evidence`, not `.hero-boundary`. Both classes rendered
-           identically, so the half that answers "is the thinner context worse?" was
-           set in the same grey as the scope note below it and read as small print
-           under the saving. Its four numbers take the claim's own `.accent-text`
-           treatment for the same reason. -->
-      <p class="hero-evidence">
-        Cheaper is not better, so the same PRs were reviewed twice and scored blind:
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
-        <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
-        <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
-        <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
-      </p>
-
-      <!-- The honesty boundary travels with the claim, not as a footnote further down
-           the page (ops/positioning.md &sect; The boundary, carried with the claim).
-           TRA-979: the boundary alone overclaims for Max-tier users — `trace init`
-           runs a third-party patcher for them — so the one declinable exception
-           travels with it, linked to the audited tier table. -->
-      <p class="hero-boundary">
-        We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
-      </p>
+      <!-- Keep the position sentence verbatim here and in README, the banner and
+           the page description. The short headline gives it room to be read. -->
+      <p class="hero-desc">trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.</p>
 
       <div class="hero-cta">
         <!-- Rendered for everyone and pointed at the releases page, not hidden behind
@@ -2374,43 +2289,30 @@ updated: 2026-09-21
         </a>
       </div>
 
-      <!-- The platforms the button is not offering, as links rather than a question in
-           front of it (TRA-440). JS rewrites both labels and both hrefs to the files
-           the detected machine is not getting; without JS they are honest generic
-           links to the releases page. -->
-      <p class="hero-alt">
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-alt-1>macOS</a>
-        <span class="dot"></span>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-alt-2>Windows</a>
-        <span class="dot"></span>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener">all downloads</a>
-      </p>
+      <div class="hero-utility">
+        <button type="button" class="hero-install" onclick="copyInstall(this)">
+          <span class="prompt" aria-hidden="true">$</span>
+          <code>npm install -g trace-mcp</code>
+          <span class="copy" aria-live="polite">copy</span>
+        </button>
+        <a class="hero-more" href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener">All downloads &rarr;</a>
+      </div>
 
-      <!-- A real <button>, not the <span onclick> this used to be: the only way to
-           copy the install command was a mouse click, and it took no focus ring. -->
-      <button type="button" class="hero-install" onclick="copyInstall(this)">
-        <span class="prompt" aria-hidden="true">$</span>
-        <code>npm install -g trace-mcp</code>
-        <span class="copy" aria-live="polite">copy</span>
-      </button>
+    </div>
+  </section>
 
-      <p class="hero-trust">
-        <span>Open source</span>
-        <span class="dot"></span>
-        <!-- No absolute about locality (TRA-1013): src/telemetry/usage-ping.ts POSTs
-             one anonymous daily ping unless it is switched off, so `grep
-             google-analytics` over our own repo disproves it. Say the true thing. -->
-        <span>Code stays local</span>
-        <span class="dot"></span>
-        <span>Claude Code</span>
-        <span class="dot"></span>
-        <span>Cursor</span>
-        <span class="dot"></span>
-        <span>Codex</span>
-        <span class="dot"></span>
-        <span>Windsurf</span>
-      </p>
-
+  <!-- ── APP VIEW ── -->
+  <section class="app-banner">
+    <div class="container">
+      <figure class="app-frame">
+        <div class="app-frame-meta">
+          <span><span class="tag">trace-mcp</span> / graph explorer</span>
+          <span class="divider"></span>
+          <span>symbols &middot; edges &middot; live</span>
+        </div>
+        <img class="theme-light-only" src="images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" loading="lazy" width="1920" height="1200">
+        <img class="theme-dark-only" src="images/app-dark-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance" loading="lazy" width="1920" height="1200">
+      </figure>
     </div>
   </section>
 
@@ -2421,6 +2323,22 @@ updated: 2026-09-21
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">{{ site.data.pr_context_bench.median_savings_pct }}%</span>
           <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
+        </div>
+        <!-- TRA-2265: the first screen stays one claim and one action. The measured
+             saving, its quality comparison and the installation boundary live together
+             below the hero, where they remain visible without pushing out the CTA. -->
+        <div class="metrics-strip-proof">
+          <p class="metrics-evidence">
+            Cheaper is not better, so the same PRs were reviewed twice and scored blind:
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_understood }}</span> understood the change against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_understood }}</span> for naive file loading,
+            <span class="accent-text">{{ site.data.pr_context_quality.trace_false_positives }}</span> false positives per PR against
+            <span class="accent-text">{{ site.data.pr_context_quality.baseline_false_positives }}</span> &mdash;
+            <a href="/pr-context-benchmark.html#does-the-thinner-context-produce-a-worse-review">parity, against a bar set before the run</a>.
+          </p>
+          <p class="metrics-boundary">
+            We change configuration you could change yourself. We do not patch your client's binary, intercept its traffic, or rewrite its files. One declinable exception: the Max tier's <a href="/what-trace-init-installs.html#the-tweakcc-pairing-and-the-line-it-sits-next-to">tweakcc pairing runs a third-party patcher for you</a>.
+          </p>
         </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">{{ site.data.response_tokens.reduction_pct }}%</span>
@@ -2450,8 +2368,7 @@ updated: 2026-09-21
        as "an MCP server" never learned that half of what they installed exists.
        Two entries, not four feature cards: splitting per-mechanism re-creates the
        "two products in one binary" reading this block exists to avoid.
-       It sits below the metrics strip, not above it, so the measured first screen
-       (DESIGN-WEB §8) is untouched. -->
+       It sits below the metrics strip, after the app view and proof. -->
   <section class="doors" id="doors">
     <div class="container">
       <p class="doors-lede">One product, two doors. Which one a thing comes through is decided by how it is installed &mdash; not by what it does.</p>
@@ -2512,21 +2429,6 @@ updated: 2026-09-21
           <span class="client">VS Code</span>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- ── APP BANNER (graph hero) ── -->
-  <section class="app-banner">
-    <div class="container">
-      <figure class="app-frame reveal">
-        <div class="app-frame-meta">
-          <span><span class="tag">trace-mcp</span> / graph explorer</span>
-          <span class="divider"></span>
-          <span>symbols &middot; edges &middot; live</span>
-        </div>
-        <img class="theme-light-only" src="images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" loading="lazy" width="1920" height="1200">
-        <img class="theme-dark-only" src="images/app-dark-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance" loading="lazy" width="1920" height="1200">
-      </figure>
     </div>
   </section>
 
@@ -3432,13 +3334,11 @@ updated: 2026-09-21
     // count is what separates it from a real Mac.
     const isMac = /Mac/i.test(navigator.platform || navigator.userAgent) && navigator.maxTouchPoints <= 1;
     const isWin = /Win/i.test(navigator.platform || navigator.userAgent);
-    const alt1 = document.querySelector('[data-alt-1]');
-    const alt2 = document.querySelector('[data-alt-2]');
     if (!isMac && !isWin) {
-      // Linux, and anything else the release has no installer for: the npm box below
-      // is the whole install path there, so it becomes the hero's primary action. A
+      // Linux, and anything else the release has no installer for: the npm command
+      // is the install path there, so it becomes the hero's primary action. A
       // button to a releases page full of .dmg and .exe is not an offer.
-      btn.remove();
+      btn.closest('.hero-cta')?.remove();
       const install = document.querySelector('.hero-install');
       if (install) install.classList.add('is-primary');
       return;
@@ -3499,19 +3399,6 @@ updated: 2026-09-21
         btnLabel.textContent = 'Download for Mac (' + (arch === 'arm64' ? 'Apple Silicon' : 'Intel') + ')';
       }
 
-      // The two platforms the button is not offering, in the row below it.
-      const others = isWin
-        ? [['Mac (Apple Silicon)', dmg('arm64')], ['Mac (Intel)', dmg('x64')]]
-        : [[arch === 'arm64' ? 'Intel Mac' : 'Apple Silicon Mac', dmg(arch === 'arm64' ? 'x64' : 'arm64')],
-           ['Windows', exe()]];
-      [alt1, alt2].forEach((el, i) => {
-        const [label, asset] = others[i];
-        if (!el || !asset) return;
-        el.textContent = label;
-        el.href = asset.browser_download_url;
-        el.setAttribute('download', '');
-        el.title = asset.name;
-      });
     }).catch(() => {}); // Rate-limited or offline: the releases-page href still works.
   })();
 

@@ -72,6 +72,15 @@ export function shouldSkipRecentReindex(
   return false;
 }
 
+/**
+ * Unmark one (project, path) so the next reindex of it is not deduped. For a
+ * caller that marked a path (via `shouldSkipRecentReindex`) but then failed to
+ * index it — otherwise every other path would skip the file for TTL_MS.
+ */
+export function forgetRecentReindex(project: string, filePath: string): void {
+  buckets.get(project)?.delete(filePath);
+}
+
 /** Drop all cache entries for a project (called when project is removed from the daemon). */
 export function clearProjectReindexCache(project: string): void {
   buckets.delete(project);
