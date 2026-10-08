@@ -2,6 +2,7 @@ import { readEmbeddingBreakerState } from '../../ai/embedding-pipeline.js';
 import type { TraceMcpConfig } from '../../config.js';
 import type { IndexStats, Store } from '../../db/store.js';
 import { getDroppedEventStats } from '../../indexer/watcher.js';
+import { getUnindexableSkipStats } from '../../indexer/unindexable-skip-cache.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
@@ -30,6 +31,15 @@ interface IndexHealthResult {
   };
   warnings: string[];
   progress?: ProgressSnapshot;
+  /**
+   * Summary of files skipped as deterministically unindexable (binary/oversize)
+   * in the watcher / incremental path.
+   */
+  unindexableSkips?: {
+    total: number;
+    binary: number;
+    oversize: number;
+  };
   /**
    * Vector coverage of the index. Reported whenever symbols exist — NOT only
    * when embeddings are enabled or a previous run failed. Gating it on
@@ -204,11 +214,23 @@ export function getIndexHealth(
     }
   }
 
+  const resolvedRoot = projectRoot ?? (typeof config.root === 'string' ? config.root : undefined);
+  const unindexable = resolvedRoot ? getUnindexableSkipStats(resolvedRoot) : undefined;
+
   return {
     status,
     stats,
     embedding,
     ...(projectRoot ? { projectRoot } : {}),
+    ...(unindexable && unindexable.totalEntries > 0
+      ? {
+          unindexableSkips: {
+            total: unindexable.totalEntries,
+            binary: unindexable.byReason.binary,
+            oversize: unindexable.byReason.oversize,
+          },
+        }
+      : {}),
     // Empty-index disambiguation (TRA-1534). The agent's session root and the
     // project holding the code it wants are often different roots (e.g. an
     // ephemeral Multica workdir vs an indexed project like top100) — name the

@@ -25,6 +25,8 @@ export interface ExtractAndPersistResult {
   indexed: number;
   skipped: number;
   errors: number;
+  skippedBinary?: number;
+  skippedOversize?: number;
 }
 
 /** Inputs `extractAndPersist` needs, extracted out of `IndexingPipeline` so the
@@ -271,6 +273,11 @@ export async function extractAndPersist(
               } as ExtractRequest);
               if (r.kind === 'skipped') {
                 result.skipped++;
+                if (r.reason === 'binary') {
+                  result.skippedBinary = (result.skippedBinary ?? 0) + 1;
+                } else if (r.reason === 'oversize') {
+                  result.skippedOversize = (result.skippedOversize ?? 0) + 1;
+                }
                 continue;
               }
               if (r.kind === 'mtime_updated') {
@@ -305,6 +312,11 @@ export async function extractAndPersist(
           const ext = await extractor.extract(relPath, fileForce(relPath));
           if (ext.kind === 'skipped') {
             result.skipped++;
+            if (ext.reason === 'binary') {
+              result.skippedBinary = (result.skippedBinary ?? 0) + 1;
+            } else if (ext.reason === 'oversize') {
+              result.skippedOversize = (result.skippedOversize ?? 0) + 1;
+            }
             continue;
           }
           if (ext.kind === 'mtime_updated') {

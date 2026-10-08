@@ -122,6 +122,10 @@ export interface IndexingResult {
    * incremental drift, not the synchronous initial pass).
    */
   changedFileIds?: number[];
+  /** TRA-2273: Aggregated count of files skipped due to binary content. */
+  skippedBinary?: number;
+  /** TRA-2273: Aggregated count of files skipped due to exceeding file size cap. */
+  skippedOversize?: number;
 }
 
 /**
@@ -892,7 +896,12 @@ export class IndexingPipeline {
     // gates (they can change between runs) and drop entries that resolve
     // outside the root or no longer exist (mis-rooted git output under a
     // non-default `status.relativePaths`, or a file deleted after listing).
-    const changed = this.filterIndexablePaths(discovery.changed).filter((rel) => {
+    const {
+      relPaths: filteredChanged,
+      skippedBinary: discSkippedBinary,
+      skippedOversize: discSkippedOversize,
+    } = this.filterIndexablePaths(discovery.changed);
+    const changed = filteredChanged.filter((rel) => {
       try {
         return fs.statSync(path.resolve(this.rootPath, rel)).isFile();
       } catch {
@@ -906,6 +915,7 @@ export class IndexingPipeline {
       const check = validatePath(rel, this.rootPath);
       return check.isOk();
     });
+    const discSkipped = discSkippedBinary + discSkippedOversize;
     if (changed.length === 0 && deleted.length === 0) {
       // Trust-but-verify: an empty watcher answer is only as fresh as the
       // snapshot write that bounds it. A snapshot that raced ahead of a
@@ -957,9 +967,11 @@ export class IndexingPipeline {
       invalidatePageRankCache();
       invalidateSearchCache(this.store.db);
       return {
-        totalFiles: 0,
+        totalFiles: discSkipped,
         indexed: 0,
-        skipped: 0,
+        skipped: discSkipped,
+        ...(discSkippedBinary > 0 ? { skippedBinary: discSkippedBinary } : {}),
+        ...(discSkippedOversize > 0 ? { skippedOversize: discSkippedOversize } : {}),
         errors: 0,
         durationMs: Date.now() - startMs,
         incremental: true,
@@ -978,6 +990,16 @@ export class IndexingPipeline {
     throwIfIndexAborted(signal, this.rootPath);
     if (deleted.length > 0) this.deleteFiles(deleted);
     const r = await this.runPipeline(changed, false, startMs, signal);
+    if (discSkipped > 0) {
+      r.totalFiles += discSkipped;
+      r.skipped += discSkipped;
+      if (discSkippedBinary > 0) {
+        r.skippedBinary = (r.skippedBinary ?? 0) + discSkippedBinary;
+      }
+      if (discSkippedOversize > 0) {
+        r.skippedOversize = (r.skippedOversize ?? 0) + discSkippedOversize;
+      }
+    }
     await this.afterDiscoveryRun(snapshotPath);
     logger.info(
       { source: discovery.source, changed: changed.length, deleted: deleted.length },
@@ -1283,7 +1305,11 @@ export class IndexingPipeline {
    * filesystem (one stat per path, plus at most one 8 KB head read for the
    * binary verdict) but never the database.
    */
-  private filterIndexablePaths(filePaths: string[]): string[] {
+  private filterIndexablePaths(filePaths: string[]): {
+    relPaths: string[];
+    skippedBinary: number;
+    skippedOversize: number;
+  } {
     // Same exclude gate collectFiles() applies via fast-glob. Without it,
     // event-driven entry points index runtime churn the full pipeline would
     // never touch — e.g. Laravel storage/framework/sessions blobs arriving on
@@ -1298,6 +1324,8 @@ export class IndexingPipeline {
       : undefined;
     const gitignore = this.gitignoreMatcher();
     const relPaths: string[] = [];
+    let skippedBinary = 0;
+    let skippedOversize = 0;
     for (const fp of filePaths) {
       const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
       const check = validatePath(rel, this.rootPath);
@@ -1371,7 +1399,11 @@ export class IndexingPipeline {
           size: entryStat.size,
           mtimeMs: entryStat.mtimeMs,
         });
-        if (unindexable) continue;
+        if (unindexable) {
+          if (unindexable === 'binary') skippedBinary++;
+          else if (unindexable === 'oversize') skippedOversize++;
+          continue;
+        }
       }
       // Store paths are always posix-separated (collectFiles() via
       // fast-glob) — pushing `rel` instead of `relPosix` inserted a phantom
@@ -1379,7 +1411,7 @@ export class IndexingPipeline {
       // breaking every downstream mtime/existing-row lookup (TRA-1045).
       relPaths.push(relPosix);
     }
-    return relPaths;
+    return { relPaths, skippedBinary, skippedOversize };
   }
 
   async indexFiles(
@@ -1387,7 +1419,8 @@ export class IndexingPipeline {
     opts: { postprocess?: PostprocessLevel; signal?: AbortSignal } = {},
   ): Promise<IndexingResult> {
     const enqueuedAt = Date.now();
-    const relPaths = this.filterIndexablePaths(filePaths);
+    const { relPaths, skippedBinary, skippedOversize } = this.filterIndexablePaths(filePaths);
+    const skippedUnindexable = skippedBinary + skippedOversize;
 
     // TRA-935: nothing survived the filters, so this run cannot change a
     // single row. Return before touching `_lock` — running the pipeline
@@ -1398,9 +1431,11 @@ export class IndexingPipeline {
     // lock-queue wait, which is why elapsedMs read as hours.
     if (relPaths.length === 0) {
       return {
-        totalFiles: 0,
+        totalFiles: skippedUnindexable,
         indexed: 0,
-        skipped: 0,
+        skipped: skippedUnindexable,
+        ...(skippedBinary > 0 ? { skippedBinary } : {}),
+        ...(skippedOversize > 0 ? { skippedOversize } : {}),
         errors: 0,
         durationMs: Date.now() - enqueuedAt,
         incremental: true,
@@ -1433,6 +1468,16 @@ export class IndexingPipeline {
       // as reindex latency.
       const start = Date.now();
       const r = await this.runPipeline(relPaths, false, start, opts.signal);
+      if (skippedUnindexable > 0) {
+        r.totalFiles += skippedUnindexable;
+        r.skipped += skippedUnindexable;
+        if (skippedBinary > 0) {
+          r.skippedBinary = (r.skippedBinary ?? 0) + skippedBinary;
+        }
+        if (skippedOversize > 0) {
+          r.skippedOversize = (r.skippedOversize ?? 0) + skippedOversize;
+        }
+      }
       // The watcher/hook path only ever sees the events it was handed. Kick a
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
