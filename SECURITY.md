@@ -183,7 +183,7 @@ Transitive advisories are pinned to patched versions via `overrides` in `package
 
 The **0 vulnerabilities** invariant is enforced, not assumed: the `audit` job in `.github/workflows/ci.yml` runs `pnpm audit --prod --audit-level=moderate` on every push and PR, and a `moderate`-or-worse advisory in the production tree fails the build. An advisory we consciously accept is recorded in `pnpm.auditConfig.ignoreGhsas` in `package.json` — next to the `overrides`, so the exception is written down rather than remembered:
 
-* `braces <= 3.0.3` (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687) — stack exhaustion via deeply nested patterns in recursive AST walkers. Reached transitively through `fast-glob` → `micromatch`. No upstream patch exists in the npm ecosystem (`patched_versions: "<0.0.0"`). In trace-mcp, glob patterns are evaluated against internal codebase file trees rather than unauthenticated network endpoints. Recorded in `pnpm.auditConfig.ignoreGhsas` until upstream publishes a patched release.
+* `braces <= 3.0.3` (GHSA-vfj7-8cjw-p6xm / CVE-2026-93687) — stack exhaustion via deeply nested patterns in recursive AST walkers. Reached transitively through `fast-glob` → `micromatch`. No upstream patch exists in the npm ecosystem (`patched_versions: "<0.0.0"`). The MCP `apply_codemod.file_pattern` parameter is caller-controlled; `apply_codemod` now rejects brace syntax before passing that pattern to `fast-glob`. Internal glob calls use fixed patterns or derive them from local project metadata. Recorded in `pnpm.auditConfig.ignoreGhsas` until upstream publishes a patched release.
 
 ---
 
