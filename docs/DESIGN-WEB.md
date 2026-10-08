@@ -994,13 +994,10 @@ it per-mechanism — graph, decision memory, mirrors, guard — re-creates the "
 products in one binary" reading the block exists to prevent. A new mechanism
 joins an existing card's copy or it does not go here.
 
-**It sits below the metrics strip, not above it.** §8's first screen is a
-measurement: hero, then the metrics strip already showing underneath at
-1440×900. Anything inserted between the two moves that measurement, and this
-block is not first-screen material — it is where a reader goes after the
-evidence, not before it. Measured after the change: `.hero` and
-`.metrics-strip` occupy exactly the bands they did before, and `.doors` starts
-at the metrics strip's bottom edge.
+**It sits below the metrics strip.** The first screen now ends with the app
+view, followed by the metrics and their quality proof (§8). The two doors
+explain installation surfaces after that evidence. They are not first-screen
+material and must not be inserted between the hero and app view.
 
 **No section number and no `.section-meta`.** It is a band like `.trust-strip`
 and `.app-banner`, not a numbered chapter — numbering it would renumber the

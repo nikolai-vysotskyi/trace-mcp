@@ -138,7 +138,7 @@ does not change what the number is for
 (`docs/_data/pr_context_bench.json`, 60 merged PRs across 6 repos that are not
 ours). It is the only measurement we have on other people's code, it is a
 measurement of the graph, and it stays the leading evidence in the metrics strip
-directly below the compact hero (TRA-2265). TRA-647 was already about getting it in front of arrivals; this
+after the hero's app view (TRA-2265). TRA-647 was already about getting it in front of arrivals; this
 does not compete with it.
 
 ## The boundary, carried with the claim
