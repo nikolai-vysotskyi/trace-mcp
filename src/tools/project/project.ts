@@ -5,6 +5,7 @@ import { getDroppedEventStats } from '../../indexer/watcher.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
+import type { WorktreeDeltaSummary } from '../../worktree-delta.js';
 
 interface IndexHealthResult {
   status: 'ok' | 'degraded' | 'empty';
@@ -30,6 +31,12 @@ interface IndexHealthResult {
   };
   warnings: string[];
   progress?: ProgressSnapshot;
+  /**
+   * Present only in a linked git worktree served from the canonical checkout's
+   * index: the files this worktree changed relative to what the index holds.
+   * Results about those files are flagged `stale_on_branch`.
+   */
+  worktree?: WorktreeDeltaSummary;
   /**
    * Vector coverage of the index. Reported whenever symbols exist — NOT only
    * when embeddings are enabled or a previous run failed. Gating it on

@@ -395,6 +395,25 @@ export class ProjectManager {
     }
   }
 
+  /**
+   * The daemon-wide extract pool, created on first use. For indexers that are
+   * not managed projects (a linked worktree's branch index) so they do not
+   * spawn worker threads of their own.
+   */
+  getSharedExtractPool(config: TraceMcpConfig): ExtractPool | null {
+    this.ensureShared(config);
+    return this.sharedPool;
+  }
+
+  /** Drop the shared extract pool's per-root caches for `root`. Never throws. */
+  dropSharedPoolRoot(root: string): void {
+    try {
+      this.sharedPool?.dropProject(root);
+    } catch (err) {
+      logger.warn({ error: err, root }, 'sharedPool.dropProject failed (non-fatal)');
+    }
+  }
+
   /** Set up and start indexing for a single project. */
   async addProject(
     projectRoot: string,

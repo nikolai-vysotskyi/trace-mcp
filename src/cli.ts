@@ -166,6 +166,8 @@ import {
   updateLastIndexed,
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
+import { getWorktreeDelta, resolveWorktreeLink, summarizeWorktreeDelta } from './worktree-delta.js';
+import { resolveWorktreeIndexSettings, WorktreeIndexManager } from './daemon/worktree-index.js';
 import {
   buildProjectNotFoundError,
   buildResolutionFailureError,
@@ -1107,6 +1109,18 @@ program
     // Cross-project relay for call_project_tool — additive wiring on top of
     // the existing ProjectManager/ProjectResourcePool, not a second pool.
     const projectRelay = createDaemonProjectRelay(projectManager, resourcePool);
+    // Branch indexes for linked worktrees (GH #1481 step 2): a copy of the
+    // canonical index with the worktree delta re-indexed into it, served to
+    // worktree sessions. Main-checkout sessions never touch it.
+    const worktreeIndexManager = new WorktreeIndexManager({
+      settings: resolveWorktreeIndexSettings(globalRaw.worktree_index),
+      getCanonical: (root) => projectManager.getProject(root),
+      getExtractPool: (config) => projectManager.getSharedExtractPool(config),
+      dropPoolRoot: (root) => projectManager.dropSharedPoolRoot(root),
+      sharedServerDeps: (config) => resourcePool.getSharedDeps(config),
+      version: PKG_VERSION,
+    });
+    worktreeIndexManager.start();
 
     // Per-session MCP transports: sessionId → transport
     // Multiple clients can connect to the same project simultaneously.
@@ -1200,6 +1214,8 @@ program
       fullSurface: boolean,
       /** The preset the client asked for, when it sent one (TRA-951). */
       clientPreset: string | undefined,
+      /** Linked worktree the stdio proxy routed to this canonical project, if any. */
+      worktreeHint?: string,
     ): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
@@ -1252,6 +1268,10 @@ program
         // applies its own preset client-side (ProxyBackend).
         serveFullSurface: fullSurface,
         sessionPreset: clientPreset,
+        worktreeRoot: worktreeHint,
+        // Null unless the hint names a linked worktree of this checkout and the
+        // feature is on; starts building that worktree's branch index.
+        worktreeIndex: worktreeIndexManager.routeFor(managed.root, worktreeHint) ?? undefined,
       };
       const handle = createServer(
         managed.store,
@@ -1608,6 +1628,9 @@ program
         // the surface itself.
         const fullSurface = url.searchParams.get('surface') === 'full';
         const clientPreset = url.searchParams.get('preset') ?? undefined;
+        // Sent by a stdio proxy that routed a linked worktree to this canonical
+        // project; lets the session flag results for files the branch changed.
+        const worktreeHint = url.searchParams.get('worktree') ?? undefined;
 
         // Resolve to the deepest KNOWN root: a registered subproject
         // (the/fair/fair-front) wins over its container ancestor (the) so the
@@ -1648,7 +1671,12 @@ program
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
             transport =
-              (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ?? undefined;
+              (await createSessionTransport(
+                projectRoot,
+                fullSurface,
+                clientPreset,
+                worktreeHint,
+              )) ?? undefined;
             createdTransport = transport;
             if (!transport) {
               // Auto-register the project on first MCP connect when the path
@@ -1711,8 +1739,12 @@ program
                           `here; undo with \`trace-mcp remove ${projectRoot}\` (#936)`,
                   );
                   transport =
-                    (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ??
-                    undefined;
+                    (await createSessionTransport(
+                      projectRoot,
+                      fullSurface,
+                      clientPreset,
+                      worktreeHint,
+                    )) ?? undefined;
                   createdTransport = transport;
                 } catch (err) {
                   logger.warn(
@@ -2246,6 +2278,63 @@ program
         return;
       }
 
+      // REST API: files a linked git worktree changed relative to the canonical
+      // checkout's index (the checkout a worktree session is served from).
+      // `?project=` is the worktree root; the canonical checkout must be a
+      // registered project. A main checkout answers `is_linked_worktree: false`.
+      if (req.method === 'GET' && url.pathname === '/api/projects/worktree') {
+        const worktreeRoot = url.searchParams.get('project');
+        if (!worktreeRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const link = resolveWorktreeLink(worktreeRoot);
+        if (!link) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ is_linked_worktree: false }));
+          return;
+        }
+        if (!getProject(link.canonicalRoot)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: `Canonical checkout "${path.basename(link.canonicalRoot)}" isn't registered with this daemon.`,
+            }),
+          );
+          return;
+        }
+        const delta = await getWorktreeDelta(link);
+        if (!delta) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'git could not compute the worktree delta' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify(
+            summarizeWorktreeDelta(delta, undefined, worktreeIndexManager.describe(link)),
+          ),
+        );
+        return;
+      }
+
+      // REST API: drop a linked worktree's branch index (WorktreeRemove hook).
+      // Deletes only copies whose sidecar names this worktree; the path itself
+      // may already be gone. Never touches the canonical index.
+      if (req.method === 'DELETE' && url.pathname === '/api/projects/worktree') {
+        const worktreeRoot = url.searchParams.get('project');
+        if (!worktreeRoot || !path.isAbsolute(worktreeRoot)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing or relative ?project= query param' }));
+          return;
+        }
+        const dropped = await worktreeIndexManager.drop(worktreeRoot);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ dropped }));
+        return;
+      }
+
       // REST API: quality findings (code smells incl. debug artifacts)
       if (req.method === 'GET' && url.pathname === '/api/projects/smells') {
         const projectRoot = url.searchParams.get('project');
@@ -2764,6 +2853,28 @@ program
         // `getProject` is alias-tolerant; `.root` is the canonical spelling.
         // Truly unregistered roots pass through unchanged and 404 below.
         const preManaged = parsed?.project ? projectManager.getProject(parsed.project) : undefined;
+        // A linked worktree that is not a project of its own: the edit belongs
+        // in that worktree's branch index, never in the canonical DB.
+        if (!preManaged && typeof parsed?.project === 'string' && typeof parsed.path === 'string') {
+          const routed = await worktreeIndexManager.reindexFile(parsed.project, parsed.path, {
+            wait: ['1', 'true'].includes(url.searchParams.get('wait') ?? ''),
+          });
+          if (routed) {
+            if (!routed.ok) {
+              res.writeHead(routed.status, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: routed.error }));
+            } else if (routed.noCopy) {
+              res.writeHead(202, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({ status: 'no_copy', reason: routed.noCopy, path: routed.relPath }),
+              );
+            } else {
+              res.writeHead(204);
+              res.end();
+            }
+            return;
+          }
+        }
         const effectiveProject = preManaged?.root ?? parsed?.project;
         // The project may be registered but idle-unloaded (project_idle_unload_minutes) —
         // getProject() alone would see it as gone and handleReindexFile would
@@ -3812,6 +3923,7 @@ program
       // project's in-flight initial index) so the next field log says whether
       // that await is the cost, instead of us guessing.
       const projectsStopStartedAt = Date.now();
+      await worktreeIndexManager.shutdown();
       await projectManager.shutdown();
       // TRA-1017: `openSockets` here separates cause A (projects slow) from
       // cause B (sockets slow) in the next field log — when the deadline

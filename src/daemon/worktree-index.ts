@@ -1,0 +1,1746 @@
+/**
+ * Branch index for linked git worktrees (GH #1481, step 2).
+ *
+ * A linked worktree is served from its main checkout's index, so callers,
+ * usages and change impact across the files the branch touched come from the
+ * main version. Answering "overlay first, canonical otherwise" per query would
+ * mean touching most of the data layer, and it would still miss edges from an
+ * unchanged file to a symbol the branch renamed (those live in the canonical
+ * DB). Instead, per live worktree:
+ *
+ *  1. Copy the canonical DB with SQLite's online backup API, driven through the
+ *     canonical project's own connection: incremental (a few MB per event loop
+ *     turn), a read transaction per step only, never blocks the canonical
+ *     writer, picks up WAL content, and writes made by that connection during
+ *     the copy are carried into it instead of restarting it.
+ *  2. Re-index the worktree delta (`worktree-delta.ts`: modified + untracked,
+ *     deleted removed) into the copy with an ordinary incremental pipeline
+ *     rooted at the worktree — the same `indexFiles` path a watcher batch takes,
+ *     edge resolution and the deferred reconcile included.
+ *  3. Host the copy in a tool-only server (`createServer({ toolHost })`). A
+ *     worktree session keeps its canonical server for everything it owns
+ *     (journal, savings, session state) and dispatches index tools to the copy
+ *     once it is ready (`WorktreeIndexRoute`).
+ *
+ * No file watcher: each routed call re-checks the delta (cached two seconds by
+ * `getWorktreeDelta`) and re-indexes what changed since the last pass, and
+ * `POST /api/projects/reindex-file` for a worktree path lands here directly.
+ * Copies are unloaded when idle, rebuilt when the canonical HEAD moves past the
+ * snapshot, dropped on `WorktreeRemove` and garbage-collected once their
+ * worktree is gone. Sessions in a main checkout never reach this module.
+ *
+ * Files: `<INDEX_DIR>/worktrees/<name>-<hash(worktree)>-<canonical HEAD>-<stamp>.db`
+ * plus a `.json` sidecar naming the worktree, the canonical checkout and the
+ * HEAD the canonical index had indexed when the copy was taken (its
+ * `index_head_sha`, not the git HEAD) — what GC and reuse after a restart read.
+ */
+
+import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { promisify } from 'node:util';
+import Database from 'better-sqlite3';
+import {
+  BlobVectorStore,
+  CachedInferenceService,
+  createAIProvider,
+  EmbeddingPipeline,
+  InferenceCache,
+} from '../ai/index.js';
+import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
+import {
+  type TraceMcpConfig,
+  type WorktreeIndexConfig,
+  WorktreeIndexConfigSchema,
+} from '../config.js';
+import { initializeDatabase } from '../db/schema.js';
+import { Store } from '../db/store.js';
+import { INDEX_DIR, LOCKS_DIR, projectHash, projectName } from '../global.js';
+import type { ExtractPool } from '../indexer/extract-pool.js';
+import { IndexingPipeline } from '../indexer/pipeline.js';
+import { clearProjectReindexCache } from '../indexer/recent-reindex-cache.js';
+import { isReindexing } from '../indexer/reindex-inflight.js';
+import { logger } from '../logger.js';
+import { dropTreeCacheScope } from '../parser/tree-cache.js';
+import { SqliteTaskCache } from '../pipeline/index.js';
+import { PluginRegistry } from '../plugin-api/registry.js';
+import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
+import { createServer, type ServerDeps, type ServerHandle } from '../server/server.js';
+import type { ToolResponse } from '../server/types.js';
+import type { WorktreeIndexRoute, WorktreeIndexTarget } from '../server/worktree-index-route.js';
+import { trailingDebounce } from '../util/debounce.js';
+import { safeGitEnv } from '../utils/git-env.js';
+import { isHotChurnPath } from '../utils/hot-churn.js';
+import { LockError, withLock } from '../utils/pid-lock.js';
+import {
+  computeWorktreeDelta,
+  findLinkedWorktree,
+  getWorktreeDelta,
+  invalidateWorktreeDelta,
+  resolveWorktreeLink,
+  summarizeWorktreeDelta,
+  type BranchIndexInfo,
+  type WorktreeDelta,
+  type WorktreeDeltaSummary,
+  type WorktreeLink,
+  worktreeDeltaPaths,
+  worktreeDeltaSize,
+} from '../worktree-delta.js';
+import { serializeError } from './log-error.js';
+
+const execFileAsync = promisify(execFile);
+
+// ─── Settings ──────────────────────────────────────────────────────
+
+export interface WorktreeIndexSettings {
+  /** Master switch. Off: worktree sessions behave exactly as in #1483. */
+  enabled: boolean;
+  /**
+   * How long a session's first calls wait for a copy still being built,
+   * counted from the session's first call (one budget for all of them).
+   */
+  initialWaitMs: number;
+  /** How long a call waits for the delta re-check before answering anyway. */
+  syncWaitMs: number;
+  /** Unload a copy nobody used for this long (file stays for reuse). 0: never. */
+  idleUnloadMs: number;
+  /** Copies held open at once. */
+  maxLoaded: number;
+  /** Copies kept on disk. */
+  maxSnapshots: number;
+  /** Total bytes of copies kept on disk. 0: unlimited. */
+  maxDiskBytes: number;
+  /** A worktree whose delta is larger than this gets no copy. */
+  maxDeltaFiles: number;
+}
+
+function toSettings(c: WorktreeIndexConfig): WorktreeIndexSettings {
+  return {
+    enabled: c.enabled,
+    initialWaitMs: c.initial_wait_ms,
+    syncWaitMs: c.sync_wait_ms,
+    idleUnloadMs: c.idle_unload_minutes * 60_000,
+    maxLoaded: c.max_loaded,
+    maxSnapshots: c.max_snapshots,
+    maxDiskBytes: c.max_disk_mb * 1024 * 1024,
+    maxDeltaFiles: c.max_delta_files,
+  };
+}
+
+/** The config schema's defaults, in the manager's units. */
+export const DEFAULT_WORKTREE_INDEX_SETTINGS: Readonly<WorktreeIndexSettings> = Object.freeze(
+  toSettings(WorktreeIndexConfigSchema.parse({})),
+);
+
+/**
+ * Parse with the config schema; a key that fails validation is dropped so it
+ * takes its default while the valid keys still apply (the daemon reads the
+ * global config raw and must not refuse to start over one bad value).
+ */
+function parseSection(raw: unknown): WorktreeIndexConfig {
+  const input: Record<string, unknown> =
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...(raw as object) } : {};
+  for (;;) {
+    const parsed = WorktreeIndexConfigSchema.safeParse(input);
+    if (parsed.success) return parsed.data;
+    const bad = new Set(parsed.error.issues.map((issue) => issue.path[0]));
+    let dropped = false;
+    for (const key of bad) {
+      if (typeof key === 'string' && key in input) {
+        delete input[key];
+        dropped = true;
+      }
+    }
+    if (!dropped) return WorktreeIndexConfigSchema.parse({});
+    logger.warn({ keys: [...bad] }, 'Invalid worktree_index settings ignored (defaults used)');
+  }
+}
+
+/**
+ * Read the `worktree_index` section of the global config. Invalid values fall
+ * back to the defaults. `TRACE_MCP_WORKTREE_INDEX=0|off|false` turns the
+ * feature off regardless of the file (`1|on|true` turns it on).
+ */
+export function resolveWorktreeIndexSettings(
+  raw: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+): WorktreeIndexSettings {
+  const settings = toSettings(parseSection(raw));
+  const envSwitch = env.TRACE_MCP_WORKTREE_INDEX?.trim().toLowerCase();
+  if (envSwitch === '0' || envSwitch === 'off' || envSwitch === 'false') settings.enabled = false;
+  else if (envSwitch === '1' || envSwitch === 'on' || envSwitch === 'true') settings.enabled = true;
+  return settings;
+}
+
+// ─── Snapshot files ────────────────────────────────────────────────
+
+const META_SCHEMA = 1;
+
+/** Sidecar describing one copy. Written next to the DB, read by GC and reuse. */
+export interface SnapshotMeta {
+  schema: number;
+  worktree_root: string;
+  canonical_root: string;
+  /** HEAD the canonical index had indexed when the copy was taken. */
+  canonical_head: string;
+  /** trace-mcp version that wrote the copy; another version rebuilds. */
+  version: string;
+  created_at: number;
+  last_used_at: number;
+  /** Paths the copy has re-indexed from the worktree (the delta, over time). */
+  applied: string[];
+}
+
+interface SnapshotFile {
+  dbPath: string;
+  metaPath: string;
+  meta: SnapshotMeta;
+}
+
+const SIDECARS = ['', '-wal', '-shm', '-journal'];
+
+/** Pages copied per backup step: 4 MB with the 4 KB page size, a few ms per turn. */
+const BACKUP_PAGES_PER_STEP = 1024;
+
+/**
+ * How long to wait, before copying anyway, for the canonical index to go
+ * quiet and to have indexed its current git HEAD (a watcher batch after a
+ * pull or checkout may still be in its debounce).
+ */
+const CANONICAL_QUIET_WAIT_MS = 5_000;
+
+/** Retry delay after a failed build (git error, canonical not ready, …). */
+const BUILD_RETRY_MS = 60_000;
+
+/** Retry delay after a build refused by a size limit (delta, disk). */
+const BUILD_REFUSED_RETRY_MS = 10 * 60_000;
+
+/**
+ * Retry delay after a build refused for want of a slot (`max_loaded`):
+ * short, a slot frees as soon as another copy goes idle.
+ */
+const SLOT_RETRY_MS = 30_000;
+
+/** A copy used this recently serves a live session: never evicted for another. */
+const LIVE_MS = 60_000;
+
+/** How long a build waits for an evictable copy's running calls to finish. */
+const SLOT_WAIT_MS = 5_000;
+
+/** Rebuild instead of re-indexing when more than this many files left the delta. */
+const REBUILD_REVERTED_MIN = 200;
+
+/** How long a retired copy waits for in-flight calls before closing anyway. */
+const RETIRE_DRAIN_MS = 30_000;
+
+/** Lock retries for a sync that collides with register_edit / reindex-file. */
+const LOCK_RETRIES = 20;
+const LOCK_RETRY_DELAY_MS = 50;
+
+/** Leftover `.tmp` copies older than this are swept. */
+const STALE_TMP_MS = 60 * 60_000;
+
+/**
+ * How long a `POST reindex-file` waits for its file to land in the copy. The
+ * PostToolUse hook gives the request 2 s; past this the re-index continues in
+ * the background. `?wait=1` callers get `REINDEX_FILE_WAIT_FULL_MS` instead.
+ */
+const REINDEX_FILE_WAIT_MS = 1_000;
+const REINDEX_FILE_WAIT_FULL_MS = 30_000;
+
+/**
+ * A sync re-plans (stats every delta path) only for a new delta or after
+ * this long: `getWorktreeDelta` hands every call within its TTL the same
+ * delta, and a burst of calls must not stat a large delta each time.
+ */
+const PLAN_TTL_MS = 2_000;
+const STAT_BATCH = 64;
+
+const SWEEP_INTERVAL_MS = 60_000;
+const GC_INTERVAL_MS = 30 * 60_000;
+const GC_FIRST_DELAY_MS = 30_000;
+
+/** Stable per-worktree file prefix: GC and reuse recognise a copy by it. */
+export function snapshotPrefix(worktreeRoot: string): string {
+  return `${projectName(worktreeRoot)}-${projectHash(worktreeRoot)}-`;
+}
+
+function realpathOr(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+function fileBytes(dbPath: string): number {
+  let total = 0;
+  for (const suffix of SIDECARS) {
+    try {
+      total += fs.statSync(dbPath + suffix).size;
+    } catch {
+      /* absent */
+    }
+  }
+  return total;
+}
+
+function removeDbFiles(dbPath: string): void {
+  for (const suffix of SIDECARS) {
+    try {
+      fs.rmSync(dbPath + suffix, { force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+function readMeta(metaPath: string): SnapshotMeta | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(metaPath, 'utf-8')) as Partial<SnapshotMeta>;
+    if (
+      raw.schema !== META_SCHEMA ||
+      typeof raw.worktree_root !== 'string' ||
+      typeof raw.canonical_root !== 'string' ||
+      typeof raw.canonical_head !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      schema: META_SCHEMA,
+      worktree_root: raw.worktree_root,
+      canonical_root: raw.canonical_root,
+      canonical_head: raw.canonical_head,
+      version: typeof raw.version === 'string' ? raw.version : '',
+      created_at: typeof raw.created_at === 'number' ? raw.created_at : 0,
+      last_used_at: typeof raw.last_used_at === 'number' ? raw.last_used_at : 0,
+      applied: Array.isArray(raw.applied)
+        ? raw.applied.filter((p): p is string => typeof p === 'string')
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeMeta(metaPath: string, meta: SnapshotMeta): void {
+  const tmp = `${metaPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(meta), { mode: 0o600 });
+  fs.renameSync(tmp, metaPath);
+}
+
+/** `mtime:size` of a worktree file, or `absent`. Change detection for the sync. */
+function statSignature(abs: string): string {
+  try {
+    const st = fs.statSync(abs);
+    if (!st.isFile()) return 'absent';
+    return `${st.mtimeMs}:${st.size}`;
+  } catch {
+    return 'absent';
+  }
+}
+
+/**
+ * The git HEAD an index last finished indexing at (`index_head_sha`, stamped
+ * by every pipeline run), or null when it has none.
+ */
+function readIndexedHead(db: Database.Database): string | null {
+  try {
+    const row = db.prepare("SELECT value FROM repo_metadata WHERE key = 'index_head_sha'").get() as
+      | { value: string }
+      | undefined;
+    return row?.value || null;
+  } catch {
+    return null;
+  }
+}
+
+/** `readIndexedHead` of a DB file not otherwise open (a fresh backup). */
+function readIndexedHeadOfFile(dbPath: string): string | null {
+  let db: Database.Database | null = null;
+  try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    return readIndexedHead(db);
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
+/** `statSignature` without blocking the event loop, a bounded batch at a time. */
+async function statSignatures(root: string, rels: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < rels.length; i += STAT_BATCH) {
+    const batch = rels.slice(i, i + STAT_BATCH);
+    const sigs = await Promise.all(
+      batch.map(async (rel) => {
+        try {
+          const st = await fs.promises.stat(path.join(root, rel));
+          return st.isFile() ? `${st.mtimeMs}:${st.size}` : 'absent';
+        } catch {
+          return 'absent';
+        }
+      }),
+    );
+    batch.forEach((rel, j) => out.set(rel, sigs[j]));
+  }
+  return out;
+}
+
+async function waitFor<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  if (ms <= 0) return undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Paths `git worktree list` reports for the repository of `canonicalRoot`, or null. */
+async function listGitWorktrees(canonicalRoot: string): Promise<Set<string> | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-c', 'core.fsmonitor=false', 'worktree', 'list', '--porcelain', '-z'],
+      { cwd: canonicalRoot, encoding: 'utf-8', timeout: 10_000, env: safeGitEnv() },
+    );
+    const out = new Set<string>();
+    for (const field of stdout.split('\0')) {
+      if (field.startsWith('worktree ')) out.add(realpathOr(field.slice('worktree '.length)));
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Dependencies ──────────────────────────────────────────────────
+
+/** What a copy needs from the canonical project. A `ManagedProject` fits. */
+export interface CanonicalSource {
+  root: string;
+  db: Database.Database;
+  config: TraceMcpConfig;
+  status: 'starting' | 'indexing' | 'ready' | 'error';
+}
+
+export interface WorktreeIndexManagerDeps {
+  settings: WorktreeIndexSettings;
+  /** The loaded canonical project for a root, if the daemon has it. */
+  getCanonical: (root: string) => CanonicalSource | undefined;
+  /** Shared extract pool (the daemon's). Null: the pipeline runs in-process. */
+  getExtractPool?: (config: TraceMcpConfig) => ExtractPool | null;
+  /** Drop per-root caches from the shared extract pool when a copy closes. */
+  dropPoolRoot?: (root: string) => void;
+  /** Daemon-wide shared stores for the tool-host server. */
+  sharedServerDeps?: (config: TraceMcpConfig) => ServerDeps;
+  /** Directory holding the copies. Default `<INDEX_DIR>/worktrees`. */
+  dir?: string;
+  /** Override of `CANONICAL_QUIET_WAIT_MS` (tests). */
+  canonicalQuietWaitMs?: number;
+  /** Override of `SLOT_WAIT_MS` (tests). */
+  slotWaitMs?: number;
+  /** Version stamped into the sidecar. A different version rebuilds. */
+  version?: string;
+  now?: () => number;
+}
+
+export interface WorktreeIndexStats {
+  loaded: number;
+  /** Copies closing (still open until their in-flight calls finish). */
+  retiring: number;
+  building: number;
+  on_disk: number;
+  disk_bytes: number;
+}
+
+export type WorktreeReindexResult =
+  /**
+   * `noCopy`: no copy took the edit and none was queued — why
+   * (`copy_building`, a refusal such as `delta_too_large`,
+   * `canonical_not_ready`, `dropping`). The file is in the git delta from
+   * now on: canonical answers flag it until a copy exists, and the next copy
+   * plans from that delta.
+   */
+  | { ok: true; relPath: string; skippedChurn?: boolean; noCopy?: string }
+  | { ok: false; status: 400; error: string };
+
+// ─── One copy ──────────────────────────────────────────────────────
+
+type IndexState = 'opening' | 'ready' | 'retiring' | 'closed';
+
+interface SyncPlan {
+  index: string[];
+  remove: string[];
+  signatures: Map<string, string>;
+  /** Files that left the delta since the last pass and changed on disk. */
+  reverted: number;
+}
+
+/** One copy: its DB, pipeline and tool-host server. Exported for tests. */
+export class BranchIndex {
+  state: IndexState = 'opening';
+  readonly worktreeRoot: string;
+  readonly canonicalRoot: string;
+  readonly canonicalHead: string;
+  readonly dbPath: string;
+  readonly metaPath: string;
+  meta: SnapshotMeta;
+  lastUsedAt: number;
+  lastDelta: WorktreeDelta | null = null;
+  builtAt = 0;
+
+  private db: Database.Database | null = null;
+  private pipeline: IndexingPipeline | null = null;
+  private handle: ServerHandle | null = null;
+  /** Path → stat signature of what the copy last indexed from the worktree. */
+  private readonly applied = new Map<string, string>();
+  private readonly pendingPaths = new Set<string>();
+  /**
+   * Files a sync accepted but not yet planned may be behind on — its delta
+   * plus everything an earlier pass applied — and how many such syncs there
+   * are. The plan is what tells the changed files apart; a call served
+   * before it exists must not read as current. Cleared once no sync is
+   * unplanned.
+   */
+  private readonly coarsePending = new Set<string>();
+  private unplanned = 0;
+  /** The delta could not be computed: answer, flagged for everything known, until a sync plans. */
+  private unverified = false;
+  private chain: Promise<void> = Promise.resolve();
+  private inflight = 0;
+  private drained: (() => void) | null = null;
+  /** Schedules embeddings/summaries after a re-index; null when AI is off. */
+  private aiRun: (() => void) | null = null;
+  private cancelAI: (() => void) | null = null;
+  private metaDirty = false;
+  /** The delta the last completed pass planned from, and when. */
+  private plannedDelta: WorktreeDelta | null = null;
+  private plannedAt = 0;
+  private readonly lockName: string;
+
+  constructor(
+    private readonly owner: WorktreeIndexManager,
+    file: SnapshotFile,
+    now: number,
+  ) {
+    this.worktreeRoot = file.meta.worktree_root;
+    this.canonicalRoot = file.meta.canonical_root;
+    this.canonicalHead = file.meta.canonical_head;
+    this.dbPath = file.dbPath;
+    this.metaPath = file.metaPath;
+    this.meta = file.meta;
+    this.lastUsedAt = now;
+    // Same name register_edit and reindex-file use for this root, so the three
+    // writers of this copy serialize.
+    this.lockName = `${projectHash(this.worktreeRoot)}-reindex`;
+    // A reused copy: everything it ever re-indexed is re-checked on the first
+    // pass (hash-gated), including files that have since left the delta.
+    for (const p of file.meta.applied) this.applied.set(p, 'unknown');
+  }
+
+  open(config: TraceMcpConfig, deps: WorktreeIndexManagerDeps): void {
+    const db = initializeDatabase(this.dbPath, {
+      cacheMb: config.index_cache_mb,
+      mmapMb: config.index_mmap_mb,
+      memoryProfile: config.index_memory_profile ?? 'auto',
+    });
+    this.db = db;
+    writeServerPid(db);
+    const store = new Store(db);
+    const registry = PluginRegistry.createWithDefaults();
+    const progress = new ProgressState(db);
+    this.pipeline = new IndexingPipeline(store, registry, config, this.worktreeRoot, progress, {
+      extractPool: deps.getExtractPool?.(config) ?? null,
+      taskCache: new SqliteTaskCache(db),
+    });
+    this.handle = createServer(store, registry, config, this.worktreeRoot, progress, {
+      ...deps.sharedServerDeps?.(config),
+      serveFullSurface: true,
+      skipUsagePing: true,
+      toolHost: true,
+      worktreeIndexInfo: () => this.info(),
+    });
+    this.setupAI(config, store, progress);
+  }
+
+  /** Embeddings / summaries for re-indexed symbols, debounced like a watcher batch. */
+  private setupAI(config: TraceMcpConfig, store: Store, progress: ProgressState): void {
+    if (!config.ai?.enabled) return;
+    const ai = config.ai;
+    const provider = createAIProvider(config);
+    const abort = new AbortController();
+    const vectorStore = new BlobVectorStore(store.db);
+    const embedding = new EmbeddingPipeline(store, provider.embedding(), vectorStore, progress);
+    const summarization =
+      ai.summarize_on_index === false
+        ? null
+        : new SummarizationPipeline(
+            store,
+            new CachedInferenceService(
+              provider.fastInference(),
+              new InferenceCache(store.db),
+              ai.fast_model ?? 'fast',
+            ),
+            this.worktreeRoot,
+            {
+              batchSize: ai.summarize_batch_size ?? 20,
+              kinds: ai.summarize_kinds ?? [
+                'class',
+                'function',
+                'method',
+                'interface',
+                'trait',
+                'enum',
+                'type',
+              ],
+              concurrency: ai.concurrency ?? 1,
+              summarizeFromDocstrings: ai.summarizeFromDocstrings,
+              maxTokens: ai.summarize_max_tokens,
+            },
+            progress,
+            vectorStore,
+          );
+    const run = trailingDebounce(() => {
+      if (this.state !== 'ready') return;
+      summarization?.summarizeUnsummarized(abort.signal).catch((err) => {
+        logger.warn(
+          { error: serializeError(err), root: this.worktreeRoot },
+          'Branch index summarization failed',
+        );
+      });
+      embedding.indexUnembedded(undefined, abort.signal).catch((err) => {
+        logger.warn(
+          { error: serializeError(err), root: this.worktreeRoot },
+          'Branch index embedding failed',
+        );
+      });
+    }, 5_000);
+    this.aiRun = () => run();
+    this.cancelAI = () => {
+      run.cancel();
+      abort.abort();
+    };
+  }
+
+  markReady(now: number): void {
+    this.state = 'ready';
+    this.builtAt = now;
+  }
+
+  /** Decide what the copy must re-index to match `delta` and the worktree on disk. */
+  private async plan(delta: WorktreeDelta): Promise<SyncPlan> {
+    const inDelta = new Set([...delta.modified, ...delta.untracked, ...delta.deleted]);
+    // Files that left the delta (reverted, or merged into the canonical HEAD)
+    // still hold their branch version in the copy: re-index them from disk.
+    const left = [...this.applied.keys()].filter((rel) => !inDelta.has(rel));
+    const signatures = await statSignatures(this.worktreeRoot, [...inDelta, ...left]);
+    const index: string[] = [];
+    const remove: string[] = [];
+    let reverted = 0;
+    for (const [rel, sig] of signatures) {
+      if (this.applied.get(rel) === sig) continue;
+      (sig === 'absent' ? remove : index).push(rel);
+      if (!inDelta.has(rel)) reverted++;
+    }
+    return { index, remove, signatures, reverted };
+  }
+
+  /**
+   * Files the copy may be behind on, as a delta for `markStaleOnBranch`:
+   * those whose re-index is still running, those a not-yet-planned sync may
+   * touch and, while the delta could not be computed, everything the last
+   * delta or an earlier pass named. Null when nothing is in flight.
+   */
+  pendingDelta(): WorktreeDelta | null {
+    if (this.pendingPaths.size === 0 && this.coarsePending.size === 0 && !this.unverified) {
+      return null;
+    }
+    const paths = new Set(this.pendingPaths);
+    for (const p of this.coarsePending) paths.add(p);
+    if (this.unverified) {
+      if (this.lastDelta) for (const p of worktreeDeltaPaths(this.lastDelta)) paths.add(p);
+      for (const p of this.applied.keys()) paths.add(p);
+    }
+    if (paths.size === 0) return null;
+    return {
+      worktreeRoot: this.worktreeRoot,
+      canonicalRoot: this.canonicalRoot,
+      worktreeHead: this.lastDelta?.worktreeHead ?? '',
+      canonicalHead: this.canonicalHead,
+      modified: [...paths],
+      deleted: [],
+      untracked: [],
+      computedAt: this.lastDelta?.computedAt ?? 0,
+    };
+  }
+
+  /** git could not compute the delta for a call: flag everything known until a sync plans one. */
+  markUnverified(): void {
+    this.unverified = true;
+  }
+
+  private settleUnplanned(): void {
+    if (--this.unplanned === 0) this.coarsePending.clear();
+  }
+
+  /**
+   * Bring the copy in line with `delta`. Serialized per copy; resolves to the
+   * number of files that left the delta and changed (the rebuild signal).
+   * The delta's files count as pending from this call, not from when the
+   * chain reaches it, and narrow to the plan's files once that exists.
+   */
+  sync(delta: WorktreeDelta): Promise<number> {
+    this.unplanned++;
+    for (const p of worktreeDeltaPaths(delta)) this.coarsePending.add(p);
+    for (const p of this.applied.keys()) this.coarsePending.add(p);
+    const run = this.chain.then(async () => {
+      if (this.state !== 'ready' && this.state !== 'opening') {
+        this.settleUnplanned();
+        return 0;
+      }
+      const now = this.owner.now();
+      if (delta === this.plannedDelta && now - this.plannedAt < PLAN_TTL_MS) {
+        this.settleUnplanned();
+        return 0;
+      }
+      this.lastDelta = delta;
+      let plan: SyncPlan;
+      try {
+        plan = await this.plan(delta);
+      } catch (err) {
+        this.settleUnplanned();
+        throw err;
+      }
+      // `apply` marks the plan's files before its first await, so the coarse
+      // set can go as soon as it is called.
+      const applying = this.apply(plan);
+      this.unverified = false;
+      this.settleUnplanned();
+      await applying;
+      // Only once applied: a failed pass is re-planned by the next call.
+      this.plannedDelta = delta;
+      this.plannedAt = now;
+      return plan.reverted;
+    });
+    this.chain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** Re-index specific worktree paths (reindex-file), serialized with `sync`. */
+  reindexPaths(relPaths: string[]): Promise<void> {
+    const run = this.chain.then(async () => {
+      if (this.state !== 'ready') return;
+      const index: string[] = [];
+      const remove: string[] = [];
+      const signatures = new Map<string, string>();
+      for (const rel of relPaths) {
+        const sig = statSignature(path.join(this.worktreeRoot, rel));
+        signatures.set(rel, sig);
+        (sig === 'absent' ? remove : index).push(rel);
+      }
+      await this.apply({ index, remove, signatures, reverted: 0 });
+    });
+    this.chain = run.catch(() => undefined);
+    return run;
+  }
+
+  private async apply(plan: SyncPlan): Promise<void> {
+    const pipeline = this.pipeline;
+    if (!pipeline || (plan.index.length === 0 && plan.remove.length === 0)) return;
+    const files = [...plan.index, ...plan.remove];
+    for (const p of files) this.pendingPaths.add(p);
+    const work = async () => {
+      if (plan.remove.length > 0) pipeline.deleteFiles(plan.remove);
+      if (plan.index.length > 0) await pipeline.indexFiles(plan.index);
+    };
+    try {
+      await this.withReindexLock(work);
+      for (const [rel, sig] of plan.signatures) this.applied.set(rel, sig);
+      for (const p of files) this.pendingPaths.delete(p);
+      this.metaDirty = true;
+      this.aiRun?.();
+    } catch (err) {
+      // Left pending, and recorded as never verified: the next plan re-checks
+      // such a file even when no delta names it any more.
+      for (const p of files) if (!this.applied.has(p)) this.applied.set(p, 'unknown');
+      logger.warn(
+        {
+          error: serializeError(err),
+          root: this.worktreeRoot,
+          files: files.length,
+        },
+        'Branch index re-index failed (will retry on the next call)',
+      );
+      throw err;
+    }
+  }
+
+  private async withReindexLock(fn: () => Promise<void>): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await withLock({ lockDir: LOCKS_DIR, name: this.lockName, op: 'worktree-index-sync' }, fn);
+        return;
+      } catch (err) {
+        if (!(err instanceof LockError) || attempt >= LOCK_RETRIES) throw err;
+        await delay(LOCK_RETRY_DELAY_MS);
+      }
+    }
+  }
+
+  /** Persist the sidecar when the applied set changed. Never throws. */
+  flushMeta(now: number): void {
+    if (!this.metaDirty && now - this.meta.last_used_at < 5 * 60_000) return;
+    this.meta = { ...this.meta, last_used_at: this.lastUsedAt, applied: [...this.applied.keys()] };
+    try {
+      writeMeta(this.metaPath, this.meta);
+      this.metaDirty = false;
+    } catch (err) {
+      logger.debug({ err, metaPath: this.metaPath }, 'Branch index sidecar write failed');
+    }
+  }
+
+  /**
+   * Run `tool` on the copy. Undefined — the caller answers from the canonical
+   * index — once the copy is retiring: a call accepted then (a batch's next
+   * sub-call) could still be running when the DB closes under it.
+   */
+  async run(tool: string, params: Record<string, unknown>): Promise<ToolResponse | undefined> {
+    if (this.state !== 'ready') return undefined;
+    const handler = this.handle?.toolHandlers.get(tool);
+    if (!handler) return undefined;
+    this.inflight++;
+    this.lastUsedAt = this.owner.now();
+    try {
+      return await handler(params);
+    } finally {
+      this.inflight--;
+      if (this.inflight === 0) this.drained?.();
+    }
+  }
+
+  get busy(): boolean {
+    return this.inflight > 0;
+  }
+
+  target(): WorktreeIndexTarget {
+    // `pending` is read once the handler has returned; a sync that completes
+    // meanwhile must not hide what the handler read from the copy before it.
+    let before: WorktreeDelta | null = null;
+    return {
+      run: (tool, params) => {
+        before = this.pendingDelta();
+        return this.run(tool, params);
+      },
+      pending: () => mergePending(before, this.pendingDelta()),
+    };
+  }
+
+  /** `get_index_health`'s `worktree` section as this copy's tool host reports it. */
+  info(): WorktreeDeltaSummary | null {
+    const delta = this.lastDelta;
+    if (!delta) return null;
+    return summarizeWorktreeDelta(delta, undefined, this.owner.describeIndex(this));
+  }
+
+  /** Files whose latest edit is not in the copy yet (capped at 50). */
+  pendingFiles(): string[] {
+    return (this.pendingDelta()?.modified ?? []).slice(0, 50);
+  }
+
+  get reindexedFiles(): number {
+    return this.applied.size;
+  }
+
+  /**
+   * Stop serving and close. Waits (bounded) for calls already running. The
+   * manager closes copies through `retire`, which keeps the file counted as
+   * open until this resolves.
+   */
+  async close(opts: { drainMs?: number } = {}): Promise<void> {
+    if (this.state === 'closed') return;
+    this.state = 'retiring';
+    // No new calls start now (`run` refuses them); wait for the running ones.
+    const drainBy = performance.now() + (opts.drainMs ?? RETIRE_DRAIN_MS);
+    while (this.inflight > 0) {
+      const left = drainBy - performance.now();
+      if (left <= 0) {
+        logger.warn(
+          { root: this.worktreeRoot, inflight: this.inflight },
+          'Branch index closed with calls still running',
+        );
+        break;
+      }
+      await waitFor(
+        new Promise<void>((resolve) => {
+          this.drained = resolve;
+        }),
+        left,
+      );
+    }
+    this.drained = null;
+    await waitFor(this.chain, 5_000);
+    this.state = 'closed';
+    this.cancelAI?.();
+    this.flushMeta(this.owner.now());
+    try {
+      this.handle?.dispose();
+      await this.handle?.server.close();
+    } catch {
+      /* best-effort */
+    }
+    try {
+      await this.pipeline?.dispose();
+    } catch (err) {
+      logger.debug({ err }, 'Branch index pipeline dispose failed');
+    }
+    try {
+      if (this.db?.open) {
+        clearServerPid(this.db);
+        this.db.close();
+      }
+    } catch (err) {
+      logger.debug({ err }, 'Branch index DB close failed');
+    }
+    this.handle = null;
+    this.pipeline = null;
+    this.db = null;
+    // Caches keyed by the worktree root are the manager's to drop
+    // (`releaseRoot`): another copy of the same worktree may be using them.
+  }
+}
+
+// ─── Manager ───────────────────────────────────────────────────────
+
+/** One shape for both reports of a branch index (see `BranchIndexInfo`). */
+/** Union of two `pendingDelta` snapshots (everything they name is in `modified`). */
+function mergePending(a: WorktreeDelta | null, b: WorktreeDelta | null): WorktreeDelta | null {
+  if (!a) return b;
+  if (!b || b.modified.length === 0) return a;
+  return { ...b, modified: [...new Set([...a.modified, ...b.modified])] };
+}
+
+function branchIndexInfo(entry: Entry | null, index: BranchIndex | null): BranchIndexInfo {
+  // Absent rather than null: tool responses drop null fields, and both
+  // reports must read the same.
+  return {
+    state: index?.state ?? (entry?.building ? 'building' : 'none'),
+    ...(index ? { canonical_head_at_copy: index.canonicalHead } : {}),
+    ...(index?.builtAt ? { built_at: new Date(index.builtAt).toISOString() } : {}),
+    pending: index?.pendingFiles() ?? [],
+    reindexed_files: index?.reindexedFiles ?? 0,
+    ...(entry?.lastError ? { last_error: entry.lastError } : {}),
+  };
+}
+
+interface Entry {
+  link: WorktreeLink;
+  current: BranchIndex | null;
+  building: Promise<BranchIndex | null> | null;
+  /**
+   * The build under way holds a `max_loaded` slot from the moment it got one
+   * until it ends, so concurrent builds cannot overshoot the limit.
+   */
+  slotReserved: boolean;
+  retryAt: number;
+  lastError: string | null;
+}
+
+/**
+ * Owns every branch index of the daemon. One instance per daemon, created in
+ * `serve-http`; nothing here runs for a session that is not a linked worktree.
+ */
+export class WorktreeIndexManager {
+  private readonly entries = new Map<string, Entry>();
+  /**
+   * Copies closing, by DB path. Still open until their close resolves: GC,
+   * disk eviction and reuse must leave the file alone, and a new copy of the
+   * same worktree waits for them (`settleRetiring`).
+   */
+  private readonly retiring = new Map<string, { root: string; done: Promise<void> }>();
+  /**
+   * Worktree roots whose copies are being dropped (WorktreeRemove, GC), with
+   * a count of the drops under way: no entry — and so no build — is created
+   * for them until the files are gone.
+   */
+  private readonly dropping = new Map<string, number>();
+  private readonly dir: string;
+  private readonly version: string;
+  private sweepTimer: ReturnType<typeof setInterval> | null = null;
+  private gcTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
+
+  constructor(private readonly deps: WorktreeIndexManagerDeps) {
+    this.dir = deps.dir ?? path.join(INDEX_DIR, 'worktrees');
+    this.version = deps.version ?? '0.0.0-dev';
+  }
+
+  get settings(): WorktreeIndexSettings {
+    return this.deps.settings;
+  }
+
+  now(): number {
+    return this.deps.now?.() ?? Date.now();
+  }
+
+  /** Close `index`, counting its file as open until it is closed. Never rejects. */
+  private retire(index: BranchIndex, opts: { drainMs?: number } = {}): Promise<void> {
+    const pending = this.retiring.get(index.dbPath);
+    if (pending) return pending.done;
+    const done = index
+      .close(opts)
+      .catch((err) => logger.debug({ err, dbPath: index.dbPath }, 'Branch index close failed'))
+      .finally(() => {
+        if (this.retiring.get(index.dbPath)?.done === done) this.retiring.delete(index.dbPath);
+        this.releaseRoot(index.worktreeRoot);
+      });
+    this.retiring.set(index.dbPath, { root: index.worktreeRoot, done });
+    return done;
+  }
+
+  /** Wait for copies of `worktreeRoot` still closing. */
+  private async settleRetiring(worktreeRoot: string): Promise<void> {
+    const closing = [...this.retiring.values()].filter((r) => r.root === worktreeRoot);
+    await Promise.all(closing.map((r) => r.done));
+  }
+
+  /**
+   * Drop the caches keyed by a worktree root once no copy of it is open or
+   * closing: they are shared by every copy of that worktree, and a rebuild
+   * closes the old copy while the new one already serves.
+   */
+  private releaseRoot(worktreeRoot: string): void {
+    const entry = this.entries.get(worktreeRoot);
+    if (entry?.current && entry.current.state !== 'closed') return;
+    if (entry?.building) return;
+    for (const r of this.retiring.values()) if (r.root === worktreeRoot) return;
+    clearProjectReindexCache(worktreeRoot);
+    try {
+      dropTreeCacheScope(worktreeRoot);
+    } catch {
+      /* best-effort */
+    }
+    this.deps.dropPoolRoot?.(worktreeRoot);
+  }
+
+  /**
+   * Route for a session created against `canonicalRoot` with the stdio
+   * proxy's `?worktree=` hint. Null — and so no change at all — unless the
+   * feature is on and the hint names a linked worktree of exactly that
+   * checkout. Starts building the copy in the background.
+   */
+  routeFor(canonicalRoot: string, worktreeHint: string | undefined): WorktreeIndexRoute | null {
+    if (!this.settings.enabled || this.stopped || !worktreeHint) return null;
+    const link = resolveWorktreeLink(canonicalRoot, worktreeHint);
+    if (!link) return null;
+    const entry = this.entryFor(link);
+    if (entry?.current) entry.current.lastUsedAt = this.now();
+    if (entry) this.ensureBuilding(entry);
+    // The session's first calls share one `initialWaitMs` budget, counted
+    // from its first call — not from when the build started, which may be
+    // long before (another session) or a while before (a slow client).
+    let waitUntil: number | null = null;
+    return {
+      resolve: () => {
+        waitUntil ??= this.now() + this.settings.initialWaitMs;
+        return this.resolve(link, waitUntil).catch(() => null);
+      },
+    };
+  }
+
+  /** The entry for `link`, created on demand; null while its copies are being dropped. */
+  private entryFor(link: WorktreeLink): Entry | null {
+    if (this.dropping.has(link.worktreeRoot)) return null;
+    let entry = this.entries.get(link.worktreeRoot);
+    if (!entry || entry.link.canonicalRoot !== link.canonicalRoot) {
+      entry = {
+        link,
+        current: null,
+        building: null,
+        slotReserved: false,
+        retryAt: 0,
+        lastError: null,
+      };
+      this.entries.set(link.worktreeRoot, entry);
+    }
+    return entry;
+  }
+
+  /**
+   * The ready copy for `link`, or null to answer from the canonical index.
+   * While no copy is ready, waits for the build until `waitUntil`. A ready
+   * copy answers after its delta re-check, which waits up to `syncWaitMs`
+   * for the re-index: from the moment the delta is in hand the copy flags
+   * every file it may be behind on, so a call that outruns the budget is
+   * still honest. The delta itself is awaited in full — the canonical
+   * handler would await the same shared computation, so answering from
+   * there would cost the same and say less.
+   */
+  async resolve(
+    link: WorktreeLink,
+    waitUntil: number = this.now() + this.settings.initialWaitMs,
+  ): Promise<WorktreeIndexTarget | null> {
+    if (!this.settings.enabled || this.stopped) return null;
+    const entry = this.entryFor(link);
+    if (!entry) return null;
+    const now = this.now();
+    let index = entry.current;
+    if (!index || index.state !== 'ready') {
+      const building = this.ensureBuilding(entry);
+      if (!building) return null;
+      const built = await waitFor(building, waitUntil - now);
+      if (!built || built.state !== 'ready') return null;
+      index = built;
+    }
+    index.lastUsedAt = this.now();
+    const delta = await getWorktreeDelta(entry.link);
+    const synced = entry.current;
+    if (!synced || synced.state !== 'ready') return null;
+    if (!delta) {
+      // git could not answer: the copy flags everything it knows of.
+      synced.markUnverified();
+      return synced.target();
+    }
+    await waitFor(this.syncEntry(entry, synced, delta), this.settings.syncWaitMs);
+    const served = entry.current;
+    if (!served || served.state !== 'ready') return null;
+    // A rebuild swapped the copy during the wait: it synced its own
+    // build-time delta, not this one — flagged coarsely until it has.
+    if (served !== synced) void served.sync(delta).catch(() => undefined);
+    return served.target();
+  }
+
+  /** Apply `delta` to `index`, or schedule a rebuild. Never rejects. */
+  private async syncEntry(entry: Entry, index: BranchIndex, delta: WorktreeDelta): Promise<void> {
+    try {
+      if (index.state !== 'ready') return;
+      // What the canonical index has indexed, not its git HEAD: right after a
+      // pull the watcher has not caught up, and a copy taken then would
+      // carry the old content under the new HEAD's name.
+      const canonical = this.deps.getCanonical(entry.link.canonicalRoot);
+      const canonicalHead = canonical?.db.open
+        ? (readIndexedHead(canonical.db) ?? delta.canonicalHead)
+        : index.canonicalHead;
+      const headMoved = canonicalHead !== index.canonicalHead;
+      if (headMoved) {
+        // The canonical index moved on: files the branch shares with the new
+        // HEAD are stale in this copy and in no delta. Keep serving it until
+        // the new copy is ready — and keep it in line with the worktree
+        // meanwhile: the rebuild can be refused (limits) or fail, and then
+        // this copy is what answers for a while.
+        this.ensureBuilding(entry, { replace: true, reason: 'canonical_head_moved' });
+      }
+      const reverted = await index.sync(delta);
+      if (!headMoved && reverted > REBUILD_REVERTED_MIN && reverted > worktreeDeltaSize(delta)) {
+        this.ensureBuilding(entry, { replace: true, reason: 'delta_shrank' });
+      }
+    } catch (err) {
+      logger.debug({ err, root: entry.link.worktreeRoot }, 'Branch index sync failed');
+    }
+  }
+
+  private ensureBuilding(
+    entry: Entry,
+    opts: { replace?: boolean; reason?: string } = {},
+  ): Promise<BranchIndex | null> | null {
+    if (entry.building) return entry.building;
+    if (entry.current && entry.current.state === 'ready' && !opts.replace) return null;
+    const now = this.now();
+    if (now < entry.retryAt) return null;
+    const canonical = this.deps.getCanonical(entry.link.canonicalRoot);
+    if (!canonical || canonical.status !== 'ready' || !canonical.db.open) return null;
+    if (realpathOr(canonical.root) !== entry.link.canonicalRoot) return null;
+    const building = this.build(entry, canonical, opts.reason ?? 'first_use')
+      .catch((err) => {
+        entry.lastError = String(err);
+        entry.retryAt = this.now() + BUILD_RETRY_MS;
+        logger.warn(
+          { error: serializeError(err), worktree: entry.link.worktreeRoot },
+          'Branch index build failed — serving the canonical index meanwhile',
+        );
+        return null;
+      })
+      .finally(() => {
+        entry.building = null;
+        entry.slotReserved = false;
+      });
+    entry.building = building;
+    return building;
+  }
+
+  private refuse(
+    entry: Entry,
+    reason: string,
+    detail: Record<string, unknown>,
+    retryMs = BUILD_REFUSED_RETRY_MS,
+  ): null {
+    entry.lastError = reason;
+    entry.retryAt = this.now() + retryMs;
+    logger.info(
+      { worktree: entry.link.worktreeRoot, reason, ...detail },
+      'Branch index not built — serving the canonical index',
+    );
+    return null;
+  }
+
+  private async build(
+    entry: Entry,
+    canonical: CanonicalSource,
+    reason: string,
+  ): Promise<BranchIndex | null> {
+    const { link } = entry;
+    const t0 = performance.now();
+    const delta = await computeWorktreeDelta(link);
+    if (!delta) throw new Error('git could not compute the worktree delta');
+    const deltaFiles = worktreeDeltaSize(delta);
+    if (deltaFiles > this.settings.maxDeltaFiles) {
+      return this.refuse(entry, 'delta_too_large', {
+        deltaFiles,
+        limit: this.settings.maxDeltaFiles,
+      });
+    }
+    if (!(await this.makeRoomForLoad(entry))) {
+      return this.refuse(entry, 'max_loaded', { limit: this.settings.maxLoaded }, SLOT_RETRY_MS);
+    }
+
+    fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+    // An unloaded copy of this worktree may still be closing: reuse its file
+    // once it is closed rather than open a second connection on it.
+    await this.settleRetiring(link.worktreeRoot);
+    let file = this.findReusable(link, readIndexedHead(canonical.db) ?? delta.canonicalHead);
+    let copyMs = 0;
+    let reused = file !== null;
+    let index: BranchIndex;
+    let td: number;
+    for (;;) {
+      if (!file) {
+        reused = false;
+        const estimate = fileBytes(canonical.db.name);
+        if (!this.makeRoomOnDisk(estimate, link.worktreeRoot)) {
+          return this.refuse(entry, 'disk_limit', {
+            estimateBytes: estimate,
+            limitBytes: this.settings.maxDiskBytes,
+          });
+        }
+        const tc = performance.now();
+        file = await this.copyCanonical(link, canonical, delta.canonicalHead);
+        copyMs = Math.round(performance.now() - tc);
+      }
+      index = new BranchIndex(this, file, this.now());
+      td = performance.now();
+      try {
+        index.open(canonical.config, this.deps);
+        await index.sync(delta);
+        break;
+      } catch (err) {
+        await this.retire(index, { drainMs: 0 });
+        // A copy that fails to open or sync is not kept: a reused one would
+        // be picked again, and fail again, on every retry.
+        this.deleteFile(file.dbPath, file.metaPath);
+        if (!reused) throw err;
+        logger.warn(
+          { error: serializeError(err), dbPath: file.dbPath, worktree: link.worktreeRoot },
+          'Reused branch index unusable — deleted, copying afresh',
+        );
+        file = null;
+      }
+    }
+    const deltaMs = Math.round(performance.now() - td);
+    if (this.stopped) {
+      await this.retire(index, { drainMs: 0 });
+      return null;
+    }
+    index.markReady(this.now());
+    index.flushMeta(this.now());
+
+    const previous = entry.current;
+    entry.current = index;
+    entry.lastError = null;
+    entry.retryAt = 0;
+    if (previous && previous !== index) {
+      void this.retire(previous).then(() => {
+        if (previous.dbPath !== index.dbPath) this.deleteFile(previous.dbPath, previous.metaPath);
+      });
+    }
+    logger.info(
+      {
+        worktree: link.worktreeRoot,
+        canonical: link.canonicalRoot,
+        reason,
+        reused,
+        copyMs,
+        deltaMs,
+        totalMs: Math.round(performance.now() - t0),
+        deltaFiles,
+        bytes: fileBytes(index.dbPath),
+      },
+      'Branch index ready',
+    );
+    return index;
+  }
+
+  /**
+   * Online backup of the canonical DB into a fresh copy for `link`, stamped
+   * with the HEAD the canonical index had indexed when the copy was taken
+   * (`gitHead` only when the index records none).
+   */
+  private async copyCanonical(
+    link: WorktreeLink,
+    canonical: CanonicalSource,
+    gitHead: string,
+  ): Promise<SnapshotFile> {
+    const created = this.now();
+    const stamp = created.toString(36);
+    const tmp = path.join(this.dir, `${snapshotPrefix(link.worktreeRoot)}${stamp}.db.tmp`);
+    removeDbFiles(tmp);
+    // Copy between canonical pipeline runs, once the canonical index has
+    // caught up with its git HEAD, when we can: the backup never blocks the
+    // canonical writer, but a copy taken mid-run carries a half-written pass,
+    // and one taken before the watcher batch of a pull the old content.
+    const quietBy = performance.now() + (this.deps.canonicalQuietWaitMs ?? CANONICAL_QUIET_WAIT_MS);
+    while (performance.now() < quietBy) {
+      const indexed = readIndexedHead(canonical.db);
+      if (!isReindexing(canonical.root) && (indexed === null || indexed === gitHead)) break;
+      await delay(100);
+    }
+    let canonicalHead = gitHead;
+    let dbPath = '';
+    try {
+      await canonical.db.backup(tmp, { progress: () => BACKUP_PAGES_PER_STEP });
+      canonicalHead = readIndexedHeadOfFile(tmp) ?? gitHead;
+      dbPath = path.join(
+        this.dir,
+        `${snapshotPrefix(link.worktreeRoot)}${canonicalHead.slice(0, 12)}-${stamp}.db`,
+      );
+      for (const suffix of ['-wal', '-shm']) {
+        if (fs.existsSync(tmp + suffix)) fs.renameSync(tmp + suffix, dbPath + suffix);
+      }
+      fs.renameSync(tmp, dbPath);
+      try {
+        fs.chmodSync(dbPath, 0o600);
+      } catch {
+        /* best-effort */
+      }
+    } catch (err) {
+      removeDbFiles(tmp);
+      if (dbPath) removeDbFiles(dbPath);
+      throw err;
+    }
+    const metaPath = dbPath.replace(/\.db$/, '.json');
+    const meta: SnapshotMeta = {
+      schema: META_SCHEMA,
+      worktree_root: link.worktreeRoot,
+      canonical_root: link.canonicalRoot,
+      canonical_head: canonicalHead,
+      version: this.version,
+      created_at: created,
+      last_used_at: created,
+      applied: [],
+    };
+    writeMeta(metaPath, meta);
+    return { dbPath, metaPath, meta };
+  }
+
+  /** Every copy on disk with a readable sidecar. */
+  listSnapshots(): SnapshotFile[] {
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.dir);
+    } catch {
+      return [];
+    }
+    const out: SnapshotFile[] = [];
+    for (const name of names) {
+      if (!name.endsWith('.json') || name.endsWith('.tmp')) continue;
+      const metaPath = path.join(this.dir, name);
+      const meta = readMeta(metaPath);
+      if (!meta) continue;
+      out.push({ dbPath: metaPath.replace(/\.json$/, '.db'), metaPath, meta });
+    }
+    return out;
+  }
+
+  private loadedPaths(): Set<string> {
+    const out = new Set<string>(this.retiring.keys());
+    for (const entry of this.entries.values()) {
+      if (entry.current && entry.current.state !== 'closed') out.add(entry.current.dbPath);
+    }
+    return out;
+  }
+
+  /** Newest reusable copy for `link` at `canonicalHead`; older ones of the worktree go. */
+  private findReusable(link: WorktreeLink, canonicalHead: string): SnapshotFile | null {
+    const loaded = this.loadedPaths();
+    const mine = this.listSnapshots()
+      .filter((f) => f.meta.worktree_root === link.worktreeRoot)
+      .sort((a, b) => b.meta.created_at - a.meta.created_at);
+    let pick: SnapshotFile | null = null;
+    for (const f of mine) {
+      const usable =
+        !pick &&
+        f.meta.canonical_root === link.canonicalRoot &&
+        f.meta.canonical_head === canonicalHead &&
+        f.meta.version === this.version &&
+        fs.existsSync(f.dbPath) &&
+        !loaded.has(f.dbPath);
+      if (usable) pick = f;
+      else if (!loaded.has(f.dbPath)) this.deleteFile(f.dbPath, f.metaPath);
+    }
+    return pick;
+  }
+
+  /**
+   * Get `except` a `maxLoaded` slot, closing copies that are not serving a
+   * live session (least recently used first) when the copies open, closing
+   * or reserved by other builds fill them. A copy used in the last `LIVE_MS`
+   * is never evicted — two worktrees taking the slot from each other on every
+   * call would rebuild forever; the newcomer answers from the canonical
+   * index until a slot frees. An evictable copy with calls still running is
+   * waited for (bounded). On success the slot is reserved for this build.
+   */
+  private async makeRoomForLoad(except: Entry): Promise<boolean> {
+    const waitBy = performance.now() + (this.deps.slotWaitMs ?? SLOT_WAIT_MS);
+    for (;;) {
+      const others = [...this.entries.values()].filter((e) => e !== except);
+      const holds = (e: Entry) =>
+        (e.current && e.current.state !== 'closed') || e.slotReserved ? 1 : 0;
+      // The copy `except` already holds is replaced, not added.
+      const used = others.reduce((n, e) => n + holds(e), 0) + this.retiring.size;
+      if (used + 1 <= this.settings.maxLoaded) {
+        except.slotReserved = true;
+        return true;
+      }
+      const now = this.now();
+      const evictable = others
+        .filter(
+          (e) =>
+            e.current?.state === 'ready' && !e.building && now - e.current.lastUsedAt >= LIVE_MS,
+        )
+        .sort((a, b) => a.current!.lastUsedAt - b.current!.lastUsedAt);
+      const idle = evictable.find((e) => !e.current!.busy);
+      if (idle) {
+        await this.unload(idle);
+        continue;
+      }
+      // Only copies busy with a call (or still closing) could free a slot.
+      if ((evictable.length === 0 && this.retiring.size === 0) || performance.now() >= waitBy) {
+        return false;
+      }
+      await delay(50);
+    }
+  }
+
+  /** Delete unloaded copies, least recently used first, until a new one fits. */
+  private makeRoomOnDisk(incomingBytes: number, forWorktree: string): boolean {
+    const loaded = this.loadedPaths();
+    const files = this.listSnapshots()
+      .map((f) => ({ ...f, bytes: fileBytes(f.dbPath) }))
+      .sort((a, b) => a.meta.last_used_at - b.meta.last_used_at);
+    let count = files.length;
+    let bytes = files.reduce((sum, f) => sum + f.bytes, 0);
+    const fits = () =>
+      count + 1 <= this.settings.maxSnapshots &&
+      (this.settings.maxDiskBytes === 0 || bytes + incomingBytes <= this.settings.maxDiskBytes);
+    for (const f of files) {
+      if (fits()) break;
+      if (loaded.has(f.dbPath)) continue;
+      this.deleteFile(f.dbPath, f.metaPath);
+      count--;
+      bytes -= f.bytes;
+      logger.info(
+        { dbPath: f.dbPath, worktree: f.meta.worktree_root, forWorktree },
+        'Branch index evicted to stay within the disk limits',
+      );
+    }
+    return fits();
+  }
+
+  private deleteFile(dbPath: string, metaPath: string): void {
+    removeDbFiles(dbPath);
+    try {
+      fs.rmSync(metaPath, { force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private async unload(entry: Entry): Promise<void> {
+    const index = entry.current;
+    if (!index) return;
+    entry.current = null;
+    await this.retire(index);
+    // Only now: until the close is done the file counts as open (`retiring`).
+    if (this.entries.get(entry.link.worktreeRoot) === entry && !entry.current && !entry.building) {
+      this.entries.delete(entry.link.worktreeRoot);
+    }
+  }
+
+  /**
+   * `POST /api/projects/reindex-file` for a path in a linked worktree. Null
+   * when this module does not handle the project (not a worktree, canonical
+   * checkout not loaded, feature off) — the caller then takes its usual path.
+   * Otherwise the file is re-indexed into the worktree's copy, or — while the
+   * copy does not exist yet — left to the build, which reads the worktree as
+   * it is. Never writes the canonical DB.
+   */
+  async reindexFile(
+    project: string,
+    rawPath: string,
+    opts: { wait?: boolean } = {},
+  ): Promise<WorktreeReindexResult | null> {
+    if (!this.settings.enabled || this.stopped) return null;
+    const found = findLinkedWorktree(project);
+    if (!found) return null;
+    const link: WorktreeLink = { worktreeRoot: found.worktreeRoot, canonicalRoot: found.mainRoot };
+    const canonical = this.deps.getCanonical(link.canonicalRoot);
+    if (!canonical || realpathOr(canonical.root) !== link.canonicalRoot) return null;
+
+    const abs = path.resolve(path.isAbsolute(rawPath) ? rawPath : path.join(project, rawPath));
+    let rel = path.relative(link.worktreeRoot, abs);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      rel = path.relative(link.worktreeRoot, realpathOr(abs));
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        return { ok: false, status: 400, error: 'path is outside project root' };
+      }
+    }
+    const relPosix = rel.split(path.sep).join('/');
+    if (relPosix.length === 0) return { ok: false, status: 400, error: 'path is required' };
+    if (isHotChurnPath(relPosix)) return { ok: true, relPath: relPosix, skippedChurn: true };
+
+    const entry = this.entryFor(link);
+    const index = entry?.current;
+    if (!entry || !index || index.state !== 'ready') {
+      // No copy to take the edit, and nothing to queue: the file is in the
+      // git delta from now on, so the canonical answers flag it until a copy
+      // exists, and the copy being built (or the next one) plans from that
+      // delta and reads the worktree as it is. Drop the cached delta so the
+      // very next call sees the edit. Reported, never failed: the hook's
+      // fallback for a non-2xx is a cold `index-file` into a stray DB keyed
+      // by the worktree root.
+      invalidateWorktreeDelta(link);
+      const building = entry ? this.ensureBuilding(entry) : null;
+      const noCopy = !entry
+        ? 'dropping'
+        : building
+          ? 'copy_building'
+          : this.now() < entry.retryAt && entry.lastError
+            ? entry.lastError
+            : 'canonical_not_ready';
+      return { ok: true, relPath: relPosix, noCopy };
+    }
+    index.lastUsedAt = this.now();
+    await waitFor(
+      index.reindexPaths([relPosix]).catch(() => undefined),
+      opts.wait ? REINDEX_FILE_WAIT_FULL_MS : REINDEX_FILE_WAIT_MS,
+    );
+    return { ok: true, relPath: relPosix };
+  }
+
+  /**
+   * The branch index of `link` — what `GET /api/projects/worktree` and the
+   * copy's own `get_index_health` report — or null when the daemon has none.
+   */
+  describe(link: WorktreeLink): BranchIndexInfo | null {
+    const entry = this.entries.get(link.worktreeRoot);
+    return entry ? branchIndexInfo(entry, entry.current) : null;
+  }
+
+  /** `describe` from inside a copy: that copy, whether or not it is still current. */
+  describeIndex(index: BranchIndex): BranchIndexInfo {
+    return branchIndexInfo(this.entries.get(index.worktreeRoot) ?? null, index);
+  }
+
+  /**
+   * Drop the copy of a worktree (WorktreeRemove hook). Matches sidecars by
+   * the path as given and by its real path — the directory may be gone.
+   * Returns how many copies were deleted.
+   */
+  async drop(worktreePath: string): Promise<number> {
+    const candidates = new Set([path.resolve(worktreePath), realpathOr(worktreePath)]);
+    const dropped = await this.whileDropping(candidates, () => {
+      let n = 0;
+      for (const f of this.listSnapshots()) {
+        if (!candidates.has(f.meta.worktree_root)) continue;
+        this.deleteFile(f.dbPath, f.metaPath);
+        n++;
+      }
+      return n;
+    });
+    if (dropped > 0) logger.info({ worktree: worktreePath, dropped }, 'Branch index dropped');
+    return dropped;
+  }
+
+  /**
+   * Close every copy of the worktrees in `roots` — after any build under way
+   * finishes, and with no new entry or build allowed meanwhile — then run
+   * `remove` (deleting the files) before builds are allowed again.
+   */
+  private async whileDropping<T>(roots: Set<string>, remove: () => T): Promise<T> {
+    for (const root of roots) this.dropping.set(root, (this.dropping.get(root) ?? 0) + 1);
+    try {
+      for (const [key, entry] of [...this.entries]) {
+        if (!roots.has(key)) continue;
+        await entry.building?.catch(() => null);
+        const index = entry.current;
+        entry.current = null;
+        if (index) await this.retire(index, { drainMs: 5_000 });
+        if (this.entries.get(key) === entry) this.entries.delete(key);
+      }
+      for (const root of roots) await this.settleRetiring(root);
+      return remove();
+    } finally {
+      for (const root of roots) {
+        const n = (this.dropping.get(root) ?? 1) - 1;
+        if (n > 0) this.dropping.set(root, n);
+        else this.dropping.delete(root);
+      }
+    }
+  }
+
+  /**
+   * Delete copies whose worktree is gone: the directory is missing, it is no
+   * longer a linked worktree of the recorded checkout, or `git worktree list`
+   * of that checkout does not name it. Also sweeps stale `.tmp` copies and
+   * DB files without a sidecar. Returns the deleted DB paths.
+   */
+  async gc(): Promise<string[]> {
+    const deleted: string[] = [];
+    const lists = new Map<string, Set<string> | null>();
+    for (const f of this.listSnapshots()) {
+      const wt = f.meta.worktree_root;
+      let gone = !fs.existsSync(wt);
+      if (!gone) {
+        const found = findLinkedWorktree(wt);
+        gone = !found || found.worktreeRoot !== wt || found.mainRoot !== f.meta.canonical_root;
+      }
+      if (!gone) {
+        if (!lists.has(f.meta.canonical_root)) {
+          lists.set(f.meta.canonical_root, await listGitWorktrees(f.meta.canonical_root));
+        }
+        const listed = lists.get(f.meta.canonical_root);
+        if (listed && !listed.has(wt)) gone = true;
+      }
+      if (!gone) continue;
+      await this.whileDropping(new Set([wt]), () => {
+        this.deleteFile(f.dbPath, f.metaPath);
+        deleted.push(f.dbPath);
+      });
+    }
+    // Leftovers: interrupted copies and DBs whose sidecar was lost.
+    let names: string[] = [];
+    try {
+      names = fs.readdirSync(this.dir);
+    } catch {
+      /* no directory yet */
+    }
+    const now = this.now();
+    const stillLoaded = this.loadedPaths();
+    for (const name of names) {
+      const full = path.join(this.dir, name);
+      const isTmp = name.includes('.db.tmp');
+      const isOrphanDb = name.endsWith('.db') && !fs.existsSync(full.replace(/\.db$/, '.json'));
+      if (!isTmp && !isOrphanDb) continue;
+      if (stillLoaded.has(full)) continue;
+      // Building writes a fresh .tmp; leave young ones alone.
+      try {
+        if (now - fs.statSync(full).mtimeMs < STALE_TMP_MS && isTmp) continue;
+      } catch {
+        continue;
+      }
+      if (isTmp) fs.rmSync(full, { force: true });
+      else removeDbFiles(full);
+      deleted.push(full);
+    }
+    if (deleted.length > 0) logger.info({ deleted: deleted.length }, 'Branch index GC');
+    return deleted;
+  }
+
+  /** Unload copies nobody used for `idleUnloadMs`. Returns their worktree roots. */
+  async sweepIdle(): Promise<string[]> {
+    const idleMs = this.settings.idleUnloadMs;
+    const now = this.now();
+    const out: string[] = [];
+    for (const entry of [...this.entries.values()]) {
+      const index = entry.current;
+      if (!index) {
+        if (!entry.building && now >= entry.retryAt) this.entries.delete(entry.link.worktreeRoot);
+        continue;
+      }
+      index.flushMeta(now);
+      if (idleMs <= 0 || entry.building || index.busy) continue;
+      if (now - index.lastUsedAt < idleMs) continue;
+      await this.unload(entry);
+      out.push(entry.link.worktreeRoot);
+    }
+    if (out.length > 0) logger.info({ worktrees: out }, 'Branch index unloaded (idle)');
+    return out;
+  }
+
+  stats(): WorktreeIndexStats {
+    let loaded = 0;
+    let building = 0;
+    for (const entry of this.entries.values()) {
+      if (entry.current && entry.current.state !== 'closed') loaded++;
+      if (entry.building) building++;
+    }
+    const files = this.listSnapshots();
+    return {
+      loaded,
+      retiring: this.retiring.size,
+      building,
+      on_disk: files.length,
+      disk_bytes: files.reduce((sum, f) => sum + fileBytes(f.dbPath), 0),
+    };
+  }
+
+  /** Periodic idle unload and GC. Timers are unref'd. */
+  start(): void {
+    if (this.sweepTimer || this.stopped) return;
+    this.sweepTimer = setInterval(() => {
+      void this.sweepIdle().catch((err) => logger.debug({ err }, 'Branch index sweep failed'));
+    }, SWEEP_INTERVAL_MS);
+    this.sweepTimer.unref?.();
+    const scheduleGc = (ms: number) => {
+      this.gcTimer = setTimeout(() => {
+        void this.gc()
+          .catch((err) => logger.debug({ err }, 'Branch index GC failed'))
+          .finally(() => {
+            if (!this.stopped) scheduleGc(GC_INTERVAL_MS);
+          });
+      }, ms);
+      this.gcTimer.unref?.();
+    };
+    scheduleGc(GC_FIRST_DELAY_MS);
+  }
+
+  /** Close every copy. Files stay for reuse after the restart. */
+  async shutdown(): Promise<void> {
+    this.stopped = true;
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    if (this.gcTimer) clearTimeout(this.gcTimer);
+    this.sweepTimer = null;
+    this.gcTimer = null;
+    const entries = [...this.entries.values()];
+    this.entries.clear();
+    await Promise.all(
+      entries.map(async (entry) => {
+        await waitFor(entry.building ?? Promise.resolve(null), 2_000);
+        if (entry.current) await this.retire(entry.current, { drainMs: 2_000 });
+      }),
+    );
+    await Promise.all([...this.retiring.values()].map((r) => r.done));
+  }
+}

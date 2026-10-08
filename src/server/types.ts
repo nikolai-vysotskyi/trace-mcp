@@ -17,13 +17,17 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import type { StateEngine } from '../state/state-engine.js';
 import type { TopologyStore } from '../topology/topology-db.js';
+import type { WorktreeDelta, WorktreeDeltaSummary } from '../worktree-delta.js';
+import type { WorktreeIndexRoute } from './worktree-index-route.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
-/** Name → gated handler map for in-process tool dispatch without a second MCP
- *  transport/session. Populated by `installToolGate` inside `createServer()`
- *  and exposed on `ServerHandle.toolHandlers` — the same map the `batch` tool
- *  (session.ts) already uses for same-project dispatch. */
+/** Name → handler map for in-process tool dispatch without a second MCP
+ *  transport/session. The handlers are the tools' own callbacks, NOT the
+ *  gated ones: a caller skips the gate's journal, savings, dedup and
+ *  enrichment and does its own accounting. Populated by `installToolGate`
+ *  inside `createServer()` and exposed on `ServerHandle.toolHandlers` — the
+ *  same map the `batch` tool (session.ts) uses for same-project dispatch. */
 export type ToolHandlerMap = Map<
   string,
   (params: Record<string, unknown>) => Promise<ToolResponse>
@@ -126,6 +130,25 @@ export interface ServerContext {
   onJournalEntry?: (data: JournalEntryCallbackData) => void;
   /** Session ID stamped into `onJournalEntry` broadcasts. Required when the callback is set. */
   sessionId?: string;
+  /**
+   * Present only when this session runs in a linked git worktree served from
+   * the canonical checkout's index: resolves which files the branch changed
+   * (cached, never rejects). Absent in a main checkout.
+   */
+  getWorktreeDelta?: () => Promise<WorktreeDelta | null>;
+  /**
+   * Present only for a worktree session the daemon can serve from a branch
+   * index (GH #1481 step 2). `batch` dispatches its sub-calls through it the
+   * same way the tool gate does.
+   */
+  worktreeIndex?: WorktreeIndexRoute;
+  /** Tools that always run on this session's own server, even with a branch index. */
+  isSessionLocalTool?: (name: string) => boolean;
+  /**
+   * Set on the server that hosts a branch index: what `get_index_health`
+   * reports about it under `worktree`.
+   */
+  worktreeIndexInfo?: () => WorktreeDeltaSummary | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */

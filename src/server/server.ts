@@ -84,8 +84,14 @@ import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
 import { validatePath } from '../utils/security.js';
+import {
+  getWorktreeDelta,
+  resolveWorktreeLink,
+  type WorktreeDeltaSummary,
+} from '../worktree-delta.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
+import type { WorktreeIndexRoute } from './worktree-index-route.js';
 import { buildInstructions } from './instructions.js';
 import { installRetiredToolHints } from './retired-tools.js';
 import { createToolFilter, resolveSessionPreset } from './tool-filter.js';
@@ -289,6 +295,28 @@ export interface ServerDeps {
    * which would otherwise report a session that nobody opened (TRA-951).
    */
   skipUsagePing?: boolean;
+  /**
+   * Worktree root a stdio proxy routed to this (canonical) project. Set by the
+   * daemon when the session's `?worktree=` hint names a linked worktree, so the
+   * session can flag results for files that worktree changed. A session whose
+   * own root is a linked worktree needs no hint.
+   */
+  worktreeRoot?: string;
+  /**
+   * Branch index route for this worktree session (GH #1481 step 2): once the
+   * daemon's copy of the canonical index for this worktree is ready, tool
+   * calls are answered from it. Absent for every other session.
+   */
+  worktreeIndex?: WorktreeIndexRoute;
+  /**
+   * This server only hosts tool handlers for another session (the daemon's
+   * branch index server): it never talks to a client, so it writes no status
+   * sentinel, no session snapshot file and resolves no worktree delta of its
+   * own — the session that dispatches to it owns all of that.
+   */
+  toolHost?: boolean;
+  /** For a tool-host server: what `get_index_health` reports under `worktree`. */
+  worktreeIndexInfo?: () => WorktreeDeltaSummary | null;
 }
 
 /**
@@ -303,8 +331,9 @@ export interface ServerHandle {
    */
   journal: SessionJournal;
   /**
-   * Name → gated handler map for in-process tool dispatch without a second MCP
-   * transport/session. Same map the `batch` tool uses for same-project calls;
+   * Name → handler map (the tools' own callbacks, before the gate) for
+   * in-process tool dispatch without a second MCP transport/session. Same
+   * map the `batch` tool uses for same-project calls;
    * `call_project_tool`'s cross-project relay (src/daemon/project-relay.ts)
    * looks up a DIFFERENT project's server by this field instead of opening a
    * second live MCP connection.
@@ -385,7 +414,8 @@ export function createServer(
   const journal = new SessionJournal();
   const sessionStartedAt = new Date().toISOString();
   const snapshotPath = getSnapshotPath(projectRoot);
-  journal.enablePeriodicSnapshot(snapshotPath);
+  const toolHost = deps?.toolHost === true;
+  if (!toolHost) journal.enablePeriodicSnapshot(snapshotPath);
 
   // Observability bridge (P13): replace the process-wide noop sink with one
   // configured from `telemetry.observability`. Lazy/async — spans buffer in
@@ -527,7 +557,7 @@ export function createServer(
     }
     // Write final snapshot for PreCompact hook
     try {
-      journal.flushSnapshotFile(snapshotPath);
+      if (!toolHost) journal.flushSnapshotFile(snapshotPath);
     } catch {
       /* best-effort */
     }
@@ -622,25 +652,46 @@ export function createServer(
   // Records tool-call counters + last successful call timestamp so the v0.8+
   // hook can distinguish "process up but MCP channel stalled" from a healthy
   // server, and the desktop app can render the project status badge.
-  const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
+  // A tool host serves no client, so it must not claim the sentinel: the guard
+  // hook would take a fresh one for the worktree path as a live session there.
+  const heartbeat = toolHost
+    ? { stop: () => {}, recordToolCall: (_success: boolean) => {} }
+    : startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
+
+  // Linked worktree served from the canonical checkout's index: resolve the
+  // files the branch changed so answers about them can be flagged. Null (and
+  // therefore no behaviour change at all) for a main checkout.
+  const worktreeLink = toolHost ? null : resolveWorktreeLink(projectRoot, deps?.worktreeRoot);
+
+  const loadWorktreeDelta = worktreeLink
+    ? () => getWorktreeDelta(worktreeLink).catch(() => null)
+    : undefined;
 
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
-  const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
-    installToolGate(
-      server,
-      config,
-      activePreset,
-      savings,
-      journal,
-      j,
-      extractResultCount,
-      extractCompactResult,
-      stripMetaFields,
-      projectRoot,
-      (success) => heartbeat.recordToolCall(success),
-      deps?.onJournalEntry,
-      deps?.sessionId,
-    );
+  const {
+    _originalTool,
+    registeredToolNames,
+    ungatedToolNames,
+    toolHandlers,
+    deferredTools,
+    isSessionLocalTool,
+  } = installToolGate(
+    server,
+    config,
+    activePreset,
+    savings,
+    journal,
+    j,
+    extractResultCount,
+    extractCompactResult,
+    stripMetaFields,
+    projectRoot,
+    (success) => heartbeat.recordToolCall(success),
+    deps?.onJournalEntry,
+    deps?.sessionId,
+    loadWorktreeDelta,
+    deps?.worktreeIndex,
+  );
 
   if (presetName !== 'full') {
     logger.info(
@@ -771,6 +822,10 @@ export function createServer(
     // still reach the durable activity journal.
     onJournalEntry: deps?.onJournalEntry,
     sessionId: deps?.sessionId,
+    getWorktreeDelta: loadWorktreeDelta,
+    worktreeIndex: deps?.worktreeIndex,
+    isSessionLocalTool,
+    worktreeIndexInfo: deps?.worktreeIndexInfo,
   };
 
   const metaCtx: MetaContext = {
