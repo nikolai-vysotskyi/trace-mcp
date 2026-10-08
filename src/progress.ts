@@ -67,9 +67,11 @@ export class ProgressState {
 
   private db: Database.Database | null;
   private listeners: ProgressListener[] = [];
+  private readonly projectRoot?: string;
 
-  constructor(db?: Database.Database) {
+  constructor(db?: Database.Database, projectRoot?: string) {
     this.db = db ?? null;
+    this.projectRoot = projectRoot;
     if (this.db) {
       this.loadFromDb();
     }
@@ -101,7 +103,7 @@ export class ProgressState {
     // Log progress on phase changes and periodically during running
     if (partial.phase === 'running' && partial.total !== undefined) {
       logger.info(
-        { pipeline: name, total: current.total },
+        { pipeline: name, projectRoot: this.projectRoot, total: current.total },
         '%s started: %d items to process',
         name,
         current.total,
@@ -117,14 +119,14 @@ export class ProgressState {
       // downgrades this to 'skipped'; the log line has to say it too.
       if (current.total > 0 && current.processed === 0) {
         logger.warn(
-          { pipeline: name, total: current.total, elapsed },
+          { pipeline: name, projectRoot: this.projectRoot, total: current.total, elapsed },
           '%s finished without processing any of %d queued items',
           name,
           current.total,
         );
       } else {
         logger.info(
-          { pipeline: name, processed: current.processed, elapsed },
+          { pipeline: name, projectRoot: this.projectRoot, processed: current.processed, elapsed },
           '%s completed: %d items in %ds',
           name,
           current.processed,
@@ -132,7 +134,12 @@ export class ProgressState {
         );
       }
     } else if (partial.phase === 'error') {
-      logger.error({ pipeline: name, error: current.error }, '%s failed: %s', name, current.error);
+      logger.error(
+        { pipeline: name, projectRoot: this.projectRoot, error: current.error },
+        '%s failed: %s',
+        name,
+        current.error,
+      );
     } else if (partial.processed !== undefined && current.total > 0) {
       const pct = Math.round((current.processed / current.total) * 100);
       // Debug, not info: these ticks were 42% of the 39 MB of daemon.log
@@ -140,7 +147,13 @@ export class ProgressState {
       // unfindable. The live view reads `snapshot()` / the SSE progress feed,
       // not the log; start and completion stay at info.
       logger.debug(
-        { pipeline: name, processed: current.processed, total: current.total, pct },
+        {
+          pipeline: name,
+          projectRoot: this.projectRoot,
+          processed: current.processed,
+          total: current.total,
+          pct,
+        },
         '%s progress: %d/%d (%d%%)',
         name,
         current.processed,
