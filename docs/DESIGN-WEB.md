@@ -776,7 +776,7 @@ would break the `§` references inside this file and the one in `docs/index.html
 Read it as the landing-page counterpart to §2.
 
 **Centred, one column, and this order** (TRA-738, from Nikolai's mock): eyebrow →
-headline → one line of what it is → one button → the platforms it is not offering
+headline → one button → the platforms it is not offering
 → the npm box → the trust line at the fold. That is the whole first screen.
 Anything else belongs below the fold or one click away, and the burden is on the
 addition, not on the removal.
@@ -786,14 +786,16 @@ The list of what used to sit here is the point: a service label
 two-sentence description, two actions of different natures, an
 alternative-architecture link, and a three-item trust row — eight blocks above
 the fold where Ollama, the reference, has three. Left-aligned, they read as a
-paragraph the visitor had to finish before finding the download.
+paragraph the visitor had to finish before finding the download. TRA-2265 moved
+the later benchmark and installation paragraphs below the hero after they
+recreated that same problem one PR at a time.
 
 **Centred, and this is the one place on the site where it is.** §2.7 prefers
 asymmetry, and it is right everywhere there is a second column to balance
 against. There is none here: one sentence and one button, alone, off to the
 left, with the whole right half empty is not asymmetry, it is a page that
 started and gave up. `.hero { text-align: center }` plus `margin: 0 auto` on
-`.hero-headline` (900px) and `.hero-desc` (660px).
+`.hero-headline` (900px).
 
 **One action. The button.** `.btn .btn-primary .btn-lg` — an `--accent-solid`
 cobalt fill under a white label, 5.46:1 in both themes. It shipped red until
@@ -807,27 +809,12 @@ the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
 (Intel)`, `Download for Windows` — never a platform the page has not confirmed
 and never an architecture the visitor is left to guess at.
 
-**Three body sizes under the headline, and shade says which kind of sentence
-it is** (TRA-1143). `.hero-desc` is the claim — 19px, `--text-primary`, its
-number at `--text-display` through `.accent-text`. `.hero-evidence` is the
-other half of the same measurement, the quality result that says the cheap
-context was worth having — 15px, but `--text-primary` too, with its four
-numbers on the same `.accent-text`. `.hero-boundary` is the scope note about
-what the product does to your machine — 15px, `--text-secondary`.
-
-Size separates evidence from claim; shade groups them and drops the scope note
-out. Getting this wrong is not a nuance: for one release the evidence and the
-scope note shared `.hero-boundary` and rendered identically at
-15px/`--text-secondary`, so the answer to "is the thinner context worse?" was
-set in the same grey as a legal boundary and read as small print under the
-number it qualifies. The saving was loud and the proof it had not been bought
-with worse reviews was quiet — the exact shape the page exists to avoid.
-
-**A number that qualifies a claim gets the claim's own emphasis, on both
-sides of the comparison.** All four of `.hero-evidence`'s figures take
-`.accent-text`, including the ones where we lose: `0.80 false positives per PR
-against 0.58` is us being worse, and it is set as brightly as the half we win.
-Dimming the losing number is how a comparison becomes a boast.
+**Keep the measurement complete below the hero** (TRA-2265). The first tile in
+`.metrics-strip-grid` shows the saving and its denominator; `.metrics-evidence`
+follows the tiles with all four quality figures from the same run. Every number,
+including the comparison where we lose, has the same emphasis. The installation
+scope note follows in `.metrics-boundary`, still before the methods footnotes.
+The hero has no benchmark prose or installation paragraph.
 
 **Three mono caps rows, one treatment, three greys.** `.hero-eyebrow`
 (`--text-secondary`, above the headline, carrying the service label and the
@@ -888,25 +875,18 @@ never lands on a separator.
 one tested step wider than the failure. Inline behaviour is what you get above
 700px, not at it.
 
-**The first screen fits a 13" laptop, and that is a measurement.** Measured
-on the **live published page** at 1440×900 — `getBoundingClientRect().top`
-plus `scrollY`, document coordinates: the button top sits at 630px and the
-trust line at 841px, with the metrics strip below the fold.
+**The first screen fits a 13" laptop, and that is a measurement.** TRA-2265's
+headless local preview at 1440×900, with the Jekyll front matter stripped, put
+the button top at 403px, trust line at 614px and metrics strip at 696px. At
+390×844 they were at 264px, 449px and 532px, with no horizontal overflow.
+These are preview coordinates, not a measurement of the published page: Jekyll
+was unavailable in that run. Re-measure the live page after publication and
+record the live baseline here. A button below 900px at 1440×900 is a regression.
 
-Take the figure on `trace-mcp.com`, not on a local preview, and say which you
-took. Without a Jekyll build there is no faithful local render of this page —
-a Liquid-lite substitution reads roughly 48px lower on every hero element than
-the live page does, so a preview number recorded here as the baseline is a
-regression the next run will chase and not find. The rule is the button, not
-the hero — a first screen whose button falls below 900px is a regression
-however good it looks at 1440×1080.
-
-Re-measure `getBoundingClientRect()` on `.hero-cta` and `.hero-trust` after any
-change to the headline wording, either paragraph, or the hero's padding. The
-figures here have been refreshed once already (TRA-1143): they read 483px and
-656px from before the evidence line existed, which made a stale record look
-like a passing check. If you change the hero and do not re-measure, the next
-run reads your numbers as the truth.
+Re-measure `getBoundingClientRect()` on `.hero-cta`, `.hero-trust` and
+`.metrics-strip` after any change to headline wording, hero content or padding.
+The previous live figures read 630px and 841px after the benchmark paragraphs
+were added. Do not present a preview number as a live baseline.
 
 ---
 
