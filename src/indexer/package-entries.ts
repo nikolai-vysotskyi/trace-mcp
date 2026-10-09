@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 const PACKAGE_ENTRIES_CACHE_TTL_MS = 60_000;
 const MAX_PACKAGE_ENTRIES_CACHE_ENTRIES = 20;
@@ -47,6 +48,36 @@ export function findPackageJsonEntries(
   rootPath: string,
   options?: { bypassCache?: boolean; ttlMs?: number },
 ): Set<string> {
+  const cached = readCachedEntries(rootPath, options);
+  if (cached) return cached;
+  const entries = new Set<string>();
+  for (const _ of scanPackageEntries(rootPath, entries)) {
+    // Synchronous callers use the same scanner and cache contract.
+  }
+  cacheEntries(rootPath, entries);
+  return entries;
+}
+
+/** Cooperative variant for bulk indexing: no directory walk may monopolize /health. */
+export async function findPackageJsonEntriesAsync(
+  rootPath: string,
+  options?: { bypassCache?: boolean; ttlMs?: number },
+): Promise<Set<string>> {
+  const cached = readCachedEntries(rootPath, options);
+  if (cached) return cached;
+  const entries = new Set<string>();
+  let dirs = 0;
+  for (const _ of scanPackageEntries(rootPath, entries)) {
+    if (++dirs % 32 === 0) await yieldToEventLoopFair();
+  }
+  cacheEntries(rootPath, entries);
+  return entries;
+}
+
+function readCachedEntries(
+  rootPath: string,
+  options?: { bypassCache?: boolean; ttlMs?: number },
+): Set<string> | undefined {
   const ttl = options?.ttlMs ?? PACKAGE_ENTRIES_CACHE_TTL_MS;
   if (!options?.bypassCache) {
     const cached = packageEntriesCache.get(rootPath);
@@ -57,16 +88,19 @@ export function findPackageJsonEntries(
       return cached.entries;
     }
   }
+  return undefined;
+}
 
-  const entries = new Set<string>();
-  if (!rootPath || !fs.existsSync(rootPath)) return entries;
+function* scanPackageEntries(rootPath: string, entries: Set<string>): Generator<void> {
+  if (!rootPath || !fs.existsSync(rootPath)) return;
 
   const visited = new Set<string>();
   const queue: Array<{ dir: string; depth: number }> = [{ dir: rootPath, depth: 0 }];
   const MAX_DEPTH = 8;
 
-  while (queue.length > 0) {
-    const { dir, depth } = queue.shift()!;
+  // A cursor keeps breadth-first order without Array.shift's quadratic copies.
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const { dir, depth } = queue[cursor]!;
     if (visited.has(dir)) continue;
     visited.add(dir);
 
@@ -133,16 +167,17 @@ export function findPackageJsonEntries(
         logger.debug({ err: e, pkgPath }, 'force-include: failed to parse package.json');
       }
     }
+    yield;
   }
+}
 
+function cacheEntries(rootPath: string, entries: Set<string>): void {
   packageEntriesCache.delete(rootPath);
   if (packageEntriesCache.size >= MAX_PACKAGE_ENTRIES_CACHE_ENTRIES) {
     const oldestKey = packageEntriesCache.keys().next().value;
     if (oldestKey !== undefined) packageEntriesCache.delete(oldestKey);
   }
   packageEntriesCache.set(rootPath, { entries, computedAt: Date.now() });
-
-  return entries;
 }
 
 /**

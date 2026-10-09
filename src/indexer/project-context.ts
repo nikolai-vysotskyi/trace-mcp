@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DetectedVersion, ParsedDependency, ProjectContext } from '../plugin-api/types.js';
 import { validatePath } from '../utils/security.js';
+import { WORKSPACE_SKIP_DIRS } from './monorepo.js';
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -180,7 +181,60 @@ function findScanDirectories(rootPath: string): string[] {
   return dirs;
 }
 
-export function buildProjectContext(rootPath: string): ProjectContext {
+const CONTEXT_FILE_NAMES = new Set([
+  ...CONFIG_FILE_NAMES,
+  'package.json',
+  'composer.json',
+  'pyproject.toml',
+  'requirements.txt',
+  'go.mod',
+  'Cargo.toml',
+  'Gemfile',
+  'pom.xml',
+  'build.gradle',
+  'build.gradle.kts',
+  '.nvmrc',
+  '.node-version',
+  '.python-version',
+  '.ruby-version',
+  '.tool-versions',
+]);
+
+/** Discover relevant directories with async I/O before the synchronous manifest parser runs. */
+export async function findScanDirectoriesAsync(rootPath: string): Promise<string[]> {
+  const root = path.resolve(rootPath);
+  const dirs = [root];
+  const scan = async (dir: string, depth: number): Promise<void> => {
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    if (
+      dir !== root &&
+      entries.some(
+        (e) =>
+          (e.isFile() && CONTEXT_FILE_NAMES.has(e.name)) ||
+          (e.isSymbolicLink() && (e.name === 'package.json' || e.name === 'composer.json')),
+      )
+    ) {
+      dirs.push(dir);
+    }
+    // The legacy implicit workspace scanner checks children at depth 3,
+    // while ProjectContext itself only consumes directories through depth 2.
+    if (depth >= 3) return;
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.') || WORKSPACE_SKIP_DIRS.has(entry.name))
+        continue;
+      await scan(path.join(dir, entry.name), depth + 1);
+    }
+  };
+  await scan(root, 0);
+  return dirs;
+}
+
+export function buildProjectContext(rootPath: string, scanDirectories?: string[]): ProjectContext {
   const detectedVersions: DetectedVersion[] = [];
   const allDependencies: ParsedDependency[] = [];
   const configFiles: string[] = [];
@@ -237,7 +291,12 @@ export function buildProjectContext(rootPath: string): ProjectContext {
     }
   };
 
-  const scanDirs = findScanDirectories(rootPath);
+  const scanDirs = scanDirectories
+    ? scanDirectories.filter((dir) => {
+        const parts = path.relative(rootPath, dir).split(path.sep);
+        return parts.length <= 2 && !parts.some((segment) => SKIP_DIRS.has(segment));
+      })
+    : findScanDirectories(rootPath);
 
   let packageJson: Record<string, unknown> | undefined;
   let composerJson: Record<string, unknown> | undefined;
