@@ -3452,3 +3452,54 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+
+### Night pass (pass 1), 2026-10-10 (TRA-2302): mention sweep collision audit (winter6205/iknow), open threads audit, competitor deep-dive (Serena LSP CDN failure #2152 & session reset #2149, Semble process leak #288, CRG FTS desync #1103)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-10-09 (routine sync, no new comments since Nikolai's 2026-09-26 round 3 update). Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: open, updated 2026-10-08 (contributor plan underway). Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: merged, live in HOL Registry; third-party scanner CI refused per repo security policy, follow-up claim notifications ignored.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- 1 repo outside seen list: `winter6205/iknow`.
+- Inspection via raw API: inspected `docs/trace-mcp-server.md`, `src/trace-mcp/`, `docs/CONTEXT.md`.
+- Classification: name collision. `winter6205/iknow` is an LLM agent harness / runtime featuring an internal `iknow-trace-mcp` stdio server (`list_sessions`, `query_trace`, `get_record`) designed for querying iknow execution session traces and jsonl transcripts. Unrelated to code intelligence, AST indexing, or token reduction.
+- Recorded into `ops/mentions-seen.txt` with explanatory comment. Subsequent sweep verified clean ("No repos outside the seen list. Nothing to read.").
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2152 (opened 2026-10-09): `Kotlin LSP install fails: download-cdn.jetbrains.com now returns 404 (needs the signed redirect via download.jetbrains.com)`. Demonstrates a fundamental structural fragility of LSP-based code navigation architectures. Serena relies on dynamically downloading external third-party language server binaries (JetBrains Kotlin LSP, Erlang ELP, tsserver) at runtime. When upstream CDN endpoints change authentication or signed-redirect requirements, the entire bootstrap pipeline fails with extraction errors, breaking language support across user environments. By contrast, `trace-mcp` ships with native Tree-sitter grammars compiled directly into node native bindings, providing instant offline parsing across 20+ languages with zero runtime network dependency or fragile CDN binaries.
+  - Issue #2149 (closed 2026-10-09): `Active project resets between MCP tool calls in the same session ("No active project" despite earlier activate_project)`. Serena depends on stateful project activation across MCP sessions, which causes failures when clients disconnect or parallelize calls. In `trace-mcp`, all tools are stateless and resolve workspace directories dynamically or from explicit paths, ensuring idempotency across IDEs and agents.
+  - PR #2146 (merged 2026-10-09): `Optimise file access methods for project file traversal and filtering`. Refactored file traversal to reduce overhead during project walks.
+- `MinishLab/semble`:
+  - Issue #288 (open 2026-10-08): `When used as an MCP, it will spawn a large number of UV processes that are not released.` Semble spawns subprocesses (`uv run ...`) per tool invocation or subagent, leaking dozens of unreleased child processes that exhaust OS process limits and memory. In `trace-mcp`, all operations execute within a single persistent Node.js/Electron process with shared in-memory state and managed SQLite connections, preventing process leaks.
+- `tirth8205/code-review-graph`:
+  - Issues #1103 & #1104 / PR #1105: `[Bug]: MCP serve --auto-watch skips FTS post-processing after file updates` and stale FTS after `--skip-postprocess`. File watcher decoupled FTS indexing from AST updates, creating index desynchronization where updated code was missing from full-text search. In `trace-mcp`, SQLite FTS5 index updates are atomically synchronized in the same database transaction as AST symbol table updates.
+- `DeusData/codebase-memory-mcp`:
+  - PR #2573 (open 2026-10-09): `ci: build Linux amd64 release on Ubuntu 22.04`. CBM addresses glibc incompatibility across Linux distributions caused by building native binaries on newer glibc versions. `trace-mcp` avoids distribution glibc friction by shipping standard npm packages with precompiled native tree-sitter bindings and Electron desktop bundles.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 189★ (steady), 24 forks, pushed 2026-10-09 (v3.35.0 live).
+- `MinishLab/semble`: 6,192★ (-1 fluctuation), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 32,006★ (+5 since pass 4), 2,932 forks (+1), pushed 2026-10-06.
+- `yamadashy/repomix`: 28,769★ (+2 since pass 4), 1,575 forks (+1), pushed 2026-10-03.
+- `oraios/serena`: 30,131★ (+7 since pass 4), 2,051 forks (-1), pushed 2026-10-09.
+- `DeusData/codebase-memory-mcp`: 46,232★ (+16 since pass 4), 3,804 forks (+1), pushed 2026-10-09.
+- `cdeust/ai-architect-mcp-codebase`: 5★, 1 fork, pushed 2026-10-09.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
