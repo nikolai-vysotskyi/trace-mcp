@@ -35,7 +35,7 @@ async function connect(path: string): Promise<Client> {
         cwd: path,
         stderr: 'inherit',
       });
-      const client = new Client({ name: 'bb-plugin-trace-mcp', version: '0.1.0' });
+      const client = new Client({ name: 'bb-plugin-trace-mcp', version: '0.2.0' });
       client.onclose = () => sessions.delete(path);
       try {
         await client.connect(transport);
