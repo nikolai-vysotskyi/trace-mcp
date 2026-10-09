@@ -58,7 +58,7 @@ assert.equal(search.content[0].text, 'found symbol');
 assert.deepEqual(calls[0], {
   method: 'call',
   args: { path: '/repo/on-remote-host', name: 'search', args: { query: 'needle' } },
-  options: { hostId: 'remote-host-1', signal: context.signal },
+  options: { hostId: 'remote-host-1', signal: context.signal, timeoutMs: 180_000 },
 });
 assert.match(
   await tools.get('trace_tools').execute({ query: 'search', limit: 12 }, context),

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { traceHostContract } from './contract.js';
 
 const MAX_RESULT_CHARS = 64_000;
+const HOST_CALL_TIMEOUT_MS = 180_000;
 
 export default async function tracePlugin(bb: BbPluginApi): Promise<void> {
   const host = bb.hosts.experimental_client({ contract: traceHostContract });
@@ -22,7 +23,15 @@ export default async function tracePlugin(bb: BbPluginApi): Promise<void> {
 
   async function call(name: string, args: Record<string, unknown>, ctx: PluginAgentToolContext) {
     const { path, hostId } = await target(ctx);
-    const result = await host.call('call', { path, name, args }, { hostId, signal: ctx.signal });
+    const result = await host.call(
+      'call',
+      { path, name, args },
+      {
+        hostId,
+        signal: ctx.signal,
+        timeoutMs: HOST_CALL_TIMEOUT_MS,
+      },
+    );
     return {
       isError: result.isError,
       content: result.content.map((part) =>
@@ -85,7 +94,15 @@ export default async function tracePlugin(bb: BbPluginApi): Promise<void> {
     }),
     async execute({ query, limit }, ctx) {
       const { path, hostId } = await target(ctx);
-      const result = await host.call('list', { path }, { hostId, signal: ctx.signal });
+      const result = await host.call(
+        'list',
+        { path },
+        {
+          hostId,
+          signal: ctx.signal,
+          timeoutMs: HOST_CALL_TIMEOUT_MS,
+        },
+      );
       const needle = query.toLowerCase();
       const matches = result.tools
         .filter((tool) => `${tool.name} ${tool.description ?? ''}`.toLowerCase().includes(needle))
@@ -105,7 +122,15 @@ export default async function tracePlugin(bb: BbPluginApi): Promise<void> {
     }),
     execute: async ({ name, arguments: args }, ctx) => {
       const { path, hostId } = await target(ctx);
-      const available = await host.call('list', { path }, { hostId, signal: ctx.signal });
+      const available = await host.call(
+        'list',
+        { path },
+        {
+          hostId,
+          signal: ctx.signal,
+          timeoutMs: HOST_CALL_TIMEOUT_MS,
+        },
+      );
       if (!available.tools.some((tool) => tool.name === name))
         throw new Error(`Unknown trace-mcp tool: ${name}`);
       return call(name, args, ctx);
