@@ -33,7 +33,7 @@ async function connect(path: string): Promise<Client> {
           'full',
         ],
         cwd: path,
-        stderr: 'pipe',
+        stderr: 'inherit',
       });
       const client = new Client({ name: 'bb-plugin-trace-mcp', version: '0.1.0' });
       client.onclose = () => sessions.delete(path);
