@@ -173,7 +173,8 @@ export async function extractAndPersist(
   // indexed regardless of file-size cap. Without this, lodash-class
   // monolithic libraries (single-file UMD/IIFE declared as `main`) drop
   // out of the index and every published method looks dead.
-  const forceIncludePaths = findPackageJsonEntries(rootPath);
+  const forceIncludePaths =
+    candidates.length > 0 ? findPackageJsonEntries(rootPath) : new Set<string>();
 
   const extractor = new FileExtractor({
     store,

@@ -95,8 +95,8 @@ export function resolvePythonTypeEdges(state: PipelineState, scope?: ChangeScope
   const targets = store.db
     .prepare(`
     SELECT s.id, s.name, s.kind, s.file_id, f.workspace
-      FROM symbols s
-      JOIN files f ON s.file_id = f.id
+      FROM files f
+      JOIN symbols s INDEXED BY idx_symbols_file ON s.file_id = f.id
      WHERE f.language = 'python'
        AND s.kind IN ('class','interface','type_alias','enum','type')
   `)

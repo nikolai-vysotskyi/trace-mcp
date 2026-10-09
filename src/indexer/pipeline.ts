@@ -1052,11 +1052,12 @@ export class IndexingPipeline {
   }
 
   /**
-   * TRA-1543: run ANALYZE unless one completed within ANALYZE_THROTTLE_MS.
-   * The indexAll walk path used to pay ~24 ms per run; planner statistics go
-   * stale gracefully, so a 10-minute budget is plenty. Non-fatal by contract.
+   * TRA-1543 / TRA-2282: run ANALYZE unless one completed within ANALYZE_THROTTLE_MS.
+   * If sqlite_stat1 cardinality is severely divergent (e.g. recorded file count in stat1
+   * is tiny while actual file count grew significantly), bypass the throttle to prevent
+   * catastrophic query plans.
    */
-  private maybeAnalyze(): void {
+  private maybeAnalyze(force?: boolean): void {
     let last: number | null = null;
     try {
       const raw = this.store.getRepoMetadata(META_LAST_ANALYZE_MS);
@@ -1067,9 +1068,13 @@ export class IndexingPipeline {
     } catch {
       /* best-effort — a metadata miss just means "analyze now" */
     }
-    if (last != null && Date.now() - last < ANALYZE_THROTTLE_MS) {
+    const divergent = !force && this.isStatDivergent();
+    if (!force && !divergent && last != null && Date.now() - last < ANALYZE_THROTTLE_MS) {
       logger.debug({ lastAnalyzeMs: last }, 'ANALYZE throttled — recent enough');
       return;
+    }
+    if (divergent) {
+      logger.debug('ANALYZE throttle bypassed — sqlite_stat1 cardinality divergent');
     }
     try {
       this.store.db.exec('ANALYZE');
@@ -1078,6 +1083,28 @@ export class IndexingPipeline {
       return;
     }
     this.stampAnalyzeComplete();
+  }
+
+  /** TRA-2282: detect when sqlite_stat1 row counts severely lag reality */
+  private isStatDivergent(): boolean {
+    try {
+      const hasStat = this.store.db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sqlite_stat1'")
+        .get();
+      if (!hasStat) return false;
+      const statRow = this.store.db
+        .prepare("SELECT stat FROM sqlite_stat1 WHERE tbl='files' LIMIT 1")
+        .get() as { stat: string } | undefined;
+      if (!statRow) return false;
+      const statCount = Number.parseInt(statRow.stat.split(' ')[0] ?? '', 10);
+      if (!Number.isFinite(statCount)) return false;
+      const actualCount = (
+        this.store.db.prepare('SELECT count(*) as c FROM files').get() as { c: number }
+      ).c;
+      return actualCount >= 50 && actualCount >= statCount * 3;
+    } catch {
+      return false;
+    }
   }
 
   /** Record a completed ANALYZE (bulk or throttled-walk path) for the throttle. */
@@ -1482,20 +1509,14 @@ export class IndexingPipeline {
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
       if (r.indexed > 0) this.scheduleCoverageReconcile();
-      // TRA-1541 ANALYZE discipline: indexAll refreshes planner statistics at
-      // the end of every run, but this incremental path never did. Runs that
-      // took the trigger-drop + rebuild path (no ANALYZE there, unlike
-      // disableBulkMode) leave sqlite_stat1 describing the pre-burst graph
-      // until the next full reindex — refresh here for exactly those runs.
-      // Gated on the rebuild flag itself, not on indexed counts: a run with
-      // many skipped/errored candidates still rebuilds. Non-fatal by contract.
+      // TRA-1541 / TRA-2282 ANALYZE discipline: indexAll refreshes planner statistics at
+      // the end of every run. For indexFiles, refresh planner statistics if FTS was
+      // rebuilt, or if files were indexed and stats are divergent or throttle elapsed.
       if (this._lastUsedFtsRebuild) {
         this._lastUsedFtsRebuild = false;
-        try {
-          this.store.db.exec('ANALYZE');
-        } catch (err) {
-          logger.debug({ err }, 'ANALYZE failed after indexFiles (non-fatal)');
-        }
+        this.maybeAnalyze(true);
+      } else if (r.indexed > 0) {
+        this.maybeAnalyze();
       }
       return r;
     });

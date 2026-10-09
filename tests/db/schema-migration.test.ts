@@ -38,12 +38,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 34 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 35 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(34);
+    expect(Number(row!.value)).toBe(35);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -90,6 +90,7 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
 
     expect(names.has('idx_ranking_pins_expires')).toBe(true);
     expect(names.has('idx_pass_cache_created')).toBe(true);
+    expect(names.has('idx_files_language')).toBe(true);
   });
 
   it('core graph tables ship in the same fresh init (regression guard)', () => {
