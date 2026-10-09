@@ -4,7 +4,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildProjectContext } from '../../src/indexer/project-context.js';
+import {
+  buildProjectContext,
+  findScanDirectoriesAsync,
+} from '../../src/indexer/project-context.js';
+import { detectWorkspaces } from '../../src/indexer/monorepo.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
 
 let tmpDir: string;
@@ -18,6 +22,26 @@ afterEach(() => {
 });
 
 describe('buildProjectContext', () => {
+  it('discovers manifest directories cooperatively without changing context or implicit workspaces', async () => {
+    writeFixtureFile(tmpDir, 'package.json', JSON.stringify({ name: 'root' }));
+    writeFixtureFile(
+      tmpDir,
+      'apps/a/package.json',
+      JSON.stringify({ name: 'a', dependencies: { react: '^19' } }),
+    );
+    writeFixtureFile(tmpDir, 'apps/b/composer.json', JSON.stringify({ require: { php: '^8' } }));
+    writeFixtureFile(tmpDir, 'out/app/package.json', JSON.stringify({ name: 'generated' }));
+    for (let i = 0; i < 512; i++)
+      fs.mkdirSync(path.join(tmpDir, 'src', `empty-${i}`), { recursive: true });
+    let heartbeat = false;
+    setImmediate(() => {
+      heartbeat = true;
+    });
+    const dirs = await findScanDirectoriesAsync(tmpDir);
+    expect(heartbeat).toBe(true);
+    expect(buildProjectContext(tmpDir, dirs)).toEqual(buildProjectContext(tmpDir));
+    expect(detectWorkspaces(tmpDir, dirs)).toEqual(detectWorkspaces(tmpDir));
+  });
   it('returns empty context for an empty directory', () => {
     const ctx = buildProjectContext(tmpDir);
     expect(ctx.detectedVersions).toEqual([]);

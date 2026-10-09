@@ -13,7 +13,7 @@ export interface WorkspaceInfo {
  * Detect monorepo workspaces from pnpm-workspace.yaml, package.json, or composer.json.
  * Returns an empty array if no workspace config is found.
  */
-export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
+export function detectWorkspaces(rootPath: string, scanDirectories?: string[]): WorkspaceInfo[] {
   // 1. pnpm-workspace.yaml
   const pnpmResult = detectPnpmWorkspaces(rootPath);
   if (pnpmResult.length > 0) return pnpmResult;
@@ -29,7 +29,7 @@ export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
   // 4. Implicit workspace detection: scan 1-2 levels deep for directories with
   //    package.json or composer.json. Covers the "folder of projects" layout
   //    (e.g. ~/projects/the/ holding 15carats/{front,laravel}, fair/{...}, ...).
-  const implicitResult = detectImplicitWorkspaces(rootPath);
+  const implicitResult = detectImplicitWorkspaces(rootPath, scanDirectories);
   if (implicitResult.length === 0) return [];
 
   const hasRootManifest =
@@ -158,7 +158,7 @@ function detectComposerWorkspaces(rootPath: string): WorkspaceInfo[] {
   }
 }
 
-const SKIP_DIRS = new Set([
+export const WORKSPACE_SKIP_DIRS = new Set([
   'node_modules',
   'vendor',
   '.git',
@@ -183,7 +183,23 @@ const SKIP_DIRS = new Set([
  *     thewed/
  *       thewed-laravel/ (composer.json)
  */
-function detectImplicitWorkspaces(rootPath: string): WorkspaceInfo[] {
+function detectImplicitWorkspaces(rootPath: string, scanDirectories?: string[]): WorkspaceInfo[] {
+  if (scanDirectories) {
+    const workspaces: WorkspaceInfo[] = [];
+    for (const dir of scanDirectories) {
+      if (dir === path.resolve(rootPath)) continue;
+      const rel = path.relative(rootPath, dir).replace(/\\/g, '/');
+      if (rel.split('/').length > 2) continue;
+      if (workspaces.some((ws) => rel.startsWith(`${ws.path}/`))) continue;
+      if (
+        fs.existsSync(path.join(dir, 'package.json')) ||
+        fs.existsSync(path.join(dir, 'composer.json'))
+      ) {
+        workspaces.push({ name: rel, path: rel });
+      }
+    }
+    return workspaces;
+  }
   const workspaces: WorkspaceInfo[] = [];
   const seen = new Set<string>();
 
@@ -197,7 +213,8 @@ function detectImplicitWorkspaces(rootPath: string): WorkspaceInfo[] {
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      if (!entry.isDirectory() || WORKSPACE_SKIP_DIRS.has(entry.name) || entry.name.startsWith('.'))
+        continue;
 
       const absChild = path.join(dir, entry.name);
       const relChild = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
