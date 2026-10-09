@@ -6,6 +6,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as parcelWatcher from '@parcel/watcher';
+import { logger } from '../../logger.js';
+import { IndexAbortedError } from '../index-abort.js';
 
 type Callback = (err: Error | null, events: parcelWatcher.Event[]) => void | Promise<void>;
 
@@ -94,6 +96,55 @@ describe('FileWatcher — dropped fs events', () => {
     release();
     await stopping;
     expect(stopped).toBe(true);
+  });
+
+  it('does not report a cancelled reconcile as an error or start a queued pass after unsubscribe', async () => {
+    let rejectRescan: (error: Error) => void = () => {};
+    const onRescan = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectRescan = reject;
+        }),
+    );
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+    const watcher = await startWatcher(onRescan);
+    const dropped = new Error('Events were dropped by the FSEvents client.');
+
+    try {
+      await capturedCallback!(dropped, []);
+      await capturedCallback!(dropped, []);
+      await watcher.unsubscribe();
+      rejectRescan(new IndexAbortedError(process.cwd()));
+      await Promise.resolve();
+      await watcher.drain();
+
+      expect(onRescan).toHaveBeenCalledTimes(1);
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'Index reconcile after dropped events failed',
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('still reports a genuine reconcile failure', async () => {
+    const failure = new Error('disk read failed');
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+    const watcher = await startWatcher(async () => {
+      throw failure;
+    });
+
+    try {
+      await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+      await watcher.stop();
+      expect(errorSpy).toHaveBeenCalledWith(
+        { error: failure, rootPath: process.cwd() },
+        'Index reconcile after dropped events failed',
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
 

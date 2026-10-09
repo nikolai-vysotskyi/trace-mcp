@@ -4,6 +4,7 @@ import type * as parcelWatcher from '@parcel/watcher';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
+import { IndexAbortedError } from './index-abort.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
 import { HOT_CHURN_NATIVE_IGNORE_GLOBS, isHotChurnPath } from '../utils/hot-churn.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
@@ -637,7 +638,7 @@ export class FileWatcher {
   }
 
   private runRescan(onRescan: (() => Promise<void>) | undefined, rootPath: string): void {
-    if (!onRescan) return;
+    if (!onRescan || this.unsubscribed) return;
     if (this.activeRescan) {
       this.rescanPending = true;
       return;
@@ -645,11 +646,13 @@ export class FileWatcher {
     droppedEventStats.reconciles++;
     this.activeRescan = onRescan()
       .catch((e) => {
-        logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');
+        if (!(e instanceof IndexAbortedError)) {
+          logger.error({ error: e, rootPath }, 'Index reconcile after dropped events failed');
+        }
       })
       .finally(() => {
         this.activeRescan = null;
-        if (this.rescanPending) {
+        if (this.rescanPending && !this.unsubscribed) {
           this.rescanPending = false;
           this.runRescan(onRescan, rootPath);
         }
