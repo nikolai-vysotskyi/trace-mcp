@@ -381,7 +381,8 @@ export default async function tracePlugin(bb: BbPluginApi): Promise<void> {
   });
   bb.agents.registerTool({
     name: 'trace_remember_decision',
-    description: 'Save a project decision to shared trace-mcp memory with bb thread deduplication.',
+    description:
+      'Save an English-language project decision to shared memory with bb thread deduplication.',
     parameters: z.object({
       title: z.string().min(1).max(200),
       content: z.string().min(1).max(5000),
