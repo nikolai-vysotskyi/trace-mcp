@@ -1534,7 +1534,10 @@ export class IndexingPipeline {
       // The watcher/hook path only ever sees the events it was handed. Kick a
       // debounced coverage check so a project whose on-disk shape changed
       // drastically converges without an explicit forced reindex (TRA-231).
-      if (r.indexed > 0) this.scheduleCoverageReconcile();
+      if (r.indexed > 0) {
+        this._filesIndexedSinceAnalyze += r.indexed;
+        this.scheduleCoverageReconcile();
+      }
       // TRA-1541 / TRA-2282 ANALYZE discipline: indexAll refreshes planner statistics at
       // the end of every run. For indexFiles, refresh planner statistics if FTS was
       // rebuilt, or if files were indexed and stats are divergent or throttle elapsed.

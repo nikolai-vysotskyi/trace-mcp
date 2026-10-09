@@ -210,57 +210,84 @@ describe('TRA-2282: reindexing stall fixes', () => {
     db.close();
   });
 
-  it('IndexingPipeline maybeAnalyze skips isStatDivergent queries on routine incremental saves', async () => {
+  it('IndexingPipeline indexFiles increments _filesIndexedSinceAnalyze and triggers divergence check upon reaching 50 files', async () => {
     const { initializeDatabase } = await import('../../src/db/schema.js');
     const { Store } = await import('../../src/db/store.js');
     const { IndexingPipeline, META_LAST_ANALYZE_MS } = await import(
       '../../src/indexer/pipeline.js'
     );
     const { PluginRegistry } = await import('../../src/plugin-api/registry.js');
+    const { TypeScriptLanguagePlugin } = await import(
+      '../../src/indexer/plugins/language/typescript/index.js'
+    );
 
     const db = initializeDatabase(':memory:');
     const store = new Store(db);
     const registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+
     const pipeline = new IndexingPipeline(
       store,
       registry,
-      { root: tmpDir, include: ['**/*'], exclude: [], plugins: [] },
+      { root: tmpDir, include: ['**/*.ts'], exclude: [], plugins: [] },
       tmpDir,
     );
 
+    // Run ANALYZE to ensure sqlite_stat1 exists, then insert outdated stat for files table (statCount = 5)
+    db.exec('ANALYZE');
+    db.exec(
+      "INSERT OR REPLACE INTO sqlite_stat1 (tbl, idx, stat) VALUES ('files', 'idx_files_path', '5 1')",
+    );
+
     // Stamp recent analyze time so we are within the throttle window
-    store.setRepoMetadata(META_LAST_ANALYZE_MS, String(Date.now()));
+    const analyzeTime = Date.now();
+    store.setRepoMetadata(META_LAST_ANALYZE_MS, String(analyzeTime));
 
-    // Spy on db.prepare to observe queries executed
-    const prepareSpy = vi.spyOn(db, 'prepare');
-
-    // Private method access to test maybeAnalyze directly
     const pipelineAny = pipeline as unknown as {
       _filesIndexedSinceAnalyze: number;
-      maybeAnalyze: (force?: boolean) => void;
     };
 
-    // Incremental save with only 1 file indexed (< 50)
-    pipelineAny._filesIndexedSinceAnalyze = 1;
-    pipelineAny.maybeAnalyze();
+    // 1. Index 1 file via indexFiles()
+    const file0 = path.join(tmpDir, 'f0.ts');
+    fs.writeFileSync(file0, 'export const x = 1;');
 
-    // Should NOT have run any sqlite_stat1 query or count(*) on files table!
-    const divergenceQueries = prepareSpy.mock.calls.filter((call) => {
+    const prepareSpy = vi.spyOn(db, 'prepare');
+
+    const res1 = await pipeline.indexFiles(['f0.ts']);
+    expect(res1.indexed).toBe(1);
+
+    // Verify indexFiles incremented _filesIndexedSinceAnalyze to 1
+    expect(pipelineAny._filesIndexedSinceAnalyze).toBe(1);
+
+    // Verify divergence check was skipped (< 50 files indexed)
+    const divergenceQueries1 = prepareSpy.mock.calls.filter((call) => {
       const sql = typeof call[0] === 'string' ? call[0] : '';
       return sql.includes('sqlite_stat1') || sql.includes('count(*) as c FROM files');
     });
-    expect(divergenceQueries).toHaveLength(0);
+    expect(divergenceQueries1).toHaveLength(0);
 
-    // When 50 files indexed, divergence check should now run
-    pipelineAny._filesIndexedSinceAnalyze = 50;
+    // 2. Index 49 more files via indexFiles() to reach 50 files threshold
+    const batchPaths: string[] = [];
+    for (let i = 1; i < 50; i++) {
+      const rel = `f${i}.ts`;
+      fs.writeFileSync(path.join(tmpDir, rel), `export const x${i} = ${i};`);
+      batchPaths.push(rel);
+    }
+
     prepareSpy.mockClear();
-    pipelineAny.maybeAnalyze();
+    const res2 = await pipeline.indexFiles(batchPaths);
+    expect(res2.indexed).toBe(49);
 
-    const checkedDivergenceQueries = prepareSpy.mock.calls.filter((call) => {
+    // Divergence check should have run because cumulative files reached 50
+    const divergenceQueries2 = prepareSpy.mock.calls.filter((call) => {
       const sql = typeof call[0] === 'string' ? call[0] : '';
-      return sql.includes('sqlite_stat1') || sql.includes('sqlite_master');
+      return sql.includes('sqlite_stat1');
     });
-    expect(checkedDivergenceQueries.length).toBeGreaterThan(0);
+    expect(divergenceQueries2.length).toBeGreaterThan(0);
+
+    // Because actual count is 50 and statCount is 5 (50 >= 50 && 50 >= 5 * 3),
+    // divergence was detected and ANALYZE was run, resetting the counter to 0!
+    expect(pipelineAny._filesIndexedSinceAnalyze).toBe(0);
 
     prepareSpy.mockRestore();
     db.close();
