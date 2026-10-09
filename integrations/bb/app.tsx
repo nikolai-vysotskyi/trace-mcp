@@ -154,11 +154,11 @@ function TraceContextPanel({ threadId }: { threadId: string }) {
         ) : null}
         <div className="trace-stats">
           <div>
-            <strong>{(index?.files ?? 0).toLocaleString()}</strong>
+            <strong>{index ? index.files.toLocaleString() : '—'}</strong>
             <span>files</span>
           </div>
           <div>
-            <strong>{(index?.symbols ?? 0).toLocaleString()}</strong>
+            <strong>{index ? index.symbols.toLocaleString() : '—'}</strong>
             <span>symbols</span>
           </div>
         </div>
@@ -200,7 +200,11 @@ function TraceContextPanel({ threadId }: { threadId: string }) {
             </p>
           </>
         ) : (
-          <p className="trace-secondary">This provider has not reported context usage yet.</p>
+          <p className="trace-secondary">
+            {loading && overview === null
+              ? 'Loading context usage…'
+              : 'This provider has not reported context usage yet.'}
+          </p>
         )}
       </section>
 
