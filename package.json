@@ -177,7 +177,7 @@
       "nanoid": ">=3.3.17",
       "proxy-addr": ">=2.0.8",
       "source-map-js": ">=1.2.2",
-      "tinypool": "2.1.1"
+      "tinypool": ">=2.1.2"
     },
     "auditConfig": {
       "ignoreGhsas": [
