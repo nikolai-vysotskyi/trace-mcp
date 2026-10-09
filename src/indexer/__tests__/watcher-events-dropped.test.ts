@@ -4,8 +4,10 @@
  * return — every change in the lost window stayed invisible to the index
  * forever. It must now run the reconcile pass instead.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as parcelWatcher from '@parcel/watcher';
+import { logger } from '../../logger.js';
+import { IndexAbortedError } from '../index-abort.js';
 
 type Callback = (err: Error | null, events: parcelWatcher.Event[]) => void | Promise<void>;
 
@@ -27,6 +29,8 @@ async function startWatcher(onRescan?: () => Promise<void>) {
 }
 
 describe('FileWatcher — dropped fs events', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it('runs the reconcile pass when events were dropped', async () => {
     const onRescan = vi.fn(async () => {});
     const watcher = await startWatcher(onRescan);
@@ -94,6 +98,65 @@ describe('FileWatcher — dropped fs events', () => {
     release();
     await stopping;
     expect(stopped).toBe(true);
+  });
+
+  it('does not log a cancelled reconcile as an error', async () => {
+    const error = vi.spyOn(logger, 'error');
+    const watcher = await startWatcher(async () => {
+      throw new IndexAbortedError();
+    });
+
+    await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+    await watcher.drain();
+
+    expect(error).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'Index reconcile after dropped events failed',
+    );
+    await watcher.unsubscribe();
+  });
+
+  it('still logs a real reconcile failure', async () => {
+    const error = vi.spyOn(logger, 'error');
+    const failure = new Error('reconcile failed');
+    const watcher = await startWatcher(async () => {
+      throw failure;
+    });
+
+    await capturedCallback!(new Error('Events were dropped by the FSEvents client.'), []);
+    await watcher.drain();
+
+    expect(error).toHaveBeenCalledWith(
+      { error: failure, rootPath: process.cwd() },
+      'Index reconcile after dropped events failed',
+    );
+    await watcher.unsubscribe();
+  });
+
+  it('does not start a queued follow-up after terminal unsubscribe', async () => {
+    let release: () => void = () => {};
+    const onRescan = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const watcher = await startWatcher(onRescan);
+    const dropped = new Error('Events were dropped by the FSEvents client.');
+
+    await capturedCallback!(dropped, []);
+    await capturedCallback!(dropped, []);
+    expect(onRescan).toHaveBeenCalledTimes(1);
+
+    await watcher.unsubscribe();
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+    await watcher.drain();
+    expect(onRescan).toHaveBeenCalledTimes(1);
   });
 });
 
