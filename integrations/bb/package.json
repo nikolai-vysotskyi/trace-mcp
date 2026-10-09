@@ -48,6 +48,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "npm run test:plugin && npm run test:app",
     "test:smoke": "node smoke.mjs",
     "test:plugin": "node --import tsx verify-plugin.mjs",
     "test:app": "vitest run --config vitest.config.ts"

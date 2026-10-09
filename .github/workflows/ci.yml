@@ -80,6 +80,7 @@ jobs:
       core: ${{ steps.filter.outputs.core }}
       platform: ${{ steps.filter.outputs.platform }}
       vscode: ${{ steps.filter.outputs.vscode }}
+      bb: ${{ steps.filter.outputs.bb }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: filter
@@ -91,6 +92,9 @@ jobs:
               - '.github/workflows/ci.yml'
             vscode:
               - 'packages/vscode-extension/**'
+              - '.github/workflows/ci.yml'
+            bb:
+              - 'integrations/bb/**'
               - '.github/workflows/ci.yml'
             # Cross-platform (mac+windows) gate. Anything we ship, or test what
             # we ship with, can be Windows-shaped: seven releases in a row were
@@ -146,6 +150,7 @@ jobs:
               # Dependabot PRs touch nothing but that directory, so without
               # this they'd leave `impact-report` skipped forever.
               - 'packages/vscode-extension/**'
+              - 'integrations/**'
               - 'docs/**'
               # And once more for the root markdown (README, CONTRIBUTING,
               # DESIGN, SECURITY…): a PR that touches only those hit the exact
@@ -797,6 +802,41 @@ jobs:
       - name: Test
         working-directory: packages/vscode-extension
         run: pnpm run test
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # bb plugin integration — typecheck + tests. Own lockfile, own install.
+  # ───────────────────────────────────────────────────────────────────────────
+  bb-plugin:
+    needs: changes
+    if: needs.changes.outputs.bb == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: integrations/bb/package-lock.json
+
+      - name: Install dependencies
+        working-directory: integrations/bb
+        run: npm ci --prefer-offline
+
+      - name: Typecheck
+        working-directory: integrations/bb
+        run: npm run typecheck
+
+      - name: Test (app)
+        working-directory: integrations/bb
+        run: npm run test:app
+
+      - name: Test (plugin)
+        working-directory: integrations/bb
+        run: npm run test:plugin
 
   # ───────────────────────────────────────────────────────────────────────────
   # Cross-platform test — macOS + Windows.
