@@ -20,6 +20,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
 
+const PACKAGE_ENTRIES_CACHE_TTL_MS = 60_000;
+const MAX_PACKAGE_ENTRIES_CACHE_ENTRIES = 20;
+
+const packageEntriesCache = new Map<string, { entries: Set<string>; computedAt: number }>();
+
+/** Evict package.json entry cache (all or per-root). */
+export function clearPackageEntriesCache(rootPath?: string): void {
+  if (rootPath) {
+    packageEntriesCache.delete(rootPath);
+  } else {
+    packageEntriesCache.clear();
+  }
+}
+
 /**
  * Walk every `package.json` under `rootPath` (skipping node_modules and
  * vendor dirs), resolve `main` / `module` / `bin` / `exports` to relative
@@ -29,15 +43,30 @@ import { logger } from '../logger.js';
  * Wildcards in subpath/conditional `exports` keys or values are skipped
  * — they map to many files and can't be enumerated upfront.
  */
-export function findPackageJsonEntries(rootPath: string): Set<string> {
+export function findPackageJsonEntries(
+  rootPath: string,
+  options?: { bypassCache?: boolean; ttlMs?: number },
+): Set<string> {
+  const ttl = options?.ttlMs ?? PACKAGE_ENTRIES_CACHE_TTL_MS;
+  if (!options?.bypassCache) {
+    const cached = packageEntriesCache.get(rootPath);
+    if (cached && Date.now() - cached.computedAt < ttl) {
+      // LRU refresh: move to end
+      packageEntriesCache.delete(rootPath);
+      packageEntriesCache.set(rootPath, cached);
+      return cached.entries;
+    }
+  }
+
   const entries = new Set<string>();
   if (!rootPath || !fs.existsSync(rootPath)) return entries;
 
   const visited = new Set<string>();
-  const queue: string[] = [rootPath];
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: rootPath, depth: 0 }];
+  const MAX_DEPTH = 8;
 
   while (queue.length > 0) {
-    const dir = queue.shift()!;
+    const { dir, depth } = queue.shift()!;
     if (visited.has(dir)) continue;
     visited.add(dir);
 
@@ -53,16 +82,22 @@ export function findPackageJsonEntries(rootPath: string): Set<string> {
       // Skip directories that never contain first-party source
       if (ent.isDirectory()) {
         if (
+          depth >= MAX_DEPTH ||
           name === 'node_modules' ||
           name === 'vendor' ||
           name === 'dist' ||
           name === 'build' ||
           name === '.git' ||
+          name === 'coverage' ||
+          name === 'tmp' ||
+          name === 'temp' ||
+          name === '__pycache__' ||
+          name === 'site-packages' ||
           name.startsWith('.') // .next, .turbo, .pnpm-store, etc.
         ) {
           continue;
         }
-        queue.push(path.join(dir, name));
+        queue.push({ dir: path.join(dir, name), depth: depth + 1 });
         continue;
       }
 
@@ -99,6 +134,13 @@ export function findPackageJsonEntries(rootPath: string): Set<string> {
       }
     }
   }
+
+  packageEntriesCache.delete(rootPath);
+  if (packageEntriesCache.size >= MAX_PACKAGE_ENTRIES_CACHE_ENTRIES) {
+    const oldestKey = packageEntriesCache.keys().next().value;
+    if (oldestKey !== undefined) packageEntriesCache.delete(oldestKey);
+  }
+  packageEntriesCache.set(rootPath, { entries, computedAt: Date.now() });
 
   return entries;
 }

@@ -16,9 +16,11 @@
  * so a future widening (REAL → NUMERIC etc.) does not break the test.
  */
 
-import type Database from 'better-sqlite3';
-import { beforeEach, describe, expect, it } from 'vitest';
+import path from 'node:path';
+import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTableNames, initializeDatabase } from '../../src/db/schema.js';
+import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 interface PragmaColumn {
   name: string;
@@ -38,12 +40,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 34 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 35 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(34);
+    expect(Number(row!.value)).toBe(35);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -90,6 +92,7 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
 
     expect(names.has('idx_ranking_pins_expires')).toBe(true);
     expect(names.has('idx_pass_cache_created')).toBe(true);
+    expect(names.has('idx_files_language')).toBe(true);
   });
 
   it('core graph tables ship in the same fresh init (regression guard)', () => {
@@ -155,5 +158,87 @@ describe('edges_confidence_from_tier trigger — scip_resolved arm', () => {
       .get(aNode) as { resolution_tier: string; confidence: number };
     expect(edge.resolution_tier).toBe('scip_resolved');
     expect(edge.confidence).toBe(1.0);
+  });
+});
+
+describe('migration 34 -> 35 (TRA-2282: idx_files_language)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = createTmpDir('migration-35-');
+  });
+
+  afterEach(() => {
+    removeTmpDir(tmpDir);
+  });
+
+  it('upgrades existing v34 database to v35 and creates idx_files_language', () => {
+    const dbPath = path.join(tmpDir, 'test-v34.db');
+    // Initialize DB then simulate v34 state
+    const seedDb = initializeDatabase(dbPath);
+    // Drop the v35 index and revert schema_meta / schema_migrations
+    seedDb.exec('DROP INDEX IF EXISTS idx_files_language');
+    seedDb.prepare("UPDATE schema_meta SET value = '34' WHERE key = 'schema_version'").run();
+    seedDb.prepare('DELETE FROM schema_migrations WHERE version = 35').run();
+    // Insert test files to verify rows remain valid and queryable
+    seedDb
+      .prepare(
+        "INSERT INTO files (path, language, status, byte_length, content_hash, indexed_at) VALUES ('src/test.ts', 'typescript', 'ok', 123, 'hash1', '2026-10-09T00:00:00Z')",
+      )
+      .run();
+    seedDb
+      .prepare(
+        "INSERT INTO files (path, language, status, byte_length, content_hash, indexed_at) VALUES ('src/test.py', 'python', 'ok', 456, 'hash2', '2026-10-09T00:00:00Z')",
+      )
+      .run();
+    seedDb.close();
+
+    // Verify v34 state before reopening with initializeDatabase
+    const checkDb = new Database(dbPath);
+    const v34Version = checkDb
+      .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+      .get() as { value: string };
+    expect(v34Version.value).toBe('34');
+    const idxBefore = checkDb
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_files_language'",
+      )
+      .get();
+    expect(idxBefore).toBeUndefined();
+    checkDb.close();
+
+    // Now re-open with initializeDatabase — triggers migration 35
+    const upgradedDb = initializeDatabase(dbPath);
+
+    // Verify schema_version is now 35
+    const v35Version = upgradedDb
+      .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
+      .get() as { value: string };
+    expect(v35Version.value).toBe('35');
+
+    // Verify migration 35 is recorded in schema_migrations
+    const migRow = upgradedDb
+      .prepare('SELECT version FROM schema_migrations WHERE version = 35')
+      .get() as { version: number } | undefined;
+    expect(migRow).toBeDefined();
+    expect(migRow!.version).toBe(35);
+
+    // Verify idx_files_language index exists
+    const idxAfter = upgradedDb
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_files_language'",
+      )
+      .get() as { name: string } | undefined;
+    expect(idxAfter).toBeDefined();
+    expect(idxAfter!.name).toBe('idx_files_language');
+
+    // Verify existing rows are intact and can be queried via the new index
+    const tsFiles = upgradedDb
+      .prepare('SELECT path FROM files WHERE language = ?')
+      .all('typescript') as { path: string }[];
+    expect(tsFiles).toHaveLength(1);
+    expect(tsFiles[0]?.path).toBe('src/test.ts');
+
+    upgradedDb.close();
   });
 });

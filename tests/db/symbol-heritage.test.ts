@@ -49,13 +49,13 @@ describe('symbol_heritage (TRA-2002)', () => {
     store.db.close();
   });
 
-  it('fresh DB ships the symbol_heritage table at schema version 34', () => {
+  it('fresh DB ships the symbol_heritage table at schema version 35', () => {
     const version = store.getRepoMetadata('no-such-key'); // touch store; version read below
     expect(version).toBeNull();
     const row = store.db
       .prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'")
       .get() as { value: string };
-    expect(row.value).toBe('34');
+    expect(row.value).toBe('35');
     const tables = store.db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbol_heritage'")
       .all() as { name: string }[];

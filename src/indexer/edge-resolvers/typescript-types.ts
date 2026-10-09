@@ -92,8 +92,8 @@ export function resolveTypeScriptTypeEdges(state: PipelineState, scope?: ChangeS
   const targetSyms = store.db
     .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, f.workspace
-      FROM symbols s
-      JOIN files f ON s.file_id = f.id
+      FROM files f
+      JOIN symbols s INDEXED BY idx_symbols_file ON s.file_id = f.id
      WHERE f.language IN ${TS_JS_LANGS}
        AND s.kind IN ('class','interface','type','enum')
   `)

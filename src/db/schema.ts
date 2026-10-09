@@ -6,7 +6,7 @@ import { logger } from '../logger.js';
 import { backfillSymbolHeritage } from './heritage.js';
 import { installSlowStatementGuard } from './slow-statement.js';
 
-const SCHEMA_VERSION = 34;
+const SCHEMA_VERSION = 35;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -329,6 +329,7 @@ CREATE TABLE IF NOT EXISTS symbol_heritage (
     PRIMARY KEY (symbol_id, parent_name, kind)
 );
 CREATE INDEX IF NOT EXISTS idx_symbol_heritage_parent ON symbol_heritage(parent_name);
+CREATE INDEX IF NOT EXISTS idx_files_language ON files(language);
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -1899,6 +1900,12 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     `);
     const backfilled = backfillSymbolHeritage(db);
     logger.info({ heritageEdges: backfilled }, 'Migration 34: backfilled symbol_heritage');
+  },
+  35: (db) => {
+    // TRA-2282: index files(language) so edge resolvers filtering by
+    // language don't table-scan files or trick the optimizer into a full
+    // Cartesian product when sqlite_stat1 is skewed or stale.
+    db.exec('CREATE INDEX IF NOT EXISTS idx_files_language ON files(language)');
   },
 };
 

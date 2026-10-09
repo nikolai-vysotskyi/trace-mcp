@@ -35,7 +35,7 @@
 import fs from 'node:fs';
 import { logger } from '../logger.js';
 import { DEFAULT_MAX_FILE_SIZE, isBinaryBuffer } from '../utils/security.js';
-import { findPackageJsonEntries } from './package-entries.js';
+import { clearPackageEntriesCache, findPackageJsonEntries } from './package-entries.js';
 
 export type UnindexableReason = 'oversize' | 'binary';
 
@@ -51,10 +51,6 @@ const BINARY_PROBE_BYTES = 8192;
 const MAX_ROOTS = 64;
 const MAX_ENTRIES_PER_ROOT = 256;
 
-/** `package.json` entry sets go stale fast (a new `main` must take effect). */
-const FORCE_INCLUDE_TTL_MS = 60_000;
-const MAX_FORCE_INCLUDE_ROOTS = 64;
-
 /** Bound on distinct warn keys; beyond it the set resets (DoS-safe). */
 const MAX_WARN_KEYS = 1000;
 
@@ -66,9 +62,6 @@ interface Verdict {
 
 /** rootPath → relPosix → last unindexable verdict. */
 const verdicts = new Map<string, Map<string, Verdict>>();
-
-/** rootPath → cached `package.json` entry set. */
-const forceIncludeCache = new Map<string, { entries: Set<string>; computedAt: number }>();
 
 const warned = new Set<string>();
 
@@ -122,24 +115,12 @@ function dropVerdict(rootPath: string, relPosix: string): void {
 }
 
 /**
- * Package entry set for `rootPath`, memoized. The underlying walk touches
- * every directory, so it runs at most once per TTL per root — and only when
- * an actually-oversized file needs the force-include decision. Normal-size
- * files never pay for it.
+ * Package entry set for `rootPath`. findPackageJsonEntries handles caching,
+ * TTL, and invalidation on package.json changes so this never holds a stale
+ * entry set. Normal-size files never pay for it.
  */
 function getForceIncludeSet(rootPath: string): ReadonlySet<string> {
-  const now = Date.now();
-  const cached = forceIncludeCache.get(rootPath);
-  if (cached && now - cached.computedAt < FORCE_INCLUDE_TTL_MS) {
-    return cached.entries;
-  }
-  const entries = findPackageJsonEntries(rootPath);
-  if (forceIncludeCache.size >= MAX_FORCE_INCLUDE_ROOTS) {
-    const lru = forceIncludeCache.keys().next().value;
-    if (lru !== undefined && lru !== rootPath) forceIncludeCache.delete(lru);
-  }
-  forceIncludeCache.set(rootPath, { entries, computedAt: now });
-  return entries;
+  return findPackageJsonEntries(rootPath);
 }
 
 function probeBinary(absPath: string, size: number): boolean | null {
@@ -299,7 +280,7 @@ export function getUnindexableVerdicts(rootPath: string): UnindexableVerdictInfo
 /** Test hook — clears verdicts, warn gates, and the entry-set cache. */
 export function resetUnindexableSkipCacheForTests(): void {
   verdicts.clear();
-  forceIncludeCache.clear();
+  clearPackageEntriesCache();
   warned.clear();
 }
 
