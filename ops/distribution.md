@@ -3357,3 +3357,50 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+
+### Day pass 3, 2026-10-09 (TRA-2292): clean sweep, open threads audit, competitor deep-dive (CRG crossed 32k & plugin hooks PR #1102, Semble tool namespacing PR #289, Serena path confinement review)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-10-09 (routine sync, no new comments since Nikolai's 2026-09-26 round 3 update). Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: contributor `moataz-hjaiji` confirmed implementation plan on 2026-10-08 for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback recommendations. Preparing PR. No action needed.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All queries clean. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Competitor intelligence & architectural observations:**
+- `tirth8205/code-review-graph`:
+  - Star milestone: crossed 32,000★ (32,003★, +6 since TRA-2289).
+  - PR #1102: Contributor opened "fix: wrap plugin hooks in a top-level 'hooks' key so Claude Code loads them". Claude Code failed to load plugin hooks from CRG's bare event mapping in `hooks/hooks.json` (`hooks.json must have 'hooks' or 'modules'`). By contrast, `trace-mcp`'s `.claude-plugin/hooks/hooks.json` has always placed plugin hooks under a canonical top-level `"hooks"` key (guard on `PreToolUse` and session preservation snapshot on `PreCompact`), operating cleanly across Claude Code versions without schema errors.
+  - PR #1105 / Issue #1104 / #1103: Ongoing work reconciling stale FTS indices on no-op updates and addressing auto-watch threads that skip post-processing. Highlights the stability of `trace-mcp`'s unified, debounced SQLite transactions where symbol tables and full-text indexes update atomically.
+- `MinishLab/semble`:
+  - PR #289 / Issue #287: "fix: Use bare MCP tool names in agent instructions". Upstream agent instructions hardcoded `mcp__semble__search` instead of plain names, causing Grok, CommandCode, and Claude Code to fail proper MCP invocations. In `trace-mcp`, tool interfaces expose clean canonical tool names (`search`, `get_symbol`, `get_outline`) and client presets handle client-specific configuration cleanly without hardcoding brittle host-specific namespace prefixes.
+- `oraios/serena`:
+  - PR #2150 (open): Symlink & path traversal confinement discussion. Adding realpath validation to `Project.is_path_in_project` while gating symlinks on a `trusted_projects` config continues to raise edge-case concerns. Confirms `trace-mcp`'s zero-trust architectural choice: unconditional realpath containment check (`validateWritePath`) refusing symlink writes across all refactoring operations.
+- `cdeust/ai-architect-mcp-codebase`:
+  - PR #441 deep-dive: refined Cargo package table pinning (hashing only `[package]` table via `LC_ALL=C awk`, rejecting NUL bytes and empty tables, and enforcing pipefail in CI coverage). Useful reference for resilient shell bootstrap integrity.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★, 24 forks, pushed 2026-10-09 (v3.35.0 live).
+- `MinishLab/semble`: 6,193★ (steady), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 32,003★ (+6 since TRA-2289, crossed 32k), 2,931 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,770★ (+1 since TRA-2289), 1,574 forks (+1), pushed 2026-10-03.
+- `oraios/serena`: 30,125★ (+5 since TRA-2289), 2,052 forks (+2), pushed 2026-10-09.
+- `DeusData/codebase-memory-mcp`: 46,211★ (+10 since TRA-2289), 3,803 forks (+1), pushed 2026-10-09.
+- `cdeust/ai-architect-mcp-codebase`: 5★, 1 fork (+1 fork), pushed 2026-10-09.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
