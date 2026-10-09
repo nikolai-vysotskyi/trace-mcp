@@ -1270,9 +1270,11 @@ export class IndexingPipeline {
     for (let i = 0; i < allStale.length; i += RECONCILE_DELETE_CHUNK) {
       if (i > 0) await yieldToEventLoopFair();
       const slice = allStale.slice(i, i + RECONCILE_DELETE_CHUNK);
-      this.store.db.transaction(() => {
-        for (const id of slice) this.store.deleteFile(id);
-      })();
+      this.store.db
+        .transaction(() => {
+          for (const id of slice) this.store.deleteFile(id);
+        })
+        .immediate();
     }
     logger.info(
       {
@@ -1331,20 +1333,22 @@ export class IndexingPipeline {
         clearPackageEntriesCache(this.rootPath);
       }
     }
-    this.store.db.transaction(() => {
-      for (const fp of filePaths) {
-        const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-        // Store paths are always posix-separated (collectFiles() via
-        // fast-glob) — an unconverted backslash on Windows misses the row
-        // entirely, silently no-op'ing the delete (TRA-1045).
-        const relPath = rel.split(path.sep).join('/');
-        const file = this.store.getFile(relPath);
-        if (file) {
-          this.store.deleteFile(file.id);
-          logger.info({ file: relPath }, 'Deleted file from index');
+    this.store.db
+      .transaction(() => {
+        for (const fp of filePaths) {
+          const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+          // Store paths are always posix-separated (collectFiles() via
+          // fast-glob) — an unconverted backslash on Windows misses the row
+          // entirely, silently no-op'ing the delete (TRA-1045).
+          const relPath = rel.split(path.sep).join('/');
+          const file = this.store.getFile(relPath);
+          if (file) {
+            this.store.deleteFile(file.id);
+            logger.info({ file: relPath }, 'Deleted file from index');
+          }
         }
-      }
-    })();
+      })
+      .immediate();
   }
 
   /**
@@ -2434,9 +2438,11 @@ export class IndexingPipeline {
     const insert = this.store.db.prepare(
       'INSERT OR IGNORE INTO edge_types (name, category, directed, description) VALUES (?, ?, 1, ?)',
     );
-    this.store.db.transaction(() => {
-      for (const et of pending) insert.run(et.name, et.category, et.description);
-    })();
+    this.store.db
+      .transaction(() => {
+        for (const et of pending) insert.run(et.name, et.category, et.description);
+      })
+      .immediate();
   }
 
   /**

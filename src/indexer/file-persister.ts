@@ -6,6 +6,7 @@
 import type { RawEdge } from '../plugin-api/types.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
+import { isSqliteBusyError } from '../db/repair.js';
 
 /**
  * Files committed per transaction by `persistBatch` (TRA-1828).
@@ -73,11 +74,31 @@ export class FilePersister {
     for (let i = 0; i < extractions.length; i += PERSIST_WRITE_CHUNK) {
       if (i > 0) await yieldToEventLoopFair();
       const chunk = extractions.slice(i, i + PERSIST_WRITE_CHUNK);
-      this.state.store.db.transaction(() => {
+      // TRA-2257: use immediate mode (BEGIN IMMEDIATE) instead of deferred
+      // transactions. In SQLite WAL mode, if tryFastSymbolUpdate reads
+      // before updating under deferred mode, concurrent writers cause
+      // SQLITE_BUSY_SNAPSHOT (database is locked) without waiting for busy_timeout.
+      // Immediate mode acquires the RESERVED lock up front and honors busy_timeout.
+      // Additionally, wrap with bounded backoff retry for transient locks.
+      const writeTx = this.state.store.db.transaction(() => {
         for (const ext of chunk) {
           this.persistExtraction(ext);
         }
-      })();
+      }).immediate;
+
+      let attempts = 0;
+      while (true) {
+        try {
+          writeTx();
+          break;
+        } catch (err) {
+          if (isSqliteBusyError(err) && ++attempts <= 3) {
+            await new Promise((r) => setTimeout(r, 50 * attempts));
+            continue;
+          }
+          throw err;
+        }
+      }
     }
   }
 

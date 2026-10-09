@@ -13,7 +13,7 @@ import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
 import type { TraceMcpConfig } from '../config.js';
 import { loadConfig, loadGlobalConfigRaw } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
-import { isCorruptDbError, repairIndex } from '../db/repair.js';
+import { isCorruptDbError, isSqliteBusyError, repairIndex } from '../db/repair.js';
 import { Store } from '../db/store.js';
 import { deleteDbFamily } from '../utils/db-family.js';
 import { announceDbHolder, releaseDbHoldersForRoot } from '../db-holders.js';
@@ -875,6 +875,26 @@ export class ProjectManager {
             });
             return;
           }
+          if (isSqliteBusyError(err)) {
+            // TRA-2257: SQLite busy / database locked during initial reindex
+            // (e.g. concurrent indexer, overlapping daemon startup, or WAL checkpoint).
+            // Attempt bounded retry with backoff. If it resolves, clears pendingReindexForVersion.
+            // If the lock persists, leaves status='error' and the error diagnosable.
+            logger.warn(
+              { projectRoot, error: serializeError(err) },
+              'Initial indexing hit database lock (SQLITE_BUSY) — retrying with bounded backoff.',
+            );
+            await this.recoverBusyInitialIndex(managed, projectRoot, {
+              finishRecovery,
+              originalError: err,
+              retryIndex: () =>
+                this.indexAllLimit!(() =>
+                  pipeline.indexAll(needsForcedReindex, { signal: indexAbortController.signal }),
+                ),
+              signal: indexAbortController.signal,
+            });
+            return;
+          }
           managed.status = 'error';
           managed.error = String(err);
           logger.error({ error: serializeError(err), projectRoot }, 'Initial indexing failed');
@@ -1381,6 +1401,80 @@ export class ProjectManager {
         return;
       }
     }
+  }
+
+  /**
+   * Bounded retry ladder for initial indexing failures caused by transient
+   * database locks (SQLITE_BUSY / database is locked, TRA-2257). If the lock
+   * clears during backoff, completes recovery and clears pendingReindexForVersion.
+   * If the lock is permanent, leaves the error diagnosable in managed.error
+   * and managed.status='error'.
+   */
+  private async recoverBusyInitialIndex(
+    managed: ManagedProject,
+    projectRoot: string,
+    opts: {
+      finishRecovery: (via: string) => Promise<void>;
+      originalError: unknown;
+      retryIndex: () => Promise<unknown>;
+      signal?: AbortSignal;
+      maxRetries?: number;
+      backoffMs?: number[];
+    },
+  ): Promise<void> {
+    const maxRetries = opts.maxRetries ?? 2;
+    const backoff = opts.backoffMs ?? [250, 750];
+    let lastErr: unknown = opts.originalError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      if (opts.signal?.aborted) {
+        logger.info({ projectRoot }, 'Busy-lock recovery aborted by project stop (non-fatal)');
+        return;
+      }
+      const delay = backoff[attempt - 1] ?? 1000;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, delay);
+        if (opts.signal) {
+          opts.signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              resolve();
+            },
+            { once: true },
+          );
+        }
+      });
+      if (opts.signal?.aborted) {
+        logger.info({ projectRoot }, 'Busy-lock recovery aborted by project stop (non-fatal)');
+        return;
+      }
+      try {
+        await opts.retryIndex();
+        await opts.finishRecovery(`busy-lock recovery (attempt ${attempt})`);
+        return;
+      } catch (retryErr) {
+        if (retryErr instanceof IndexAbortedError) {
+          logger.info({ projectRoot }, 'Busy-lock recovery aborted by project stop (non-fatal)');
+          return;
+        }
+        lastErr = retryErr;
+        if (!isSqliteBusyError(retryErr)) {
+          break;
+        }
+      }
+    }
+
+    managed.status = 'error';
+    managed.error = `Initial indexing hit database lock that did not resolve: ${String(lastErr)}`;
+    logger.error(
+      {
+        error: serializeError(lastErr),
+        projectRoot,
+        originalError: String(opts.originalError),
+      },
+      'Initial indexing busy-lock recovery also failed — giving up (no further retry)',
+    );
   }
 
   /**

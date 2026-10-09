@@ -58,6 +58,28 @@ export function isCorruptDbError(err: unknown): boolean {
   return /database disk image is malformed/i.test(msg);
 }
 
+/**
+ * True when `err` indicates a SQLite database lock / contention failure
+ * (`SQLITE_BUSY`, `SQLITE_BUSY_SNAPSHOT`, `SQLITE_LOCKED`, or message
+ * `database is locked` / `database table is locked`).
+ */
+export function isSqliteBusyError(err: unknown): boolean {
+  if (err !== null && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.codeName === 'string' && /SQLITE_BUSY|SQLITE_LOCKED/i.test(rec.codeName))
+      return true;
+    if (typeof rec.code === 'string' && /SQLITE_BUSY|SQLITE_LOCKED/i.test(rec.code)) return true;
+    if (
+      typeof rec.message === 'string' &&
+      /database is locked|database table is locked/i.test(rec.message)
+    ) {
+      return true;
+    }
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return /database is locked|database table is locked/i.test(msg);
+}
+
 function tableExists(db: Database.Database, name: string): boolean {
   const r = db
     .prepare(`SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ? LIMIT 1`)
