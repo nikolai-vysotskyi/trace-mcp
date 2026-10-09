@@ -3308,3 +3308,52 @@ Audited read-only via API, nothing written outside this file.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
 
+
+### Day pass 2, 2026-10-09 (TRA-2289): clean sweep, open threads audit, competitor deep-dive (Serena path confinement PR #2150 & session drops #2149, CRG FTS desync #1103)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-10-09 (routine sync, no new comments since Nikolai's 2026-09-26 round 3 update). Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: contributor `moataz-hjaiji` confirmed implementation plan on 2026-10-08 for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback recommendations. Preparing PR. No action needed.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All queries clean. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - PR #2150 (opened 2026-10-09T08:57Z): Contributor submitted critical fix for path traversal and symlink confinement vulnerability (#2144). Reproduction demonstrated that line-based and symbol-level editing tools (`delete_lines`, `replace_lines`, `insert_at_line`, etc.) completely bypassed path validation, allowing writes outside the project root via `..` or in-tree symlinks. The proposed fix adds realpath resolution to `Project.is_path_in_project`, but gates symlink following on project-trust configuration.
+  - Architectural comparison: `trace-mcp` strictly validates all write paths (`validateWritePath` in `src/utils/security.ts` / `tests/tools/refactor-confinement.test.ts`) against project root realpath ancestors and unconditionally refuses writes through symlinks, providing uniform zero-trust protection regardless of project configuration.
+  - Issue #2149 (opened 2026-10-09T08:00Z): "Active project resets between MCP tool calls in the same session ('No active project' despite earlier activate_project)" in MCP stdio sessions with custom hosts. Serena's per-call `session_id` state tracking causes mid-session loss of active project context when hosts mint or rotate session IDs. By contrast, `trace-mcp` avoids session-id keying for workspace context.
+- `tirth8205/code-review-graph`:
+  - Issue #1103: `[Bug]: MCP serve --auto-watch skips FTS post-processing after file updates`. The MCP auto-watch thread receives and processes filesystem changes into graph nodes but omits the FTS post-processing callback, causing newly added symbols to be missing from FTS and leaving stale FTS row IDs for existing symbols.
+  - Issue #1104 / PR #1105: No-op `update` marks FTS complete without repairing inconsistencies.
+  - Architectural comparison: In `trace-mcp`, incremental indexing updates symbol tables, outlines, and text search indices atomically inside a single SQLite transaction during the debounced file-watching cycle (`src/indexer/watcher.ts`), preventing graph-to-index desynchronization.
+- `MinishLab/semble`:
+  - Issue #290: Discussion on subagents and CLI vs MCP tool access. Maintainer cautions that exposing MCP tools to subagents requires care due to varying capabilities across coding agent platforms.
+  - Issue #288: Subprocess leaks under uv when used via MCP (`uv tool upgrade` / unreleased uv processes).
+- `cdeust/ai-architect-mcp-codebase`:
+  - Actively maintained (commit `8efcb751` / `5c2e138f` on 2026-10-08/09). Bumped `lbug` (LadybugDB) and refined bootstrap pin validation for Cargo package tables with LC_ALL=C awk and NUL byte defense. Tracked in our competitor registry (5★).
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★, 24 forks, pushed 2026-10-09.
+- `MinishLab/semble`: 6,193★ (+2 since TRA-2286), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,997★ (+7), 2,931 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,769★ (+5), 1,573 forks, pushed 2026-10-03.
+- `oraios/serena`: 30,120★ (+9), 2,050 forks (+1), pushed 2026-10-09.
+- `DeusData/codebase-memory-mcp`: 46,201★ (+21), 3,802 forks (+5), pushed 2026-10-09.
+- `cdeust/ai-architect-mcp-codebase`: 5★ (+1), 0 forks, pushed 2026-10-09.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
