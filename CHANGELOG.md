@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.35.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.8...v3.35.0) (2026-10-09)
+
+
+### Features
+
+* **integrations:** add bb plugin integration ([#1520](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1520)) ([7d55f99](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7d55f99ca81e6a898163c1a47d8a6b0cc1ff39e3))
+* **worktree:** flag results for files a linked worktree changed ([#1483](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1483)) ([f04f473](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f04f473d278b87104625e90972b63f05d5346875))
+
+
+### Bug Fixes
+
+* **daemon:** retry dropped-event FK rescan and report failure (TRA-2276) ([#1513](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1513)) ([b7ab5cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b7ab5cf9d35c44baf6ef41484e06e33b1b395fb0))
+* **deps:** override vulnerable tinypool (TRA-2279) ([#1514](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1514)) ([014f4ad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/014f4ad2aedc45dff6cd4ba852693fcbf99e78e8))
+* **indexer:** resolve reindexing event-loop stalls and slow SQLite joins (TRA-2282) ([#1515](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1515)) ([2862e86](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2862e8659cce685ae3959ef4bc83806280cc50b3))
+* **indexer:** suppress expected skip warns and aggregate skip counters (TRA-2273) ([#1510](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1510)) ([4d1309e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d1309e17cfb9972ebb90b197821ccf1ef8e5020))
+
+
+### Documentation
+
+* **ops:** day pass 2 2026-10-09, clean sweep, Serena & CRG competitor deep-dive (TRA-2289) ([#1517](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1517)) ([88c7157](https://github.com/nikolai-vysotskyi/trace-mcp/commit/88c715794a21ffd519226e837fddb17b8453e5a8))
+* **ops:** day pass 2026-10-09, sweep hit Live-Documentation, Serena & CBM competitor deep-dive (TRA-2286) ([#1516](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1516)) ([a9c1771](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9c17718c024ecd2d91f8403cb9df589be86a23f))
+* **ops:** day pass 2026-10-09, thread re-audit, clean mention sweep, competitor intelligence (TRA-2275) ([#1512](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1512)) ([68339bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68339bc440ed564406694c5cee6cbb8b22249e1f))
+* **ops:** day pass 3 2026-10-09, clean sweep, CRG 32k & hooks deep-dive (TRA-2292) ([#1518](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1518)) ([f69149f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f69149fb1b90ee8beca40ffec9707d6575af980a))
+* **ops:** night pass 2026-10-09, clean sweep, CBM & Serena competitor deep-dive (TRA-2294) ([#1519](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1519)) ([b5ce270](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b5ce2705f3ef7c332c427d1de86d8418868aa4d1))
+* **ops:** record bb plugin submission state ([#1521](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1521)) ([52193f6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/52193f67b006641b3abbfe62574cee11976127b0))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group across 1 directory with 3 updates ([#1500](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1500)) ([445aeeb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/445aeeb7e43c0ffc57e8a72e6f757bd931d5cdc9))
+* **ci:** bump the github-actions-minor-patch group with 3 updates ([#1488](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1488)) ([8f98ae5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f98ae545d775c8629c5635db1dbc89050a85fbf))
+* **deps-dev:** bump the development-minor-patch group across 1 directory with 4 updates ([#1501](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1501)) ([3563db2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3563db2a5db7c6929ffb0fc23ecea06e1c5d128f))
+* **vscode-deps-dev:** bump vitest ([#1489](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1489)) ([e82b3c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e82b3c389e8bcadad61422bc396669237fde8dbb))
+
 ## [3.34.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.7...v3.34.8) (2026-10-08)
 
 
