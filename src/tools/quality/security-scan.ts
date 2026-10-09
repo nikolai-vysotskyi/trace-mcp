@@ -1105,6 +1105,7 @@ function isSafeCallTail(tail: string): boolean {
   if (/\b(?:shell|env)\b/i.test(trimmed)) return false;
   // Options must not contain untrusted tokens or interpolations
   if (UNTRUSTED_TOKEN_RE.test(trimmed)) return false;
+  if (/\b(?:user|input|untrusted|client|remote)/i.test(trimmed)) return false;
   if (trimmed.includes('${')) return false;
   return true;
 }
@@ -1131,10 +1132,24 @@ function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' |
   }
 
   // `which X` — argument controls only which binary is looked up, with a single closed template literal.
+  // The interpolated value must be an explicitly trusted command identifier (command, cmd, binary, bin)
+  // and must not contain untrusted or user-controlled tokens (such as req.query.cmd or userCmd).
   const whichMatch =
-    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{[^`$]+\}`([^;)]*)\)/.exec(line);
-  if (whichMatch && isSafeCallTail(whichMatch[1])) {
-    return 'which';
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{\s*([a-zA-Z_$][\w$]*)\s*\}`([^;)]*)\)/.exec(
+      line,
+    );
+  if (whichMatch) {
+    const ident = whichMatch[1];
+    const isTrustedCommandIdent = /^(?:command|cmd|binary|bin)$/.test(ident);
+    const hasUntrustedToken =
+      UNTRUSTED_TOKEN_RE.test(ident) ||
+      /\b(?:user|input|untrusted|client|remote)/i.test(ident) ||
+      UNTRUSTED_TOKEN_RE.test(line) ||
+      /\b(?:user|input|untrusted|client|remote)/i.test(line);
+
+    if (isTrustedCommandIdent && !hasUntrustedToken && isSafeCallTail(whichMatch[2])) {
+      return 'which';
+    }
   }
 
   // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.

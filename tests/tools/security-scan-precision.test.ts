@@ -1054,6 +1054,84 @@ function run(req) {
     expect(critical[0].rule_id).toBe('CWE-78');
   });
 
+  test('does not demote which when interpolation contains property access (e.g. req.query.cmd)', () => {
+    writeFile(
+      store,
+      'scripts/which-req-query.mjs',
+      `
+function run(req) {
+  execSync(\`which \${req.query.cmd}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when interpolation contains untrusted identifier (e.g. userCmd)', () => {
+    writeFile(
+      store,
+      'scripts/which-user-cmd.mjs',
+      `
+function run(userCmd) {
+  execSync(\`which \${userCmd}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes which when interpolation is a safe command identifier without untrusted tokens', () => {
+    writeFile(
+      store,
+      'scripts/which-safe.mjs',
+      `
+function isAvailable(command) {
+  execSync(\`which \${command}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].severity).toBe('low');
+    expect(all.findings[0].confidence).toBe('low');
+  });
+
+  test('does not demote when options object contains untrusted identifier (e.g. userDir)', () => {
+    writeFile(
+      store,
+      'scripts/taskkill-user-dir.mjs',
+      `
+function stop(userDir) {
+  execSync(\`taskkill /PID \${process.pid}\`, { cwd: userDir });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
   // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------
