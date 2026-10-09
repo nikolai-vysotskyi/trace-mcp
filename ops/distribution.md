@@ -3404,3 +3404,50 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+
+### Night pass (pass 4), 2026-10-09 (TRA-2294): clean sweep, open threads audit, competitor deep-dive (CBM hardware SHA2 & TF-IDF rebuild, Serena symlink escape PR #2150, CRG request cancellation crash #1106, Semble bundled subagents PR #291)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-10-09 (routine sync, no new comments since Nikolai's 2026-09-26 round 3 update). Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: open, updated 2026-10-08 (contributor plan underway). Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: merged, live in HOL Registry; third-party scanner CI refused per repo security policy, follow-up claim notifications ignored.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- All queries clean. Result: 0 repos outside seen list ("No repos outside the seen list. Nothing to read."). Clean sweep.
+
+**Competitor intelligence & architectural observations:**
+- `DeusData/codebase-memory-mcp`:
+  - PR #2575: `perf(sha256): compress blocks on ARMv8 SHA2 / x86 SHA-NI (#2441)`. CBM calculated SHA-256 of its ~300 MB daemon binary on every process startup, burning ~1.2 s CPU and pushing hook execution past the 2,000 ms timeout window. Resolved by adding hardware-accelerated block compression (ARMv8 SHA2 via `sysctl`/`HWCAP`, x86 SHA-NI via `CPUID`). By contrast, `trace-mcp` records version and build provenance statically at build time (constants in `package.json` / build manifests), avoiding dynamic whole-binary hash calculations on startup and eliminating hook timeout risks.
+  - PR #2574: `Semantic relations with a judged p; doc sections linked to their code by format and position`. Repaired a semantic indexer bug where TF-IDF compared i-th tokens of functions instead of shared vocabulary sets (`cbm_sem_tfidf_terms`). Index version bumped from 6 to 7, requiring full index rebuilds across user repositories. By contrast, `trace-mcp`'s AST-based symbol extraction and SQLite FTS5 BM25 search are exact, deterministic, and schema-stable without requiring rebuild cycles for token-level heuristic fixes.
+- `oraios/serena`:
+  - PR #2150 (open): `fix: confine file access to the project root by resolving symlinks in the path check` (Fixes #2144). Reveals directory traversal vulnerabilities where `Project.is_path_in_project` relied on lexical path normalization (`os.path.normpath`), allowing symlinks to escape the project boundary. Furthermore, symbol editing tools (`delete_lines`, `replace_lines`, `insert_at_line`, `replace_symbol_body`, etc.) lacked path validation entirely, allowing file modification outside project root via `..`. By contrast, `trace-mcp` enforces centralized path confinement (`validateWritePath` in `src/utils/security.ts`) that resolves `realpath` ancestors and unconditionally rejects symlink writes for all refactoring and modification tools.
+- `tirth8205/code-review-graph`:
+  - Issue #1106 (opened 2026-10-09): `[Bug]: serve exits when a request is cancelled mid-flight — AssertionError: Request already responded to`. When an MCP client cancels a request (`notifications/cancelled`), CRG's completed tool handler attempts to respond a second time. The unhandled `AssertionError` propagates through anyio and crashes the entire MCP server process, terminating stdio sessions across IDEs. In `trace-mcp`, request lifecycles and cancellation signals are managed safely via `@modelcontextprotocol/sdk` abort handling without unhandled exceptions crashing the server.
+- `MinishLab/semble`:
+  - PR #291 (closed 2026-10-08, fixes #290): `fix: Give bundled subagents access to the semble MCP tools`. Shipped subagent definitions had restricted tool access to CLI/shell only, forcing subagents into slow 5-second CLI process invocations rather than 18 ms in-memory MCP calls. Antigravity was left unconfigured as a documented gap. By contrast, `trace-mcp` provides direct MCP server integration across Claude Code, Cursor, Windsurf, Antigravity, and VS Code.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 189★ (+1 since pass 3), 24 forks, pushed 2026-10-09 (v3.35.0 live).
+- `MinishLab/semble`: 6,193★ (steady), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 32,001★ (-2 fluctuation / steady at 32k), 2,931 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,767★ (-3 fluctuation), 1,574 forks, pushed 2026-10-03.
+- `oraios/serena`: 30,124★ (-1 fluctuation), 2,052 forks, pushed 2026-10-09.
+- `DeusData/codebase-memory-mcp`: 46,216★ (+5 since pass 3), 3,803 forks, pushed 2026-10-09.
+- `cdeust/ai-architect-mcp-codebase`: 5★, 1 fork, pushed 2026-10-09.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
