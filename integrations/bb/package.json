@@ -1,0 +1,46 @@
+{
+  "name": "bb-plugin-trace-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Serve indexed repository context and decision memory to bb agents",
+  "engines": {
+    "node": ">=22.19.0",
+    "bb": ">=0.45.0",
+    "bbPluginSdk": ">=0.6.33"
+  },
+  "bb": {
+    "name": "trace-mcp",
+    "description": "Find repository symbols and remembered decisions without rereading the same files. Runs trace-mcp on the machine that hosts each bb environment.",
+    "branding": {
+      "icon": "./assets/icon.svg"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": [
+      "./skills/trace-mcp"
+    ]
+  },
+  "keywords": [
+    "bb-plugin",
+    "memory",
+    "context",
+    "tokens",
+    "mcp"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "^0.6.33",
+    "@types/node": "^22.13.0",
+    "typescript": "^5.9.0",
+    "tsx": "^4.23.15"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "node smoke.mjs",
+    "test:plugin": "node --import tsx verify-plugin.mjs"
+  }
+}
