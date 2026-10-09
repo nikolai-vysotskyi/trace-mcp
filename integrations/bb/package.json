@@ -6,7 +6,8 @@
   "description": "Serve indexed repository context and decision memory to bb agents",
   "engines": {
     "node": ">=22.19.0",
-    "bb": ">=0.0"
+    "bb": ">=0.45.0",
+    "bbPluginSdk": ">=0.6.33"
   },
   "bb": {
     "name": "trace-mcp",
