@@ -3,6 +3,7 @@
  * Initial post-update rebuild encounters transient SQLITE_BUSY / database lock.
  * Bounded retry must complete rebuild and clear pendingReindexForVersion.
  * Permanent lock must leave the project in error state with diagnostic error.
+ * Immediate transaction mode prevents SQLITE_BUSY_SNAPSHOT during concurrent indexing.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,6 +14,8 @@ import { ProjectManager } from '../../src/daemon/project-manager.js';
 import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
+import { FilePersister } from '../../src/indexer/file-persister.js';
+import type { FileExtraction, PipelineState } from '../../src/indexer/pipeline-state.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typescript/index.js';
 
@@ -116,28 +119,103 @@ describe('TRA-2257: SQLITE_BUSY initial rebuild recovery', () => {
     await seedPipe.dispose();
     storeSeed.db.close();
 
-    // Now instantiate two pipelines referencing the same DB file
+    // Now instantiate two stores referencing the same DB file
     const store1 = new Store(initializeDatabase(dbPath));
     const store2 = new Store(initializeDatabase(dbPath));
     const reg1 = new PluginRegistry();
     reg1.registerLanguagePlugin(new TypeScriptLanguagePlugin());
-    const reg2 = new PluginRegistry();
-    reg2.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+
+    // Interleave concurrent write between read and write in persistBatch.
+    // When store1 reads symbols during persistBatch (tryFastSymbolUpdate),
+    // connection 2 attempts a write.
+    // Under pre-fix deferred transaction, connection 2's commit invalidates store1's WAL read snapshot,
+    // causing store1 to crash with SQLITE_BUSY_SNAPSHOT ("database is locked").
+    // Under immediate transaction, store1 holds the RESERVED lock up front, so connection 2 cannot commit
+    // during store1's transaction, preventing snapshot divergence.
+    let concurrentWriteAttempted = false;
+    let writeBlockedByImmediateLock = false;
+    const origGetSymbols = store1.getSymbolsByFile.bind(store1);
+    store1.getSymbolsByFile = (fileId: number) => {
+      const syms = origGetSymbols(fileId);
+      if (!concurrentWriteAttempted) {
+        concurrentWriteAttempted = true;
+        try {
+          store2.db.pragma('busy_timeout = 50');
+          store2.db.prepare('UPDATE files SET byte_length = 999 WHERE id = ?').run(fileId);
+        } catch {
+          writeBlockedByImmediateLock = true;
+        }
+      }
+      return syms;
+    };
+
+    // Modify file so it is not skipped and enters persistBatch with existingId (exercising tryFastSymbolUpdate)
+    fs.writeFileSync(
+      path.join(testRoot, 'src', 'index.ts'),
+      'export function hello(): string { return "world-updated"; }\n',
+    );
 
     const pipe1 = new IndexingPipeline(store1, reg1, config, testRoot);
-    const pipe2 = new IndexingPipeline(store2, reg2, config, testRoot);
 
     try {
-      const [r1, r2] = await Promise.all([pipe1.indexAll(true), pipe2.indexAll(true)]);
+      const r1 = await pipe1.indexAll(true);
       expect(r1.errors).toBe(0);
-      expect(r2.errors).toBe(0);
       expect(r1.totalFiles).toBeGreaterThanOrEqual(1);
-      expect(r2.totalFiles).toBeGreaterThanOrEqual(1);
+      expect(writeBlockedByImmediateLock).toBe(true);
     } finally {
       await pipe1.dispose();
-      await pipe2.dispose();
       store1.db.close();
       store2.db.close();
+    }
+  });
+
+  it('FilePersister.persistBatch retries and succeeds when another connection temporarily holds write lock', async () => {
+    const dbPath = path.join(testRoot, 'shared-retry.db');
+    const db1 = initializeDatabase(dbPath);
+    const db2 = initializeDatabase(dbPath);
+    db1.pragma('busy_timeout = 20');
+    db2.pragma('busy_timeout = 20');
+
+    const store1 = new Store(db1);
+    const state: PipelineState = {
+      store: store1,
+      fileIdMap: new Map(),
+      changedFileIds: new Set(),
+      pendingImports: new Map(),
+      isIncremental: false,
+    };
+    const persister = new FilePersister(state, () => {});
+
+    // Hold write lock on connection 2 for 80ms
+    let lockReleased = false;
+    const timer = setTimeout(() => {
+      lockReleased = true;
+      db2.prepare('COMMIT').run();
+    }, 80);
+    db2.prepare('BEGIN IMMEDIATE').run();
+
+    const extraction: FileExtraction = {
+      relPath: 'src/index.ts',
+      existingId: null,
+      hash: 'h1',
+      contentSize: 100,
+      language: 'typescript',
+      symbols: [],
+      otherEdges: [],
+      importEdges: [],
+      routes: [],
+      components: [],
+      migrations: [],
+      frameworkExtracts: [],
+    };
+
+    try {
+      await persister.persistBatch([extraction]);
+      expect(lockReleased).toBe(true);
+    } finally {
+      clearTimeout(timer);
+      db1.close();
+      db2.close();
     }
   });
 });
