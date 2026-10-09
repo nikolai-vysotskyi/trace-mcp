@@ -84,6 +84,7 @@ import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
 import { validatePath } from '../utils/security.js';
+import { getWorktreeDelta, resolveWorktreeLink } from '../worktree-delta.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
@@ -289,6 +290,13 @@ export interface ServerDeps {
    * which would otherwise report a session that nobody opened (TRA-951).
    */
   skipUsagePing?: boolean;
+  /**
+   * Worktree root a stdio proxy routed to this (canonical) project. Set by the
+   * daemon when the session's `?worktree=` hint names a linked worktree, so the
+   * session can flag results for files that worktree changed. A session whose
+   * own root is a linked worktree needs no hint.
+   */
+  worktreeRoot?: string;
 }
 
 /**
@@ -624,6 +632,14 @@ export function createServer(
   // server, and the desktop app can render the project status badge.
   const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
+  // Linked worktree served from the canonical checkout's index: resolve the
+  // files the branch changed so answers about them can be flagged. Null (and
+  // therefore no behaviour change at all) for a main checkout.
+  const worktreeLink = resolveWorktreeLink(projectRoot, deps?.worktreeRoot);
+  const loadWorktreeDelta = worktreeLink
+    ? () => getWorktreeDelta(worktreeLink).catch(() => null)
+    : undefined;
+
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
   const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
     installToolGate(
@@ -640,6 +656,7 @@ export function createServer(
       (success) => heartbeat.recordToolCall(success),
       deps?.onJournalEntry,
       deps?.sessionId,
+      loadWorktreeDelta,
     );
 
   if (presetName !== 'full') {
@@ -771,6 +788,7 @@ export function createServer(
     // still reach the durable activity journal.
     onJournalEntry: deps?.onJournalEntry,
     sessionId: deps?.sessionId,
+    getWorktreeDelta: loadWorktreeDelta,
   };
 
   const metaCtx: MetaContext = {

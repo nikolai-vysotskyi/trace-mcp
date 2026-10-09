@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.19
+# trace-mcp-guard v0.20
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.20 changes (GH #1481 — linked git worktrees):
+#   - A linked worktree is served from the MAIN checkout's index, so the index
+#     holds the main version of every file the branch changed. The guard had no
+#     worktree notion: the sentinel is hashed by the main root, the walk up from
+#     a worktree path never reaches it, and the session read as "server not
+#     running" — strict routing off for the whole session.
+#   - The hook now detects a linked worktree (pure bash, reads .git metadata,
+#     no subprocess in a main checkout) and, when no sentinel is found for the
+#     worktree path (or only a stale one), falls back to the main checkout's
+#     sentinel and consultation markers.
+#   - Read (and Grep with a file path) on a file the worktree changed relative
+#     to the main checkout's HEAD — `git diff --name-only <main HEAD>` plus
+#     untracked files, cached TRACE_MCP_GUARD_WORKTREE_TTL seconds (default 5)
+#     — is allowed without a consultation: trace would answer with the main
+#     version. Files modified on disk since the cache was written count too.
+#     Everything else is routed exactly as in a main checkout.
+#   - Outside a linked worktree nothing changes.
 #
 # v0.19 changes (TRA-1791 — unresolvable-session fallback):
 #   - The guard knew only "daemon alive / daemon dead". A session whose MCP
@@ -556,6 +574,76 @@ if [[ -n "$PROJECT_HASH" ]]; then
   fi
 fi
 
+# ─── Linked-worktree awareness (GH #1481) ──────────────────────────
+# A linked worktree is served from the MAIN checkout's index, so the sentinel
+# and the consultation markers are keyed by the main root, which the walk above
+# (up from the worktree path) never reaches. Detect the worktree from .git
+# metadata alone — a `.git` FILE holding `gitdir: <main>/.git/worktrees/<name>`
+# whose admin dir carries a `commondir` file (submodules have a `.git` file too,
+# but no commondir). No subprocess: a main checkout returns at the first `.git`
+# directory and pays nothing.
+WORKTREE_ROOT=""
+WORKTREE_MAIN_ROOT=""
+detect_linked_worktree() {
+  local dir="$PWD" depth=0 line admin common
+  while (( depth < 40 )); do
+    [[ -d "$dir/.git" ]] && return 1
+    if [[ -f "$dir/.git" ]]; then
+      IFS= read -r line < "$dir/.git" 2>/dev/null || true
+      [[ "$line" == gitdir:* ]] || return 1
+      admin="${line#gitdir:}"
+      admin="${admin# }"
+      [[ "$admin" == /* ]] || admin="$dir/$admin"
+      [[ -f "$admin/commondir" ]] || return 1
+      IFS= read -r common < "$admin/commondir" 2>/dev/null || true
+      [[ -n "$common" ]] || return 1
+      [[ "$common" == /* ]] || common="$admin/$common"
+      common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
+      [[ "${common##*/}" == ".git" ]] || return 1
+      WORKTREE_ROOT="$dir"
+      WORKTREE_MAIN_ROOT="${common%/.git}"
+      return 0
+    fi
+    [[ "$dir" == "/" ]] && return 1
+    dir="${dir%/*}"
+    [[ -n "$dir" ]] || dir="/"
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+if detect_linked_worktree && [[ -n "$PROJECT_HASH" ]]; then
+  WT_MAIN_HASH=$(project_hash_of "$WORKTREE_MAIN_ROOT")
+  if [[ -n "$WT_MAIN_HASH" && "$WT_MAIN_HASH" == "$PROJECT_HASH" ]]; then
+    # A worktree nested inside its main checkout: the walk up from it lands on
+    # the main root, so the hash is already right — but paths must stay relative
+    # to the worktree, or the marker key (`src/b.ts`) never matches.
+    PROJECT_ROOT="$WORKTREE_ROOT"
+  elif [[ -n "$WT_MAIN_HASH" ]]; then
+    # Borrow the main checkout's sentinel and markers when nothing live is bound
+    # to the worktree path: no sentinel at all (the walk keeps a stale match, so
+    # that means no server was ever bound here), or only a STALE one — a leftover
+    # from an old direct session must not mask the live main server.
+    WT_HELD=$(sentinel_for "$PROJECT_HASH")
+    WT_MAIN_SENTINEL=$(sentinel_for "$WT_MAIN_HASH")
+    WT_BORROW=0
+    if [[ -n "$WT_MAIN_SENTINEL" ]]; then
+      if [[ -z "$WT_HELD" ]]; then
+        WT_BORROW=1
+      elif (( $(date +%s) - $(file_mtime "$WT_HELD") > STALE_THRESHOLD_SEC )) \
+        && (( $(date +%s) - $(file_mtime "$WT_MAIN_SENTINEL") <= STALE_THRESHOLD_SEC )); then
+        WT_BORROW=1
+      fi
+    fi
+    if (( WT_BORROW == 1 )); then
+      # Paths stay relative to the worktree (that is where the agent works);
+      # the hash — and so every sentinel/marker lookup — is the main checkout's.
+      PROJECT_ROOT="$WORKTREE_ROOT"
+      PROJECT_HASH="$WT_MAIN_HASH"
+    fi
+  fi
+fi
+
 # Whichever of the two was touched most recently, so a sentinel left behind by a
 # crashed new server cannot mask a live old one still refreshing the $TMPDIR
 # copy — the freshest file is by definition the one a running server owns. The
@@ -604,6 +692,54 @@ any_consultation_markers() {
 READS_DIR="$TMP_HOME/trace-mcp-reads-${SESSION_ID}"
 DENY_AGGREGATE_FILE="$READS_DIR/.deny-aggregate"
 mkdir -p "$READS_DIR" 2>/dev/null || true
+
+# ─── Worktree delta (GH #1481) ─────────────────────────────────────
+# Files the linked worktree changed relative to the main checkout's HEAD. The
+# index describes the main version of these, so Read/Grep on them must not be
+# gated on a consultation. Computed with git (hardened: no system/global config,
+# no fsmonitor) and cached per session; HEAD ids cannot validate the cache —
+# unstaged edits and new untracked files change neither — so it is a short TTL
+# plus "modified on disk after the cache was written" in worktree_delta_has.
+WORKTREE_DELTA_TTL=${TRACE_MCP_GUARD_WORKTREE_TTL:-5}
+[[ "$WORKTREE_DELTA_TTL" =~ ^[0-9]+$ ]] || WORKTREE_DELTA_TTL=5
+WORKTREE_DELTA_FILE="$READS_DIR/.worktree-delta"
+
+worktree_git() {
+  local root="$1"; shift
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 GIT_OPTIONAL_LOCKS=0 \
+    git -C "$root" -c core.fsmonitor=false "$@" 2>/dev/null
+}
+
+worktree_delta_refresh() {
+  local base tmp="$WORKTREE_DELTA_FILE.$$"
+  base=$(worktree_git "$WORKTREE_MAIN_ROOT" rev-parse --verify -q HEAD) || return 1
+  [[ -n "$base" ]] || return 1
+  {
+    worktree_git "$WORKTREE_ROOT" diff --name-only -z --no-renames --no-ext-diff --relative "$base" -- || true
+    worktree_git "$WORKTREE_ROOT" ls-files --others --exclude-standard -z || true
+  } | tr '\0' '\n' | sort -u > "$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+  mv -f "$tmp" "$WORKTREE_DELTA_FILE" 2>/dev/null || { rm -f "$tmp"; return 1; }
+}
+
+# True when $1 (absolute, or relative to the worktree root) is part of the delta.
+# Fails open to "not in delta" — the caller then applies the normal rules.
+worktree_delta_has() {
+  [[ -n "$WORKTREE_ROOT" ]] || return 1
+  local abs="$1" rel
+  [[ "$abs" == /* ]] || abs="$(pwd)/$abs"
+  case "$abs" in
+    "$WORKTREE_ROOT"/*) rel="${abs#"$WORKTREE_ROOT"/}" ;;
+    *) return 1 ;;
+  esac
+  if [[ ! -f "$WORKTREE_DELTA_FILE" ]] || (( NOW - $(file_mtime "$WORKTREE_DELTA_FILE") > WORKTREE_DELTA_TTL )); then
+    worktree_delta_refresh || return 1
+  fi
+  [[ -f "$WORKTREE_DELTA_FILE" ]] || return 1
+  grep -Fxq -- "$rel" "$WORKTREE_DELTA_FILE" 2>/dev/null && return 0
+  # Edited or created since the cache was written.
+  [[ -f "$abs" && "$abs" -nt "$WORKTREE_DELTA_FILE" ]] && return 0
+  return 1
+}
 
 # Tunables
 REPEAT_READ_LIMIT=${TRACE_MCP_GUARD_REPEAT_LIMIT:-3}
@@ -1111,6 +1247,14 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
       HAS_MARKER=1
     fi
 
+    # Linked worktree: a file the branch changed is described by the index in its
+    # main-checkout version, so a consultation cannot unlock anything useful —
+    # the file on disk is the source of truth (GH #1481). Treated like a
+    # consulted file below, so the read ledger and deny state stay accurate.
+    if (( HAS_MARKER == 0 )) && worktree_delta_has "$FILE_PATH"; then
+      HAS_MARKER=1
+    fi
+
     # Ancestor-root fallback (TRA-1737): the server hashes its marker dir by
     # the session root it was launched with, which may be a PARENT of the
     # root this hook resolved (the sentinel walk stops at the nearest claimed
@@ -1234,6 +1378,11 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
     exit 0
   fi
   if echo "$GREP_PATH" | grep -qE '(node_modules|vendor|dist|build|\.git)'; then
+    exit 0
+  fi
+
+  # Linked worktree: grep on a single file the branch changed (GH #1481).
+  if [[ -n "$GREP_PATH" ]] && worktree_delta_has "$GREP_PATH"; then
     exit 0
   fi
 

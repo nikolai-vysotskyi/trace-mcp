@@ -6,6 +6,7 @@ import { getUnindexableSkipStats } from '../../indexer/unindexable-skip-cache.js
 import type { PluginRegistry } from '../../plugin-api/registry.js';
 import type { DetectedVersion, ProjectContext } from '../../plugin-api/types.js';
 import type { ProgressSnapshot } from '../../progress.js';
+import type { WorktreeDeltaSummary } from '../../worktree-delta.js';
 
 interface IndexHealthResult {
   status: 'ok' | 'degraded' | 'empty';
@@ -31,6 +32,12 @@ interface IndexHealthResult {
   };
   warnings: string[];
   progress?: ProgressSnapshot;
+  /**
+   * Present only in a linked git worktree served from the canonical checkout's
+   * index: the files this worktree changed relative to what the index holds.
+   * Results about those files are flagged `stale_on_branch`.
+   */
+  worktree?: WorktreeDeltaSummary;
   /**
    * Summary of files skipped as deterministically unindexable (binary/oversize)
    * in the watcher / incremental path.

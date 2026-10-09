@@ -42,6 +42,7 @@ import { listPresets } from '../project/presets.js';
 import { runLoadTools } from '../../server/tool-surface.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { getDeadCodeV2 } from '../refactoring/dead-code.js';
+import { markStaleOnBranch, staleOnBranchWarning } from '../../server/worktree-stale.js';
 
 export function registerSessionTools(server: McpServer, ctx: MetaContext): void {
   const {
@@ -65,6 +66,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     deferredTools,
     onJournalEntry,
     sessionId,
+    getWorktreeDelta,
   } = ctx;
 
   // --- Resources ---
@@ -955,6 +957,8 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     async ({ calls }) => {
       const results: { tool: string; result?: unknown; error?: string }[] = [];
       const excluded = new Set(config.tools?.exclude ?? []);
+      // Sub-calls bypass the gate, so flag worktree-changed files here too.
+      const worktreeDelta = getWorktreeDelta ? await getWorktreeDelta() : null;
       for (const call of calls) {
         // `tools.exclude` is the one hard restriction — a tool excluded by
         // config must be unreachable through every door, including this one.
@@ -1021,6 +1025,15 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
                 parsed._optimization_hint = undefined;
                 parsed._budget_warning = undefined;
                 parsed._budget_level = undefined;
+                if (worktreeDelta) {
+                  const stale = staleOnBranchWarning(markStaleOnBranch(parsed, worktreeDelta));
+                  if (stale) {
+                    const prior: unknown[] = Array.isArray(parsed._warnings)
+                      ? parsed._warnings
+                      : [];
+                    parsed._warnings = [...prior, stale];
+                  }
+                }
               }
               results.push({ tool: call.tool, result: parsed });
             } catch {

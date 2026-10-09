@@ -20,6 +20,7 @@ import {
 } from './tool-gate-helpers.js';
 import { createToolFilter } from './tool-filter.js';
 import type { ToolResponse } from './types.js';
+import type { WorktreeDelta } from '../worktree-delta.js';
 
 /**
  * A tool registered but held back from this session's surface (TRA-402).
@@ -78,6 +79,7 @@ export function installToolGate(
   recordToolCall?: (success: boolean) => void,
   onJournalEntry?: (data: JournalEntryCallbackData) => void,
   sessionId?: string,
+  getWorktreeDelta?: () => Promise<WorktreeDelta | null>,
 ): ToolGateResult {
   const descriptionOverrides = config.tools?.descriptions ?? {};
   const schemaTransformConfig: SchemaTransformConfig = {
@@ -117,6 +119,7 @@ export function installToolGate(
     recordToolCall,
     onJournalEntry,
     sessionId,
+    getWorktreeDelta,
   });
 
   server.tool = ((...args: unknown[]) => {

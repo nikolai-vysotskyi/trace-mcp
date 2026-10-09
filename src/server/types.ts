@@ -17,6 +17,7 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import type { StateEngine } from '../state/state-engine.js';
 import type { TopologyStore } from '../topology/topology-db.js';
+import type { WorktreeDelta } from '../worktree-delta.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
@@ -126,6 +127,12 @@ export interface ServerContext {
   onJournalEntry?: (data: JournalEntryCallbackData) => void;
   /** Session ID stamped into `onJournalEntry` broadcasts. Required when the callback is set. */
   sessionId?: string;
+  /**
+   * Present only when this session runs in a linked git worktree served from
+   * the canonical checkout's index: resolves which files the branch changed
+   * (cached, never rejects). Absent in a main checkout.
+   */
+  getWorktreeDelta?: () => Promise<WorktreeDelta | null>;
 }
 
 /** Extended context for meta tools that bypass preset gate */
