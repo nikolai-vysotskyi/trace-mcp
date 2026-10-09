@@ -9,9 +9,24 @@
  * `register_edit` take. That made it a second, unserialized SQLite writer on
  * exactly the projects whose reindex is slow enough to time out.
  */
+import path from 'node:path';
 import { LOCKS_DIR, projectHash } from '../global.js';
 import { logger } from '../logger.js';
+import { findProjectRoot } from '../project-root.js';
+import { getProject, resolveRegisteredAncestor } from '../registry.js';
 import { LockError, withLock } from '../utils/pid-lock.js';
+
+/** Use the nearest registered index for files inside container projects. */
+export function resolveIndexFileProjectRoot(file: string): string | null {
+  let detectedRoot: string;
+  try {
+    detectedRoot = findProjectRoot(path.dirname(path.resolve(file)));
+  } catch {
+    return resolveRegisteredAncestor(file)?.root ?? null;
+  }
+
+  return getProject(detectedRoot)?.root ?? resolveRegisteredAncestor(file)?.root ?? detectedRoot;
+}
 
 export type IndexFileOutcome =
   /** The daemon accepted the file (2xx). */

@@ -91,7 +91,11 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
-import { describeIndexFileOutcome, dispatchIndexFile } from './cli/index-file.js';
+import {
+  describeIndexFileOutcome,
+  dispatchIndexFile,
+  resolveIndexFileProjectRoot,
+} from './cli/index-file.js';
 import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
 import { buildApiProjectsList } from './daemon/api-projects-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
@@ -4538,10 +4542,8 @@ program
       process.exit(0); // file may have been deleted — exit silently
     }
 
-    let projectRoot: string;
-    try {
-      projectRoot = findProjectRoot(path.dirname(resolvedFile));
-    } catch {
+    const projectRoot = resolveIndexFileProjectRoot(resolvedFile);
+    if (!projectRoot) {
       process.exit(0); // not inside a known project — skip silently
     }
 

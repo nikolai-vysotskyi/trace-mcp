@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { announceDbHolder } from '../src/db-holders.js';
+import { resolveIndexFileProjectRoot } from '../src/cli/index-file.js';
 import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, getDbPath, REGISTRY_PATH } from '../src/global.js';
 import {
   findEphemeralProjects,
@@ -147,6 +148,41 @@ describe('resolveRegisteredAncestor', () => {
 
     const entry = resolveRegisteredAncestor(child);
     expect(entry?.root).toBe(parent);
+  });
+});
+
+describe('index-file project resolution', () => {
+  it('routes a file in an unregistered nested repo to its registered container', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'apps', 'laravel');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'composer.json'), '{}');
+    registerProject(container);
+
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'App.php'))).toBe(container);
+  });
+
+  it('keeps the closest registered nested project', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'apps', 'laravel');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'composer.json'), '{}');
+    registerProject(container);
+    registerProject(nested);
+
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'App.php'))).toBe(nested);
+  });
+
+  it('retains marker-based resolution when no registered project contains the file', () => {
+    const nested = makeTmpRepo();
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'index.ts'))).toBe(nested);
+  });
+
+  it('uses a registered container when the file has no project markers', () => {
+    const container = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-container-'));
+    registerProject(container);
+
+    expect(resolveIndexFileProjectRoot(path.join(container, 'notes', 'draft.md'))).toBe(container);
   });
 });
 
