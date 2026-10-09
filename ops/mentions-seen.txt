@@ -259,3 +259,8 @@ sudosubin/agents.nix
 # Genuine third-party: research document AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md
 # surveys agent code-intelligence tools, citing trace-mcp (mcpservers.org) for 68 languages & impact analysis:
 jfjordanfarr/Live-Documentation
+
+# ── Swept 2026-10-10 (TRA-2302) ──
+# Name collision: LLM agent harness with internal iknow-trace-mcp server
+# (docs/trace-mcp-server.md, src/trace-mcp/) exposing session transcript trace querying tools:
+winter6205/iknow
