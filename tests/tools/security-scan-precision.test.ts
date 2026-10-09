@@ -878,6 +878,85 @@ function run(req) {
   });
 
   // -------------------------------------------------------------------
+  // 5b. Guard-demotion sync and second-argument options (Round 5 review)
+  // -------------------------------------------------------------------
+
+  test('does not demote when line has dangerous execSync alongside safeexec', () => {
+    writeFile(
+      store,
+      'scripts/safeexec-multi.mjs',
+      `
+function run(req) {
+  execSync(\`sh -c \${req.body.cmd}\`); safeexec(\`ps -p \${process.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote ps when second argument provides dangerous shell option', () => {
+    writeFile(
+      store,
+      'scripts/ps-shell-opt.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`, { shell: req.query.x });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when second argument provides dangerous env option', () => {
+    writeFile(
+      store,
+      'scripts/ps-env-opt.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`, { env: req.body });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when second argument provides dangerous shell option', () => {
+    writeFile(
+      store,
+      'scripts/kill-shell-opt.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\`, { shell: req.query.x });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------
 

@@ -1094,40 +1094,61 @@ function hasFixedAuthority(line: string, lines: string[], fromLine: number): boo
  *  - "ps"       — POSIX `ps ... -p X` with a literal process.pid or numeric literal arg,
  *  - null       — no known safe shape.
  */
+function isSafeCallTail(tail: string): boolean {
+  const trimmed = tail.trim();
+  if (trimmed === '') return true;
+  // If there is a second argument, it must be a closed options object literal on the same line
+  if (!/^\s*,\s*\{[^}]*\}\s*$/.test(trimmed)) return false;
+  // Options must not configure a custom shell or environment
+  if (/\b(?:shell|env)\b/i.test(trimmed)) return false;
+  // Options must not contain untrusted tokens or interpolations
+  if (UNTRUSTED_TOKEN_RE.test(trimmed)) return false;
+  if (trimmed.includes('${')) return false;
+  return true;
+}
+
 function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' | 'ps' | null {
   // Fail-closed if multiple command execution sinks appear on the same line.
   // A safe invocation must be an isolated call; multiple sinks on one line
   // could mask a critical injection on the same line.
-  const sinkCalls = line.match(/\b(?:exec|execSync|spawnSync)\s*\(/g);
+  // Matched without word-boundary anchor so any variation (execSync, safeexec, _exec)
+  // is counted as a sink call, avoiding desync with detection patterns.
+  const sinkCalls = line.match(/(?:exec|execSync|spawnSync)\s*\(/g);
   if (sinkCalls && sinkCalls.length > 1) {
     return null;
   }
 
   // Match fixed-verb GUI openers with a single, closed template literal argument.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+[^`]*`\s*[,)]/.test(line)) {
+  const openMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+[^`]*`([^;)]*)\)/.exec(
+      line,
+    );
+  if (openMatch && isSafeCallTail(openMatch[1])) {
     return 'open';
   }
 
   // `which X` — argument controls only which binary is looked up, with a single closed template literal.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{[^`$]+\}`\s*[,)]/.test(line)) {
+  const whichMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{[^`$]+\}`([^;)]*)\)/.exec(line);
+  if (whichMatch && isSafeCallTail(whichMatch[1])) {
     return 'which';
   }
 
   // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.
-  if (
-    /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/PID\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`\s*[,)]/i.test(
+  const taskkillMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/PID\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/i.exec(
       line,
-    )
-  ) {
+    );
+  if (taskkillMatch && isSafeCallTail(taskkillMatch[1])) {
     return 'taskkill';
   }
 
   // ps ... -p/--pid X — strictly process.pid or numeric literal, single closed template literal argument.
-  if (
-    /(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`$]*(?:-p|--pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`\s*[,)]/.test(
+  const psMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`$]*(?:-p|--pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/.exec(
       line,
-    )
-  ) {
+    );
+  if (psMatch && isSafeCallTail(psMatch[1])) {
     return 'ps';
   }
 
