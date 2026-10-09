@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { announceDbHolder } from '../src/db-holders.js';
+import { indexFilePathForProject, resolveIndexFileProjectRoot } from '../src/cli/index-file.js';
 import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, getDbPath, REGISTRY_PATH } from '../src/global.js';
 import {
   findEphemeralProjects,
@@ -147,6 +148,76 @@ describe('resolveRegisteredAncestor', () => {
 
     const entry = resolveRegisteredAncestor(child);
     expect(entry?.root).toBe(parent);
+  });
+});
+
+describe('index-file project resolution', () => {
+  it('rejects a file outside any known project', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-unregistered-'));
+    expect(() => resolveIndexFileProjectRoot(path.join(dir, 'file.ts'))).toThrow();
+  });
+
+  it('routes a file in an unregistered nested repo to its registered container', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'apps', 'laravel');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'composer.json'), '{}');
+    registerProject(container);
+
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'App.php'))).toBe(container);
+  });
+
+  it('keeps the closest registered nested project', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'apps', 'laravel');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'composer.json'), '{}');
+    registerProject(container);
+    registerProject(nested);
+
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'App.php'))).toBe(nested);
+  });
+
+  it('retains marker-based resolution when no registered project contains the file', () => {
+    const nested = makeTmpRepo();
+    expect(resolveIndexFileProjectRoot(path.join(nested, 'src', 'index.ts'))).toBe(nested);
+  });
+
+  it('uses a registered container when the file has no project markers', () => {
+    const container = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-container-'));
+    registerProject(container);
+
+    expect(resolveIndexFileProjectRoot(path.join(container, 'notes', 'draft.md'))).toBe(container);
+  });
+
+  it('routes a canonical file path to a container registered through a symlink', () => {
+    const container = makeTmpRepo();
+    const aliases = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-alias-'));
+    const alias = path.join(aliases, 'container');
+    fs.symlinkSync(container, alias, 'dir');
+    const nested = path.join(container, 'nested');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'package.json'), '{}');
+    const file = path.join(nested, 'index.ts');
+    fs.writeFileSync(file, 'export {}');
+    registerProject(alias, { explicit: true });
+
+    expect(resolveIndexFileProjectRoot(file)).toBe(alias);
+    expect(indexFilePathForProject(file, alias)).toBe(path.join(alias, 'nested', 'index.ts'));
+  });
+
+  it('preserves an explicit project-root override', () => {
+    const container = makeTmpRepo();
+    const override = makeTmpRepo();
+    registerProject(container);
+    const previous = process.env.TRACE_MCP_REPO_ROOT;
+    process.env.TRACE_MCP_REPO_ROOT = override;
+    try {
+      expect(resolveIndexFileProjectRoot(path.join(container, 'index.ts'))).toBe(override);
+    } finally {
+      if (previous === undefined) delete process.env.TRACE_MCP_REPO_ROOT;
+      else process.env.TRACE_MCP_REPO_ROOT = previous;
+    }
   });
 });
 
