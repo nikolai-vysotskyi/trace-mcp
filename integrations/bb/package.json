@@ -35,10 +35,12 @@
   "devDependencies": {
     "@get-bb/plugin-sdk": "^0.4.3",
     "@types/node": "^22.13.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "tsx": "^4.23.15"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test:smoke": "node smoke.mjs"
+    "test:smoke": "node smoke.mjs",
+    "test:plugin": "node --import tsx verify-plugin.mjs"
   }
 }

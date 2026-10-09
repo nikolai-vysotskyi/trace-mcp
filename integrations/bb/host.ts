@@ -18,15 +18,31 @@ async function connect(path: string): Promise<Client> {
     const pending = (async () => {
       if (!(await stat(path)).isDirectory())
         throw new Error('bb environment path is not a directory');
+      const windows = process.platform === 'win32';
       const transport = new StdioClientTransport({
-        command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
-        args: ['--yes', 'trace-mcp@3.34.8', 'serve', '--preset', 'full'],
+        command: windows ? 'cmd.exe' : 'npm',
+        args: [
+          ...(windows ? ['/d', '/s', '/c', 'npm'] : []),
+          'exec',
+          '--yes',
+          '--package=trace-mcp@3.34.8',
+          '--',
+          'trace-mcp',
+          'serve',
+          '--preset',
+          'full',
+        ],
         cwd: path,
         stderr: 'pipe',
       });
       const client = new Client({ name: 'bb-plugin-trace-mcp', version: '0.1.0' });
-      await client.connect(transport);
       client.onclose = () => sessions.delete(path);
+      try {
+        await client.connect(transport);
+      } catch (error) {
+        await Promise.allSettled([client.close()]);
+        throw error;
+      }
       return client;
     })();
     sessions.set(path, pending);
