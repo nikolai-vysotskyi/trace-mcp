@@ -94,6 +94,7 @@ import { isDaemonRunning } from './daemon/client.js';
 import {
   describeIndexFileOutcome,
   dispatchIndexFile,
+  indexFilePathForProject,
   resolveIndexFileProjectRoot,
 } from './cli/index-file.js';
 import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
@@ -4577,7 +4578,7 @@ program
 
         const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
         try {
-          await pipeline.indexFiles([resolvedFile]);
+          await pipeline.indexFiles([indexFilePathForProject(resolvedFile, projectRoot)]);
         } finally {
           await pipeline.dispose();
           db.close();

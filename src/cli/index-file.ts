@@ -9,6 +9,7 @@
  * `register_edit` take. That made it a second, unserialized SQLite writer on
  * exactly the projects whose reindex is slow enough to time out.
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import { LOCKS_DIR, projectHash } from '../global.js';
 import { logger } from '../logger.js';
@@ -16,16 +17,54 @@ import { findProjectRoot } from '../project-root.js';
 import { getProject, resolveRegisteredAncestor } from '../registry.js';
 import { LockError, withLock } from '../utils/pid-lock.js';
 
+function nearestRegisteredRoot(file: string): string | null {
+  let dir = path.dirname(path.resolve(file));
+  while (true) {
+    // getProject also matches symlink aliases, unlike a lexical ancestor walk.
+    const entry = getProject(dir);
+    if (entry) return entry.root;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return resolveRegisteredAncestor(file)?.root ?? null; // multi-root child paths
+}
+
 /** Use the nearest registered index for files inside container projects. */
 export function resolveIndexFileProjectRoot(file: string): string | null {
   let detectedRoot: string;
   try {
     detectedRoot = findProjectRoot(path.dirname(path.resolve(file)));
   } catch {
-    return resolveRegisteredAncestor(file)?.root ?? null;
+    return nearestRegisteredRoot(file);
   }
 
-  return getProject(detectedRoot)?.root ?? resolveRegisteredAncestor(file)?.root ?? detectedRoot;
+  // The explicit override names the intended DB even if another project
+  // contains this file. Keep that CLI contract when the override is unregistered.
+  if (process.env.TRACE_MCP_REPO_ROOT) return getProject(detectedRoot)?.root ?? detectedRoot;
+  return nearestRegisteredRoot(file) ?? detectedRoot;
+}
+
+/** Keep local pipeline paths under the registered spelling of a symlinked root. */
+export function indexFilePathForProject(file: string, projectRoot: string): string {
+  const relative = path.relative(projectRoot, file);
+  if (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) {
+    return file;
+  }
+
+  try {
+    const realRelative = path.relative(fs.realpathSync(projectRoot), fs.realpathSync(file));
+    if (
+      realRelative !== '..' &&
+      !realRelative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(realRelative)
+    ) {
+      return path.join(projectRoot, realRelative);
+    }
+  } catch {
+    // The pipeline will reject an inaccessible or out-of-root file.
+  }
+  return file;
 }
 
 export type IndexFileOutcome =
