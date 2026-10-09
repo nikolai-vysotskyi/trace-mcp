@@ -791,7 +791,10 @@ function extractInterpolatedExprs(line: string): string[] {
       if (depth === 0) break;
       j++;
     }
-    if (depth !== 0) break;
+    if (depth !== 0) {
+      exprs.push(line.slice(i + 2).trim() || '<unclosed>');
+      break;
+    }
     exprs.push(line.slice(i + 2, j).trim());
     i = j;
   }
@@ -1092,23 +1095,40 @@ function hasFixedAuthority(line: string, lines: string[], fromLine: number): boo
  *  - null       — no known safe shape.
  */
 function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' | 'ps' | null {
-  // Match fixed-verb GUI openers.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+/.test(line)) {
+  // Fail-closed if multiple command execution sinks appear on the same line.
+  // A safe invocation must be an isolated call; multiple sinks on one line
+  // could mask a critical injection on the same line.
+  const sinkCalls = line.match(/\b(?:exec|execSync|spawnSync)\s*\(/g);
+  if (sinkCalls && sinkCalls.length > 1) {
+    return null;
+  }
+
+  // Match fixed-verb GUI openers with a single, closed template literal argument.
+  if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+[^`]*`\s*[,)]/.test(line)) {
     return 'open';
   }
-  // `which X` — argument controls only which binary is looked up.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{/.test(line)) return 'which';
 
-  const exprs = extractInterpolatedExprs(line);
-  // Demote only when every interpolated value is directly process.pid or a numeric literal.
-  // Any variable or parameter resolution is deliberately omitted to prevent scope-bypass CWE-78s.
-  if (exprs.length > 0 && exprs.every((e) => e === 'process.pid' || /^-?\d+$/.test(e))) {
-    if (/(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+\/PID\s+/.test(line)) {
-      return 'taskkill';
-    }
-    if (/(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`]*?(?:-p|--pid)\s*/.test(line)) {
-      return 'ps';
-    }
+  // `which X` — argument controls only which binary is looked up, with a single closed template literal.
+  if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{[^`$]+\}`\s*[,)]/.test(line)) {
+    return 'which';
+  }
+
+  // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.
+  if (
+    /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/PID\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`\s*[,)]/i.test(
+      line,
+    )
+  ) {
+    return 'taskkill';
+  }
+
+  // ps ... -p/--pid X — strictly process.pid or numeric literal, single closed template literal argument.
+  if (
+    /(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`$]*(?:-p|--pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`\s*[,)]/.test(
+      line,
+    )
+  ) {
+    return 'ps';
   }
 
   return null;
@@ -1385,7 +1405,7 @@ export function scanSecurity(
               }
             }
 
-            if (rule.key === 'command_injection' && usesTemplate) {
+            if (rule.key === 'command_injection' && pattern.regex.source.includes('`')) {
               const cmdShape = classifyCommandInjection(line);
               if (cmdShape === 'open') {
                 // GUI file-open verb with a path our process produced.

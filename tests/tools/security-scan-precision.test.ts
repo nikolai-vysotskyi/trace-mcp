@@ -742,6 +742,142 @@ function stop() {
   });
 
   // -------------------------------------------------------------------
+  // 5a. Sink-isolation regressions (Round 4 review findings)
+  // -------------------------------------------------------------------
+
+  test('does not demote ps when concatenation follows template literal', () => {
+    writeFile(
+      store,
+      'scripts/ps-concat.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\` + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when template literal continues on the next line', () => {
+    writeFile(
+      store,
+      'scripts/ps-multiline.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid} \\
+    \${req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when unclosed ${ interpolation is present on the line', () => {
+    writeFile(
+      store,
+      'scripts/ps-unclosed.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid} \${
+    req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote when two command injection sinks appear on the same line (safe ps + unsafe concat)', () => {
+    writeFile(
+      store,
+      'scripts/multi-sink.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`); execSync('rm ' + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote when two command injection sinks appear on the same line (safe ps + unsafe template)', () => {
+    writeFile(
+      store,
+      'scripts/multi-sink-template.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`); execSync(\`rm \${req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote taskkill when concatenation follows template literal', () => {
+    writeFile(
+      store,
+      'scripts/kill-concat.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\` + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when two sinks appear on the same line', () => {
+    writeFile(
+      store,
+      'scripts/kill-multi.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\`); execSync('rm ' + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------
 
