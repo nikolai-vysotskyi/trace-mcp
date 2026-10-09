@@ -47,7 +47,7 @@ Rules for keeping it honest:
 
 | Surface | Listed | What it shows | How to change it | Verified |
 |---|---|---|---|---|
-| [get-bb/marketplace](https://github.com/get-bb/marketplace) / BB Community plugin menu | **[PR #524](https://github.com/get-bb/marketplace/pull/524) open and ready for review; not listed yet** | `bb-plugin-trace-mcp` in `integrations/bb` provides native bb tools for code search, symbol lookup, outlines, decision recall, and the remaining MCP tools via discovery. The entry's primary category is `memory-and-context`, secondary `token-usage-and-limits` | **Verified 2026-10-09:** bb's shipped v2 schema, domain model, and browse shelves each accepted one `category`. [bb PR #5276](https://github.com/get-bb/bb/pull/5276) implements secondary placement but was **automatically closed** by bb's contributor gate: `CONTRIBUTING.md` requires the author to join [their Discord](https://discord.gg/kvBU6tJhcJ), explain the PR in `#contributors`, and be added to the allow list by a maintainer; reopen only after that approval. This is a gate on the author, not a code rejection, and GitHub issues do not substitute for the stated Discord step. Catalog PR #524 includes the matching schema change; older bb versions show the primary category only. Source [trace-mcp PR #1520](https://github.com/nikolai-vysotskyi/trace-mcp/pull/1520) merged 2026-10-09, and public Git tag `bb-plugin-trace-mcp/v0.1.0` resolves to its merge commit. Local catalog build and tests passed; full `npm run check` failed on 17 unrelated existing sources because connections to GitHub failed, with no error on `trace-mcp`. Rerun liveness from stable network before merging the catalog PR. Headless plugin has no user-facing panel to screenshot | 2026-10-09 |
+| [get-bb/marketplace](https://github.com/get-bb/marketplace) / BB Community plugin menu | **[PR #524](https://github.com/get-bb/marketplace/pull/524) open for review; not listed yet** | `bb-plugin-trace-mcp` v0.2.0 in `integrations/bb` adds native search/memory tools, a bb thread panel for index health, actual provider-reported context usage and decisions, plus `bb trace` CLI. The entry has primary `memory-and-context`, secondary `token-usage-and-limits`, and two real panel screenshots | **Verified 2026-10-10:** source [PR #1531](https://github.com/nikolai-vysotskyi/trace-mcp/pull/1531) merged, public tag `bb-plugin-trace-mcp/v0.2.0` resolves to that merge commit. The plugin was installed and exercised in bb 0.45.0; the skill, panel and CLI worked on a real thread. Catalog build and tests pass. Full local liveness traversals still lose GitHub connectivity on unrelated existing entries; direct `git ls-remote` for our tag passes. Rerun full liveness from stable network before merging catalog PR #524. bb's shipped catalog supports one category only: [bb PR #5276](https://github.com/get-bb/bb/pull/5276) implements the second shelf but was automatically closed because `nikolai-vysotskyi` is not yet on its contributor allow list. Per bb's `CONTRIBUTING.md`, the author must ask in [Discord `#contributors`](https://discord.gg/kvBU6tJhcJ) before reopening; this was not a code rejection. Until that PR ships, older bb versions display the primary category only. The two screenshots show the real plugin panel without personal data | 2026-10-10 |
 | [davila7/claude-code-templates](https://github.com/davila7/claude-code-templates) / [aitmpl.com](https://www.aitmpl.com/component/trace-mcp) | **Yes — and it is the largest surface we are on: 30,531★ / 3,459 forks, pushed daily** | `cli-tool/components/mcps/devtools/trace-mcp.json`, mirrored verbatim into `dashboard/public/component-content/mcps/devtools/trace-mcp.json` (same string, wrapped in a `content` field — both must be edited together). Ships `npx -y trace-mcp@latest` and a hand-typed description. **Already stale again**: it says "80 languages", `counts.yml` says 81 — six days after the refresh that was supposed to fix exactly this | **The entry is ours, not a third-party scrape.** Both commits are Nikolai's: [#553](https://github.com/davila7/claude-code-templates/commit/8b18c46f) 2026-04-29 added it, [#844](https://github.com/davila7/claude-code-templates/commit/bb0c681c) 2026-08-29 refreshed the counts. PRs are the route and two have been merged, so the door is open — but see the note below before spending a run on it. It hardcodes the npm name in `args`, so it belongs on the TRA-644 rename checklist; fold the 80→81 fix into that same PR rather than opening one for a digit | 2026-09-05 |
 | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.15.0, published 2026-09-03, `status: active`, matching npm `latest`. **The `description` it renders was rewritten 2026-09-05 (TRA-904)** and lands with the next release, not with the merge — see the one-liner section below | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret). **This row is now more than one listing.** `modelcontextprotocol/servers` already redirects here, mcp.so and smithery ingest it, and as of 2026-09-02 goose retires its own 59-entry directory in favour of it too. The `description` field in `server.json` is therefore the copy those surfaces render, not just ours — see TRA-761 | 2026-09-04 |
 | [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows. Renders 31 links to `trace-mcp.com` and rewrites every one to `rel="ugc nofollow"` — see TRA-792 below | 2026-09-04 |
@@ -3447,6 +3447,57 @@ Audited read-only via API, nothing written outside this file.
 - `yamadashy/repomix`: 28,767★ (-3 fluctuation), 1,574 forks, pushed 2026-10-03.
 - `oraios/serena`: 30,124★ (-1 fluctuation), 2,052 forks, pushed 2026-10-09.
 - `DeusData/codebase-memory-mcp`: 46,216★ (+5 since pass 3), 3,803 forks, pushed 2026-10-09.
+- `cdeust/ai-architect-mcp-codebase`: 5★, 1 fork, pushed 2026-10-09.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+
+### Night pass (pass 1), 2026-10-10 (TRA-2302): mention sweep collision audit (winter6205/iknow), open threads audit, competitor deep-dive (Serena LSP CDN failure #2152 & session reset #2149, Semble process leak #288, CRG FTS desync #1103)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-10-09 (routine sync, no new comments since Nikolai's 2026-09-26 round 3 update). Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: open, updated 2026-10-08 (contributor plan underway). Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: merged, live in HOL Registry; third-party scanner CI refused per repo security policy, follow-up claim notifications ignored.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- 1 repo outside seen list: `winter6205/iknow`.
+- Inspection via raw API: inspected `docs/trace-mcp-server.md`, `src/trace-mcp/`, `docs/CONTEXT.md`.
+- Classification: name collision. `winter6205/iknow` is an LLM agent harness / runtime featuring an internal `iknow-trace-mcp` stdio server (`list_sessions`, `query_trace`, `get_record`) designed for querying iknow execution session traces and jsonl transcripts. Unrelated to code intelligence, AST indexing, or token reduction.
+- Recorded into `ops/mentions-seen.txt` with explanatory comment. Subsequent sweep verified clean ("No repos outside the seen list. Nothing to read.").
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2152 (opened 2026-10-09): `Kotlin LSP install fails: download-cdn.jetbrains.com now returns 404 (needs the signed redirect via download.jetbrains.com)`. Demonstrates a fundamental structural fragility of LSP-based code navigation architectures. Serena relies on dynamically downloading external third-party language server binaries (JetBrains Kotlin LSP, Erlang ELP, tsserver) at runtime. When upstream CDN endpoints change authentication or signed-redirect requirements, the entire bootstrap pipeline fails with extraction errors, breaking language support across user environments. By contrast, `trace-mcp` ships with native Tree-sitter grammars compiled directly into node native bindings, providing instant offline parsing across 20+ languages with zero runtime network dependency or fragile CDN binaries.
+  - Issue #2149 (closed 2026-10-09): `Active project resets between MCP tool calls in the same session ("No active project" despite earlier activate_project)`. Serena depends on stateful project activation across MCP sessions, which causes failures when clients disconnect or parallelize calls. In `trace-mcp`, all tools are stateless and resolve workspace directories dynamically or from explicit paths, ensuring idempotency across IDEs and agents.
+  - PR #2146 (merged 2026-10-09): `Optimise file access methods for project file traversal and filtering`. Refactored file traversal to reduce overhead during project walks.
+- `MinishLab/semble`:
+  - Issue #288 (open 2026-10-08): `When used as an MCP, it will spawn a large number of UV processes that are not released.` Semble spawns subprocesses (`uv run ...`) per tool invocation or subagent, leaking dozens of unreleased child processes that exhaust OS process limits and memory. In `trace-mcp`, all operations execute within a single persistent Node.js/Electron process with shared in-memory state and managed SQLite connections, preventing process leaks.
+- `tirth8205/code-review-graph`:
+  - Issues #1103 & #1104 / PR #1105: `[Bug]: MCP serve --auto-watch skips FTS post-processing after file updates` and stale FTS after `--skip-postprocess`. File watcher decoupled FTS indexing from AST updates, creating index desynchronization where updated code was missing from full-text search. In `trace-mcp`, SQLite FTS5 index updates are atomically synchronized in the same database transaction as AST symbol table updates.
+- `DeusData/codebase-memory-mcp`:
+  - PR #2573 (open 2026-10-09): `ci: build Linux amd64 release on Ubuntu 22.04`. CBM addresses glibc incompatibility across Linux distributions caused by building native binaries on newer glibc versions. `trace-mcp` avoids distribution glibc friction by shipping standard npm packages with precompiled native tree-sitter bindings and Electron desktop bundles.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 189★ (steady), 24 forks, pushed 2026-10-09 (v3.35.0 live).
+- `MinishLab/semble`: 6,192★ (-1 fluctuation), 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 32,006★ (+5 since pass 4), 2,932 forks (+1), pushed 2026-10-06.
+- `yamadashy/repomix`: 28,769★ (+2 since pass 4), 1,575 forks (+1), pushed 2026-10-03.
+- `oraios/serena`: 30,131★ (+7 since pass 4), 2,051 forks (-1), pushed 2026-10-09.
+- `DeusData/codebase-memory-mcp`: 46,232★ (+16 since pass 4), 3,804 forks (+1), pushed 2026-10-09.
 - `cdeust/ai-architect-mcp-codebase`: 5★, 1 fork, pushed 2026-10-09.
 
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
