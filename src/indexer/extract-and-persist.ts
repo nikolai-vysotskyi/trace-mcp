@@ -10,7 +10,7 @@ import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
 import { logFrameworkExtractStats, resetFrameworkExtractStats } from '../plugin-api/executor.js';
 import { selectChangedFiles } from './change-prefilter.js';
-import { clearPackageEntriesCache, findPackageJsonEntries } from './package-entries.js';
+import { clearPackageEntriesCache, findPackageJsonEntriesAsync } from './package-entries.js';
 import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
 import type { WorkspaceInfo } from './monorepo.js';
@@ -177,7 +177,7 @@ export async function extractAndPersist(
     clearPackageEntriesCache(rootPath);
   }
   const forceIncludePaths =
-    candidates.length > 0 ? findPackageJsonEntries(rootPath) : new Set<string>();
+    candidates.length > 0 ? await findPackageJsonEntriesAsync(rootPath) : new Set<string>();
 
   const extractor = new FileExtractor({
     store,

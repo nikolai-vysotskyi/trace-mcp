@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { findPackageJsonEntries } from '../../src/indexer/package-entries.js';
+import {
+  findPackageJsonEntries,
+  findPackageJsonEntriesAsync,
+} from '../../src/indexer/package-entries.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
 function writePkg(dir: string, pkg: Record<string, unknown>): void {
@@ -159,5 +162,18 @@ describe('findPackageJsonEntries', () => {
       expect(e).not.toContain('\\');
     }
     expect(entries).toContain('a/b/c/d.js');
+  });
+
+  it('keeps the event loop responsive during a cold scan of many directories', async () => {
+    writePkg(path.join(tmpDir, 'packages', 'core'), { main: './index.ts' });
+    for (let i = 0; i < 512; i++) fs.mkdirSync(path.join(tmpDir, `dir-${i}`));
+    let heartbeat = false;
+    setImmediate(() => {
+      heartbeat = true;
+    });
+    const entries = await findPackageJsonEntriesAsync(tmpDir, { bypassCache: true });
+    expect(heartbeat).toBe(true);
+    expect(entries).toContain('packages/core/index.ts');
+    expect(entries).toEqual(findPackageJsonEntries(tmpDir));
   });
 });
