@@ -91,7 +91,12 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
-import { describeIndexFileOutcome, dispatchIndexFile } from './cli/index-file.js';
+import {
+  describeIndexFileOutcome,
+  dispatchIndexFile,
+  indexFilePathForProject,
+  resolveIndexFileProjectRoot,
+} from './cli/index-file.js';
 import { buildHealthPayload, withMissingRoots } from './daemon/health-payload.js';
 import { buildApiProjectsList } from './daemon/api-projects-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
@@ -4540,7 +4545,7 @@ program
 
     let projectRoot: string;
     try {
-      projectRoot = findProjectRoot(path.dirname(resolvedFile));
+      projectRoot = resolveIndexFileProjectRoot(resolvedFile);
     } catch {
       process.exit(0); // not inside a known project — skip silently
     }
@@ -4575,7 +4580,7 @@ program
 
         const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
         try {
-          await pipeline.indexFiles([resolvedFile]);
+          await pipeline.indexFiles([indexFilePathForProject(resolvedFile, projectRoot)]);
         } finally {
           await pipeline.dispose();
           db.close();
