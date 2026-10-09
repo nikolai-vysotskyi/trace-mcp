@@ -399,3 +399,45 @@ describe('tweakcc pin is declared in package.json', () => {
     expect(pkg.peerDependencies?.tweakcc).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// pip / pipx in CI
+// ---------------------------------------------------------------------------
+
+function collectPipInstalls(dir: string): { file: string; command: string }[] {
+  if (!existsSync(dir)) return [];
+  const out: { file: string; command: string }[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectPipInstalls(full));
+      continue;
+    }
+    if (!/\.ya?ml$/.test(entry.name)) continue;
+    const content = readFileSync(full, 'utf8');
+    for (const match of content.matchAll(/\b(?:pip|pipx)\s+install\s+([^\n\r]+)/g)) {
+      out.push({ file: rel(full), command: match[0].trim() });
+    }
+  }
+  return out;
+}
+
+const PIP_EXACT_VERSION = /^[a-zA-Z0-9_.-]+==\d+\.\d+\.\d+/;
+
+describe('pip/pipx installs in workflows name an exact version', () => {
+  const installs = collectPipInstalls(join(ROOT, '.github/workflows'));
+
+  it('pins every pip/pipx package in CI to an exact version', () => {
+    expect(installs.length).toBeGreaterThan(0);
+    for (const { file, command } of installs) {
+      const parts = command.split(/\s+/).slice(2);
+      const pkgs = parts.filter((p) => !p.startsWith('-'));
+      for (const pkg of pkgs) {
+        expect(
+          PIP_EXACT_VERSION.test(pkg),
+          `${file}: \`${command}\` installs unpinned package \`${pkg}\``,
+        ).toBe(true);
+      }
+    }
+  });
+});
