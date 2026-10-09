@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
 import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
+import { findLinkedWorktree } from '../../worktree-delta.js';
 import { resolveDeepestKnownRoot } from '../../subproject/resolve.js';
 import { isTransientError, withRetry } from '../../utils/retry.js';
 import { LOAD_TOOLS_HINT, expandLoadRequest, planToolLoad } from '../../server/tool-surface.js';
@@ -151,6 +153,14 @@ function delay(ms: number): Promise<void> {
   });
 }
 
+function realpathOrSelf(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
 /**
  * Forwards MCP messages between the MessageRouter and a running daemon's /mcp endpoint.
  *
@@ -179,6 +189,13 @@ export class ProxyBackend implements Backend {
 
   /** Resolved once in start(); reused when re-establishing a dead session. */
   private projectRoot: string | null = null;
+  /**
+   * Set when a linked worktree was routed to its canonical project: the daemon
+   * session then binds to the canonical root, so the worktree path travels as
+   * a `?worktree=` hint to let the session flag results for files the branch
+   * changed. Null when the session is not a routed worktree.
+   */
+  private worktreeHint: string | null = null;
   /** The client's initialize frame, cached so we can replay it after a daemon restart. */
   private initializeFrame: (JSONRPCMessage & { id: string | number }) | null = null;
   /** Single-flight guard so concurrent failed sends share one recovery. */
@@ -638,7 +655,8 @@ export class ProxyBackend implements Backend {
    * `/mcp` directly send no such marker and keep the daemon's preset.
    */
   private mcpUrl(projectRoot: string): string {
-    const base = `${this.opts.daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}`;
+    const worktree = this.worktreeHint ? `&worktree=${encodeURIComponent(this.worktreeHint)}` : '';
+    const base = `${this.opts.daemonUrl}/mcp?project=${encodeURIComponent(projectRoot)}${worktree}`;
     if (!this.opts.toolFilter) return base;
     // `preset` travels too: the daemon registers everything, but it still
     // writes this session's instructions block and usage ping, and both are
@@ -659,6 +677,13 @@ export class ProxyBackend implements Backend {
     // binds to the subproject's own scoped index instead of the container's
     // mixed blob (#209 — "ругается на зонтик").
     const known = await resolveDeepestKnownRoot(this.opts.projectRoot);
+    // A worktree nested inside its main checkout (`<main>/.claude/worktrees/x`)
+    // resolves to the registered main as an ordinary ancestor, never reaching the
+    // worktree branch below — still tell the daemon which worktree this is.
+    const linked = findLinkedWorktree(this.opts.projectRoot);
+    if (known && linked && realpathOrSelf(known) === linked.mainRoot) {
+      this.worktreeHint = linked.worktreeRoot;
+    }
     if (known && known !== this.opts.projectRoot) {
       logger.info(
         { requested: this.opts.projectRoot, resolved: known },
@@ -684,6 +709,9 @@ export class ProxyBackend implements Backend {
         },
         'ProxyBackend: routing worktree to canonical indexed repo',
       );
+      // The toplevel, not the raw cwd: a session started in a subdirectory
+      // must still name the worktree. The daemon validates it.
+      this.worktreeHint = wt.isLinkedWorktree ? (linked?.worktreeRoot ?? null) : null;
       return canonical.root;
     }
     return this.opts.projectRoot;

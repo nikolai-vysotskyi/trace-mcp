@@ -24,6 +24,8 @@ import { COMPACT_CORE_PARAMS } from './compact-params.js';
 import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
 import { encodeWire, type WireFormat } from './wire-format.js';
+import type { WorktreeDelta } from '../worktree-delta.js';
+import { markStaleOnBranch, staleOnBranchWarning } from './worktree-stale.js';
 
 /** Shape of a tool response coming back from a wrapped callback. */
 export type WrappedToolResponse = {
@@ -231,6 +233,12 @@ export interface GatedCallbackContext {
   sessionId?: string;
   /** True when this tool's registered schema declares a `detail_level` param. */
   supportsDetailLevel?: boolean;
+  /**
+   * Set only for a session in a linked git worktree: resolves the files the
+   * branch changed, so results about them can be flagged `stale_on_branch`.
+   * Undefined everywhere else, which leaves responses untouched.
+   */
+  getWorktreeDelta?: () => Promise<WorktreeDelta | null>;
 }
 
 /** Emit a journal-broadcast entry for the most recent journal record. */
@@ -383,6 +391,7 @@ function enrichResponse(
   params: Record<string, unknown>,
   originalParamSnapshot: Record<string, unknown>,
   appliedDefaults: ReturnType<typeof applyBudgetDefaults>,
+  worktreeDelta: WorktreeDelta | null,
 ): void {
   const optHint = ctx.journal.getOptimizationHint(ctx.name, params);
   // We synthesize a top-level `_warnings` array whenever budget defaults
@@ -407,6 +416,10 @@ function enrichResponse(
       : [];
     const synthesized = buildClampWarnings(ctx.name, originalParamSnapshot, appliedDefaults, obj);
     const warnings = [...existing, ...synthesized];
+    if (worktreeDelta) {
+      const stale = staleOnBranchWarning(markStaleOnBranch(obj, worktreeDelta));
+      if (stale) warnings.push(stale);
+    }
     if (warnings.length > 0) obj._warnings = warnings;
   });
 }
@@ -463,6 +476,9 @@ export function createGatedCallback(
     const telemetrySpan = getGlobalTelemetrySink().startSpan(`tool.${ctx.name}`, {
       'tool.name': ctx.name,
     });
+    // Started before the handler so the git work overlaps it; only a non-error
+    // response waits for it. Resolvers never reject.
+    const worktreeDeltaPending = ctx.getWorktreeDelta?.();
     let result: unknown;
     try {
       result = await originalCb(...cbArgs);
@@ -516,7 +532,11 @@ export function createGatedCallback(
       isError: !!resultObj?.isError,
     });
 
-    enrichResponse(ctx, resultObj, params, originalParamSnapshot, appliedDefaults);
+    // Only a worktree session has a resolver; everywhere else this stays null
+    // and the response is built exactly as before.
+    const worktreeDelta =
+      worktreeDeltaPending && !resultObj?.isError ? await worktreeDeltaPending : null;
+    enrichResponse(ctx, resultObj, params, originalParamSnapshot, appliedDefaults, worktreeDelta);
     applyWireFormat(resultObj, effectiveFormat);
 
     // Scored last, on the bytes that actually go over the wire: `enrichResponse`

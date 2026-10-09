@@ -24,6 +24,7 @@ import { checkFileForDuplicates } from '../analysis/duplication.js';
 import { takeUnreportedDuplicates } from '../analysis/duplication-memo.js';
 import { getMinimalContext } from '../project/minimal-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
+import { summarizeWorktreeDelta } from '../../worktree-delta.js';
 
 export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
   const {
@@ -49,6 +50,8 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     {},
     async () => {
       const result = getIndexHealth(store, config, projectRoot);
+      const worktreeDelta = ctx.getWorktreeDelta ? await ctx.getWorktreeDelta() : null;
+      if (worktreeDelta) result.worktree = summarizeWorktreeDelta(worktreeDelta);
       if (ctx.progress) {
         result.progress = ctx.progress.snapshot();
       }

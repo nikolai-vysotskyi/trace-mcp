@@ -166,6 +166,7 @@ import {
   updateLastIndexed,
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
+import { getWorktreeDelta, resolveWorktreeLink, summarizeWorktreeDelta } from './worktree-delta.js';
 import {
   buildProjectNotFoundError,
   buildResolutionFailureError,
@@ -1200,6 +1201,8 @@ program
       fullSurface: boolean,
       /** The preset the client asked for, when it sent one (TRA-951). */
       clientPreset: string | undefined,
+      /** Linked worktree the stdio proxy routed to this canonical project, if any. */
+      worktreeHint?: string,
     ): Promise<StreamableHTTPServerTransport | null> {
       const managed = projectManager.getProject(projectRoot);
       if (!managed) return null;
@@ -1252,6 +1255,7 @@ program
         // applies its own preset client-side (ProxyBackend).
         serveFullSurface: fullSurface,
         sessionPreset: clientPreset,
+        worktreeRoot: worktreeHint,
       };
       const handle = createServer(
         managed.store,
@@ -1608,6 +1612,9 @@ program
         // the surface itself.
         const fullSurface = url.searchParams.get('surface') === 'full';
         const clientPreset = url.searchParams.get('preset') ?? undefined;
+        // Sent by a stdio proxy that routed a linked worktree to this canonical
+        // project; lets the session flag results for files the branch changed.
+        const worktreeHint = url.searchParams.get('worktree') ?? undefined;
 
         // Resolve to the deepest KNOWN root: a registered subproject
         // (the/fair/fair-front) wins over its container ancestor (the) so the
@@ -1648,7 +1655,12 @@ program
           } else if (req.method === 'POST' && isInitializeRequest(parsedBody)) {
             // New session: create transport + server
             transport =
-              (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ?? undefined;
+              (await createSessionTransport(
+                projectRoot,
+                fullSurface,
+                clientPreset,
+                worktreeHint,
+              )) ?? undefined;
             createdTransport = transport;
             if (!transport) {
               // Auto-register the project on first MCP connect when the path
@@ -1711,8 +1723,12 @@ program
                           `here; undo with \`trace-mcp remove ${projectRoot}\` (#936)`,
                   );
                   transport =
-                    (await createSessionTransport(projectRoot, fullSurface, clientPreset)) ??
-                    undefined;
+                    (await createSessionTransport(
+                      projectRoot,
+                      fullSurface,
+                      clientPreset,
+                      worktreeHint,
+                    )) ?? undefined;
                   createdTransport = transport;
                 } catch (err) {
                   logger.warn(
@@ -2243,6 +2259,43 @@ program
             }),
           );
         }
+        return;
+      }
+
+      // REST API: files a linked git worktree changed relative to the canonical
+      // checkout's index (the checkout a worktree session is served from).
+      // `?project=` is the worktree root; the canonical checkout must be a
+      // registered project. A main checkout answers `is_linked_worktree: false`.
+      if (req.method === 'GET' && url.pathname === '/api/projects/worktree') {
+        const worktreeRoot = url.searchParams.get('project');
+        if (!worktreeRoot) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
+          return;
+        }
+        const link = resolveWorktreeLink(worktreeRoot);
+        if (!link) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ is_linked_worktree: false }));
+          return;
+        }
+        if (!getProject(link.canonicalRoot)) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: `Canonical checkout "${path.basename(link.canonicalRoot)}" isn't registered with this daemon.`,
+            }),
+          );
+          return;
+        }
+        const delta = await getWorktreeDelta(link);
+        if (!delta) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'git could not compute the worktree delta' }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(summarizeWorktreeDelta(delta)));
         return;
       }
 
