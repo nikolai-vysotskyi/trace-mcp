@@ -32,7 +32,18 @@ try {
   }
   const result = await client.callTool({ name: 'get_outline', arguments: { path: 'src/cli.ts' } });
   if (result.isError) throw new Error(JSON.stringify(result.content));
-  console.log(JSON.stringify({ toolCount: names.length, outline: 'ok' }));
+  const health = await client.callTool({ name: 'get_index_health', arguments: {} });
+  if (health.isError || typeof JSON.parse(health.content[0].text).stats?.totalFiles !== 'number') {
+    throw new Error('get_index_health did not return index statistics');
+  }
+  const decisions = await client.callTool({
+    name: 'query_decisions',
+    arguments: { limit: 1, index_only: true, verify: false },
+  });
+  if (decisions.isError || !Array.isArray(JSON.parse(decisions.content[0].text).decisions)) {
+    throw new Error('query_decisions did not return a decision list');
+  }
+  console.log(JSON.stringify({ outline: 'ok', indexHealth: 'ok', decisions: 'ok' }));
 } catch (error) {
   throw new Error(`MCP smoke failed: ${stderr}`, { cause: error });
 } finally {

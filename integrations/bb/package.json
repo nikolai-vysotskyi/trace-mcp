@@ -1,9 +1,9 @@
 {
   "name": "bb-plugin-trace-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Serve indexed repository context and decision memory to bb agents",
+  "description": "Bring indexed code, project decisions, and context usage into bb threads",
   "engines": {
     "node": ">=22.19.0",
     "bb": ">=0.45.0",
@@ -11,14 +11,15 @@
   },
   "bb": {
     "name": "trace-mcp",
-    "description": "Find repository symbols and remembered decisions without rereading the same files. Runs trace-mcp on the machine that hosts each bb environment.",
+    "description": "Find code and project decisions from bb threads. A thread panel shows index health, saved decisions, and the provider's context-window usage; native tools and bb trace commands work on each environment's machine.",
     "branding": {
       "icon": "./assets/icon.svg"
     },
     "server": "./server.ts",
+    "app": "./app.tsx",
     "host": "./host.ts",
     "skills": [
-      "./skills/trace-mcp"
+      "skills"
     ]
   },
   "keywords": [
@@ -35,12 +36,20 @@
   "devDependencies": {
     "@get-bb/plugin-sdk": "^0.6.33",
     "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^29.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.9.0",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^4.1.1"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test:smoke": "node smoke.mjs",
-    "test:plugin": "node --import tsx verify-plugin.mjs"
+    "test:plugin": "node --import tsx verify-plugin.mjs",
+    "test:app": "vitest run --config vitest.config.ts"
   }
 }

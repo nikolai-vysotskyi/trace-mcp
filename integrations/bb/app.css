@@ -1,0 +1,228 @@
+.trace-context-panel {
+  color: inherit;
+  display: grid;
+  gap: 20px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4px 0 24px;
+}
+
+.trace-panel-actions,
+.trace-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+.trace-text-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.trace-section {
+  border-top: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+  padding-top: 16px;
+}
+.trace-section-heading h2 {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  margin: 0;
+}
+.trace-section-heading > strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.trace-index-status,
+.trace-count {
+  border: 1px solid color-mix(in oklab, currentColor 18%, transparent);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 3px 8px;
+  text-transform: capitalize;
+}
+.trace-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.trace-stats > div {
+  background: color-mix(in oklab, currentColor 5%, transparent);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+}
+.trace-stats strong {
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  line-height: 25px;
+}
+.trace-stats span,
+.trace-secondary {
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0.65;
+}
+.trace-secondary {
+  margin: 8px 0 0;
+}
+.trace-meter {
+  background: color-mix(in oklab, currentColor 12%, transparent);
+  border-radius: 999px;
+  height: 6px;
+  margin-top: 14px;
+  overflow: hidden;
+}
+.trace-meter span {
+  background: currentColor;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  min-width: 2px;
+}
+.trace-secondary-button {
+  background: transparent;
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  margin-top: 14px;
+  min-height: 32px;
+  padding: 5px 10px;
+}
+.trace-secondary-button:hover,
+.trace-search button:hover,
+.trace-decision-form button:hover {
+  background: color-mix(in oklab, currentColor 8%, transparent);
+}
+.trace-search {
+  display: flex;
+  gap: 6px;
+  margin: 14px 0 8px;
+}
+.trace-search input,
+.trace-decision-form input,
+.trace-decision-form select,
+.trace-decision-form textarea {
+  background: transparent;
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+.trace-search input {
+  flex: 1;
+}
+.trace-search button,
+.trace-decision-form button {
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  min-height: 32px;
+  padding: 5px 11px;
+}
+.trace-decision-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.trace-decision-list li {
+  border-bottom: 1px solid color-mix(in oklab, currentColor 10%, transparent);
+  display: grid;
+  gap: 2px;
+  padding: 11px 0;
+}
+.trace-decision-list strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.trace-decision-list span {
+  font-size: 11px;
+  opacity: 0.6;
+}
+.trace-decision-list p {
+  font-size: 12px;
+  line-height: 18px;
+  margin: 4px 0 0;
+  opacity: 0.75;
+}
+.trace-decision-form {
+  border: 1px solid color-mix(in oklab, currentColor 14%, transparent);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+}
+.trace-decision-form label {
+  display: grid;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 5px;
+}
+.trace-decision-form textarea {
+  resize: vertical;
+}
+.trace-decision-form button {
+  justify-self: start;
+}
+.trace-alert {
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+  padding: 9px 11px;
+}
+.trace-notice {
+  font-size: 12px;
+  line-height: 18px;
+  margin: 0;
+}
+.trace-visually-hidden {
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+.trace-context-panel button:focus-visible,
+.trace-context-panel input:focus-visible,
+.trace-context-panel select:focus-visible,
+.trace-context-panel textarea:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.trace-context-panel button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
