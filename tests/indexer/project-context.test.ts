@@ -31,6 +31,7 @@ describe('buildProjectContext', () => {
     );
     writeFixtureFile(tmpDir, 'apps/b/composer.json', JSON.stringify({ require: { php: '^8' } }));
     writeFixtureFile(tmpDir, 'out/app/package.json', JSON.stringify({ name: 'generated' }));
+    writeFixtureFile(tmpDir, 'deep/one/two/package.json', JSON.stringify({ name: 'deep-app' }));
     fs.mkdirSync(path.join(tmpDir, 'apps', 'linked'), { recursive: true });
     fs.symlinkSync(
       path.join(tmpDir, 'package.json'),

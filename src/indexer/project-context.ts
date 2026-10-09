@@ -221,7 +221,9 @@ export async function findScanDirectoriesAsync(rootPath: string): Promise<string
     ) {
       dirs.push(dir);
     }
-    if (depth >= 2) return;
+    // The legacy implicit workspace scanner checks children at depth 3,
+    // while ProjectContext itself only consumes directories through depth 2.
+    if (depth >= 3) return;
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || WORKSPACE_SKIP_DIRS.has(entry.name))
         continue;
@@ -290,13 +292,10 @@ export function buildProjectContext(rootPath: string, scanDirectories?: string[]
   };
 
   const scanDirs = scanDirectories
-    ? scanDirectories.filter(
-        (dir) =>
-          !path
-            .relative(rootPath, dir)
-            .split(path.sep)
-            .some((segment) => SKIP_DIRS.has(segment)),
-      )
+    ? scanDirectories.filter((dir) => {
+        const parts = path.relative(rootPath, dir).split(path.sep);
+        return parts.length <= 2 && !parts.some((segment) => SKIP_DIRS.has(segment));
+      })
     : findScanDirectories(rootPath);
 
   let packageJson: Record<string, unknown> | undefined;

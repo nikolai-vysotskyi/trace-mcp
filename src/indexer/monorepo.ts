@@ -189,7 +189,7 @@ function detectImplicitWorkspaces(rootPath: string, scanDirectories?: string[]):
     for (const dir of scanDirectories) {
       if (dir === path.resolve(rootPath)) continue;
       const rel = path.relative(rootPath, dir).replace(/\\/g, '/');
-      if (rel.split('/').length > 2) continue;
+      if (rel.split('/').length > 3) continue;
       if (workspaces.some((ws) => rel.startsWith(`${ws.path}/`))) continue;
       if (
         fs.existsSync(path.join(dir, 'package.json')) ||
