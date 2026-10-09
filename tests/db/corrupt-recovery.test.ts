@@ -14,7 +14,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initializeDatabase } from '../../src/db/schema.js';
-import { isCorruptDbError } from '../../src/db/repair.js';
+import { isCorruptDbError, isSqliteBusyError } from '../../src/db/repair.js';
 import { Store } from '../../src/db/store.js';
 import { verifyIndex } from '../../src/db/verify.js';
 import { deleteDbFamily } from '../../src/utils/db-family.js';
@@ -48,6 +48,30 @@ describe('isCorruptDbError', () => {
     expect(isCorruptDbError(new Error('no such table: symbols'))).toBe(false);
     expect(isCorruptDbError(null)).toBe(false);
     expect(isCorruptDbError(undefined)).toBe(false);
+  });
+});
+
+describe('isSqliteBusyError', () => {
+  it('matches SQLITE_BUSY, SQLITE_BUSY_SNAPSHOT, and SQLITE_LOCKED codes', () => {
+    expect(isSqliteBusyError({ code: 'SQLITE_BUSY' })).toBe(true);
+    expect(isSqliteBusyError({ code: 'SQLITE_BUSY_SNAPSHOT' })).toBe(true);
+    expect(isSqliteBusyError({ code: 'SQLITE_LOCKED' })).toBe(true);
+    expect(isSqliteBusyError({ codeName: 'SQLITE_BUSY' })).toBe(true);
+    expect(isSqliteBusyError({ codeName: 'SQLITE_BUSY_SNAPSHOT' })).toBe(true);
+  });
+
+  it('matches on error messages', () => {
+    expect(isSqliteBusyError(new Error('SqliteError: database is locked'))).toBe(true);
+    expect(isSqliteBusyError(new Error('database table is locked'))).toBe(true);
+    expect(isSqliteBusyError({ message: 'database is locked' })).toBe(true);
+  });
+
+  it('rejects corrupt errors, FK violations, and non-errors', () => {
+    expect(isSqliteBusyError(new Error('FOREIGN KEY constraint failed'))).toBe(false);
+    expect(isSqliteBusyError(new Error('database disk image is malformed'))).toBe(false);
+    expect(isSqliteBusyError({ code: 'SQLITE_CORRUPT' })).toBe(false);
+    expect(isSqliteBusyError(null)).toBe(false);
+    expect(isSqliteBusyError(undefined)).toBe(false);
   });
 });
 
