@@ -48,7 +48,7 @@ import {
 import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
-import { buildProjectContext } from './project-context.js';
+import { buildProjectContext, findScanDirectoriesAsync } from './project-context.js';
 import { checkUnindexableSkip } from './unindexable-skip-cache.js';
 import { clearPackageEntriesCache } from './package-entries.js';
 // P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
@@ -516,6 +516,7 @@ export class IndexingPipeline {
   private workspaces: WorkspaceInfo[] = [];
   private _lock: Promise<unknown> = Promise.resolve();
   private _projectContext: ProjectContext | undefined;
+  private _projectContextDirs: string[] | undefined;
   /**
    * TRA-1543: workspace→plugin detection, shared by registration, extraction
    * and resolution within a run (was detected 3× per run) and reused across
@@ -661,11 +662,12 @@ export class IndexingPipeline {
       //     would be a false positive that automated quality gates would
       //     misinterpret as a regression.
       const skipShrinkCheck = force === true || this._postprocessLevel === 'none';
+      this._projectContextDirs = await findScanDirectoriesAsync(this.rootPath);
       if (this.config.children?.length) {
         this.workspaces = buildMultiRootWorkspaces(this.rootPath, this.config.children);
         logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Multi-root workspaces');
       } else {
-        this.workspaces = detectWorkspaces(this.rootPath);
+        this.workspaces = detectWorkspaces(this.rootPath, this._projectContextDirs);
         if (this.workspaces.length > 0) {
           logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
         }
@@ -1734,6 +1736,7 @@ export class IndexingPipeline {
     });
 
     this._projectContext = undefined;
+    if (this._isIncremental) this._projectContextDirs = undefined;
     // TRA-1543: drop the workspace-plugin detection unless the current scope
     // provably cannot change it (incremental run, same workspaces, no
     // manifest touched — see canReuseWorkspacePlugins). A dropped map is
@@ -2376,7 +2379,7 @@ export class IndexingPipeline {
 
   private buildProjectContext(): ProjectContext {
     if (!this._projectContext) {
-      this._projectContext = buildProjectContext(this.rootPath);
+      this._projectContext = buildProjectContext(this.rootPath, this._projectContextDirs);
     }
     return this._projectContext;
   }
