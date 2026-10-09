@@ -211,7 +211,14 @@ export async function findScanDirectoriesAsync(rootPath: string): Promise<string
     } catch {
       return;
     }
-    if (dir !== root && entries.some((e) => e.isFile() && CONTEXT_FILE_NAMES.has(e.name))) {
+    if (
+      dir !== root &&
+      entries.some(
+        (e) =>
+          (e.isFile() && CONTEXT_FILE_NAMES.has(e.name)) ||
+          (e.isSymbolicLink() && (e.name === 'package.json' || e.name === 'composer.json')),
+      )
+    ) {
       dirs.push(dir);
     }
     if (depth >= 2) return;
