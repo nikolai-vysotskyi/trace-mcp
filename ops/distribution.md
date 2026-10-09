@@ -115,6 +115,7 @@ Rules for keeping it honest:
 | [drguptavivek/DigitVA](https://github.com/drguptavivek/DigitVA) | **Yes — third-party user adoption, we did not submit it** (0★, 0 forks) | Clinical autopsy platform by author of `fundus_img_xtract`. In `handoff.md`, agent instructions note: "Code search: semble first. trace-mcp is broken (binary missing)." | Nothing to submit and do not ping. Key insight: second repo by same practitioner mandating trace-mcp in handoff, but hit an environment issue where trace-mcp binary was missing. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
 | [midnight000spark/dharma-toolkit](https://github.com/midnight000spark/dharma-toolkit) | **Yes — third-party evaluation, we did not submit it** (0★, 0 forks) | Project architecture records D-47 and F-72 evaluate trace-mcp 3.31.4 on Dart/Flutter codebase: noted regex-only symbol parsing for Dart and absence of Flutter framework integration, postponing adoption | Nothing to submit and do not ping. Direct user evaluation signal: validates roadmap priorities regarding framework/language depth outside JS/TS/Python. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
 | [FlorianBruniaux/claude-code-ultimate-guide](https://github.com/FlorianBruniaux/claude-code-ultimate-guide) | **Evaluated — premier editorial surface, candidate for submission** (6,125★, 803 forks, active daily) | The most authoritative Claude Code guide and ecosystem reference (430K+ lines). Has two direct target sections: `guide/ecosystem/mcp-servers-ecosystem.md` under `### Code search & analysis` (currently listing only Grepai and Semble) and `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration", listing code-review-graph, jCodeMunch, and mcp-server-tree-sitter) | Highly curated, active editorial maintainer (Florian Bruniaux) who reviews and merges external tool PRs (e.g. #84 YYLO, #86 swe-mux). trace-mcp fills their explicit documented gap between Grepai (requires Ollama) and Semble (Model2Vec CPU, no call graph or AST symbols): 100% CPU-local, zero external service/Ollama, AST-based symbol graph + call hierarchy across 88 frameworks and 81 languages, 72.7% token reduction on PR reviews. Documented as candidate for next cycle | 2026-10-08 |
+| [jfjordanfarr/Live-Documentation](https://github.com/jfjordanfarr/Live-Documentation) | **Yes — third-party research survey, we did not submit it** (MIT, active 2026-10-08) | Independent architecture research document `AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md` surveying code intelligence tools for AI agents. Cites `trace-mcp` (mcpservers.org) under "Agents reading a codebase's structure" alongside `codebase-graph`, `Codebase Memory MCP`, and `CodeGraph`: describes trace-mcp as "(68 languages, impact analysis)". Analyzes architectural trade-off between live MCP servers and reviewable committed docs-as-code | Independent survey, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-09 | 2026-10-09 |
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
 
@@ -3257,6 +3258,51 @@ Audited read-only via API, nothing written outside this file.
 - `yamadashy/repomix`: 28,756★ (+5), 1,574 forks, pushed 2026-10-03.
 - `oraios/serena`: 30,105★, 2,049 forks, pushed 2026-10-08.
 - `DeusData/codebase-memory-mcp`: 46,163★ (+12), 3,796 forks, pushed 2026-10-07.
+
+**Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
+
+**Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Day pass, 2026-10-09 (TRA-2286): sweep hit Live-Documentation survey, competitor deep-dive (Serena multi-target C# & sync fs poll, CBM daemon timeout), open threads re-audit
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `eltociear/awesome-AI-driven-development#119`: merged 2026-09-30, live in both READMEs.
+- `GetBindu/awesome-claude-code-and-skills#195`: open, clean, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: open, updated 2026-09-26 (reminder sent, no reply). Reminder budget spent. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: open, untouched since 2026-09-14 (wontfix-spend).
+- `hesreallyhim/awesome-claude-code#2871`: open issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: open issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: open, updated 2026-09-26. Nikolai's lane, recorded, not touched.
+- `Dokploy/mcp#81`: contributor `moataz-hjaiji` preparing PR for meta-tool `dokploy-loadTools` based on Nikolai's proposal. No action needed.
+- Comment threads: `lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`: all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`, pass 1 + pass 2):**
+- Ran full sweep with `GH_PROMPT_DISABLED=1` and `GIT_TERMINAL_PROMPT=0`.
+- Found 1 new repo outside `ops/mentions-seen.txt`: `jfjordanfarr/Live-Documentation`.
+- Matched file inspected: `AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md`.
+- Classification: Genuine third-party research survey on headless live documentation architecture for AI agents. Cites `trace-mcp` (mcpservers.org link) under "Agents reading a codebase's structure" alongside `codebase-graph`, `Codebase Memory MCP`, and `CodeGraph`: describes trace-mcp as "(68 languages, impact analysis)". Analyzes the trade-off of runtime MCP servers vs committed reviewable docs-as-code artifacts.
+- Action: Recorded in `ops/mentions-seen.txt` and added to genuine distribution surfaces table. Do not ping or open issues (independent research doc).
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2147 / #2148: Multi-targeted C# projects (`<TargetFrameworks>net472;net10.0</TargetFrameworks>`) cause Roslyn LSP to nondeterministically select an arbitrary target framework context because ascending random GUID `ProjectId` ordering decides the winning context on each restart. By contrast, `trace-mcp` parses C# syntax directly via Tree-sitter AST queries (`src/indexer/languages/csharp.ts`), avoiding external Roslyn statefulness and GUID-based framework nondeterminism.
+  - Issue #2145: Seven symbol tools in `serena/tools/symbol_tools.py` run a synchronous `ls_sync_file_system_changes()` filesystem poll before executing every single query, adding massive traversal latency to codebases with many projects. By contrast, `trace-mcp` utilizes debounced background file-watching (`watcher.ts` / `daemon.ts`) and an in-memory SQLite index, keeping query-time tool execution (`search`, `get_symbol`, `get_outline`) sub-millisecond without per-query fs sync.
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2569: CBM daemon startup exceeds hardcoded 30s client-accept timeout on slow devices or emulated environments (Termux proot, low-power aarch64). In `trace-mcp`, startup initialization is lightweight and decoupled from client ping/handshake timeouts.
+- `yamadashy/repomix`:
+  - Issue #1920 / #1921: Numbered `--split-output` files from prior runs get recursively re-packed into subsequent runs if not explicitly excluded. Re-confirms `trace-mcp`'s architectural advantage: structured query navigation vs flat text concatenation / context packing traps.
+
+**Competitor pulse (no touch):**
+- `nikolai-vysotskyi/trace-mcp`: 188★, 24 forks, pushed 2026-10-09.
+- `MinishLab/semble`: 6,191★, 274 forks, pushed 2026-10-08.
+- `tirth8205/code-review-graph`: 31,990★ (+6 since TRA-2275), 2,931 forks, pushed 2026-10-06.
+- `yamadashy/repomix`: 28,764★ (+8 since TRA-2275), 1,573 forks, pushed 2026-10-03.
+- `oraios/serena`: 30,111★ (+6 since TRA-2275), 2,049 forks, pushed 2026-10-08.
+- `DeusData/codebase-memory-mcp`: 46,180★ (+17 since TRA-2275), 3,797 forks, pushed 2026-10-09.
 
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 

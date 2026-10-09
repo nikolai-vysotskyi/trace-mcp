@@ -255,3 +255,7 @@ midnight000spark/dharma-toolkit
 # Packages nikolai-vysotskyi/trace-mcp v3.34.6 in data/agent-skills/ and data/claude-code-marketplaces/:
 sudosubin/agents.nix
 
+# ── Swept 2026-10-09 (TRA-2286) ──
+# Genuine third-party: research document AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md
+# surveys agent code-intelligence tools, citing trace-mcp (mcpservers.org) for 68 languages & impact analysis:
+jfjordanfarr/Live-Documentation
