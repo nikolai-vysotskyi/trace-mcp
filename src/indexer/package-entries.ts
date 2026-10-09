@@ -51,6 +51,9 @@ export function findPackageJsonEntries(
   if (!options?.bypassCache) {
     const cached = packageEntriesCache.get(rootPath);
     if (cached && Date.now() - cached.computedAt < ttl) {
+      // LRU refresh: move to end
+      packageEntriesCache.delete(rootPath);
+      packageEntriesCache.set(rootPath, cached);
       return cached.entries;
     }
   }
@@ -132,6 +135,7 @@ export function findPackageJsonEntries(
     }
   }
 
+  packageEntriesCache.delete(rootPath);
   if (packageEntriesCache.size >= MAX_PACKAGE_ENTRIES_CACHE_ENTRIES) {
     const oldestKey = packageEntriesCache.keys().next().value;
     if (oldestKey !== undefined) packageEntriesCache.delete(oldestKey);

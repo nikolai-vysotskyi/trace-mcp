@@ -50,6 +50,7 @@ import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from '
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
 import { checkUnindexableSkip } from './unindexable-skip-cache.js';
+import { clearPackageEntriesCache } from './package-entries.js';
 // P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
 // of being called imperatively from `runPipeline`. The Task wrappers live in
 // `src/pipeline/tasks/*` and delegate to the existing private methods on
@@ -545,6 +546,8 @@ export class IndexingPipeline {
   private _lastDeletedSymbolNames: Map<string, Set<number>> = new Map();
   /** TRA-1541: whether the last Pass 1 took the FTS rebuild path (no ANALYZE). Read by indexFiles. */
   private _lastUsedFtsRebuild = false;
+  /** TRA-2282: count of files indexed since the last ANALYZE run. */
+  private _filesIndexedSinceAnalyze = 0;
   private _isIncremental = false;
   /** Set by dispose(); pending deferred work must bail instead of touching a closed DB. */
   private _disposed = false;
@@ -806,6 +809,9 @@ export class IndexingPipeline {
       // that skipped bulk mode (overlapping indexer) never ran the
       // disableBulkMode ANALYZE, so it joins the throttled ANALYZE budget
       // like any other non-bulk walk.
+      if (r.indexed > 0) {
+        this._filesIndexedSinceAnalyze += r.indexed;
+      }
       if (!bulkEngaged) {
         this.maybeAnalyze();
       } else {
@@ -990,6 +996,9 @@ export class IndexingPipeline {
     throwIfIndexAborted(signal, this.rootPath);
     if (deleted.length > 0) this.deleteFiles(deleted);
     const r = await this.runPipeline(changed, false, startMs, signal);
+    if (r.indexed > 0) {
+      this._filesIndexedSinceAnalyze += r.indexed;
+    }
     if (discSkipped > 0) {
       r.totalFiles += discSkipped;
       r.skipped += discSkipped;
@@ -1056,6 +1065,10 @@ export class IndexingPipeline {
    * If sqlite_stat1 cardinality is severely divergent (e.g. recorded file count in stat1
    * is tiny while actual file count grew significantly), bypass the throttle to prevent
    * catastrophic query plans.
+   *
+   * To prevent synchronous sqlite_stat1 divergence queries from stalling routine
+   * 1-file incremental saves, divergence checking is only performed when at least
+   * 50 files have been indexed since the last ANALYZE.
    */
   private maybeAnalyze(force?: boolean): void {
     let last: number | null = null;
@@ -1068,8 +1081,16 @@ export class IndexingPipeline {
     } catch {
       /* best-effort — a metadata miss just means "analyze now" */
     }
-    const divergent = !force && this.isStatDivergent();
-    if (!force && !divergent && last != null && Date.now() - last < ANALYZE_THROTTLE_MS) {
+    const withinThrottle = !force && last != null && Date.now() - last < ANALYZE_THROTTLE_MS;
+    if (withinThrottle && this._filesIndexedSinceAnalyze < 50) {
+      logger.debug(
+        { lastAnalyzeMs: last, filesSinceAnalyze: this._filesIndexedSinceAnalyze },
+        'ANALYZE throttled — recent enough',
+      );
+      return;
+    }
+    const divergent = !force && withinThrottle && this.isStatDivergent();
+    if (withinThrottle && !divergent) {
       logger.debug({ lastAnalyzeMs: last }, 'ANALYZE throttled — recent enough');
       return;
     }
@@ -1109,6 +1130,7 @@ export class IndexingPipeline {
 
   /** Record a completed ANALYZE (bulk or throttled-walk path) for the throttle. */
   private stampAnalyzeComplete(): void {
+    this._filesIndexedSinceAnalyze = 0;
     try {
       this.store.setRepoMetadata(META_LAST_ANALYZE_MS, String(Date.now()));
     } catch {
@@ -1301,7 +1323,11 @@ export class IndexingPipeline {
     // and its WASM trees are freed instead of lingering to LRU eviction.
     for (const fp of filePaths) {
       const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-      invalidateTreeCacheFile(this.rootPath, rel.split(path.sep).join('/'));
+      const relPosix = rel.split(path.sep).join('/');
+      invalidateTreeCacheFile(this.rootPath, relPosix);
+      if (relPosix === 'package.json' || relPosix.endsWith('/package.json')) {
+        clearPackageEntriesCache(this.rootPath);
+      }
     }
     this.store.db.transaction(() => {
       for (const fp of filePaths) {
