@@ -1099,6 +1099,8 @@ function isSafeCallTail(tail: string): boolean {
   if (trimmed === '') return true;
   // If there is a second argument, it must be a closed options object literal on the same line
   if (!/^\s*,\s*\{[^}]*\}\s*$/.test(trimmed)) return false;
+  // Fail-closed on spread operators, computed keys, or escape sequences in options
+  if (trimmed.includes('...') || trimmed.includes('[') || trimmed.includes('\\')) return false;
   // Options must not configure a custom shell or environment
   if (/\b(?:shell|env)\b/i.test(trimmed)) return false;
   // Options must not contain untrusted tokens or interpolations
@@ -1113,7 +1115,8 @@ function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' |
   // could mask a critical injection on the same line.
   // Matched without word-boundary anchor so any variation (execSync, safeexec, _exec)
   // is counted as a sink call, avoiding desync with detection patterns.
-  const sinkCalls = line.match(/(?:exec|execSync|spawnSync)\s*\(/g);
+  // Also recognizes optional-chaining calls like exec?.( or execSync?.(
+  const sinkCalls = line.match(/(?:exec|execSync|spawnSync)\s*(?:\?\.)?\s*\(/g);
   if (sinkCalls && sinkCalls.length > 1) {
     return null;
   }
@@ -1135,8 +1138,9 @@ function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' |
   }
 
   // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.
+  // Case-insensitive /i flag is omitted so ${process.pid} is strictly case-sensitive.
   const taskkillMatch =
-    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/PID\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/i.exec(
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/(?:PID|pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/.exec(
       line,
     );
   if (taskkillMatch && isSafeCallTail(taskkillMatch[1])) {

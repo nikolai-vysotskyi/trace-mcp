@@ -957,6 +957,104 @@ function run(req) {
   });
 
   // -------------------------------------------------------------------
+  // 5c. Case sensitivity, options key obfuscation, optional chaining (Round 6)
+  // -------------------------------------------------------------------
+
+  test('does not demote taskkill when pid interpolation has uppercase PROCESS.PID', () => {
+    writeFile(
+      store,
+      'scripts/kill-case.mjs',
+      `
+function run() {
+  execSync(\`taskkill /F /PID \${PROCESS.PID}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains spread operator', () => {
+    writeFile(
+      store,
+      'scripts/ps-spread.mjs',
+      `
+function run(userOpts) {
+  execSync(\`ps -p \${process.pid}\`, { ...userOpts });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains computed key', () => {
+    writeFile(
+      store,
+      'scripts/ps-computed.mjs',
+      `
+function run(k, userShell) {
+  execSync(\`ps -p \${process.pid}\`, { [k]: userShell });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains unicode escape sequence in key', () => {
+    writeFile(
+      store,
+      'scripts/ps-unicode-opt.mjs',
+      `
+function run(userShell) {
+  execSync(\`ps -p \${process.pid}\`, { \\u0073hell: userShell });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote when line has optional-chaining exec sink alongside safe ps', () => {
+    writeFile(
+      store,
+      'scripts/optional-chain-multi.mjs',
+      `
+function run(req) {
+  exec?.(\`rm \${req.query.x}\`); execSync(\`ps -p \${process.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  // -------------------------------------------------------------------
   // 6. Low-confidence findings are opt-in, and counted when suppressed
   // -------------------------------------------------------------------
 
