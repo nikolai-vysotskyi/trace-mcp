@@ -20,8 +20,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    container:
-      image: semgrep/semgrep
     if: (github.actor != 'dependabot[bot]')
     steps:
       - name: Checkout
@@ -29,6 +27,9 @@ jobs:
         with:
           # --baseline-commit below needs the merge base in local history.
           fetch-depth: 0
+
+      - name: Install Semgrep
+        run: pipx install semgrep
 
       # Two invocations on purpose (TRA-255). The first is the reporting scan:
       # full tree, never fails, feeds the code-scanning SARIF. The second is
