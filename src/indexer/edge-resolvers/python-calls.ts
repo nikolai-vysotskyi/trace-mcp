@@ -103,8 +103,8 @@ export async function resolvePythonCallEdges(
     .prepare(`
     SELECT s.id, s.symbol_id, s.name, s.kind, s.file_id, s.signature,
            p.symbol_id AS parent_symbol_id
-    FROM symbols s
-    JOIN files f ON s.file_id = f.id
+    FROM files f
+    JOIN symbols s INDEXED BY idx_symbols_file ON s.file_id = f.id
     LEFT JOIN symbols p ON s.parent_id = p.id
     WHERE f.language = 'python'
   `)

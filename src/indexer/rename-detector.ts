@@ -49,6 +49,12 @@ export function detectRenames(
   relPaths: string[],
   existingFiles: Map<string, FileRow>,
 ): DetectRenamesResult {
+  // Fast path (TRA-2282): if all candidate paths already exist in the DB,
+  // none of them can be the target of a rename. Exit immediately to avoid
+  // scanning all files in the DB with fs.existsSync on every incremental save.
+  const hasNewFiles = relPaths.some((p) => !existingFiles.has(p));
+  if (!hasNewFiles) return { renamed: 0, pairs: [] };
+
   // Files in DB whose path is not in the current scan list — candidates
   // for "old name of a renamed file".
   const onDiskSet = new Set(relPaths);
