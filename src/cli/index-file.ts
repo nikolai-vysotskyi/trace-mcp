@@ -31,12 +31,14 @@ function nearestRegisteredRoot(file: string): string | null {
 }
 
 /** Use the nearest registered index for files inside container projects. */
-export function resolveIndexFileProjectRoot(file: string): string | null {
+export function resolveIndexFileProjectRoot(file: string): string {
   let detectedRoot: string;
   try {
     detectedRoot = findProjectRoot(path.dirname(path.resolve(file)));
   } catch {
-    return nearestRegisteredRoot(file);
+    const registeredRoot = nearestRegisteredRoot(file);
+    if (registeredRoot) return registeredRoot;
+    throw new Error(`Could not find a project for ${file}`);
   }
 
   // The explicit override names the intended DB even if another project

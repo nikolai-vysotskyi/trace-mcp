@@ -152,6 +152,11 @@ describe('resolveRegisteredAncestor', () => {
 });
 
 describe('index-file project resolution', () => {
+  it('rejects a file outside any known project', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-unregistered-'));
+    expect(() => resolveIndexFileProjectRoot(path.join(dir, 'file.ts'))).toThrow();
+  });
+
   it('routes a file in an unregistered nested repo to its registered container', () => {
     const container = makeTmpRepo();
     const nested = path.join(container, 'apps', 'laravel');

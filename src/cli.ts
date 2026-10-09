@@ -4543,8 +4543,10 @@ program
       process.exit(0); // file may have been deleted — exit silently
     }
 
-    const projectRoot = resolveIndexFileProjectRoot(resolvedFile);
-    if (!projectRoot) {
+    let projectRoot: string;
+    try {
+      projectRoot = resolveIndexFileProjectRoot(resolvedFile);
+    } catch {
       process.exit(0); // not inside a known project — skip silently
     }
 
