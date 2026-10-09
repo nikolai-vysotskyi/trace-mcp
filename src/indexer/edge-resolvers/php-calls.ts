@@ -160,6 +160,27 @@ export async function resolvePhpCallEdges(
   let constAccesses = 0;
   let typeRefs = 0;
 
+  let skippedStale = 0;
+
+  function tryInsertEdge(
+    sourceNodeId: number,
+    targetNodeId: number,
+    edgeTypeId: number,
+    metadata: string,
+    isCrossWs = 0,
+  ): boolean {
+    try {
+      insertStmt.run(sourceNodeId, targetNodeId, edgeTypeId, metadata, isCrossWs);
+      return true;
+    } catch (e) {
+      // TRA-2249 / TRA-1902: endpoint node deleted after the snapshot — the edge is
+      // stale, not the pass. Anything else is a real bug: rethrow.
+      if (!isForeignKeyViolation(e)) throw e;
+      skippedStale++;
+      return false;
+    }
+  }
+
   /** Helper to emit a reference edge to a class if the ref resolves. */
   function emitRef(
     sourceNodeId: number,
@@ -172,14 +193,17 @@ export async function resolvePhpCallEdges(
       const tNode = symbolNodeMap.get(target.id);
       if (tNode == null || tNode === sourceNodeId) return;
       if (source.workspace !== target.workspace) return;
-      insertStmt.run(
-        sourceNodeId,
-        tNode,
-        refType!.id,
-        JSON.stringify({ ref: classRef, kind: refKind }),
-        0,
-      );
-      typeRefs++;
+      if (
+        tryInsertEdge(
+          sourceNodeId,
+          tNode,
+          refType!.id,
+          JSON.stringify({ ref: classRef, kind: refKind }),
+          0,
+        )
+      ) {
+        typeRefs++;
+      }
       return;
     }
     // Fallback: phantom external class (vendor/framework base)
@@ -189,14 +213,17 @@ export async function resolvePhpCallEdges(
     const phantom = phantoms.ensure(phantomFqn, source.workspace, 'class');
     if (!before) phantomNodesCreated++;
     if (phantom.node_id === sourceNodeId) return;
-    insertStmt.run(
-      sourceNodeId,
-      phantom.node_id,
-      refType!.id,
-      JSON.stringify({ ref: classRef, kind: refKind, external: true }),
-      0,
-    );
-    typeRefs++;
+    if (
+      tryInsertEdge(
+        sourceNodeId,
+        phantom.node_id,
+        refType!.id,
+        JSON.stringify({ ref: classRef, kind: refKind, external: true }),
+        0,
+      )
+    ) {
+      typeRefs++;
+    }
   }
 
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
@@ -240,8 +267,9 @@ export async function resolvePhpCallEdges(
               const tNode = symbolNodeMap.get(target.id);
               if (tNode == null || tNode === sourceNodeId) continue;
               if (sym.workspace !== target.workspace) continue; // strict workspace isolation
-              insertStmt.run(sourceNodeId, tNode, edgeTypeId, JSON.stringify({ ref }), 0);
-              counter();
+              if (tryInsertEdge(sourceNodeId, tNode, edgeTypeId, JSON.stringify({ ref }), 0)) {
+                counter();
+              }
               continue;
             }
             // Phantom fallback — synthesize a node for the unresolved class
@@ -251,14 +279,17 @@ export async function resolvePhpCallEdges(
             const phantom = phantoms.ensure(phantomFqn, sym.workspace, phantomKind);
             if (!before) phantomNodesCreated++;
             if (phantom.node_id === sourceNodeId) continue;
-            insertStmt.run(
-              sourceNodeId,
-              phantom.node_id,
-              edgeTypeId,
-              JSON.stringify({ ref, external: true }),
-              0,
-            );
-            counter();
+            if (
+              tryInsertEdge(
+                sourceNodeId,
+                phantom.node_id,
+                edgeTypeId,
+                JSON.stringify({ ref, external: true }),
+                0,
+              )
+            ) {
+              counter();
+            }
           }
         };
         emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => {
@@ -316,38 +347,53 @@ export async function resolvePhpCallEdges(
           if (sym.workspace !== target.workspace) continue;
 
           let edgeTypeId: number;
+          let incCounter: () => void;
           switch (cs.type) {
             case 'new':
               edgeTypeId = instType.id;
-              instantiations++;
+              incCounter = () => {
+                instantiations++;
+              };
               break;
             case 'this_prop':
             case 'member_prop':
             case 'static_prop':
             case 'relative_static_prop':
               edgeTypeId = propType.id;
-              propAccesses++;
+              incCounter = () => {
+                propAccesses++;
+              };
               break;
             case 'class_const':
             case 'relative_const':
               edgeTypeId = constType.id;
-              constAccesses++;
+              incCounter = () => {
+                constAccesses++;
+              };
               break;
             case 'class_ref':
               edgeTypeId = refType.id;
-              typeRefs++;
+              incCounter = () => {
+                typeRefs++;
+              };
               break;
             default:
               edgeTypeId = callsType.id;
-              calls++;
+              incCounter = () => {
+                calls++;
+              };
           }
-          insertStmt.run(
-            sourceNodeId,
-            tNode,
-            edgeTypeId,
-            JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }),
-            0,
-          );
+          if (
+            tryInsertEdge(
+              sourceNodeId,
+              tNode,
+              edgeTypeId,
+              JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }),
+              0,
+            )
+          ) {
+            incCounter();
+          }
         }
       }
     }
@@ -378,6 +424,19 @@ export async function resolvePhpCallEdges(
       'PHP call/heritage edges resolved',
     );
   }
+  if (skippedStale > 0) {
+    logger.warn(
+      { skipped: skippedStale },
+      'PHP call/heritage edges skipped stale node references deleted mid-pass',
+    );
+  }
+}
+
+/** better-sqlite3 FK violation (code first, message as fallback). */
+function isForeignKeyViolation(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  if ((e as { code?: unknown }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return true;
+  return /FOREIGN KEY constraint failed/i.test(e.message);
 }
 
 /**
