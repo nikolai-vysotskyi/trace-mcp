@@ -1054,6 +1054,86 @@ function run(req) {
     expect(critical[0].rule_id).toBe('CWE-78');
   });
 
+  test('does not demote which when variable is interpolated (PoC: const binary = req.query.cmd)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-binary.mjs',
+      `
+function run(req) {
+  const binary = req.query.cmd;
+  execSync(\`which \${binary}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is interpolated (PoC: const cmd = req.query.name)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-cmd.mjs',
+      `
+function run(req) {
+  const cmd = req.query.name;
+  execSync(\`which \${cmd}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is interpolated (PoC: const command = process.argv[2])', () => {
+    writeFile(
+      store,
+      'scripts/which-var-command.mjs',
+      `
+function run() {
+  const command = process.argv[2];
+  execSync(\`which \${command}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is destructured (PoC: const { bin } = body)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-destructure.mjs',
+      `
+function run(body) {
+  const { bin } = body;
+  spawnSync(\`which \${bin}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
   test('does not demote which when interpolation contains property access (e.g. req.query.cmd)', () => {
     writeFile(
       store,
@@ -1073,13 +1153,14 @@ function run(req) {
     expect(def.suppressed_low_confidence).toBe(0);
   });
 
-  test('does not demote which when interpolation contains untrusted identifier (e.g. userCmd)', () => {
+  test('does not demote taskkill when cwd option is a variable (PoC: const dir = req.query.path)', () => {
     writeFile(
       store,
-      'scripts/which-user-cmd.mjs',
+      'scripts/taskkill-var-dir.mjs',
       `
-function run(userCmd) {
-  execSync(\`which \${userCmd}\`);
+function stop(req) {
+  const dir = req.query.path;
+  execSync(\`taskkill /PID \${process.pid}\`, { cwd: dir });
 }
 `,
       'javascript',
@@ -1092,13 +1173,29 @@ function run(userCmd) {
     expect(def.suppressed_low_confidence).toBe(0);
   });
 
-  test('demotes which when interpolation is a safe command identifier without untrusted tokens', () => {
+  test('drops which when interpolation is a literal string constant', () => {
     writeFile(
       store,
-      'scripts/which-safe.mjs',
+      'scripts/which-literal.mjs',
       `
-function isAvailable(command) {
-  execSync(\`which \${command}\`);
+function isAvailable() {
+  execSync(\`which \${'node'}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes taskkill when cwd option is a literal string directly in the call', () => {
+    writeFile(
+      store,
+      'scripts/taskkill-literal-cwd.mjs',
+      `
+function stop() {
+  execSync(\`taskkill /PID \${process.pid}\`, { cwd: '/var/log' });
 }
 `,
       'javascript',
@@ -1111,25 +1208,6 @@ function isAvailable(command) {
     expect(all.findings).toHaveLength(1);
     expect(all.findings[0].severity).toBe('low');
     expect(all.findings[0].confidence).toBe('low');
-  });
-
-  test('does not demote when options object contains untrusted identifier (e.g. userDir)', () => {
-    writeFile(
-      store,
-      'scripts/taskkill-user-dir.mjs',
-      `
-function stop(userDir) {
-  execSync(\`taskkill /PID \${process.pid}\`, { cwd: userDir });
-}
-`,
-      'javascript',
-    );
-    const def = scan(['command_injection']);
-    expect(def.findings).toHaveLength(1);
-    expect(def.findings[0].rule_id).toBe('CWE-78');
-    expect(def.findings[0].severity).toBe('critical');
-    expect(def.findings[0].confidence).toBe('high');
-    expect(def.suppressed_low_confidence).toBe(0);
   });
 
   // -------------------------------------------------------------------

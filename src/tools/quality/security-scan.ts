@@ -1098,15 +1098,55 @@ function isSafeCallTail(tail: string): boolean {
   const trimmed = tail.trim();
   if (trimmed === '') return true;
   // If there is a second argument, it must be a closed options object literal on the same line
-  if (!/^\s*,\s*\{[^}]*\}\s*$/.test(trimmed)) return false;
-  // Fail-closed on spread operators, computed keys, or escape sequences in options
-  if (trimmed.includes('...') || trimmed.includes('[') || trimmed.includes('\\')) return false;
+  const match = /^\s*,\s*\{([^}]*)\}\s*$/.exec(trimmed);
+  if (!match) return false;
+
+  // Fail-closed on spread operators, computed keys, escape sequences, or interpolations
+  if (
+    trimmed.includes('...') ||
+    trimmed.includes('[') ||
+    trimmed.includes('\\') ||
+    trimmed.includes('${')
+  ) {
+    return false;
+  }
   // Options must not configure a custom shell or environment
   if (/\b(?:shell|env)\b/i.test(trimmed)) return false;
-  // Options must not contain untrusted tokens or interpolations
-  if (UNTRUSTED_TOKEN_RE.test(trimmed)) return false;
-  if (/\b(?:user|input|untrusted|client|remote)/i.test(trimmed)) return false;
-  if (trimmed.includes('${')) return false;
+
+  const inner = match[1].trim();
+  if (inner === '') return true;
+
+  // Every option entry must be a strict `key: <literal>` pair.
+  // Variables (e.g. { cwd: dir }), shorthand properties ({ dir }), and expressions are strictly rejected.
+  const entries = inner
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  for (const entry of entries) {
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx === -1) {
+      // Shorthand property like { dir } -> variable reference, fail closed!
+      return false;
+    }
+    const key = entry.slice(0, colonIdx).trim();
+    const val = entry.slice(colonIdx + 1).trim();
+
+    // Key must be an unquoted identifier or single/double-quoted string
+    if (!/^[a-zA-Z_$][\w$]*$|^'[^']*'$|^"[^"]*"$/.test(key)) return false;
+    if (/\b(?:shell|env)\b/i.test(key)) return false;
+
+    // Value must be a literal (string, number, boolean, null, undefined) directly in the call
+    const isStringLiteral = /^'[^']*'$|^"[^"]*"$/.test(val);
+    const isNumberLiteral = /^-?\d+(?:\.\d+)?$/.test(val);
+    const isBooleanLiteral = /^(?:true|false)$/.test(val);
+    const isNullOrUndefined = /^(?:null|undefined)$/.test(val);
+
+    if (!isStringLiteral && !isNumberLiteral && !isBooleanLiteral && !isNullOrUndefined) {
+      // Variable reference or non-literal value -> fail closed!
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -1131,25 +1171,14 @@ function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' |
     return 'open';
   }
 
-  // `which X` — argument controls only which binary is looked up, with a single closed template literal.
-  // The interpolated value must be an explicitly trusted command identifier (command, cmd, binary, bin)
-  // and must not contain untrusted or user-controlled tokens (such as req.query.cmd or userCmd).
+  // `which X` — only literal string argument in closed template literal is demoted.
+  // Variables are never demoted as they can carry untrusted user input regardless of variable name.
   const whichMatch =
-    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{\s*([a-zA-Z_$][\w$]*)\s*\}`([^;)]*)\)/.exec(
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{\s*['"][a-zA-Z0-9_.-]+['"]\s*\}`([^;)]*)\)/.exec(
       line,
     );
-  if (whichMatch) {
-    const ident = whichMatch[1];
-    const isTrustedCommandIdent = /^(?:command|cmd|binary|bin)$/.test(ident);
-    const hasUntrustedToken =
-      UNTRUSTED_TOKEN_RE.test(ident) ||
-      /\b(?:user|input|untrusted|client|remote)/i.test(ident) ||
-      UNTRUSTED_TOKEN_RE.test(line) ||
-      /\b(?:user|input|untrusted|client|remote)/i.test(line);
-
-    if (isTrustedCommandIdent && !hasUntrustedToken && isSafeCallTail(whichMatch[2])) {
-      return 'which';
-    }
+  if (whichMatch && isSafeCallTail(whichMatch[1])) {
+    return 'which';
   }
 
   // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.
