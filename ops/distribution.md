@@ -3559,3 +3559,51 @@ Audited read-only via API, nothing written outside this file.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Afternoon pass (pass 3), 2026-10-10 (TRA-2320): threads audit, mention sweep, competitor bug-triage & architectural deep-dive
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `get-bb/marketplace#524`: OPEN, mergeable, zero comments. Awaiting maintainer review. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED`). Nikolai's dedicated lane — recorded, not touched.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, community-led PR progressing. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Executed both pass 1 (`trace-mcp`, `nikolai-vysotskyi/trace-mcp`, `trace-mcp.com`, `"npx -y trace-mcp"`) and pass 2 paired queries (`serena`, `repomix`, `codebase-memory-mcp`, `AGENTS.md`, `CLAUDE.md`).
+- Result: 0 new hits outside `ops/mentions-seen.txt`. Sweep clean.
+
+**Competitor bug triage & architectural comparison:**
+- `oraios/serena`:
+  - Issue #2154 (opened 2026-10-10): `replace_in_files can apply a stale preview ID to a different identical match`. `occurrence_ids` are generated as `file:line@hash` or sequential match offsets; when an edit occurs between dry-run preview and apply, a different match takes the offset and is silently modified instead of failing closed.
+  - In `trace-mcp`, refactor and edit operations rely on content checksums, symbol AST node identity, and strict line/character range preconditions. If source content shifts, the precondition fails closed rather than misapplying edits to adjacent identical literals.
+- `tirth8205/code-review-graph`:
+  - Issue #1107 (opened 2026-10-10): `rename refactor leaves from module import old_name unchanged, raising ImportError`. Their symbol refactor tool renames definitions and call sites but omits import bindings (`from x import y`).
+  - Issue #1106 (opened 2026-10-09): `serve exits entirely on cancelled requests (AssertionError: Request already responded to)`. When client cancels an in-flight tool call on timeout, the late-finishing tool callback attempts to respond to the closed request, raising an unhandled exception in anyio task group and terminating the stdio server process.
+  - In `trace-mcp`, JSON-RPC request handling tracks request lifecycle and absorbs late-arriving responses for cancelled request IDs without process termination.
+- `colbymchenry/codegraph`:
+  - Issue #2474 (opened 2026-10-09): `TypeScript export type * from makes the whole file parse to no symbols`. TypeScript 5.0 syntax causes the parser to fail and discard the entire barrel file, dropping all re-exported symbols and breaking graph connectivity.
+  - In `trace-mcp`, Tree-sitter TypeScript plugin isolates node errors and extracts barrel re-exports (`export_statement` with `source` field) regardless of type modifier nuances (`extractImportEdges`), preserving graph connectivity.
+
+**Competitor pulse (2026-10-10 afternoon):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,779★ (+4), 1,575 forks.
+- `oraios/serena`: 30,146★ (+8), 2,052 forks.
+- `DeusData/codebase-memory-mcp`: 46,267★ (+20), 3,804 forks (-1).
+- `tirth8205/code-review-graph`: 32,018★ (+7), 2,933 forks.
+- `colbymchenry/codegraph`: 73,649★ (+24), 4,746 forks (+6).
+- `abhigyanpatwari/GitNexus`: 47,817★ (+5), 5,195 forks (+1).
+- `continuedev/continue`: 36,168★ (+7), 5,460 forks (+1).
+- `Aider-AI/aider`: 49,452★ (+11), 5,043 forks (+1).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
