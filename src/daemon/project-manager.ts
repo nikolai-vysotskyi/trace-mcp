@@ -171,6 +171,7 @@ function managedMapKey(projects: Map<string, ManagedProject>, root: string): str
  * not hold the event loop open for the remainder of the timeout.
  */
 async function waitWithTimeout(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  if (!promise || typeof promise.then !== 'function') return true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const settled = promise.then(
@@ -418,6 +419,9 @@ export class ProjectManager {
     projectRoot: string,
     opts?: { watch?: boolean; persist?: boolean },
   ): Promise<ManagedProject> {
+    if (!fs.existsSync(projectRoot)) {
+      throw new Error(`Project directory does not exist: ${projectRoot}`);
+    }
     // Read-mostly mode (a registered subproject served on-demand): index once,
     // no fs watcher, no registry.json / config-file writes. Stays in-memory for
     // the daemon's lifetime but is never restored as a watched project on the
@@ -712,6 +716,11 @@ export class ProjectManager {
     // TRA-1553: a previous stop may have thrown midway and left a stale
     // stopping mark behind — the project is servable again from here.
     clearProjectStopping(projectRoot);
+
+    if (!fs.existsSync(projectRoot)) {
+      await this.removeProject(projectRoot);
+      throw new Error(`Project directory was deleted during setup: ${projectRoot}`);
+    }
 
     // Start indexing in background, gated by the shared semaphore so adding
     // N projects at once doesn't fan out to N concurrent indexAll runs.
@@ -2199,13 +2208,30 @@ export class ProjectManager {
    */
   startIdleUnloadSweep(
     idleMs: number,
-    opts?: { intervalMs?: number; maxLoaded?: number; onUnloaded?: (roots: string[]) => void },
+    opts?: {
+      intervalMs?: number;
+      maxLoaded?: number;
+      evictDeleted?: boolean;
+      onUnloaded?: (roots: string[]) => void;
+    },
   ): void {
     this.stopIdleUnloadSweep();
     const maxLoaded = opts?.maxLoaded ?? 0;
     if (idleMs <= 0 && maxLoaded <= 0) return;
     this.idleUnloadTimer = setInterval(
       () => {
+        if (opts?.evictDeleted) {
+          this.evictDeletedProjects()
+            .then((evicted) => {
+              if (evicted.length > 0) opts?.onUnloaded?.(evicted);
+            })
+            .catch((err) => {
+              logger.warn(
+                { err: serializeError(err) },
+                'Periodic evictDeletedProjects failed (non-fatal)',
+              );
+            });
+        }
         this.unloadIdleProjects(idleMs, maxLoaded)
           .then((roots) => {
             if (roots.length > 0) opts?.onUnloaded?.(roots);
@@ -2244,9 +2270,52 @@ export class ProjectManager {
     logger.info('ProjectManager shutdown complete');
   }
 
+  /**
+   * Scan registered and resident projects for deleted or dangerous folders.
+   * Evicts them from memory, removes database and sidecar artifacts,
+   * unregisters them from registry.json, and restarts ancestor watchers.
+   * Preserves projects on unmounted volumes (where the parent directory is also missing).
+   *
+   * Returns the list of evicted project roots.
+   */
+  async evictDeletedProjects(): Promise<string[]> {
+    const registered = listProjects();
+    const candidateRoots = new Set<string>(registered.map((e) => e.root));
+    for (const managed of this.projects.values()) {
+      candidateRoots.add(managed.root);
+    }
+
+    const evicted: string[] = [];
+    for (const root of candidateRoots) {
+      const dangerReason = isDangerousProjectRoot(root);
+      if (dangerReason) {
+        logger.warn({ root, reason: dangerReason }, 'Removing dangerous project from registry');
+        try {
+          await this.removeProject(root);
+          evicted.push(root);
+        } catch (err) {
+          logger.warn({ root, err: serializeError(err) }, 'Failed to evict dangerous project');
+        }
+        continue;
+      }
+      if (!fs.existsSync(root) && fs.existsSync(path.dirname(root))) {
+        logger.warn(
+          { root },
+          'Removing project with missing folder from registry (parent dir exists — looks like deletion, not unmount)',
+        );
+        try {
+          await this.removeProject(root);
+          evicted.push(root);
+        } catch (err) {
+          logger.warn({ root, err: serializeError(err) }, 'Failed to evict deleted project');
+        }
+      }
+    }
+    return evicted;
+  }
+
   /** Load all registered projects and start them. */
   async loadAllRegistered(): Promise<void> {
-    const allEntries = listProjects();
     // Self-heal: evict registry rows that would block startup or cause
     // "Project not found" 404s at runtime:
     //  - dangerous roots (/, $HOME, system dirs) — typically from an MCP client
@@ -2256,27 +2325,8 @@ export class ProjectManager {
     //    /Volumes/USB/foo when /Volumes/USB itself is also gone): we only
     //    prune when the immediate parent directory is still there, which is
     //    the signature of a user deletion vs. a transient mount.
-    const entries = [];
-    for (const entry of allEntries) {
-      const dangerReason = isDangerousProjectRoot(entry.root);
-      if (dangerReason) {
-        logger.warn(
-          { root: entry.root, reason: dangerReason },
-          'Removing dangerous project from registry',
-        );
-        unregisterProject(entry.root);
-        continue;
-      }
-      if (!fs.existsSync(entry.root) && fs.existsSync(path.dirname(entry.root))) {
-        logger.warn(
-          { root: entry.root },
-          'Removing project with missing folder from registry (parent dir exists — looks like deletion, not unmount)',
-        );
-        unregisterProject(entry.root);
-        continue;
-      }
-      entries.push(entry);
-    }
+    const evicted = new Set(await this.evictDeletedProjects());
+    const entries = listProjects().filter((e) => !evicted.has(e.root));
     // Overlapping roots (a container folder registered alongside projects
     // inside it) double-index and double-watch the same files — observed in
     // the field as a 2-3× multiplier on every watcher-driven reindex. The

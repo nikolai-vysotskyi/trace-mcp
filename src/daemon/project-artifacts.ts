@@ -244,7 +244,7 @@ export function removeProjectArtifacts(
   // recomputing from absRoot would silently miss it (and miss the
   // session/task-cache files, which are themselves named off this same
   // dbPath — see local-backend.ts's `sharedDbPath.replace(/\.db$/, ...)`).
-  const registryEntry = getProject(absRoot);
+  const registryEntry = typeof getProject === 'function' ? getProject(absRoot) : null;
   const indexDbBase =
     registryEntry?.dbPath ??
     path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
@@ -258,9 +258,10 @@ export function removeProjectArtifacts(
   // opened, so never delete the index DB itself while another registered
   // entry still points at it — its own topology/decision rows and
   // session/task-cache files are still cleaned up below regardless.
-  const sharedWithSibling = listProjects().some(
-    (e) => path.resolve(e.root) !== absRoot && e.dbPath === indexDbBase,
-  );
+  const sharedWithSibling =
+    typeof listProjects === 'function'
+      ? listProjects().some((e) => path.resolve(e.root) !== absRoot && e.dbPath === indexDbBase)
+      : false;
   // TRA-304: a live holder marker from another root means some process has
   // this DB open right now, even if that root left no registry entry. Same
   // rule, same reason — an unreadable holder dir counts as "in use".
