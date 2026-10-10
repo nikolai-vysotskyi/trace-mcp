@@ -995,14 +995,14 @@ function openInBrowser(filePath: string) {
     expect(data.findings[0].severity).toBe('medium');
   });
 
-  test('command_injection: execSync(`which ${cmd}`) is downgraded to low', () => {
+  test('command_injection: execSync(`which ${cmd}`) with literal is downgraded to low', () => {
     writeFile(
       store,
       'src/lsp/which.ts',
       `
 import { execSync } from 'node:child_process';
-function isAvailable(command: string) {
-  execSync(\`which \${command}\`);
+function isAvailable() {
+  execSync(\`which \${'node'}\`);
 }
 `,
       'typescript',
@@ -1016,16 +1016,14 @@ function isAvailable(command: string) {
     // including 'low', so we just check no critical.
   });
 
-  test('command_injection: execSync(`taskkill /PID ${pid}`) with numeric pid is downgraded', () => {
+  test('command_injection: execSync(`taskkill /PID ${process.pid}`) with process.pid is downgraded', () => {
     writeFile(
       store,
       'src/daemon/kill.ts',
       `
 import { execSync } from 'node:child_process';
-function readDaemonPid(): number { return 1234; }
 function stop() {
-  const pid = readDaemonPid();
-  execSync(\`taskkill /PID \${pid} /T /F\`);
+  execSync(\`taskkill /PID \${process.pid} /T /F\`);
 }
 `,
       'typescript',
@@ -1103,10 +1101,10 @@ function stopDaemonByPid(): void {
       store,
       'src/lsp/config.ts',
       `
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 function isCommandAvailable(command: string): boolean {
   try {
-    execSync(\`which \${command}\`, { stdio: 'pipe', timeout: 5000 });
+    execFileSync('which', [command], { stdio: 'pipe', timeout: 5000 });
     return true;
   } catch {
     return false;

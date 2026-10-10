@@ -49,12 +49,17 @@ if (entries.length === 0) {
 const combined = [];
 for (const name of entries) {
   const full = path.join(dir, name);
+  const st = fs.lstatSync(full);
+  // Verify regular file to avoid traversing symlinks or hashing directories
+  if (!st.isFile()) continue;
+
   const hash = crypto.createHash('sha256');
   hash.update(fs.readFileSync(full));
   const digest = hash.digest('hex');
 
   // Per-asset bare-digest file — primary format consumed by the updater.
-  fs.writeFileSync(`${full}.sha256`, `${digest}\n`, 'utf-8');
+  const shaPath = path.join(dir, `${name}.sha256`);
+  fs.writeFileSync(shaPath, `${digest}\n`, 'utf-8');
   combined.push(`${digest}  ${name}`);
   console.log(`${digest}  ${name}`);
 }
