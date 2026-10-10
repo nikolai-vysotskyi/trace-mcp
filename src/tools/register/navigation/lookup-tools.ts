@@ -107,14 +107,22 @@ function resolveFileInRegisteredProjects(
     return null;
   }
 
+  const isPathConfined = (candPath: string, rootDir: string): boolean => {
+    const normCand = path.resolve(candPath);
+    const normRoot = path.resolve(rootDir);
+    const prefix = normRoot.endsWith(path.sep) ? normRoot : normRoot + path.sep;
+    return normCand.startsWith(prefix) || normCand === normRoot;
+  };
+
   const projects = listProjects();
+  // 1 & 2: Match explicitly scoped prefixes (project basename or multi-root child basename)
   for (const p of projects) {
     // 1. File path starts with project's basename (e.g. "trace-mcp/src/index.ts")
     const base = path.basename(p.root);
     if (filePath.startsWith(base + '/') || filePath.startsWith(base + path.sep)) {
       const subRel = filePath.slice(base.length + 1);
       const candSub = path.resolve(p.root, subRel);
-      if (fs.existsSync(candSub)) {
+      if (isPathConfined(candSub, p.root) && fs.existsSync(candSub)) {
         try {
           if (fs.statSync(candSub).isFile()) {
             return { projectRoot: p.root, relPath: subRel, absPath: candSub };
@@ -130,7 +138,7 @@ function resolveFileInRegisteredProjects(
         if (filePath.startsWith(baseC + '/') || filePath.startsWith(baseC + path.sep)) {
           const subRel = filePath.slice(baseC.length + 1);
           const candSub = path.resolve(c, subRel);
-          if (fs.existsSync(candSub)) {
+          if (isPathConfined(candSub, c) && fs.existsSync(candSub)) {
             try {
               if (fs.statSync(candSub).isFile()) {
                 return { projectRoot: c, relPath: subRel, absPath: candSub };
@@ -140,9 +148,40 @@ function resolveFileInRegisteredProjects(
         }
       }
     }
+  }
 
-    // 3. Sibling worktrees: path starts with sibling directory name under p.root's parent
-    // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
+  // 3. Direct subpath of a registered multi-root container (e.g. assetfeed container holding
+  // unlisted worktrees/subdirs such as pplx-x-graph or scratchpad).
+  // Must be unambiguous across all registered multi-root containers: if multiple multi-root
+  // projects have a matching file at the same relative path (e.g. "shared/utils.ts"),
+  // reject as ambiguous to prevent silent cross-project leakage (TRA-2327).
+  const multiRootCandidates: ResolvedProjectFile[] = [];
+  for (const p of projects) {
+    if (p.type === 'multi-root') {
+      const candDirect = path.resolve(p.root, filePath);
+      if (isPathConfined(candDirect, p.root) && fs.existsSync(candDirect)) {
+        try {
+          if (fs.statSync(candDirect).isFile()) {
+            const anc = resolveRegisteredAncestor(candDirect);
+            const projRoot = anc ? anc.root : p.root;
+            const relPath = path.relative(projRoot, candDirect);
+            multiRootCandidates.push({ projectRoot: projRoot, relPath, absPath: candDirect });
+          }
+        } catch {}
+      }
+    }
+  }
+  if (multiRootCandidates.length === 1) {
+    return multiRootCandidates[0];
+  }
+  if (multiRootCandidates.length > 1) {
+    // Ambiguous match across multiple multi-root containers — do not guess
+    return null;
+  }
+
+  // 4. Sibling worktrees: path starts with sibling directory name under p.root's parent
+  // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
+  for (const p of projects) {
     const firstSlash = filePath.indexOf('/');
     const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
     const splitIdx =
@@ -159,7 +198,7 @@ function resolveFileInRegisteredProjects(
       const anc = resolveRegisteredAncestor(candSiblingDir);
       if (anc && path.resolve(anc.root) === path.resolve(candSiblingDir)) {
         const candFile = path.resolve(candSiblingDir, subRel);
-        if (fs.existsSync(candFile)) {
+        if (isPathConfined(candFile, candSiblingDir) && fs.existsSync(candFile)) {
           try {
             if (fs.statSync(candFile).isFile()) {
               return { projectRoot: anc.root, relPath: subRel, absPath: candFile };
@@ -335,9 +374,14 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
         // Try candidate registered projects where filePath exists, ONLY if this is a root session.
         // Legitimate project roots with 0 indexed files must not leak files from other projects.
-        const resolved = isRootSession
+        const candidate = isRootSession
           ? resolveFileInRegisteredProjects(filePath, projectRoot)
           : null;
+        // Defense-in-depth: ensure candidate's relPath is strictly confined to candidate's projectRoot
+        const resolved =
+          candidate && validatePath(candidate.relPath, candidate.projectRoot).isOk()
+            ? candidate
+            : null;
         if (resolved) {
           if (ctx.projectRelay) {
             try {

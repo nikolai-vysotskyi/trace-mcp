@@ -386,4 +386,153 @@ describe('get_outline — descendant projects and root sessions (TRA-2243)', () 
       unregisterProject(unrelatedDir);
     }
   });
+
+  it('resolves relative path to multi-root project container when session is at / (TRA-2327)', async () => {
+    const multiRootDir = path.join(tmpDir, 'multi-root-proj');
+    const childDir = path.join(multiRootDir, 'child-app');
+    const subDir = path.join(multiRootDir, 'sub-module');
+    fs.mkdirSync(childDir, { recursive: true });
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(subDir, 'feature.ts'),
+      'export function subFeature(): string { return "feature"; }\n',
+    );
+    registerProject(multiRootDir, { type: 'multi-root', children: [childDir] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Caller at / asks for sub-module/feature.ts (relative to container multiRootDir)
+      const res = await handler({ path: 'sub-module/feature.ts' });
+      expect(res.isError).toBeFalsy();
+      const body = JSON.parse(res.content[0].text);
+      expect(body.symbols.some((s: { name: string }) => s.name === 'subFeature')).toBe(true);
+      expect(body._hint).toContain(`Resolved path to registered project '${multiRootDir}'`);
+    } finally {
+      unregisterProject(multiRootDir);
+    }
+  });
+
+  it('rejects ambiguous relative path present in multiple registered multi-root containers (TRA-2327)', async () => {
+    const projA = path.join(tmpDir, 'multi-proj-a');
+    const projB = path.join(tmpDir, 'multi-proj-b');
+    const childA = path.join(projA, 'app-a');
+    const childB = path.join(projB, 'app-b');
+    fs.mkdirSync(childA, { recursive: true });
+    fs.mkdirSync(childB, { recursive: true });
+    fs.mkdirSync(path.join(projA, 'shared'), { recursive: true });
+    fs.mkdirSync(path.join(projB, 'shared'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projA, 'shared', 'utils.ts'),
+      'export function utilsA(): string { return "a"; }\n',
+    );
+    fs.writeFileSync(
+      path.join(projB, 'shared', 'utils.ts'),
+      'export function utilsB(): string { return "b"; }\n',
+    );
+    registerProject(projA, { type: 'multi-root', children: [childA] });
+    registerProject(projB, { type: 'multi-root', children: [childB] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // shared/utils.ts exists in BOTH projA and projB, so direct subpath match is ambiguous
+      const res = await handler({ path: 'shared/utils.ts' });
+      expect(res.isError).toBe(true);
+      const body = JSON.parse(res.content[0].text);
+      expect(body.reason).toBe('filesystem_root_session');
+      expect(body.symbols).toBeUndefined();
+    } finally {
+      unregisterProject(projB);
+      unregisterProject(projA);
+    }
+  });
+
+  it('rejects path traversal attempting to escape project root in root session (TRA-2327)', async () => {
+    // Sensitive file outside registered projects
+    const secretFile = path.join(tmpDir, 'sensitive-outside.ts');
+    fs.writeFileSync(secretFile, 'export const secretKey = "super-secret";\n');
+
+    const projDir = path.join(tmpDir, 'confined-proj');
+    const childDir = path.join(projDir, 'child');
+    fs.mkdirSync(childDir, { recursive: true });
+    registerProject(projDir, { type: 'multi-root', children: [childDir] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Traversal tests attempting escape via:
+      // 1. Direct subpath / rule 3: ../../sensitive-outside.ts
+      // 2. Project basename / rule 1: confined-proj/../../sensitive-outside.ts
+      // 3. Child basename / rule 2: child/../../sensitive-outside.ts
+      // 4. Sibling dir / rule 4: child/../../sensitive-outside.ts
+      const traversalPaths = [
+        '../../sensitive-outside.ts',
+        'confined-proj/../../sensitive-outside.ts',
+        'child/../../sensitive-outside.ts',
+      ];
+
+      for (const tPath of traversalPaths) {
+        const res = await handler({ path: tPath });
+        expect(res.isError).toBe(true);
+        const body = JSON.parse(res.content[0].text);
+        // Must reject with empty index error, never resolve or outline the outside file
+        expect(body.symbols).toBeUndefined();
+        expect(body.error).toBe('File not found or unreadable (index is empty)');
+      }
+    } finally {
+      unregisterProject(projDir);
+    }
+  });
 });
