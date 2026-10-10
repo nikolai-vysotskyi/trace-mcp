@@ -491,6 +491,10 @@ export class FileWatcher {
               try {
                 await onChanges(paths);
               } catch (e) {
+                if (e instanceof IndexAbortedError) {
+                  logger.warn({ error: e }, 'File change handler aborted');
+                  return;
+                }
                 logger.error({ error: e }, 'File change handler failed');
               }
             })(),
