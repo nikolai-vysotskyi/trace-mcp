@@ -181,4 +181,18 @@ describe('BenchmarkLab', () => {
     await waitFor(() => expect(screen.getByText(/Benchmark Lab run x/)).toBeTruthy());
     expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
   });
+
+  it('renders daemon down pane if fixtures endpoint fails (TRA-2298)', async () => {
+    mockFetch((url) => {
+      if (url.endsWith('/api/benchmark-lab/arms')) return ARMS;
+      if (url.endsWith('/api/benchmark-lab/fixtures'))
+        return new Response(JSON.stringify({ error: 'Benchmark Lab battery not found' }), {
+          status: 500,
+        });
+      if (url.endsWith('/api/benchmark-lab/runs')) return { runs: [] };
+      throw new Error(`unexpected GET ${url}`);
+    });
+    render(<BenchmarkLab />);
+    expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
+  });
 });

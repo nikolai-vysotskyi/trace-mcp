@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Plugin } from 'esbuild';
 import { defineConfig } from 'tsup';
@@ -11,6 +11,30 @@ const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 // other pass already finished writing. Wipe dist/ exactly once here, before
 // either pass starts, and leave `clean: false` on both configs below.
 rmSync('dist', { recursive: true, force: true });
+
+const FIXTURES_SRC = 'tests/recall-harness/fixtures';
+const FIXTURES_DEST = 'dist/benchmark-lab/fixtures';
+
+function copyBenchmarkFixtures(): void {
+  if (existsSync(FIXTURES_SRC)) {
+    mkdirSync(FIXTURES_DEST, { recursive: true });
+    cpSync(FIXTURES_SRC, FIXTURES_DEST, { recursive: true });
+  }
+}
+
+// Ensure the pinned fixtures ship inside dist/ for packaged / installed runs (TRA-2298)
+copyBenchmarkFixtures();
+
+function copyBenchmarkFixturesPlugin(): Plugin {
+  return {
+    name: 'copy-benchmark-fixtures',
+    setup(build) {
+      build.onEnd(() => {
+        copyBenchmarkFixtures();
+      });
+    },
+  };
+}
 
 /**
  * Node's ESM loader mis-resolves CJS packages when the install path contains
@@ -175,7 +199,7 @@ export default defineConfig([
     // dist/ is wiped once above, before either config runs — see the rmSync
     // comment at the top of this file.
     clean: false,
-    esbuildPlugins: [cjsViaCreateRequire()],
+    esbuildPlugins: [cjsViaCreateRequire(), copyBenchmarkFixturesPlugin()],
   },
   {
     ...common,
@@ -200,6 +224,6 @@ export default defineConfig([
     },
     // dist/ is wiped once above, before either config runs.
     clean: false,
-    esbuildPlugins: [cjsViaCreateRequire(), heavyBackendsExternal()],
+    esbuildPlugins: [cjsViaCreateRequire(), heavyBackendsExternal(), copyBenchmarkFixturesPlugin()],
   },
 ]);

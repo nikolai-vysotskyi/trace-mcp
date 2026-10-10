@@ -90,15 +90,31 @@ export interface LabFixture {
 }
 
 function defaultFixturesDir(): string {
-  // src/benchmark-lab → repo root in dev; tsup flattens dist/*.js, so the
-  // bundled module sits one level below the package root. Walk up instead of
-  // counting levels — the count differs per build.
-  return (
-    findUpwards(['tests', 'recall-harness', 'fixtures']) ??
-    // Fallback keeps the honest "battery not found" error in loadLabFixtures
-    // (e.g. an installed package without tests/) instead of throwing here.
-    path.resolve(__dirname, '..', '..', 'tests', 'recall-harness', 'fixtures')
-  );
+  // 1. Repository checkout (dev under tsx/vitest or local checkout build):
+  // tests/recall-harness/fixtures is found by walking up from this module.
+  const repoBattery = findUpwards(['tests', 'recall-harness', 'fixtures']);
+  if (repoBattery && fs.existsSync(repoBattery)) {
+    return repoBattery;
+  }
+
+  // 2. Installed / packaged distribution (npm install -g trace-mcp, desktop app payload, etc.):
+  // tests/ does not ship with published packages, but the pinned battery ships inside
+  // dist/benchmark-lab/fixtures alongside the bundled dist/cli.js and dist/index.js.
+  const shippedInDist = path.join(__dirname, 'benchmark-lab', 'fixtures');
+  if (fs.existsSync(shippedInDist)) {
+    return shippedInDist;
+  }
+
+  // 3. Search upwards for the shipped dist/ copy if __dirname is nested or in another layout:
+  const upwardsShipped =
+    findUpwards(['dist', 'benchmark-lab', 'fixtures']) ??
+    findUpwards(['benchmark-lab', 'fixtures']);
+  if (upwardsShipped && fs.existsSync(upwardsShipped)) {
+    return upwardsShipped;
+  }
+
+  // Fallback keeps the descriptive error in loadLabFixtures instead of throwing here.
+  return shippedInDist;
 }
 
 /**
@@ -123,8 +139,7 @@ function findUpwards(targetParts: string[], maxDepth = 8): string | null {
 export function loadLabFixtures(dir: string = defaultFixturesDir()): LabFixture[] {
   if (!fs.existsSync(dir)) {
     throw new Error(
-      `Benchmark Lab battery not found: ${dir}. The fixtures ship with the repository checkout — ` +
-        `a run from an installed package without tests/ cannot measure against them.`,
+      `Benchmark Lab battery not found: ${dir}. The fixtures ship with the repository checkout or distribution package.`,
     );
   }
   const files = fs

@@ -302,6 +302,13 @@ export function stageServer({ targetArch, targetOs } = {}) {
     return !base.endsWith('.map') && !base.endsWith('.d.ts') && base !== 'index.js';
   });
 
+  // Ensure the pinned Benchmark Lab fixtures ship in the payload (TRA-2298)
+  const fixturesSrc = path.join(REPO_ROOT, 'tests', 'recall-harness', 'fixtures');
+  const fixturesDest = path.join(PAYLOAD, 'dist', 'benchmark-lab', 'fixtures');
+  if (fs.existsSync(fixturesSrc) && !fs.existsSync(fixturesDest)) {
+    copyTree(fixturesSrc, fixturesDest);
+  }
+
   copyTree(path.join(REPO_ROOT, 'hooks'), path.join(PAYLOAD, 'hooks'));
 
   // A trimmed manifest, not a copy of the root one. `type: module` is what

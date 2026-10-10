@@ -154,6 +154,7 @@ export function enableDaemon(): void {
  */
 export function ephemeralServeHttpRefusal(entryPath: string): string | null {
   if (!entryPath) return null;
+  if (process.env.TRACE_MCP_ALLOW_EPHEMERAL_DAEMON === '1') return null;
   const abs = path.resolve(entryPath);
   if (!isEphemeralInstallPath(abs)) return null;
   if (isDevCheckoutEntry(abs)) return null;
