@@ -22,6 +22,7 @@
  * All readers are best-effort and never throw: attribution must not break boot.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { INDEX_DIR } from '../shared/paths.js';
@@ -29,6 +30,18 @@ import type { LaunchdLastExit } from './lifecycle.js';
 
 /** Watchdog alert file name inside INDEX_DIR (cf. serve-http's StallWatchdog). */
 export const STALL_ALERTS_FILENAME = 'stall-alerts.jsonl';
+
+/** Coalition name launchd assigns the daemon (cf. the TRA-2056 .ips report). */
+export const DAEMON_COALITION_NAME = 'com.trace-mcp.server';
+
+/** macOS DiagnosticReports dir holding node-*.ips crash reports. Null elsewhere. */
+export function getOomCrashReportDir(
+  platform: NodeJS.Platform = process.platform,
+  homeDir: string = os.homedir(),
+): string | null {
+  if (platform !== 'darwin') return null;
+  return path.join(homeDir, 'Library', 'Logs', 'DiagnosticReports');
+}
 
 /** Absolute path of the watchdog alert file. Injectable for tests. */
 export function getStallAlertsPath(indexDir: string = INDEX_DIR): string {
@@ -131,11 +144,109 @@ export function formatStallAlerts(summary: StallAlertSummary): string[] {
   return lines;
 }
 
+export interface OomCrashReport {
+  /** Absolute path of the .ips report. */
+  path: string;
+  /** Report mtime (epoch ms) — orders the crash against the daemon.log gap. */
+  mtimeMs: number;
+  /** Crashed pid parsed from the report, when present. */
+  pid?: number;
+}
+
+/**
+ * Best-effort scan for a V8 heap-OOM crash report from the previous daemon
+ * run (TRA-2056).
+ *
+ * A V8 OOM aborts via `V8::FatalProcessOutOfMemory` → SIGABRT — no JS
+ * shutdown handler runs, so daemon.log holds only the vitals trajectory
+ * before the gap. macOS writes a `node-*.ips` report whose faulting stack
+ * names `FatalProcessOutOfMemory`/`OOMErrorHandler` under the daemon's
+ * coalition (`com.trace-mcp.server`). Returns matches newest-first, capped
+ * at `maxReports`; [] when the dir is absent, unreadable, or holds nothing
+ * matching (including all non-darwin platforms).
+ *
+ * Reads are capped (`MAX_IPS_BYTES`) and never throw: attribution must not
+ * break boot. `dirOverride` exists for tests.
+ */
+export function readRecentOomCrashes(dirOverride?: string, maxReports = 3): OomCrashReport[] {
+  let dir: string | null = null;
+  try {
+    dir = dirOverride ?? getOomCrashReportDir();
+  } catch {
+    return [];
+  }
+  if (!dir) return [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir).filter((n) => n.startsWith('node-') && n.endsWith('.ips'));
+  } catch {
+    return [];
+  }
+  if (names.length === 0) return [];
+  const MAX_IPS_BYTES = 512 * 1024;
+  const withMtime: Array<{ name: string; mtimeMs: number }> = [];
+  for (const name of names) {
+    try {
+      const st = fs.statSync(path.join(dir, name));
+      withMtime.push({ name, mtimeMs: st.mtimeMs });
+    } catch {
+      /* a racing log-rotation unlink is not evidence */
+    }
+  }
+  withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const out: OomCrashReport[] = [];
+  for (const { name, mtimeMs } of withMtime.slice(0, 20)) {
+    if (out.length >= Math.max(1, maxReports)) break;
+    const full = path.join(dir, name);
+    let text: string;
+    try {
+      const fd = fs.openSync(full, 'r');
+      try {
+        const st = fs.fstatSync(fd);
+        const len = Math.min(st.size, MAX_IPS_BYTES);
+        const buf = Buffer.alloc(len);
+        fs.readSync(fd, buf, 0, len, 0);
+        text = buf.toString('utf-8');
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      continue;
+    }
+    if (!text.includes(DAEMON_COALITION_NAME)) continue;
+    if (!text.includes('FatalProcessOutOfMemory') && !text.includes('OOMErrorHandler')) continue;
+    const report: OomCrashReport = { path: full, mtimeMs };
+    const pidMatch = text.match(/"pid"\s*:\s*(\d+)/);
+    if (pidMatch) {
+      const pid = Number.parseInt(pidMatch[1], 10);
+      if (Number.isFinite(pid)) report.pid = pid;
+    }
+    out.push(report);
+  }
+  return out;
+}
+
+/**
+ * Human-readable lines for `daemon status`. [] when no OOM report matches —
+ * status stays quiet on healthy installs.
+ */
+export function formatOomCrashes(reports: OomCrashReport[]): string[] {
+  if (reports.length === 0) return [];
+  const latest = reports[0];
+  const when = new Date(latest.mtimeMs).toISOString();
+  return [
+    `  V8 heap OOM crash report: ${latest.path} (${when}` +
+      (latest.pid !== undefined ? `, pid ${latest.pid}` : '') +
+      ')',
+  ];
+}
+
 export interface UncleanStopDiagnosis {
   daemonStarts: number;
   daemonUncleanStops: number;
   launchdExit: LaunchdLastExit | null;
   stallSummary: StallAlertSummary;
+  oomCrash?: OomCrashReport | null;
 }
 
 /**
@@ -145,19 +256,27 @@ export interface UncleanStopDiagnosis {
  */
 export function logUncleanStopDiagnosis(diagnosis: UncleanStopDiagnosis): void {
   try {
-    const { daemonStarts, daemonUncleanStops, launchdExit, stallSummary } = diagnosis;
+    const { daemonStarts, daemonUncleanStops, launchdExit, stallSummary, oomCrash } = diagnosis;
     const fields: Record<string, unknown> = {
       daemonStarts,
       daemonUncleanStops,
       stallAlertFile: getStallAlertsPath(),
       stallAlertsSeen: stallSummary.count,
     };
+    if (oomCrash) {
+      fields.oomCrashReport = oomCrash.path;
+      if (oomCrash.pid !== undefined) fields.oomCrashPid = oomCrash.pid;
+    }
     if (launchdExit) {
       if (launchdExit.exitCode !== undefined) fields.launchdLastExit = launchdExit.exitCode;
       if (launchdExit.reason !== undefined) fields.launchdLastExitReason = launchdExit.reason;
       if (launchdExit.runs !== undefined) fields.launchdRuns = launchdExit.runs;
     }
-    if (stallSummary.unrecoveredFatal) {
+    if (oomCrash) {
+      fields.likelyCause =
+        'V8 JavaScript heap OOM (FatalProcessOutOfMemory in the crash report; ' +
+        'see daemon.log Daemon vitals heap_used_mb trajectory before the gap)';
+    } else if (stallSummary.unrecoveredFatal) {
       fields.watchdogFatal = stallSummary.unrecoveredFatal;
       fields.likelyCause = 'stall-watchdog SIGKILL after fatalAfterMs without an event-loop beat';
     } else {

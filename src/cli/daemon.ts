@@ -21,7 +21,9 @@ import {
   LAUNCHD_PLIST_PATH,
 } from '../global.js';
 import {
+  formatOomCrashes,
   formatStallAlerts,
+  readRecentOomCrashes,
   readRecentStallAlerts,
   summarizeStallAlerts,
 } from '../daemon/unclean-stop.js';
@@ -208,6 +210,9 @@ daemonCommand
         // daemon.log — surface it here so a down daemon's cause is one command away.
         for (const line of formatStallAlerts(summarizeStallAlerts(readRecentStallAlerts())))
           console.log(line);
+        // TRA-2056: a V8 heap OOM leaves its own breadcrumb — the .ips crash
+        // report — for the same reason.
+        for (const line of formatOomCrashes(readRecentOomCrashes())) console.log(line);
       }
       if (disabled) {
         console.log(`  Auto-spawn: disabled (opt-out file: ${DAEMON_DISABLED_PATH})`);
@@ -229,6 +234,8 @@ daemonCommand
     // line sits in stall-alerts.jsonl, not daemon.log.
     for (const line of formatStallAlerts(summarizeStallAlerts(readRecentStallAlerts())))
       console.log(line);
+    // TRA-2056: same for a V8 heap OOM — the .ips report, not daemon.log.
+    for (const line of formatOomCrashes(readRecentOomCrashes())) console.log(line);
     if (health.version) console.log(`  Version: ${health.version}`);
     if (health.pid != null) console.log(`  PID: ${health.pid}`);
     if (health.uptime != null) {
