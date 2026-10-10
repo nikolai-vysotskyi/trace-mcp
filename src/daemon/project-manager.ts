@@ -2208,23 +2208,30 @@ export class ProjectManager {
    */
   startIdleUnloadSweep(
     idleMs: number,
-    opts?: { intervalMs?: number; maxLoaded?: number; onUnloaded?: (roots: string[]) => void },
+    opts?: {
+      intervalMs?: number;
+      maxLoaded?: number;
+      evictDeleted?: boolean;
+      onUnloaded?: (roots: string[]) => void;
+    },
   ): void {
     this.stopIdleUnloadSweep();
     const maxLoaded = opts?.maxLoaded ?? 0;
     if (idleMs <= 0 && maxLoaded <= 0) return;
     this.idleUnloadTimer = setInterval(
       () => {
-        this.evictDeletedProjects()
-          .then((evicted) => {
-            if (evicted.length > 0) opts?.onUnloaded?.(evicted);
-          })
-          .catch((err) => {
-            logger.warn(
-              { err: serializeError(err) },
-              'Periodic evictDeletedProjects failed (non-fatal)',
-            );
-          });
+        if (opts?.evictDeleted) {
+          this.evictDeletedProjects()
+            .then((evicted) => {
+              if (evicted.length > 0) opts?.onUnloaded?.(evicted);
+            })
+            .catch((err) => {
+              logger.warn(
+                { err: serializeError(err) },
+                'Periodic evictDeletedProjects failed (non-fatal)',
+              );
+            });
+        }
         this.unloadIdleProjects(idleMs, maxLoaded)
           .then((roots) => {
             if (roots.length > 0) opts?.onUnloaded?.(roots);
@@ -2274,11 +2281,8 @@ export class ProjectManager {
   async evictDeletedProjects(): Promise<string[]> {
     const registered = listProjects();
     const candidateRoots = new Set<string>(registered.map((e) => e.root));
-    for (const root of this.projects.keys()) {
-      if (candidateRoots.has(root)) continue;
-      if (isDangerousProjectRoot(root)) {
-        candidateRoots.add(root);
-      }
+    for (const managed of this.projects.values()) {
+      candidateRoots.add(managed.root);
     }
 
     const evicted: string[] = [];

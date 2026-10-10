@@ -240,6 +240,7 @@ describe('TRA-2313: Deleted folder eviction and orphan DB cleanup', () => {
 
       pm.startIdleUnloadSweep(30 * 60_000, {
         intervalMs: 10_000,
+        evictDeleted: true,
         onUnloaded,
       });
 
@@ -257,5 +258,51 @@ describe('TRA-2313: Deleted folder eviction and orphan DB cleanup', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('evictDeletedProjects evicts unpersisted resident projects (persist: false) when directory is deleted', async () => {
+    const unpersistedDir = path.join(tempRoot, 'unpersisted-resident-proj');
+    fs.mkdirSync(unpersistedDir);
+    fs.writeFileSync(path.join(unpersistedDir, 'index.ts'), 'export const u = 42;');
+
+    const pm = new ProjectManager();
+
+    // Verify it is NOT in registry.json
+    expect(listProjects().some((p) => p.root === unpersistedDir)).toBe(false);
+
+    // Simulate resident project added with persist: false (in memory only, no registry entry)
+    const fakeManaged: any = {
+      root: unpersistedDir,
+      config: {},
+      db: { close: vi.fn() },
+      store: {},
+      registry: {},
+      progress: {},
+      pipeline: { dispose: vi.fn(async () => undefined) },
+      watcher: {
+        stop: vi.fn(),
+        unsubscribe: vi.fn(async () => undefined),
+        drain: vi.fn(async () => undefined),
+      },
+      server: { close: vi.fn() },
+      serverHandle: { dispose: vi.fn(async () => undefined) },
+      status: 'ready',
+      lastAccessedAt: Date.now(),
+    };
+    (pm as any).projects.set(unpersistedDir, fakeManaged);
+
+    expect((pm as any).projects.has(unpersistedDir)).toBe(true);
+
+    // Delete folder from disk
+    fs.rmSync(unpersistedDir, { recursive: true, force: true });
+    expect(fs.existsSync(unpersistedDir)).toBe(false);
+
+    // Run eviction
+    const evicted = await pm.evictDeletedProjects();
+
+    expect(evicted).toContain(unpersistedDir);
+    expect((pm as any).projects.has(unpersistedDir)).toBe(false);
+    expect(fakeManaged.watcher.unsubscribe).toHaveBeenCalled();
+    expect(fakeManaged.db.close).toHaveBeenCalled();
   });
 });
