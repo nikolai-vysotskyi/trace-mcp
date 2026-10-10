@@ -108,6 +108,7 @@ function resolveFileInRegisteredProjects(
   }
 
   const projects = listProjects();
+  // 1 & 2: Match explicitly scoped prefixes (project basename or multi-root child basename)
   for (const p of projects) {
     // 1. File path starts with project's basename (e.g. "trace-mcp/src/index.ts")
     const base = path.basename(p.root);
@@ -140,53 +141,62 @@ function resolveFileInRegisteredProjects(
         }
       }
     }
+  }
 
-    // 3. Direct subpath of a registered project root or multi-root container
-    // e.g. p.root is a multi-root container or project directory, and filePath is relative to it
-    const candDirect = path.resolve(p.root, filePath);
-    if (fs.existsSync(candDirect)) {
-      try {
-        if (fs.statSync(candDirect).isFile()) {
-          const anc = resolveRegisteredAncestor(candDirect);
-          const projRoot = anc ? anc.root : p.root;
-          const relPath = path.relative(projRoot, candDirect);
-          return { projectRoot: projRoot, relPath, absPath: candDirect };
-        }
-      } catch {}
-    }
-
-    // 4. Sibling worktrees: path starts with sibling directory name under p.root's parent
-    // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
-    const rootsToProbe = [p.root, ...(p.children ?? [])];
-    for (const r of rootsToProbe) {
-      const firstSlash = filePath.indexOf('/');
-      const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
-      const splitIdx =
-        firstSlash !== -1 && firstSep !== -1
-          ? Math.min(firstSlash, firstSep)
-          : firstSlash !== -1
-            ? firstSlash
-            : firstSep;
-      if (splitIdx > 0) {
-        const firstSegment = filePath.slice(0, splitIdx);
-        const subRel = filePath.slice(splitIdx + 1);
-        const candSiblingDir = path.resolve(path.dirname(r), firstSegment);
-        // Only match if candSiblingDir is actually a registered project root or ancestor
-        const anc = resolveRegisteredAncestor(candSiblingDir);
-        if (
-          anc &&
-          (path.resolve(anc.root) === path.resolve(candSiblingDir) || anc.type === 'multi-root')
-        ) {
-          const candFile = path.resolve(candSiblingDir, subRel);
-          if (fs.existsSync(candFile)) {
-            try {
-              if (fs.statSync(candFile).isFile()) {
-                const targetRoot = anc.type === 'multi-root' ? anc.root : anc.root;
-                const relPath = path.relative(targetRoot, candFile);
-                return { projectRoot: targetRoot, relPath, absPath: candFile };
-              }
-            } catch {}
+  // 3. Direct subpath of a registered multi-root container (e.g. assetfeed container holding
+  // unlisted worktrees/subdirs such as pplx-x-graph or scratchpad).
+  // Must be unambiguous across all registered multi-root containers: if multiple multi-root
+  // projects have a matching file at the same relative path (e.g. "shared/utils.ts"),
+  // reject as ambiguous to prevent silent cross-project leakage (TRA-2327).
+  const multiRootCandidates: ResolvedProjectFile[] = [];
+  for (const p of projects) {
+    if (p.type === 'multi-root') {
+      const candDirect = path.resolve(p.root, filePath);
+      if (fs.existsSync(candDirect)) {
+        try {
+          if (fs.statSync(candDirect).isFile()) {
+            const anc = resolveRegisteredAncestor(candDirect);
+            const projRoot = anc ? anc.root : p.root;
+            const relPath = path.relative(projRoot, candDirect);
+            multiRootCandidates.push({ projectRoot: projRoot, relPath, absPath: candDirect });
           }
+        } catch {}
+      }
+    }
+  }
+  if (multiRootCandidates.length === 1) {
+    return multiRootCandidates[0];
+  }
+  if (multiRootCandidates.length > 1) {
+    // Ambiguous match across multiple multi-root containers — do not guess
+    return null;
+  }
+
+  // 4. Sibling worktrees: path starts with sibling directory name under p.root's parent
+  // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
+  for (const p of projects) {
+    const firstSlash = filePath.indexOf('/');
+    const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
+    const splitIdx =
+      firstSlash !== -1 && firstSep !== -1
+        ? Math.min(firstSlash, firstSep)
+        : firstSlash !== -1
+          ? firstSlash
+          : firstSep;
+    if (splitIdx > 0) {
+      const firstSegment = filePath.slice(0, splitIdx);
+      const subRel = filePath.slice(splitIdx + 1);
+      const candSiblingDir = path.resolve(path.dirname(p.root), firstSegment);
+      // Only match if candSiblingDir is actually a registered project root or ancestor
+      const anc = resolveRegisteredAncestor(candSiblingDir);
+      if (anc && path.resolve(anc.root) === path.resolve(candSiblingDir)) {
+        const candFile = path.resolve(candSiblingDir, subRel);
+        if (fs.existsSync(candFile)) {
+          try {
+            if (fs.statSync(candFile).isFile()) {
+              return { projectRoot: anc.root, relPath: subRel, absPath: candFile };
+            }
+          } catch {}
         }
       }
     }

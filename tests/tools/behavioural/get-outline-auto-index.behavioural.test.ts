@@ -429,4 +429,56 @@ describe('get_outline — descendant projects and root sessions (TRA-2243)', () 
       unregisterProject(multiRootDir);
     }
   });
+
+  it('rejects ambiguous relative path present in multiple registered multi-root containers (TRA-2327)', async () => {
+    const projA = path.join(tmpDir, 'multi-proj-a');
+    const projB = path.join(tmpDir, 'multi-proj-b');
+    const childA = path.join(projA, 'app-a');
+    const childB = path.join(projB, 'app-b');
+    fs.mkdirSync(childA, { recursive: true });
+    fs.mkdirSync(childB, { recursive: true });
+    fs.mkdirSync(path.join(projA, 'shared'), { recursive: true });
+    fs.mkdirSync(path.join(projB, 'shared'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projA, 'shared', 'utils.ts'),
+      'export function utilsA(): string { return "a"; }\n',
+    );
+    fs.writeFileSync(
+      path.join(projB, 'shared', 'utils.ts'),
+      'export function utilsB(): string { return "b"; }\n',
+    );
+    registerProject(projA, { type: 'multi-root', children: [childA] });
+    registerProject(projB, { type: 'multi-root', children: [childB] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // shared/utils.ts exists in BOTH projA and projB, so direct subpath match is ambiguous
+      const res = await handler({ path: 'shared/utils.ts' });
+      expect(res.isError).toBe(true);
+      const body = JSON.parse(res.content[0].text);
+      expect(body.reason).toBe('filesystem_root_session');
+      expect(body.symbols).toBeUndefined();
+    } finally {
+      unregisterProject(projB);
+      unregisterProject(projA);
+    }
+  });
 });
