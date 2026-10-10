@@ -3503,3 +3503,59 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** moratorium holds, acquisition still unreadable. No submissions. Queue stands: StackMap first, aloth second, TensorBlock third.
 
 **Touch budget: 0 of 5 used.** No outgoing messages this run.
+
+### Morning pass (pass 2), 2026-10-10 (TRA-2317): open threads audit, MiniMax round 4 analysis, mention sweep verification, OpenCowork intelligence, competitor telemetry & security deep-dive
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `get-bb/marketplace#524`: OPEN, mergeable, zero comments. Awaiting maintainer review. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` for commit `bc461c77cef5facbdfc5a22de6aa64d5c11c2bf9`). Reviewer requested:
+  1. Guard against postinstall persistent side effects on first install (`TRACE_MCP_NO_POSTINSTALL=1`), preventing background LaunchAgent/daemon creation before bounded contract is established.
+  2. Prove backend provenance on existing-daemon attachment beyond fixed port `/health` (binding package version, PID, binary path, signature).
+  3. Wire smoke test into exact-head CI with enforced assertions rather than printed log statements.
+  4. Clarify transactional safety claims regarding multi-file refactors (document real preview/confirmation/rollback semantics rather than claiming atomic rollback).
+  *Note: Nikolai's dedicated lane — recorded, not touched.*
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN (conflicting with daily maintainer self-adds). Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` progressing with PR for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback architecture. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- External comment threads (`lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`): all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Re-verified both passes against live GitHub Code Search API. Pass 1 code query `trace-mcp` and pass 2 paired queries (`serena`, `repomix`, `codebase-memory-mcp`, `AGENTS.md`, `CLAUDE.md`) return zero repos outside `ops/mentions-seen.txt`. Sweep remains completely clean.
+
+**Ecosystem & Integration Scouting — OpenCowork (`OpenCoworkAI/open-cowork`):**
+- Repository: 2,198★, active Electron/Claude Code desktop wrapper app.
+- Codebase analysis of `src/main/mcp/software-dev-server-example.ts`: OpenCowork bundles a built-in Software Development MCP server that exposes `read_code_file` along with GUI automation tools (`start_gui_application`, `gui_interact_vision`, `gui_verify_vision`).
+- Key observation: in `readFile()`, file access is restricted purely by lexical path resolution (`path.resolve(WORKSPACE_DIR, filePath)` followed by `startsWith(WORKSPACE_DIR)`). Symlinks are not resolved or verified before reading (`fs.readFile(fullPath)`), mirroring the exact class of path confinement vulnerability found across agent desktop apps.
+- Furthermore, the code inspection shows OpenCowork currently relies on simple monolithic `read_code_file` calls for development tasks. Introducing `trace-mcp` code intelligence and AST indexing would drastically reduce token consumption for agent workflows in OpenCowork workspaces. Added to distribution prospective targets.
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2144: `Serena's file-access tools follow symlinks outside the project root, bypassing their own path-confinement check`. In Serena, `Project.is_path_in_project()` relied purely on lexical normalization (`os.path.normpath()`), intentionally allowing symlinks under the assumption that they point to project files. This allows malicious symlinks in repositories to disclose arbitrary local files (`~/.ssh/id_rsa`, `/etc/passwd`) or overwrite files outside the project root.
+  - In `trace-mcp`, symlink security is strictly enforced at every level: `src/utils/security.ts` (`validateWritePath`) verifies realpath confinement and explicitly rejects writing through symlinks; `src/utils/atomic-write.ts` rejects target symlinks; and `src/tools/refactoring/refactor.ts` aborts any codemod touching files resolving outside the project root via symlinks (TRA-1848).
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2576 (opened 2026-10-09): `TypeScript: import(…).T[] inside a generic call's type argument marks a valid file parse_partial and drops later declarations`. Valid TypeScript code fails parser recovery inside inline import types, causing the parser to abandon extraction and dropping 60%+ of symbol declarations from the graph.
+  - In `trace-mcp`, Tree-sitter AST parsing isolates node parse errors without abandoning subsequent AST siblings, ensuring continuous index extraction even across partially malformed syntax trees.
+- `tirth8205/code-review-graph`:
+  - Issue #1104: No-op `update` leaves stale FTS marked `complete` after `--skip-postprocess`. Confirms ongoing architectural struggles with maintaining SQLite FTS consistency across incremental updates and manual post-processing stages.
+
+**Competitor pulse (as of 2026-10-10 morning):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,775★, 1,575 forks.
+- `oraios/serena`: 30,138★, 2,052 forks.
+- `DeusData/codebase-memory-mcp`: 46,247★, 3,805 forks.
+- `tirth8205/code-review-graph`: 32,011★, 2,933 forks.
+- `colbymchenry/codegraph`: 73,625★, 4,740 forks.
+- `abhigyanpatwari/GitNexus`: 47,812★, 5,194 forks.
+- `continuedev/continue`: 36,161★, 5,459 forks.
+- `Aider-AI/aider`: 49,441★, 5,042 forks.
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
