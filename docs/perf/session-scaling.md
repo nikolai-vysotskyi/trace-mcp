@@ -138,6 +138,24 @@ would put back.
 
 ---
 
+## Field check, 2026-10-11: 56 live proxy sessions
+
+On the development Mac, a `ps` snapshot found 56 `dist/proxy.js serve` processes. Their summed
+RSS was 9,276.7 MB (median 169.9 MB per process, range 96.1–219.0 MB); 32 had been running for
+four days. All 56 still had a live parent process and none had been reparented to PID 1. The
+proxies together used 9.1% CPU at the instant sampled. This is evidence of a large **live**
+session population, not an orphan-process reproduction. Summed RSS counts shared pages in each
+process, so it must not be reported as 9.3 GB of unique physical memory.
+
+The 140–190 MB per-session range predicted by the N≤9 harness is consistent with the field
+median, but the harness has never tested N=56 or measured the machine's unique/private footprint
+at that scale. A follow-up memory experiment should record private footprint as well as RSS, and
+identify which clients keep sessions open for days before changing session lifetime behavior.
+Closing an otherwise healthy stdio session on an idle timer would remove tools from a client
+that may not reconnect, so this snapshot alone is not grounds for such a change.
+
+---
+
 ## Reproduction
 
 ```bash
