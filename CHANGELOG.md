@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.2...v3.36.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **daemon:** heap-pressure guard and V8 OOM attribution (TRA-2056) ([#1546](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1546)) ([87fa818](https://github.com/nikolai-vysotskyi/trace-mcp/commit/87fa818da426ae08a65875121b627a27d94ae771))
+* **indexer:** downgrade IndexAbortedError in watcher change handler to warn (TRA-1903) ([#1547](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1547)) ([9671213](https://github.com/nikolai-vysotskyi/trace-mcp/commit/96712131c900333fe8d7d5467754191a901f3d2e))
+* **indexer:** drop ML checkpoint tmp siblings and rate-limit ENOENT warnings (TRA-2326) ([#1542](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1542)) ([c6fa737](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6fa7371b8f17f4f18a5441c3459d11bd07c72fd))
+* **tools:** resolve get_outline relative paths to multi-root containers (TRA-2327) ([#1544](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1544)) ([e51f80a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e51f80a186639a13b7e5e3476d758b5c402eb71e))
+
+
+### Documentation
+
+* **perf:** record live proxy session footprint (TRA-2330) ([#1548](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1548)) ([71cc84d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/71cc84ddbc349daea602cd7a1aac8234cbb5bd98))
+
 ## [3.36.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.1...v3.36.2) (2026-10-10)
 
 
