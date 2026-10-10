@@ -82,4 +82,71 @@ describe('FileWatcher.stop() with an in-flight change handler', () => {
     await watcher.stop();
     expect(finished).toBe(true);
   });
+
+  it('downgrades IndexAbortedError from onChanges to warn during teardown (TRA-1903)', async () => {
+    const { logger } = await import('../../logger.js');
+    const { IndexAbortedError } = await import('../index-abort.js');
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+
+    try {
+      const watcher = new FileWatcher();
+      await watcher.start(
+        root,
+        {} as never,
+        async () => {
+          throw new IndexAbortedError('batch aborted');
+        },
+        1,
+      );
+
+      capturedCallback?.(null, [{ type: 'update', path: path.join(root, 'a.ts') }]);
+      // Allow debounce and onChanges handler to execute and complete
+      await new Promise((r) => setTimeout(r, 20));
+
+      await watcher.stop();
+
+      expect(errorSpy).not.toHaveBeenCalledWith(expect.anything(), 'File change handler failed');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.any(IndexAbortedError) }),
+        'File change handler aborted',
+      );
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs unexpected errors from onChanges as error (TRA-1903)', async () => {
+    const { logger } = await import('../../logger.js');
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+
+    try {
+      const watcher = new FileWatcher();
+      const failure = new Error('unexpected disk error');
+      await watcher.start(
+        root,
+        {} as never,
+        async () => {
+          throw failure;
+        },
+        1,
+      );
+
+      capturedCallback?.(null, [{ type: 'update', path: path.join(root, 'a.ts') }]);
+      await new Promise((r) => setTimeout(r, 20));
+
+      await watcher.stop();
+
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.anything(), 'File change handler aborted');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ error: failure }),
+        'File change handler failed',
+      );
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
 });
