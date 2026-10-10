@@ -3974,6 +3974,7 @@ program
         : 8;
     projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
       maxLoaded: configuredMaxLoadedProjects,
+      evictDeleted: true,
       onUnloaded: (roots) => {
         for (const root of roots) {
           // Same cleanup as the DELETE endpoint: without it the progress
