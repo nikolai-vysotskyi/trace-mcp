@@ -13,7 +13,7 @@
  *   npx tsx scripts/bench-session-scaling.ts --quick    # Smoke run: 5s idle, N=1,4
  */
 
-import { execFileSync, execSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -517,10 +517,14 @@ function ensureFixtureWorktree(): { path: string; cleanup: () => void } {
   const fixtureDir = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), 'tracemcp-bench-fixture-')),
   );
-  // Extract pinned commit tree into standalone directory
-  execSync(`git archive ${PINNED_COMMIT} | tar -x -C "${fixtureDir}"`, {
+  // Extract pinned commit tree into standalone directory via safe argv execution
+  const archive = execFileSync('git', ['archive', PINNED_COMMIT], {
     cwd: REPO_ROOT,
-    stdio: 'ignore',
+    maxBuffer: 100 * 1024 * 1024,
+  });
+  execFileSync('tar', ['-x', '-C', fixtureDir], {
+    input: archive,
+    stdio: ['pipe', 'ignore', 'ignore'],
   });
   execFileSync('git', ['init', fixtureDir], { stdio: 'ignore' });
   execFileSync('git', ['-C', fixtureDir, 'config', 'user.name', 'bench'], {

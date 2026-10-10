@@ -791,7 +791,10 @@ function extractInterpolatedExprs(line: string): string[] {
       if (depth === 0) break;
       j++;
     }
-    if (depth !== 0) break;
+    if (depth !== 0) {
+      exprs.push(line.slice(i + 2).trim() || '<unclosed>');
+      break;
+    }
     exprs.push(line.slice(i + 2, j).trim());
     i = j;
   }
@@ -1087,41 +1090,116 @@ function hasFixedAuthority(line: string, lines: string[], fromLine: number): boo
  * Identify low-risk command_injection shapes. Returns one of:
  *  - "open"     — GUI file-open commands (open/xdg-open/start) with a path arg,
  *  - "which"    — `which X` lookup (read-only PATH probe),
- *  - "taskkill" — Windows `taskkill /PID X` with a numeric/pid-bound arg,
+ *  - "taskkill" — Windows `taskkill /PID X` with a literal process.pid or numeric literal arg,
+ *  - "ps"       — POSIX `ps ... -p X` with a literal process.pid or numeric literal arg,
  *  - null       — no known safe shape.
  */
-function classifyCommandInjection(
-  line: string,
-  lines: string[],
-  fromLine: number,
-): 'open' | 'which' | 'taskkill' | null {
-  // Match fixed-verb GUI openers.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+/.test(line)) {
-    return 'open';
+function isSafeCallTail(tail: string): boolean {
+  const trimmed = tail.trim();
+  if (trimmed === '') return true;
+  // If there is a second argument, it must be a closed options object literal on the same line
+  const match = /^\s*,\s*\{([^}]*)\}\s*$/.exec(trimmed);
+  if (!match) return false;
+
+  // Fail-closed on spread operators, computed keys, escape sequences, or interpolations
+  if (
+    trimmed.includes('...') ||
+    trimmed.includes('[') ||
+    trimmed.includes('\\') ||
+    trimmed.includes('${')
+  ) {
+    return false;
   }
-  // `which X` — argument controls only which binary is looked up.
-  if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{/.test(line)) return 'which';
-  // `taskkill /PID X` — check whether the interpolated value is a numeric literal,
-  // or bound to one of `pid` / `process.pid` / `child.pid` in the same function.
-  const tk =
-    /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+\/PID\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
-      line,
-    );
-  if (tk) {
-    const ident = tk[1];
-    if (/^(?:process\.pid|child\.pid)$/.test(ident)) return 'taskkill';
-    if (/^-?\d+$/.test(ident)) return 'taskkill';
-    // Look upward in the same file for `const ident = readDaemonPid()` or
-    // a numeric assignment — pragmatic heuristic.
-    const headIdent = ident.split('.')[0];
-    const pidAssignRe = new RegExp(
-      `(?:const|let|var)\\s+${headIdent}\\b[^=]*=\\s*(?:readDaemonPid|process\\.pid|child\\.pid|\\d+|.+\\.pid\\b)`,
-    );
-    for (let i = 0; i < lines.length; i++) {
-      if (i === fromLine) continue;
-      if (pidAssignRe.test(lines[i])) return 'taskkill';
+  // Options must not configure a custom shell or environment
+  if (/\b(?:shell|env)\b/i.test(trimmed)) return false;
+
+  const inner = match[1].trim();
+  if (inner === '') return true;
+
+  // Every option entry must be a strict `key: <literal>` pair.
+  // Variables (e.g. { cwd: dir }), shorthand properties ({ dir }), and expressions are strictly rejected.
+  const entries = inner
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+  for (const entry of entries) {
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx === -1) {
+      // Shorthand property like { dir } -> variable reference, fail closed!
+      return false;
+    }
+    const key = entry.slice(0, colonIdx).trim();
+    const val = entry.slice(colonIdx + 1).trim();
+
+    // Key must be an unquoted identifier or single/double-quoted string
+    if (!/^[a-zA-Z_$][\w$]*$|^'[^']*'$|^"[^"]*"$/.test(key)) return false;
+    if (/\b(?:shell|env)\b/i.test(key)) return false;
+
+    // Value must be a literal (string, number, boolean, null, undefined) directly in the call
+    const isStringLiteral = /^'[^']*'$|^"[^"]*"$/.test(val);
+    const isNumberLiteral = /^-?\d+(?:\.\d+)?$/.test(val);
+    const isBooleanLiteral = /^(?:true|false)$/.test(val);
+    const isNullOrUndefined = /^(?:null|undefined)$/.test(val);
+
+    if (!isStringLiteral && !isNumberLiteral && !isBooleanLiteral && !isNullOrUndefined) {
+      // Variable reference or non-literal value -> fail closed!
+      return false;
     }
   }
+
+  return true;
+}
+
+function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' | 'ps' | null {
+  // Fail-closed if multiple command execution sinks appear on the same line.
+  // A safe invocation must be an isolated call; multiple sinks on one line
+  // could mask a critical injection on the same line.
+  // Matched without word-boundary anchor so any variation (execSync, safeexec, _exec)
+  // is counted as a sink call, avoiding desync with detection patterns.
+  // Also recognizes optional-chaining calls like exec?.( or execSync?.(
+  const sinkCalls = line.match(/(?:exec|execSync|spawnSync)\s*(?:\?\.)?\s*\(/g);
+  if (sinkCalls && sinkCalls.length > 1) {
+    return null;
+  }
+
+  // Match fixed-verb GUI openers with a single, closed template literal argument.
+  const openMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+[^`]*`([^;)]*)\)/.exec(
+      line,
+    );
+  if (openMatch && isSafeCallTail(openMatch[1])) {
+    return 'open';
+  }
+
+  // `which X` — only literal string argument in closed template literal is demoted.
+  // Variables are never demoted as they can carry untrusted user input regardless of variable name.
+  const whichMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{\s*['"][a-zA-Z0-9_.-]+['"]\s*\}`([^;)]*)\)/.exec(
+      line,
+    );
+  if (whichMatch && isSafeCallTail(whichMatch[1])) {
+    return 'which';
+  }
+
+  // taskkill /PID X — strictly process.pid or numeric literal, single closed template literal argument.
+  // Case-insensitive /i flag is omitted so ${process.pid} is strictly case-sensitive.
+  const taskkillMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+[^`$]*\/(?:PID|pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/.exec(
+      line,
+    );
+  if (taskkillMatch && isSafeCallTail(taskkillMatch[1])) {
+    return 'taskkill';
+  }
+
+  // ps ... -p/--pid X — strictly process.pid or numeric literal, single closed template literal argument.
+  const psMatch =
+    /(?<![\w$])(?:exec|execSync|spawnSync)\s*\(\s*`ps\s+[^`$]*(?:-p|--pid)\s+\$\{(?:process\.pid|-?\d+)\}[^`$]*`([^;)]*)\)/.exec(
+      line,
+    );
+  if (psMatch && isSafeCallTail(psMatch[1])) {
+    return 'ps';
+  }
+
   return null;
 }
 
@@ -1396,8 +1474,8 @@ export function scanSecurity(
               }
             }
 
-            if (rule.key === 'command_injection' && usesTemplate) {
-              const cmdShape = classifyCommandInjection(line, lines, lineIdx);
+            if (rule.key === 'command_injection' && pattern.regex.source.includes('`')) {
+              const cmdShape = classifyCommandInjection(line);
               if (cmdShape === 'open') {
                 // GUI file-open verb with a path our process produced.
                 severity = 'medium';
@@ -1414,6 +1492,11 @@ export function scanSecurity(
                 confidence = 'low';
                 fixOverride =
                   '`taskkill /PID X` argument bound to a known numeric PID; verify the source of the PID.';
+              } else if (cmdShape === 'ps') {
+                severity = 'low';
+                confidence = 'low';
+                fixOverride =
+                  '`ps -p X` argument bound to a known numeric PID; verify the source of the PID.';
               }
             }
 

@@ -12,7 +12,7 @@
  *
  * macOS/Linux only — reads RSS from `ps`.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
@@ -22,7 +22,14 @@ const ROOT = resolve(process.env.EXTRACT_ROOT ?? process.cwd());
 const FILES = (process.env.EXTRACT_FILES ?? 'src/cli.ts').split(',');
 const N = Number(process.env.N ?? 8);
 
-const rss = () => Number(execSync(`ps -o rss= -p ${process.pid}`).toString().trim()) / 1024;
+// Numeric process.pid cannot introduce shell metacharacters (CWE-78 false positive);
+// execFileSync avoids shell invocation entirely.
+const rss = () =>
+  Number(
+    execFileSync('ps', ['-o', 'rss=', '-p', String(process.pid)])
+      .toString()
+      .trim(),
+  ) / 1024;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const show = (label, mb, base) =>
   console.log(

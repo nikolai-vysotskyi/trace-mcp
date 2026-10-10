@@ -5,7 +5,7 @@
  * the safety signal removed, so a precision fix cannot silently cost recall.
  */
 import { execSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, test } from 'vitest';
@@ -302,6 +302,912 @@ export function openReport(outputPath: string): void {
     expect(findings).toHaveLength(1);
     expect(findings[0].rule_id).toBe('CWE-78');
     expect(findings[0].severity).toBe('critical');
+  });
+
+  test('demotes ps -p ${process.pid} queries to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/rss.mjs',
+      `
+const rss = () => Number(execSync(\`ps -o rss= -p \${process.pid}\`).toString().trim()) / 1024;
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('still detects ps with an untrusted arbitrary command or non-pid interpolation', () => {
+    writeFile(
+      store,
+      'scripts/ps-bad.mjs',
+      `
+function run(untrusted) {
+  execSync(\`ps \${untrusted}\`);
+}
+`,
+      'javascript',
+    );
+    const findings = scan(['command_injection']).findings;
+    expect(findings).toHaveLength(1);
+    expect(findings[0].severity).toBe('critical');
+    expect(findings[0].confidence).toBe('high');
+  });
+
+  test('does not demote ps when pid comes from external input (req.query.pid) assigned to variable', () => {
+    writeFile(
+      store,
+      'src/handlers/process.js',
+      `
+function handle(req) {
+  const value = req.query.pid;
+  execSync(\`ps -o rss= -p \${value}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when req.query.pid is interpolated directly', () => {
+    writeFile(
+      store,
+      'src/handlers/process-direct.js',
+      `
+function handle(req) {
+  execSync(\`ps -o rss= -p \${req.query.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when pid is in a local variable even if assigned from process.pid', () => {
+    writeFile(
+      store,
+      'scripts/rss-var.mjs',
+      `
+function check() {
+  const pid = process.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when variable is reassigned to untrusted input', () => {
+    writeFile(
+      store,
+      'src/handlers/reassign.js',
+      `
+function handle(req) {
+  let pid = process.pid;
+  pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when fallback || operator is used on RHS', () => {
+    writeFile(
+      store,
+      'src/handlers/fallback.js',
+      `
+function handle(req) {
+  const pid = process.pid || req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when number + fallback || operator is used on RHS', () => {
+    writeFile(
+      store,
+      'src/handlers/num-fallback.js',
+      `
+function handle(req) {
+  const pid = 0 || req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when safe pid is in another function in the same file', () => {
+    writeFile(
+      store,
+      'src/handlers/other-func.js',
+      `
+function safe() {
+  const pid = process.pid;
+  return pid;
+}
+function unsafe(req) {
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when two declarations are on the same line', () => {
+    writeFile(
+      store,
+      'src/handlers/multi-decl.js',
+      `
+function handle(req) {
+  let pid; const n = 5;
+  pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when child is an arbitrary object', () => {
+    writeFile(
+      store,
+      'src/handlers/child-obj.js',
+      `
+function handle(req) {
+  const child = req.body;
+  const pid = child.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when pid is reassigned to untrusted input', () => {
+    writeFile(
+      store,
+      'src/handlers/taskkill-reassign.js',
+      `
+function readDaemonPid() { return 1234; }
+function stop(req) {
+  let pid = readDaemonPid();
+  pid = req.query.pid;
+  execSync(\`taskkill /PID \${pid} /T /F\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when pid is a function parameter with default value', () => {
+    writeFile(
+      store,
+      'src/handlers/param-default.js',
+      `
+function handle(pid = process.pid) {
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes ps -p ${1234} numeric literal queries to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/rss-lit.mjs',
+      `
+const rss = () => Number(execSync(\`ps -o rss= -p \${1234}\`).toString().trim()) / 1024;
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('demotes taskkill /PID ${process.pid} to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/kill-self.mjs',
+      `
+execSync(\`taskkill /PID \${process.pid} /T /F\`);
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('demotes taskkill /PID ${1234} numeric literal to low confidence', () => {
+    writeFile(
+      store,
+      'scripts/kill-lit.mjs',
+      `
+execSync(\`taskkill /PID \${1234} /T /F\`);
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].confidence).toBe('low');
+    expect(all.findings[0].severity).toBe('low');
+  });
+
+  test('does not demote ps when multiple statements on one line reassign pid', () => {
+    writeFile(
+      store,
+      'src/handlers/multistmt.js',
+      `
+function handle(req) {
+  let pid = process.pid; pid = req.query.pid;
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when closure mutates outer pid variable', () => {
+    writeFile(
+      store,
+      'src/handlers/closure-write.js',
+      `
+function handle(req) {
+  let pid = process.pid;
+  const set = (r) => { pid = r.query.pid; };
+  set(req);
+  execSync(\`ps -o rss= -p \${pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when method has default parameters', () => {
+    writeFile(
+      store,
+      'src/handlers/method-default.js',
+      `
+class Service {
+  kill(pid = defaults(), opts = defaults()) {
+    execSync(\`ps -o rss= -p \${pid}\`);
+  }
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when pid is iterated in for...of loop', () => {
+    writeFile(
+      store,
+      'src/handlers/for-loop.js',
+      `
+function handle(req) {
+  for (const pid of req.body.pids) {
+    execSync(\`ps -o rss= -p \${pid}\`);
+  }
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when untrusted interpolation is present alongside process.pid', () => {
+    writeFile(
+      store,
+      'scripts/ps-multi.mjs',
+      `
+function run(untrusted) {
+  execSync(\`ps -o rss= -p \${process.pid} \${untrusted}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when pid is in a variable even if assigned from process.pid', () => {
+    writeFile(
+      store,
+      'scripts/kill-var.mjs',
+      `
+function stop() {
+  const pid = process.pid;
+  execSync(\`taskkill /PID \${pid} /T /F\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  // -------------------------------------------------------------------
+  // 5a. Sink-isolation regressions (Round 4 review findings)
+  // -------------------------------------------------------------------
+
+  test('does not demote ps when concatenation follows template literal', () => {
+    writeFile(
+      store,
+      'scripts/ps-concat.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\` + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when template literal continues on the next line', () => {
+    writeFile(
+      store,
+      'scripts/ps-multiline.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid} \\
+    \${req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when unclosed ${ interpolation is present on the line', () => {
+    writeFile(
+      store,
+      'scripts/ps-unclosed.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid} \${
+    req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote when two command injection sinks appear on the same line (safe ps + unsafe concat)', () => {
+    writeFile(
+      store,
+      'scripts/multi-sink.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`); execSync('rm ' + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote when two command injection sinks appear on the same line (safe ps + unsafe template)', () => {
+    writeFile(
+      store,
+      'scripts/multi-sink-template.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`); execSync(\`rm \${req.query.x}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote taskkill when concatenation follows template literal', () => {
+    writeFile(
+      store,
+      'scripts/kill-concat.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\` + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when two sinks appear on the same line', () => {
+    writeFile(
+      store,
+      'scripts/kill-multi.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\`); execSync('rm ' + req.query.x);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  // -------------------------------------------------------------------
+  // 5b. Guard-demotion sync and second-argument options (Round 5 review)
+  // -------------------------------------------------------------------
+
+  test('does not demote when line has dangerous execSync alongside safeexec', () => {
+    writeFile(
+      store,
+      'scripts/safeexec-multi.mjs',
+      `
+function run(req) {
+  execSync(\`sh -c \${req.body.cmd}\`); safeexec(\`ps -p \${process.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote ps when second argument provides dangerous shell option', () => {
+    writeFile(
+      store,
+      'scripts/ps-shell-opt.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`, { shell: req.query.x });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when second argument provides dangerous env option', () => {
+    writeFile(
+      store,
+      'scripts/ps-env-opt.mjs',
+      `
+function run(req) {
+  execSync(\`ps -p \${process.pid}\`, { env: req.body });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when second argument provides dangerous shell option', () => {
+    writeFile(
+      store,
+      'scripts/kill-shell-opt.mjs',
+      `
+function run(req) {
+  execSync(\`taskkill /PID \${process.pid} /F\`, { shell: req.query.x });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  // -------------------------------------------------------------------
+  // 5c. Case sensitivity, options key obfuscation, optional chaining (Round 6)
+  // -------------------------------------------------------------------
+
+  test('does not demote taskkill when pid interpolation has uppercase PROCESS.PID', () => {
+    writeFile(
+      store,
+      'scripts/kill-case.mjs',
+      `
+function run() {
+  execSync(\`taskkill /F /PID \${PROCESS.PID}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains spread operator', () => {
+    writeFile(
+      store,
+      'scripts/ps-spread.mjs',
+      `
+function run(userOpts) {
+  execSync(\`ps -p \${process.pid}\`, { ...userOpts });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains computed key', () => {
+    writeFile(
+      store,
+      'scripts/ps-computed.mjs',
+      `
+function run(k, userShell) {
+  execSync(\`ps -p \${process.pid}\`, { [k]: userShell });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote ps when options object contains unicode escape sequence in key', () => {
+    writeFile(
+      store,
+      'scripts/ps-unicode-opt.mjs',
+      `
+function run(userShell) {
+  execSync(\`ps -p \${process.pid}\`, { \\u0073hell: userShell });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote when line has optional-chaining exec sink alongside safe ps', () => {
+    writeFile(
+      store,
+      'scripts/optional-chain-multi.mjs',
+      `
+function run(req) {
+  exec?.(\`rm \${req.query.x}\`); execSync(\`ps -p \${process.pid}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings.length).toBeGreaterThanOrEqual(1);
+    const critical = def.findings.filter((f) => f.severity === 'critical');
+    expect(critical.length).toBeGreaterThanOrEqual(1);
+    expect(critical[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not demote which when variable is interpolated (PoC: const binary = req.query.cmd)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-binary.mjs',
+      `
+function run(req) {
+  const binary = req.query.cmd;
+  execSync(\`which \${binary}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is interpolated (PoC: const cmd = req.query.name)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-cmd.mjs',
+      `
+function run(req) {
+  const cmd = req.query.name;
+  execSync(\`which \${cmd}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is interpolated (PoC: const command = process.argv[2])', () => {
+    writeFile(
+      store,
+      'scripts/which-var-command.mjs',
+      `
+function run() {
+  const command = process.argv[2];
+  execSync(\`which \${command}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when variable is destructured (PoC: const { bin } = body)', () => {
+    writeFile(
+      store,
+      'scripts/which-var-destructure.mjs',
+      `
+function run(body) {
+  const { bin } = body;
+  spawnSync(\`which \${bin}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote which when interpolation contains property access (e.g. req.query.cmd)', () => {
+    writeFile(
+      store,
+      'scripts/which-req-query.mjs',
+      `
+function run(req) {
+  execSync(\`which \${req.query.cmd}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('does not demote taskkill when cwd option is a variable (PoC: const dir = req.query.path)', () => {
+    writeFile(
+      store,
+      'scripts/taskkill-var-dir.mjs',
+      `
+function stop(req) {
+  const dir = req.query.path;
+  execSync(\`taskkill /PID \${process.pid}\`, { cwd: dir });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(1);
+    expect(def.findings[0].rule_id).toBe('CWE-78');
+    expect(def.findings[0].severity).toBe('critical');
+    expect(def.findings[0].confidence).toBe('high');
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('drops which when interpolation is a literal string constant', () => {
+    writeFile(
+      store,
+      'scripts/which-literal.mjs',
+      `
+function isAvailable() {
+  execSync(\`which \${'node'}\`);
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(0);
+  });
+
+  test('demotes taskkill when cwd option is a literal string directly in the call', () => {
+    writeFile(
+      store,
+      'scripts/taskkill-literal-cwd.mjs',
+      `
+function stop() {
+  execSync(\`taskkill /PID \${process.pid}\`, { cwd: '/var/log' });
+}
+`,
+      'javascript',
+    );
+    const def = scan(['command_injection']);
+    expect(def.findings).toHaveLength(0);
+    expect(def.suppressed_low_confidence).toBe(1);
+
+    const all = scan(['command_injection'], { includeLow: true });
+    expect(all.findings).toHaveLength(1);
+    expect(all.findings[0].severity).toBe('low');
+    expect(all.findings[0].confidence).toBe('low');
   });
 
   // -------------------------------------------------------------------
