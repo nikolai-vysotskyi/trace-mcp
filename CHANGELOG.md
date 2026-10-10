@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.0...v3.36.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **daemon:** evict deleted projects and clean orphan DBs in sweep (TRA-2313) ([#1535](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1535)) ([bffb450](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bffb4502cdc5b982c61feb617d1ea3096bb204fd))
+* **security:** triage three utility script findings and harden scanner precision (TRA-2258) ([#1509](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1509)) ([8cdef74](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8cdef749c44f6d3024a8e8a836a9c1f2c8c8264f))
+
+
+### Documentation
+
+* **ops:** morning pass 2026-10-10, threads audit, OpenCowork, competitor analysis (TRA-2317) ([#1537](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1537)) ([54e1404](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54e140491ef01be6071c060ed3d13d6c262658f0))
+
 ## [3.36.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.35.0...v3.36.0) (2026-10-10)
 
 
