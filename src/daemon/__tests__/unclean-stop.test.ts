@@ -9,9 +9,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  formatOomCrashes,
   formatStallAlerts,
   getStallAlertsPath,
   logUncleanStopDiagnosis,
+  readRecentOomCrashes,
   readRecentStallAlerts,
   summarizeStallAlerts,
 } from '../unclean-stop.js';
@@ -170,5 +172,54 @@ describe('logUncleanStopDiagnosis', () => {
       }),
     ).not.toThrow();
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('attributes a V8 OOM crash report as the likely cause (TRA-2056)', () => {
+    vi.mocked(logger.warn).mockClear();
+    logUncleanStopDiagnosis({
+      daemonStarts: 10,
+      daemonUncleanStops: 2,
+      launchdExit: null,
+      stallSummary: summarizeStallAlerts([]),
+      oomCrash: {
+        path: '/tmp/DiagnosticReports/node-2026-09-28-184029.ips',
+        mtimeMs: 1,
+        pid: 41711,
+      },
+    });
+    const [fields] = vi.mocked(logger.warn).mock.calls[0] as [Record<string, unknown>, string];
+    expect(String(fields.likelyCause)).toContain('V8');
+    expect(String(fields.likelyCause)).toContain('OOM');
+    expect(fields.oomCrashPid).toBe(41711);
+  });
+});
+
+describe('readRecentOomCrashes (TRA-2056)', () => {
+  function writeIps(dir: string, name: string, body: string): void {
+    fs.writeFileSync(path.join(dir, name), body, 'utf-8');
+  }
+
+  it('returns [] for a missing dir instead of throwing', () => {
+    expect(readRecentOomCrashes(path.join(os.tmpdir(), 'trace-no-such-dir-oom'))).toEqual([]);
+  });
+
+  it('matches the TRA-2056 signature and skips non-daemon reports', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-oom-'));
+    writeIps(
+      dir,
+      'node-2026-09-28-184029.ips',
+      '{"coalitionName" : "com.trace-mcp.server", "pid" : 41711}\n' +
+        'v8::internal::Heap::FatalProcessOutOfMemory node::OOMErrorHandler abort',
+    );
+    writeIps(dir, 'node-2026-09-28-190000.ips', '{"coalitionName" : "com.other.app"} SIGABRT');
+    writeIps(dir, 'other.txt', 'coalitionName com.trace-mcp.server FatalProcessOutOfMemory');
+    const found = readRecentOomCrashes(dir);
+    expect(found).toHaveLength(1);
+    expect(found[0].pid).toBe(41711);
+    expect(found[0].path).toContain('node-2026-09-28-184029.ips');
+    expect(formatOomCrashes(found)).toHaveLength(1);
+    expect(formatOomCrashes(found)[0]).toContain('OOM');
+    expect(formatOomCrashes([])).toEqual([]);
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

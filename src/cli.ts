@@ -23,10 +23,12 @@ import {
 import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/exit-breadcrumb.js';
 import {
   logUncleanStopDiagnosis,
+  readRecentOomCrashes,
   readRecentStallAlerts,
   STALL_ALERTS_FILENAME,
   summarizeStallAlerts,
 } from './daemon/unclean-stop.js';
+import { startHeapGuard } from './daemon/heap-guard.js';
 import {
   printTelemetryNoticeOnce,
   readDaemonReliabilityCounters,
@@ -3723,6 +3725,9 @@ program
     // "daemon dead". Started in the listen() callback below, stopped here.
     let lagMonitor: EventLoopLagMonitor | null = null;
     let stallWatchdog: StallWatchdog | null = null;
+    // TRA-2056: heap-pressure guard timer — stopped here so shutdown never
+    // re-triggers a restart mid-drain.
+    let stopHeapGuard: (() => void) | null = null;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -3859,6 +3864,12 @@ program
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
       clearInterval(journalSilenceCheck);
+      try {
+        stopHeapGuard?.();
+      } catch {
+        /* best-effort */
+      }
+      stopHeapGuard = null;
       try {
         stopActivityWatchdog?.();
       } catch {
@@ -4026,6 +4037,21 @@ program
         };
       },
     });
+    // Heap-pressure guard (TRA-2056): a V8 OOM aborts mid-request with no JS
+    // handler, so warn early and restart gracefully (drain via shutdown(),
+    // letting launchd respawn) instead of dying by SIGABRT at the ceiling.
+    // Disabled with TRACE_MCP_HEAP_GUARD=0.
+    if (process.env.TRACE_MCP_HEAP_GUARD !== '0') {
+      stopHeapGuard = startHeapGuard({
+        getContext: () => ({
+          projectsLoaded: projectManager.listProjects().length,
+          reindexInFlight: countReindexingProjects(),
+        }),
+        onRestart: () => {
+          void shutdown('heap-pressure');
+        },
+      });
+    }
     // Track activity: wrap the client/session/SSE mutation points in-place via
     // a ticker that re-evaluates on every /health check (cheap, idempotent).
     // Plus explicit hook below on key mutations.
@@ -4170,6 +4196,9 @@ program
           daemonUncleanStops: counters.uncleanStops,
           launchdExit: getLaunchdLastExit(),
           stallSummary: summarizeStallAlerts(readRecentStallAlerts()),
+          // TRA-2056: a V8 heap OOM aborts via SIGABRT with no JS handler —
+          // the .ips crash report is the only post-mortem besides vitals.
+          oomCrash: readRecentOomCrashes()[0] ?? null,
         });
       }
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
