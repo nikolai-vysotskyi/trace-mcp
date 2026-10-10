@@ -58,6 +58,10 @@ export function setupProject(
 ): ProjectSetupResult {
   const absRoot = path.resolve(projectRoot);
 
+  if (!fs.existsSync(absRoot)) {
+    throw new Error(`Project directory does not exist: "${absRoot}"`);
+  }
+
   // Already-registered roots resolve without touching any gate below: an
   // implicit `setupProject` during daemon boot (`loadAllRegistered`), lazy
   // reload, or a `POST /api/projects` re-add must keep working under
