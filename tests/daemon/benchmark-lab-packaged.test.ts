@@ -56,10 +56,12 @@ describe('benchmark-lab in packaged distribution (TRA-2298)', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tmcp-packaged-lab-'));
 
     // 1. Pack the package into a tarball exactly as published to npm
-    const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+    const isWin = process.platform === 'win32';
+    const pnpmBin = isWin ? 'pnpm.cmd' : 'pnpm';
     execFileSync(pnpmBin, ['pack', '--pack-destination', tmpDir], {
       cwd: REPO_ROOT,
       stdio: 'pipe',
+      shell: isWin,
     });
 
     const tarball = fs.readdirSync(tmpDir).find((f) => f.endsWith('.tgz'));
