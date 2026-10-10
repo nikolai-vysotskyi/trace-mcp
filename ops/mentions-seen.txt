@@ -264,3 +264,6 @@ jfjordanfarr/Live-Documentation
 # Name collision: LLM agent harness with internal iknow-trace-mcp server
 # (docs/trace-mcp-server.md, src/trace-mcp/) exposing session transcript trace querying tools:
 winter6205/iknow
+
+# Genuine marketplace listing: merged 2026-10-10 (PR #524 by SawyerHood), live in entries/trace-mcp.json:
+get-bb/marketplace
