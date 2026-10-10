@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.35.0...v3.36.0) (2026-10-10)
+
+
+### Features
+
+* **integrations:** deepen bb context and memory workflow ([#1531](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1531)) ([31ebfd7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/31ebfd7a1d7f03afd1cbf6f2ba8cf0593f775c2b))
+
+
+### Bug Fixes
+
+* **benchmark-lab:** ship pinned fixtures in distribution package (TRA-2298) ([#1523](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1523)) ([3c68641](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3c686414b12ad7e6acdcc9064e65fe1ae59e11d7))
+* **cli:** route index-file to registered container (TRA-2299) ([#1522](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1522)) ([dfd2f5d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dfd2f5d78156fdd3ecebb88de1e10f819f3ede59))
+* **indexer:** ignore cancelled dropped-event reconcile ([#1529](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1529)) ([8f0bd0d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f0bd0d76a407802d5b7447a8134e1125781873d))
+* **indexer:** keep daemon responsive during bulk discovery (TRA-2305) ([#1532](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1532)) ([a4bd2d4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a4bd2d4caf0ca8443868b0de5268c4a7710c51ad))
+* **indexer:** recover from SQLITE_BUSY on initial rebuild and use immediate transactions (TRA-2257) ([#1528](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1528)) ([adbce81](https://github.com/nikolai-vysotskyi/trace-mcp/commit/adbce81ef28274cc2bce0d311d78404067a3c80f))
+* **indexer:** skip php-calls edges with nodes deleted mid-pass (TRA-2249) ([#1526](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1526)) ([3ca9f53](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ca9f53ec2d7e84f6b7d1642ce9896b6f4a88805))
+* **test:** isolate plugin integration test runner and exclude from root vitest (TRA-2307) ([#1534](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1534)) ([7bd676c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7bd676c9fcaa4a9308f5e8d7309544542267c9f6))
+
+
+### Documentation
+
+* **ops:** night pass 2026-10-10, collision audit, CRG/Serena/Semble deep-dive (TRA-2302) ([#1527](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1527)) ([6f0257a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f0257a609dc942ced810c2bf0b1b7c70c85a51f))
+* **ops:** record bb plugin v0.2 submission ([#1533](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1533)) ([b7755d1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b7755d16537f8954865393e8a20eaee6d9e008b4))
+
+
+### CI/CD
+
+* run Semgrep via pipx to avoid Docker Hub rate limit (TRA-2301) ([#1525](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1525)) ([5c246b1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c246b122348c9eb021bddcbb52944e9afa00262))
+
 ## [3.35.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.34.8...v3.35.0) (2026-10-09)
 
 
