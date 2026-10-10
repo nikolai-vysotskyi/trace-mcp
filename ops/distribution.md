@@ -3607,3 +3607,58 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Evening pass (pass 4), 2026-10-10 (TRA-2322): ecosystem scouting (ECC, CC-Switch, claude-mem), Graphify deduplication triage, competitor pulse & outreach audit
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads & external PR audit (via GitHub API read-only):**
+- `get-bb/marketplace#524`: OPEN, mergeable, 0 comments. Awaiting maintainer review. Standing no-ping rule holds.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action.
+- `Dokploy/mcp#81`: OPEN, community-led PR in progress.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- **Touch budget: 0 of 5 used.** All standing rules respected; no unsolicited pings sent.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Executed both pass 1 and pass 2 against live GitHub Code Search API.
+- Result: 0 new hits outside `ops/mentions-seen.txt`. Sweep clean.
+
+**Ecosystem & Integration Scouting:**
+- `affaan-m/ECC` (276,272★, agent harness optimization system for Claude Code / Codex / Cursor):
+  - Architecture audit: ECC ships bundled MCP configs in `mcp-configs/mcp-servers.json` (e.g. `context7`, `token-optimizer`, `codescene`).
+  - `token-optimizer` is currently bundled with a note promising "Token optimization for 95%+ context reduction via content deduplication and compression".
+  - Opportunity: `trace-mcp` is an ideal partner/server candidate for ECC harness setups because trace-mcp provides structural AST map extraction instead of raw file dumping, preventing context window saturation in large codebases. ECC specifically documents community MCP submissions in `CONTRIBUTING.md`. Prospective target logged; evaluating non-intrusive PR strategy per repo contribution guidelines.
+- `farion1231/cc-switch` (142,347★, cross-platform Tauri/Rust desktop assistant for Claude Code / Codex / OpenCode / Hermes):
+  - Codebase audit: `src-tauri/src/mcp/` implements native MCP config validation (`validation.rs`) and Windows `cmd /c` wrapping for `npx`/`node` stdio servers (`claude_mcp.rs`).
+  - Validates `stdio`/`http`/`sse` types and generates `.mcp.json` configs for supported harnesses.
+  - Adding `trace-mcp` preset to CC-Switch's built-in MCP manager would give 140k+ desktop agent developers 1-click installation of trace-mcp. Prospective target logged.
+- `thedotmack/claude-mem` (99,119★, persistent context across agent sessions):
+  - Bundles its own `mcp-search` stdio server launched via Node inline runner in `plugin/.mcp.json`. Complementary memory architecture: claude-mem handles episodic cross-session memory, while trace-mcp provides static codebase AST navigation.
+
+**Competitor intelligence & architectural observations:**
+- `Graphify-Labs/graphify`:
+  - Issue #4281 (opened 2026-10-10): `Node IDs drop the file extension (and doc IDs the path), so distinct entities in x.py/x.html or a/x.md/b/x.md collide and one is lost`. Graphify strips extensions from file stems and drops relative paths from doc nodes during extraction, causing distinct files (e.g. `portal.py` vs `portal.html`, or `docs/protocol.md` vs `docs/firmware/protocol.md`) to generate colliding node IDs (`firmware_lib_portal`), dropping one node completely during deduplication (`dedup.py:505`).
+  - In `trace-mcp`, node identifiers preserve the full canonical project-relative path including extension and precise line/column AST coordinates (`${filePath}#${symbolName}@${range}`). Distinct files sharing a base stem never collide, guaranteeing 100% symbol retention.
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2577 (opened 2026-10-10): `Use bounded streaming compression for artifact export instead of whole-snapshot buffers`. In `cbm_artifact_export`, the pipeline allocates and reads the entire SQLite snapshot into memory (`read_file_alloc`) and simultaneously allocates worst-case `cbm_zstd_compress_bound` output buffer, causing severe memory spikes on large repositories during export.
+  - In `trace-mcp`, SQLite exports and index cache serialization utilize streaming disk writes with bounded chunk sizes, avoiding multi-gigabyte memory spikes.
+
+**Competitor pulse (2026-10-10 evening):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,780★ (+1), 1,575 forks.
+- `oraios/serena`: 30,155★ (+9), 2,051 forks (-1).
+- `DeusData/codebase-memory-mcp`: 46,278★ (+11), 3,805 forks (+1).
+- `tirth8205/code-review-graph`: 32,021★ (+3), 2,934 forks (+1).
+- `colbymchenry/codegraph`: 73,658★ (+9), 4,747 forks (+1).
+- `abhigyanpatwari/GitNexus`: 47,824★ (+7), 5,196 forks (+1).
+- `continuedev/continue`: 36,169★ (+1), 5,459 forks (-1).
+- `Aider-AI/aider`: 49,456★ (+4), 5,044 forks (+1).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
