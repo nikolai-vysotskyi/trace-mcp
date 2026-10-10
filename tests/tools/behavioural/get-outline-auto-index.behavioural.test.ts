@@ -386,4 +386,47 @@ describe('get_outline — descendant projects and root sessions (TRA-2243)', () 
       unregisterProject(unrelatedDir);
     }
   });
+
+  it('resolves relative path to multi-root project container when session is at / (TRA-2327)', async () => {
+    const multiRootDir = path.join(tmpDir, 'multi-root-proj');
+    const childDir = path.join(multiRootDir, 'child-app');
+    const subDir = path.join(multiRootDir, 'sub-module');
+    fs.mkdirSync(childDir, { recursive: true });
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(subDir, 'feature.ts'),
+      'export function subFeature(): string { return "feature"; }\n',
+    );
+    registerProject(multiRootDir, { type: 'multi-root', children: [childDir] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Caller at / asks for sub-module/feature.ts (relative to container multiRootDir)
+      const res = await handler({ path: 'sub-module/feature.ts' });
+      expect(res.isError).toBeFalsy();
+      const body = JSON.parse(res.content[0].text);
+      expect(body.symbols.some((s: { name: string }) => s.name === 'subFeature')).toBe(true);
+      expect(body._hint).toContain(`Resolved path to registered project '${multiRootDir}'`);
+    } finally {
+      unregisterProject(multiRootDir);
+    }
+  });
 });
