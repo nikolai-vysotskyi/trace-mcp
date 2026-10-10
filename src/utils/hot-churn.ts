@@ -21,6 +21,13 @@
  * `.reasoning_caps_` prefix or the `cache/` segment). Same narrowed
  * treatment: exact dot-tmp prefix + a whole `cache` path segment.
  *
+ * TRA-2326: atomic rewrite of ML checkpoint artifacts (e.g. `resume_mlx.npz.tmp`
+ * or `enc.onnx.data.tmp` renamed to `resume_mlx.npz` / `enc.onnx.data` in
+ * `.../artifacts/...` or `.../checkpoints/...`). The watcher catches the tmp
+ * between create and atomic rename (199+ `Cannot read file ENOENT` on a live
+ * daemon). Narrowed to `.npz.tmp` or `.onnx.data.tmp` (or ML checkpoint tmp)
+ * under whole `artifacts` or `checkpoints` directory segments.
+ *
  * They are engine scratch, never source — the same argument TRA-1943
  * applies to SQLite sidecars — so every indexing entry point drops them
  * before any stat/read/lock, mirroring `isSqliteSidecarPath`:
@@ -48,6 +55,11 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/state/.gateway_*.tmp',
   // TRA-2057: atomic rewrite of `cache/reasoning_caps.json`.
   '**/cache/.reasoning_caps_*.tmp',
+  // TRA-2326: atomic rewrite of ML checkpoint artifacts.
+  '**/artifacts/**/*.npz.tmp',
+  '**/artifacts/**/*.onnx.data.tmp',
+  '**/checkpoints/**/*.npz.tmp',
+  '**/checkpoints/**/*.onnx.data.tmp',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
@@ -92,5 +104,16 @@ export function isHotChurnPath(p: string): boolean {
       return true;
     if (base.startsWith('.reasoning_caps_') && parents.includes('cache')) return true;
   }
+
+  // TRA-2326: atomic rewrites of ML checkpoint artifacts (e.g. `resume_mlx.npz.tmp`
+  // or `enc.onnx.data.tmp`) under whole `artifacts` or `checkpoints` segments.
+  // A bare `*.tmp` is preserved for general source/text files; here we match
+  // temporary files of ML binary artifacts (`.npz.tmp`, `.onnx.data.tmp`)
+  // strictly inside training/checkpoint directories.
+  if (base.endsWith('.npz.tmp') || base.endsWith('.onnx.data.tmp')) {
+    const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
+    if (parents.includes('artifacts') || parents.includes('checkpoints')) return true;
+  }
+
   return false;
 }
