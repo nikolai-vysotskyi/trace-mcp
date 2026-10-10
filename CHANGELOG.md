@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.1...v3.36.2) (2026-10-10)
+
+
+### Documentation
+
+* record bb marketplace admission ([#1541](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1541)) ([895e791](https://github.com/nikolai-vysotskyi/trace-mcp/commit/895e791b83d5b41d400e3098fa51ab2252069aa8))
+
 ## [3.36.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.0...v3.36.1) (2026-10-10)
 
 
