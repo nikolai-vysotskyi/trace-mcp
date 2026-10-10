@@ -481,4 +481,58 @@ describe('get_outline — descendant projects and root sessions (TRA-2243)', () 
       unregisterProject(projA);
     }
   });
+
+  it('rejects path traversal attempting to escape project root in root session (TRA-2327)', async () => {
+    // Sensitive file outside registered projects
+    const secretFile = path.join(tmpDir, 'sensitive-outside.ts');
+    fs.writeFileSync(secretFile, 'export const secretKey = "super-secret";\n');
+
+    const projDir = path.join(tmpDir, 'confined-proj');
+    const childDir = path.join(projDir, 'child');
+    fs.mkdirSync(childDir, { recursive: true });
+    registerProject(projDir, { type: 'multi-root', children: [childDir] });
+
+    try {
+      const emptyStore = createTestStore();
+      const ctx = {
+        store: emptyStore,
+        registry: new PluginRegistry(),
+        config: { root: '/', include: [], exclude: [], plugins: [] },
+        projectRoot: '/',
+        guardPath: () => null,
+        j: (v: unknown) => JSON.stringify(v),
+        jh: (_tool: string, v: unknown) => JSON.stringify(v),
+        markExplored: () => undefined,
+        decisionStore: null,
+        rankingLedger: null,
+        projectRelay: null,
+      } as unknown as ServerContext;
+
+      const { server, captured } = makeCapturingServer();
+      registerLookupTools(server as never, ctx);
+      const handler = captured.find((t) => t.name === 'get_outline')!.handler;
+
+      // Traversal tests attempting escape via:
+      // 1. Direct subpath / rule 3: ../../sensitive-outside.ts
+      // 2. Project basename / rule 1: confined-proj/../../sensitive-outside.ts
+      // 3. Child basename / rule 2: child/../../sensitive-outside.ts
+      // 4. Sibling dir / rule 4: child/../../sensitive-outside.ts
+      const traversalPaths = [
+        '../../sensitive-outside.ts',
+        'confined-proj/../../sensitive-outside.ts',
+        'child/../../sensitive-outside.ts',
+      ];
+
+      for (const tPath of traversalPaths) {
+        const res = await handler({ path: tPath });
+        expect(res.isError).toBe(true);
+        const body = JSON.parse(res.content[0].text);
+        // Must reject with empty index error, never resolve or outline the outside file
+        expect(body.symbols).toBeUndefined();
+        expect(body.error).toBe('File not found or unreadable (index is empty)');
+      }
+    } finally {
+      unregisterProject(projDir);
+    }
+  });
 });
