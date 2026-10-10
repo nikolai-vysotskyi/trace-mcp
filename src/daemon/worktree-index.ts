@@ -506,6 +506,8 @@ export class BranchIndex {
   /** Path → stat signature of what the copy last indexed from the worktree. */
   private readonly applied = new Map<string, string>();
   private readonly pendingPaths = new Set<string>();
+  /** Explicit reindex requests waiting for their turn on `chain`, by path. */
+  private readonly queuedPaths = new Map<string, number>();
   /**
    * Files a sync accepted but not yet planned may be behind on — its delta
    * plus everything an earlier pass applied — and how many such syncs there
@@ -663,10 +665,16 @@ export class BranchIndex {
    * delta or an earlier pass named. Null when nothing is in flight.
    */
   pendingDelta(): WorktreeDelta | null {
-    if (this.pendingPaths.size === 0 && this.coarsePending.size === 0 && !this.unverified) {
+    if (
+      this.pendingPaths.size === 0 &&
+      this.queuedPaths.size === 0 &&
+      this.coarsePending.size === 0 &&
+      !this.unverified
+    ) {
       return null;
     }
     const paths = new Set(this.pendingPaths);
+    for (const p of this.queuedPaths.keys()) paths.add(p);
     for (const p of this.coarsePending) paths.add(p);
     if (this.unverified) {
       if (this.lastDelta) for (const p of worktreeDeltaPaths(this.lastDelta)) paths.add(p);
@@ -742,6 +750,9 @@ export class BranchIndex {
 
   /** Re-index specific worktree paths (reindex-file), serialized with `sync`. */
   reindexPaths(relPaths: string[]): Promise<void> {
+    // A request can wait behind a slow sync longer than the HTTP endpoint's
+    // one-second budget. Flag it from acceptance, before the chain runs.
+    for (const rel of relPaths) this.queuedPaths.set(rel, (this.queuedPaths.get(rel) ?? 0) + 1);
     const run = this.chain.then(async () => {
       if (this.state !== 'ready') return;
       const index: string[] = [];
@@ -755,7 +766,13 @@ export class BranchIndex {
       await this.apply({ index, remove, signatures, reverted: 0 });
     });
     this.chain = run.catch(() => undefined);
-    return run;
+    return run.finally(() => {
+      for (const rel of relPaths) {
+        const count = this.queuedPaths.get(rel) ?? 0;
+        if (count <= 1) this.queuedPaths.delete(rel);
+        else this.queuedPaths.set(rel, count - 1);
+      }
+    });
   }
 
   private async apply(plan: SyncPlan): Promise<void> {
@@ -1542,6 +1559,9 @@ export class WorktreeIndexManager {
       return { ok: true, relPath: relPosix, noCopy };
     }
     index.lastUsedAt = this.now();
+    // The previously cached delta may predate this edit. A routed call must
+    // see the new file state even while the explicit reindex is queued.
+    invalidateWorktreeDelta(link);
     await waitFor(
       index.reindexPaths([relPosix]).catch(() => undefined),
       opts.wait ? REINDEX_FILE_WAIT_FULL_MS : REINDEX_FILE_WAIT_MS,

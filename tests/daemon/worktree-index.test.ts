@@ -829,6 +829,42 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     expect(flagged(outline.json)).toContain('src/lib.ts');
   });
 
+  it('flags a previously unchanged file while its reindex request waits on the copy', async () => {
+    // Add a tracked file with the same content on both branches. It is not in
+    // the branch delta or the copy's previously applied path set.
+    const rel = 'src/shared.ts';
+    const original = 'export function shared(): number { return 1; }\n';
+    write(wt, rel, original);
+    git(wt, 'add', rel);
+    git(wt, 'commit', '-q', '-m', 'add shared');
+    git(main, 'cherry-pick', '-q', git(wt, 'rev-parse', 'HEAD'));
+    await canonical.pipeline.indexFiles([rel]);
+
+    const m = manager({ syncWaitMs: 50 });
+    const call = await session(m);
+    await call('get_index_health');
+    const link = { worktreeRoot: wt, canonicalRoot: main };
+    expect((await getWorktreeDelta(link))?.modified).not.toContain(rel);
+    const entries = (m as unknown as { entries: Map<string, { current: BranchIndex }> }).entries;
+    const index = entries.get(wt)!.current;
+
+    // Hold an earlier copy operation past the HTTP wait budget. A call made
+    // after the 202 must not receive the old outline without a stale warning.
+    let release!: () => void;
+    Object.assign(index, { chain: new Promise<void>((r) => (release = r)) });
+    cleanups.push(release);
+    write(wt, rel, 'export function shared(): number { return 2; }\n');
+    const result = await m.reindexFile(wt, path.join(wt, rel));
+    expect(result).toEqual({ ok: true, relPath: rel });
+    expect(index.pendingDelta()?.modified).toContain(rel);
+    expect((await getWorktreeDelta(link))?.modified).toContain(rel);
+
+    const outline = await call('get_outline', { path: rel });
+    expect(JSON.stringify(outline.json)).toContain('shared');
+    expect(flagged(outline.json)).toContain(rel);
+    release();
+  });
+
   it('reports a refused copy on reindex-file and keeps flagging the file from the delta', async () => {
     const m = manager({ maxDeltaFiles: 1 });
     const call = await session(m);
