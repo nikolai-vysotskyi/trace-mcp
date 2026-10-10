@@ -134,6 +134,94 @@ export function resetFileTooLargeWarnDedupForTests(): void {
   binaryLogged.clear();
 }
 
+/**
+ * TRA-2326: per-process dedup and rate limiting for repeated identical
+ * `Cannot read file` ENOENT warnings. When a disappearing file (such as
+ * an atomic ML checkpoint or volatile scratchpad) is repeatedly triggered,
+ * emitting hundreds of L40 warnings masks other signals and pollutes daemon.log.
+ * The first ENOENT logs full warn; subsequent identical ENOENTs go to debug,
+ * with a warn summary every N occurrences. Non-ENOENT read errors (e.g. EACCES)
+ * always log warn without suppression.
+ */
+const CANNOT_READ_ENOENT_SUMMARY_EVERY = 50;
+const MAX_CANNOT_READ_ENOENT_KEYS = 1000;
+const cannotReadEnoentCounts = new Map<string, { count: number }>();
+
+function cannotReadEnoentKey(rootPath: string, relPath: string): string {
+  return `${rootPath}\n${relPath}`;
+}
+
+/** Test hook — clears the per-process Cannot read file ENOENT dedup state between cases. */
+export function resetCannotReadEnoentDedupForTests(): void {
+  cannotReadEnoentCounts.clear();
+}
+
+function logCannotReadFile(
+  rootPath: string,
+  relPath: string,
+  errno: NodeJS.ErrnoException | undefined,
+  err: unknown,
+): void {
+  const code = errno?.code;
+  const errorMsg = err instanceof Error ? err.message : String(err);
+
+  // Preserve immediate warnings for non-ENOENT errors (EACCES, etc.)
+  if (code !== 'ENOENT') {
+    logger.warn(
+      {
+        file: relPath,
+        rootPath,
+        code,
+        error: errorMsg,
+      },
+      'Cannot read file',
+    );
+    return;
+  }
+
+  const key = cannotReadEnoentKey(rootPath, relPath);
+  const seen = cannotReadEnoentCounts.get(key);
+  if (!seen) {
+    if (cannotReadEnoentCounts.size >= MAX_CANNOT_READ_ENOENT_KEYS) cannotReadEnoentCounts.clear();
+    cannotReadEnoentCounts.set(key, { count: 1 });
+    logger.warn(
+      {
+        file: relPath,
+        rootPath,
+        code,
+        error: errorMsg,
+      },
+      'Cannot read file',
+    );
+    return;
+  }
+
+  seen.count += 1;
+  if (seen.count % CANNOT_READ_ENOENT_SUMMARY_EVERY === 0) {
+    logger.warn(
+      {
+        file: relPath,
+        rootPath,
+        code,
+        repeatCount: seen.count,
+        error: errorMsg,
+      },
+      `Cannot read file ${seen.count} times with ENOENT (summary, details at debug)`,
+    );
+    return;
+  }
+
+  logger.debug(
+    {
+      file: relPath,
+      rootPath,
+      code,
+      repeatCount: seen.count,
+    },
+    'Cannot read file (repeat suppressed)',
+  );
+}
+
 function logFileTooLargeOnce(
   rootPath: string,
   relPath: string,
@@ -382,18 +470,10 @@ export class FileExtractor {
       // TRA-1715: the bare `{ file }` record was undiagnosable — 3317 of them
       // with no root and no cause. Carry the root plus the errno code and
       // message (ENOENT vs EACCES decides the response) so the daemon log
-      // alone answers which project lost which file and why. Strings, not
-      // the raw Error: a stack per unreadable file would flood the log when
-      // a whole root vanishes mid-run.
-      logger.warn(
-        {
-          file: relPath,
-          rootPath,
-          code: errno?.code,
-          error: err instanceof Error ? err.message : String(err),
-        },
-        'Cannot read file',
-      );
+      // alone answers which project lost which file and why.
+      // TRA-2326: rate-limit repeated identical ENOENTs for vanishing files
+      // so ML checkpoint races or scratch files do not flood daemon.log.
+      logCannotReadFile(rootPath, relPath, errno, err);
       return { kind: 'error' };
     }
 
