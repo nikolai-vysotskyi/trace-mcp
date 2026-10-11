@@ -383,6 +383,8 @@ export function pruneIndexDir(options: PruneOptions = {}): PruneSummary {
 export interface TopLevelOrphanSweepResult {
   /** Base `.db` paths actually deleted (whole family via {@link deleteDbFamily}). */
   removed: string[];
+  /** Total bytes deleted across DB families. */
+  freedBytes: number;
   /** `orphan_unregistered` candidates seen by this run. */
   scannedOrphans: number;
   /** Of those, how many were kept because family mtime is still inside the TTL. */
@@ -421,6 +423,7 @@ export function sweepTopLevelOrphanDbs(
   const orphans = candidates.filter((c) => c.category === 'orphan_unregistered');
   const cutoff = Date.now() - maxAgeDays * DAY_MS;
   const removed: string[] = [];
+  let freedBytes = 0;
   let retainedWithinTtl = 0;
 
   for (const c of orphans) {
@@ -440,11 +443,14 @@ export function sweepTopLevelOrphanDbs(
       continue;
     }
     if (hasLiveHolderOrUnknown(c.path)) continue;
-    unlinkDb(c.path);
-    removed.push(c.path);
+    const deleted = unlinkDb(c.path);
+    if (deleted.deleted.length > 0) {
+      removed.push(c.path);
+      freedBytes += deleted.bytes;
+    }
   }
 
-  return { removed, scannedOrphans: orphans.length, retainedWithinTtl };
+  return { removed, freedBytes, scannedOrphans: orphans.length, retainedWithinTtl };
 }
 
 export interface OrphanStatusSweepResult {

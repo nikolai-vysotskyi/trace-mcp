@@ -100,6 +100,7 @@ describe('sweepTopLevelOrphanDbs (TRA-1908)', () => {
     expect(res.removed).toEqual([base]);
     expect(res.scannedOrphans).toBe(1);
     expect(res.retainedWithinTtl).toBe(0);
+    expect(res.freedBytes).toBe(17);
     for (const suffix of ['', '-wal', '-shm', '.watcher-snapshot']) {
       expect(fs.existsSync(base + suffix)).toBe(false);
     }
@@ -113,6 +114,7 @@ describe('sweepTopLevelOrphanDbs (TRA-1908)', () => {
     expect(res.removed).toEqual([]);
     expect(res.scannedOrphans).toBe(1);
     expect(res.retainedWithinTtl).toBe(1);
+    expect(res.freedBytes).toBe(0);
     expect(fs.existsSync(base)).toBe(true);
   });
 
