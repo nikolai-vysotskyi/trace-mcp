@@ -3805,3 +3805,54 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** Moratorium holds.
 **Touch budget: 0 of 5 used.**
 
+### Evening pass (pass 3), 2026-10-11 (TRA-2343): open threads audit, live mention sweep (lza6 discovery), Codebase Memory MCP & CodeGraph & CRG deep-dive
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads & external PR audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` preparing PR implementing the `dokploy-loadTools` meta-tool and dynamic tool schema design proposed by Nikolai.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- **Touch budget: 0 of 5 used.** All standing rules respected; no unsolicited pings sent.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Executed against live GitHub Code Search API (pass 1: 4 queries; pass 2: 5 competitor pairs).
+- Identified 2 repo hits:
+  1. `get-bb/marketplace`: Existing listing (PR #524 merged 2026-10-10, entries/trace-mcp.json on main). Verified and recorded.
+  2. `lza6/Armor-piercing-system-prompts`: Genuine third-party surface. Chinese AI prompt & agent skills collection (689 skill units across 104 source repos). Incorporates 4 distinct `trace-mcp` skills directly into its curated trees:
+     - `05-技能与代理开发/trace-mcp/SKILL.md`: Core code intelligence routing (decision matrix replacing Read/Grep/Glob with `get_outline`, `get_symbol`, `get_context_bundle`, `get_change_impact`).
+     - `07-后端与架构/trace-mcp-codemod/SKILL.md`: Mechanical refactoring workflow via `apply_codemod`.
+     - `07-后端与架构/trace-mcp-refactoring/SKILL.md`: Risk assessment and safe symbol renames across codebases.
+     - `04-安全渗透/trace-mcp-pre-commit/SKILL.md`: AST-level security checks and pre-commit hooks.
+  - Read matching files via raw GitHub; classified as genuine third-party curation. Added to `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2591 (opened 2026-10-11): `query_graph: a WHERE comparison between two properties (a.file_path = b.file_path) fails with "expected value at pos N"`. Cypher-like query parser in `query_graph` tool assumes right-hand side of binary WHERE expressions is always a literal value, throwing parse error when comparing two node properties. In `trace-mcp`, graph traversals and relational lookups execute directly over typed SQLite schema indexes with parameterized SQL joins, supporting arbitrary cross-property filters.
+- `colbymchenry/codegraph`:
+  - Issue #2491 (opened 2026-10-11): `TypeScript: functions imported from node: built-ins resolve to same-named project functions`. Bare calls to functions imported from Node built-ins (`import { resolve } from 'node:path'`) ignore explicit import bindings and link directly to unrelated project functions (`resolve` in `src/policy.ts`), polluting callers and impact graph. In `trace-mcp`, Tree-sitter AST extraction tracks module import bindings explicitly; calls bound to external or built-in modules never link to project symbols by bare name.
+- `tirth8205/code-review-graph`:
+  - Issue #1109 (opened 2026-10-10): `detect_changes reports React components as untested when the spec renders them through a test-file helper, and counts TS interfaces/type aliases as test gaps`. Two fundamental flaws:
+    1. `TESTED_BY` edges are only generated from direct `is_test` callers (`it(...)`). Helper functions within spec files (e.g., `view = () => render(<Widget />)`) break the tested chain, marking tested components as untested.
+    2. TypeScript interfaces and type aliases are stored as `Class` nodes and evaluated as test gaps despite having no runtime representation.
+  - In `trace-mcp`, test association traverses call paths transitively through test file helpers, and AST kind distinctions separate pure type definitions from executable symbols.
+
+**Competitor pulse (2026-10-11 evening pass 3):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,792★ (+4), 1,579 forks (+1).
+- `oraios/serena`: 30,182★ (+8), 2,053 forks (+1).
+- `DeusData/codebase-memory-mcp`: 46,341★ (+21), 3,810 forks (+2).
+- `tirth8205/code-review-graph`: 32,038★ (+10), 2,936 forks (=).
+- `colbymchenry/codegraph`: 73,711★ (+23), 4,747 forks (=).
+- `abhigyanpatwari/GitNexus`: 47,833★ (+5), 5,197 forks (+2).
+- `continuedev/continue`: 36,180★ (+7), 5,460 forks (+1).
+- `Aider-AI/aider`: 49,468★ (+9), 5,046 forks (+1).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
