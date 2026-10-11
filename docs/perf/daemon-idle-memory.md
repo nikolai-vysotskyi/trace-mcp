@@ -243,3 +243,27 @@ Residual: framework-plugin edges, `storeRawEdges`, FTS rebuilds, and the
 smaller single-transaction resolvers still run whole-pass transactions — a
 pathological single stage can still exceed 1 s on a very large repo. Moving
 reconcile off the main thread remains the real fix, in its own issue.
+
+---
+
+## 2026-10-12 — Vue framework resolution stall (TRA-2352)
+
+The v3.36.5 field log had repeated 22–26 s event-loop stalls during reindex.
+The stalls fell between successive framework-edge storage logs. An isolated
+process using a SQLite backup of the affected multi-workspace index (113
+detected workspaces) attributed 17.5–17.6 s of one pass to
+`vue-framework.resolveEdges`; `buildImportMap` alone took 13.3 s over about
+3,000 Vue files. It rebuilt the complete component-path map for every Vue
+file, an O(V²) walk, even when no template tag needed fallback resolution.
+The main-thread timer could not run during that synchronous pass.
+
+The resolver now builds the map once, retaining the last two distinct paths
+per alias so excluding the current component keeps the prior collision
+behavior. It also yields during the Vue-file and dynamic-reference loops.
+On a separate backup of the same index, Vue resolution fell to 257 ms; the
+whole framework pass's maximum observed event-loop lag was 614 ms, with no
+20 s stall. Both backup runs ended with 139,129 edges. The regression test
+queues a health-style timer during the pass and checks that the file list is
+read only once. These are isolated measurements, not post-release field
+evidence; repeat the live `lagMs` check after release without changing
+`max_files` or treating `projects_indexing == 0` as proof of idleness.

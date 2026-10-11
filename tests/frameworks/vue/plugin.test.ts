@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { VueFrameworkPlugin } from '../../../src/indexer/plugins/integration/view/vue/index.js';
-import type { ProjectContext } from '../../../src/plugin-api/types.js';
+import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
 
 const VUE3_FIXTURE = path.resolve(__dirname, '../../fixtures/vue3-composition');
 
@@ -127,5 +127,52 @@ describe('VueFrameworkPlugin', () => {
       expect(plugin.manifest.version).toBe('1.0.0');
       expect(plugin.manifest.priority).toBe(10);
     });
+  });
+
+  it('lets a health timer run during a large Vue edge pass without rebuilding the file map per component', async () => {
+    const files = Array.from({ length: 400 }, (_, i) => ({
+      id: i + 1,
+      path: `components/Widget${i}.vue`,
+      language: 'vue',
+    }));
+    let allFilesCalls = 0;
+    const ctx: ResolveContext = {
+      rootPath: VUE3_FIXTURE,
+      getAllFiles: () => {
+        allFilesCalls++;
+        return files;
+      },
+      getSymbolsByFile: (id) => [
+        {
+          id,
+          symbolId: `components/Widget${id - 1}.vue::Widget${id - 1}`,
+          name: `Widget${id - 1}`,
+          kind: 'class',
+          fqn: null,
+          metadata: { templateComponents: [], composables: [] },
+        },
+      ],
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: () => undefined,
+    };
+
+    let settled = false;
+    let timerRanBeforeCompletion = false;
+    const healthTimer = new Promise<void>((resolve) =>
+      setTimeout(() => {
+        timerRanBeforeCompletion = !settled;
+        resolve();
+      }, 0),
+    );
+    const pass = Promise.resolve(plugin.resolveEdges(ctx)).then(() => {
+      settled = true;
+    });
+    await healthTimer;
+    await pass;
+
+    expect(timerRanBeforeCompletion).toBe(true);
+    expect(allFilesCalls).toBeLessThanOrEqual(2);
   });
 });

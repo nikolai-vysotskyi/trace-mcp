@@ -35,7 +35,7 @@ export function toPascalCase(name: string): string {
  */
 export function resolveComponentTag(
   tag: string,
-  imports: Map<string, string>,
+  imports: Pick<ReadonlyMap<string, string>, 'get' | 'has'>,
   componentFiles: Map<string, string>,
 ): string | undefined {
   // 1. Direct import match

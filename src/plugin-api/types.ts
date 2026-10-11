@@ -274,7 +274,9 @@ export interface FrameworkPlugin {
     content: Buffer | string,
     language: string,
   ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>>;
-  resolveEdges?(ctx: ResolveContext): TraceMcpResult<RawEdge[]>;
+  resolveEdges?(
+    ctx: ResolveContext,
+  ): TraceMcpResult<RawEdge[]> | Promise<TraceMcpResult<RawEdge[]>>;
   configure?(config: Record<string, unknown>): void;
 }
 
