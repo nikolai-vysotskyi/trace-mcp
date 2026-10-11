@@ -4423,8 +4423,8 @@ program
             const orphanResult = sweepTopLevelOrphanDbs();
             if (orphanResult.removed.length > 0) {
               logger.info(
-                { removedDbs: orphanResult.removed },
-                `Deleted ${orphanResult.removed.length} abandoned unregistered index DB(s)`,
+                { removedDbs: orphanResult.removed, freedBytes: orphanResult.freedBytes },
+                `Deleted ${orphanResult.removed.length} abandoned unregistered index DB(s) (${orphanResult.freedBytes} bytes freed)`,
               );
             } else if (orphanResult.scannedOrphans > 0) {
               logger.info(
