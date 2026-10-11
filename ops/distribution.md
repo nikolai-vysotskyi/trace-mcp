@@ -3757,3 +3757,51 @@ Audited read-only via API, nothing written outside this file.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Morning pass (pass 2), 2026-10-11 (TRA-2338): open threads audit, live mention sweep verification, Codebase Memory MCP & CodeGraph & CRG deep-dive
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads & external PR audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` preparing PR implementing the `dokploy-loadTools` meta-tool and dynamic tool schema design proposed by Nikolai.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- **Touch budget: 0 of 5 used.** All standing rules respected; no unsolicited pings sent.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Live execution completed: both pass 1 (`gh search code` with 4 queries) and pass 2 (`gh api search/code` with 5 paired queries against competitors) returned 0 new repositories mentioning `trace-mcp` outside `ops/mentions-seen.txt`.
+- Mention sweep is verified clean.
+
+**Competitor intelligence & architectural observations:**
+- `DeusData/codebase-memory-mcp`:
+  - Issues #2585 & #2588 (opened 2026-10-11): Critical architectural vulnerabilities in index freshness and graph integrity.
+    - Issue #2585 reveals that `check_index_coverage` freshness checks compare only `mtime` and `size`, missing same-size content edits with preserved timestamps (`cp -p`, `rsync -t`). Furthermore, `get_code_snippet` applies stored line numbers against current disk bytes without re-indexing, resulting in silent code corruption where one function returns another function’s code. Additionally, `metadata.generation` fails to advance on incremental re-indexing, leaving clients unable to verify index snapshot coherence.
+    - Issue #2588 documents that renaming directories (`git mv`) causes cross-file references to disappear without recording unresolved rows in diagnostics, silently degrading graph connectivity.
+  - In `trace-mcp`, SQLite index state is tied to SHA-256 content hashes rather than fragile mtime stamps, and Tree-sitter AST nodes with persistent symbol identifiers ensure that symbol snippets and call-graph edges cannot drift or silently detach upon file renames.
+- `colbymchenry/codegraph`:
+  - Issue #2485 (opened 2026-10-10): `codegraph upgrade` executes a destructive and invalid refresh of Hermes Agent configurations (`~/.hermes/config.yaml`). The installer inserts an unknown toolset `- mcp-codegraph` into `platform_toolsets.cli` triggering Hermes startup warnings; worse, attempting to fix it with the bare server name turns the list into an allowlist that silently suppresses all other configured MCP servers (`agentmail`, etc.). Additionally, the refresh process clobbers existing custom configurations.
+  - In `trace-mcp`, config generation and client integration (`trace-mcp init`) respect client schema semantics strictly, preserve external configuration blocks immutably, and follow opt-in boundaries without clobbering third-party agent setups.
+- `tirth8205/code-review-graph`:
+  - Issue #1110 (opened 2026-10-10): `tsconfig baseUrl/paths inherited through "extends" are resolved against the child config's directory`. In Nx and Turborepo monorepos, child projects extending a root `tsconfig.base.json` have their alias paths resolved relative to the child subfolder instead of the defining base config directory. In a 5.3k-file monorepo, 0 of 430 imports of shared libraries resolved, breaking `importers_of` and impact radius queries entirely.
+  - In `trace-mcp`, TypeScript path resolution properly anchors `baseUrl` and path mappings to the directory of the exact `tsconfig.json` where they are declared before propagating across configuration inheritance chains.
+
+**Competitor pulse (2026-10-11 morning pass 2):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,788★ (+2), 1,578 forks (+1).
+- `oraios/serena`: 30,174★ (+6), 2,052 forks (+1).
+- `DeusData/codebase-memory-mcp`: 46,320★ (+13), 3,808 forks (+1).
+- `tirth8205/code-review-graph`: 32,028★ (+3), 2,936 forks (+1).
+- `colbymchenry/codegraph`: 73,688★ (+11), 4,747 forks (+1).
+- `abhigyanpatwari/GitNexus`: 47,828★ (+3), 5,195 forks (-1).
+- `continuedev/continue`: 36,173★ (+1), 5,459 forks (+1).
+- `Aider-AI/aider`: 49,459★ (+2), 5,045 forks (=).
+
+**Catalogs:** Moratorium holds.
+**Touch budget: 0 of 5 used.**
+
