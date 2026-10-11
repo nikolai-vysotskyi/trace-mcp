@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.4...v3.36.5) (2026-10-11)
+
+
+### Bug Fixes
+
+* **gc:** report freed bytes for orphan index sweep (TRA-1650) ([#1556](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1556)) ([8488bec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8488bece3cc11127552448d298a8fbe36e131421))
+
 ## [3.36.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.3...v3.36.4) (2026-10-11)
 
 
