@@ -3856,3 +3856,49 @@ Audited read-only via API, nothing written outside this file.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Late night pass (pass 4), 2026-10-11 (TRA-2345): open threads audit, live mention sweep verified clean, competitor triage (Serena, CodeGraph, Codebase Memory MCP)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads & external PR audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` preparing PR implementing the `dokploy-loadTools` meta-tool and dynamic tool schema design proposed by Nikolai.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- **Touch budget: 0 of 5 used.** All standing rules respected; no unsolicited pings sent.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Executed against live GitHub Code Search API (pass 1: 4 queries; pass 2: 5 competitor pairs).
+- Zero unclassified or unrecorded repository hits outside `ops/mentions-seen.txt`. Sweep clean.
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2154 (opened 2026-10-10): `replace_in_files can apply a stale preview ID to a different identical match`. `MultiFileContentReplacer.make_occurrence_id` generates occurrence IDs formatted as `<relative path>:<match index>@<digest of matched text>`. When a file is modified between dry-run preview and apply (e.g. deleting or inserting preceding lines), the match index shifts while path and text digest remain identical, causing the tool to replace a different occurrence than the one selected during preview without error.
+  - In `trace-mcp`, edit preview IDs are bound to file content hashes and explicit character/line spans, rejecting stale apply calls immediately when the underlying file revision or offset changes.
+- `colbymchenry/codegraph`:
+  - Issue #2499 (opened 2026-10-11): `JavaScript: named class expressions inside customElements.define lose classes and methods`. When a named class expression is passed directly as a function argument (`customElements.define('demo-widget', class Widget extends ElementBase { ... })`), the WASM JavaScript extractor and Rust AST visitor only match `class_declaration`, omitting the `Widget` class definition and its member methods entirely from the graph.
+  - In `trace-mcp`, Tree-sitter AST queries capture both `class_declaration` and named `class` expression nodes across all call arguments, linking member methods and inheritance edges uniformly regardless of statement vs. expression position.
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2588 (opened 2026-10-11): `References into a moved directory vanish without unresolved rows`. When markdown doc-links reference symbols via relative paths (`src/util/rounding.py::clamp`) and the target directory is moved or renamed (`src/helpers`), paths whose directories no longer exist are pruned without creating unresolved or missing reference rows, hiding stale documentation links silently.
+  - In `trace-mcp`, symbol references and doc-links that fail resolution are preserved in diagnostic tables with explicit unresolvable/dangling state rather than silently dropped.
+
+**Competitor pulse (2026-10-11 late night pass 4):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,794★ (+2), 1,579 forks (=).
+- `oraios/serena`: 30,186★ (+4), 2,056 forks (+3).
+- `DeusData/codebase-memory-mcp`: 46,356★ (+15), 3,812 forks (+2).
+- `tirth8205/code-review-graph`: 32,041★ (+3), 2,936 forks (=).
+- `colbymchenry/codegraph`: 73,725★ (+14), 4,752 forks (+5).
+- `abhigyanpatwari/GitNexus`: 47,837★ (+4), 5,197 forks (=).
+- `continuedev/continue`: 36,184★ (+4), 5,463 forks (+3).
+- `Aider-AI/aider`: 49,474★ (+6), 5,048 forks (+2).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
