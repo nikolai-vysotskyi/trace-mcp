@@ -48,6 +48,7 @@ import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
+import { commitInChunks } from './resolver-budget.js';
 
 /**
  * Edge types whose targets live in metadata and are resolved later by a
@@ -182,7 +183,7 @@ export class EdgeResolver {
     await runInOwnTurn(async () => {
       const result = await executeFrameworkResolveEdges(plugin, ctx);
       if (result.isErr()) return;
-      this.storeRawEdges(result.value);
+      await this.storeRawEdgesAsync(result.value);
     });
   }
 
@@ -349,8 +350,22 @@ export class EdgeResolver {
     _purgeCrossWs(this.state);
   }
 
-  /** Store raw edges from framework/language plugins into the graph. */
+  /**
+   * Async variant of `storeRawEdges` (TRA-2334).
+   * Time-slices edge storage: yields between chunks during symbol and workspace
+   * pre-loads and commits edge insertions in chunked transactions via `commitInChunks`,
+   * preventing tens of thousands of framework plugin edges from starving /health.
+   */
+  async storeRawEdgesAsync(edges: RawEdge[]): Promise<void> {
+    await this._storeRawEdgesInternal(edges, true);
+  }
+
+  /** Store raw edges synchronously into the graph. */
   storeRawEdges(edges: RawEdge[]): void {
+    void this._storeRawEdgesInternal(edges, false);
+  }
+
+  private async _storeRawEdgesInternal(edges: RawEdge[], chunked: boolean): Promise<void> {
     if (edges.length === 0) return;
     const { store } = this.state;
 
@@ -369,6 +384,7 @@ export class EdgeResolver {
       const arr = Array.from(symbolIdStrs);
       const CHUNK = 900;
       for (let i = 0; i < arr.length; i += CHUNK) {
+        if (chunked && i > 0) await yieldToEventLoopFair();
         const chunk = arr.slice(i, i + CHUNK);
         const placeholders = chunk.map(() => '?').join(',');
         const rows = store.db
@@ -470,6 +486,7 @@ export class EdgeResolver {
       const nodeIdArr = Array.from(allNodeIds);
       const CHUNK = 900;
       for (let i = 0; i < nodeIdArr.length; i += CHUNK) {
+        if (chunked && i > 0) await yieldToEventLoopFair();
         const chunk = nodeIdArr.slice(i, i + CHUNK);
         const ph = chunk.map(() => '?').join(',');
         const rows = store.db
@@ -505,40 +522,49 @@ export class EdgeResolver {
     const CROSS_WS_ALLOWED_CATEGORIES = new Set(['workspace', 'runtime']);
     let droppedCrossWs = 0;
 
-    const insertBatch = store.db.transaction(() => {
-      for (const { edge, src: sourceNodeId, tgt: targetNodeId } of resolved) {
-        const edgeTypeId = edgeTypeCache.get(edge.edgeType);
-        if (edgeTypeId == null) continue;
+    const runInsert = (item: { src: number; tgt: number; edge: RawEdge }) => {
+      const { edge, src: sourceNodeId, tgt: targetNodeId } = item;
+      const edgeTypeId = edgeTypeCache.get(edge.edgeType);
+      if (edgeTypeId == null) return;
 
-        let isCrossWs = false;
-        if (hasWorkspaces) {
-          const srcWs = nodeWorkspaceCache.get(sourceNodeId);
-          const tgtWs = nodeWorkspaceCache.get(targetNodeId);
-          isCrossWs = srcWs != null && tgtWs != null && srcWs !== tgtWs;
-        }
-
-        if (isCrossWs) {
-          const category = edgeTypeCategoryCache.get(edge.edgeType);
-          if (category == null || !CROSS_WS_ALLOWED_CATEGORIES.has(category)) {
-            droppedCrossWs++;
-            continue;
-          }
-        }
-
-        const resolutionTier = edge.resolution ?? 'ast_resolved';
-
-        insertStmt.run(
-          sourceNodeId,
-          targetNodeId,
-          edgeTypeId,
-          (edge.resolved ?? true) ? 1 : 0,
-          edge.metadata ? JSON.stringify(edge.metadata) : null,
-          isCrossWs ? 1 : 0,
-          resolutionTier,
-        );
+      let isCrossWs = false;
+      if (hasWorkspaces) {
+        const srcWs = nodeWorkspaceCache.get(sourceNodeId);
+        const tgtWs = nodeWorkspaceCache.get(targetNodeId);
+        isCrossWs = srcWs != null && tgtWs != null && srcWs !== tgtWs;
       }
-    });
-    insertBatch();
+
+      if (isCrossWs) {
+        const category = edgeTypeCategoryCache.get(edge.edgeType);
+        if (category == null || !CROSS_WS_ALLOWED_CATEGORIES.has(category)) {
+          droppedCrossWs++;
+          return;
+        }
+      }
+
+      const resolutionTier = edge.resolution ?? 'ast_resolved';
+
+      insertStmt.run(
+        sourceNodeId,
+        targetNodeId,
+        edgeTypeId,
+        (edge.resolved ?? true) ? 1 : 0,
+        edge.metadata ? JSON.stringify(edge.metadata) : null,
+        isCrossWs ? 1 : 0,
+        resolutionTier,
+      );
+    };
+
+    if (chunked) {
+      await commitInChunks(store.db, resolved, (chunk) => {
+        for (const item of chunk) runInsert(item);
+      });
+    } else {
+      const insertBatch = store.db.transaction(() => {
+        for (const item of resolved) runInsert(item);
+      });
+      insertBatch();
+    }
 
     if (droppedCrossWs > 0) {
       logger.info({ dropped: droppedCrossWs }, 'Dropped cross-workspace framework edges');
