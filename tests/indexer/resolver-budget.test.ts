@@ -227,3 +227,65 @@ describe('chunked resolver pass (TRA-1764)', () => {
     expect(callsEdgeCount()).toBe(afterIndex);
   });
 });
+
+describe('EdgeResolver.storeRawEdgesAsync time-slicing (TRA-2334)', () => {
+  beforeEach(() => {
+    _resetYieldCountForTests();
+  });
+
+  it('yields mid-pass and lets queued event-loop probe run during edge storage', async () => {
+    const store = createTestStore();
+    const callsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as {
+      id: number;
+    };
+
+    // Create 600 symbols to exceed RESOLVER_WRITE_CHUNK (250)
+    const fileId = store.insertFile('src/test.ts', 'typescript', 'hash1', 100, null, null);
+    const syms = Array.from({ length: 600 }, (_, i) => ({
+      name: `fn${i}`,
+      kind: 'function' as const,
+      symbolId: `sym::fn${i}#function`,
+    }));
+    store.insertSymbols(fileId, syms);
+
+    const edges = Array.from({ length: 600 }, (_, i) => ({
+      sourceSymbolId: `sym::fn${i}#function`,
+      targetSymbolId: `sym::fn${(i + 1) % 600}#function`,
+      edgeType: 'calls',
+    }));
+
+    const { EdgeResolver } = await import('../../src/indexer/edge-resolver.js');
+    const resolver = new EdgeResolver({
+      store,
+      workspaces: [],
+      registry: new PluginRegistry(),
+      config: { root: '/tmp', include: [], exclude: [], plugins: [] } as unknown as TraceMcpConfig,
+      rootPath: '/tmp',
+      isIncremental: false,
+      changedFileIds: new Set(),
+      pendingImports: new Map(),
+      fileContentCache: new Map(),
+      gitignore: undefined,
+    });
+
+    const events: string[] = [];
+    const probe = (async () => {
+      await new Promise<void>((r) => setImmediate(r));
+      events.push('probe');
+    })();
+
+    await resolver.storeRawEdgesAsync(edges);
+    await probe;
+    events.push('done');
+
+    expect(events).toEqual(['probe', 'done']);
+    expect(getYieldCount()).toBeGreaterThan(0);
+
+    const count = (
+      store.db
+        .prepare(`SELECT COUNT(*) AS c FROM edges WHERE edge_type_id = ?`)
+        .get(callsType.id) as { c: number }
+    ).c;
+    expect(count).toBe(600);
+  });
+});
