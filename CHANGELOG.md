@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.5...v3.36.6) (2026-10-11)
+
+
+### Bug Fixes
+
+* **indexer:** time-slice Vue framework resolution (TRA-2352) ([#1559](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1559)) ([1afc33d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1afc33df7d7f25258839d78de7e1721dee14e4a5))
+
 ## [3.36.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.4...v3.36.5) (2026-10-11)
 
 
