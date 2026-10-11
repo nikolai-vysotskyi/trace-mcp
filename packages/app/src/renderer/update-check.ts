@@ -7,7 +7,10 @@
 
    So App calls this once and hands the result to both. The main process does
    the actual work — it checks the npm registry (no rate limit) with GitHub
-   Releases as a fallback; this is state plus a 10-minute cadence.
+   Releases as a fallback; this is state plus a 10-minute cadence. (A
+   main-process safety net rechecks when no window has checked for a while —
+   see startBackgroundUpdateChecks in main/index.ts, TRA-2104 — so this poll
+   only owns the cadence while a window is open.)
 
    Three states worth distinguishing: up to date (with when we last looked),
    an update available, and an update downloaded but pending a restart. */

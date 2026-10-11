@@ -8,6 +8,11 @@ import { t } from './i18n';
 import { currentHelpUrl, registerAppMenu } from './menu';
 import { getLauncherDir, getLauncherShimPath } from './trace-home';
 import { appendUpdateLog, updateLogPath } from './update-log';
+import {
+  BACKGROUND_UPDATE_CHECK_TICK_MS,
+  isTransientUpdateError,
+  shouldBackgroundRecheck,
+} from './update-check-policy';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
 import { updateChannelFor } from './update-channel';
 import { detectMcpClients } from '../shared/mcp-detector';
@@ -861,8 +866,34 @@ ipcMain.handle('check-for-update', async () => {
   };
 });
 
+// Last wall-clock check from any path (renderer IPC or the background net).
+// Lets the net distinguish "checked recently" from "silent for hours".
+let lastUpdateCheckAt: number | undefined;
+
+// TRA-2104: safety net for a tray with no open window. Renderer polling only
+// runs while a window is mounted, so a closed-window tray performed zero
+// checks (37h of silence in update.log) and never retried a transient 404.
+// While a window is open the renderer's 10-minute poll keeps this idle; it
+// only fires when nothing has checked for a while, tray-only or otherwise.
+let backgroundUpdateCheckRunning = false;
+function startBackgroundUpdateChecks(): void {
+  setInterval(() => {
+    if (backgroundUpdateCheckRunning) return;
+    if (!shouldBackgroundRecheck(lastUpdateCheckAt)) return;
+    backgroundUpdateCheckRunning = true;
+    // Outcome logging lives inside checkForUpdate; nothing to do with the
+    // result here except release the guard.
+    void checkForUpdate().finally(() => {
+      backgroundUpdateCheckRunning = false;
+    });
+  }, BACKGROUND_UPDATE_CHECK_TICK_MS);
+}
+
 async function checkForUpdate() {
   const now = Date.now();
+  // Every path through here counts — renderer IPC and the background net
+  // below — so the net can tell "checked recently" from "silent for hours".
+  lastUpdateCheckAt = now;
   const current = app.getVersion().replace(/^v/, '');
 
   if (UPDATE_CHANNEL === 'electron-updater') {
@@ -870,12 +901,24 @@ async function checkForUpdate() {
       const updater = await getAutoUpdater();
       const result = await updater.checkForUpdates();
       const latest = result?.updateInfo?.version?.replace(/^v/, '');
-      if (!latest) return { available: false, current, lastChecked: now };
-      return { available: cmpSemver(latest, current) > 0, current, latest, lastChecked: now };
+      const outcome = !latest
+        ? { available: false, current, lastChecked: now }
+        : {
+            available: cmpSemver(latest, current) > 0,
+            current,
+            latest,
+            lastChecked: now,
+          };
+      // TRA-2104: successes were never logged, so update.log showed hundreds
+      // of failures and zero successes — indistinguishable from "never works".
+      appendUpdateLog({ event: 'check-for-update:ok', ...outcome });
+      return outcome;
     } catch (err) {
+      const message = (err as Error)?.message ?? String(err);
       appendUpdateLog({
         event: 'check-for-update:electron-updater-failed',
-        error: (err as Error)?.message ?? String(err),
+        error: message,
+        transient: isTransientUpdateError(message),
       });
       return { available: false, current, lastChecked: now, error: toUpdateErrorMessage(err) };
     }
@@ -994,6 +1037,10 @@ async function checkForDaemonUpdate() {
 // without invoking a subshell (which would otherwise be needed to source
 // .zshrc / .bashrc).
 let cachedNpmBin: string | null | undefined;
+// Whether the npm-root disagreement has been logged this process. Both inputs
+// are cached (`cachedNpmBin` / `cachedNpmRoot`), so it is a fixed property of
+// the resolved npm — not something a 10-minute poll can change.
+let loggedNpmRootMismatch = false;
 function npmBinCandidates(): string[] {
   const home = os.homedir();
   const guesses: string[] = [
@@ -1162,7 +1209,12 @@ async function resolveNpmRoots(): Promise<{ configRoot: string | null; binRoot: 
     ? path.resolve(path.dirname(npmBin), '..', 'lib', 'node_modules')
     : null;
   if (configRoot && binRoot && path.resolve(configRoot) !== binRoot) {
-    appendUpdateLog({ event: 'npm-root:mismatch', npmBin, configRoot, binRoot });
+    // TRA-2104: this fired on every 10-minute poll (thousands of lines) while
+    // describing a fixed property — both roots are cached. Once per process.
+    if (!loggedNpmRootMismatch) {
+      loggedNpmRootMismatch = true;
+      appendUpdateLog({ event: 'npm-root:mismatch', npmBin, configRoot, binRoot });
+    }
   }
   return { configRoot, binRoot };
 }
@@ -1543,6 +1595,15 @@ ipcMain.handle('restart-app', async () => {
 // exit happens first, with no before-quit hook of ours in the way.
 
 app.whenReady().then(() => {
+  // TRA-2104: without lifecycle markers a silent update.log is ambiguous
+  // between "tray was closed" and "bundle died". This pairs with `tray:stop`
+  // on before-quit below.
+  appendUpdateLog({
+    event: 'tray:start',
+    version: app.getVersion(),
+    platform: process.platform,
+    channel: UPDATE_CHANNEL,
+  });
   // macOS: set custom dock icon so it's ready when the window shows.
   if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
@@ -1560,6 +1621,10 @@ app.whenReady().then(() => {
   // window opens while setup runs, and the renderer follows `daemon:setup-state`.
   void runDaemonSetup();
   createTray();
+  // TRA-2104: the renderer's 10-minute poll only runs while a window is
+  // mounted — this is what keeps checking (and retrying transient 404s) for
+  // a tray with no open window.
+  startBackgroundUpdateChecks();
   // Open the main window straight away — the tray remains for background control.
   // Users who close the window still have the tray; users who quit via ⌘Q shut down.
   showMenuWindow();
@@ -1568,6 +1633,12 @@ app.whenReady().then(() => {
 // macOS: when the user clicks the dock icon after closing all windows, re-open.
 app.on('activate', () => {
   showMenuWindow();
+});
+
+// TRA-2104: pairs with `tray:start` above — "closed by the user" vs "died
+// silently" is otherwise unreadable in update.log. Sync append, safe here.
+app.on('before-quit', () => {
+  appendUpdateLog({ event: 'tray:stop', version: app.getVersion() });
 });
 
 // GPU process crash recovery — log and continue (Chromium auto-restarts GPU process)
