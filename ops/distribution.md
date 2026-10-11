@@ -3902,3 +3902,46 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Morning pass (pass 1), 2026-10-12 (TRA-2349): open threads audit, live mention sweep verified clean, competitor triage (CodeGraph, CRG, Codebase Memory MCP)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads & external PR audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` preparing PR implementing the `dokploy-loadTools` meta-tool and dynamic tool schema design proposed by Nikolai.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- **Touch budget: 0 of 5 used.** All standing rules respected; no unsolicited pings sent.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Executed against live GitHub Code Search API (pass 1: 4 queries; pass 2: 5 competitor pairs).
+- Zero unclassified or unrecorded repository hits outside `ops/mentions-seen.txt`. Sweep verified clean.
+
+**Competitor intelligence & architectural observations:**
+- `colbymchenry/codegraph`:
+  - Issue #2506 (opened 2026-10-11): `codegraph upgrade replaces the entire global AGENTS.md with just the CODEGRAPH block, wiping user content outside the markers`. The upgrade command clobbers `~/.config/opencode/AGENTS.md` without parsing or preserving user-configured directives outside the fenced markers. In `trace-mcp`, instruction files and integration markers are safely edited within delimited blocks without destroying external workspace configuration.
+  - Issue #2502 (opened 2026-10-11): `TypeScript/pnpm: workspace member imports fail when the entry is declared via package.json "main"/"exports" (e.g. ./src/index.ts) — a same-name private function then hides real callers`. In pnpm monorepos, imports lacking a root `index.*` fail module entry resolution and fall back to fragile bare-name matching that links callers to arbitrary private functions with identical names. In `trace-mcp`, monorepo package resolution respects `package.json` package exports and main targets via Node module resolution rules, preventing spurious homonym collisions.
+- `tirth8205/code-review-graph`:
+  - Issue #1110 (opened 2026-10-10): `[Bug]: tsconfig baseUrl/paths inherited through "extends" are resolved against the child config's directory`. When `tsconfig.json` extends a parent config containing `baseUrl: "."`, path mappings are resolved relative to the extending child config instead of the parent defining the property, breaking path alias lookups in standard Nx/Turborepo layouts. In `trace-mcp`, TSConfig inheritance accurately resolves `baseUrl` relative to the defining configuration file.
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2598 (opened 2026-10-11): `Windows local teardown treats live startup contention as a cleanup failure`. One-shot CLI clients execute their workload and then fail teardown on Windows because process-exit synchronization reacquires contended mutexes, aborting with exit code errors. In `trace-mcp`, daemon connection handles separate lock management from client shutdown, guaranteeing clean disconnection without hanging or failing successful tool executions.
+
+**Competitor pulse (2026-10-12 morning pass 1):**
+- `nikolai-vysotskyi/trace-mcp`: 189★, 24 forks.
+- `yamadashy/repomix`: 28,799★ (+5), 1,579 forks (=).
+- `oraios/serena`: 30,185★ (-1), 2,057 forks (+1).
+- `DeusData/codebase-memory-mcp`: 46,369★ (+13), 3,812 forks (=).
+- `tirth8205/code-review-graph`: 32,045★ (+4), 2,936 forks (=).
+- `colbymchenry/codegraph`: 73,739★ (+14), 4,753 forks (+1).
+- `abhigyanpatwari/GitNexus`: 47,839★ (+2), 5,197 forks (=).
+- `continuedev/continue`: 36,187★ (+3), 5,463 forks (=).
+- `Aider-AI/aider`: 49,474★ (=), 5,048 forks (=).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
