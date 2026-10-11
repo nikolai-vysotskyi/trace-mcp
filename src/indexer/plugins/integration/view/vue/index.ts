@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -331,7 +332,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     return ok(result);
   }
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
@@ -375,8 +376,15 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       }
     }
 
+    // Build the name lookup once. The old buildImportMap scanned every Vue
+    // file for every Vue file, making a 3k-component repo spend ~13 seconds
+    // in this map alone. Keep the last two distinct paths per name so the
+    // lookup can still exclude the current file without changing collisions.
+    const importCandidates = this.buildImportCandidates(vueFiles);
+
     // For each .vue file, resolve template components and composables
-    for (const file of vueFiles) {
+    for (const [index, file] of vueFiles.entries()) {
+      if (index % 16 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;
@@ -385,7 +393,14 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       const templateComponents = (metadata?.templateComponents as string[]) ?? [];
       const composables = (metadata?.composables as string[]) ?? [];
 
-      const importMap = this.buildImportMap(ctx, file);
+      const getImport = (name: string): string | undefined => {
+        const candidate = importCandidates.get(name);
+        return candidate?.last === file.path ? candidate.previous : candidate?.last;
+      };
+      const importMap = {
+        get: getImport,
+        has: (name: string) => getImport(name) !== undefined,
+      };
 
       // Resolve renders_component edges
       for (const tag of templateComponents) {
@@ -434,7 +449,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     // mentioned as identifiers/strings (e.g., in config files, route tables,
     // plugin registrations). Covers cases where a component isn't rendered
     // via <Tag/> but IS referenced dynamically.
-    this.resolveDynamicComponentRefs(ctx, allFiles, componentNameToSymbolId, edges);
+    await this.resolveDynamicComponentRefs(ctx, allFiles, componentNameToSymbolId, edges);
 
     // Nuxt entry points: pages, layouts, error.vue, app.vue are auto-loaded
     // by Nuxt's file-based router. They're not referenced explicitly in
@@ -478,12 +493,12 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
    * false positives — only PascalCase names ≥5 chars with a distinctive
    * prefix or camelHump are considered references.
    */
-  private resolveDynamicComponentRefs(
+  private async resolveDynamicComponentRefs(
     ctx: ResolveContext,
     allFiles: { id: number; path: string; language: string | null }[],
     componentNameToSymbolId: Map<string, string>,
     edges: RawEdge[],
-  ): void {
+  ): Promise<void> {
     // Only consider distinctive component names.
     const names = [...componentNameToSymbolId.keys()].filter(isDistinctiveComponentName);
     if (names.length === 0) return;
@@ -502,7 +517,8 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       if (ownFile) nameToOwnFile.set(name, ownFile);
     }
 
-    for (const file of allFiles) {
+    for (const [index, file] of allFiles.entries()) {
+      if (index % 16 === 0) await yieldToEventLoopFair();
       // Scan TS/JS (config, routes, plugins) and Vue (sibling imports).
       const lang = file.language;
       if (lang !== 'typescript' && lang !== 'javascript' && lang !== 'vue') continue;
@@ -539,15 +555,18 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
    * path-based auto-import aliases (components/forms/CheckboxInput.vue
    * → FormsCheckboxInput, forms-checkbox-input).
    */
-  private buildImportMap(
-    ctx: ResolveContext,
-    currentFile: { id: number; path: string },
-  ): Map<string, string> {
-    const importMap = new Map<string, string>();
-    const allFiles = ctx.getAllFiles();
+  private buildImportCandidates(
+    vueFiles: { id: number; path: string; language: string | null }[],
+  ): Map<string, { last: string; previous?: string }> {
+    const candidates = new Map<string, { last: string; previous?: string }>();
+    const add = (name: string, filePath: string) => {
+      const current = candidates.get(name);
+      if (current?.last !== filePath) {
+        candidates.set(name, { last: filePath, previous: current?.last });
+      }
+    };
 
-    for (const f of allFiles) {
-      if (!f.path.endsWith('.vue') || f.path === currentFile.path) continue;
+    for (const f of vueFiles) {
       const compName = f.path
         .split('/')
         .pop()
@@ -555,19 +574,19 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       if (!compName) continue;
 
       // Base name + case variants
-      importMap.set(compName, f.path);
-      importMap.set(toKebabCase(compName), f.path);
-      importMap.set(toPascalCase(compName), f.path);
+      add(compName, f.path);
+      add(toKebabCase(compName), f.path);
+      add(toPascalCase(compName), f.path);
 
       // Nuxt 3/4 auto-import path-prefixed aliases
       // (FormCheckboxInput, IconsArrow, etc.)
       for (const alias of nuxtAutoImportAliases(f.path, this._nuxtConfigCache)) {
-        importMap.set(alias, f.path);
-        importMap.set(toKebabCase(alias), f.path);
+        add(alias, f.path);
+        add(toKebabCase(alias), f.path);
       }
     }
 
-    return importMap;
+    return candidates;
   }
 }
 
