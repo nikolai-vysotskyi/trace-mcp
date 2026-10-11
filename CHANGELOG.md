@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.3...v3.36.4) (2026-10-11)
+
+
+### Bug Fixes
+
+* **app:** retry transient update checks and add background safety net (TRA-2104) ([#1550](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1550)) ([07f57dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/07f57dddb8e6fa326853dc8f59e94c82bc1eac56))
+* **indexer:** time-slice framework edge insertion in storeRawEdges (TRA-2334) ([#1555](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1555)) ([79f7e9c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/79f7e9c8729b959cb0f21df53e316777ca668451))
+
 ## [3.36.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.2...v3.36.3) (2026-10-10)
 
 
