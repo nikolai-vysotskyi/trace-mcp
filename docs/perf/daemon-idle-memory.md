@@ -272,7 +272,7 @@ evidence; repeat the live `lagMs` check after release without changing
 
 ## 2026-10-13 — exclude macOS sleep from stall attribution (TRA-2375)
 
-In v3.36.7, `Slow SQLite statement blocked the event loop` reported
+`Slow SQLite statement blocked the event loop` reported
 `ms: 368310` for `SELECT * FROM symbols WHERE file_id = ? ORDER BY byte_start`
 at 01:59:00 +0400. The macOS power log shows sleep at 01:52:50 and dark wake
 at 01:59:00, a 370-second gap. The slow-statement guard uses `Date.now()`
