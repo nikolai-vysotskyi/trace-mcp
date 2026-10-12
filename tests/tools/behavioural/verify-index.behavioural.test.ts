@@ -124,4 +124,19 @@ describe('verify_index (verifyIndex) — behavioural contract', () => {
     expect(req?.status).toBe('error');
     expect(req?.detail).toMatch(/Missing tables/);
   });
+
+  it('skips FTS integrity-check insert probe on readonly database connections without error/warn', () => {
+    const memDb = new Database(':memory:');
+    bootstrapMinimalIndex(memDb);
+    const dump = memDb.serialize();
+    memDb.close();
+
+    const roDb = new Database(dump, { readonly: true });
+    const report = verifyIndex(roDb);
+    const fts = report.checks.find((c) => c.name === 'fts_integrity');
+    expect(fts).toBeDefined();
+    expect(fts?.status).toBe('ok');
+    expect(fts?.detail).toMatch(/skipped \(database is opened read-only\)/);
+    roDb.close();
+  });
 });
