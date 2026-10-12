@@ -274,3 +274,14 @@ lza6/Armor-piercing-system-prompts
 # Genuine third-party comparative study: technical architecture benchmark evaluating
 # trace-mcp v3.36.4 alongside 7 code graph tools in docs/ESTUDO-COMPARATIVO.md:
 wkoch/xrai
+
+# ── Swept 2026-10-13 (TRA-2373) ──
+# Genuine third-party citation & benchmark reference: RESEARCH.md cites trace-mcp
+# ("Honest PR-review bench: −72.7% input tokens... A model for honest reporting"):
+h0rn3t/Graft
+# Name collision: unrelated microservices architecture using internal Cloud Run service
+# account / container name "trace-mcp" for BigQuery telemetry export (infra/03-service-accounts.sh, CLAUDE.md):
+vaibhavidhumal4/TRACE
+# Genuine local adoption in conversation history: desktop commit log docs/conversas/2026-10-11.md
+# explicitly preserves local state in .trace-mcp/install-date and .trace-mcp/guard-mode across commits:
+wkoch/goCraft

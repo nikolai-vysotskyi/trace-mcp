@@ -119,6 +119,9 @@ Rules for keeping it honest:
 | [jfjordanfarr/Live-Documentation](https://github.com/jfjordanfarr/Live-Documentation) | **Yes — third-party research survey, we did not submit it** (MIT, active 2026-10-08) | Independent architecture research document `AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md` surveying code intelligence tools for AI agents. Cites `trace-mcp` (mcpservers.org) under "Agents reading a codebase's structure" alongside `codebase-graph`, `Codebase Memory MCP`, and `CodeGraph`: describes trace-mcp as "(68 languages, impact analysis)". Analyzes architectural trade-off between live MCP servers and reviewable committed docs-as-code | Independent survey, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-09 | 2026-10-09 |
 | [lza6/Armor-piercing-system-prompts](https://github.com/lza6/Armor-piercing-system-prompts) | **Yes — third-party packaging, we did not write it and did not submit it** (4★, 2 forks, pushed 2026-10-08) | Aggregated Chinese Claude Code agent skills repository. Packages 4 complete `trace-mcp` skills: `05-技能与代理开发/trace-mcp/SKILL.md` (code navigation routing over 182 tools), `07-后端与架构/trace-mcp-codemod/SKILL.md` (bulk mechanical codemods), `04-安全渗透/trace-mcp-pre-commit/SKILL.md`, and `07-后端与架构/trace-mcp-refactoring/SKILL.md`. Formulates concrete rules mandating trace-mcp tools over Read/Grep/Glob/Bash for agents | Nothing to submit and do not ping. Value is distribution evidence in agent prompt/skill collections in the wild. Discovered by `scripts/mention-sweep.sh` 2026-10-12 | 2026-10-12 |
 | [wkoch/xrai](https://github.com/wkoch/xrai) | **Yes — third-party technical study & benchmark evaluation, we did not submit it** (0★, active 2026-10-11) | In-depth technical architecture study `docs/ESTUDO-COMPARATIVO.md` ("Oito referências para o xrai", 2026-10-11) evaluating `trace-mcp` v3.36.4 alongside 7 code graph tools (Graft, codebase-memory-mcp, code-review-graph, jcodemunch, tokensave, ProjectAtlas, codegraph-mcp). Analyzes `trace-mcp`'s 81 language plugins matrix, SCIP ingestion (`src/scip/ingest.ts`), `get_task_context` budget assembly (`src/scoring/structured-assembly.ts`), session deduplication, and the PR review benchmark methodology (72.7% token reduction) and post-mortem (`docs/perf/pr-context-loss-classes.md`) | In-depth architectural evaluation and academic/engineering citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-12 | 2026-10-12 |
+| [h0rn3t/Graft](https://github.com/h0rn3t/Graft) | **Yes — third-party benchmark & research citation, we did not submit it** (4★, active 2026-10-12) | Independent code intelligence research document `RESEARCH.md` surveying agent tools. Cites `trace-mcp` as: "Honest PR-review bench: −72.7% input tokens, but false positives 0.58 → 0.80 | A model for honest reporting" alongside jCodeMunch, codedb, fff, pgr, tokensave | Independent engineering evaluation & citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
+| [wkoch/goCraft](https://github.com/wkoch/goCraft) | **Yes — third-party user adoption, we did not submit it** (active 2026-10-12) | Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations | Independent practitioner usage in the wild. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
+
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
 
@@ -3721,6 +3724,67 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - `jgravelle/jcodemunch-mcp`: 2,762★, 374 forks.
 - `continuedev/continue`: 36,196★, 5,462 forks (+2★).
 - `Aider-AI/aider`: 49,501★, 5,047 forks (+8★).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+### Early morning pass (pass 1), 2026-10-13 (TRA-2373): mention sweep (Graft citation, goCraft local state, TRACE collision), open threads audit, competitor deep dive & architectural insights
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED`). Nikolai's dedicated lane — recorded, not touched.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN (conflicting with maintainer self-adds). Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` (2026-10-08) progressing with PR for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback architecture. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes (`gh search code` and `gh api search/code` paired queries). Found 3 new repositories mentioning `trace-mcp`:
+  1. `h0rn3t/Graft` (4★): Code intelligence research document `RESEARCH.md` surveying agent code graph tools. Cites `trace-mcp`: *"Honest PR-review bench: −72.7% input tokens, but false positives 0.58 → 0.80 | A model for honest reporting"*. Evaluated alongside jCodeMunch, codedb, fff, pgr, tokensave. Recorded as genuine third-party benchmark citation in surfaces table and `ops/mentions-seen.txt`.
+  2. `wkoch/goCraft`: Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations. Recorded as genuine user adoption in surfaces table and `ops/mentions-seen.txt`.
+  3. `vaibhavidhumal4/TRACE`: Name collision — unrelated microservices architecture using internal Cloud Run service account / container name "trace-mcp" for BigQuery telemetry export (`infra/03-service-accounts.sh`, `CLAUDE.md`). Classified and silenced in `ops/mentions-seen.txt`.
+
+**Competitor intelligence & deep-dive architectural observations:**
+- `colbymchenry/codegraph`:
+  - Issue #2527 (`CLI worker pools default to cpus-1 each with no user-facing cap — index builds can saturate many-core machines`):
+    - Problem: CLI worker pools allocate `cpus - 1` workers by default with no user-facing concurrency cap or throttling knob. On large multi-core machines (e.g. 18+ logical cores), index builds saturate CPU resources (load average 38, ~1700% CPU), causing system responsiveness degradation and background daemon contention.
+    - Architectural contrast: `trace-mcp`'s daemon implements adaptive worker scaling, task concurrency caps, cooperative yielding during AST ingestion, and background process priority throttling, preventing host CPU starvation.
+  - PR #2530 (`fix(cpp): a smart pointer's held class lacking a method gets no edge only when its bases are known`):
+    - Problem: `->` calls on smart pointers (`std::unique_ptr`, `std::shared_ptr`, `std::optional`) whose held class lacks the method were dropping call-graph edges even when base classes were incomplete/unresolved in the index, leading to false-negative edge omissions.
+    - Solution: Only suppresses edges when all base classes are completely known; otherwise retains conservative reachable edge candidate.
+    - Architectural contrast: `trace-mcp` uses SCIP symbol resolution semantics where unresolved inheritance hierarchy leaves open candidate links rather than dropping reachability edges.
+  - PR #2529 (`fix(sync): an import moves to an added file that outranks the one it found`):
+    - Problem: Incremental sync failed to re-resolve extensionless imports when a higher-precedence file was added (e.g. adding `button.ts` next to existing `button.vue` where `.ts` takes precedence over `.vue`). Sync only retried imports that previously failed, locking the call graph into stale targets.
+    - Architectural contrast: `trace-mcp` maintains revision invalidation sets based on directory addition events, forcing re-resolution of extensionless import boundaries when shadow files are introduced.
+- `DeusData/codebase-memory-mcp`:
+  - PR #2613 (`fix(markdown): qualify a repeated heading's Section by its parent headings (#2586)`):
+    - Problem: Markdown Section qualified names were constructed as `module.heading_text`. Repeated heading titles (such as `## Implementation` appearing under multiple parent `# Service A` and `# Service B` sections) collided on the same qualified name, overwriting graph nodes and attaching references to the wrong parent file.
+    - Architectural contrast: `trace-mcp`'s outline and structural hierarchy builds fully qualified breadcrumb paths (`file#h1/h2/...`), guaranteeing deterministic uniqueness for identical subheadings across documentation trees.
+- `tirth8205/code-review-graph`:
+  - PR #1111 (`fix(tsconfig): anchor inherited baseUrl and paths at the config that declares them (#1110)`):
+    - Problem: `TsconfigResolver` merged `baseUrl` and `paths` from parent configs but resolved them against the child config's directory, breaking path alias lookups in monorepo layouts (Nx/Turborepo) and causing `IMPORTS_FROM` edges to miss shared libraries.
+    - Architectural contrast: `trace-mcp` resolves TSConfig `baseUrl` and `paths` relative to the exact configuration file where the property is declared before merging into composite workspace mappings.
+- `jgravelle/jcodemunch-mcp`:
+  - PR #1048 / Release v1.108.351 (`fix: creating a class counts as a call of its constructor`):
+    - Problem: Class instantiations were not linked to constructors in call-graph reachability, erroneously reporting constructors as uncalled/dead code.
+
+**Competitor pulse (as of 2026-10-13 early morning):**
+- `nikolai-vysotskyi/trace-mcp`: 191★ (+1), 24 forks.
+- `yamadashy/repomix`: 28,808★ (+2), 1,584 forks (+1).
+- `oraios/serena`: 30,209★ (+7), 2,062 forks (=).
+- `DeusData/codebase-memory-mcp`: 46,436★ (+8), 3,815 forks (=).
+- `tirth8205/code-review-graph`: 32,084★ (+2), 2,936 forks (=).
+- `colbymchenry/codegraph`: 73,823★ (+7), 4,764 forks (+1).
+- `abhigyanpatwari/GitNexus`: 47,851★ (-1), 5,195 forks (-1).
+- `jgravelle/jcodemunch-mcp`: 2,762★ (=), 375 forks (+1).
+- `continuedev/continue`: 36,201★ (+5), 5,463 forks (+1).
+- `Aider-AI/aider`: 49,503★ (+2), 5,050 forks (+3).
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
