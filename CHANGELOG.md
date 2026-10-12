@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.36.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.6...v3.36.7) (2026-10-12)
+
+
+### Bug Fixes
+
+* **db:** skip FTS integrity write probe on read-only database connections ([#1571](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1571)) ([d42ec14](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d42ec1439316ac0901b3529a94133775af99b140))
+* **indexer:** resolve event loop stalls during Laravel & Blade edge resolution (TRA-2351) ([#1561](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1561)) ([3ffffc4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ffffc48119e9d20e534960b03099a89556c9e28))
+
+
+### Documentation
+
+* **ops:** afternoon pass 2026-10-12, mention sweep, BB admission, competitor pulse & analysis (TRA-2364) ([#1563](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1563)) ([94a8ff3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94a8ff32e40f7e72fd0deefa58fa2f9b1e016bca))
+* **ops:** evening pass 2026-10-12, mention sweep clean, catalog spam audit, competitor pulse & insights (TRA-2366) ([#1565](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1565)) ([6d41764](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6d417648ca18f86c816204de5eb530daed336f2b))
+* **ops:** late evening pass 2026-10-12, mention sweep clean, competitor deep dive & architectural insights (TRA-2368) ([#1566](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1566)) ([72e81ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/72e81ea1e6df82dc3441189a8b5a174ea5b5b9f4))
+
 ## [3.36.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.5...v3.36.6) (2026-10-11)
 
 
