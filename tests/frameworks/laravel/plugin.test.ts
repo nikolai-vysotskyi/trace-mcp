@@ -175,6 +175,77 @@ describe('LaravelPlugin', () => {
       );
     });
 
+    it('prefers local package match over foreign fork match upon FQN collision', async () => {
+      // Repro case from Reviewer E: composer.json in vendor/forked/package/
+      // has same provider FQN as vendor/other/package/.
+      const composerJsonContent = JSON.stringify({
+        name: 'forked/package',
+        extra: {
+          laravel: {
+            providers: ['Vendor\\Shared\\ServiceProvider'],
+          },
+        },
+      });
+
+      const mockFiles = [
+        { id: 1, path: 'vendor/forked/package/composer.json', language: 'json' },
+        { id: 2, path: 'vendor/forked/package/src/ServiceProvider.php', language: 'php' },
+        { id: 3, path: 'vendor/other/package/src/ServiceProvider.php', language: 'php' },
+      ];
+
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        getAllFiles: () => mockFiles,
+        getSymbolsByFile: (fileId: number) => {
+          if (fileId === 2) {
+            return [
+              {
+                id: 201,
+                symbolId: 'sym:201',
+                name: 'ServiceProvider',
+                kind: 'class',
+                fqn: 'Vendor\\Shared\\ServiceProvider',
+              },
+            ];
+          }
+          if (fileId === 3) {
+            return [
+              {
+                id: 301,
+                symbolId: 'sym:301',
+                name: 'ServiceProvider',
+                kind: 'class',
+                fqn: 'Vendor\\Shared\\ServiceProvider',
+              },
+            ];
+          }
+          return [];
+        },
+        // Global lookup without scope would return other package (arbitrary row in SQLite)
+        getSymbolByFqn: (fqn: string) => {
+          if (fqn === 'Vendor\\Shared\\ServiceProvider') {
+            return {
+              id: 301,
+              symbolId: 'sym:301',
+              name: 'ServiceProvider',
+              kind: 'class',
+            };
+          }
+          return undefined;
+        },
+        readFile: (filePath: string) =>
+          filePath === 'vendor/forked/package/composer.json' ? composerJsonContent : '',
+      };
+
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      const edges = result._unsafeUnwrap();
+
+      expect(edges.length).toBe(1);
+      // Must prefer the local package symbol (201), NOT the foreign one (301)
+      expect(edges[0].targetRefId).toBe(201);
+    });
+
     it('cooperatively yields to event loop during large file set resolution', async () => {
       // 35 files => should yield at index 0, 16, 32
       const files = Array.from({ length: 35 }, (_, i) => ({

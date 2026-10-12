@@ -202,21 +202,8 @@ function findSymbolByFqnScoped(
   fqn: string,
   preferredPrefix: string,
 ): { id: number; symbolId: string; name: string; kind: string; filePath: string } | null {
-  // Fast path: direct indexed FQN lookup
-  const generic = ctx.getSymbolByFqn(fqn);
-  if (generic) {
-    // If generic match already belongs to preferred package (via symbolId "file:id::..."),
-    // or if we only need a valid symbol match, avoid scanning thousands of files.
-    return {
-      id: generic.id,
-      symbolId: generic.symbolId,
-      name: generic.name,
-      kind: generic.kind,
-      filePath: '',
-    };
-  }
-
-  // Fallback: search files under preferredPrefix (only package files, NOT all files)
+  // 1. Scoped search: prefer matches in the same package/workspace prefix.
+  // Iterate ONLY files belonging to preferredPrefix (sub-package directory), NOT all project files.
   const allFiles = ctx.getAllFiles();
   for (const f of allFiles) {
     if (!f.path.startsWith(preferredPrefix)) continue;
@@ -232,5 +219,18 @@ function findSymbolByFqnScoped(
       };
     }
   }
+
+  // 2. Fallback: indexed FQN match anywhere in the index
+  const generic = ctx.getSymbolByFqn(fqn);
+  if (generic) {
+    return {
+      id: generic.id,
+      symbolId: generic.symbolId,
+      name: generic.name,
+      kind: generic.kind,
+      filePath: '',
+    };
+  }
+
   return null;
 }
