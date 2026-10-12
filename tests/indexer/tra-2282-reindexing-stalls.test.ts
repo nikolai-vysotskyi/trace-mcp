@@ -206,6 +206,19 @@ describe('TRA-2282: reindexing stall fixes', () => {
     findPackageJsonEntries(tmpDir);
     expect(readdirSpy).toHaveBeenCalled();
 
+    // A directory delete may be the only event, and its package.json may
+    // never have been indexed even though package discovery cached it.
+    const nested = path.join(tmpDir, 'nested');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, 'package.json'), '{"name":"nested"}');
+    clearPackageEntriesCache(tmpDir);
+    findPackageJsonEntries(tmpDir);
+    readdirSpy.mockClear();
+    fs.rmSync(nested, { recursive: true });
+    pipeline.deleteFiles(['nested']);
+    findPackageJsonEntries(tmpDir);
+    expect(readdirSpy).toHaveBeenCalled();
+
     readdirSpy.mockRestore();
     db.close();
   });

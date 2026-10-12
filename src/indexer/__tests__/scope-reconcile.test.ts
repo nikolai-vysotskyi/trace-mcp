@@ -160,4 +160,16 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
     expect(store.getAllFiles().map((f) => f.path)).toEqual(['top100/older/c.ts']);
     expect(store.getSymbolsByFile(file)).toEqual([]);
   });
+
+  it('evicts descendants when a directory is replaced by a regular file', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    const pipeline = makePipeline(store);
+    store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    mkdirSync(join(workDir, 'top100'));
+    writeFileSync(join(workDir, 'top100', 'old'), 'replacement');
+
+    pipeline.deleteFiles(['top100/old']);
+
+    expect(store.getAllFiles()).toEqual([]);
+  });
 });
