@@ -837,7 +837,7 @@ describe.skipIf(process.platform === 'win32')('worktree branch index', () => {
     write(wt, rel, original);
     git(wt, 'add', rel);
     git(wt, 'commit', '-q', '-m', 'add shared');
-    git(main, 'cherry-pick', '-q', git(wt, 'rev-parse', 'HEAD'));
+    git(main, 'cherry-pick', git(wt, 'rev-parse', 'HEAD'));
     await canonical.pipeline.indexFiles([rel]);
 
     const m = manager({ syncWaitMs: 50 });
