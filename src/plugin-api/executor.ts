@@ -218,14 +218,22 @@ async function withTimeout<T>(fn: () => T, timeoutMs: number, operationName: str
 
   if (result instanceof Promise) {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const startedActive = performance.now();
     try {
       return await Promise.race([
         result,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`Timeout: ${operationName} exceeded ${timeoutMs}ms`)),
-            timeoutMs,
-          );
+          const checkDeadline = () => {
+            const remaining = timeoutMs - (performance.now() - startedActive);
+            if (remaining <= 0) {
+              reject(new Error(`Timeout: ${operationName} exceeded ${timeoutMs}ms`));
+            } else {
+              // A timer can fire on resume before the monotonic work budget
+              // has elapsed. Give the plugin its remaining active time.
+              timer = setTimeout(checkDeadline, remaining);
+            }
+          };
+          timer = setTimeout(checkDeadline, timeoutMs);
         }),
       ]);
     } finally {
