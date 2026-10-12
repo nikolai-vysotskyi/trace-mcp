@@ -267,3 +267,20 @@ queues a health-style timer during the pass and checks that the file list is
 read only once. These are isolated measurements, not post-release field
 evidence; repeat the live `lagMs` check after release without changing
 `max_files` or treating `projects_indexing == 0` as proof of idleness.
+
+---
+
+## 2026-10-13 — exclude macOS sleep from stall attribution (TRA-2375)
+
+`Slow SQLite statement blocked the event loop` reported
+`ms: 368310` for `SELECT * FROM symbols WHERE file_id = ? ORDER BY byte_start`
+at 01:59:00 +0400. The macOS power log shows sleep at 01:52:50 and dark wake
+at 01:59:00, a 370-second gap. The slow-statement guard uses `Date.now()`
+around the call, so its measurement includes suspended time. On the same
+file-backed index, five read-only executions of that query for the file with
+the most symbols (3,955) took 5.05–7.01 ms. The original call may have had
+some real latency, but the 368-second warning is not evidence of continuous
+SQLite work or an event-loop stall. Correlate any wall-clock stall with
+`pmset -g log` before attributing it to indexing. TRA-2375 tracks a
+sleep-aware diagnostic and a separate check of framework-plugin timeouts
+observed around wake.
