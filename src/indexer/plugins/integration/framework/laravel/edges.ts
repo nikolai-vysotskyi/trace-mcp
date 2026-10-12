@@ -202,14 +202,14 @@ function findSymbolByFqnScoped(
   fqn: string,
   preferredPrefix: string,
 ): { id: number; symbolId: string; name: string; kind: string; filePath: string } | null {
-  // Try all files — we need to scan because getSymbolByFqn returns only one match.
+  // 1. Scoped search: prefer matches in the same package/workspace prefix.
+  // Iterate ONLY files belonging to preferredPrefix (sub-package directory), NOT all project files.
   const allFiles = ctx.getAllFiles();
-  // Fast path: same package directory
   for (const f of allFiles) {
     if (!f.path.startsWith(preferredPrefix)) continue;
     const syms = ctx.getSymbolsByFile(f.id);
     const hit = syms.find((s) => s.fqn === fqn);
-    if (hit)
+    if (hit) {
       return {
         id: hit.id,
         symbolId: hit.symbolId,
@@ -217,8 +217,10 @@ function findSymbolByFqnScoped(
         kind: hit.kind,
         filePath: f.path,
       };
+    }
   }
-  // Fallback: first match anywhere
+
+  // 2. Fallback: indexed FQN match anywhere in the index
   const generic = ctx.getSymbolByFqn(fqn);
   if (generic) {
     return {
@@ -229,5 +231,6 @@ function findSymbolByFqnScoped(
       filePath: '',
     };
   }
+
   return null;
 }

@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -566,7 +567,7 @@ export class BladePlugin implements FrameworkPlugin {
     return ok(result);
   }
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
@@ -578,7 +579,8 @@ export class BladePlugin implements FrameworkPlugin {
     // Lazy-built set of all file paths (for fast asset resolution lookups)
     let allPathSet: Set<string> | null = null;
 
-    for (const file of allFiles) {
+    for (const [index, file] of allFiles.entries()) {
+      if (index % 16 === 0) await yieldToEventLoopFair();
       if (!file.path.endsWith('.blade.php')) continue;
 
       const source = ctx.readFile(file.path);
