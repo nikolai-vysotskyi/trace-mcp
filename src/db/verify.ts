@@ -186,21 +186,31 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
   // always matches the source table — it isn't a useful drift signal. The
   // FTS5 'integrity-check' command, on the other hand, walks the inverted
   // index and reports physical corruption.
+  // Note: SQLite's FTS5 'integrity-check' uses INSERT syntax which fails with
+  // "attempt to write a readonly database" when the db connection is read-only.
   if (tableExists(db, 'symbols_fts')) {
-    try {
-      db.prepare(`INSERT INTO symbols_fts(symbols_fts) VALUES ('integrity-check')`).run();
+    if (db.readonly) {
       checks.push({
         name: 'fts_integrity',
         status: 'ok',
-        detail: 'symbols_fts integrity-check passed',
+        detail: 'symbols_fts integrity-check skipped (database is opened read-only)',
       });
-    } catch (e) {
-      checks.push({
-        name: 'fts_integrity',
-        status: 'warn',
-        detail: `symbols_fts integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
-        suggested_repair: 'rebuild-fts',
-      });
+    } else {
+      try {
+        db.prepare(`INSERT INTO symbols_fts(symbols_fts) VALUES ('integrity-check')`).run();
+        checks.push({
+          name: 'fts_integrity',
+          status: 'ok',
+          detail: 'symbols_fts integrity-check passed',
+        });
+      } catch (e) {
+        checks.push({
+          name: 'fts_integrity',
+          status: 'warn',
+          detail: `symbols_fts integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
+          suggested_repair: 'rebuild-fts',
+        });
+      }
     }
   }
 
@@ -208,20 +218,30 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
   // Same external-content reasoning as above; same repair mode (rebuild-fts
   // restores both index families).
   if (tableExists(db, 'symbols_name_tri')) {
-    try {
-      db.prepare(`INSERT INTO symbols_name_tri(symbols_name_tri) VALUES ('integrity-check')`).run();
+    if (db.readonly) {
       checks.push({
         name: 'trigram_fts_integrity',
         status: 'ok',
-        detail: 'symbols_name_tri integrity-check passed',
+        detail: 'symbols_name_tri integrity-check skipped (database is opened read-only)',
       });
-    } catch (e) {
-      checks.push({
-        name: 'trigram_fts_integrity',
-        status: 'warn',
-        detail: `symbols_name_tri integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
-        suggested_repair: 'rebuild-fts',
-      });
+    } else {
+      try {
+        db.prepare(
+          `INSERT INTO symbols_name_tri(symbols_name_tri) VALUES ('integrity-check')`,
+        ).run();
+        checks.push({
+          name: 'trigram_fts_integrity',
+          status: 'ok',
+          detail: 'symbols_name_tri integrity-check passed',
+        });
+      } catch (e) {
+        checks.push({
+          name: 'trigram_fts_integrity',
+          status: 'warn',
+          detail: `symbols_name_tri integrity-check failed: ${e instanceof Error ? e.message : String(e)}`,
+          suggested_repair: 'rebuild-fts',
+        });
+      }
     }
   }
 
