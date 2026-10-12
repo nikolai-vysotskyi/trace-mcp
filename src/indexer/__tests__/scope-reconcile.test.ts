@@ -172,4 +172,16 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
 
     expect(store.getAllFiles()).toEqual([]);
   });
+
+  it('handles paths with trailing and repeated slashes safely without polynomial regex slowdown', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/old/deep/b.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/older/c.ts', 'typescript', 'old', 10, null, null);
+
+    const pathWithRepeatedSlashes = `top100/old${'/'.repeat(2000)}`;
+    const files = store.getFilesUnderPath(pathWithRepeatedSlashes);
+
+    expect(files.map((f) => f.path)).toEqual(['top100/old/a.ts', 'top100/old/deep/b.ts']);
+  });
 });

@@ -217,6 +217,16 @@ describe('TRA-2282: reindexing stall fixes', () => {
     fs.rmSync(nested, { recursive: true });
     pipeline.deleteFiles(['nested']);
     findPackageJsonEntries(tmpDir);
+    // Path with trailing or repeated slashes invalidates cache without regex slowdown
+    const deepNested = path.join(tmpDir, 'deep-nested');
+    fs.mkdirSync(deepNested);
+    fs.writeFileSync(path.join(deepNested, 'package.json'), '{"name":"deep-nested"}');
+    clearPackageEntriesCache(tmpDir);
+    findPackageJsonEntries(tmpDir);
+    readdirSpy.mockClear();
+    fs.rmSync(deepNested, { recursive: true });
+    pipeline.deleteFiles([`deep-nested${'//'.repeat(500)}`]);
+    findPackageJsonEntries(tmpDir);
     expect(readdirSpy).toHaveBeenCalled();
 
     readdirSpy.mockRestore();

@@ -138,7 +138,11 @@ export class FileRepository {
 
   /** Indexed descendants of a directory, using the UNIQUE path index. */
   getFilesUnderPath(dir: string): FileRow[] {
-    const prefix = `${dir.replace(/\/+$/, '')}/`;
+    let end = dir.length;
+    while (end > 0 && dir.charCodeAt(end - 1) === 47 /* '/' */) {
+      end--;
+    }
+    const prefix = `${dir.slice(0, end)}/`;
     // '/' sorts immediately before '0' in SQLite's binary collation. This
     // range excludes siblings such as "older" without LIKE's case folding.
     return this.db

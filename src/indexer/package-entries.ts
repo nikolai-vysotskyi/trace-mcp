@@ -42,7 +42,11 @@ export function clearPackageEntriesCache(rootPath?: string): void {
 export function clearPackageEntriesCacheForDeletedPath(rootPath: string, relPath: string): void {
   const cached = packageEntriesCache.get(rootPath);
   if (!cached) return;
-  const prefix = `${relPath.replace(/\/+$/, '')}/`;
+  let end = relPath.length;
+  while (end > 0 && relPath.charCodeAt(end - 1) === 47 /* '/' */) {
+    end--;
+  }
+  const prefix = `${relPath.slice(0, end)}/`;
   for (const pkg of cached.packagePaths) {
     if (pkg === relPath || pkg.startsWith(prefix)) {
       packageEntriesCache.delete(rootPath);
