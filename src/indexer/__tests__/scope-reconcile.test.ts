@@ -138,4 +138,26 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
       .flatMap((f) => store.getSymbolsByFile(f.id).map((s) => s.name));
     expect(names).toEqual(['realOne']);
   });
+
+  it('deletes every indexed file beneath a deleted directory event', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    const pipeline = makePipeline(store);
+    const file = store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    store.insertSymbol(file, {
+      symbolId: 'top100/old/a.ts::ghost#function',
+      name: 'ghost',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 5,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+    store.insertFile('top100/old/deep/b.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/older/c.ts', 'typescript', 'old', 10, null, null);
+
+    pipeline.deleteFiles([join(workDir, 'top100', 'old')]);
+
+    expect(store.getAllFiles().map((f) => f.path)).toEqual(['top100/older/c.ts']);
+    expect(store.getSymbolsByFile(file)).toEqual([]);
+  });
 });
