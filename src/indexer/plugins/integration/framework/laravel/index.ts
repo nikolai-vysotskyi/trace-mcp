@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -635,7 +636,7 @@ export class LaravelPlugin implements FrameworkPlugin {
     return ok(result);
   }
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
@@ -645,7 +646,8 @@ export class LaravelPlugin implements FrameworkPlugin {
       fileMap.set(f.path, f);
     }
 
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
+      if (index % 16 === 0) await yieldToEventLoopFair();
       const source = ctx.readFile(file.path);
       if (!source) continue;
 

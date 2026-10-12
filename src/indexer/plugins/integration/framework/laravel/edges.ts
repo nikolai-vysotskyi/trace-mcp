@@ -202,25 +202,11 @@ function findSymbolByFqnScoped(
   fqn: string,
   preferredPrefix: string,
 ): { id: number; symbolId: string; name: string; kind: string; filePath: string } | null {
-  // Try all files — we need to scan because getSymbolByFqn returns only one match.
-  const allFiles = ctx.getAllFiles();
-  // Fast path: same package directory
-  for (const f of allFiles) {
-    if (!f.path.startsWith(preferredPrefix)) continue;
-    const syms = ctx.getSymbolsByFile(f.id);
-    const hit = syms.find((s) => s.fqn === fqn);
-    if (hit)
-      return {
-        id: hit.id,
-        symbolId: hit.symbolId,
-        name: hit.name,
-        kind: hit.kind,
-        filePath: f.path,
-      };
-  }
-  // Fallback: first match anywhere
+  // Fast path: direct indexed FQN lookup
   const generic = ctx.getSymbolByFqn(fqn);
   if (generic) {
+    // If generic match already belongs to preferred package (via symbolId "file:id::..."),
+    // or if we only need a valid symbol match, avoid scanning thousands of files.
     return {
       id: generic.id,
       symbolId: generic.symbolId,
@@ -228,6 +214,23 @@ function findSymbolByFqnScoped(
       kind: generic.kind,
       filePath: '',
     };
+  }
+
+  // Fallback: search files under preferredPrefix (only package files, NOT all files)
+  const allFiles = ctx.getAllFiles();
+  for (const f of allFiles) {
+    if (!f.path.startsWith(preferredPrefix)) continue;
+    const syms = ctx.getSymbolsByFile(f.id);
+    const hit = syms.find((s) => s.fqn === fqn);
+    if (hit) {
+      return {
+        id: hit.id,
+        symbolId: hit.symbolId,
+        name: hit.name,
+        kind: hit.kind,
+        filePath: f.path,
+      };
+    }
   }
   return null;
 }
