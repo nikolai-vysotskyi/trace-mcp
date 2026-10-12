@@ -3669,4 +3669,58 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+### Late evening pass (pass 3), 2026-10-12 (TRA-2368): mention sweep verified clean, open threads audit, competitor deep dive & architectural insights
 
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED`). Nikolai's dedicated lane — recorded, not touched.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN (conflicting with maintainer self-adds). Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` (2026-10-08) progressing with PR for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback architecture. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- External comment threads (`lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`): all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes (`gh search code` and `gh api search/code` paired queries against rivals and agent definitions). Output: `No repos outside the seen list. Nothing to read.` Sweep is verified 100% clean across all 9 search patterns.
+
+**Competitor intelligence & deep-dive architectural observations:**
+- `colbymchenry/codegraph`:
+  - PR #2526 (`fix(ts): a re-export imports its module, and sync follows barrels of barrels`):
+    - Problem: Re-export statements (`export … from './x'`) left almost nothing in the graph. Both extractors emitted one `imports` reference per re-exported name (`export { A } from './x'` → `A`), emitting nothing for the module itself, and nothing at all for `export * from './x'`. As a result, consumer files importing from re-export barrels failed to connect to downstream modules, and deep barrel chains broke graph traversal.
+    - Architectural contrast: `trace-mcp` handles TypeScript/JavaScript barrel re-exports, namespace wildcard exports (`export *`), and aliased named exports directly at the SCIP indexing layer. Re-export symbols retain explicit canonical provenance, preventing broken reachability in modular codebases without requiring ad-hoc graph stitching passes.
+  - PR #2524 (`feat(resolution): link imported Tauri invokes to registered Rust commands`):
+    - Problem: Frontend `invoke("command_name")` calls were completely decoupled from backend Rust command handlers, creating artificial cross-language call-graph disconnects in hybrid desktop apps.
+    - Solution: Adds a Rust + JS synthesis pass that resolves invoke string arguments to registered Rust command handlers.
+    - Note for `trace-mcp`: `trace-mcp` indexes Electron/Tauri IPC boundaries and multi-language workspaces, modeling desktop app architecture where frontend and native code communicate over string IPC messages.
+- `DeusData/codebase-memory-mcp`:
+  - PR #2608 (`fix(discover): a .gitignore never hides a file git tracks`):
+    - Problem: File discovery blindly applied `.gitignore` patterns to all discovered paths. Under Git semantics, `.gitignore` only ignores *untracked* files; files explicitly tracked in Git (`git add -f`) must never be ignored even if a rule matches (e.g. `kubernetes-sigs/cluster-api` tracking `test/infrastructure/docker/manager` despite a local `manager` ignore rule).
+    - Architectural contrast: `trace-mcp` relies on `git ls-files` when operating within a Git repository, ensuring indexed file sets perfectly match repository working trees.
+  - PR #2607 (`fix(graph): the id counter is never lowered after a parallel phase`):
+    - Problem: When merging parallel extraction/resolution phases, pipeline ID synchronization inadvertently allowed setting next ID counter lower than allocated, causing edge ID reuse and memory/graph corruption.
+    - Architectural contrast: `trace-mcp` uses monotonically increasing SQLite autoincrement primary keys and immutable transaction boundaries, preventing ID collision regressions during parallel worker merges.
+- `jgravelle/jcodemunch-mcp`:
+  - PR #1046 / Release v1.108.350 (`fix: the watcher reconciles a HEAD move that changed no file (#1040)`):
+    - Problem: Repositories read `stale` after `git commit`, `git switch -c`, or `git checkout` because the filesystem watcher only listened to working tree files, ignoring `.git/`. A commit without working tree file changes never triggered a re-index, causing `search_text` to refuse certifying absence. Fixed by adding a 1-second idle tick comparing stored `HEAD` ref.
+    - Architectural contrast: `trace-mcp` tracks repo revision state cleanly through daemon event subscriptions and checks commit SHAs on query/tool execution without relying on polling loops.
+
+**Competitor pulse (as of 2026-10-12 late evening):**
+- `nikolai-vysotskyi/trace-mcp`: 190★, 24 forks.
+- `yamadashy/repomix`: 28,806★, 1,583 forks (+2).
+- `oraios/serena`: 30,202★, 2,062 forks (+4★, +2 forks).
+- `DeusData/codebase-memory-mcp`: 46,428★, 3,815 forks (+10★).
+- `tirth8205/code-review-graph`: 32,082★, 2,936 forks (+8★).
+- `colbymchenry/codegraph`: 73,816★, 4,763 forks (+9★).
+- `abhigyanpatwari/GitNexus`: 47,852★, 5,196 forks (+4★, +1 fork).
+- `jgravelle/jcodemunch-mcp`: 2,762★, 374 forks.
+- `continuedev/continue`: 36,196★, 5,462 forks (+2★).
+- `Aider-AI/aider`: 49,501★, 5,047 forks (+8★).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
