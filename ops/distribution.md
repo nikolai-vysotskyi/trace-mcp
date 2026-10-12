@@ -3617,3 +3617,56 @@ Audited read-only via API, nothing written outside this file.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+### Evening pass (pass 2), 2026-10-12 (TRA-2366): mention sweep clean verification, open threads audit, catalog spam evaluation, competitor pulse & architectural insights
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED`). Nikolai's dedicated lane — recorded, not touched.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN (conflicting with daily maintainer self-adds). Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` (2026-10-08) progressing with PR for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback architecture. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- External comment threads (`lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`): all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes (`gh search code` and `gh api search/code` paired queries). Output: `No repos outside the seen list. Nothing to read.` All 3 repos from the previous sweep (`get-bb/marketplace`, `lza6/Armor-piercing-system-prompts`, `wkoch/xrai`) were safely recorded in `ops/mentions-seen.txt`. Sweep is clean.
+
+**Ecosystem & catalog intelligence (mcp-serverlist.com spam campaign evaluation):**
+- Identified mass automated outreach campaign by `tonylate520` (repo `tonylate520/mcp-serverlist`, 0★, created 2026-10-10) opening cookie-cutter issues across 40+ repositories (including competitor PR #2604 on `DeusData/codebase-memory-mcp`, plus issues on `chigwell/telegram-mcp`, `crystaldba/postgres-mcp`, `chroma-core/chroma-mcp`, `OctoEverywhere/mcp`, `yuna0x0/anilist-mcp` — where maintainer marked it `invalid`).
+- Format: "Added 1-click config generator and setup guide for <repo> on MCP ServerList" with prompt to add a backlink badge to README.
+- Assessment: Classic SEO badge/link-farm tactic, zero organic audience, automated spam pattern. Classified as **link-farm / never-touch** under repo security rules. If/when an issue is opened on `nikolai-vysotskyi/trace-mcp`, decline and close without adding badge.
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2153 (`Serena is resource-intensive`): User reports running Serena over stdio MCP in multi-agent harness (Codex subagents) spawns multiple Serena processes per conversation, leaking and exceeding 32 GB RAM. Switching conversations races and overflows memory. Furthermore, running over HTTP triggers concurrency races on workspace directory switching (`parallel tasks racing to switch projects`), causing language parsers to fail loading.
+  - Architectural contrast: `trace-mcp`'s daemon model with persistent SQLite/LMDB index, memory-mapped query paths, and strict worker isolation completely avoids runaway multi-process RAM inflation. Multiple client connections reuse the background server without re-parsing or duplicating AST buffers.
+- `jgravelle/jcodemunch-mcp`:
+  - Release v1.108.348 & v1.108.349 (2026-10-12): Fixes dead code detection bug (L-165, L-166) where cross-file calls in languages without explicit per-file imports (Go, Java, C#, Rust, Ruby) were falsely flagged as `no_callers`.
+  - Consequence & limitation: Fix matches callers strictly by bare name (`LANGUAGES_CALLED_ACROSS_FILES_WITHOUT_AN_IMPORT`). As jCodeMunch explicitly documents in their PR description: "The match is by name, so an uncalled function can hide behind any call of its name" — e.g. uncalled `fn len()` is falsely cleared by `v.len()` on `Vec`, Go `Println` cleared by `fmt.Println`, C# `Dispose` cleared by `s.Dispose()`. Of 289 ripgrep functions no longer reported dead, 179 matched by bare name collisions.
+  - Architectural contrast: `trace-mcp` relies on lexical scope and framework/package-aware SCIP graph resolution rather than global bare-name fuzzy matching, avoiding false negative caller masking.
+- `tirth8205/code-review-graph`:
+  - Feature request #1113 (`networkx with backend=arrow`): NetworkX in-memory representation exhausts system memory on large codebases. Maintainer exploring immutable Arrow-backed graphs (`nx-arrow`) to cut memory 6–7x.
+  - Bug #1109 (`detect_changes reports React components as untested when the spec renders them through a test-file helper`): Demonstrates false positive test-gap reporting when tests call indirect helpers, and TS interfaces are categorized as `Class` nodes without exemption.
+  - Architectural contrast: `trace-mcp` uses on-disk SQLite/SCIP representations with streaming iterators and custom indexed schema, keeping heap usage bounded regardless of graph node count.
+
+**Competitor pulse (as of 2026-10-12 evening):**
+- `nikolai-vysotskyi/trace-mcp`: 190★, 24 forks.
+- `yamadashy/repomix`: 28,806★, 1,581 forks.
+- `oraios/serena`: 30,198★, 2,060 forks.
+- `DeusData/codebase-memory-mcp`: 46,418★, 3,815 forks.
+- `tirth8205/code-review-graph`: 32,074★, 2,936 forks.
+- `colbymchenry/codegraph`: 73,807★, 4,763 forks.
+- `abhigyanpatwari/GitNexus`: 47,848★, 5,195 forks.
+- `continuedev/continue`: 36,194★, 5,462 forks.
+- `Aider-AI/aider`: 49,493★, 5,047 forks.
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
