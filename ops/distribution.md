@@ -3945,3 +3945,57 @@ Audited read-only via API, nothing written outside this file.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Morning pass (pass 2), 2026-10-12 (TRA-2361): open threads audit, sweep hit wkoch/xrai deep-dive, competitor triage (CodeGraph Ruby dispatch, DeusData CBM snapshot consistency, CRG React test gaps)
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` on 2026-10-09). Dedicated lane for Nikolai; no outreach action taken.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` advancing community PR implementing the `dokploy-loadTools` meta-tool adopting Nikolai's dynamic tool schema design.
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, quiet since 2026-09-20. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, quiet since 2026-09-26. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN, untouched. Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, quiet since 2026-09-18. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, quiet since 2026-09-20. Standing no-ping rule holds.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- External comment threads (`lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`): all quiet.
+- **Touch budget: 0 of 5 used.** All standing rules respected; zero unsolicited outreach or PR pings sent.
+
+**Mention sweep discovery & deep-dive (`wkoch/xrai`):**
+- Discovered via Pass 1 & Pass 2 sweeps: `wkoch/xrai` (Rust CLI/MCP tool context engine, 0★, active development).
+- Analysis of `docs/ESTUDO-COMPARATIVO.md` & `docs/PROVA-DE-DIFERENCIACAO.md`:
+  - Features an extensive independent evaluation of `trace-mcp` v3.36.4 alongside Graft, codebase-memory-mcp, and code-review-graph.
+  - Highlights `trace-mcp`'s core architectural advantages: session journal deduplication, progressive tool loading via preset budgets (`src/tools/register/__tests__/preset-surface-budget.test.ts`), SQLite/FTS5 indexing, and 72.7% median token reduction benchmarks.
+  - Validates `trace-mcp`'s architectural decisions: separates locating symbols from delivering raw bodies to curb budget pressure.
+  - Classified in `ops/mentions-seen.txt` and verified.
+
+**Competitor intelligence & architectural observations:**
+- `colbymchenry/codegraph`:
+  - PR #2509 fixing Issue #2503 (opened 2026-10-12): `Ruby: namespaced-constant receivers (A::B.call) get no references edge, so the class has 0 callers`. In Ruby/Rails apps using service objects (`Billing::ChargeCard.call(...)`), CodeGraph's kernel failed to emit a `references` edge when the receiver node kind was `scope_resolution` (rather than bare `constant`), resulting in 0 callers / 0 dependents for over 1,600 call sites.
+  - In `trace-mcp`, qualified receiver resolution handles scoped resolution nodes across Ruby/Rails conventions seamlessly without dropping caller edges.
+- `DeusData/codebase-memory-mcp`:
+  - PR #2600 addressing Issue #2585 (opened 2026-10-12): `Tool results cannot be tied to one coherent, content-verified index snapshot`. Codebase Memory MCP's CLI and MCP tools exhibited critical synchronization flaws where:
+    1. Incremental re-indexing did not update the exposed graph `generation` metadata, causing agents to believe the index was stale or never updated.
+    2. `get_code_snippet` blended cached line ranges with new on-disk content without verifying freshness, returning truncated or incorrect function bodies.
+    3. Identical bytes with touched `mtime` remained stuck in `metadata_changed` status.
+  - In `trace-mcp`, index transactions, content-hash verification, and atomic file reads prevent stale-slice leakage across active tool executions.
+- `tirth8205/code-review-graph`:
+  - PR #1112 addressing Issue #1109 (opened 2026-10-11): `detect_changes reports React components as untested when the spec renders them through a test-file helper, and counts TS interfaces/type aliases as test gaps`. In CRG, TypeScript `interface` and `type` declarations were modeled as `Class` nodes without runtime bodies, causing `detect-changes` to report hundreds of interfaces as untested code gaps. Furthermore, test helper functions in `.spec.tsx` did not propagate `TESTED_BY` edges to wrapped components.
+  - In `trace-mcp`, type-only definitions are correctly categorized in the symbol table, and call graphs accurately trace through helper indirection without creating false test-gap alarms.
+
+**Competitor pulse (2026-10-12 morning pass 2):**
+- `nikolai-vysotskyi/trace-mcp`: 190★ (+1), 24 forks (=).
+- `yamadashy/repomix`: 28,802★ (+3), 1,579 forks (=).
+- `oraios/serena`: 30,191★ (+6), 2,058 forks (+1).
+- `DeusData/codebase-memory-mcp`: 46,384★ (+15), 3,813 forks (+1).
+- `tirth8205/code-review-graph`: 32,047★ (+2), 2,936 forks (=).
+- `colbymchenry/codegraph`: 73,760★ (+21), 4,758 forks (+5).
+- `abhigyanpatwari/GitNexus`: 47,840★ (+1), 5,195 forks (-2).
+- `continuedev/continue`: 36,191★ (+4), 5,462 forks (-1).
+- `Aider-AI/aider`: 49,478★ (+4), 5,048 forks (=).
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.

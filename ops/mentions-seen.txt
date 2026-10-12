@@ -272,3 +272,9 @@ get-bb/marketplace
 # Genuine third-party: System prompts & skills aggregation repo (2★, 2 forks).
 # Bundles trace-mcp, trace-mcp-codemod, trace-mcp-refactoring, and trace-mcp-pre-commit in 04/05/07 skill trees:
 lza6/Armor-piercing-system-prompts
+
+# ── Swept 2026-10-12 (TRA-2361) ──
+# Genuine third-party: Rust code intelligence CLI/MCP research project (0★, 0 forks).
+# Deep comparative analysis in docs/ESTUDO-COMPARATIVO.md & PROVA-DE-DIFERENCIACAO.md
+# analyzing trace-mcp v3.36.4 architecture, SQLite/FTS5, presets, and token benchmark:
+wkoch/xrai
