@@ -264,3 +264,13 @@ jfjordanfarr/Live-Documentation
 # Name collision: LLM agent harness with internal iknow-trace-mcp server
 # (docs/trace-mcp-server.md, src/trace-mcp/) exposing session transcript trace querying tools:
 winter6205/iknow
+
+# ── Swept 2026-10-12 (TRA-2364) ──
+# Merged plugin marketplace entry (PR #524) in entries/trace-mcp.json:
+get-bb/marketplace
+# Genuine third-party packaging: Chinese Claude Code agent skills repository (4★, 2 forks).
+# Packages trace-mcp, trace-mcp-codemod, trace-mcp-refactoring, trace-mcp-pre-commit skills:
+lza6/Armor-piercing-system-prompts
+# Genuine third-party comparative study: technical architecture benchmark evaluating
+# trace-mcp v3.36.4 alongside 7 code graph tools in docs/ESTUDO-COMPARATIVO.md:
+wkoch/xrai

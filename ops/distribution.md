@@ -117,6 +117,8 @@ Rules for keeping it honest:
 | [midnight000spark/dharma-toolkit](https://github.com/midnight000spark/dharma-toolkit) | **Yes — third-party evaluation, we did not submit it** (0★, 0 forks) | Project architecture records D-47 and F-72 evaluate trace-mcp 3.31.4 on Dart/Flutter codebase: noted regex-only symbol parsing for Dart and absence of Flutter framework integration, postponing adoption | Nothing to submit and do not ping. Direct user evaluation signal: validates roadmap priorities regarding framework/language depth outside JS/TS/Python. Found by `scripts/mention-sweep.sh` 2026-10-08 | 2026-10-08 |
 | [FlorianBruniaux/claude-code-ultimate-guide](https://github.com/FlorianBruniaux/claude-code-ultimate-guide) | **Evaluated — premier editorial surface, candidate for submission** (6,125★, 803 forks, active daily) | The most authoritative Claude Code guide and ecosystem reference (430K+ lines). Has two direct target sections: `guide/ecosystem/mcp-servers-ecosystem.md` under `### Code search & analysis` (currently listing only Grepai and Semble) and `examples/skills/smart-explore.md` ("Smart explore: Progressive code exploration", listing code-review-graph, jCodeMunch, and mcp-server-tree-sitter) | Highly curated, active editorial maintainer (Florian Bruniaux) who reviews and merges external tool PRs (e.g. #84 YYLO, #86 swe-mux). trace-mcp fills their explicit documented gap between Grepai (requires Ollama) and Semble (Model2Vec CPU, no call graph or AST symbols): 100% CPU-local, zero external service/Ollama, AST-based symbol graph + call hierarchy across 88 frameworks and 81 languages, 72.7% token reduction on PR reviews. Documented as candidate for next cycle | 2026-10-08 |
 | [jfjordanfarr/Live-Documentation](https://github.com/jfjordanfarr/Live-Documentation) | **Yes — third-party research survey, we did not submit it** (MIT, active 2026-10-08) | Independent architecture research document `AI-Agent-Workspace/Research/2026-10-08-headless-use-cases.md` surveying code intelligence tools for AI agents. Cites `trace-mcp` (mcpservers.org) under "Agents reading a codebase's structure" alongside `codebase-graph`, `Codebase Memory MCP`, and `CodeGraph`: describes trace-mcp as "(68 languages, impact analysis)". Analyzes architectural trade-off between live MCP servers and reviewable committed docs-as-code | Independent survey, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-09 | 2026-10-09 |
+| [lza6/Armor-piercing-system-prompts](https://github.com/lza6/Armor-piercing-system-prompts) | **Yes — third-party packaging, we did not write it and did not submit it** (4★, 2 forks, pushed 2026-10-08) | Aggregated Chinese Claude Code agent skills repository. Packages 4 complete `trace-mcp` skills: `05-技能与代理开发/trace-mcp/SKILL.md` (code navigation routing over 182 tools), `07-后端与架构/trace-mcp-codemod/SKILL.md` (bulk mechanical codemods), `04-安全渗透/trace-mcp-pre-commit/SKILL.md`, and `07-后端与架构/trace-mcp-refactoring/SKILL.md`. Formulates concrete rules mandating trace-mcp tools over Read/Grep/Glob/Bash for agents | Nothing to submit and do not ping. Value is distribution evidence in agent prompt/skill collections in the wild. Discovered by `scripts/mention-sweep.sh` 2026-10-12 | 2026-10-12 |
+| [wkoch/xrai](https://github.com/wkoch/xrai) | **Yes — third-party technical study & benchmark evaluation, we did not submit it** (0★, active 2026-10-11) | In-depth technical architecture study `docs/ESTUDO-COMPARATIVO.md` ("Oito referências para o xrai", 2026-10-11) evaluating `trace-mcp` v3.36.4 alongside 7 code graph tools (Graft, codebase-memory-mcp, code-review-graph, jcodemunch, tokensave, ProjectAtlas, codegraph-mcp). Analyzes `trace-mcp`'s 81 language plugins matrix, SCIP ingestion (`src/scip/ingest.ts`), `get_task_context` budget assembly (`src/scoring/structured-assembly.ts`), session deduplication, and the PR review benchmark methodology (72.7% token reduction) and post-mortem (`docs/perf/pr-context-loss-classes.md`) | In-depth architectural evaluation and academic/engineering citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-12 | 2026-10-12 |
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
 
@@ -3559,3 +3561,59 @@ Audited read-only via API, nothing written outside this file.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Afternoon pass (pass 1), 2026-10-12 (TRA-2364): mention sweep (3 hits analyzed), BB marketplace admission verified, open threads audit, competitor pulse & telemetry, Serena stale preview ID & CBM/CRG architecture analysis
+
+Audited read-only via API, nothing written outside this file.
+
+**Open threads audit (via GitHub API read-only):**
+- `get-bb/marketplace#524`: MERGED 2026-10-10T16:17Z by maintainer review (SawyerHood). Entry `entries/trace-mcp.json` is live on `main`. Added to `mentions-seen.txt`.
+- `MiniMax-AI/MiniMax-Code-Plugins#54`: OPEN, updated 2026-10-09T01:18Z with Review Round 4 from `hetaoBackend` (`CHANGES_REQUESTED` for commit `bc461c77cef5facbdfc5a22de6aa64d5c11c2bf9`). Reviewer requested:
+  1. `TRACE_MCP_NO_POSTINSTALL=1` to prevent background LaunchAgent/daemon creation on first `npx` run.
+  2. Prove backend provenance on existing-daemon attachment beyond fixed port `/health` (binding package version, PID, binary path, signature).
+  3. Wire smoke test into exact-head CI with enforced assertions.
+  4. Clarify transactional safety claims regarding multi-file refactors (document real preview/confirmation/rollback semantics rather than claiming atomic rollback).
+  *Note: Nikolai's dedicated lane — recorded, not touched.*
+- `GetBindu/awesome-claude-code-and-skills#195`: OPEN, mergeable, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `0xNyk/awesome-hermes-agent#395`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `tolkonepiu/best-of-mcp-servers#384`: OPEN, mergeable, untouched since 2026-09-26 reminder. Standing no-ping rule holds.
+- `ai-boost/awesome-harness-engineering#240`: OPEN (conflicting with daily maintainer self-adds). Standing wontfix-spend / no-ping rule holds.
+- `hesreallyhim/awesome-claude-code#2871`: OPEN issue, untouched since 2026-09-18 bot validation. Standing no-ping rule holds.
+- `natsukium/mcp-servers-nix#606`: OPEN issue, untouched since 2026-09-20 reminder. Standing no-ping rule holds.
+- `Dokploy/mcp#81`: OPEN, contributor `moataz-hjaiji` (2026-10-08) progressing with PR for meta-tool `dokploy-loadTools` adopting Nikolai's schema payload and client fallback architecture. No action needed.
+- `hashgraph-online/awesome-ai-plugins#182`: MERGED, listed in HOL Registry. Third-party scanner CI refused per repo security policy; claim notifications ignored.
+- External comment threads (`lastlight#372`, `pi-extensions#1204`, `nanocoder#1197`, `pyrefly#4583`, `ai-tooling#585`, `pr-agent#2499`, `slopstop#633`, `atlas#105`): all quiet.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (`scripts/mention-sweep.sh`):**
+- Ran both passes (`gh search code` and `gh api search/code` paired queries). Found 3 repos outside `ops/mentions-seen.txt`.
+- All 3 inspected read-only via API/raw content:
+  1. `get-bb/marketplace`: Merged marketplace PR #524 in `entries/trace-mcp.json`. Classified in `ops/mentions-seen.txt`.
+  2. `lza6/Armor-piercing-system-prompts` (4★, 2 forks): Aggregated Chinese Claude Code agent skills repository. Contains 4 complete `trace-mcp` skills: `05-技能与代理开发/trace-mcp/SKILL.md` (code navigation routing over 182 tools), `07-后端与架构/trace-mcp-codemod/SKILL.md` (codemods), `04-安全渗透/trace-mcp-pre-commit/SKILL.md`, and `07-后端与架构/trace-mcp-refactoring/SKILL.md`. Formulates explicit rules forbidding agents from using Read/Grep/Glob/Bash on code when trace-mcp is available. Genuine third-party packaging/ecosystem surface; added to Surfaces table and `ops/mentions-seen.txt`.
+  3. `wkoch/xrai` (0★, active): Deep comparative study `docs/ESTUDO-COMPARATIVO.md` ("Oito referências para o xrai", 2026-10-11) evaluating `trace-mcp` v3.36.4 alongside 7 code graph tools. Evaluates `trace-mcp`'s 81 language plugins matrix, SCIP ingestion (`src/scip/ingest.ts`), `get_task_context` budget assembly (`src/scoring/structured-assembly.ts`), session deduplication, and benchmark methodology (72.7% token reduction) and post-mortem (`docs/perf/pr-context-loss-classes.md`). Genuine third-party architecture analysis & citation; added to Surfaces table and `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- `oraios/serena`:
+  - Issue #2154 (opened 2026-10-10 by `dafyy321-pixel`): `replace_in_files can apply a stale preview ID to a different identical match`. Serena builds occurrence IDs as `<relative path>:<match index>@<digest of matched text>`. If lines are deleted or inserted between dry-run and apply, ordinal indices shift; when applying the old ID, Serena mutates an unintended occurrence without warning.
+  - In `trace-mcp`, `apply_codemod` avoids fragile ordinal IDs altogether: dry-run provides a contextual preview, while apply mode verifies the pattern dynamically against the current file state, writes atomically via `atomicWriteFile`, and enforces symlink boundary containment (`validateWritePath`).
+- `DeusData/codebase-memory-mcp`:
+  - Issue #2591 (2026-10-11): `query_graph: a WHERE comparison between two properties (a.file_path = b.file_path) fails with "expected value at pos N"`. Cypher query parser fails on property-to-property joins.
+  - Issues #2587 & #2588: Directory moves cause references to disappear without tracking unresolved records, while dangling member references degrade into file-level edges without validation.
+- `tirth8205/code-review-graph`:
+  - Issue #1110 (2026-10-10): `tsconfig baseUrl/paths inherited through "extends" are resolved against the child config's directory`. Misconfigured TS config resolution when inheritance is involved.
+  - Issue #1107: `rename refactor leaves 'from module import old_name' unchanged, so applied code raises ImportError`. Python AST renamer fails on import statements.
+
+**Competitor pulse (as of 2026-10-12 afternoon):**
+- `nikolai-vysotskyi/trace-mcp`: 190★ (+1), 24 forks.
+- `yamadashy/repomix`: 28,802★, 1,579 forks.
+- `oraios/serena`: 30,197★, 2,058 forks.
+- `DeusData/codebase-memory-mcp`: 46,405★, 3,813 forks.
+- `tirth8205/code-review-graph`: 32,060★, 2,936 forks.
+- `colbymchenry/codegraph`: 73,794★, 4,759 forks.
+- `abhigyanpatwari/GitNexus`: 47,844★, 5,194 forks.
+- `continuedev/continue`: 36,192★, 5,462 forks.
+- `Aider-AI/aider`: 49,488★, 5,047 forks.
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
