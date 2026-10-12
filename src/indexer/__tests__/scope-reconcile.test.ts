@@ -138,4 +138,50 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
       .flatMap((f) => store.getSymbolsByFile(f.id).map((s) => s.name));
     expect(names).toEqual(['realOne']);
   });
+
+  it('deletes every indexed file beneath a deleted directory event', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    const pipeline = makePipeline(store);
+    const file = store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    store.insertSymbol(file, {
+      symbolId: 'top100/old/a.ts::ghost#function',
+      name: 'ghost',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 5,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+    store.insertFile('top100/old/deep/b.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/older/c.ts', 'typescript', 'old', 10, null, null);
+
+    pipeline.deleteFiles([join(workDir, 'top100', 'old')]);
+
+    expect(store.getAllFiles().map((f) => f.path)).toEqual(['top100/older/c.ts']);
+    expect(store.getSymbolsByFile(file)).toEqual([]);
+  });
+
+  it('evicts descendants when a directory is replaced by a regular file', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    const pipeline = makePipeline(store);
+    store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    mkdirSync(join(workDir, 'top100'));
+    writeFileSync(join(workDir, 'top100', 'old'), 'replacement');
+
+    pipeline.deleteFiles(['top100/old']);
+
+    expect(store.getAllFiles()).toEqual([]);
+  });
+
+  it('handles paths with trailing and repeated slashes safely without polynomial regex slowdown', () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    store.insertFile('top100/old/a.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/old/deep/b.ts', 'typescript', 'old', 10, null, null);
+    store.insertFile('top100/older/c.ts', 'typescript', 'old', 10, null, null);
+
+    const pathWithRepeatedSlashes = `top100/old${'/'.repeat(2000)}`;
+    const files = store.getFilesUnderPath(pathWithRepeatedSlashes);
+
+    expect(files.map((f) => f.path)).toEqual(['top100/old/a.ts', 'top100/old/deep/b.ts']);
+  });
 });

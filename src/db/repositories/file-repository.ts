@@ -136,6 +136,20 @@ export class FileRepository {
     return this.db.prepare('SELECT * FROM files').all() as FileRow[];
   }
 
+  /** Indexed descendants of a directory, using the UNIQUE path index. */
+  getFilesUnderPath(dir: string): FileRow[] {
+    let end = dir.length;
+    while (end > 0 && dir.charCodeAt(end - 1) === 47 /* '/' */) {
+      end--;
+    }
+    const prefix = `${dir.slice(0, end)}/`;
+    // '/' sorts immediately before '0' in SQLite's binary collation. This
+    // range excludes siblings such as "older" without LIKE's case folding.
+    return this.db
+      .prepare('SELECT * FROM files WHERE path >= ? AND path < ?')
+      .all(prefix, `${prefix.slice(0, -1)}0`) as FileRow[];
+  }
+
   updateFileWorkspace(fileId: number, workspace: string): void {
     this.db.prepare('UPDATE files SET workspace = ? WHERE id = ?').run(workspace, fileId);
   }
