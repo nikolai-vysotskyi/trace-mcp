@@ -3,7 +3,15 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { TraceMcpConfigSchema } from '../../src/config.js';
+import { initializeDatabase } from '../../src/db/schema.js';
+import { Store } from '../../src/db/store.js';
+import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import { ProgressState } from '../../src/progress.js';
+import { createServer } from '../../src/server/server.js';
 
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-guard.sh');
 const TMP_BASE = fs.realpathSync(os.tmpdir());
@@ -327,6 +335,78 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     // Agent calls get_outline; server writes the marker.
     writeConsultationMarker(projectDir, 'baz.ts');
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+  });
+
+  it('allows Read after get_outline runs directly or as a batch sub-call', async () => {
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+    for (const name of ['direct', 'batched']) {
+      const rel = `${name}.ts`;
+      fs.writeFileSync(path.join(projectDir, rel), `export function ${name}() {}`);
+      const fileId = store.insertFile(rel, 'typescript', `h-${name}`, 30);
+      store.insertSymbol(fileId, {
+        symbolId: `${rel}::${name}#function`,
+        name,
+        kind: 'function',
+        fqn: name,
+        byteStart: 0,
+        byteEnd: 30,
+        lineStart: 1,
+        lineEnd: 1,
+      });
+    }
+    const server = createServer(
+      store,
+      PluginRegistry.createWithDefaults(),
+      TraceMcpConfigSchema.parse({ tools: { preset: 'full' } }),
+      projectDir,
+      new ProgressState(db),
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'guard-batch-test', version: '1.0.0' });
+    try {
+      await Promise.all([server.server.connect(serverTransport), client.connect(clientTransport)]);
+      for (const name of ['direct', 'batched']) {
+        expect(
+          runGuard(
+            'Read',
+            { file_path: path.join(projectDir, `${name}.ts`) },
+            sessionId,
+            projectDir,
+          ).allowed,
+        ).toBe(false);
+      }
+
+      const direct = await client.callTool({
+        name: 'get_outline',
+        arguments: { path: 'direct.ts' },
+      });
+      expect(direct.isError).not.toBe(true);
+      const batch = await client.callTool({
+        name: 'batch',
+        arguments: { calls: [{ tool: 'get_outline', args: { path: 'batched.ts' } }] },
+      });
+      expect(batch.isError).not.toBe(true);
+      const entries = JSON.parse((batch.content[0] as { text: string }).text).batch_results;
+      expect(entries[0].error).toBeUndefined();
+
+      const markerDir = path.join(TMP_BASE, `trace-mcp-consulted-${projectHash(projectDir)}`);
+      for (const name of ['direct', 'batched']) {
+        expect(fs.existsSync(path.join(markerDir, fileHash(`${name}.ts`)))).toBe(true);
+        expect(
+          runGuard(
+            'Read',
+            { file_path: path.join(projectDir, `${name}.ts`) },
+            sessionId,
+            projectDir,
+          ).allowed,
+        ).toBe(true);
+      }
+    } finally {
+      await client.close().catch(() => {});
+      server.dispose();
+      db.close();
+    }
   });
 
   it('clears deny escalation once consultation marker appears', () => {
