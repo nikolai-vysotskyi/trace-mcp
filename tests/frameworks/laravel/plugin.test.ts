@@ -2,6 +2,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../../src/indexer/plugins/integration/framework/laravel/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
+import { _resetYieldCountForTests, getYieldCount } from '../../../src/utils/event-loop.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 const L12_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-12');
@@ -270,6 +271,37 @@ describe('LaravelPlugin', () => {
       const result = await plugin.resolveEdges(mockCtx);
       expect(result.isOk()).toBe(true);
       expect(breathed).toBe(true);
+    });
+
+    it('does not yield fair turns on unrelated files in bulk projects (TRA-2394)', async () => {
+      // 500 files, none are PHP/Blade/Composer
+      const files = Array.from({ length: 500 }, (_, i) => ({
+        id: i + 1,
+        path: `data/file${i}.bin`,
+        language: 'binary',
+      }));
+
+      let readFileCalls = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => {
+          readFileCalls++;
+          return '';
+        },
+      };
+
+      _resetYieldCountForTests();
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([]);
+      // On pre-fix code, 500 un-filtered files yielded at index 0, 16, 32... (~32 times)
+      // and called readFile on all 500 files.
+      // With pre-filtering, 0 yields and 0 readFile calls occur.
+      expect(getYieldCount()).toBe(0);
+      expect(readFileCalls).toBe(0);
     });
   });
 });

@@ -50,7 +50,10 @@ import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from '
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext, findScanDirectoriesAsync } from './project-context.js';
 import { checkUnindexableSkip } from './unindexable-skip-cache.js';
-import { clearPackageEntriesCache } from './package-entries.js';
+import {
+  clearPackageEntriesCache,
+  clearPackageEntriesCacheForDeletedPath,
+} from './package-entries.js';
 // P02 Task DAG migration: 3 passes are scheduled through a TaskDag instead
 // of being called imperatively from `runPipeline`. The Task wrappers live in
 // `src/pipeline/tasks/*` and delegate to the existing private methods on
@@ -1322,33 +1325,59 @@ export class IndexingPipeline {
       );
       return;
     }
+    const filesToDelete = new Map<number, { id: number; path: string }>();
+    for (const fp of filePaths) {
+      const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+      const relPath = rel.split(path.sep).join('/');
+      if (validatePath(relPath, this.rootPath).isErr() || relPath === '.') continue;
+      // Preserve cache invalidation for a delete event even when the file was
+      // never indexed (package discovery can still have cached its manifest).
+      invalidateTreeCacheFile(this.rootPath, relPath);
+      if (relPath === 'package.json' || relPath.endsWith('/package.json')) {
+        clearPackageEntriesCache(this.rootPath);
+      }
+      clearPackageEntriesCacheForDeletedPath(this.rootPath, relPath);
+      const exact = this.store.getFile(relPath);
+      if (exact) filesToDelete.set(exact.id, exact);
+      // Parcel/FSEvents may report only the directory when a whole tree is
+      // removed. The index stores files, not directories, so an exact lookup
+      // alone leaves every descendant and its symbols searchable forever.
+      // A still-present directory can be a stale delete event after a rename
+      // or quick recreation; leave it for normal file events/full reconcile.
+      let mayHaveLostDescendants = false;
+      try {
+        mayHaveLostDescendants = !fs.statSync(path.resolve(this.rootPath, relPath)).isDirectory();
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        mayHaveLostDescendants = code === 'ENOENT' || code === 'ENOTDIR';
+      }
+      if (mayHaveLostDescendants) {
+        for (const file of this.store.getFilesUnderPath(relPath)) {
+          filesToDelete.set(file.id, file);
+        }
+      }
+    }
     // TRA-1577: drop per-file tree-sitter cache entries alongside the DB rows
     // so a deleted path can't serve a stale incremental base on re-creation,
     // and its WASM trees are freed instead of lingering to LRU eviction.
-    for (const fp of filePaths) {
-      const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-      const relPosix = rel.split(path.sep).join('/');
-      invalidateTreeCacheFile(this.rootPath, relPosix);
-      if (relPosix === 'package.json' || relPosix.endsWith('/package.json')) {
+    for (const file of filesToDelete.values()) {
+      invalidateTreeCacheFile(this.rootPath, file.path);
+      if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
         clearPackageEntriesCache(this.rootPath);
       }
     }
     this.store.db
       .transaction(() => {
-        for (const fp of filePaths) {
-          const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
-          // Store paths are always posix-separated (collectFiles() via
-          // fast-glob) — an unconverted backslash on Windows misses the row
-          // entirely, silently no-op'ing the delete (TRA-1045).
-          const relPath = rel.split(path.sep).join('/');
-          const file = this.store.getFile(relPath);
-          if (file) {
-            this.store.deleteFile(file.id);
-            logger.info({ file: relPath }, 'Deleted file from index');
-          }
+        for (const file of filesToDelete.values()) {
+          this.store.deleteFile(file.id);
         }
       })
       .immediate();
+    if (filesToDelete.size > 0) {
+      invalidatePageRankCache();
+      invalidateSearchCache(this.store.db);
+      logger.info({ count: filesToDelete.size }, 'Deleted files from index');
+    }
   }
 
   /**

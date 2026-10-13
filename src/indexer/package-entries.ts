@@ -24,7 +24,10 @@ import { yieldToEventLoopFair } from '../utils/event-loop.js';
 const PACKAGE_ENTRIES_CACHE_TTL_MS = 60_000;
 const MAX_PACKAGE_ENTRIES_CACHE_ENTRIES = 20;
 
-const packageEntriesCache = new Map<string, { entries: Set<string>; computedAt: number }>();
+const packageEntriesCache = new Map<
+  string,
+  { entries: Set<string>; packagePaths: Set<string>; computedAt: number }
+>();
 
 /** Evict package.json entry cache (all or per-root). */
 export function clearPackageEntriesCache(rootPath?: string): void {
@@ -32,6 +35,23 @@ export function clearPackageEntriesCache(rootPath?: string): void {
     packageEntriesCache.delete(rootPath);
   } else {
     packageEntriesCache.clear();
+  }
+}
+
+/** Evict when a removed tree contained a manifest seen by the cached scan. */
+export function clearPackageEntriesCacheForDeletedPath(rootPath: string, relPath: string): void {
+  const cached = packageEntriesCache.get(rootPath);
+  if (!cached) return;
+  let end = relPath.length;
+  while (end > 0 && relPath.charCodeAt(end - 1) === 47 /* '/' */) {
+    end--;
+  }
+  const prefix = `${relPath.slice(0, end)}/`;
+  for (const pkg of cached.packagePaths) {
+    if (pkg === relPath || pkg.startsWith(prefix)) {
+      packageEntriesCache.delete(rootPath);
+      return;
+    }
   }
 }
 
@@ -51,10 +71,11 @@ export function findPackageJsonEntries(
   const cached = readCachedEntries(rootPath, options);
   if (cached) return cached;
   const entries = new Set<string>();
-  for (const _ of scanPackageEntries(rootPath, entries)) {
+  const packagePaths = new Set<string>();
+  for (const _ of scanPackageEntries(rootPath, entries, packagePaths)) {
     // Synchronous callers use the same scanner and cache contract.
   }
-  cacheEntries(rootPath, entries);
+  cacheEntries(rootPath, entries, packagePaths);
   return entries;
 }
 
@@ -66,11 +87,12 @@ export async function findPackageJsonEntriesAsync(
   const cached = readCachedEntries(rootPath, options);
   if (cached) return cached;
   const entries = new Set<string>();
+  const packagePaths = new Set<string>();
   let dirs = 0;
-  for (const _ of scanPackageEntries(rootPath, entries)) {
+  for (const _ of scanPackageEntries(rootPath, entries, packagePaths)) {
     if (++dirs % 32 === 0) await yieldToEventLoopFair();
   }
-  cacheEntries(rootPath, entries);
+  cacheEntries(rootPath, entries, packagePaths);
   return entries;
 }
 
@@ -91,7 +113,11 @@ function readCachedEntries(
   return undefined;
 }
 
-function* scanPackageEntries(rootPath: string, entries: Set<string>): Generator<void> {
+function* scanPackageEntries(
+  rootPath: string,
+  entries: Set<string>,
+  packagePaths: Set<string>,
+): Generator<void> {
   if (!rootPath || !fs.existsSync(rootPath)) return;
 
   const visited = new Set<string>();
@@ -138,6 +164,7 @@ function* scanPackageEntries(rootPath: string, entries: Set<string>): Generator<
       if (!ent.isFile() || name !== 'package.json') continue;
 
       const pkgPath = path.join(dir, name);
+      packagePaths.add(path.relative(rootPath, pkgPath).replace(/\\/g, '/'));
       try {
         const raw = fs.readFileSync(pkgPath, 'utf-8');
         const pkg = JSON.parse(raw);
@@ -171,13 +198,13 @@ function* scanPackageEntries(rootPath: string, entries: Set<string>): Generator<
   }
 }
 
-function cacheEntries(rootPath: string, entries: Set<string>): void {
+function cacheEntries(rootPath: string, entries: Set<string>, packagePaths: Set<string>): void {
   packageEntriesCache.delete(rootPath);
   if (packageEntriesCache.size >= MAX_PACKAGE_ENTRIES_CACHE_ENTRIES) {
     const oldestKey = packageEntriesCache.keys().next().value;
     if (oldestKey !== undefined) packageEntriesCache.delete(oldestKey);
   }
-  packageEntriesCache.set(rootPath, { entries, computedAt: Date.now() });
+  packageEntriesCache.set(rootPath, { entries, packagePaths, computedAt: Date.now() });
 }
 
 /**

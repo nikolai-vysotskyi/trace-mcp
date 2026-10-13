@@ -646,7 +646,15 @@ export class LaravelPlugin implements FrameworkPlugin {
       fileMap.set(f.path, f);
     }
 
-    for (const [index, file] of files.entries()) {
+    // Pre-filter files relevant to Laravel/Blade/Composer (TRA-2394).
+    // In multi-language repos or bulk-indexing with 10k+ files (e.g. Python, text, data),
+    // yielding fair turns on unrelated files starves the plugin budget and causes timeouts.
+    const relevantFiles = files.filter(
+      (f) =>
+        f.language === 'php' || f.path.endsWith('.blade.php') || f.path.endsWith('composer.json'),
+    );
+
+    for (const [index, file] of relevantFiles.entries()) {
       if (index % 16 === 0) await yieldToEventLoopFair();
       const source = ctx.readFile(file.path);
       if (!source) continue;

@@ -17,7 +17,7 @@
  * to the default. Installed once per handle (WeakSet-guarded — installing
  * twice must not double-wrap and double-log).
  *
- * Cost: two `Date.now()` calls per statement execution — negligible next
+ * Cost: two wall and two monotonic clock reads per execution — negligible next
  * to any SQLite work. Threading: better-sqlite3 is synchronous, so timing
  * on the calling thread attributes the stall to exactly the statement
  * holding the daemon's only thread.
@@ -60,6 +60,35 @@ function clipSql(sql: string): string {
 
 type StatementMethod = 'run' | 'get' | 'all' | 'iterate';
 const TIMED_METHODS = new Set<string>(['run', 'get', 'all', 'iterate']);
+const CLOCK_DISCREPANCY_MS = 1000;
+
+function logTiming(
+  startedActive: number,
+  startedWall: number,
+  thresholdMs: number,
+  op: string,
+  db: string,
+  sql: string,
+): void {
+  const ms = performance.now() - startedActive;
+  const wallMs = Date.now() - startedWall;
+  const sleepOrClockChangeMs = wallMs - ms;
+  const clockChanged = Math.abs(sleepOrClockChangeMs) >= CLOCK_DISCREPANCY_MS;
+  if (ms < thresholdMs && !clockChanged) return;
+  const details = {
+    ms,
+    op,
+    db,
+    sql: clipSql(sql),
+    ...(clockChanged ? { wallMs, sleepOrClockChangeMs } : {}),
+  };
+  logger.warn(
+    details,
+    ms >= thresholdMs
+      ? 'Slow SQLite statement blocked the event loop'
+      : 'SQLite statement crossed sleep or wall-clock adjustment',
+  );
+}
 
 /**
  * Wrap a prepared statement so its row-returning executions are timed.
@@ -81,17 +110,12 @@ function wrapStatement<T extends object>(
 ): T {
   const timed = (method: StatementMethod, fn: (...a: unknown[]) => unknown) => {
     return (...args: unknown[]) => {
-      const t0 = Date.now();
+      const startedActive = performance.now();
+      const startedWall = Date.now();
       try {
         return fn(...args);
       } finally {
-        const ms = Date.now() - t0;
-        if (ms >= thresholdMs) {
-          logger.warn(
-            { ms, op: method, db: dbName, sql: clipSql(sql) },
-            'Slow SQLite statement blocked the event loop',
-          );
-        }
+        logTiming(startedActive, startedWall, thresholdMs, method, dbName, sql);
       }
     };
   };
@@ -137,17 +161,12 @@ export function installSlowStatementGuard(
   const origExec = (db.exec as (sql: string) => unknown).bind(db);
   handle['exec'] = function (source: unknown) {
     const sql = String(source);
-    const t0 = Date.now();
+    const startedActive = performance.now();
+    const startedWall = Date.now();
     try {
       return origExec(sql);
     } finally {
-      const ms = Date.now() - t0;
-      if (ms >= thresholdMs) {
-        logger.warn(
-          { ms, op: 'exec', db: dbName, sql: clipSql(sql) },
-          'Slow SQLite statement blocked the event loop',
-        );
-      }
+      logTiming(startedActive, startedWall, thresholdMs, 'exec', dbName, sql);
     }
   };
 }

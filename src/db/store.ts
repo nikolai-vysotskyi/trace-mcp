@@ -71,6 +71,10 @@ export class Store {
     return this.files.getAllFiles();
   }
 
+  getFilesUnderPath(dir: string): FileRow[] {
+    return this.files.getFilesUnderPath(dir);
+  }
+
   updateFileWorkspace(fileId: number, workspace: string): void {
     this.files.updateFileWorkspace(fileId, workspace);
   }

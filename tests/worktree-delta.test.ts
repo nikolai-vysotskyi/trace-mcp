@@ -245,6 +245,23 @@ describe.skipIf(process.platform === 'win32')('worktree delta', () => {
       expect(s.truncated).toBe(false);
     });
 
+    it('is served from a branch index only while that index is ready', () => {
+      const info = {
+        state: 'ready' as const,
+        canonical_head_at_copy: 'b'.repeat(40),
+        built_at: new Date(0).toISOString(),
+        pending: [],
+        reindexed_files: 5,
+      };
+      expect(summarizeWorktreeDelta(delta).served_from).toBe('canonical_index');
+      const ready = summarizeWorktreeDelta(delta, undefined, info);
+      expect(ready.served_from).toBe('branch_index');
+      expect(ready.branch_index).toEqual(info);
+      const building = summarizeWorktreeDelta(delta, undefined, { ...info, state: 'building' });
+      expect(building.served_from).toBe('canonical_index');
+      expect(building.branch_index?.state).toBe('building');
+    });
+
     it('caps long lists and says so', () => {
       const s = summarizeWorktreeDelta(delta, 2);
       expect(s.modified).toEqual(['x.ts', 'y.ts']);

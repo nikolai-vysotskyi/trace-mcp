@@ -101,6 +101,59 @@ describe('installSlowStatementGuard (TRA-1834)', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('reports a wall-clock jump without calling a fast query an event-loop stall', () => {
+    let wall = 1000;
+    let active = 1000;
+    const wallSpy = vi.spyOn(Date, 'now').mockImplementation(() => wall);
+    const activeSpy = vi.spyOn(performance, 'now').mockImplementation(() => active);
+    try {
+      const originalExec = db.exec.bind(db);
+      vi.spyOn(db, 'exec').mockImplementation((sql) => {
+        wall += 370_000;
+        active += 5;
+        return originalExec(sql);
+      });
+      installSlowStatementGuard(db, { thresholdMs: 2000 });
+      db.exec('SELECT 1');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ ms: 5, wallMs: 370_000, sleepOrClockChangeMs: 369_995 }),
+        'SQLite statement crossed sleep or wall-clock adjustment',
+      );
+      expect(
+        warnSpy.mock.calls.some(
+          (call) => call[1] === 'Slow SQLite statement blocked the event loop',
+        ),
+      ).toBe(false);
+    } finally {
+      wallSpy.mockRestore();
+      activeSpy.mockRestore();
+    }
+  });
+
+  it('still reports active blocking when a query also crosses sleep', () => {
+    let wall = 0;
+    let active = 0;
+    const wallSpy = vi.spyOn(Date, 'now').mockImplementation(() => wall);
+    const activeSpy = vi.spyOn(performance, 'now').mockImplementation(() => active);
+    try {
+      const originalExec = db.exec.bind(db);
+      vi.spyOn(db, 'exec').mockImplementation((sql) => {
+        wall += 372_500;
+        active += 2500;
+        return originalExec(sql);
+      });
+      installSlowStatementGuard(db, { thresholdMs: 2000 });
+      db.exec('SELECT 1');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ ms: 2500, wallMs: 372_500, sleepOrClockChangeMs: 370_000 }),
+        'Slow SQLite statement blocked the event loop',
+      );
+    } finally {
+      wallSpy.mockRestore();
+      activeSpy.mockRestore();
+    }
+  });
+
   it('installing twice does not double-log', () => {
     installSlowStatementGuard(db, { thresholdMs: 0 });
     installSlowStatementGuard(db, { thresholdMs: 0 });
