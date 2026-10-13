@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.7...v3.37.0) (2026-10-13)
+
+
+### Features
+
+* **worktree:** serve a linked worktree from its own branch index ([#1490](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1490)) ([2d72351](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2d72351bbe3145017b64b9be3ceafda9d3836aa7))
+
+
+### Bug Fixes
+
+* exclude macOS suspend time from diagnostics and plugin timeout ([#1575](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1575)) ([471c64f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/471c64f48b5e6659191c1f02802830f2a415eb9e))
+* **indexer:** evict deleted directory contents (TRA-2371) ([#1572](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1572)) ([4b20d94](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b20d940842d62a3f96c4bef306070357e02ec4f))
+
+
+### Documentation
+
+* distinguish macOS sleep from daemon SQLite stalls ([#1573](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1573)) ([1e70531](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e7053190d03a9a7d8ff380a1fb774e3b54db6fa))
+* **ops:** early morning pass 2026-10-13, mention sweep (Graft, goCraft, TRACE), competitor deep dive (TRA-2373) ([#1574](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1574)) ([e6003bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6003bf78cc0b07194fed84219ad94f4023f93fe))
+* **ops:** morning pass 2026-10-13, mention sweep, assetfeed classification, competitor triage (TRA-2385) ([#1578](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1578)) ([42546d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42546d89842841911dfc7f15c2f2cb10578d543c))
+* **sitemap:** refresh lastmod for configuration and config-index (TRA-2383) ([#1577](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1577)) ([3c13165](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3c131653cb7e9e2e985b4be0bdfb9d46c09792a2))
+
 ## [3.36.7](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.36.6...v3.36.7) (2026-10-12)
 
 
