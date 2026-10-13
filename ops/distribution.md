@@ -3915,3 +3915,57 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Evening pass, 2026-10-13 (TRA-2390): mention sweep clean, thread audit, competitor major milestone (Serena v2.0.0 GPL relicensing & REPL architecture, colbymchenry/codegraph #2532, DeusData #2610)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend in progress). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation progressing.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (Pass 1 modern backend + Pass 2 legacy multi-term pairs). Clean: 0 repos outside seen list.
+
+**Competitor intelligence & architectural observations:**
+- oraios/serena:
+  - Release v2.0.0 / PR #2158 (Major strategic and licensing milestone):
+    - License shift: Serena application shifted from MIT to GPL-3.0-or-later (SolidLSP core remains MIT). Historical commits remain MIT, but future contributions require CLA acceptance. This significantly changes the distribution and commercial embeddability dynamic in the ecosystem, strengthening trace-mcp's position as a permissive, enterprise-friendly (MIT-licensed) solution with zero vendor lock-in.
+    - Architecture shift: Introduced the "Serena REPL" as an alternative agent interface to reduce tool surface area, executing commands within a REPL rather than discrete tool invocations.
+    - Tool execution safety: PR #2159 ("fix(hooks): classify searches and reads run via native Bash tools") addresses Claude Code 2.1.117+ behavior where agents run code search/reads via `Bash` rather than discrete `Read`/`Grep` tools, tracking compound shell invocations (`grep`, `rg`, `cat`, `head`, `sed`, `awk`) to trigger reminders.
+    - Security: Solidified path confinement ignoring symlinks for untrusted projects (#2144), paralleling trace-mcp's canonical path confinement in `tests/tools/refactor-confinement.test.ts`.
+- colbymchenry/codegraph:
+  - PR #2532 (fix(cpp): a call on an `auto` variable or a chained call reaches the class C++ finds, not a namesake):
+    - Problem: Receiver resolution for typed receivers fell back to the type's last name across `auto` locals, chained calls (`a->b()->c()`), and external types (`absl::Status`), causing resolution to latch onto unrelated namesake classes (e.g., RocksDB `MemTableRep::Iterator` vs base `Iterator`).
+    - Solution: Preserves fully-qualified expression types as written at declaration and walks chained types deterministically.
+    - Architectural contrast: trace-mcp resolves symbols globally via SCIP and lexical scopes, avoiding fuzzy unqualified name guessing across translation units.
+- DeusData/codebase-memory-mcp:
+  - PR #2610 (feat(index): doc_candidates switch for the doc-code candidate scoring):
+    - Problem: Semantic edge calculation between doc sections and code symbols caused massive indexing slowdowns on large repos (Linux kernel: +174s overhead).
+    - Solution: Added `doc_candidates` configuration flag and tool parameter to allow skipping candidate matrix calculations on large repos.
+    - Architectural contrast: trace-mcp relies on precomputed static code maps and deterministic symbol trees, bypassing expensive quadratic dot-product passes during primary indexing.
+
+**Competitor pulse (as of 2026-10-13 evening):**
+- nikolai-vysotskyi/trace-mcp: 191* (=), 24 forks (=)
+- yamadashy/repomix: 28,818* (+2), 1,584 forks (=)
+- oraios/serena: 30,225* (+3), 2,061 forks (-1)
+- DeusData/codebase-memory-mcp: 46,488* (+18), 3,822 forks (+2)
+- tirth8205/code-review-graph: 32,111* (+8), 2,938 forks (+1)
+- colbymchenry/codegraph: 73,919* (+44), 4,768 forks (+1)
+- abhigyanpatwari/GitNexus: 47,865* (+1), 5,195 forks (=)
+- jgravelle/jcodemunch-mcp: 2,764* (=), 375 forks (=)
+- continuedev/continue: 36,210* (+2), 5,465 forks (+1)
+- Aider-AI/aider: 49,525* (+3), 5,052 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
