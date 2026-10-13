@@ -55,11 +55,33 @@ export function detectRenames(
   const hasNewFiles = relPaths.some((p) => !existingFiles.has(p));
   if (!hasNewFiles) return { renamed: 0, pairs: [] };
 
-  // Files in DB whose path is not in the current scan list — candidates
-  // for "old name of a renamed file".
+  // Read and hash only new candidate paths on disk first (TRA-2380).
+  // Without this, every incremental creation (e.g. 1 new file in a 15k-file repo)
+  // ran fs.existsSync across every non-batch file in the database synchronously,
+  // causing multi-second event loop stalls.
+  const newCandidates: Array<{ relPath: string; hash: string }> = [];
+  const targetHashes = new Set<string>();
+  for (const relPath of relPaths) {
+    if (existingFiles.has(relPath)) continue;
+    const abs = path.resolve(rootPath, relPath);
+    let buf: Buffer;
+    try {
+      buf = fs.readFileSync(abs);
+    } catch {
+      continue;
+    }
+    const hash = hashContent(buf);
+    newCandidates.push({ relPath, hash });
+    targetHashes.add(hash);
+  }
+  if (newCandidates.length === 0 || targetHashes.size === 0) {
+    return { renamed: 0, pairs: [] };
+  }
+
+  // Filter DB rows by hash match FIRST before any fs.existsSync stat calls.
   const onDiskSet = new Set(relPaths);
   const orphans = store.getAllFiles().filter((f) => {
-    if (!f.content_hash) return false;
+    if (!f.content_hash || !targetHashes.has(f.content_hash)) return false;
     if (onDiskSet.has(f.path)) return false;
     // Defensive: only consider rows whose old path actually no longer exists
     // on disk. A second snapshot could otherwise mistakenly rename a row
@@ -69,9 +91,7 @@ export function detectRenames(
   });
   if (orphans.length === 0) return { renamed: 0, pairs: [] };
 
-  // Index orphans by hash for O(1) lookup. A given hash may appear under
-  // multiple orphans (legitimate identical files that were all moved); we
-  // keep them in an array and pick the first available match per new path.
+  // Index orphans by hash for O(1) lookup.
   const orphansByHash = new Map<string, FileRow[]>();
   for (const o of orphans) {
     const arr = orphansByHash.get(o.content_hash!) ?? [];
@@ -81,16 +101,7 @@ export function detectRenames(
 
   let renamed = 0;
   const pairs: DetectedRename[] = [];
-  for (const relPath of relPaths) {
-    if (existingFiles.has(relPath)) continue; // already known under this path
-    const abs = path.resolve(rootPath, relPath);
-    let buf: Buffer;
-    try {
-      buf = fs.readFileSync(abs);
-    } catch {
-      continue; // unreadable file — leave for the normal error path
-    }
-    const hash = hashContent(buf);
+  for (const { relPath, hash } of newCandidates) {
     const candidates = orphansByHash.get(hash);
     if (!candidates || candidates.length === 0) continue;
 
