@@ -285,3 +285,7 @@ vaibhavidhumal4/TRACE
 # Genuine local adoption in conversation history: desktop commit log docs/conversas/2026-10-11.md
 # explicitly preserves local state in .trace-mcp/install-date and .trace-mcp/guard-mode across commits:
 wkoch/goCraft
+
+# ── Swept 2026-10-13 morning pass (TRA-2385) ──
+# Internal reference in Nikolai portfolio / agency site seeder (database/seeders/data/site_pages.php):
+assetfeed/assetfeed-laravel

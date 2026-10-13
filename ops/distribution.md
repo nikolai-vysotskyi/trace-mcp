@@ -3788,3 +3788,60 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Morning pass (pass 2), 2026-10-13 (TRA-2385): mention sweep, internal seeder classification, competitor triage (PR #2535, PR #2617, PR #2619, PR #1112, PR #1053)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation progressing.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns. One new repo returned:
+  - assetfeed/assetfeed-laravel: internal reference in Nikolai portfolio / agency site seeder (database/seeders/data/site_pages.php lines citing trace-mcp MIT). Verified read-only via GitHub API. Classified as internal self-reference and recorded in ops/mentions-seen.txt.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2535 (fix(resolution): a workspace package import resolves to its package.json entry (#2502)):
+    - Problem: Workspace member imports (import { x } from '@acme/core' or subpaths like @acme/core/schema) only resolved if an index.* file existed at the package root directory. In standard TypeScript monorepos where package.json specifies 'main': './src/index.ts' and conditional 'exports' maps, imports without root indexes failed resolution and fell back to proximity-based name guessing, attaching calls to wrong private symbols.
+    - Solution: Reads package.json member exports mappings ('.' and subpaths) respecting condition order (types, import, default, require).
+    - Architectural contrast: trace-mcp handles workspace package entry resolution in src/indexer/package-entries.ts (enhanced in TRA-2371 / #1572), respecting TSConfig project references, paths, and package.json exports entries deterministically.
+- DeusData/codebase-memory-mcp:
+  - PR #2619 (fix(lsp): no pointer offset on an empty C# or Java definition array):
+    - Problem: Under Clang UBSan on macOS, applying zero offset to a NULL pointer (NULL + 0) in Tier-2 registry builders when indexing projects lacking C# or Java definitions triggers runtime error: applying zero offset to null pointer.
+  - PR #2617 (fix: never qsort an empty k8s vector; split the spawner deletion test):
+    - Problem: Calling qsort(NULL, 0, ...) on an empty array triggers glibc nonnull attribute runtime violation in Linux GCC UBSan builds.
+    - Architectural contrast: trace-mcp runs on Node/TypeScript with strict array bounds checks and explicit empty-slice guards, avoiding native pointer arithmetic defects.
+- tirth8205/code-review-graph:
+  - PR #1112 (fix: keep TypeScript interfaces and type aliases out of test gaps):
+    - Problem: TypeScript interface and type declarations were stored as Class nodes with no runtime body. The gap filter in changes.py treated every changed Class node as needing tests, producing false positives in code-review test-gap reports.
+    - Solution: Stores typescript_kind in metadata and excludes pure type declarations from test gap candidates.
+    - Architectural contrast: trace-mcp differentiates type-only definitions from runtime symbols during Tree-sitter / SCIP AST passes, ensuring outline and dependency graphs cleanly distinguish interface declarations from executable constructs.
+- jgravelle/jcodemunch-mcp:
+  - PR #1053 / Release v1.108.353 (fix: a C# new records the class it creates (L-170)):
+    - Problem: C# object_creation_expression (new Made(...)) was not registered as a call node type. get_dead_code_v2 found zero callers for constructors and erroneously marked active constructors as dead code.
+
+**Competitor pulse (as of 2026-10-13 morning):**
+- nikolai-vysotskyi/trace-mcp: 191* (=), 24 forks (=)
+- yamadashy/repomix: 28,810* (+2), 1,584 forks (=)
+- oraios/serena: 30,213* (+4), 2,062 forks (=)
+- DeusData/codebase-memory-mcp: 46,456* (+20), 3,819 forks (+4)
+- tirth8205/code-review-graph: 32,093* (+9), 2,937 forks (+1)
+- colbymchenry/codegraph: 73,843* (+20), 4,766 forks (+2)
+- abhigyanpatwari/GitNexus: 47,858* (+7), 5,196 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,763* (+1), 375 forks (=)
+- continuedev/continue: 36,203* (+2), 5,463 forks (=)
+- Aider-AI/aider: 49,510* (+7), 5,051 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
