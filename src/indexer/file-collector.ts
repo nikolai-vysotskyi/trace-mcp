@@ -146,7 +146,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
           deepEntries.push(entry as string);
         } else {
           deepTruncated = true;
-          deepStream.destroy();
+          (deepStream as NodeJS.EventEmitter & { destroy?: () => void }).destroy?.();
           break;
         }
       }
