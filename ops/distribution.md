@@ -3845,3 +3845,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Evening pass (pass 3), 2026-10-13 (TRA-2392): mention sweep clean, open threads audit, competitor triage (PR #2542, PR #2633, PR #2630, PR #2629, PR #1061)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend requesting provenance/daemon isolation and reproducible smoke). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation by moataz-hjaiji in progress.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (code search & pair queries). Output: clean ("No repos outside the seen list. Nothing to read."). No collisions or genuine external surfaces to triage.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2542 (fix(cpp): a nested class defined out of line is indexed under its name, and a construction makes the class C++ finds):
+    - Problem: Out-of-line nested classes (e.g. `struct Outer::Inner { ... }`) were indexed under anonymous scope, and constructor calls guessed wrong targets across leveldb/rocksdb/protobuf.
+    - Solution: Resolved qualified out-of-line nested class definitions to their enclosing scope names and retargeted constructions to the class symbol rather than arbitrary homonymous types.
+    - Architectural contrast: trace-mcp uses Tree-sitter AST queries with full qualified scope tracking across C/C++ namespaces and nested class definitions (`src/indexer/ast/`), correctly attributing method implementations defined outside class declarations without heuristics.
+- DeusData/codebase-memory-mcp:
+  - PR #2633 (fix(cli): never wait on a stdin stream for a call complete without arguments):
+    - Problem: Invoking `cli list_projects` with no arguments blocked indefinitely when stdin was a held-open stream (e.g., spawned Node child process or SSH session without stdin EOF), causing 25-minute stalls in automated smoke tests.
+    - Solution: Classifies stdin source (terminal, regular file, stream); for tools with optional-only arguments, stream stdin is not awaited.
+    - Architectural contrast: trace-mcp CLI and MCP transport use strict non-blocking framing over stdio JSON-RPC with explicit EOF / length delimiters and never hang on optional parameters.
+  - PR #2630 (fix(graph): platform variants keep their path QNs and are related by variant_key):
+    - Problem: Normalizing platform-specific paths (e.g. `arch/x86/`, `src/win/`) into platform-neutral QNs caused 16,769 Linux kernel definitions to lose path resolution and cross-linked impossible architecture calls.
+    - Solution: Restored path-derived QN identity while linking variants via a `variant_key` attribute for test impact walks.
+    - Architectural contrast: trace-mcp maintains URI/path-qualified node IDs per file and models platform build conditions cleanly through file-level exclusion filters and target environments.
+  - PR #2629 (fix(extract): one definition per site when the raw and preprocessed parses disagree):
+    - Problem: Macro-generated structs caused parse error regions where preprocessed rescue passes duplicated raw definitions into nested error regions (randstruct shape in Linux kunit tests).
+    - Solution: Single definition per site rule at decision point, preferring flat expanded copies over misnested raw ERROR twins.
+- jgravelle/jcodemunch-mcp:
+  - PR #1061 (fix: a JavaScript call through a string key records the method (L-173)):
+    - Problem: Subscript expressions with string literals (e.g. `t["m"]()`) were resolved to the container object `t` instead of the method `m`, causing dead code analysis (`get_dead_code_v2`) to falsely flag methods called via string bracket syntax as dead.
+    - Solution: Added call reference extraction for bracket notation holding identifier-compatible string literals.
+    - Architectural contrast: trace-mcp's AST extractors handle computed property accesses and subscript member calls (`MemberExpression` vs `BracketNotation`) in JavaScript/TypeScript, preserving method call edges for string literal keys.
+
+**Competitor pulse (as of 2026-10-13 evening):**
+- nikolai-vysotskyi/trace-mcp: 191* (=), 24 forks (=)
+- yamadashy/repomix: 28,818* (+8), 1,584 forks (=)
+- oraios/serena: 30,228* (+15), 2,061 forks (-1)
+- DeusData/codebase-memory-mcp: 46,507* (+51), 3,826 forks (+7)
+- tirth8205/code-review-graph: 32,115* (+22), 2,938 forks (+1)
+- colbymchenry/codegraph: 73,943* (+100), 4,769 forks (+3)
+- abhigyanpatwari/GitNexus: 47,868* (+10), 5,196 forks (=)
+- jgravelle/jcodemunch-mcp: 2,764* (+1), 375 forks (=)
+- continuedev/continue: 36,212* (+9), 5,465 forks (+2)
+- Aider-AI/aider: 49,525* (+15), 5,053 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
