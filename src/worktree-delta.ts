@@ -81,6 +81,15 @@ export interface WorktreeDeltaSummary {
   untracked: string[];
   /** True when any list above was cut at {@link WORKTREE_DELTA_SUMMARY_LIMIT}. */
   truncated: boolean;
+  /**
+   * Which index answers this session: the canonical checkout's (results for
+   * the files listed here describe the canonical version) or the worktree's
+   * own branch index (a copy of the canonical index with this delta
+   * re-indexed into it).
+   */
+  served_from: 'canonical_index' | 'branch_index';
+  /** Set when the daemon keeps (or is building) a branch index for this worktree. */
+  branch_index?: BranchIndexInfo;
   note: string;
 }
 
@@ -252,6 +261,11 @@ export function clearWorktreeDeltaCache(): void {
   cache.clear();
 }
 
+/** Forget one worktree's cached delta (an edit was just reported for it). */
+export function invalidateWorktreeDelta(link: WorktreeLink): void {
+  cache.delete(cacheKey(link));
+}
+
 /**
  * Cached {@link computeWorktreeDelta}: concurrent callers share one in-flight
  * computation, and a result is reused for `ttlMs`. Never rejects.
@@ -306,11 +320,43 @@ export function worktreeDeltaSize(delta: WorktreeDelta): number {
   return delta.modified.length + delta.deleted.length + delta.untracked.length;
 }
 
-/** Compact, size-bounded form of the delta for health and API payloads. */
+/**
+ * A linked worktree's branch index as `get_index_health` and
+ * `GET /api/projects/worktree` report it (`WorktreeIndexManager.describe`).
+ */
+export interface BranchIndexInfo {
+  /**
+   * `ready`: the copy answers. `building`: no copy yet, one is being built.
+   * `opening`/`retiring`/`closed`: a copy coming up or going away. `none`:
+   * no copy (not built yet, refused or failed — see `last_error`).
+   */
+  state: 'none' | 'building' | 'opening' | 'ready' | 'retiring' | 'closed';
+  /** HEAD the canonical index had indexed when the copy was taken (no copy: absent). */
+  canonical_head_at_copy?: string;
+  built_at?: string;
+  /**
+   * Files the copy may be behind on: edited after it last re-indexed them,
+   * or named by a delta it has not planned against yet (capped at 50).
+   */
+  pending: string[];
+  /** Files the copy has re-indexed from the worktree so far. */
+  reindexed_files: number;
+  /** Why the last build did not produce a copy, when it did not. */
+  last_error?: string;
+}
+
+/**
+ * Compact, size-bounded form of the delta for health and API payloads.
+ * `served_from` follows `branchIndex`: a ready copy answers, otherwise the
+ * canonical index does.
+ */
 export function summarizeWorktreeDelta(
   delta: WorktreeDelta,
   limit: number = WORKTREE_DELTA_SUMMARY_LIMIT,
+  branchIndex: BranchIndexInfo | null = null,
 ): WorktreeDeltaSummary {
+  const servedFrom: WorktreeDeltaSummary['served_from'] =
+    branchIndex?.state === 'ready' ? 'branch_index' : 'canonical_index';
   const cut = (xs: string[]): string[] => (xs.length > limit ? xs.slice(0, limit) : xs);
   const truncated =
     delta.modified.length > limit || delta.deleted.length > limit || delta.untracked.length > limit;
@@ -325,9 +371,15 @@ export function summarizeWorktreeDelta(
     deleted: cut(delta.deleted),
     untracked: cut(delta.untracked),
     truncated,
+    served_from: servedFrom,
+    ...(branchIndex ? { branch_index: branchIndex } : {}),
     note:
-      'This session is served from the canonical checkout index. Files listed here differ on this ' +
-      'worktree: index results for them describe the canonical version (flagged stale_on_branch), ' +
-      'and untracked files are not indexed at all. Read these files from disk.',
+      servedFrom === 'branch_index'
+        ? 'This session is served from a branch index: a copy of the canonical checkout index with ' +
+          'the files listed here re-indexed from this worktree, so results describe the branch. A ' +
+          'file whose latest edit has not been re-indexed yet is flagged stale_on_branch.'
+        : 'This session is served from the canonical checkout index. Files listed here differ on this ' +
+          'worktree: index results for them describe the canonical version (flagged stale_on_branch), ' +
+          'and untracked files are not indexed at all. Read these files from disk.',
   };
 }
