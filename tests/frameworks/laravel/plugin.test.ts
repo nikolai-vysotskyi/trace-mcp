@@ -271,5 +271,29 @@ describe('LaravelPlugin', () => {
       expect(result.isOk()).toBe(true);
       expect(breathed).toBe(true);
     });
+
+    it('does not yield fair turns on unrelated files in bulk projects (TRA-2394)', async () => {
+      // 500 files, none are PHP/Blade/Composer
+      const files = Array.from({ length: 500 }, (_, i) => ({
+        id: i + 1,
+        path: `data/file${i}.bin`,
+        language: 'binary',
+      }));
+
+      let yields = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => '',
+      };
+
+      // Since all files are unrelated, resolveEdges should return ok([])
+      // without performing ~32 fair event-loop yields.
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([]);
+    });
   });
 });

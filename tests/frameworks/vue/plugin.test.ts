@@ -175,4 +175,41 @@ describe('VueFrameworkPlugin', () => {
     expect(timerRanBeforeCompletion).toBe(true);
     expect(allFilesCalls).toBeLessThanOrEqual(2);
   });
+
+  it('does not yield fair turns on unrelated files in resolveDynamicComponentRefs (TRA-2394)', async () => {
+    const plugin = new VueFrameworkPlugin();
+    const files = [
+      { id: 1, path: 'src/components/MyCustomButton.vue', language: 'vue' },
+      ...Array.from({ length: 500 }, (_, i) => ({
+        id: i + 2,
+        path: `data/file${i}.bin`,
+        language: 'binary',
+      })),
+    ];
+
+    const ctx: any = {
+      rootPath: '/tmp/test',
+      getAllFiles: () => files,
+      getSymbolsByFile: (id: number) =>
+        id === 1
+          ? [
+              {
+                id: 1,
+                symbolId: 'src/components/MyCustomButton.vue::MyCustomButton',
+                name: 'MyCustomButton',
+                kind: 'class',
+                fqn: null,
+                metadata: { templateComponents: [], composables: [] },
+              },
+            ]
+          : [],
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: () => undefined,
+    };
+
+    const result = await plugin.resolveEdges(ctx);
+    expect(result.isOk()).toBe(true);
+  });
 });

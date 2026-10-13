@@ -579,9 +579,13 @@ export class BladePlugin implements FrameworkPlugin {
     // Lazy-built set of all file paths (for fast asset resolution lookups)
     let allPathSet: Set<string> | null = null;
 
-    for (const [index, file] of allFiles.entries()) {
+    // Pre-filter Blade files (TRA-2394).
+    // In projects with 10k+ non-Blade files, yielding fair turns on unrelated files
+    // starves the plugin budget and causes timeouts.
+    const bladeFiles = allFiles.filter((f) => f.path.endsWith('.blade.php'));
+
+    for (const [index, file] of bladeFiles.entries()) {
       if (index % 16 === 0) await yieldToEventLoopFair();
-      if (!file.path.endsWith('.blade.php')) continue;
 
       const source = ctx.readFile(file.path);
       if (!source) continue;

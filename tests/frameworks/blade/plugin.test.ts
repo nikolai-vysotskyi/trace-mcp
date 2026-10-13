@@ -143,4 +143,26 @@ describe('BladePlugin', () => {
       expect(plugin.manifest.dependencies).toEqual(['laravel']);
     });
   });
+
+  describe('resolveEdges() file filtering (TRA-2394)', () => {
+    it('does not yield fair turns on non-Blade files', async () => {
+      const files = Array.from({ length: 500 }, (_, i) => ({
+        id: i + 1,
+        path: `src/file${i}.ts`,
+        language: 'typescript',
+      }));
+
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => '',
+      };
+
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([]);
+    });
+  });
 });
