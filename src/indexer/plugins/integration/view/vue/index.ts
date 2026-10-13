@@ -517,11 +517,15 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       if (ownFile) nameToOwnFile.set(name, ownFile);
     }
 
-    for (const [index, file] of allFiles.entries()) {
+    // Pre-filter files relevant to dynamic component references (TRA-2394).
+    // In multi-language repos with 10k+ non-JS/TS/Vue files, yielding fair turns on unrelated files
+    // starves the plugin budget and causes timeouts.
+    const relevantFiles = allFiles.filter(
+      (f) => f.language === 'typescript' || f.language === 'javascript' || f.language === 'vue',
+    );
+
+    for (const [index, file] of relevantFiles.entries()) {
       if (index % 16 === 0) await yieldToEventLoopFair();
-      // Scan TS/JS (config, routes, plugins) and Vue (sibling imports).
-      const lang = file.language;
-      if (lang !== 'typescript' && lang !== 'javascript' && lang !== 'vue') continue;
 
       const source = ctx.readFile(file.path);
       if (!source) continue;
