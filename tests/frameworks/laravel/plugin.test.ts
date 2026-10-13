@@ -2,6 +2,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LaravelPlugin } from '../../../src/indexer/plugins/integration/framework/laravel/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
+import { _resetYieldCountForTests, getYieldCount } from '../../../src/utils/event-loop.js';
 
 const L10_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-10');
 const L12_FIXTURE = path.resolve(__dirname, '../../fixtures/laravel-12');
@@ -280,20 +281,27 @@ describe('LaravelPlugin', () => {
         language: 'binary',
       }));
 
-      let yields = 0;
+      let readFileCalls = 0;
       const mockCtx: any = {
         rootPath: '/dummy',
         getAllFiles: () => files,
         getSymbolsByFile: () => [],
         getSymbolByFqn: () => undefined,
-        readFile: () => '',
+        readFile: () => {
+          readFileCalls++;
+          return '';
+        },
       };
 
-      // Since all files are unrelated, resolveEdges should return ok([])
-      // without performing ~32 fair event-loop yields.
+      _resetYieldCountForTests();
       const result = await plugin.resolveEdges(mockCtx);
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap()).toEqual([]);
+      // On pre-fix code, 500 un-filtered files yielded at index 0, 16, 32... (~32 times)
+      // and called readFile on all 500 files.
+      // With pre-filtering, 0 yields and 0 readFile calls occur.
+      expect(getYieldCount()).toBe(0);
+      expect(readFileCalls).toBe(0);
     });
   });
 });

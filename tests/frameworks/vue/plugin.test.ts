@@ -2,6 +2,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { VueFrameworkPlugin } from '../../../src/indexer/plugins/integration/view/vue/index.js';
 import type { ProjectContext, ResolveContext } from '../../../src/plugin-api/types.js';
+import { _resetYieldCountForTests, getYieldCount } from '../../../src/utils/event-loop.js';
 
 const VUE3_FIXTURE = path.resolve(__dirname, '../../fixtures/vue3-composition');
 
@@ -187,6 +188,7 @@ describe('VueFrameworkPlugin', () => {
       })),
     ];
 
+    let readFileCalls = 0;
     const ctx: any = {
       rootPath: '/tmp/test',
       getAllFiles: () => files,
@@ -206,10 +208,20 @@ describe('VueFrameworkPlugin', () => {
       getSymbolByFqn: () => undefined,
       getNodeId: () => undefined,
       createNodeIfNeeded: () => 1,
-      readFile: () => undefined,
+      readFile: () => {
+        readFileCalls++;
+        return undefined;
+      },
     };
 
+    _resetYieldCountForTests();
     const result = await plugin.resolveEdges(ctx);
     expect(result.isOk()).toBe(true);
+    // On pre-fix code, the 500 binary files caused an extra ~32 fair yields and 500 readFile calls
+    // in resolveDynamicComponentRefs (yielding ~33 times in total).
+    // With pre-filtering, the 500 binary files are never iterated or read:
+    // only the 1 .vue file is processed (1 yield in vueFiles + 1 in resolveDynamicComponentRefs = 2).
+    expect(getYieldCount()).toBeLessThanOrEqual(2);
+    expect(readFileCalls).toBe(1);
   });
 });

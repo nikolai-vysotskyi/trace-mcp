@@ -9,6 +9,7 @@ import {
   xComponentToPath,
 } from '../../../src/indexer/plugins/integration/view/blade/index.js';
 import type { ProjectContext } from '../../../src/plugin-api/types.js';
+import { _resetYieldCountForTests, getYieldCount } from '../../../src/utils/event-loop.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../../fixtures/blade-laravel');
 
@@ -152,17 +153,27 @@ describe('BladePlugin', () => {
         language: 'typescript',
       }));
 
+      let readFileCalls = 0;
       const mockCtx: any = {
         rootPath: '/dummy',
         getAllFiles: () => files,
         getSymbolsByFile: () => [],
         getSymbolByFqn: () => undefined,
-        readFile: () => '',
+        readFile: () => {
+          readFileCalls++;
+          return '';
+        },
       };
 
+      _resetYieldCountForTests();
       const result = await plugin.resolveEdges(mockCtx);
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap()).toEqual([]);
+      // On pre-fix code, 500 non-Blade files yielded every 16 files (~32 times)
+      // and read each file from disk before checking .blade.php extension.
+      // With pre-filtering, 0 yields and 0 reads occur.
+      expect(getYieldCount()).toBe(0);
+      expect(readFileCalls).toBe(0);
     });
   });
 });
