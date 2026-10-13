@@ -3845,3 +3845,73 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Early morning pass, 2026-10-14 (TRA-2397): mention sweep clean, competitor triage (colbymchenry/codegraph PR #2539-#2542, DeusData PR #2633-#2635, jgravelle PR #1066, oraios/serena PR #2159)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation progressing.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Output: "No repos outside the seen list. Nothing to read." Sweep is completely clean. No additions needed to ops/mentions-seen.txt.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2542 (fix(cpp): a nested class defined out of line is indexed under its name, and a construction makes the class C++ finds):
+    - Problem: Out-of-line nested class/struct/union definitions (e.g. LevelDB `struct SkipList<Key, Comparator>::Node { ... }`, RocksDB `struct BlockBasedTableOptions::IndexType`) were parsed as `<anonymous>` classes in AST traversals, disconnecting member methods from outer class hierarchy.
+    - Solution: Preserves qualified parent-scope path for out-of-line class declarations when indexing symbol table.
+    - Architectural contrast: trace-mcp uses Tree-sitter AST queries with full lexical scope resolution (`src/indexer/ast/cpp.ts`), tracking nested qualification paths directly in symbol ids.
+  - PR #2541 (fix(cpp): a call to an overloaded method links to the overload its arguments fit):
+    - Problem: Method calls on typed receivers (`db->Get(ro, key, &value)`) always resolved to the first declared overload in the class rather than matching argument counts and types.
+    - Solution: Differentiates method overloads via parameter signature matching on receiver instances.
+    - Architectural contrast: trace-mcp indexes overloads with distinct symbol hashes and signatures, preserving disambiguation metadata for navigation and impact analysis.
+  - PR #2539 (fix(cpp): `->` on an absl::StatusOr reaches the class it holds; a using-declared member of a dependent base is found):
+    - Problem: Member arrow operators on smart wrapper types like `absl::StatusOr<T>` or `std::expected<T, E>` failed to unwrap to the target class `T`, dropping all downstream call-graph edges in Abseil/Protobuf codebases.
+    - Solution: Explicit unwrapping heuristic for common monadic/holder types in C++.
+    - Architectural contrast: trace-mcp SCIP/LSP indexing resolves operator overload return types and template instantiations via semantic compiler models where available, avoiding hardcoded container whitelists.
+- DeusData/codebase-memory-mcp:
+  - PR #2635 (chore(ui): drop sharp and its LGPL libvips; the license gate allows no exception):
+    - Problem: Transitive dependency `@img/sharp-wasm32` brought in LGPL-3.0-or-later libvips, failing enterprise release license gates for commercial embedding.
+    - Solution: Stripped `sharp` from graph-ui dependencies.
+    - Architectural contrast: trace-mcp maintains zero-dependency CLI/core runtime with pure MIT/Apache-2.0 dependencies, strictly avoiding LGPL/native-compilation overheads.
+  - PR #2633 (fix(cli): never wait on a stdin stream for a call complete without arguments):
+    - Problem: Commands like `cli list_projects` with no arguments hung indefinitely when stdin was an unclosed pipe (SSH sessions, `child_process.spawn` parents).
+    - Solution: Skips waiting on stdin when arguments are already supplied or schema expects no input payload.
+    - Architectural contrast: trace-mcp CLI (`src/cli/`) uses explicit non-blocking argument parsing with standard Commander.js command handlers, isolating stream I/O to JSON-RPC transports.
+- jgravelle/jcodemunch-mcp:
+  - PR #1066 (fix: a Python import written over several lines records its names (L-176)):
+    - Problem: Multi-line parenthesized imports (`from pkg import (\n a,\n b\n)`) failed regex/line-based reference scanning, causing `find_references` to report 0 callers for symbols imported in standard Black/Ruff formatted files.
+    - Solution: Multi-line AST grouping for import lists.
+    - Architectural contrast: trace-mcp uses Tree-sitter parse trees rather than regex/line scanners, inherently handling multi-line AST nodes across all supported languages.
+- oraios/serena:
+  - PR #2159 (fix(hooks): classify searches and reads run via native Bash tools):
+    - Problem: In Claude Code 2.1.117+, search and read actions invoked via the native `Bash` tool bypassed Serena's telemetry hooks, distorting tool utilization stats.
+    - Solution: Hooks parse Bash command strings (`grep`, `find`, `cat`) to categorize operations as semantic searches or reads.
+    - Architectural contrast: trace-mcp operates as a dedicated MCP server protocol endpoint; tools are invoked explicitly through structured RPC calls rather than intercepting shell commands.
+
+**Competitor pulse (as of 2026-10-14 early morning):**
+- nikolai-vysotskyi/trace-mcp: 191* (=), 24 forks (=)
+- yamadashy/repomix: 28,824* (+14), 1,584 forks (=)
+- oraios/serena: 30,232* (+19), 2,062 forks (=)
+- DeusData/codebase-memory-mcp: 46,516* (+60), 3,828 forks (+9)
+- tirth8205/code-review-graph: 32,120* (+27), 2,938 forks (+1)
+- colbymchenry/codegraph: 73,956* (+113), 4,770 forks (+4)
+- abhigyanpatwari/GitNexus: 47,871* (+13), 5,196 forks (=)
+- jgravelle/jcodemunch-mcp: 2,764* (+1), 375 forks (=)
+- continuedev/continue: 36,215* (+12), 5,465 forks (+2)
+- Aider-AI/aider: 49,528* (+18), 5,053 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
