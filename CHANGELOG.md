@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.2...v3.37.3) (2026-10-14)
+
+
+### Bug Fixes
+
+* **ci:** stabilize Windows full-suite timeouts and contention (TRA-2427) ([#1599](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1599)) ([0438568](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0438568b17efaf816bac63ba6a797076fb29dc34))
+
+
+### Documentation
+
+* **ops:** late night pass 2026-10-14, mention sweep clean, competitor triage (TRA-2430) ([#1601](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1601)) ([dac8635](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dac8635098b04da03fb4a50017aa1ddb63941126))
+* **ops:** published content inventory and URL reconciliation (TRA-2417) ([#1594](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1594)) ([39dacdd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39dacdd74b44b695ed97ab23afd74139901fa52a))
+
 ## [3.37.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.1...v3.37.2) (2026-10-14)
 
 
