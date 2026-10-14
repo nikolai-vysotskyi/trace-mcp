@@ -284,3 +284,27 @@ SQLite work or an event-loop stall. Correlate any wall-clock stall with
 `pmset -g log` before attributing it to indexing. TRA-2375 tracks a
 sleep-aware diagnostic and a separate check of framework-plugin timeouts
 observed around wake.
+
+---
+
+## 2026-10-15 — field baseline before the TRA-2434 release
+
+Read-only observation of the installed v3.37.3 daemon (PID 93105, port 3741),
+02:00–02:03:38 +0400. This build predates the merged scope-aware framework
+resolution fix in TRA-2434 / PR #1603; the observation is **not** a verdict on
+that fix.
+
+In `~/.agy/3/.trace/daemon.log`, the window contains 15 `Event loop stall`
+warnings (2,068–57,443 ms), all with `reindexInFlight: 2`; four
+`resolveEdges` timeouts (Laravel 1, Blade 1, Vue 2); 501 watcher
+`reindex-file` events; and two FSEvents drops. Vitals stayed near 1.94 GB RSS
+with two projects indexing. A `GET /health` timed out after 3 s while the
+process still owned the listening socket. `pmset -g log` has no sleep/wake
+transition in that window, so the 57 s stall should not be dismissed as a
+suspend-time artifact. The watcher events and FSEvents drops are concurrent
+signals, not an established cause of the stalls.
+
+After a release containing PR #1603 is installed, repeat the same bounded log
+query and `/health` probe during comparable indexing work. Compare timeout
+counts and stall duration, and keep `projects_indexing` in view: these are busy
+samples and must not be used to test the idle RSS ceiling above.
