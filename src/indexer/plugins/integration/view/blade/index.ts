@@ -584,8 +584,17 @@ export class BladePlugin implements FrameworkPlugin {
     // starves the plugin budget and causes timeouts.
     const bladeFiles = allFiles.filter((f) => f.path.endsWith('.blade.php'));
 
-    for (const [index, file] of bladeFiles.entries()) {
-      if (index % 16 === 0) await yieldToEventLoopFair();
+    // Scope-aware (TRA-2434): when the pipeline passes a changeScope, narrow to changed files.
+    const scope = ctx.changeScope;
+    const targetBladeFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? bladeFiles.filter((f) => scope.changedFileIds.has(f.id))
+        : bladeFiles;
+
+    if (targetBladeFiles.length === 0) return ok([]);
+
+    for (const [index, file] of targetBladeFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
 
       const source = ctx.readFile(file.path);
       if (!source) continue;

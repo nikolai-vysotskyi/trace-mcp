@@ -224,4 +224,77 @@ describe('VueFrameworkPlugin', () => {
     expect(getYieldCount()).toBeLessThanOrEqual(2);
     expect(readFileCalls).toBe(1);
   });
+
+  it('restricts scanning to changeScope in incremental runs (TRA-2434)', async () => {
+    const plugin = new VueFrameworkPlugin();
+    const files = [
+      { id: 1, path: 'src/components/A.vue', language: 'vue' },
+      { id: 2, path: 'src/components/B.vue', language: 'vue' },
+      { id: 3, path: 'src/components/C.vue', language: 'vue' },
+      { id: 4, path: 'src/utils/helper.ts', language: 'typescript' },
+    ];
+
+    let readFileCalls = 0;
+    const ctx: any = {
+      rootPath: '/tmp/test',
+      changeScope: {
+        changedFileIds: new Set([2]),
+      },
+      getAllFiles: () => files,
+      getSymbolsByFile: (id: number) => [
+        {
+          id,
+          symbolId: `file${id}::Comp`,
+          name: 'Comp',
+          kind: 'class',
+          fqn: null,
+          metadata: { templateComponents: [], composables: [] },
+        },
+      ],
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: () => {
+        readFileCalls++;
+        return '';
+      },
+    };
+
+    _resetYieldCountForTests();
+    const result = await plugin.resolveEdges(ctx);
+    expect(result.isOk()).toBe(true);
+    // Dynamic ref scan only scans file 2 because it's the only changed file
+    expect(readFileCalls).toBe(0); // B.vue does not have distinctive names in componentNameToSymbolId to search for, or only B.vue is read if matching
+    expect(getYieldCount()).toBe(0);
+  });
+
+  it('fast-paths immediately when changeScope contains no vue/ts/js files (TRA-2434)', async () => {
+    const plugin = new VueFrameworkPlugin();
+    const files = [
+      { id: 1, path: 'src/components/A.vue', language: 'vue' },
+      { id: 2, path: 'README.md', language: 'markdown' },
+    ];
+
+    let getSymbolsCalls = 0;
+    const ctx: any = {
+      rootPath: '/tmp/test',
+      changeScope: {
+        changedFileIds: new Set([2]), // Only README.md changed
+      },
+      getAllFiles: () => files,
+      getSymbolsByFile: () => {
+        getSymbolsCalls++;
+        return [];
+      },
+      getSymbolByFqn: () => undefined,
+      getNodeId: () => undefined,
+      createNodeIfNeeded: () => 1,
+      readFile: () => '',
+    };
+
+    const result = await plugin.resolveEdges(ctx);
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap()).toEqual([]);
+    expect(getSymbolsCalls).toBe(0);
+  });
 });
