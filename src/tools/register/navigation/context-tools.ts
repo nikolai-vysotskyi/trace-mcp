@@ -13,6 +13,7 @@ import { buildNegativeEvidence } from '../../shared/evidence.js';
 import { compactContextItems, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
 import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.js';
 import { withRecallTimeout } from '../../../utils/recall-timeout.js';
+import { markToolConsultation } from '../../../server/consultation-markers.js';
 
 /**
  * Registers `get_context_bundle` and `get_feature_context` — multi-symbol /
@@ -74,7 +75,10 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
       }
       // Mark all files in the bundle as explored
       for (const sym of result.value.primary ?? []) {
-        if (sym.file) markExplored(sym.file);
+        if (sym.file) {
+          markExplored(sym.file);
+          markToolConsultation(projectRoot, 'get_context_bundle', { path: sym.file });
+        }
       }
       // Per-symbol _freshness + summary in _meta
       const primaryItems = (result.value.primary ?? []) as Array<{

@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listProjects } from '../../registry.js';
+import { markToolConsultation } from '../../server/consultation-markers.js';
 import type { ServerContext } from '../../server/types.js';
 import { summarizeToolParams } from '../../session/journal.js';
 
@@ -168,6 +169,9 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
       // attributed to the target project, where it actually ran.
       const relayStart = Date.now();
       const relayed = await handler(args ?? {});
+      if (!relayed?.isError) {
+        markToolConsultation(resolvedRoot, tool, args ?? {});
+      }
       const relayedText = relayed.content?.[0]?.text;
       const relayedTokens =
         typeof relayedText === 'string' ? Math.ceil(relayedText.length / 4) : undefined;

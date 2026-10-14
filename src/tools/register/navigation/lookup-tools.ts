@@ -25,7 +25,12 @@ import {
 } from '../../../observation-pack.js';
 import { emptyIndexHint, fallbackOutline } from '../../navigation/zero-index.js';
 import { isDangerousProjectRoot } from '../../../dangerous-root.js';
-import { listProjects, resolveRegisteredAncestor } from '../../../registry.js';
+import {
+  listProjects,
+  resolveFileInRegisteredProjects,
+  resolveRegisteredAncestor,
+} from '../../../registry.js';
+import { markToolConsultation } from '../../../server/consultation-markers.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
 import { buildEmptyResultNote } from '../../shared/empty-note.js';
 import { compactOutlineSymbols, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
@@ -56,160 +61,6 @@ async function autoIndexOnDemand(ctx: ServerContext, filePath: string): Promise<
     // Best-effort: fall through and let the caller re-check the store.
   }
   return true;
-}
-
-interface ResolvedProjectFile {
-  projectRoot: string;
-  relPath: string;
-  absPath: string;
-}
-
-/**
- * When get_outline runs on a session root that doesn't hold the file (specifically
- * a root session such as projectRoot === '/' from a desktop client),
- * locate candidate registered projects where filePath exists on disk.
- *
- * Scoping rules (TRA-2243 / Reviewer E):
- * - If filePath is absolute: verify exists, resolve to registered ancestor.
- * - If filePath is relative: must explicitly start with the target project's basename,
- *   a registered multi-root child's basename, or a registered sibling worktree's directory name.
- * - Bare relative paths (e.g. "package.json", "shared.ts") must NEVER match across arbitrary projects.
- */
-function resolveFileInRegisteredProjects(
-  filePath: string,
-  _currentProjectRoot: string,
-): ResolvedProjectFile | null {
-  if (path.isAbsolute(filePath)) {
-    const abs = path.resolve(filePath);
-    if (fs.existsSync(abs)) {
-      try {
-        if (fs.statSync(abs).isFile()) {
-          const ancestor = resolveRegisteredAncestor(abs);
-          return ancestor
-            ? {
-                projectRoot: ancestor.root,
-                relPath: path.relative(ancestor.root, abs),
-                absPath: abs,
-              }
-            : { projectRoot: path.dirname(abs), relPath: path.basename(abs), absPath: abs };
-        }
-      } catch {
-        /* stat failed */
-      }
-    }
-    return null;
-  }
-
-  // Relative path must contain a directory separator to match a project prefix.
-  // Bare paths (e.g. "shared.ts", "package.json") cannot be safely mapped to an arbitrary project.
-  const hasSep = filePath.includes('/') || (path.sep !== '/' && filePath.includes(path.sep));
-  if (!hasSep) {
-    return null;
-  }
-
-  const isPathConfined = (candPath: string, rootDir: string): boolean => {
-    const normCand = path.resolve(candPath);
-    const normRoot = path.resolve(rootDir);
-    const prefix = normRoot.endsWith(path.sep) ? normRoot : normRoot + path.sep;
-    return normCand.startsWith(prefix) || normCand === normRoot;
-  };
-
-  const projects = listProjects();
-  // 1 & 2: Match explicitly scoped prefixes (project basename or multi-root child basename)
-  for (const p of projects) {
-    // 1. File path starts with project's basename (e.g. "trace-mcp/src/index.ts")
-    const base = path.basename(p.root);
-    if (filePath.startsWith(base + '/') || filePath.startsWith(base + path.sep)) {
-      const subRel = filePath.slice(base.length + 1);
-      const candSub = path.resolve(p.root, subRel);
-      if (isPathConfined(candSub, p.root) && fs.existsSync(candSub)) {
-        try {
-          if (fs.statSync(candSub).isFile()) {
-            return { projectRoot: p.root, relPath: subRel, absPath: candSub };
-          }
-        } catch {}
-      }
-    }
-
-    // 2. File path starts with child's basename in multi-root setups
-    if (p.children) {
-      for (const c of p.children) {
-        const baseC = path.basename(c);
-        if (filePath.startsWith(baseC + '/') || filePath.startsWith(baseC + path.sep)) {
-          const subRel = filePath.slice(baseC.length + 1);
-          const candSub = path.resolve(c, subRel);
-          if (isPathConfined(candSub, c) && fs.existsSync(candSub)) {
-            try {
-              if (fs.statSync(candSub).isFile()) {
-                return { projectRoot: c, relPath: subRel, absPath: candSub };
-              }
-            } catch {}
-          }
-        }
-      }
-    }
-  }
-
-  // 3. Direct subpath of a registered multi-root container (e.g. assetfeed container holding
-  // unlisted worktrees/subdirs such as pplx-x-graph or scratchpad).
-  // Must be unambiguous across all registered multi-root containers: if multiple multi-root
-  // projects have a matching file at the same relative path (e.g. "shared/utils.ts"),
-  // reject as ambiguous to prevent silent cross-project leakage (TRA-2327).
-  const multiRootCandidates: ResolvedProjectFile[] = [];
-  for (const p of projects) {
-    if (p.type === 'multi-root') {
-      const candDirect = path.resolve(p.root, filePath);
-      if (isPathConfined(candDirect, p.root) && fs.existsSync(candDirect)) {
-        try {
-          if (fs.statSync(candDirect).isFile()) {
-            const anc = resolveRegisteredAncestor(candDirect);
-            const projRoot = anc ? anc.root : p.root;
-            const relPath = path.relative(projRoot, candDirect);
-            multiRootCandidates.push({ projectRoot: projRoot, relPath, absPath: candDirect });
-          }
-        } catch {}
-      }
-    }
-  }
-  if (multiRootCandidates.length === 1) {
-    return multiRootCandidates[0];
-  }
-  if (multiRootCandidates.length > 1) {
-    // Ambiguous match across multiple multi-root containers — do not guess
-    return null;
-  }
-
-  // 4. Sibling worktrees: path starts with sibling directory name under p.root's parent
-  // e.g. filePath: "trace-mcp-pr/src/index.ts" next to "trace-mcp"
-  for (const p of projects) {
-    const firstSlash = filePath.indexOf('/');
-    const firstSep = path.sep !== '/' ? filePath.indexOf(path.sep) : -1;
-    const splitIdx =
-      firstSlash !== -1 && firstSep !== -1
-        ? Math.min(firstSlash, firstSep)
-        : firstSlash !== -1
-          ? firstSlash
-          : firstSep;
-    if (splitIdx > 0) {
-      const firstSegment = filePath.slice(0, splitIdx);
-      const subRel = filePath.slice(splitIdx + 1);
-      const candSiblingDir = path.resolve(path.dirname(p.root), firstSegment);
-      // Only match if candSiblingDir is actually a registered project root or ancestor
-      const anc = resolveRegisteredAncestor(candSiblingDir);
-      if (anc && path.resolve(anc.root) === path.resolve(candSiblingDir)) {
-        const candFile = path.resolve(candSiblingDir, subRel);
-        if (isPathConfined(candFile, candSiblingDir) && fs.existsSync(candFile)) {
-          try {
-            if (fs.statSync(candFile).isFile()) {
-              return { projectRoot: anc.root, relPath: subRel, absPath: candFile };
-            }
-          } catch {}
-        }
-      }
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -270,6 +121,10 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       }
       const { symbol, file, source, truncated, git_mismatch } = result.value;
       markExplored(file.path);
+      markToolConsultation(projectRoot, 'get_symbol', {
+        path: file.path,
+        symbol_id: symbol.symbol_id,
+      });
       // Phase 4a: attribute this read to a recent ranked retrieval event when possible.
       ctx.rankingLedger?.recordAcceptance(projectRoot, symbol.symbol_id);
       const freshness = computeFileFreshness(projectRoot, file);
@@ -396,6 +251,9 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                   output_format,
                 });
                 if (relayed && !relayed.isError) {
+                  markToolConsultation(resolved.projectRoot, 'get_outline', {
+                    path: resolved.relPath,
+                  });
                   return relayed;
                 }
               }
@@ -406,6 +264,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
           try {
             const fbResult = fallbackOutline(resolved.projectRoot, resolved.relPath);
+            markToolConsultation(resolved.projectRoot, 'get_outline', { path: resolved.relPath });
             return {
               content: [
                 {
@@ -477,6 +336,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                   output_format,
                 });
                 if (relayed && !relayed.isError) {
+                  markToolConsultation(descendant.root, 'get_outline', { path: descendantRelPath });
                   return relayed;
                 }
               }
@@ -488,6 +348,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
           if (fs.existsSync(absPath)) {
             try {
               const fbResult = fallbackOutline(descendant.root, descendantRelPath);
+              markToolConsultation(descendant.root, 'get_outline', { path: descendantRelPath });
               return {
                 content: [
                   {
@@ -549,9 +410,13 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         };
       }
       markExplored(normalizedPath);
+      markToolConsultation(projectRoot, 'get_outline', { path: normalizedPath });
       // A suffix-resolved path was consulted under its canonical name too, so a
       // follow-up Read of either spelling counts as consulted.
-      if (result.value.path !== normalizedPath) markExplored(result.value.path);
+      if (result.value.path !== normalizedPath) {
+        markExplored(result.value.path);
+        markToolConsultation(projectRoot, 'get_outline', { path: result.value.path });
+      }
       const fileRow = store.getFile(result.value.path);
       const freshness = fileRow ? computeFileFreshness(projectRoot, fileRow) : 'fresh';
       const summary = aggregateFreshness([freshness]);

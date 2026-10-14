@@ -14,11 +14,15 @@
  */
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { projectHash, STATUS_DIR } from '../global.js';
 import { normalizeToProjectRelative } from '../utils/security.js';
 import { ensureTmpDirSync, writeTmpFileSync } from '../utils/safe-fs.js';
+import { isDangerousProjectRoot } from '../dangerous-root.js';
+import { findProjectRoot, detectGitWorktree } from '../project-root.js';
+import { resolveRegisteredAncestor, resolveFileInRegisteredProjects } from '../registry.js';
 
 function fileHash(filePath: string): string {
   return crypto.createHash('sha256').update(filePath).digest('hex');
@@ -105,6 +109,8 @@ function extractConsultedFiles(toolName: string, params: Record<string, unknown>
     case 'find_usages':
     case 'get_tests_for':
     case 'get_type_hierarchy': {
+      if (typeof params.path === 'string') files.push(params.path);
+      if (typeof params.file_path === 'string') files.push(params.file_path);
       // symbol_id format: "src/foo.ts::SymbolName#kind"
       const sid = (params.symbol_id ?? params.fqn) as string | undefined;
       if (sid?.includes('::')) {
@@ -114,6 +120,8 @@ function extractConsultedFiles(toolName: string, params: Record<string, unknown>
     }
 
     case 'get_context_bundle': {
+      if (typeof params.path === 'string') files.push(params.path);
+      if (typeof params.file_path === 'string') files.push(params.file_path);
       const sid = params.symbol_id as string | undefined;
       if (sid?.includes('::')) files.push(sid.split('::')[0]);
       const sids = params.symbol_ids as string[] | undefined;
@@ -127,10 +135,135 @@ function extractConsultedFiles(toolName: string, params: Record<string, unknown>
 
     case 'register_edit':
       if (typeof params.file_path === 'string') files.push(params.file_path);
+      if (typeof params.path === 'string') files.push(params.path);
       break;
   }
 
   return files;
+}
+
+export interface ConsultationTarget {
+  projectRoot: string;
+  relKey: string;
+}
+
+/**
+ * Resolve all project roots where a consultation marker should be recorded for `filePath`.
+ *
+ * In a standard setup, this is just `sessionProjectRoot`.
+ *
+ * When the server runs from a root session (`/` or desktop client spawn), or when the
+ * file belongs to a registered project, child package, or git worktree whose sentinel
+ * will be checked by a client/guard running in a different cwd, we record markers for
+ * all candidate roots so follow-up Reads are never blocked due to session root mismatch.
+ */
+export function resolveConsultationTargets(
+  filePath: string,
+  sessionProjectRoot?: string,
+): ConsultationTarget[] {
+  const targets: ConsultationTarget[] = [];
+  const visited = new Set<string>();
+
+  const addTarget = (root: string, relOrAbsPath: string) => {
+    try {
+      const normRoot = path.resolve(root);
+      const key = canonicalMarkerKey(relOrAbsPath, normRoot);
+      const dedupKey = `${normRoot}::${key}`;
+      if (visited.has(dedupKey)) return;
+      visited.add(dedupKey);
+      targets.push({ projectRoot: normRoot, relKey: key });
+    } catch {
+      /* ignore invalid path combinations */
+    }
+  };
+
+  // 1. Session root (if provided)
+  if (sessionProjectRoot) {
+    addTarget(sessionProjectRoot, filePath);
+  }
+
+  // 2. Resolve absolute file path if possible
+  let absPath: string | null = null;
+  if (path.isAbsolute(filePath)) {
+    absPath = path.resolve(filePath);
+  } else if (
+    sessionProjectRoot &&
+    sessionProjectRoot !== '/' &&
+    isDangerousProjectRoot(sessionProjectRoot) === null
+  ) {
+    absPath = path.resolve(sessionProjectRoot, filePath);
+  } else {
+    // Root or dangerous session: resolve candidate file in registered projects
+    try {
+      const resolved = resolveFileInRegisteredProjects(filePath, sessionProjectRoot);
+      if (resolved) {
+        absPath = resolved.absPath;
+        addTarget(resolved.projectRoot, resolved.relPath);
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  if (!absPath) return targets;
+
+  // 3. Registered ancestor and multi-root children
+  try {
+    const anc = resolveRegisteredAncestor(absPath);
+    if (anc) {
+      addTarget(anc.root, absPath);
+      if (anc.type === 'multi-root' && anc.children) {
+        for (const child of anc.children) {
+          const normChild = path.resolve(child);
+          if (absPath === normChild || absPath.startsWith(normChild + path.sep)) {
+            addTarget(normChild, absPath);
+          }
+        }
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+
+  // 4. Git repository root and worktree main checkout
+  try {
+    const gitRoot = findProjectRoot(absPath);
+    if (gitRoot && isDangerousProjectRoot(gitRoot) === null) {
+      addTarget(gitRoot, absPath);
+      const wt = detectGitWorktree(gitRoot);
+      if (wt?.mainRoot && isDangerousProjectRoot(wt.mainRoot) === null) {
+        addTarget(wt.mainRoot, absPath);
+      }
+    }
+  } catch {
+    /* best-effort */
+  }
+
+  // 5. Intermediate directories with active or recent sentinels or trace configs
+  try {
+    let cursor = path.dirname(absPath);
+    let depth = 0;
+    while (cursor && cursor !== path.dirname(cursor) && depth < 10) {
+      if (isDangerousProjectRoot(cursor) !== null) break;
+      const h = projectHash(cursor);
+      const hasSentinel =
+        fs.existsSync(path.join(STATUS_DIR, `trace-mcp-alive-${h}`)) ||
+        fs.existsSync(path.join(os.tmpdir(), `trace-mcp-alive-${h}`)) ||
+        fs.existsSync(path.join(STATUS_DIR, `trace-mcp-status-${h}.json`)) ||
+        fs.existsSync(path.join(os.tmpdir(), `trace-mcp-status-${h}.json`)) ||
+        fs.existsSync(path.join(cursor, '.trace.json')) ||
+        fs.existsSync(path.join(cursor, '.trace-mcp.json'));
+      if (hasSentinel) {
+        addTarget(cursor, absPath);
+      }
+      cursor = path.dirname(cursor);
+      depth++;
+    }
+  } catch {
+    /* best-effort */
+  }
+
+  return targets;
 }
 
 /**
@@ -144,6 +277,9 @@ export function markToolConsultation(
 ): void {
   const files = extractConsultedFiles(toolName, params);
   for (const f of files) {
-    markConsulted(projectRoot, canonicalMarkerKey(f, projectRoot));
+    const targets = resolveConsultationTargets(f, projectRoot);
+    for (const { projectRoot: root, relKey } of targets) {
+      markConsulted(root, relKey);
+    }
   }
 }
