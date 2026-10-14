@@ -224,6 +224,9 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     const secret = runGuard('Read', { file_path: envFile }, sessionId, bareWt);
     expect(secret.allowed).toBe(false);
     expect(secret.reason).toContain('get_env_vars');
+    expect(
+      runGuard('Read', { file_path: envFile, offset: 1, limit: 1 }, sessionId, bareWt).allowed,
+    ).toBe(false);
 
     // A marker from an earlier server does not prove the current one has an
     // index. Even with a fresh heartbeat, it must remain in fallback mode.

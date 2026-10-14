@@ -1193,6 +1193,15 @@ state_hint_if_due || true
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
+  # .env files — always block, including narrow reads and fallback mode.
+  # Secret leakage risk is independent of trace-mcp availability.
+  if is_sensitive_env_file "$FILE_PATH"; then
+    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
+      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
+  fi
+
   # Targeted pre-Edit reads (offset/limit present) — always allow regardless
   # of ENFORCE_TIER. Read-before-Edit is a mandatory workflow step; blocking it
   # would prevent the agent from safely modifying code files. This exemption
@@ -1202,15 +1211,6 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
   READ_LIMIT=$(echo "$INPUT" | jq -r '.tool_input.limit // empty')
   if [[ -n "$READ_OFFSET" ]] || [[ -n "$READ_LIMIT" ]]; then
     exit 0
-  fi
-
-  # .env files — always block, even when heartbeat is dead.
-  # Secret leakage risk is independent of trace-mcp availability.
-  if is_sensitive_env_file "$FILE_PATH"; then
-    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
-    deny \
-      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
-      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
   # Non-code files — allow, but watch for "Second Brain" / per-feature .md
