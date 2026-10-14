@@ -289,3 +289,8 @@ wkoch/goCraft
 # ── Swept 2026-10-13 morning pass (TRA-2385) ──
 # Internal reference in Nikolai portfolio / agency site seeder (database/seeders/data/site_pages.php):
 assetfeed/assetfeed-laravel
+
+# ── Swept 2026-10-14 morning pass (TRA-2408) ──
+# Genuine curated personal collection: CATALOG.md ("My AI Box", 1,107 items) lists nikolai-vysotskyi/trace-mcp:
+azhri1990/ACODE_ROUTE
+

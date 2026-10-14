@@ -121,6 +121,8 @@ Rules for keeping it honest:
 | [wkoch/xrai](https://github.com/wkoch/xrai) | **Yes — third-party technical study & benchmark evaluation, we did not submit it** (0★, active 2026-10-11) | In-depth technical architecture study `docs/ESTUDO-COMPARATIVO.md` ("Oito referências para o xrai", 2026-10-11) evaluating `trace-mcp` v3.36.4 alongside 7 code graph tools (Graft, codebase-memory-mcp, code-review-graph, jcodemunch, tokensave, ProjectAtlas, codegraph-mcp). Analyzes `trace-mcp`'s 81 language plugins matrix, SCIP ingestion (`src/scip/ingest.ts`), `get_task_context` budget assembly (`src/scoring/structured-assembly.ts`), session deduplication, and the PR review benchmark methodology (72.7% token reduction) and post-mortem (`docs/perf/pr-context-loss-classes.md`) | In-depth architectural evaluation and academic/engineering citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-12 | 2026-10-12 |
 | [h0rn3t/Graft](https://github.com/h0rn3t/Graft) | **Yes — third-party benchmark & research citation, we did not submit it** (4★, active 2026-10-12) | Independent code intelligence research document `RESEARCH.md` surveying agent tools. Cites `trace-mcp` as: "Honest PR-review bench: −72.7% input tokens, but false positives 0.58 → 0.80 | A model for honest reporting" alongside jCodeMunch, codedb, fff, pgr, tokensave | Independent engineering evaluation & citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
 | [wkoch/goCraft](https://github.com/wkoch/goCraft) | **Yes — third-party user adoption, we did not submit it** (active 2026-10-12) | Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations | Independent practitioner usage in the wild. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
+| [azhri1990/ACODE_ROUTE](https://github.com/azhri1990/ACODE_ROUTE) | **Yes — third-party curated personal collection, we did not submit it** (0★, 0 forks, created 2026-10-14) | `CATALOG.md` ("My AI Box", 1,107 items collected) lists `- nikolai-vysotskyi/trace-mcp — https://github.com/nikolai-vysotskyi/trace-mcp` under curated developer tools | Curated personal AI reference directory. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-14 | 2026-10-14 |
+
 
 
 ### Outreach hygiene 2026-09-25: the queue is two doors with merge-rate, everything else is held or wontfix-spend (TRA-1950)
@@ -3915,3 +3917,61 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Morning pass, 2026-10-14 (TRA-2408): mention sweep (azhri1990/ACODE_ROUTE), open threads audit, competitor triage (colbymchenry/codegraph PR #2540, DeusData PR #2638/#2636, jgravelle PR #1071-#1073)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation progressing (contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 1 new repository mentioning trace-mcp:
+  - `azhri1990/ACODE_ROUTE`: Curated personal collection ("My AI Box", 1,107 items collected) created 2026-10-14. `CATALOG.md` contains `- nikolai-vysotskyi/trace-mcp — https://github.com/nikolai-vysotskyi/trace-mcp`. Recorded as a genuine reference in the surfaces table and silenced in `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2540 (fix(cpp): structured bindings and function wrappers give their types to calls on them):
+    - Problem: C++ receiver type inference lacked types for (1) structured bindings (`for (auto& [cfh, iter] : cfh_iter_pairs_) iter->Valid()`), (2) `std::function` return types (`create_iterator()->Valid()`), and (3) class members formatted with the type on the line above the name. Calls on these receivers fell back to raw name matching or were dropped.
+    - Solution: Implemented `cppStructuredBindingType` for `std::pair`/`std::tuple`/maps, wrapper unwrapping (`std::function`, `absl::FunctionRef`, `absl::AnyInvocable`), and multi-line member declarator scanning.
+    - Architectural contrast: trace-mcp uses Tree-sitter AST nodes (`structured_binding_declarator`, `init_declarator`) directly in `src/indexer/ast/cpp.ts` and leverages SCIP/LSP compiler models for type resolution, avoiding regex-style line-scanning heuristics.
+- DeusData/codebase-memory-mcp:
+  - PR #2638 (fix(soak): the per-call read follows the soak's own latency ceiling):
+    - Problem: On GitHub Actions `windows-11-arm` runner, PowerShell-backed `search_code` answered in ~23s mean. A single call exceeded the harness's fixed 30s read timeout and failed the run, despite the soak harness latency check allowing 60s.
+    - Solution: Unified read timeout with `SOAK_MAX_QUERY_LATENCY_S` (60s + 30s buffer).
+    - Architectural contrast: trace-mcp has no PowerShell subprocess wrappers; CLI and MCP daemon run in native Node.js / worker threads with dedicated timeout budgets (`src/daemon/timeouts.ts`), keeping sub-100ms response times across platforms.
+  - PR #2636 (docs: update the README for CBM Lens Beta (#2383)): Documents visual codebase lens beta.
+- jgravelle/jcodemunch-mcp:
+  - PR #1073 (ci: a runner never reports its tool calls to the public savings total):
+    - Problem: Automated CI runners were reporting tool call telemetry to the public savings total, inflating claimed token savings with synthetic test traffic.
+    - Solution: Suppresses reporting tool calls when running in CI environments.
+    - Architectural contrast: trace-mcp telemetry (`src/analytics/telemetry.ts`) is strictly gated off in test/CI runs (`TRACE_MCP_TELEMETRY=0` or `NODE_ENV=test`), anonymous, opt-out, and never published as an inflated aggregate marketing counter.
+  - PR #1072 (release: v1.108.360): Web Forms attribute parsing in ASP.NET and repository schema budget enforcement.
+  - PR #1071 (release: v1.108.359): Diagnostic local reporting improvements without hardcoded path leakage.
+
+**Competitor pulse (as of 2026-10-14 morning pass):**
+- nikolai-vysotskyi/trace-mcp: 191★ (=), 24 forks (=)
+- yamadashy/repomix: 28,825★ (+1), 1,585 forks (+1)
+- oraios/serena: 30,238★ (+6), 2,063 forks (+1)
+- DeusData/codebase-memory-mcp: 46,528★ (+12), 3,831 forks (+3)
+- tirth8205/code-review-graph: 32,123★ (+3), 2,939 forks (+1)
+- colbymchenry/codegraph: 73,995★ (+39), 4,771 forks (+1)
+- abhigyanpatwari/GitNexus: 47,872★ (+1), 5,198 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,767★ (+3), 375 forks (=)
+- continuedev/continue: 36,219★ (+4), 5,466 forks (+1)
+- Aider-AI/aider: 49,534★ (+6), 5,054 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
