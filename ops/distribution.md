@@ -4157,3 +4157,61 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+### Late night pass, 2026-10-14 (TRA-2430): mention sweep clean, open threads audit, competitor triage (DeusData PR #2642/#2643, jcodemunch PR #1079, colbymchenry/codegraph PR #2558/#2559, oraios/serena PR #2164)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (timestamp touch 2026-10-14T10:11:05Z from repository metadata sync, 0 maintainer comments/reviews), standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN issue, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PR #2642 (perf(mcp): fast query tools on every platform):
+    - Problem: Soak testing on Windows ARM runners failed due to 23-31s PowerShell `Select-String` subprocess scans hitting the 30s deadline. Full tool latency audit revealed 4 structural bottlenecks: `search_code` spawned grep or PowerShell pipelines with quadratic scaling on hit merging and byte-by-byte `fgetc` source reads; `query_graph` (Cypher engine) used bubble sort for `ORDER BY` (taking 41.0s on 29k rows in Django) and linear scans for `DISTINCT`/`GROUP BY`; store read tools acquired and released database file locks and stat'ed WAL files on every single statement; `list_projects` spawned 7 git subprocesses per project.
+    - Fix: In-process regex scanner, stable merge sort for Cypher `ORDER BY` (41.0s down to 62ms), hash tables for `DISTINCT`/`GROUP BY`, batch read transactions renewed every 100ms, and reducing `list_projects` to 2 git commands.
+    - Architectural contrast: trace-mcp has been built from day 1 around an in-process Node.js / libuv architecture with SQLite in memory / compiled AST / SCIP cache. We never spawn shell sub-processes per query, never execute O(N^2) bubble sorts on result sets, and keep symbol resolution and outline navigation down to single-digit milliseconds without subshell startup overhead or DB lock thrashing.
+  - PR #2643 (feat(infra): env and service joins, kustomize variants, Terraform / Terragrunt, Ansible):
+    - Expands indexing scope into infrastructure-as-code and configuration topology joins.
+- jgravelle/jcodemunch-mcp:
+  - PR #1079 (feat: the server's start-up instructions say where the index is cheaper, not to prefer it everywhere):
+    - Problem: During MCP `initialize`, the server's `instructions` told AI agents to unconditionally prefer jcodemunch's index over built-in tools (Read, Grep, Glob, Bash) and call `resolve_repo` first. The maintainer toned it down to acknowledge that small repositories favor native built-in tools. Tool surface remains broad at 91 tools.
+    - Architectural contrast: trace-mcp emphasizes concise tool surface, progressive disclosure via presets, and explicit token savings rather than tool sprawl (91 tools) or demanding exclusive precedence over native client tools in server initialization instructions.
+- colbymchenry/codegraph:
+  - PR #2558 (fix(react-router): a lazy route follows a barrel that re-exports an import):
+    - Problem: In React Router apps, lazily loaded folder barrel exports (`index.ts` importing and re-exporting components without local declarations) caused route resolution to fail completely, missing 27 route edges in real-world apps (DigiShop).
+    - Architectural contrast: trace-mcp leverages SCIP indexing and Tree-sitter AST queries where symbol definitions and import/export bindings are resolved through standard semantic graph relationships rather than brittle framework-specific heuristic barrel walkers.
+  - PR #2559 (feat(extraction): add Cangjie language support (.cj) with ArkUI-in-Cangjie and FFI bridges):
+    - Adding language support for Huawei's Cangjie programming language.
+- oraios/serena:
+  - PR #2164 (Change the default value of web_dashboard_open_on_launch to false depending on platform):
+    - Disabling automatic dashboard browser popup on launch for tray-supporting platforms; v2.0 milestone stabilized.
+
+**Competitor pulse (as of 2026-10-14 late night pass):**
+- nikolai-vysotskyi/trace-mcp: 191★ (=), 24 forks (=)
+- yamadashy/repomix: 28,832★ (+4), 1,592 forks (+5)
+- oraios/serena: 30,264★ (+5), 2,075 forks (+4)
+- DeusData/codebase-memory-mcp: 46,580★ (+19), 3,837 forks (+2)
+- tirth8205/code-review-graph: 32,149★ (+9), 2,946 forks (+2)
+- colbymchenry/codegraph: 74,088★ (+18), 4,781 forks (+2)
+- abhigyanpatwari/GitNexus: 47,879★ (+1), 5,197 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,770★ (+1), 375 forks (=)
+- continuedev/continue: 36,225★ (+3), 5,468 forks (=)
+- Aider-AI/aider: 49,548★ (+2), 5,055 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
