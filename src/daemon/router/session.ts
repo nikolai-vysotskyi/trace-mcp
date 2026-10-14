@@ -1141,8 +1141,40 @@ export class StdioSession {
   }
 
   private async buildLocalBackend(): Promise<LocalBackend> {
-    const { LocalBackend } = await import('./local-backend.js');
-    return new LocalBackend({
+    let LocalBackendClass: typeof LocalBackend;
+    try {
+      ({ LocalBackend: LocalBackendClass } = await import('./local-backend.js'));
+    } catch (firstError) {
+      // A global npm update temporarily removes dist/local-backend.js while
+      // an already-running thin proxy still owns the client's stdio session.
+      // The first daemon failure after that removal must not strand the
+      // session. Retry only a missing lazy bundle; other import failures need
+      // to surface immediately. Give npm ten seconds to put the file back.
+      if (
+        (firstError as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND' ||
+        !String(firstError).includes('local-backend.js')
+      ) {
+        throw firstError;
+      }
+      let loaded: typeof import('./local-backend.js') | undefined;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        try {
+          // A distinct URL avoids Node retaining a failed dynamic import.
+          loaded = await import(
+            new URL(`./local-backend.js?update-retry=${attempt}`, import.meta.url).href
+          );
+          break;
+        } catch (retryError) {
+          if ((retryError as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') {
+            throw retryError;
+          }
+        }
+      }
+      if (!loaded) throw firstError;
+      LocalBackendClass = loaded.LocalBackend;
+    }
+    return new LocalBackendClass({
       projectRoot: this.opts.projectRoot,
       indexRoot: this.opts.indexRoot,
       config: this.opts.config,
