@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.3...v3.37.4) (2026-10-14)
+
+
+### Bug Fixes
+
+* **frameworks:** make resolveEdges scope-aware to prevent timeouts (TRA-2434) ([#1603](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1603)) ([5ebc795](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5ebc79501f9349819890b337e645a2b5b77ba2b8))
+* **indexer:** resolve SQLite slow queries and event loop stalls (TRA-2433) ([#1602](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1602)) ([24db497](https://github.com/nikolai-vysotskyi/trace-mcp/commit/24db4978f324e1aaaea90e77798921a66200331f))
+
+
+### Documentation
+
+* **ops:** early morning pass 2026-10-15, mention sweep clean, competitor triage (TRA-2436) ([#1605](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1605)) ([25dc881](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25dc881c3b74ca052e5716e2ca8f64aa42c5fdf8))
+* **perf:** record v3.37.3 daemon stall baseline (TRA-2437) ([#1606](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1606)) ([3da2d9c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3da2d9c23ec2015f2d200d17b64e2996fdaa88fa))
+
 ## [3.37.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.2...v3.37.3) (2026-10-14)
 
 
