@@ -171,4 +171,122 @@ describe('markToolConsultation', () => {
       expect(fs.existsSync(path.join(dir, fileHash('src/dotted.ts')))).toBe(true);
     });
   });
+
+  // TRA-2426: when running on a root session ('/') or container root, markers must
+  // be recorded for the actual target project root and any intermediate directory with a sentinel
+  describe('multi-root and container consultation targets (TRA-2426)', () => {
+    it('writes markers to registered ancestor and child project', async () => {
+      const { registerProject, unregisterProject } = await import('../../src/registry.js');
+      const parentDir = path.join(os.tmpdir(), `trace-parent-${process.pid}`);
+      const childDir = path.join(parentDir, 'my-subproject');
+      fs.mkdirSync(childDir, { recursive: true });
+      const testFile = path.join(childDir, 'deep.ts');
+      fs.writeFileSync(testFile, 'export const a = 1;');
+
+      registerProject(parentDir);
+      registerProject(childDir);
+
+      try {
+        markToolConsultation(parentDir, 'get_outline', {
+          path: 'my-subproject/deep.ts',
+        });
+
+        // Parent should have marker for my-subproject/deep.ts
+        const parentMarkerDir = path.join(
+          STATUS_DIR,
+          `trace-mcp-consulted-${projectHash(parentDir)}`,
+        );
+        expect(fs.existsSync(path.join(parentMarkerDir, fileHash('my-subproject/deep.ts')))).toBe(
+          true,
+        );
+
+        // Child should have marker for deep.ts
+        const childMarkerDir = path.join(
+          STATUS_DIR,
+          `trace-mcp-consulted-${projectHash(childDir)}`,
+        );
+        expect(fs.existsSync(path.join(childMarkerDir, fileHash('deep.ts')))).toBe(true);
+      } finally {
+        unregisterProject(childDir);
+        unregisterProject(parentDir);
+        fs.rmSync(parentDir, { recursive: true, force: true });
+        for (const dir of [
+          path.join(STATUS_DIR, `trace-mcp-consulted-${projectHash(parentDir)}`),
+          path.join(STATUS_DIR, `trace-mcp-consulted-${projectHash(childDir)}`),
+        ]) {
+          try {
+            fs.rmSync(dir, { recursive: true, force: true });
+          } catch {}
+        }
+      }
+    });
+
+    it('writes markers to child project when called from a root session with absolute path', async () => {
+      const { registerProject, unregisterProject } = await import('../../src/registry.js');
+      const projDir = path.join(os.tmpdir(), `trace-root-session-target-${process.pid}`);
+      fs.mkdirSync(projDir, { recursive: true });
+      const testFile = path.join(projDir, 'index.ts');
+      fs.writeFileSync(testFile, 'export const b = 2;');
+
+      registerProject(projDir);
+
+      try {
+        markToolConsultation('/', 'get_outline', {
+          path: testFile,
+        });
+
+        const targetMarkerDir = path.join(
+          STATUS_DIR,
+          `trace-mcp-consulted-${projectHash(projDir)}`,
+        );
+        expect(fs.existsSync(path.join(targetMarkerDir, fileHash('index.ts')))).toBe(true);
+      } finally {
+        unregisterProject(projDir);
+        fs.rmSync(projDir, { recursive: true, force: true });
+        try {
+          fs.rmSync(path.join(STATUS_DIR, `trace-mcp-consulted-${projectHash(projDir)}`), {
+            recursive: true,
+            force: true,
+          });
+        } catch {}
+      }
+    });
+
+    it('writes markers for intermediate directory with active sentinel', async () => {
+      const { registerProject, unregisterProject } = await import('../../src/registry.js');
+      const topDir = path.join(os.tmpdir(), `trace-sentinel-top-${process.pid}`);
+      const midDir = path.join(topDir, 'mid-dir');
+      const subDir = path.join(midDir, 'sub-dir');
+      fs.mkdirSync(subDir, { recursive: true });
+      const testFile = path.join(subDir, 'app.vue');
+      fs.writeFileSync(testFile, '<template></template>');
+
+      registerProject(topDir);
+
+      // Create an active sentinel in midDir
+      const midHash = projectHash(midDir);
+      const sentinelPath = path.join(STATUS_DIR, `trace-mcp-alive-${midHash}`);
+      fs.writeFileSync(sentinelPath, String(Date.now()));
+
+      try {
+        markToolConsultation(topDir, 'get_outline', {
+          path: path.join('mid-dir', 'sub-dir', 'app.vue'),
+        });
+
+        // midDir had a sentinel, so it should receive a marker for canonical path sub-dir/app.vue
+        const midMarkerDir = path.join(STATUS_DIR, `trace-mcp-consulted-${midHash}`);
+        expect(fs.existsSync(path.join(midMarkerDir, fileHash('sub-dir/app.vue')))).toBe(true);
+      } finally {
+        unregisterProject(topDir);
+        fs.rmSync(sentinelPath, { force: true });
+        fs.rmSync(topDir, { recursive: true, force: true });
+        try {
+          fs.rmSync(path.join(STATUS_DIR, `trace-mcp-consulted-${midHash}`), {
+            recursive: true,
+            force: true,
+          });
+        } catch {}
+      }
+    });
+  });
 });

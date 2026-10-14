@@ -409,6 +409,68 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     }
   });
 
+  // TRA-2426: An agent running in a child project / worktree calls get_outline
+  // on a server attached to a container or parent session root. The follow-up Read
+  // in the child project must be allowed by the guard hook.
+  it('allows Read in child working directory after get_outline consulted file from container server session (TRA-2426)', async () => {
+    const parentDir = path.join(projectDir, 'container-repo');
+    const childDir = path.join(parentDir, 'sub-app');
+    fs.mkdirSync(childDir, { recursive: true });
+    const relFile = 'page.ts';
+    const absFile = path.join(childDir, relFile);
+    fs.writeFileSync(absFile, 'export function render() { return "hello"; }');
+
+    // Child project has its own sentinel where the guard will probe
+    const childSentinel = setHeartbeatAlive(childDir);
+
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+    const fileId = store.insertFile(path.join('sub-app', relFile), 'typescript', 'h-sub', 40);
+    store.insertSymbol(fileId, {
+      symbolId: `${path.join('sub-app', relFile)}::render#function`,
+      name: 'render',
+      kind: 'function',
+      fqn: 'render',
+      byteStart: 0,
+      byteEnd: 40,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+
+    const server = createServer(
+      store,
+      PluginRegistry.createWithDefaults(),
+      TraceMcpConfigSchema.parse({ tools: { preset: 'full' } }),
+      parentDir,
+      new ProgressState(db),
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'guard-tra2426-test', version: '1.0.0' });
+
+    try {
+      await Promise.all([server.server.connect(serverTransport), client.connect(clientTransport)]);
+
+      // Before get_outline: Read in childDir is denied
+      expect(runGuard('Read', { file_path: absFile }, sessionId, childDir).allowed).toBe(false);
+
+      // Call get_outline from parent server
+      const outlineRes = await client.callTool({
+        name: 'get_outline',
+        arguments: { path: path.join('sub-app', relFile) },
+      });
+      expect(outlineRes.isError).not.toBe(true);
+
+      // After get_outline: Read in childDir is now allowed!
+      const after = runGuard('Read', { file_path: absFile }, sessionId, childDir);
+      expect(after.allowed).toBe(true);
+    } finally {
+      await client.close().catch(() => {});
+      server.dispose();
+      db.close();
+      fs.rmSync(childSentinel, { force: true });
+    }
+  });
+
   it('clears deny escalation once consultation marker appears', () => {
     const file = path.join(projectDir, 'reset.ts');
     fs.writeFileSync(file, 'export {};');
