@@ -41,8 +41,8 @@
  * set. Best-effort only: on some platforms/backends parcel does not apply
  * glob ignores to live events, so the JS-level `isHotChurnPath` filter
  * below stays the authoritative guard (this list also snapshots at
- * subscribe-time). Globs mirror the predicate's narrowed shapes so the
- * two lists cannot silently diverge in scope.
+ * subscribe-time). Claude Code's pid/hex suffix is omitted here: native
+ * globs cannot express its narrow shape without also hiding real sources.
  */
 export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/gateway.heartbeat',
@@ -65,6 +65,13 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
 /** Basenames that are always runtime churn, wherever they live. */
 const HOT_CHURN_BASENAMES = new Set(['gateway.heartbeat', '.tick.lock']);
 
+/** Target of a Claude Code atomic-write sibling, or undefined for other paths. */
+export function atomicWriteTargetPath(p: string): string | undefined {
+  const base = p.split(/[\\/]/).at(-1) ?? '';
+  const match = /^(.+\.[^.\\/]+)\.tmp\.\d+\.[0-9a-f]{8,}$/i.exec(base);
+  return match ? p.slice(0, -base.length) + match[1] : undefined;
+}
+
 /**
  * Whether a project-relative (or absolute) path is a hot-churn
  * runtime-state file. Matched on the basename / a whole `cron` path
@@ -76,6 +83,9 @@ export function isHotChurnPath(p: string): boolean {
   if (segments.length === 0) return false;
   const base = segments[segments.length - 1].toLowerCase();
   if (HOT_CHURN_BASENAMES.has(base)) return true;
+  // Claude Code writes source edits through a uniquely named sibling and
+  // renames it over the target. Drop the sibling before watcher debounce.
+  if (atomicWriteTargetPath(p) !== undefined) return true;
   // `cron/ticker_*`: agent tick markers — the parent segment must be
   // exactly `cron`, not a substring like `cronjobs`.
   if (base.startsWith('ticker_')) {

@@ -21,7 +21,7 @@ import { computeComplexity } from '../tools/analysis/complexity.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import { isSqliteSidecarPath } from '../utils/db-family.js';
-import { isHotChurnPath } from '../utils/hot-churn.js';
+import { atomicWriteTargetPath, isHotChurnPath } from '../utils/hot-churn.js';
 import {
   DEFAULT_MAX_FILE_SIZE,
   isBinaryBuffer,
@@ -148,7 +148,7 @@ const MAX_CANNOT_READ_ENOENT_KEYS = 1000;
 const cannotReadEnoentCounts = new Map<string, { count: number }>();
 
 function cannotReadEnoentKey(rootPath: string, relPath: string): string {
-  return `${rootPath}\n${relPath}`;
+  return `${rootPath}\n${atomicWriteTargetPath(relPath) ?? relPath}`;
 }
 
 /** Test hook — clears the per-process Cannot read file ENOENT dedup state between cases. */
