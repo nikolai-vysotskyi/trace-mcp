@@ -112,11 +112,20 @@ describe('real indexing load: many projects at once', () => {
       }
       roots.push(root);
     }
-  });
+  }, 60_000);
 
-  afterAll(() => {
-    fs.rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  });
+  afterAll(async () => {
+    if (tmpRoot) {
+      // TRA-2427: async rm so Windows NTFS recursive deletion of 4,000 files
+      // does not freeze the event loop and has an explicit 60s timeout budget.
+      await fs.promises.rm(tmpRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 200,
+      });
+    }
+  }, 60_000);
 
   /** The DB handle comes back with the pipeline because `dispose()` does not
    *  close it — in the daemon that is the caller's job, and a test that skips

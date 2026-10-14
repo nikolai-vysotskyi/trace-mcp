@@ -109,7 +109,10 @@ describe('verifyDecisions — batched blob reads on the scattered worst case', (
   });
 
   it('reads N distinct-file blobs with a single cat-file batch, not N git show spawns', () => {
-    const N = 20;
+    // TRA-2427: N=8 is more than enough to prove batching on distinct files (1 cat-file
+    // batch, 0 git show spawns) while avoiding 20 synchronous git process spawns that
+    // stall Windows CI runners under load.
+    const N = 8;
     const decisions: DecisionRow[] = [];
     for (let i = 0; i < N; i++) {
       const rel = `src/f${i}.ts`;

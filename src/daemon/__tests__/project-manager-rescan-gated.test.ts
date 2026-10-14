@@ -111,7 +111,10 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     const dir = join(tmpHome, 'repo-fk');
     mkdirSync(dir, { recursive: true });
     await pm.addProject(dir);
-    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'));
+    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'), {
+      timeout: 10_000,
+      interval: 20,
+    });
     expect(rescanCallbacks).toHaveLength(1);
 
     forceFlags.length = 0;
@@ -129,7 +132,10 @@ describe('ProjectManager watcher rescan gating (TRA-1138)', () => {
     const dir = join(tmpHome, 'repo-persistent-fk');
     mkdirSync(dir, { recursive: true });
     await pm.addProject(dir);
-    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'));
+    await vi.waitFor(() => expect(pm.getProject(dir)?.status).toBe('ready'), {
+      timeout: 10_000,
+      interval: 20,
+    });
 
     failNextRescanWithFk = true;
     failForcedRescanWithFk = true;

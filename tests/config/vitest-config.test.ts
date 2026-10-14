@@ -7,4 +7,13 @@ describe('root vitest config', () => {
     expect(exclude).toContain('packages/app/**');
     expect(exclude).toContain('integrations/**');
   });
+
+  it('caps workers at 2 when running on Windows in CI (TRA-2427)', () => {
+    const isWinCI = Boolean(process.env.CI && process.platform === 'win32');
+    if (isWinCI) {
+      expect(config.test?.maxWorkers).toBe(2);
+    } else {
+      expect(config.test?.maxWorkers).toBeUndefined();
+    }
+  });
 });

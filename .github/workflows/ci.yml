@@ -913,7 +913,9 @@ jobs:
         # Hooks get 30s too: 2 of those 8 failures were `Hook timed out in
         # 15000ms` (beforeAll temp-DB setup on the same loaded runners).
         # Teardown stays 15s — never observed timing out.
-        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=60000 --hookTimeout=30000 --teardownTimeout=15000
+        # TRA-2427: cap Windows worker concurrency at 2 in CI to avoid fork
+        # thrashing and process-spawn starvation between parallel suites.
+        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=60000 --hookTimeout=30000 --teardownTimeout=15000 ${{ matrix.os == 'windows-latest' && '--maxWorkers=2' || '' }}
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
