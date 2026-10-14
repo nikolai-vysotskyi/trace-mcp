@@ -4040,3 +4040,62 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+### Midday pass, 2026-10-14 (TRA-2411): mention sweep clean, open threads audit, competitor triage (colbymchenry/codegraph PR #2553-#2557, DeusData PR #2639, oraios/serena PR #2161/#2164)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN issue, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2557 (fix(explore): tests and examples the engine knows stay out of explore's answer):
+    - Problem: `codegraph_explore` dropped low-value files using its own ad-hoc regex list that fell behind the engine's `isTestFile`. It missed C++ `foo_test.cc`, Google `foo_unittest.cc`, LLVM `unittests/`, Gradle `foo-test/`, Kotlin `jvmTest/`, and project examples/fixtures, letting unit tests crowd explore answer slots. Suffix regexes also falsely matched domain terms (`Latest.java`, `Contest.swift`, `contest.cs`).
+    - Architectural contrast: trace-mcp handles test, mock, and fixture filtering declaratively in `src/indexer/ignore.ts` and `src/indexer/path-utils.ts` without ad-hoc suffix heuristics, avoiding false positives on domain words.
+  - PR #2556 (fix(cpp): a call of a member template with explicit template arguments has the type the template returns):
+    - Problem: Member template calls with explicit template parameters (`reflection->GetRaw<RepeatedPtrField<CPPTYPE>>(msg, field)`) were denied types in `auto` declarations because `cppExpressionType` assumed callees end in the method identifier.
+    - Architectural contrast: trace-mcp uses Tree-sitter AST nodes (`template_method`, `call_expression`) and SCIP compiler definitions, parsing explicit template arguments naturally rather than relying on callee string suffix matching.
+  - PR #2555, #2554, #2553: Multiline receiver declarations, nullptr overload resolution (`std::nullptr_t` vs deleted overloads), and template argument bracket pairing.
+- DeusData/codebase-memory-mcp:
+  - PR #2639 (fix(watcher): handle UTF-8 repository and cache paths on Windows):
+    - Problem: Narrow `stat()` calls in native C watcher passed UTF-8 non-ASCII paths into the Windows ANSI CRT interface (code page 932 on Japanese Windows), causing false `watcher.root_missing` errors and pruning active graph caches after the grace period.
+    - Architectural contrast: trace-mcp uses Node.js / libuv cross-platform filesystem APIs (`uv_fs_stat` via `fs.promises`), which handle Unicode / UTF-8 paths across macOS, Linux, and Windows using wide Win32 APIs, avoiding ANSI codepage corruption.
+- jgravelle/jcodemunch-mcp:
+  - PR #1074: Docs refresh of published benchmark at v1.108.360 claiming 28.9x against grep-and-read.
+- oraios/serena:
+  - PR #2161 (Fix MCP registry manifest: pass Serena's arguments to the package, not the runtime):
+    - Problem: In `server.json`, Serena passed CLI arguments in `runtimeArguments` (`uvx`) instead of `packageArguments`. Clients appended the package spec after them, breaking server startup.
+    - Architectural contrast: trace-mcp configures `server.json` strictly to the official MCP registry schema with `runtime: npx` and properly segregated package arguments.
+  - PR #2164: Set `web_dashboard_open_on_launch` to false by default on platforms with system tray access.
+- abhigyanpatwari/GitNexus:
+  - PR #3578: Bump `@ladybugdb/core` to 0.21.2 to prevent duplicate rows after delete and re-copy.
+
+**Competitor pulse (as of 2026-10-14 midday pass):**
+- nikolai-vysotskyi/trace-mcp: 191★ (=), 24 forks (=)
+- yamadashy/repomix: 28,825★ (=), 1,588 forks (+3)
+- oraios/serena: 30,253★ (+15), 2,071 forks (+8)
+- DeusData/codebase-memory-mcp: 46,551★ (+23), 3,834 forks (+3)
+- tirth8205/code-review-graph: 32,132★ (+9), 2,944 forks (+5)
+- colbymchenry/codegraph: 74,035★ (+40), 4,779 forks (+8)
+- abhigyanpatwari/GitNexus: 47,874★ (+2), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,769★ (+2), 375 forks (=)
+- continuedev/continue: 36,220★ (+1), 5,467 forks (+1)
+- Aider-AI/aider: 49,541★ (+7), 5,054 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
