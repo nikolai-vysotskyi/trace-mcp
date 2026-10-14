@@ -680,15 +680,13 @@ function buildFileImportMap(
       const rows = store.db
         .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
-      FROM edges e
-      JOIN nodes ns ON ns.id = e.source_node_id
-      JOIN nodes nt ON nt.id = e.target_node_id
-     WHERE e.edge_type_id = ?
-       AND ns.node_type = 'file'
-       AND nt.node_type = 'file'
+      FROM nodes ns
+      CROSS JOIN edges e ON e.source_node_id = ns.id
+     WHERE ns.node_type = 'file'
        AND ns.ref_id IN (${chunk.map(() => '?').join(',')})
+       AND e.edge_type_id = ?
   `)
-        .all(importEdgeType.id, ...chunk) as Array<{
+        .all(...chunk, importEdgeType.id) as Array<{
         source_node_id: number;
         target_node_id: number;
         metadata: string | null;
@@ -696,15 +694,13 @@ function buildFileImportMap(
       for (const r of rows) importEdges.push(r);
     }
   } else {
+    // TRA-2433: direct index seek on idx_edges_type avoids scanning all nodes
+    // and 120s+ event-loop stalls. File node resolution is handled in batch below.
     const rows = store.db
       .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
       FROM edges e
-      JOIN nodes ns ON ns.id = e.source_node_id
-      JOIN nodes nt ON nt.id = e.target_node_id
      WHERE e.edge_type_id = ?
-       AND ns.node_type = 'file'
-       AND nt.node_type = 'file'
   `)
       .all(importEdgeType.id) as Array<{
       source_node_id: number;

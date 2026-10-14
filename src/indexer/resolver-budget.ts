@@ -31,8 +31,11 @@ import { yieldToEventLoopFair } from '../utils/event-loop.js';
 /** Rows committed per transaction by row-loop resolvers. */
 export const RESOLVER_WRITE_CHUNK = 250;
 
-/** `edges.id` span covered by one file-projection transaction. */
-export const PROJECTION_ID_CHUNK = 2000;
+/** `edges.id` span covered by one file-projection transaction.
+ * TRA-2433: reduced from 2000 to 500 to keep per-statement execution time
+ * under 500ms and avoid event loop stalls / slow SQLite statement warnings.
+ */
+export const PROJECTION_ID_CHUNK = 500;
 
 /** Slow-chunk tripwire shared with the file-projection range loop (TRA-1957). */
 export const SLOW_RESOLVER_CHUNK_MS = 2000;

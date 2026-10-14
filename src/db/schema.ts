@@ -5,6 +5,7 @@ import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 import { backfillSymbolHeritage } from './heritage.js';
 import { installSlowStatementGuard } from './slow-statement.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 const SCHEMA_VERSION = 35;
 
@@ -2255,6 +2256,22 @@ export function enableFts5Triggers(db: Database.Database): void {
   }
 
   // Restore triggers for subsequent single-row operations
+  ensureFts5Triggers(db);
+}
+
+/**
+ * Async variant of enableFts5Triggers that yields to the event loop
+ * between rebuilding symbols_fts and symbols_name_tri (TRA-2433).
+ */
+export async function enableFts5TriggersAsync(db: Database.Database): Promise<void> {
+  db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
+  await yieldToEventLoopFair();
+  const hasTri = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'symbols_name_tri'")
+    .get();
+  if (hasTri) {
+    db.exec("INSERT INTO symbols_name_tri(symbols_name_tri) VALUES('rebuild')");
+  }
   ensureFts5Triggers(db);
 }
 

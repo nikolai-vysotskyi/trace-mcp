@@ -142,7 +142,7 @@ export async function resolvePythonCallEdges(
 
   // Build per-file import map: file_id → Map<importedName, targetFileId>
   // This tells us that in file X, name "Foo" was imported from file Y
-  const fileImportMap = buildFileImportMap(state);
+  const fileImportMap = buildFileImportMap(state, scope?.changedFileIds);
 
   // Pre-load symbol → node ID mappings
   const CHUNK = 500;
@@ -646,7 +646,10 @@ function resolveMethodOnClass(
  * Uses the 'imports' edges that were resolved by resolvePythonImportEdges,
  * plus the pendingImports metadata to know which names were imported.
  */
-function buildFileImportMap(state: PipelineState): Map<number, Map<string, number[]>> {
+function buildFileImportMap(
+  state: PipelineState,
+  onlySourceFileIds?: ReadonlySet<number>,
+): Map<number, Map<string, number[]>> {
   const { store } = state;
   const result = new Map<number, Map<string, number[]>>();
 
@@ -656,18 +659,49 @@ function buildFileImportMap(state: PipelineState): Map<number, Map<string, numbe
     .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
-  // Query import edges with their metadata (which contains specifier names)
-  const importEdges = store.db
-    .prepare(`
+  const scopedSourceIds =
+    onlySourceFileIds && onlySourceFileIds.size > 0 ? Array.from(onlySourceFileIds) : null;
+  const importEdges: Array<{
+    source_node_id: number;
+    target_node_id: number;
+    metadata: string | null;
+  }> = [];
+
+  if (scopedSourceIds) {
+    const CHUNK = 900;
+    for (let i = 0; i < scopedSourceIds.length; i += CHUNK) {
+      const chunk = scopedSourceIds.slice(i, i + CHUNK);
+      const rows = store.db
+        .prepare(`
+    SELECT e.source_node_id, e.target_node_id, e.metadata
+      FROM nodes ns
+      CROSS JOIN edges e ON e.source_node_id = ns.id
+     WHERE ns.node_type = 'file'
+       AND ns.ref_id IN (${chunk.map(() => '?').join(',')})
+       AND e.edge_type_id = ?
+  `)
+        .all(...chunk, importEdgeType.id) as Array<{
+        source_node_id: number;
+        target_node_id: number;
+        metadata: string | null;
+      }>;
+      for (const r of rows) importEdges.push(r);
+    }
+  } else {
+    // Query import edges with their metadata (which contains specifier names)
+    const rows = store.db
+      .prepare(`
     SELECT e.source_node_id, e.target_node_id, e.metadata
     FROM edges e
     WHERE e.edge_type_id = ?
   `)
-    .all(importEdgeType.id) as Array<{
-    source_node_id: number;
-    target_node_id: number;
-    metadata: string | null;
-  }>;
+      .all(importEdgeType.id) as Array<{
+      source_node_id: number;
+      target_node_id: number;
+      metadata: string | null;
+    }>;
+    for (const r of rows) importEdges.push(r);
+  }
 
   if (importEdges.length === 0) {
     // Fall back to pendingImports if edges aren't stored yet
