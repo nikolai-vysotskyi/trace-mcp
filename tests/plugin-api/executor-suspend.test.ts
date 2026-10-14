@@ -50,4 +50,28 @@ describe('framework timeout across suspend', () => {
     await vi.advanceTimersByTimeAsync(30);
     expect((await result)._unsafeUnwrap()).toEqual([]);
   });
+
+  it('scales timeout for large repositories when using default timeout (TRA-2434)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let active = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => active);
+    const { plugin, resolve } = deferredPlugin();
+    // 5,000 files => Math.ceil(5000 / 100) * 1000 = 50,000ms
+    const largeRepoCtx = {
+      getAllFiles: () =>
+        Array.from({ length: 5000 }, (_, i) => ({
+          id: i,
+          path: `f${i}.ts`,
+          language: 'typescript',
+        })),
+    } as unknown as ResolveContext;
+
+    const result = executeFrameworkResolveEdges(plugin, largeRepoCtx);
+    // At 35,000ms, standard 30s timeout would have expired, but scaled timeout (50s) is still active
+    active = 35_000;
+    await vi.advanceTimersByTimeAsync(35_000);
+    const edge = { source: 'a', target: 'b', type: 'test' } as RawEdge;
+    resolve(ok([edge]));
+    expect((await result)._unsafeUnwrap()).toEqual([edge]);
+  });
 });

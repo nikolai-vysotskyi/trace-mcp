@@ -303,5 +303,62 @@ describe('LaravelPlugin', () => {
       expect(getYieldCount()).toBe(0);
       expect(readFileCalls).toBe(0);
     });
+
+    it('restricts scanning to changeScope in incremental runs (TRA-2434)', async () => {
+      const files = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        path: `app/Dummy${i}.php`,
+        language: 'php',
+      }));
+
+      let readFileCalls = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        changeScope: {
+          changedFileIds: new Set([42]),
+        },
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => {
+          readFileCalls++;
+          return '<?php namespace App; class Dummy {}';
+        },
+      };
+
+      _resetYieldCountForTests();
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(readFileCalls).toBe(1);
+      expect(getYieldCount()).toBe(0);
+    });
+
+    it('early-exits immediately when changeScope has no relevant files (TRA-2434)', async () => {
+      const files = Array.from({ length: 100 }, (_, i) => ({
+        id: i + 1,
+        path: `app/Dummy${i}.php`,
+        language: 'php',
+      }));
+
+      let readFileCalls = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        changeScope: {
+          changedFileIds: new Set([999]),
+        },
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => {
+          readFileCalls++;
+          return '<?php';
+        },
+      };
+
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([]);
+      expect(readFileCalls).toBe(0);
+    });
   });
 });

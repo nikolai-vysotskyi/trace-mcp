@@ -184,10 +184,18 @@ export async function executeFrameworkResolveEdges(
 ): Promise<TraceMcpResult<RawEdge[]>> {
   if (!plugin.resolveEdges) return ok([]);
 
+  // TRA-2434: For full-repository indexing on large repos (>3k files), scale default
+  // timeout with file count so legitimate large-repo passes do not hit 30s timeout.
+  // Explicit overrides (e.g. in tests) are preserved.
+  const effectiveTimeoutMs =
+    timeoutMs === DEFAULT_TIMEOUT_MS && typeof ctx.getAllFiles === 'function'
+      ? Math.max(DEFAULT_TIMEOUT_MS, Math.ceil(ctx.getAllFiles().length / 100) * 1000)
+      : timeoutMs;
+
   try {
     const result = await withTimeout(
       () => plugin.resolveEdges!(ctx),
-      timeoutMs,
+      effectiveTimeoutMs,
       `${plugin.manifest.name}.resolveEdges`,
     );
 

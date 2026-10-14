@@ -336,6 +336,22 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
+    // Scope-aware (TRA-2434): when the pipeline passes a changeScope, narrow work to changed files.
+    const scope = ctx.changeScope;
+    const isIncremental = Boolean(scope && scope.changedFileIds && scope.changedFileIds.size > 0);
+
+    // Fast-path: if incremental and no vue/ts/js files changed, skip entire plugin immediately
+    if (
+      isIncremental &&
+      !allFiles.some(
+        (f) =>
+          scope!.changedFileIds.has(f.id) &&
+          (f.language === 'vue' || f.language === 'typescript' || f.language === 'javascript'),
+      )
+    ) {
+      return ok([]);
+    }
+
     const vueFiles = allFiles.filter((f) => f.path.endsWith('.vue'));
     const composableFiles = allFiles.filter(
       (f) => (f.path.endsWith('.ts') || f.path.endsWith('.js')) && /\/use[A-Z]/.test(f.path),
@@ -382,9 +398,14 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     // lookup can still exclude the current file without changing collisions.
     const importCandidates = this.buildImportCandidates(vueFiles);
 
-    // For each .vue file, resolve template components and composables
-    for (const [index, file] of vueFiles.entries()) {
-      if (index % 16 === 0) await yieldToEventLoopFair();
+    // For each .vue file, resolve template components and composables.
+    // Narrow to changed files during incremental runs (TRA-2434).
+    const targetVueFiles = isIncremental
+      ? vueFiles.filter((f) => scope!.changedFileIds.has(f.id))
+      : vueFiles;
+
+    for (const [index, file] of targetVueFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;
@@ -454,7 +475,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     // Nuxt entry points: pages, layouts, error.vue, app.vue are auto-loaded
     // by Nuxt's file-based router. They're not referenced explicitly in
     // user code, so emit a synthetic edge to mark them as connected.
-    this.markNuxtEntryPoints(ctx, vueFiles, edges);
+    this.markNuxtEntryPoints(ctx, targetVueFiles, edges);
 
     return ok(edges);
   }
@@ -520,12 +541,16 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     // Pre-filter files relevant to dynamic component references (TRA-2394).
     // In multi-language repos with 10k+ non-JS/TS/Vue files, yielding fair turns on unrelated files
     // starves the plugin budget and causes timeouts.
+    const scope = ctx.changeScope;
+    const isIncremental = Boolean(scope && scope.changedFileIds && scope.changedFileIds.size > 0);
     const relevantFiles = allFiles.filter(
-      (f) => f.language === 'typescript' || f.language === 'javascript' || f.language === 'vue',
+      (f) =>
+        (!isIncremental || scope!.changedFileIds.has(f.id)) &&
+        (f.language === 'typescript' || f.language === 'javascript' || f.language === 'vue'),
     );
 
     for (const [index, file] of relevantFiles.entries()) {
-      if (index % 16 === 0) await yieldToEventLoopFair();
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
 
       const source = ctx.readFile(file.path);
       if (!source) continue;

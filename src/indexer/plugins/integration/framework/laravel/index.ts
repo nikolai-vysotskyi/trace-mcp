@@ -654,8 +654,19 @@ export class LaravelPlugin implements FrameworkPlugin {
         f.language === 'php' || f.path.endsWith('.blade.php') || f.path.endsWith('composer.json'),
     );
 
-    for (const [index, file] of relevantFiles.entries()) {
-      if (index % 16 === 0) await yieldToEventLoopFair();
+    // Scope-aware (TRA-2434): when the pipeline passes a changeScope, narrow to changed files.
+    // Unchanged files keep their existing edges in SQLite; re-emitting only changed files prevents
+    // rescanning 10k+ files and starving the event loop on single-file watcher ticks.
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? relevantFiles.filter((f) => scope.changedFileIds.has(f.id))
+        : relevantFiles;
+
+    if (targetFiles.length === 0) return ok([]);
+
+    for (const [index, file] of targetFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const source = ctx.readFile(file.path);
       if (!source) continue;
 

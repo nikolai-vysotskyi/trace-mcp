@@ -164,6 +164,7 @@ export class EdgeResolver {
         getNodeId: resolveContext.getNodeId,
         createNodeIfNeeded: resolveContext.createNodeIfNeeded,
         readFile: (relPath: string) => resolveContext.readFile(wsPrefix + relPath),
+        changeScope: resolveContext.changeScope,
       };
 
       for (const plugin of wsPlugins) {

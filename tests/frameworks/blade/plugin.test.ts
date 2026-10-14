@@ -175,5 +175,61 @@ describe('BladePlugin', () => {
       expect(getYieldCount()).toBe(0);
       expect(readFileCalls).toBe(0);
     });
+
+    it('restricts scanning to changeScope in incremental runs (TRA-2434)', async () => {
+      const files = [
+        { id: 1, path: 'resources/views/a.blade.php', language: 'php' },
+        { id: 2, path: 'resources/views/b.blade.php', language: 'php' },
+        { id: 3, path: 'resources/views/c.blade.php', language: 'php' },
+      ];
+
+      let readFileCalls = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        changeScope: {
+          changedFileIds: new Set([2]),
+        },
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: (p: string) => {
+          readFileCalls++;
+          return '<div>Hello</div>';
+        },
+      };
+
+      _resetYieldCountForTests();
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(readFileCalls).toBe(1);
+      expect(getYieldCount()).toBe(0);
+    });
+
+    it('early-exits immediately when changeScope contains no blade files (TRA-2434)', async () => {
+      const files = [
+        { id: 1, path: 'resources/views/a.blade.php', language: 'php' },
+        { id: 2, path: 'app/Models/User.php', language: 'php' },
+      ];
+
+      let readFileCalls = 0;
+      const mockCtx: any = {
+        rootPath: '/dummy',
+        changeScope: {
+          changedFileIds: new Set([2]), // Only User.php changed
+        },
+        getAllFiles: () => files,
+        getSymbolsByFile: () => [],
+        getSymbolByFqn: () => undefined,
+        readFile: () => {
+          readFileCalls++;
+          return '';
+        },
+      };
+
+      const result = await plugin.resolveEdges(mockCtx);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([]);
+      expect(readFileCalls).toBe(0);
+    });
   });
 });
