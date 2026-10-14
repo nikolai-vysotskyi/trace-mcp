@@ -249,19 +249,15 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     files.push(statusFile);
     expect(runGuard('Read', { file_path: unchanged }, sessionId, bareWt).allowed).toBe(true);
 
-    // A successful consultation during this server's lifetime proves its
-    // own index is usable. Strict routing resumes for unconsulted files.
+    // Even a fresh marker may come from a failed tool call. It cannot prove
+    // that this bare worktree has a usable index.
     consulted(bareWt, 'src/a.ts');
     expect(runGuard('Read', { file_path: changed }, sessionId, bareWt).allowed).toBe(true);
     const gated = runGuard('Read', { file_path: unchanged }, sessionId, bareWt);
-    expect(gated.allowed).toBe(false);
-    expect(gated.reason).toContain('get_outline');
+    expect(gated.allowed).toBe(true);
+    expect(gated.context).toContain('bare-origin worktree');
     const modified = path.join(bareWt, 'src/c.ts');
     fs.writeFileSync(modified, 'export const c = 10;\n');
-    // Force a cached-delta miss independent of filesystem timestamp precision.
-    // Git sees the content change, but the file is not newer than the cache.
-    const oldModifiedTime = new Date(Date.now() - 30_000);
-    fs.utimesSync(modified, oldModifiedTime, oldModifiedTime);
     const untracked = path.join(bareWt, 'src/new.ts');
     fs.writeFileSync(untracked, 'export const fresh = 1;\n');
     expect(runGuard('Read', { file_path: modified }, sessionId, bareWt).allowed).toBe(true);

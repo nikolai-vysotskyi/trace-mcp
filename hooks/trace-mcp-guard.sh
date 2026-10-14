@@ -601,18 +601,14 @@ detect_linked_worktree() {
       [[ "$common" == /* ]] || common="$admin/$common"
       common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
       # A bare repository has worktree metadata but no main checkout index to
-      # borrow. The worktree may still have its own index, so defer to the
-      # consultation markers when deciding whether strict routing is viable.
+      # borrow. A marker alone cannot prove that its own index is usable: the
+      # server writes markers before tool execution, including failed calls.
       if [[ "${common##*/}" != ".git" && -f "$common/HEAD" && -d "$common/objects" && -d "$common/worktrees" ]]; then
         WORKTREE_BARE=1
-        WORKTREE_ROOT="$dir"
         # The sentinel walk may have found a live parent checkout. Its status
         # and markers cannot prove this nested worktree's index is usable.
         PROJECT_ROOT="$dir"
         PROJECT_HASH=$(project_hash_of "$dir")
-        # With no main checkout, compare local edits against this worktree's
-        # HEAD once its own consultation markers prove the index is usable.
-        WORKTREE_MAIN_ROOT="$dir"
         return 1
       fi
       [[ "${common##*/}" == ".git" ]] || return 1
@@ -741,7 +737,7 @@ worktree_delta_refresh() {
 # Fails open to "not in delta" — the caller then applies the normal rules.
 worktree_delta_has() {
   [[ -n "$WORKTREE_ROOT" ]] || return 1
-  local abs="$1" rel refreshed=0
+  local abs="$1" rel
   [[ "$abs" == /* ]] || abs="$(pwd)/$abs"
   case "$abs" in
     "$WORKTREE_ROOT"/*) rel="${abs#"$WORKTREE_ROOT"/}" ;;
@@ -749,18 +745,9 @@ worktree_delta_has() {
   esac
   if [[ ! -f "$WORKTREE_DELTA_FILE" ]] || (( NOW - $(file_mtime "$WORKTREE_DELTA_FILE") > WORKTREE_DELTA_TTL )); then
     worktree_delta_refresh || return 1
-    refreshed=1
   fi
   [[ -f "$WORKTREE_DELTA_FILE" ]] || return 1
   grep -Fxq -- "$rel" "$WORKTREE_DELTA_FILE" 2>/dev/null && return 0
-  # Bare-origin worktrees can have their own live index. If a file changed
-  # after the delta was cached, macOS may give it the same second-resolution
-  # mtime as the cache, defeating -nt below. Recompute on a cache miss there;
-  # normal linked worktrees keep the cheaper TTL path.
-  if (( WORKTREE_BARE == 1 && refreshed == 0 )); then
-    worktree_delta_refresh || return 1
-    grep -Fxq -- "$rel" "$WORKTREE_DELTA_FILE" 2>/dev/null && return 0
-  fi
   # Edited or created since the cache was written.
   [[ -f "$abs" && "$abs" -nt "$WORKTREE_DELTA_FILE" ]] && return 0
   return 1
@@ -847,23 +834,6 @@ iso_to_epoch() {
   echo 0
 }
 
-# A marker left by an earlier server is not proof that this bare worktree has
-# an index now. Require a fresh status from the current server and a marker
-# written since that server started before enforcing consultation.
-bare_index_consultable() {
-  [[ -f "$STATUS_FILE" ]] || return 1
-  local started heartbeat marker dir
-  started=$(iso_to_epoch "$(jq -r '.started_at // empty' "$STATUS_FILE" 2>/dev/null)")
-  heartbeat=$(iso_to_epoch "$(jq -r '.last_heartbeat_at // empty' "$STATUS_FILE" 2>/dev/null)")
-  (( started > 0 && heartbeat >= started && NOW - heartbeat <= STALE_THRESHOLD_SEC )) || return 1
-  for dir in "$CONSULTED_DIR" "$CONSULTED_DIR_TMP"; do
-    for marker in "$dir"/*; do
-      [[ -f "$marker" ]] && (( $(file_mtime "$marker") >= started )) && return 0
-    done
-  done
-  return 1
-}
-
 # ─── Liveness / bypass check ───────────────────────────────────────
 # HEARTBEAT_DEAD=1 → fallback mode: allow Read with warning instead of
 # hard-blocking. Triggered by:
@@ -878,9 +848,9 @@ HEARTBEAT_DEAD=0
 HEARTBEAT_REASON=""
 NOW=$(date +%s)
 
-if (( WORKTREE_BARE == 1 )) && ! bare_index_consultable; then
+if (( WORKTREE_BARE == 1 )); then
   HEARTBEAT_DEAD=1
-  HEARTBEAT_REASON="bare-origin worktree has no evidence of a consultable index"
+  HEARTBEAT_REASON="bare-origin worktree has no main checkout index to borrow"
 elif [[ -z "$PROJECT_HASH" ]]; then
   HEARTBEAT_DEAD=1
   HEARTBEAT_REASON="hash unavailable"
