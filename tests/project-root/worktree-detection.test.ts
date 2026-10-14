@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { detectGitWorktree } from '../../src/project-root.js';
+import { detectGitWorktree, resolveServeRoots } from '../../src/project-root.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -124,6 +125,27 @@ describe('detectGitWorktree', () => {
     const info = detectGitWorktree(wtRoot);
     expect(info).not.toBeNull();
     expect(info!.mainRoot).toBe(mainRoot);
+  });
+
+  it('uses the checked-out root when a real worktree comes from a bare repo', () => {
+    const bare = path.join(tmpDir, 'storage.git');
+    const wtRoot = path.join(tmpDir, 'checkout');
+    const init = spawnSync('git', ['init', '--bare', '-q', '-b', 'bare-base', bare], {
+      encoding: 'utf8',
+    });
+    expect(init.status).toBe(0);
+    const add = spawnSync('git', ['-C', bare, 'worktree', 'add', '-q', '-b', 'main', wtRoot], {
+      encoding: 'utf8',
+    });
+    expect(add.status).toBe(0);
+    write(path.join(wtRoot, 'package.json'), '{}');
+
+    expect(detectGitWorktree(wtRoot)).toBeNull();
+    expect(resolveServeRoots(wtRoot)).toMatchObject({
+      projectRoot: wtRoot,
+      worktreeMainRoot: null,
+      indexRoot: wtRoot,
+    });
   });
 
   it('returns null when commondir is missing and fallback .git is not a dir', () => {

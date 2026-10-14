@@ -584,6 +584,7 @@ fi
 # directory and pays nothing.
 WORKTREE_ROOT=""
 WORKTREE_MAIN_ROOT=""
+WORKTREE_NO_INDEX=0
 detect_linked_worktree() {
   local dir="$PWD" depth=0 line admin common
   while (( depth < 40 )); do
@@ -599,9 +600,13 @@ detect_linked_worktree() {
       [[ -n "$common" ]] || return 1
       [[ "$common" == /* ]] || common="$admin/$common"
       common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
-      [[ "${common##*/}" == ".git" ]] || return 1
       WORKTREE_ROOT="$dir"
-      WORKTREE_MAIN_ROOT="${common%/.git}"
+      # A bare common directory has no main checkout whose index can be
+      # borrowed. Keep the worktree identity so an ancestor sentinel cannot
+      # claim it and block native reads against the wrong index.
+      if [[ "${common##*/}" == ".git" ]]; then
+        WORKTREE_MAIN_ROOT="${common%/.git}"
+      fi
       return 0
     fi
     [[ "$dir" == "/" ]] && return 1
@@ -612,7 +617,7 @@ detect_linked_worktree() {
   return 1
 }
 
-if detect_linked_worktree && [[ -n "$PROJECT_HASH" ]]; then
+if detect_linked_worktree && [[ -n "$PROJECT_HASH" && -n "$WORKTREE_MAIN_ROOT" ]]; then
   WT_MAIN_HASH=$(project_hash_of "$WORKTREE_MAIN_ROOT")
   if [[ -n "$WT_MAIN_HASH" && "$WT_MAIN_HASH" == "$PROJECT_HASH" ]]; then
     # A worktree nested inside its main checkout: the walk up from it lands on
@@ -642,6 +647,13 @@ if detect_linked_worktree && [[ -n "$PROJECT_HASH" ]]; then
       PROJECT_HASH="$WT_MAIN_HASH"
     fi
   fi
+fi
+
+if [[ -n "$WORKTREE_ROOT" && -z "$WORKTREE_MAIN_ROOT" ]]; then
+  case "$PROJECT_ROOT" in
+    "$WORKTREE_ROOT"|"$WORKTREE_ROOT"/*) ;;
+    *) WORKTREE_NO_INDEX=1 ;;
+  esac
 fi
 
 # Whichever of the two was touched most recently, so a sentinel left behind by a
@@ -1148,6 +1160,18 @@ state_hint_if_due || true
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
+  # .env files — always block, even for a narrow Read or an unavailable index.
+  if is_sensitive_env_file "$FILE_PATH"; then
+    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
+    deny \
+      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
+      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
+  fi
+
+  if (( WORKTREE_NO_INDEX == 1 )); then
+    allow_with_context "trace-mcp guard: no index is bound to this bare-backed worktree. Allowing Read as fallback."
+  fi
+
   # Targeted pre-Edit reads (offset/limit present) — always allow regardless
   # of ENFORCE_TIER. Read-before-Edit is a mandatory workflow step; blocking it
   # would prevent the agent from safely modifying code files. This exemption
@@ -1157,15 +1181,6 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
   READ_LIMIT=$(echo "$INPUT" | jq -r '.tool_input.limit // empty')
   if [[ -n "$READ_OFFSET" ]] || [[ -n "$READ_LIMIT" ]]; then
     exit 0
-  fi
-
-  # .env files — always block, even when heartbeat is dead.
-  # Secret leakage risk is independent of trace-mcp availability.
-  if is_sensitive_env_file "$FILE_PATH"; then
-    REL_PATH=$(echo "$FILE_PATH" | sed "s|^$(pwd)/||")
-    deny \
-      "Use get_env_vars for .env files — it masks sensitive values (passwords, API keys, tokens)." \
-      "trace-mcp alternatives for ${REL_PATH}:\\n- get_env_vars { \\\"file\\\": \\\"${REL_PATH}\\\" } — list keys + types without exposing secrets\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever read .env files directly — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
   # Non-code files — allow, but watch for "Second Brain" / per-feature .md
@@ -1369,6 +1384,10 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
     deny \
       "Use get_env_vars for .env files — it masks sensitive values." \
       "trace-mcp alternatives:\\n- get_env_vars { \\\"pattern\\\": \\\"search_term\\\" } — find env vars by key pattern without exposing values\\n(Template files like .env.example/.env.sample are allowed — grep those directly.)"
+  fi
+
+  if (( WORKTREE_NO_INDEX == 1 )); then
+    allow_with_context "trace-mcp guard: no index is bound to this bare-backed worktree. Allowing Grep as fallback."
   fi
 
   if echo "$GREP_GLOB" | grep -qiE '\.(md|json|ya?ml|toml|txt|html|xml|csv|cfg|ini|lock|log)'; then

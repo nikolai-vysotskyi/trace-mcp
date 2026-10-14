@@ -167,6 +167,8 @@ export interface WorktreeInfo {
  * Returns null when:
  *  - not in a git repo
  *  - `.git` is a directory (this IS the main worktree)
+ *  - the shared Git directory belongs to a bare repo (there is no main
+ *    checkout to borrow an index from, so this worktree is indexed itself)
  *  - any file is missing or unreadable
  */
 export function detectGitWorktree(dir?: string): WorktreeInfo | null {

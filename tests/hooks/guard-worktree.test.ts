@@ -252,3 +252,75 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     });
   });
 });
+
+describe.skipIf(process.platform === 'win32')(
+  'trace-mcp-guard.sh in a bare-backed worktree',
+  () => {
+    let tmp: string;
+    let wt: string;
+    let sessionId: string;
+    let sentinel: string;
+
+    beforeEach(() => {
+      tmp = fs.realpathSync(fs.mkdtempSync(path.join(TMP_BASE, 'trace-guard-bare-')));
+      wt = path.join(tmp, 'checkout');
+      const bare = path.join(tmp, 'storage.git');
+      sessionId = `vitest-bare-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      git(tmp, 'init', '--bare', '-q', '-b', 'bare-base', bare);
+      git(tmp, '-C', bare, 'worktree', 'add', '-q', '-b', 'main', wt);
+      fs.mkdirSync(path.join(wt, 'src'));
+      fs.writeFileSync(path.join(wt, 'src/a.ts'), 'export const a = 1;\n');
+      fs.writeFileSync(path.join(wt, 'src/b.ts'), 'export const b = 1;\n');
+      git(wt, 'add', '-A');
+      git(wt, 'commit', '-q', '-m', 'init');
+      fs.writeFileSync(path.join(wt, 'src/a.ts'), 'export const a = 2;\n');
+
+      // A server bound to the ancestor cannot serve this checkout's index.
+      sentinel = path.join(TMP_BASE, `trace-mcp-alive-${projectHash(tmp)}`);
+      fs.writeFileSync(sentinel, String(Date.now()));
+    });
+
+    afterEach(() => {
+      fs.rmSync(sentinel, { force: true });
+      fs.rmSync(path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`), {
+        recursive: true,
+        force: true,
+      });
+      fs.rmSync(tmp, { recursive: true, force: true });
+    });
+
+    it('allows Read and Grep on changed and unchanged files without an accessible index', () => {
+      for (const name of ['a', 'b']) {
+        const file = path.join(wt, `src/${name}.ts`);
+        expect(runGuard('Read', { file_path: file }, sessionId, wt).allowed).toBe(true);
+        expect(runGuard('Grep', { pattern: name, path: file }, sessionId, wt).allowed).toBe(true);
+      }
+    });
+
+    it('still blocks .env reads and greps', () => {
+      const file = path.join(wt, '.env');
+      fs.writeFileSync(file, 'TOKEN=redacted\n');
+      expect(runGuard('Read', { file_path: file }, sessionId, wt).allowed).toBe(false);
+      expect(
+        runGuard('Read', { file_path: file, offset: 1, limit: 1 }, sessionId, wt).allowed,
+      ).toBe(false);
+      expect(runGuard('Grep', { pattern: 'TOKEN', path: file }, sessionId, wt).allowed).toBe(false);
+    });
+
+    it('uses strict routing when the checkout itself has a live index', () => {
+      const direct = path.join(TMP_BASE, `trace-mcp-alive-${projectHash(wt)}`);
+      fs.writeFileSync(direct, String(Date.now()));
+      try {
+        expect(
+          runGuard('Read', { file_path: path.join(wt, 'src/b.ts') }, sessionId, wt).allowed,
+        ).toBe(false);
+        expect(
+          runGuard('Grep', { pattern: 'b', path: path.join(wt, 'src/b.ts') }, sessionId, wt)
+            .allowed,
+        ).toBe(false);
+      } finally {
+        fs.rmSync(direct, { force: true });
+      }
+    });
+  },
+);
