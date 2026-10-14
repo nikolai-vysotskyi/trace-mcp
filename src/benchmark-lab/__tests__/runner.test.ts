@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../config.js';
 import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
@@ -38,12 +38,26 @@ const PROJECT_FILES: Record<string, string> = {
   'src/gamma.ts': ['export const gammaConfig = { retries: 3, label: "gamma" };', ''].join('\n'),
 };
 
+let tempHarnessRoot: string | undefined;
+
+afterEach(() => {
+  if (tempHarnessRoot) {
+    try {
+      fs.rmSync(tempHarnessRoot, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+    tempHarnessRoot = undefined;
+  }
+});
+
 async function buildHarness(): Promise<{
   projectRoot: string;
   dbPath: string;
   fixturesDir: string;
 }> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-lab-run-'));
+  tempHarnessRoot = root;
   const projectRoot = path.join(root, 'proj');
   for (const [rel, content] of Object.entries(PROJECT_FILES)) {
     const abs = path.join(projectRoot, rel);

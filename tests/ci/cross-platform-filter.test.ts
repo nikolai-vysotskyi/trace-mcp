@@ -34,4 +34,12 @@ describe('cross-platform path filter', () => {
     expect(job.if).toContain("needs.changes.outputs.platform == 'true'");
     expect(job.strategy.matrix.os).toEqual(['macos-latest', 'windows-latest']);
   });
+
+  it('caps Windows worker concurrency in cross-platform-test (TRA-2427)', () => {
+    const doc = YAML.parse(readFileSync(CI, 'utf8'));
+    const testStep = doc.jobs['cross-platform-test'].steps.find(
+      (s: { name?: string }) => s.name === 'Test',
+    );
+    expect(testStep.run).toContain('--maxWorkers=2');
+  });
 });
