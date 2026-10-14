@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.1...v3.37.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* **guard:** allow bare-origin worktree fallback (TRA-2415) ([#1595](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1595)) ([7decedc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7decedc6e9a3bbfbe3a4a7fc01b9f90de6ffa6b1))
+* **guard:** propagate consultation markers to target and intermediate project roots (TRA-2426) ([#1598](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1598)) ([0ee9c6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ee9c6aa3322461aa81c2b0730fdd184b924f3cf))
+
 ## [3.37.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.0...v3.37.1) (2026-10-14)
 
 
