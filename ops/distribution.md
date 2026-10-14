@@ -4215,3 +4215,61 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Early morning pass, 2026-10-15 (TRA-2436): mention sweep clean, open threads audit, competitor triage (DeusData PR #2644, colbymchenry/codegraph PR #2560/#2561, jcodemunch PR #1080-#1083, oraios/serena PR #2164)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule).
+  - hesreallyhim/awesome-claude-code#2871: OPEN issue, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PR #2644 (feat(infra): chart identity by publisher URL, Ansible kube DEPLOYS, exact TOML/INI keys):
+    - Problem & change: Stacking on #2643 for v0.12.0 (index schema v9). External Helm charts are keyed by publisher URL (`__chart__<repository>/<name>`) for global identity across projects; Ansible `kube`/`k8s` play tasks now trace manifest variables through loops, `set_fact`, and defaults to emit `DEPLOYS` edges to the template manifests; TOML/INI keys link by exact name to component code symbols.
+    - Architectural contrast: DeusData continues extending graph cardinality into DevOps/IaC topology. While powerful for cluster deployment tracking, adding Helm chart identity and Ansible template resolution increases index schema churn (v9) and triggers full rebuilds on configuration changes. trace-mcp focuses strictly on source code semantic graphs (Tree-sitter AST, SCIP references, framework bindings like Inertia PHP→Vue and model migrations), maintaining sub-second responses and predictable footprint without cluster manifest overhead.
+- colbymchenry/codegraph:
+  - PR #2561 (fix(jsx): a .jsx component links to the file-scope values it reads, as in .js and .tsx):
+    - Problem: In `.jsx` files, identifier reads of file-scope constants (message catalogs, styling objects, lazy route tables) lacked `references` edges with `{"valueRef": true}`, causing `codegraph impact` to under-report affected files (e.g. only 1 affected instead of 3).
+    - PR #2560 (fix(sync): a lazy route relinks a page that appears below its barrel):
+      - Relinks route edges when barrel re-exports sit above or below the target page.
+    - Architectural contrast: trace-mcp uses unified Tree-sitter parsers and SCIP indexing across JS, JSX, TS, and TSX. Scope resolution for module-level identifiers is dialect-agnostic, preventing edge-omission disparities between `.jsx` and `.tsx` without bespoke per-dialect value-ref walkers or barrel-traversal heuristics.
+- jgravelle/jcodemunch-mcp:
+  - PR #1080 & #1081 (feat(sql): parse batches separately and recover named constraints / fix(sql): index T-SQL/Sybase procedures, triggers...):
+    - Adds regex-based SQL routine parsing, delimiter tracking (`$$`, `DELIMITER`, `BEGIN...END`), and representative kind ranks (procedure rank 1, trigger rank 2) for Postgres, MySQL, T-SQL, Sybase, and Oracle.
+  - PR #1082 (fix: a package named migrations is indexed; only generated migrations are skipped):
+    - Fixed an aggressive blacklist rule that skipped any package named `migrations`, restoring indexing for valid packages containing data migrations or custom logic.
+    - Architectural contrast: Hand-rolled regex routines and delimiter counters for multi-dialect SQL are notoriously fragile against nested bodies and dialect idioms. trace-mcp uses rigorous AST grammars and respects `.gitignore` rather than heuristic token masking or hardcoded directory-name bans.
+- oraios/serena:
+  - PR #2164 (Change the default value of web_dashboard_open_on_launch to false depending on platform):
+    - Refines tray and dashboard launch behavior on tray-supporting OS platforms post-v2.0.
+
+**Competitor pulse (as of 2026-10-15 early morning pass):**
+- nikolai-vysotskyi/trace-mcp: 191★ (=), 24 forks (=)
+- yamadashy/repomix: 28,837★ (+5), 1,592 forks (=)
+- oraios/serena: 30,266★ (+2), 2,075 forks (=)
+- DeusData/codebase-memory-mcp: 46,590★ (+10), 3,839 forks (+2)
+- tirth8205/code-review-graph: 32,153★ (+4), 2,946 forks (=)
+- colbymchenry/codegraph: 74,097★ (+9), 4,781 forks (=)
+- abhigyanpatwari/GitNexus: 47,882★ (+3), 5,197 forks (=)
+- jgravelle/jcodemunch-mcp: 2,771★ (+1), 375 forks (=)
+- continuedev/continue: 36,226★ (+1), 5,470 forks (+2)
+- Aider-AI/aider: 49,550★ (+2), 5,058 forks (+3)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
