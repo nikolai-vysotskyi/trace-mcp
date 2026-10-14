@@ -255,6 +255,10 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     expect(gated.reason).toContain('get_outline');
     const modified = path.join(bareWt, 'src/c.ts');
     fs.writeFileSync(modified, 'export const c = 10;\n');
+    // Force a cached-delta miss independent of filesystem timestamp precision.
+    // Git sees the content change, but the file is not newer than the cache.
+    const oldModifiedTime = new Date(Date.now() - 30_000);
+    fs.utimesSync(modified, oldModifiedTime, oldModifiedTime);
     const untracked = path.join(bareWt, 'src/new.ts');
     fs.writeFileSync(untracked, 'export const fresh = 1;\n');
     expect(runGuard('Read', { file_path: modified }, sessionId, bareWt).allowed).toBe(true);

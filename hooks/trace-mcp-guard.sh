@@ -741,7 +741,7 @@ worktree_delta_refresh() {
 # Fails open to "not in delta" — the caller then applies the normal rules.
 worktree_delta_has() {
   [[ -n "$WORKTREE_ROOT" ]] || return 1
-  local abs="$1" rel
+  local abs="$1" rel refreshed=0
   [[ "$abs" == /* ]] || abs="$(pwd)/$abs"
   case "$abs" in
     "$WORKTREE_ROOT"/*) rel="${abs#"$WORKTREE_ROOT"/}" ;;
@@ -749,9 +749,18 @@ worktree_delta_has() {
   esac
   if [[ ! -f "$WORKTREE_DELTA_FILE" ]] || (( NOW - $(file_mtime "$WORKTREE_DELTA_FILE") > WORKTREE_DELTA_TTL )); then
     worktree_delta_refresh || return 1
+    refreshed=1
   fi
   [[ -f "$WORKTREE_DELTA_FILE" ]] || return 1
   grep -Fxq -- "$rel" "$WORKTREE_DELTA_FILE" 2>/dev/null && return 0
+  # Bare-origin worktrees can have their own live index. If a file changed
+  # after the delta was cached, macOS may give it the same second-resolution
+  # mtime as the cache, defeating -nt below. Recompute on a cache miss there;
+  # normal linked worktrees keep the cheaper TTL path.
+  if (( WORKTREE_BARE == 1 && refreshed == 0 )); then
+    worktree_delta_refresh || return 1
+    grep -Fxq -- "$rel" "$WORKTREE_DELTA_FILE" 2>/dev/null && return 0
+  fi
   # Edited or created since the cache was written.
   [[ -f "$abs" && "$abs" -nt "$WORKTREE_DELTA_FILE" ]] && return 0
   return 1
