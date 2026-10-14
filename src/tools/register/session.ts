@@ -43,6 +43,7 @@ import { runLoadTools } from '../../server/tool-surface.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { getDeadCodeV2 } from '../refactoring/dead-code.js';
 import { markStaleOnBranch, staleOnBranchWarning } from '../../server/worktree-stale.js';
+import { markToolConsultation } from '../../server/consultation-markers.js';
 import type { WorktreeIndexTarget } from '../../server/worktree-index-route.js';
 import type { WorktreeDelta } from '../../worktree-delta.js';
 
@@ -998,6 +999,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         }
         try {
           savings.recordCall(call.tool);
+          if (projectRoot) markToolConsultation(projectRoot, call.tool, call.args ?? {});
           const subStart = Date.now();
           const target =
             worktreeIndex && !isSessionLocalTool?.(call.tool) ? await loadWorktreeTarget() : null;
