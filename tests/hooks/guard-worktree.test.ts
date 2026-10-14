@@ -261,6 +261,32 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     expect(runGuard('Read', { file_path: untracked }, sessionId, bareWt).allowed).toBe(true);
   });
 
+  it('does not treat an indexed parent as the index of a nested bare worktree', () => {
+    const bare = path.join(tmp, 'storage');
+    const nestedBareWt = path.join(main, 'nested-bare');
+    git(tmp, 'clone', '--bare', main, bare);
+    git(tmp, '--git-dir', bare, 'worktree', 'add', '-q', '-b', 'nested-bare-feature', nestedBareWt);
+    consulted(main, 'src/a.ts');
+    const parentStatus = path.join(TMP_BASE, `trace-mcp-status-${projectHash(main)}.json`);
+    fs.writeFileSync(
+      parentStatus,
+      JSON.stringify({
+        started_at: new Date(Date.now() - 1_500).toISOString(),
+        last_heartbeat_at: new Date().toISOString(),
+      }),
+    );
+    files.push(parentStatus);
+
+    const d = runGuard(
+      'Read',
+      { file_path: path.join(nestedBareWt, 'src/b.ts') },
+      sessionId,
+      nestedBareWt,
+    );
+    expect(d.allowed).toBe(true);
+    expect(d.context).toContain('bare-origin worktree');
+  });
+
   it('keeps routing once the stale sentinel of the worktree path is passed over', () => {
     // A leftover sentinel from an old direct session must not mask the live
     // main server (which would switch strict routing off for the session).

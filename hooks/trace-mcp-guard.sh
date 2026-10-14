@@ -606,6 +606,10 @@ detect_linked_worktree() {
       if [[ "${common##*/}" != ".git" && -f "$common/HEAD" && -d "$common/objects" && -d "$common/worktrees" ]]; then
         WORKTREE_BARE=1
         WORKTREE_ROOT="$dir"
+        # The sentinel walk may have found a live parent checkout. Its status
+        # and markers cannot prove this nested worktree's index is usable.
+        PROJECT_ROOT="$dir"
+        PROJECT_HASH=$(project_hash_of "$dir")
         # With no main checkout, compare local edits against this worktree's
         # HEAD once its own consultation markers prove the index is usable.
         WORKTREE_MAIN_ROOT="$dir"
