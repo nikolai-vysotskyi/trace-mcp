@@ -584,6 +584,7 @@ fi
 # directory and pays nothing.
 WORKTREE_ROOT=""
 WORKTREE_MAIN_ROOT=""
+WORKTREE_BARE=0
 detect_linked_worktree() {
   local dir="$PWD" depth=0 line admin common
   while (( depth < 40 )); do
@@ -599,6 +600,17 @@ detect_linked_worktree() {
       [[ -n "$common" ]] || return 1
       [[ "$common" == /* ]] || common="$admin/$common"
       common=$(cd "$common" 2>/dev/null && pwd -P) || return 1
+      # A bare repository has worktree metadata but no main checkout index to
+      # borrow. The worktree may still have its own index, so defer to the
+      # consultation markers when deciding whether strict routing is viable.
+      if [[ "${common##*/}" != ".git" && -f "$common/HEAD" && -d "$common/objects" && -d "$common/worktrees" ]]; then
+        WORKTREE_BARE=1
+        WORKTREE_ROOT="$dir"
+        # With no main checkout, compare local edits against this worktree's
+        # HEAD once its own consultation markers prove the index is usable.
+        WORKTREE_MAIN_ROOT="$dir"
+        return 1
+      fi
       [[ "${common##*/}" == ".git" ]] || return 1
       WORKTREE_ROOT="$dir"
       WORKTREE_MAIN_ROOT="${common%/.git}"
@@ -822,6 +834,23 @@ iso_to_epoch() {
   echo 0
 }
 
+# A marker left by an earlier server is not proof that this bare worktree has
+# an index now. Require a fresh status from the current server and a marker
+# written since that server started before enforcing consultation.
+bare_index_consultable() {
+  [[ -f "$STATUS_FILE" ]] || return 1
+  local started heartbeat marker dir
+  started=$(iso_to_epoch "$(jq -r '.started_at // empty' "$STATUS_FILE" 2>/dev/null)")
+  heartbeat=$(iso_to_epoch "$(jq -r '.last_heartbeat_at // empty' "$STATUS_FILE" 2>/dev/null)")
+  (( started > 0 && heartbeat >= started && NOW - heartbeat <= STALE_THRESHOLD_SEC )) || return 1
+  for dir in "$CONSULTED_DIR" "$CONSULTED_DIR_TMP"; do
+    for marker in "$dir"/*; do
+      [[ -f "$marker" ]] && (( $(file_mtime "$marker") >= started )) && return 0
+    done
+  done
+  return 1
+}
+
 # ─── Liveness / bypass check ───────────────────────────────────────
 # HEARTBEAT_DEAD=1 → fallback mode: allow Read with warning instead of
 # hard-blocking. Triggered by:
@@ -836,7 +865,10 @@ HEARTBEAT_DEAD=0
 HEARTBEAT_REASON=""
 NOW=$(date +%s)
 
-if [[ -z "$PROJECT_HASH" ]]; then
+if (( WORKTREE_BARE == 1 )) && ! bare_index_consultable; then
+  HEARTBEAT_DEAD=1
+  HEARTBEAT_REASON="bare-origin worktree has no evidence of a consultable index"
+elif [[ -z "$PROJECT_HASH" ]]; then
   HEARTBEAT_DEAD=1
   HEARTBEAT_REASON="hash unavailable"
 elif [[ -f "$BYPASS_FILE" ]]; then

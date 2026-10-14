@@ -200,6 +200,67 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh in a linked wo
     expect(d.context).toContain('not running');
   });
 
+  it('fails open for a worktree from a bare repository while keeping .env blocked', () => {
+    const bare = path.join(tmp, 'storage');
+    const bareWt = path.join(tmp, 'bare-wt');
+    git(tmp, 'clone', '--bare', main, bare);
+    git(tmp, '--git-dir', bare, 'worktree', 'add', '-q', '-b', 'bare-feature', bareWt);
+    // A session bound directly to this worktree has a fresh heartbeat, but the
+    // bare common directory has no main checkout whose index it can borrow.
+    heartbeat(bareWt);
+    const unchanged = path.join(bareWt, 'src/b.ts');
+    const read = runGuard('Read', { file_path: unchanged }, sessionId, bareWt);
+    expect(read.allowed).toBe(true);
+    expect(read.context).toContain('bare');
+    expect(runGuard('Grep', { pattern: 'b', path: unchanged }, sessionId, bareWt).allowed).toBe(
+      true,
+    );
+    const changed = path.join(bareWt, 'src/a.ts');
+    fs.writeFileSync(changed, 'export const a = 9;\n');
+    expect(runGuard('Read', { file_path: changed }, sessionId, bareWt).allowed).toBe(true);
+
+    const envFile = path.join(bareWt, '.env');
+    fs.writeFileSync(envFile, 'TEST_KEY=placeholder\n');
+    const secret = runGuard('Read', { file_path: envFile }, sessionId, bareWt);
+    expect(secret.allowed).toBe(false);
+    expect(secret.reason).toContain('get_env_vars');
+
+    // A marker from an earlier server does not prove the current one has an
+    // index. Even with a fresh heartbeat, it must remain in fallback mode.
+    consulted(bareWt, 'src/a.ts');
+    const oldMarker = path.join(
+      TMP_BASE,
+      `trace-mcp-consulted-${projectHash(bareWt)}`,
+      sha('src/a.ts'),
+    );
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(oldMarker, old, old);
+    const statusFile = path.join(TMP_BASE, `trace-mcp-status-${projectHash(bareWt)}.json`);
+    fs.writeFileSync(
+      statusFile,
+      JSON.stringify({
+        started_at: new Date(Date.now() - 1_500).toISOString(),
+        last_heartbeat_at: new Date().toISOString(),
+      }),
+    );
+    files.push(statusFile);
+    expect(runGuard('Read', { file_path: unchanged }, sessionId, bareWt).allowed).toBe(true);
+
+    // A successful consultation during this server's lifetime proves its
+    // own index is usable. Strict routing resumes for unconsulted files.
+    consulted(bareWt, 'src/a.ts');
+    expect(runGuard('Read', { file_path: changed }, sessionId, bareWt).allowed).toBe(true);
+    const gated = runGuard('Read', { file_path: unchanged }, sessionId, bareWt);
+    expect(gated.allowed).toBe(false);
+    expect(gated.reason).toContain('get_outline');
+    const modified = path.join(bareWt, 'src/c.ts');
+    fs.writeFileSync(modified, 'export const c = 10;\n');
+    const untracked = path.join(bareWt, 'src/new.ts');
+    fs.writeFileSync(untracked, 'export const fresh = 1;\n');
+    expect(runGuard('Read', { file_path: modified }, sessionId, bareWt).allowed).toBe(true);
+    expect(runGuard('Read', { file_path: untracked }, sessionId, bareWt).allowed).toBe(true);
+  });
+
   it('keeps routing once the stale sentinel of the worktree path is passed over', () => {
     // A leftover sentinel from an old direct session must not mask the live
     // main server (which would switch strict routing off for the session).

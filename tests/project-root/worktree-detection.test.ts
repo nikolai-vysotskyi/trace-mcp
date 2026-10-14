@@ -148,4 +148,17 @@ describe('detectGitWorktree', () => {
 
     expect(detectGitWorktree(dir)).toBeNull();
   });
+
+  it('does not invent a main checkout for a bare-origin worktree', () => {
+    const common = path.join(tmpDir, 'storage');
+    const admin = path.join(common, 'worktrees', 'feature');
+    const wt = path.join(tmpDir, 'feature');
+    mkdirp(path.join(admin, 'objects'));
+    write(path.join(common, 'HEAD'), 'ref: refs/heads/main\n');
+    write(path.join(admin, 'commondir'), '../..\n');
+    write(path.join(wt, '.git'), `gitdir: ${admin}\n`);
+    write(path.join(wt, 'package.json'), '{}');
+
+    expect(detectGitWorktree(wt)).toBeNull();
+  });
 });
