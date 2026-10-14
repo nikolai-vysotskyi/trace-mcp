@@ -233,8 +233,8 @@ function buildImportTargets(state: PipelineState): Map<number, Map<string, numbe
     .prepare(`
     SELECT ns.ref_id AS src, nt.ref_id AS tgt, e.metadata
       FROM edges e
-      JOIN nodes ns ON ns.id = e.source_node_id AND ns.node_type = 'file'
-      JOIN nodes nt ON nt.id = e.target_node_id AND nt.node_type = 'file'
+      CROSS JOIN nodes ns ON ns.id = e.source_node_id AND ns.node_type = 'file'
+      CROSS JOIN nodes nt ON nt.id = e.target_node_id AND nt.node_type = 'file'
      WHERE e.edge_type_id = ?
   `)
     .all(et.id) as Array<{ src: number; tgt: number; metadata: string | null }>;

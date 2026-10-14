@@ -1,5 +1,10 @@
 import type { Store } from '../db/store.js';
-import { disableFts5Triggers, enableFts5Triggers, ensureFts5Triggers } from '../db/schema.js';
+import {
+  disableFts5Triggers,
+  enableFts5Triggers,
+  enableFts5TriggersAsync,
+  ensureFts5Triggers,
+} from '../db/schema.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProjectContext } from '../plugin-api/types.js';
@@ -378,7 +383,7 @@ export async function extractAndPersist(
     // leaves the triggers dropped and desyncs symbols_fts on every later
     // incremental write. No-op on the incremental path (triggers stayed live
     // and were re-armed via ensureFts5Triggers before the loop).
-    if (useFtsRebuild) enableFts5Triggers(store.db);
+    if (useFtsRebuild) await enableFts5TriggersAsync(store.db);
   }
 
   // Phase 4 phantom-rebind: expose the persister's diff maps so the caller can

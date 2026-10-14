@@ -121,7 +121,7 @@ export function resolvePythonTypeEdges(state: PipelineState, scope?: ChangeScope
     }
   }
 
-  const fileImportMap = buildPythonFileImportMap(state);
+  const fileImportMap = buildPythonFileImportMap(state, scope?.changedFileIds);
 
   const insertStmt = store.db.prepare(
     `INSERT OR IGNORE INTO edges (source_node_id, target_node_id, edge_type_id, resolved, metadata, is_cross_ws, resolution_tier)
@@ -209,7 +209,10 @@ function resolveTypeRef(
  * file_id → (importedName → [targetFileId]) for Python files, built from the
  * already-resolved file→file `imports` edges and their `specifiers` metadata.
  */
-function buildPythonFileImportMap(state: PipelineState): Map<number, Map<string, number[]>> {
+function buildPythonFileImportMap(
+  state: PipelineState,
+  onlySourceFileIds?: ReadonlySet<number>,
+): Map<number, Map<string, number[]>> {
   const { store } = state;
   const result = new Map<number, Map<string, number[]>>();
 
@@ -218,21 +221,50 @@ function buildPythonFileImportMap(state: PipelineState): Map<number, Map<string,
     .get('imports') as { id: number } | undefined;
   if (!importEdgeType) return result;
 
-  const rows = store.db
-    .prepare(`
-    SELECT e.source_node_id, e.target_node_id, e.metadata
-      FROM edges e
-      JOIN nodes ns ON ns.id = e.source_node_id
-      JOIN nodes nt ON nt.id = e.target_node_id
-     WHERE e.edge_type_id = ?
-       AND ns.node_type = 'file'
-       AND nt.node_type = 'file'
-  `)
-    .all(importEdgeType.id) as Array<{
+  const scopedSourceIds =
+    onlySourceFileIds && onlySourceFileIds.size > 0 ? Array.from(onlySourceFileIds) : null;
+  const rows: Array<{
     source_node_id: number;
     target_node_id: number;
     metadata: string | null;
-  }>;
+  }> = [];
+
+  if (scopedSourceIds) {
+    const CHUNK = 900;
+    for (let i = 0; i < scopedSourceIds.length; i += CHUNK) {
+      const chunk = scopedSourceIds.slice(i, i + CHUNK);
+      const chunkRows = store.db
+        .prepare(`
+    SELECT e.source_node_id, e.target_node_id, e.metadata
+      FROM nodes ns
+      CROSS JOIN edges e ON e.source_node_id = ns.id
+     WHERE ns.node_type = 'file'
+       AND ns.ref_id IN (${chunk.map(() => '?').join(',')})
+       AND e.edge_type_id = ?
+  `)
+        .all(...chunk, importEdgeType.id) as Array<{
+        source_node_id: number;
+        target_node_id: number;
+        metadata: string | null;
+      }>;
+      for (const r of chunkRows) rows.push(r);
+    }
+  } else {
+    // TRA-2433: direct index seek on idx_edges_type avoids scanning all nodes
+    // and 120s+ event-loop stalls. File node resolution is handled in batch below.
+    const fullRows = store.db
+      .prepare(`
+    SELECT e.source_node_id, e.target_node_id, e.metadata
+      FROM edges e
+     WHERE e.edge_type_id = ?
+  `)
+      .all(importEdgeType.id) as Array<{
+      source_node_id: number;
+      target_node_id: number;
+      metadata: string | null;
+    }>;
+    for (const r of fullRows) rows.push(r);
+  }
 
   if (rows.length === 0) return result;
 

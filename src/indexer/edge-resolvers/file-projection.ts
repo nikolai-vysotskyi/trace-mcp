@@ -279,26 +279,23 @@ export async function resolveFileProjectionEdges(
   // statements are rebuilt per chunk — scoped runs are rare, so prepare
   // cost is noise). Unscoped keeps the TRA-1764 id-range pass.
   if (scopedIds) {
-    store.db.transaction(() => {
-      const CHUNK = 900;
-      for (let i = 0; i < scopedIds.length; i += CHUNK) {
-        const chunk = scopedIds.slice(i, i + CHUNK);
-        const filePh = chunk.map(() => '?').join(',');
-        const branchParams = [...chunk, ...excludedSet];
-        buildSymSymStmt(filePh).run(
-          importsType.id,
-          ...branchParams,
-          importsType.id,
-          ...branchParams,
-        );
-        buildFileSymStmt(filePh).run(
-          importsType.id,
-          ...branchParams,
-          importsType.id,
-          ...branchParams,
-        );
-      }
-    })();
+    // TRA-2433: commit in chunks with a fair yield between them instead of
+    // monopolizing the event loop in a single giant synchronous transaction.
+    const CHUNK = 300;
+    let first = true;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      if (!first) await yieldToEventLoopFair();
+      first = false;
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const filePh = chunk.map(() => '?').join(',');
+      const branchParams = [...chunk, ...excludedSet];
+      const symSym = buildSymSymStmt(filePh);
+      const fileSym = buildFileSymStmt(filePh);
+      store.db.transaction(() => {
+        symSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
+        fileSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
+      })();
+    }
   } else {
     // Unscoped full pass: one transaction per id range with a fair yield
     // between them (TRA-1764). Unscoped placeholder order is (edge_type,

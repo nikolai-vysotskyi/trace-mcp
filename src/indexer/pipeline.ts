@@ -1103,7 +1103,10 @@ export class IndexingPipeline {
       logger.debug('ANALYZE throttle bypassed — sqlite_stat1 cardinality divergent');
     }
     try {
-      this.store.db.exec('ANALYZE');
+      // TRA-2433: analyze only core relational tables with indexes. Plain ANALYZE
+      // scans all FTS5 virtual shadow tables (symbols_fts_*, symbols_name_tri_*),
+      // blocking the event loop for 5+ seconds in a single synchronous step.
+      this.store.db.exec('ANALYZE files; ANALYZE symbols; ANALYZE edges; ANALYZE nodes;');
     } catch (err) {
       logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
       return;
@@ -2329,12 +2332,14 @@ export class IndexingPipeline {
       ) {
         return;
       }
+      // TRA-2433: stamp the check timestamp so consecutive watcher events
+      // don't repeat the expensive collectFiles() disk walk every minute.
+      this._lastCoverageReconcileMs = Date.now();
       const onDisk = (await this.collectFiles()).files.length;
       if (this._disposed) return;
       const indexed = this.store.getStats().totalFiles;
       const gap = onDisk - indexed;
       if (gap < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
-      this._lastCoverageReconcileMs = Date.now();
       logger.info(
         { root: this.rootPath, onDisk, indexed, gap },
         'Coverage drift detected — running a full hash-gated reindex',
@@ -2695,8 +2700,10 @@ export class IndexingPipeline {
    * Above this batch size, we drop FTS5 triggers, bulk-insert, then rebuild
    * the FTS index from scratch. Below it, per-row trigger fires are cheaper
    * than scanning all symbols for a rebuild.
+   * TRA-2433: raised from 50 to 500 so medium batches (e.g. 100-400 files)
+   * use incremental triggers (~50ms) rather than full table scans (7+ seconds).
    */
-  private static readonly FTS_REBUILD_THRESHOLD = 50;
+  private static readonly FTS_REBUILD_THRESHOLD = 500;
 
   /**
    * Spawn a worker pool only when extracting at least this many files —
