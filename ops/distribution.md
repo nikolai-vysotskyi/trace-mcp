@@ -4099,3 +4099,61 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+### Evening pass, 2026-10-14 (TRA-2413): mention sweep clean, open threads audit, competitor triage (colbymchenry/codegraph PR #2550, DeusData PR #2638, jcodemunch PR #1075/#1076, oraios/serena PR #2162)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (timestamp touch 2026-10-14T10:11:05Z from repository metadata sync, 0 maintainer comments/reviews), standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN issue, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - PR #2550 (fix(pascal): resolve receiver chains, packages, event dispatch and nested routines):
+    - Problem: Pascal grammar could not parse `.dpk` Delphi package files, requiring a dedicated custom scanner. Event dispatch needed complex heuristic edge synthesis while avoiding counting `Assigned()`, nil comparisons, address-of expressions, or procedural assignments as function calls. Nested procedures had to be manually scoped and shadowed.
+    - Architectural contrast: trace-mcp relies on Tree-sitter grammars and SCIP indexing. By utilizing AST-level queries and SCIP definitions, trace-mcp cleanly separates syntax structure and semantic symbol definitions without hand-rolled grammar bypasses or ad-hoc heuristic edge synthesis.
+- DeusData/codebase-memory-mcp:
+  - PR #2638 (fix(soak): the per-call read follows the soak's own latency ceiling):
+    - Problem: On GitHub's Windows ARM runner, PowerShell-backed `search_code` answered in ~23s per call (mean 23.3s over 23 calls), crossing the harness's fixed 30s read timeout and failing candidate CI soak tests.
+    - Architectural contrast: trace-mcp runs entirely in-process in Node.js / libuv with an in-memory SQLite and compiled AST/SCIP cache. trace-mcp never shells out to PowerShell or bash per search query, executing code searches in single-digit milliseconds without subshell startup overhead.
+- oraios/serena:
+  - PR #2162 (fix(scala): optionally terminate orphaned Bloop daemons on stop (#1816)):
+    - Problem: Metals starts Bloop build-server daemons that daemonize themselves and re-parent to PID 1 upon shutdown, leaking RAM indefinitely. Added opt-in cleanup logic (`terminate_bloop_on_stop`) to hunt down descendant Bloop processes.
+    - Architectural contrast: trace-mcp uses self-contained Tree-sitter parsers and SCIP indexers directly in-process instead of orchestrating external heavyweight Language Servers and separate background build-server daemons that orphan and leak memory.
+- jgravelle/jcodemunch-mcp:
+  - PR #1075 (fix(summarizer): a C# or AL symbol's summary is its sentence, not the literal `<summary>` tag):
+    - Problem: XML doc comments (`/// <summary>...</summary>`) in C# and AL caused `extract_summary_from_docstring` (which assumed line 1 is a prose sentence) to return `<summary>` as the symbol summary, corrupting BM25 search relevance across all C# codebases. In addition, regex section matching exhibited quadratic behavior on unclosed hostile tags (`<param name='a'>` * 20000 took 26s).
+    - Architectural contrast: trace-mcp extracts doc comments and symbol declarations via Tree-sitter AST nodes rather than regex heuristics on raw text, avoiding quadratic backtracking and comment delimiter corruption.
+  - PR #1076: Adds `--refresh` for `claude-md` policies; tool surface remains vast at 91 tools.
+- abhigyanpatwari/GitNexus:
+  - PR #3578: Fixed duplicate rows in `@ladybugdb/core` 0.21.2 on delete and re-copy.
+
+**Competitor pulse (as of 2026-10-14 evening pass):**
+- nikolai-vysotskyi/trace-mcp: 191★ (=), 24 forks (=)
+- yamadashy/repomix: 28,828★ (+3), 1,587 forks (-1)
+- oraios/serena: 30,259★ (+6), 2,071 forks (=)
+- DeusData/codebase-memory-mcp: 46,561★ (+10), 3,835 forks (+1)
+- tirth8205/code-review-graph: 32,140★ (+8), 2,944 forks (=)
+- colbymchenry/codegraph: 74,070★ (+35), 4,779 forks (=)
+- abhigyanpatwari/GitNexus: 47,878★ (+4), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,769★ (=), 375 forks (=)
+- continuedev/continue: 36,222★ (+2), 5,468 forks (+1)
+- Aider-AI/aider: 49,546★ (+5), 5,054 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
