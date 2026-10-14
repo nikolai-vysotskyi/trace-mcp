@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-10-13T06:50:25.490Z"
+updated: "2026-10-14T06:42:28.915Z"
 active_users:
-  day: 60
-  week: 162
-  month: 317
+  day: 65
+  week: 174
+  month: 327
   first_ping_date: "2026-08-29"
-  days_observed: 46
+  days_observed: 47
   month_window_full: true
-events_28d: 2325
+events_28d: 2346
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2325
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 133360277
-  tokens_saved_raw: 159836783
-  usd_saved: 133.36
+  tokens_saved: 138360010
+  tokens_saved_raw: 164067302
+  usd_saved: 138.36
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 38
+  days: 39
   capped_days: 2
-  raw_ratio: 1.2
+  raw_ratio: 1.19
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 235
+  new_installs_28d: 248
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 19
+  retention_dau_mau_pct: 20
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -159,41 +159,41 @@ usage:
 # against `ops/arrivals.md` in trace-mcp-private before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "popular/referrers: HTTP 403"
+  error: "views: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1215
-  "upgrade": 732
-  "new": 235
+  "active": 1225
+  "upgrade": 739
+  "new": 248
   "downgrade": 73
-  "(not set)": 67
-  "unknown": 2
+  "(not set)": 59
+  "unknown": 1
 by_version:
   "3.34.6": 86
   "3.31.3": 49
   "3.32.0": 49
   "3.31.2": 47
   "3.34.4": 47
-  "3.34.8": 43
+  "3.34.8": 44
   "3.27.1": 42
   "3.34.7": 41
-  "3.26.0": 33
+  "3.36.7": 36
   "3.26.3": 33
   "3.34.1": 32
   "3.34.3": 32
-  "3.26.1": 30
   "3.28.0": 30
   "3.31.5": 28
-  "3.25.0": 27
   "3.29.0": 27
   "3.33.0": 26
   "3.31.1": 25
-  "3.36.3": 22
-  "3.36.0": 19
-  "3.36.6": 18
+  "3.36.3": 23
+  "3.26.1": 22
+  "3.36.6": 22
+  "3.36.0": 21
+  "3.36.5": 18
   "3.31.4": 17
-  "3.36.5": 17
+  "3.25.0": 16
   "3.34.2": 15
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 835
+  at_or_above: 828
   below: 0
   unknown: 0
   pct: 100
@@ -258,44 +258,44 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 115
-  "(not set)": 54
+  "United Arab Emirates": 118
+  "(not set)": 55
   "United States": 24
-  "Russia": 19
+  "Russia": 18
   "China": 10
   "Thailand": 10
-  "Brazil": 8
+  "Brazil": 9
   "Germany": 6
   "Chile": 5
   "Poland": 5
   "South Korea": 5
+  "Canada": 4
   "France": 4
-  "Canada": 3
-  "Indonesia": 3
+  "Indonesia": 4
   "Netherlands": 3
   "Spain": 3
+  "Sweden": 3
   "Türkiye": 3
   "Australia": 2
-  "Bangladesh": 2
   "Egypt": 2
   "Italy": 2
   "Norway": 2
+  "Romania": 2
   "Slovenia": 2
-  "Sweden": 2
 by_client:
-  "unknown": 219
-  "claude-code": 76
-  "codex-mcp-client": 45
+  "unknown": 227
+  "claude-code": 78
+  "codex-mcp-client": 44
   "antigravity-client": 20
   "mcp": 17
-  "opencode": 14
-  "cursor-vscode": 5
-  "grok-shell-trace-mcp": 5
+  "opencode": 13
+  "cursor-vscode": 6
+  "grok-shell-trace-mcp": 6
   "Visual Studio Code": 4
+  "Cursor": 3
   "cli": 3
   "grok-shell-trace": 3
   "rmcp": 3
-  "Cursor": 2
   "Trae": 2
   "claude-ai": 2
   "local-agent-mode-trace": 2
