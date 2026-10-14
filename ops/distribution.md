@@ -3846,6 +3846,71 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+### Afternoon pass, 2026-10-13 (TRA-2388): mention sweep clean, thread audit, competitor deep dive & architectural insights (PR #2150, PR #2155, PR #1055, PR #1058, PR #2533, PR #2608)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend in progress). Nikolai dedicated lane.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN, standing no-ping rule holds.
+  - hesreallyhim/awesome-claude-code#2871: OPEN, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN, community implementation progressing.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (Pass 1 modern backend + Pass 2 legacy multi-term pairs). Clean: 0 repos outside seen list.
+
+**Competitor intelligence & architectural observations:**
+- oraios/serena:
+  - PR #2150 (Confine file access to the project root for untrusted projects (checking symlinks accordingly)):
+    - Problem: `Project.is_path_in_project` checked containment purely lexically (`os.path.normpath`), so a symlink contained inside the project pointing outside passed lexical checks while leaking outside content during tool execution (`read_file`, `create_text_file`, `search_for_pattern`, `find_file`).
+    - Solution: Canonical path resolution checking `realpath` and rejecting operations escaping project root through symlinks.
+    - Architectural contrast: Identical boundary vulnerability addressed upstream in trace-mcp during MiniMax review in v3.31.4 (`tests/tools/refactor-confinement.test.ts`), enforcing strict realpath validation and refusing symlink traversal before any read/write execution.
+  - PR #2155 (Fix replace_in_files accepting stale occurrence selections):
+    - Problem: `replace_in_files` accepted a selection ID from an earlier preview after the selected file had changed on disk, silently applying the replacement to a subsequent occurrence or wrong range.
+    - Solution: Validates occurrence ID against disk content and character range before applying modifications.
+    - Architectural contrast: trace-mcp verifies file hashes / range tokens in refactoring / codemod tools (`apply_codemod`, `extract_function`) to guarantee atomicity and guard against concurrent or stale edits.
+- jgravelle/jcodemunch-mcp:
+  - PR #1058 / Release v1.108.355 (fix: a bare Ruby method call is recorded (L-172)):
+    - Problem: Ruby allows calling zero-argument methods without receivers as bare identifiers (`settings`). Tree-sitter parses these as `identifier` nodes rather than `call` nodes; parser ignored identifiers, causing `get_dead_code_v2` to classify active helper methods as dead code (`no_callers`).
+    - Solution: Inspects identifier nodes in call positions and resolves bare names against scope method definitions.
+    - Architectural contrast: trace-mcp's SCIP and AST symbol resolution pipeline resolves bare calls via lexical scope symbol tables, avoiding false-positive dead code classification.
+  - PR #1055 / Release v1.108.354 (fix: a Go generic call with one argument is recorded (L-171)):
+    - Problem: In Go grammar, a single-argument generic function call `Generic[int](1)` parses identically to a type conversion `type_conversion_expression` with a `generic_type`. The parser skipped type conversion nodes, missing generic calls and causing dead code false positives.
+    - Solution: Treats `type_conversion_expression` nodes with generic targets as call candidates.
+    - Architectural contrast: trace-mcp handles Go ASTs with comprehensive call expression and type conversion disambiguation in AST walkers.
+- colbymchenry/codegraph:
+  - PR #2533 (fix(cpp): a call on a data member of the caller's class reaches its type's method, wherever the class is declared):
+    - Problem: C++ receiver inference only scanned the caller file and matching header (`foo.cc` -> `foo.h`). Data members declared in separate class definition headers (e.g., `DBImpl` in `db_impl.h` with methods split across `db_impl_write.cc`, `db_impl_open.cc`) fell back to name guessing at 0.65/0.7 confidence.
+    - Solution: Traverses full class declaration scope across translation units.
+    - Architectural contrast: trace-mcp indexes symbols globally across the project graph, resolving member types through header indexing regardless of file boundaries.
+- DeusData/codebase-memory-mcp:
+  - PR #2608 (fix(discover): a .gitignore never hides a file git tracks):
+    - Problem: Discovery applied `.gitignore` rules blindly to every path, filtering out tracked files that matched gitignore patterns (e.g., tracked binaries or overlays).
+    - Solution: Queries `git ls-files -z` when inside a git repository before applying ignore heuristics.
+    - Architectural contrast: trace-mcp uses standard git-aware ignore logic honoring tracked files.
+
+**Competitor pulse (as of 2026-10-13 afternoon):**
+- nikolai-vysotskyi/trace-mcp: 191* (=), 24 forks (=)
+- yamadashy/repomix: 28,816* (+6), 1,584 forks (=)
+- oraios/serena: 30,222* (+9), 2,062 forks (=)
+- DeusData/codebase-memory-mcp: 46,470* (+14), 3,820 forks (+1)
+- tirth8205/code-review-graph: 32,103* (+10), 2,937 forks (=)
+- colbymchenry/codegraph: 73,875* (+32), 4,767 forks (+1)
+- abhigyanpatwari/GitNexus: 47,864* (+6), 5,195 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,764* (+1), 375 forks (=)
+- continuedev/continue: 36,208* (+5), 5,464 forks (+1)
+- Aider-AI/aider: 49,522* (+12), 5,050 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
 ### Early morning pass, 2026-10-14 (TRA-2397): mention sweep clean, competitor triage (colbymchenry/codegraph PR #2539-#2542, DeusData PR #2633-#2635, jgravelle PR #1066, oraios/serena PR #2159)
 
 Audited read-only via GitHub API, nothing written outside this repository.
