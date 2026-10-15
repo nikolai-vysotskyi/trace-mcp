@@ -4525,3 +4525,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+### Early morning pass, 2026-10-16 (TRA-2458): mention sweep clean, open threads audit, competitor triage (jcodemunch PR #1100/#1101, codegraph PR #2598, serena PR #2172, continue PR #13386)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; table row updated to closed/rejected, standing no-ping rule holds, no follow-up).
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Dedicated lane for Nikolai.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder sent 2026-09-26).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- jgravelle/jcodemunch-mcp:
+  - PR #1101 (feat: a session lists only its own workspace's indexes by default (repo_visibility), merged 2026-10-15T20:52Z):
+    - Problem & change: Sessions sharing an index store previously saw every repository indexed on the machine. `list_repos` leaked names and paths of other repositories (client code, internal packs, personal projects) across shared agent sessions. Introduced `repo_visibility` configuration (`"workspace"` default vs `"all"`; env `JCODEMUNCH_REPO_VISIBILITY`), hiding out-of-workspace indexes from `list_repos` and restricting ambiguous bare name resolution.
+    - Release v1.108.366 (PR #1100, merged 2026-10-15T18:53Z):
+      - Ships permanent environment variable support without 2.0 deprecation warnings.
+    - Architectural contrast: trace-mcp isolates indexes strictly per workspace root (`.trace/`) by directory path hash in SQLite. The daemon manages project boundaries natively, ensuring multi-project privacy and separation by design without requiring post-hoc visibility filtering over a global multi-repo index.
+- colbymchenry/codegraph:
+  - PR #2598 (fix(cpp): a call on a dereferenced iterator or pointer, `(*it)->Visit()`, calls the method of what it points at, merged 2026-10-15T21:58Z):
+    - Problem & change: For calls through dereferenced pointers or iterators (e.g. `(*it)->Visit()`, `(*node).Weight()`), the extractor emitted bare names without receiver types. Name-matching heuristics then mapped these calls to arbitrary classes having a method of that name with low confidence (0.4–0.7), creating false edges across unrelated classes (e.g. protobuf `FieldDescriptor` calls reaching C# `FieldGeneratorBase`). Introduced `cppDereferenced` expression typing and `matchCppDereferencedCall` to resolve against the target value's type before falling back to name heuristics.
+    - Architectural contrast: trace-mcp resolves symbols using Tree-sitter AST queries with verified syntactic scopes and language-specific definitions rather than speculative heuristic fuzzy-name matching that risks cross-class edge hallucinations.
+- oraios/serena:
+  - PR #2172 (Fix symlink handling in symbol discovery and explicit LSP requests, merged 2026-10-15T19:39Z):
+    - Problem & change: Addresses symlink traversal vulnerabilities and inconsistencies during symbol discovery (Fixes #2163). In untrusted projects, directory traversal now skips file and directory symlinks. For explicit LSP requests, path validation enforces project root containment to prevent symlink traversal outside workspace boundaries.
+    - Architectural contrast: trace-mcp's file walker enforces boundary containment, canonical path checks, and respect for `.gitignore`/`.ignore` rules by default, preventing out-of-tree symlink traversal attacks.
+- continuedev/continue:
+  - PR #13386 (fix(tools): coerce stringified argument types to schema expectations (#13350), updated 2026-10-15T21:43Z):
+    - Problem & change: Certain LLMs (such as Ollama/Qwen) emit JSON arrays, objects, booleans, and numbers as serialized JSON strings in tool call parameters. When dispatched to MCP servers validating parameters with JSON Schema/Zod, this caused `-32602: Invalid arguments` crashes. Continue implemented `coerceArgsToSchema` in its core client tool execution pipeline.
+    - Architectural contrast: trace-mcp tools handle parameter normalization and type coercion gracefully in Node.js server handlers, ensuring tool resilience even when client agents pass serialized JSON strings.
+
+**Competitor pulse (as of 2026-10-16 early morning pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,851★ (+2), 1,598 forks (+4)
+- oraios/serena: 30,295★ (+7), 2,083 forks (+5)
+- DeusData/codebase-memory-mcp: 46,668★ (+17), 3,840 forks (+1)
+- tirth8205/code-review-graph: 32,172★ (+3), 2,954 forks (+4)
+- colbymchenry/codegraph: 74,195★ (+13), 4,792 forks (+2)
+- abhigyanpatwari/GitNexus: 47,900★ (+1), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,773★ (=), 375 forks (=)
+- continuedev/continue: 36,228★ (=), 5,477 forks (+1)
+- Aider-AI/aider: 49,569★ (+3), 5,060 forks (-1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
