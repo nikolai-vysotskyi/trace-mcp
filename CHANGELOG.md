@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.4...v3.37.5) (2026-10-15)
+
+
+### Documentation
+
+* **ops:** afternoon pass 2026-10-15, mention sweep clean, competitor triage (TRA-2449) ([#1609](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1609)) ([1bb6af7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1bb6af74883a803ae668c0b6b523de13e9500cda))
+* **ops:** evening pass 2026-10-15, mention sweep clean, competitor triage (TRA-2451) ([#1610](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1610)) ([a5a37c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5a37c7104ee96117631987463e35b939565d604))
+* **ops:** late night pass 2026-10-15, mention sweep clean, competitor triage (TRA-2453) ([#1611](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1611)) ([6070819](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6070819a864ca477112e75f0db1eb2b855bb047b))
+* **ops:** morning pass 2026-10-15, mention sweep clean, competitor triage (TRA-2446) ([#1607](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1607)) ([e252c52](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e252c527ec0fae8e15ad38afa8379f6e745cab60))
+
 ## [3.37.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.3...v3.37.4) (2026-10-14)
 
 
