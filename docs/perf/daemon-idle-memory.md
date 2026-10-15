@@ -308,3 +308,27 @@ After a release containing PR #1603 is installed, repeat the same bounded log
 query and `/health` probe during comparable indexing work. Compare timeout
 counts and stall duration, and keep `projects_indexing` in view: these are busy
 samples and must not be used to test the idle RSS ceiling above.
+
+---
+
+## 2026-10-16 — the field daemon exceeds the idle RSS ceiling (TRA-2459)
+
+Read-only observation of the installed v3.37.4 daemon, PID 74675. Between
+2026-10-15 21:42:38 and 21:47:38 UTC, six consecutive one-minute vitals
+samples had `projects_loaded: 3`, `projects_indexing: 0`, and RSS 1100–1102 MB
+(heap used 584–587 MB). The stated ceiling at three loaded projects is
+`250 + 75 × 3 = 475 MB`; this field window exceeds it by at least 625 MB.
+The log contains no indexing start/completion or warning in the window. Its
+seven watcher `reindex-file` telemetry records each indexed zero files and
+took 0–1 ms. This is a stronger idle check than filtering a single vitals
+sample, though it does not identify the retained objects.
+
+`GET /debug/memory` later, after the daemon loaded five projects and resumed
+indexing, reported 1509 MB RSS and 826 MB heap used. The session journal had
+zero entries and its compact buffer used zero bytes; the tree cache reported
+about 5.9 MB. Those later numbers are **not** an idle measurement. They only
+rule out the already-capped journal and the visible tree cache as explanations
+for the then-current heap size. TRA-2061 owns attribution of the remaining
+growth. Until that investigation is resolved and the ceiling is remeasured on
+a live build, treat `250 + 75 × projects_loaded` as an isolated-test target,
+not an achieved field bound.
