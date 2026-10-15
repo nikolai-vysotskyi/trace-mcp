@@ -4333,3 +4333,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+### Afternoon pass, 2026-10-15 (TRA-2449): mention sweep clean, open threads audit (hesreallyhim #2871 closed), competitor triage (jcodemunch PR #1089/#1090, colbymchenry/codegraph PR #2569/#2568, oraios/serena PR #2166/#2167)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned during catalog backlog sweep; recorded as rejected, standing no-ping rule holds, no follow-up).
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Dedicated lane for Nikolai.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- jgravelle/jcodemunch-mcp:
+  - PR #1089 (fix: search ranking no longer depends on whether git blame finished, or on today's date (L-188), merged 2026-10-15T06:49Z):
+    - Problem: Non-deterministic BM25 search ranking across identical checkouts. Git blame provider injected `last_author` and `last_modified` into `FileContext.search_keywords`. Two fresh indexes of the same commit yielded divergent symbol ranking scores (1,167 vs 1,232 tokens on fastapi) depending on whether `git log` completed within a 10s timeout and how far the commit sat from a sliding `2.years.ago` calendar window.
+    - Change: Opted blame out of keyword search (`properties_are_search_terms = False`), pinned blame time window to 730 days from HEAD's commit date rather than wall clock, and bumped `PARSER_GENERATION` to 24 to invalidate cached indexes.
+    - Architectural contrast: Hand-rolling custom keyword enrichment and tying search term weighting to wall-clock metadata creates reproducibility traps in benchmarking and agent token usage. trace-mcp indexes structural graph topology, AST symbols, and deterministic git revision diffs without leaking non-deterministic wall-clock or provider timeout heuristics into token scoring.
+  - PR #1090 (release: v1.108.364 - SQL procedures, triggers and constraints are indexed, and one unparseable statement no longer loses the rest of the file, merged 2026-10-15T07:32Z):
+    - Problem & change: Stored procedures and triggers in T-SQL/Sybase files indexed to nothing because derekstride tree-sitter-sql grammar collapsed `CREATE PROCEDURE`/`TRIGGER` into `ERROR` nodes. Implemented `_scan_sql_routines` fallback scanner using comment/string masking over raw bytes, fixed bracket-quoted `[dbo].[X]` parsing, and expanded `search_symbols` input schema enum.
+    - Architectural contrast: Recovering from AST parser failure by layering regex masking over error bytes adds heuristic drift. trace-mcp handles resilient parsing through Tree-sitter error recovery nodes and multi-pass semantic AST validation.
+- colbymchenry/codegraph:
+  - PR #2569 (fix(cpp): a receiver type written from the global scope is looked up there, and a far lowercase outside type reaches no namesake, merged 2026-10-15T04:59Z) & PR #2568 (merged 2026-10-15T04:21Z):
+    - Problem: C++ receiver type declarator regex stripped leading `::` (`::upb::Arena` became `upb::Arena` and bound to namespace-local `hpb::upb::Arena`). Attempting to keep `::` broke template declarations (`SkipList<...>::Iterator`), requiring a lookbehind regex rule. Lowercase outside types (`absl::flat_hash_set`, `std::string`) falsely bound to project namesakes (`util::flat_hash_set`, global `string` class).
+    - Architectural contrast: Codegraph continues patching C++ receiver and type resolution using regular expressions, lookbehinds, and namesake heuristics. In C++, template specializations, qualified scopes, and namespace aliases cannot be reliably parsed via regex. trace-mcp relies on AST structural nodes and Clang SCIP indexers that natively compute symbol identities and disambiguate global scope `::` without lookbehind hacks.
+- oraios/serena:
+  - PR #2166 (fix(php): apply Intelephense's maxMemory and maxFileSize settings, merged 2026-10-15T08:53Z):
+    - Merged fix forcing `--max-old-space-size` into `NODE_OPTIONS` to prevent Intelephense LSP child process heap OOM crashes.
+  - PR #2167 (fix(fsharp): wait for FsAutoComplete's workspace load before serving requests, opened 2026-10-15T05:05Z):
+    - Demonstrates continuing concurrency synchronization challenges when wrapping external language servers (FsAutoComplete LSP loading races with client requests).
+- DeusData/codebase-memory-mcp:
+  - PR #2648 (fix(security): allow the bare wget token the shell pass compares, updated 2026-10-15T04:43Z):
+    - Ongoing shell command string parsing and sanitization in security pass.
+
+**Competitor pulse (as of 2026-10-15 afternoon pass):**
+- nikolai-vysotskyi/trace-mcp: 192★ (=), 24 forks (=)
+- yamadashy/repomix: 28,846★ (+5), 1,592 forks (=)
+- oraios/serena: 30,277★ (+6), 2,077 forks (=)
+- DeusData/codebase-memory-mcp: 46,624★ (+15), 3,840 forks (+1)
+- tirth8205/code-review-graph: 32,160★ (+2), 2,948 forks (=)
+- colbymchenry/codegraph: 74,149★ (+24), 4,784 forks (+2)
+- abhigyanpatwari/GitNexus: 47,892★ (+2), 5,199 forks (=)
+- jgravelle/jcodemunch-mcp: 2,771★ (=), 375 forks (=)
+- continuedev/continue: 36,227★ (+2), 5,473 forks (+1)
+- Aider-AI/aider: 49,561★ (+6), 5,061 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
