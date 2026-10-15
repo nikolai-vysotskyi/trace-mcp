@@ -4273,3 +4273,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+### Morning pass, 2026-10-15 (TRA-2446): mention sweep clean, open threads audit, competitor triage (DeusData PR #2642, colbymchenry/codegraph PR #2567/#2564, jcodemunch PR #1086, oraios/serena PR #2166, wicked-estate discovery)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- All 9 tracked external threads verified. Statuses unchanged:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Dedicated lane for Nikolai.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - hesreallyhim/awesome-claude-code#2871: OPEN issue, standing no-ping rule holds.
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PR #2642 (perf(mcp): fast query tools on every platform, merged 2026-10-14T21:56Z):
+    - Problem & change: Release soak on `windows-11-arm` revealed `search_code` took 23–31s per call (hitting 30s deadline) due to spawning PowerShell `Select-String` / POSIX `grep` pipelines. Rewrote `search_code` to scan indexed files in-process; replaced Cypher engine bubble sort with merge sort for `ORDER BY` (41s → 62ms on 29k rows in Django) and linear scan with hash tables for `DISTINCT`/`GROUP BY`; added 100ms deferred read transaction renewal on SQLite store reads to eliminate repeated db file locking and journal/WAL stat calls.
+    - Architectural contrast: DeusData continues retrofitting in-process scanning and query execution optimizations onto a legacy subprocess-spawning design. trace-mcp was designed from day one with in-process Tree-sitter AST traversal and native SQLite parameterized indexing with zero subprocess overhead during queries.
+- colbymchenry/codegraph:
+  - PR #2567 (fix(cpp): a qualified receiver type never reaches a class that only shares its last name, and rocksdb::DB is RocksDB's own, merged 2026-10-15T03:29Z):
+    - Problem: C++ receiver type resolution failed when projects use namespace macros (e.g. RocksDB's `namespace ROCKSDB_NAMESPACE` with `#define ROCKSDB_NAMESPACE rocksdb`), causing calls on `rocksdb::DB` to be judged external and drop call edges. Also lowercase external types collided with namesake project utilities (`absl::flat_hash_set` vs `util::flat_hash_set::insert`). Added `cppFindsOnlyNamesakes` and macro mapping expansion.
+  - PR #2564 (fix(react): a tag written in a comment or a string renders no JSX child, merged 2026-10-15T00:46Z):
+    - Problem: Regex scanning in `reactJsxChildEdges` (`JSX_TAG_RE`) read tag names from raw text, causing comments, JSDocs, and error strings (`<Carousel />`, XML templates) to falsely emit JSX render edges. Had to introduce `jsxCode(source)` pre-pass to blank strings and comments while preserving offsets.
+    - Architectural contrast: Hand-rolled regex scanning of JSX/TS and heuristic macro stitching in C++ repeatedly suffer from false-edge synthesis and edge drops. trace-mcp uses formal Tree-sitter grammars (where comments and string literals are distinct AST nodes that cannot be confused with JSX elements) and SCIP indexers (where Clang itself computes full symbol identities, resolving macros and namespaces natively).
+- jgravelle/jcodemunch-mcp:
+  - PR #1086 (fix: init writes hooks that run the install you ran, not the first one on PATH, merged 2026-10-15T01:19Z):
+    - Problem: `init` wrote hooks using `shutil.which("jcodemunch-mcp")`, which grabbed whatever older version was first on PATH rather than the active venv/binary, and broke under `uvx` when `uv cache clean` destroyed the hook target. Added `install_layout` resolution with absolute launch path detection.
+    - Architectural contrast: trace-mcp decouples CLI installation from execution via its dedicated control plane (`~/.trace/bin/trace` shim + `launcher.env`), ensuring deterministic resolution regardless of ephemeral cache purges or PATH ordering.
+- oraios/serena:
+  - PR #2166 (fix(php): apply Intelephense's maxMemory and maxFileSize settings, opened 2026-10-15T07:15Z):
+    - Problem: Intelephense language server crashed with JavaScript heap OOM on large PHP repositories because documented `maxMemory` and `maxFileSize` settings were passed in `initializationOptions` and ignored by Intelephense. Patch forces `--max-old-space-size` into `NODE_OPTIONS` for the child process.
+    - Architectural contrast: Illustrates the operational brittleness of LSP-wrapper architectures (running heavy external language server daemons in background subprocesses prone to memory exhaustion and protocol mismatches). trace-mcp's direct AST indexing operates with predictable, bounded memory without subprocess daemons per language.
+- Competitor discovery — mikeparcewski/wicked-estate:
+  - Surface: https://github.com/mikeparcewski/wicked-estate (Rust, MIT, v0.16.7 published on crates.io, pushed 2026-10-11).
+  - Shape: Single static binary MCP server + CLI (`wicked-estate-mcp` / `wicked-estate`) combining code graph, memory, and knowledge store. 15 modular crates, Tree-sitter AST extraction across 103 languages, SQLite/MemStore storage, personalized PageRank over CALLS/IMPORTS, and explicit provenance `{confidence, provenance, resolved_by}` per edge.
+  - Relevance: A notable Rust peer in the local-first code graph MCP ecosystem. Contrast: trace-mcp provides deep multi-language framework bindings (88 frameworks), Git diff blast-radius and PR review benchmarks (−72.7% tokens), and a lightweight Node/Electron desktop environment without requiring a Rust toolchain.
+
+**Competitor pulse (as of 2026-10-15 morning pass):**
+- nikolai-vysotskyi/trace-mcp: 192★ (+1), 24 forks (=)
+- yamadashy/repomix: 28,841★ (+4), 1,592 forks (=)
+- oraios/serena: 30,271★ (+5), 2,077 forks (+2)
+- DeusData/codebase-memory-mcp: 46,609★ (+19), 3,839 forks (=)
+- tirth8205/code-review-graph: 32,158★ (+5), 2,948 forks (+2)
+- colbymchenry/codegraph: 74,125★ (+28), 4,782 forks (+1)
+- abhigyanpatwari/GitNexus: 47,890★ (+8), 5,199 forks (+2)
+- jgravelle/jcodemunch-mcp: 2,771★ (=), 375 forks (=)
+- continuedev/continue: 36,225★ (-1), 5,472 forks (+2)
+- Aider-AI/aider: 49,555★ (+5), 5,060 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
