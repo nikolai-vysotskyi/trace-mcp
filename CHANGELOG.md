@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.6](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.5...v3.37.6) (2026-10-16)
+
+
+### Documentation
+
+* **ops:** early morning pass 2026-10-16, mention sweep clean, competitor triage (TRA-2458) ([#1613](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1613)) ([48ad5c8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/48ad5c8028db4a6b81802baa6f3d7240d67aef5d))
+* **perf:** record field idle RSS ceiling breach (TRA-2459) ([#1612](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1612)) ([01967eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/01967eb3a66e5bf3319529d491e6e84e43e1e091))
+
 ## [3.37.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.4...v3.37.5) (2026-10-15)
 
 
