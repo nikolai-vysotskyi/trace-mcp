@@ -21,8 +21,32 @@ import path from 'node:path';
 import { logger } from '../logger.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
-const PACKAGE_ENTRIES_CACHE_TTL_MS = 60_000;
+const PACKAGE_ENTRIES_CACHE_TTL_MS = 1_800_000; // 30 minutes (invalidated on package.json change)
 const MAX_PACKAGE_ENTRIES_CACHE_ENTRIES = 20;
+
+export const PACKAGE_SCAN_SKIP_DIRS = new Set([
+  'node_modules',
+  'vendor',
+  'dist',
+  'build',
+  '.git',
+  'coverage',
+  'tmp',
+  'temp',
+  '__pycache__',
+  'site-packages',
+  'scratchpad',
+  'storage',
+  'runs',
+  'checkpoints',
+  'dataset',
+  'datasets',
+  'out',
+  '.output',
+  'target',
+  'bin',
+  'obj',
+]);
 
 const packageEntriesCache = new Map<
   string,
@@ -55,6 +79,21 @@ export function clearPackageEntriesCacheForDeletedPath(rootPath: string, relPath
   }
 }
 
+export interface PackageEntriesOptions {
+  bypassCache?: boolean;
+  ttlMs?: number;
+  maxDepth?: number;
+  skipDirs?: Set<string>;
+}
+
+/** Check if cached entries exist without triggering a directory walk. */
+export function readCachedPackageEntries(
+  rootPath: string,
+  options?: PackageEntriesOptions,
+): Set<string> | undefined {
+  return readCachedEntries(rootPath, options);
+}
+
 /**
  * Walk every `package.json` under `rootPath` (skipping node_modules and
  * vendor dirs), resolve `main` / `module` / `bin` / `exports` to relative
@@ -66,13 +105,13 @@ export function clearPackageEntriesCacheForDeletedPath(rootPath: string, relPath
  */
 export function findPackageJsonEntries(
   rootPath: string,
-  options?: { bypassCache?: boolean; ttlMs?: number },
+  options?: PackageEntriesOptions,
 ): Set<string> {
   const cached = readCachedEntries(rootPath, options);
   if (cached) return cached;
   const entries = new Set<string>();
   const packagePaths = new Set<string>();
-  for (const _ of scanPackageEntries(rootPath, entries, packagePaths)) {
+  for (const _ of scanPackageEntries(rootPath, entries, packagePaths, options)) {
     // Synchronous callers use the same scanner and cache contract.
   }
   cacheEntries(rootPath, entries, packagePaths);
@@ -82,14 +121,14 @@ export function findPackageJsonEntries(
 /** Cooperative variant for bulk indexing: no directory walk may monopolize /health. */
 export async function findPackageJsonEntriesAsync(
   rootPath: string,
-  options?: { bypassCache?: boolean; ttlMs?: number },
+  options?: PackageEntriesOptions,
 ): Promise<Set<string>> {
   const cached = readCachedEntries(rootPath, options);
   if (cached) return cached;
   const entries = new Set<string>();
   const packagePaths = new Set<string>();
   let dirs = 0;
-  for (const _ of scanPackageEntries(rootPath, entries, packagePaths)) {
+  for (const _ of scanPackageEntries(rootPath, entries, packagePaths, options)) {
     if (++dirs % 32 === 0) await yieldToEventLoopFair();
   }
   cacheEntries(rootPath, entries, packagePaths);
@@ -98,7 +137,7 @@ export async function findPackageJsonEntriesAsync(
 
 function readCachedEntries(
   rootPath: string,
-  options?: { bypassCache?: boolean; ttlMs?: number },
+  options?: PackageEntriesOptions,
 ): Set<string> | undefined {
   const ttl = options?.ttlMs ?? PACKAGE_ENTRIES_CACHE_TTL_MS;
   if (!options?.bypassCache) {
@@ -117,12 +156,14 @@ function* scanPackageEntries(
   rootPath: string,
   entries: Set<string>,
   packagePaths: Set<string>,
+  options?: PackageEntriesOptions,
 ): Generator<void> {
   if (!rootPath || !fs.existsSync(rootPath)) return;
 
   const visited = new Set<string>();
   const queue: Array<{ dir: string; depth: number }> = [{ dir: rootPath, depth: 0 }];
-  const MAX_DEPTH = 8;
+  const MAX_DEPTH = options?.maxDepth ?? 5;
+  const skipDirs = options?.skipDirs ?? PACKAGE_SCAN_SKIP_DIRS;
 
   // A cursor keeps breadth-first order without Array.shift's quadratic copies.
   for (let cursor = 0; cursor < queue.length; cursor++) {
@@ -143,16 +184,7 @@ function* scanPackageEntries(
       if (ent.isDirectory()) {
         if (
           depth >= MAX_DEPTH ||
-          name === 'node_modules' ||
-          name === 'vendor' ||
-          name === 'dist' ||
-          name === 'build' ||
-          name === '.git' ||
-          name === 'coverage' ||
-          name === 'tmp' ||
-          name === 'temp' ||
-          name === '__pycache__' ||
-          name === 'site-packages' ||
+          skipDirs.has(name) ||
           name.startsWith('.') // .next, .turbo, .pnpm-store, etc.
         ) {
           continue;
