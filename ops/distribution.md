@@ -4581,3 +4581,57 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Morning pass, 2026-10-16 (TRA-2468): mention sweep clean, open threads audit, competitor triage (jcodemunch v1.108.368 / PR #1103-#1106, codegraph PR #2609/#2612, continue PR #13388)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Dedicated lane for Nikolai.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder sent 2026-09-26).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; table row updated to closed/rejected, standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: Clean. Zero new repos outside `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- jgravelle/jcodemunch-mcp:
+  - Release v1.108.368 (PR #1105, merged 2026-10-16T02:10Z; PR #1103 & #1104):
+    - Context provider budget drops (PR #1103, L-190): Context providers running under `JCODEMUNCH_PROVIDER_BUDGET_SECONDS` (such as Express route extractors) previously timed out silently on busy machines without recording partial index state, leading to non-deterministic indexing and keyword generation across incremental builds depending on CPU load. Now records cut providers and schedules them for re-run.
+    - Scanner text & static matching (PR #1104, L-195): Addressed catalog scanners (e.g. mcp.market / plugin scanners) that flag published packages by naively matching `eval`/`exec` strings in test fixtures, prompts, and docstrings.
+    - Path prefix containment (PR #1106, L-197): Drive roots (`folder + os.sep`) produced doubled slashes, breaking path containment and `.gitignore` matching.
+    - Architectural contrast: trace-mcp uses deterministic native Tree-sitter parsing without arbitrary per-file timer cutoffs that cause incomplete index state, relies on SQLite directory path hash isolation rather than fragile string path prefixes, and contains no `eval`/`exec` calls.
+- colbymchenry/codegraph:
+  - PR #2609 (fix(cpp): template explicit specialization naming, merged 2026-10-16T02:41Z): Qualified names previously split template arguments at `::` (e.g. `ReadPrimitive::TYPE_INT32>`), breaking symbol call linkage.
+  - PR #2612 (fix(cpp): free function overload resolution by argument fit, merged 2026-10-16T03:32Z): Free functions previously resolved overloads by line/file proximity rather than argument type signatures, causing wrong-overload bindings.
+  - Architectural contrast: trace-mcp relies on AST scope hierarchy and structured symbol definitions rather than textual or positional proximity heuristics.
+- continuedev/continue:
+  - PR #13388 (fix(indexing): skip directories failing listDir and evict rejected cache entries, updated 2026-10-16T03:57Z): WalkDir previously crashed on virtual or restricted filesystem schemes (e.g. SAP ABAP `adt://` or permission-denied directories) due to unhandled promise rejections in cache.
+  - Architectural contrast: trace-mcp's file walker handles permission denied and unsupported filesystem paths gracefully with per-entry error recovery, preserving indexing integrity.
+
+**Competitor pulse (as of 2026-10-16 morning pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (+1), 24 forks (=)
+- yamadashy/repomix: 28,855★ (+4), 1,598 forks (=)
+- oraios/serena: 30,303★ (+8), 2,083 forks (=)
+- DeusData/codebase-memory-mcp: 46,677★ (+9), 3,845 forks (+5)
+- tirth8205/code-review-graph: 32,178★ (+6), 2,954 forks (=)
+- colbymchenry/codegraph: 74,213★ (+18), 4,799 forks (+7)
+- abhigyanpatwari/GitNexus: 47,906★ (+6), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,774★ (+1), 375 forks (=)
+- continuedev/continue: 36,232★ (+4), 5,479 forks (+2)
+- Aider-AI/aider: 49,575★ (+6), 5,061 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
