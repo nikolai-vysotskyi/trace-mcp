@@ -401,9 +401,9 @@ export interface ReconcilableFileRow {
  *     end of every env pass — see TRA-2067 (GH#1450). The exemption here only
  *     protects env files the collector still owns.
  *
- * Refuses to act on a scope it cannot trust — an empty walk (glob failure,
- * unreadable root) or one truncated at `security.max_files`, where "not in
- * scope" only means "past the cap".
+ * An empty walk cannot establish scope. On a truncated walk, an out-of-scope
+ * row is removed only when its path is confirmed absent from disk; it may
+ * otherwise be past `security.max_files`.
  */
 export function selectOutOfScopeFiles(args: {
   files: ReconcilableFileRow[];
@@ -411,16 +411,19 @@ export function selectOutOfScopeFiles(args: {
   inScope: string[];
   /** True when the walk hit `security.max_files` and was cut short. */
   truncated: boolean;
+  /** Disk check for rows beyond a truncated walk; omit to keep all such rows. */
+  fileExists?: (relPath: string) => boolean;
 }): number[] {
-  const { files, inScope, truncated } = args;
-  if (truncated || inScope.length === 0) return [];
+  const { files, inScope, truncated, fileExists } = args;
+  if (inScope.length === 0 || (truncated && !fileExists)) return [];
   const keep = new Set(inScope.map((p) => p.split(path.sep).join('/')));
   return files
     .filter(
       (f) =>
         !keep.has(f.path.split(path.sep).join('/')) &&
         f.language !== 'env' &&
-        !PHANTOM_CONTENT_HASHES.has(f.content_hash ?? ''),
+        !PHANTOM_CONTENT_HASHES.has(f.content_hash ?? '') &&
+        (!truncated || !fileExists?.(f.path)),
     )
     .map((f) => f.id);
 }
@@ -1240,6 +1243,18 @@ export class IndexingPipeline {
       // count misfires exactly at the cap (a walk that found precisely
       // maxFiles files is whole, not cut) and hides the pre-cap total.
       truncated,
+      fileExists: (relPath) => {
+        const absolutePath = path.isAbsolute(relPath) ? relPath : path.join(this.rootPath, relPath);
+        try {
+          fs.statSync(absolutePath);
+          return true;
+        } catch (err) {
+          // Only a confirmed missing path is safe to prune. An inaccessible
+          // volume or file must keep its index row for a later retry.
+          const code = (err as NodeJS.ErrnoException)?.code;
+          return code !== 'ENOENT' && code !== 'ENOTDIR';
+        }
+      },
     });
     // TRA-2067 (GH#1450): `selectOutOfScopeFiles` exempts `language 'env'`
     // rows, so an env file added to `ignore.patterns` / `.traceignore`,
