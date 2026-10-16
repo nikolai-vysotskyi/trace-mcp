@@ -332,3 +332,24 @@ for the then-current heap size. TRA-2061 owns attribution of the remaining
 growth. Until that investigation is resolved and the ceiling is remeasured on
 a live build, treat `250 + 75 × projects_loaded` as an isolated-test target,
 not an achieved field bound.
+
+---
+
+## 2026-10-17 — repeated no-change reindex stalls on v3.37.7
+
+Read-only field observation of the installed v3.37.7 daemon (PID 69058,
+port 3741). Five watcher events for the same `assetfeed` log file, spaced
+about ten minutes apart, all reported `skippedHash: true`, `indexed: 0`, and
+`queuedMs: 0–4`. Nevertheless, each `indexFiles` run took 11,829–14,345 ms.
+Each run coincided with an `Event loop stall` warning of 6,939–9,126 ms and
+`reindexInFlight: 1`. The repeated no-change input gives TRA-2456 a narrow
+reproduction target: inspect why the postprocess shortcut is bypassed, then
+profile the synchronous work that remains. The logs do not establish which
+stage consumed the time or prove a client fallback in these five windows.
+
+Memory remains above the field ceiling on this build. With three projects
+loaded and `projects_indexing: 0`, consecutive one-minute vitals samples held
+at 889–947 MB RSS and 342–348 MB heap used, versus the 475 MB target. These
+samples were between the periodic reindexes, not during them. `/health`
+returned HTTP 200 in 0.6 ms when probed outside a stall. TRA-2061 continues
+to own memory attribution; these data do not identify retained objects.
