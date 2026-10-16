@@ -14,8 +14,15 @@ import type { GitignoreMatcher } from '../utils/gitignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import type { ExtractPool, ExtractRequest } from './extract-pool.js';
 import { logFrameworkExtractStats, resetFrameworkExtractStats } from '../plugin-api/executor.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { DEFAULT_MAX_FILE_SIZE } from '../utils/security.js';
 import { selectChangedFiles } from './change-prefilter.js';
-import { clearPackageEntriesCache, findPackageJsonEntriesAsync } from './package-entries.js';
+import {
+  clearPackageEntriesCache,
+  findPackageJsonEntriesAsync,
+  readCachedPackageEntries,
+} from './package-entries.js';
 import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
 import type { WorkspaceInfo } from './monorepo.js';
@@ -181,8 +188,32 @@ export async function extractAndPersist(
   if (relPaths.some((p) => p === 'package.json' || p.endsWith('/package.json'))) {
     clearPackageEntriesCache(rootPath);
   }
-  const forceIncludePaths =
-    candidates.length > 0 ? await findPackageJsonEntriesAsync(rootPath) : new Set<string>();
+  // TRA-2456: Consult package entries cache first. If cold, only perform the
+  // async directory walk when candidates exceed the bulk threshold or when at
+  // least one candidate file exceeds the default 1 MB size cap (where the 5 MB
+  // package-entry override actually matters). For normal small-file edits (< 1 MB),
+  // walking thousands of directories on a cold cache starves the event loop.
+  let forceIncludePaths = readCachedPackageEntries(rootPath);
+  if (!forceIncludePaths && candidates.length > 0) {
+    const BULK_THRESHOLD = 50;
+    const needsScan =
+      candidates.length > BULK_THRESHOLD ||
+      candidates.some((rel) => {
+        try {
+          return fs.statSync(path.resolve(rootPath, rel)).size > DEFAULT_MAX_FILE_SIZE;
+        } catch {
+          return false;
+        }
+      });
+    if (needsScan) {
+      forceIncludePaths = await findPackageJsonEntriesAsync(rootPath);
+    } else {
+      forceIncludePaths = new Set<string>();
+    }
+  }
+  if (!forceIncludePaths) {
+    forceIncludePaths = new Set<string>();
+  }
 
   const extractor = new FileExtractor({
     store,

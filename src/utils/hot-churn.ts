@@ -73,6 +73,10 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/train/**/*.pth.tmp',
   '**/ocr_train/**/*.pt.tmp',
   '**/ocr_train/**/*.pth.tmp',
+  // TRA-2456: training logs churn continuously on every batch/epoch.
+  '**/runs/**/*.log',
+  '**/train/**/*.log',
+  '**/ocr_train/**/*.log',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
@@ -143,6 +147,12 @@ export function isHotChurnPath(p: string): boolean {
   // rename. Skip only known training directories, including the observed
   // `ocr_train` layout, so arbitrary user `.tmp` files remain indexable.
   if (base.endsWith('.pt.tmp') || base.endsWith('.pth.tmp')) {
+    const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
+    if (parents.some((s) => ML_WEIGHT_DIRECTORIES.has(s))) return true;
+  }
+
+  // TRA-2456: append-only training logs churn continuously during model training runs.
+  if (base.endsWith('.log')) {
     const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
     if (parents.some((s) => ML_WEIGHT_DIRECTORIES.has(s))) return true;
   }
