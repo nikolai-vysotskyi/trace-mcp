@@ -7,7 +7,7 @@
  * grey word "Manual" as the only affordance, and a raw session id where the
  * project name belongs.
  */
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Clients } from '../Clients';
 
@@ -442,10 +442,11 @@ it('closes the sheet on Escape', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
   await screen.findByRole('dialog');
+  await act(async () => {});
 
   fireEvent.keyDown(document, { key: 'Escape' });
 
-  expect(screen.queryByRole('dialog')).toBeNull();
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
 it('opens no sheet for other write errors', async () => {
