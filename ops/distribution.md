@@ -122,6 +122,8 @@ Rules for keeping it honest:
 | [h0rn3t/Graft](https://github.com/h0rn3t/Graft) | **Yes — third-party benchmark & research citation, we did not submit it** (4★, active 2026-10-12) | Independent code intelligence research document `RESEARCH.md` surveying agent tools. Cites `trace-mcp` as: "Honest PR-review bench: −72.7% input tokens, but false positives 0.58 → 0.80 | A model for honest reporting" alongside jCodeMunch, codedb, fff, pgr, tokensave | Independent engineering evaluation & citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
 | [wkoch/goCraft](https://github.com/wkoch/goCraft) | **Yes — third-party user adoption, we did not submit it** (active 2026-10-12) | Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations | Independent practitioner usage in the wild. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
 | [azhri1990/ACODE_ROUTE](https://github.com/azhri1990/ACODE_ROUTE) | **Yes — third-party curated personal collection, we did not submit it** (0★, 0 forks, created 2026-10-14) | `CATALOG.md` ("My AI Box", 1,107 items collected) lists `- nikolai-vysotskyi/trace-mcp — https://github.com/nikolai-vysotskyi/trace-mcp` under curated developer tools | Curated personal AI reference directory. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-14 | 2026-10-14 |
+| [sayef/comind](https://github.com/sayef/comind) | **Yes — third-party architectural citation & prior art reference, we did not submit it** (0★, active 2026-10-16) | Architecture design document `docs/design/ledger.md` ("Comind Ledger — design plan") surveying agent memory and decision record systems. Under "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html` | Architectural design reference and citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-16 | 2026-10-16 |
+
 
 
 
@@ -4634,4 +4636,66 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Afternoon pass, 2026-10-16 (TRA-2471): mention sweep (sayef/comind), open threads audit, competitor triage (DeusData v0.12.0 / CBM Lens Beta, jgravelle v1.108.369-370 / PR #1109, colbymchenry PR #2618, oraios PR #2172)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (updated 2026-10-09T01:18Z with Round 4 review from hetaoBackend). Dedicated lane for Nikolai.
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder sent 2026-09-26).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: false/dirty due to upstream context additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (updated 2026-10-08T20:56:56Z, community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; table row updated to closed/rejected, standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Found 1 new repository mentioning trace-mcp:
+  - `sayef/comind`: Independent deterministic code intelligence engine project for coding agents (SCIP-based, self-hosted single binary over MCP). In `docs/design/ledger.md` ("Comind Ledger — design plan", dated 2026-10-13, active pushes 2026-10-16), evaluates agent memory systems under §1 "Why this, why now"; under the "Decision records" category, explicitly cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html`. Recorded as a genuine architectural citation in the surfaces table and silenced in `ops/mentions-seen.txt`.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - Milestone release **v0.12.0** published 2026-10-15T22:08Z (231 PRs merged since v0.11.0, 40 community PRs):
+    - CBM Lens Beta: Added a built-in loopback web UI (`--ui=true`) exploring code knowledge graphs by file, neighborhood, architecture, routes, hotspots, and browser-local assistant model. Subsystem ownership transferred to @BernhardJackiewicz (#2068, #1964, #2383).
+    - Documentation in graph: Markdown, rST, AsciiDoc, PDF, ADRs, diagrams, and OpenAPI specs linked strictly to functions, types, and files.
+    - Smart CI: `detect_changes` seeds graph from diff, walks dependency paths, and identifies affected tests with causal reasons.
+    - Infrastructure as Code: Kubernetes manifests, Helm, Flux/Argo CD, Compose files, Dockerfiles linking to workloads and programs.
+    - Architectural contrast: trace-mcp ships a dedicated standalone Electron desktop app (`trace-mcp-desktop`) with native OS windowing rather than embedding an HTTP web server into the CLI binary; indexes markdown and documentation via lightweight structured symbols (`non-code-scanner`) without requiring heavy graph database schemas or full rebuilds on upgrade; and consumes negligible memory compared to CBM's 46–48 MB binaries and heavy in-memory Cypher graphs.
+- jgravelle/jcodemunch-mcp:
+  - Releases v1.108.369 and v1.108.370 (PR #1109, merged 2026-10-16T08:05Z, LEDGER L-177):
+    - Import extractors: Seven import extractors (PHP group use `use App\Models\{User, Post};`, Kotlin alias `import a.b.D as E`, Scala `import a.b.{C, D}`, Haskell `import A.B (c, d)`, Dart `import 'a.dart' show C, D;`, CJS destructuring `const {a, b} = require("./m")`, and Python line continuation `import os, \`) previously dropped imported names or failed to record edges because regex readers stopped at the opening token without parsing bracketed/destructured lists.
+    - ReDoS vulnerability: CodeQL caught exponential backtracking in `_DART_CLAUSE` regex on unclosed keywords; patched with word boundary assertions (`\b`).
+    - Architectural contrast: trace-mcp uses Tree-sitter AST parsing across all supported grammars instead of bespoke regex extractors, eliminating both import syntax parser fragmentation and ReDoS vulnerabilities at the grammar level.
+- colbymchenry/codegraph:
+  - PR #2618 (fix(cpp): overload const twin resolution, merged 2026-10-16T07:20Z):
+    - Overload resolution scored `const T*` and `T*` parameters identically, picking whichever was declared first and retargeting calls in protobuf (194 calls), rocksdb (25 calls), fmt (14 calls). Introduced `cppConstTwinChoice` and scoring rules for non-const references vs values.
+    - Architectural contrast: trace-mcp focuses on fast AST symbol indexing and structural call hierarchies rather than attempting full C++ compiler overload resolution emulation via heuristic scoring tables.
+- oraios/serena:
+  - PR #2172 (fix symlink handling in symbol discovery and explicit LSP requests, merged 2026-10-15T19:39Z, fixes #2163):
+    - Untrusted projects previously traversed symlinks during symbol discovery or explicit requests, risking path traversal outside project root. Now skips file/dir symlinks in untrusted projects and enforces root containment in `LspApi`.
+    - Architectural contrast: trace-mcp enforces strict realpath root containment by default across all tools and indexers, rejecting traversal outside repository boundaries unconditionally.
+
+**Competitor pulse (as of 2026-10-16 afternoon pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,864★ (+9), 1,601 forks (+3)
+- oraios/serena: 30,310★ (+7), 2,088 forks (+5)
+- DeusData/codebase-memory-mcp: 46,691★ (+14), 3,846 forks (+1)
+- tirth8205/code-review-graph: 32,189★ (+11), 2,956 forks (+2)
+- colbymchenry/codegraph: 74,250★ (+37), 4,803 forks (+4)
+- abhigyanpatwari/GitNexus: 47,910★ (+4), 5,199 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,774★ (=), 375 forks (=)
+- continuedev/continue: 36,232★ (=), 5,480 forks (+1)
+- Aider-AI/aider: 49,586★ (+11), 5,063 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
 

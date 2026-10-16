@@ -294,3 +294,8 @@ assetfeed/assetfeed-laravel
 # Genuine curated personal collection: CATALOG.md ("My AI Box", 1,107 items) lists nikolai-vysotskyi/trace-mcp:
 azhri1990/ACODE_ROUTE
 
+# ── Swept 2026-10-16 afternoon pass (TRA-2471) ──
+# Genuine third-party architectural citation & prior art reference:
+# docs/design/ledger.md cites trace-mcp and https://trace-mcp.com/decision-memory.html under Decision records:
+sayef/comind
+
