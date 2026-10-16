@@ -145,7 +145,16 @@ describe('config', () => {
     }
 
     const config = (await loadConfig(tmpDir))._unsafeUnwrap();
-    for (const p of ['**/.zig-cache/**', '**/*.tar.gz', '**/*.bin', '**/*.log']) {
+    for (const p of [
+      '**/.zig-cache/**',
+      '**/*.tar.gz',
+      '**/*.bin',
+      '**/*.log',
+      '**/*.pt',
+      '**/*.pth',
+      '**/*.safetensors',
+      '**/*.onnx',
+    ]) {
       expect(config.exclude).toContain(p);
     }
     const matched = await fg(config.include, {
@@ -166,6 +175,9 @@ describe('config', () => {
     expect(isExcluded('work/model.bin')).toBe(true);
     expect(isExcluded('work/data.tar.gz')).toBe(true);
     expect(isExcluded('work/archive.tgz')).toBe(true);
+    for (const extension of ['pt', 'pth', 'safetensors', 'onnx']) {
+      expect(isExcluded(`scratchpad/ocr_train/best.${extension}`)).toBe(true);
+    }
     expect(isExcluded('src/main.ts')).toBe(false);
     expect(isExcluded('src/bin/tool.rs')).toBe(false);
   });

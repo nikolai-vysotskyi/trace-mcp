@@ -46,7 +46,8 @@ import { initializeDatabase } from '../../db/schema.js';
 import { Store } from '../../db/store.js';
 import { logger } from '../../logger.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
-import { isHotChurnPath } from '../../utils/hot-churn.js';
+import { HOT_CHURN_NATIVE_IGNORE_GLOBS, isHotChurnPath } from '../../utils/hot-churn.js';
+import picomatch from 'picomatch';
 import type { withLock } from '../../utils/pid-lock.js';
 import { collectFiles } from '../file-collector.js';
 import { FileExtractor, resetCannotReadEnoentDedupForTests } from '../file-extractor.js';
@@ -84,6 +85,36 @@ describe('isHotChurnPath ML checkpoint tmp siblings (TRA-2326)', () => {
     'artifacts/draft.tmp', // bare .tmp without .npz or .onnx.data is preserved
   ])('does not match non-churn or user source %s', (p) => {
     expect(isHotChurnPath(p)).toBe(false);
+  });
+});
+
+describe('ML training checkpoint temporary weights (TRA-2479)', () => {
+  it.each([
+    'runs/exp1/weights/best.pt.tmp',
+    'scratchpad/ocr_train/weights/last.pth.tmp',
+    'train/weights/best.pt.tmp',
+    'artifacts/best.pt.tmp',
+    'checkpoints/best.pth.tmp',
+    'C:\\project\\RUNS\\best.PT.TMP',
+  ])('drops %s before reading or debounce', (p) => {
+    expect(isHotChurnPath(p)).toBe(true);
+  });
+
+  it.each([
+    'src/best.pt.tmp',
+    'runtime/best.pt.tmp',
+    'myruns/best.pt.tmp',
+    'src/train.ts.tmp',
+    'runs/notes.tmp',
+    'runs/best.pt',
+  ])('preserves paths outside the narrowed rule: %s', (p) => {
+    expect(isHotChurnPath(p)).toBe(false);
+  });
+
+  it('native ignore globs include both temporary weight formats', () => {
+    const isIgnored = picomatch([...HOT_CHURN_NATIVE_IGNORE_GLOBS], { dot: true });
+    expect(isIgnored('runs/exp1/best.pt.tmp')).toBe(true);
+    expect(isIgnored('scratchpad/ocr_train/last.pth.tmp')).toBe(true);
   });
 });
 
@@ -125,8 +156,10 @@ describe('collectFiles drops ML checkpoint tmp siblings (TRA-2326)', () => {
 
   it('lists real sources but drops ML checkpoint tmp siblings', async () => {
     mkdirSync(join(workDir, 'artifacts', 'run1'), { recursive: true });
+    mkdirSync(join(workDir, 'scratchpad', 'ocr_train'), { recursive: true });
     mkdirSync(join(workDir, 'src'), { recursive: true });
     writeFileSync(join(workDir, 'artifacts', 'run1', 'resume_mlx.npz.tmp'), 'binary data\n');
+    writeFileSync(join(workDir, 'scratchpad', 'ocr_train', 'best.pt.tmp'), 'binary data\n');
     writeFileSync(join(workDir, 'artifacts', 'notes.txt'), 'notes\n');
     writeFileSync(join(workDir, 'src', 'app.ts'), 'export const ready = true;\n');
 
@@ -142,6 +175,7 @@ describe('collectFiles drops ML checkpoint tmp siblings (TRA-2326)', () => {
     expect(result.files).toContain('src/app.ts');
     expect(result.files).toContain('artifacts/notes.txt');
     expect(result.files).not.toContain('artifacts/run1/resume_mlx.npz.tmp');
+    expect(result.files).not.toContain('scratchpad/ocr_train/best.pt.tmp');
   });
 });
 
@@ -195,6 +229,7 @@ describe('FileWatcher drops ML checkpoint tmp events (TRA-2326)', () => {
 
     await capturedCallback(null, [
       { type: 'update', path: join(tmpRoot, 'artifacts', 'resume_mlx.npz.tmp') },
+      { type: 'update', path: join(tmpRoot, 'runs', 'exp1', 'best.pt.tmp') },
       { type: 'update', path: join(tmpRoot, 'src', 'main.ts') },
     ]);
     await flush();

@@ -1006,6 +1006,10 @@ export const TraceMcpConfigSchema = z.object({
     '**/*.tar.gz',
     '**/*.tgz',
     '**/*.bin',
+    '**/*.pt',
+    '**/*.pth',
+    '**/*.safetensors',
+    '**/*.onnx',
     '**/*.log',
   ]),
   // Directory symlinks are not followed during indexing by default — a symlink

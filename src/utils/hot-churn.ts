@@ -27,6 +27,8 @@
  * between create and atomic rename (199+ `Cannot read file ENOENT` on a live
  * daemon). Narrowed to `.npz.tmp` or `.onnx.data.tmp` (or ML checkpoint tmp)
  * under whole `artifacts` or `checkpoints` directory segments.
+ * TRA-2479: `.pt.tmp` and `.pth.tmp` checkpoint swaps also occur under
+ * `runs`, `train`, and `ocr_train`; drop them before the read attempt.
  *
  * They are engine scratch, never source — the same argument TRA-1943
  * applies to SQLite sidecars — so every indexing entry point drops them
@@ -60,10 +62,22 @@ export const HOT_CHURN_NATIVE_IGNORE_GLOBS = [
   '**/artifacts/**/*.onnx.data.tmp',
   '**/checkpoints/**/*.npz.tmp',
   '**/checkpoints/**/*.onnx.data.tmp',
+  // TRA-2479: temporary PyTorch weights in training runs and checkpoints.
+  '**/runs/**/*.pt.tmp',
+  '**/runs/**/*.pth.tmp',
+  '**/artifacts/**/*.pt.tmp',
+  '**/artifacts/**/*.pth.tmp',
+  '**/checkpoints/**/*.pt.tmp',
+  '**/checkpoints/**/*.pth.tmp',
+  '**/train/**/*.pt.tmp',
+  '**/train/**/*.pth.tmp',
+  '**/ocr_train/**/*.pt.tmp',
+  '**/ocr_train/**/*.pth.tmp',
 ] as const;
 
 /** Basenames that are always runtime churn, wherever they live. */
 const HOT_CHURN_BASENAMES = new Set(['gateway.heartbeat', '.tick.lock']);
+const ML_WEIGHT_DIRECTORIES = new Set(['runs', 'artifacts', 'checkpoints', 'train', 'ocr_train']);
 
 /** Target of a Claude Code atomic-write sibling, or undefined for other paths. */
 export function atomicWriteTargetPath(p: string): string | undefined {
@@ -123,6 +137,14 @@ export function isHotChurnPath(p: string): boolean {
   if (base.endsWith('.npz.tmp') || base.endsWith('.onnx.data.tmp')) {
     const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
     if (parents.includes('artifacts') || parents.includes('checkpoints')) return true;
+  }
+
+  // Training checkpoints are often written to a temporary sibling before
+  // rename. Skip only known training directories, including the observed
+  // `ocr_train` layout, so arbitrary user `.tmp` files remain indexable.
+  if (base.endsWith('.pt.tmp') || base.endsWith('.pth.tmp')) {
+    const parents = segments.slice(0, -1).map((s) => s.toLowerCase());
+    if (parents.some((s) => ML_WEIGHT_DIRECTORIES.has(s))) return true;
   }
 
   return false;
