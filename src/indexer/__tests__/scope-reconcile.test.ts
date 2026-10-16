@@ -67,6 +67,29 @@ describe('selectOutOfScopeFiles', () => {
     const files = [row({ id: 1 }), row({ id: 2, path: 'src/b.ts' })];
     expect(selectOutOfScopeFiles({ files, inScope: ['src/a.ts'], truncated: true })).toEqual([]);
   });
+
+  it('prunes only confirmed missing files on a truncated walk', () => {
+    const files = [
+      row({ id: 1, path: 'src/a.ts' }),
+      row({ id: 2, path: 'src/deleted.ts' }),
+      row({ id: 3, path: 'src/past-cap.ts' }),
+      row({ id: 4, path: '.env.local', language: 'env' }),
+      row({ id: 5, path: 'react', content_hash: '__phantom_pkg__' }),
+    ];
+    const checked: string[] = [];
+    expect(
+      selectOutOfScopeFiles({
+        files,
+        inScope: ['src/a.ts'],
+        truncated: true,
+        fileExists: (p) => {
+          checked.push(p);
+          return p === 'src/past-cap.ts';
+        },
+      }),
+    ).toEqual([2]);
+    expect(checked).toEqual(['src/deleted.ts', 'src/past-cap.ts']);
+  });
 });
 
 describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
@@ -89,13 +112,14 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
     rmSync(workDir, { recursive: true, force: true });
   });
 
-  function makePipeline(store: Store) {
+  function makePipeline(store: Store, maxFiles?: number) {
     const registry = new PluginRegistry();
     registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
     const config = TraceMcpConfigSchema.parse({
       root: workDir,
       include: ['**/*.ts'],
       exclude: [],
+      security: maxFiles === undefined ? undefined : { max_files: maxFiles },
     });
     return new IndexingPipeline(store, registry, config, workDir);
   }
@@ -137,6 +161,30 @@ describe('indexAll — scope reconcile and .gitignore (end to end)', () => {
       .getAllFiles()
       .flatMap((f) => store.getSymbolsByFile(f.id).map((s) => s.name));
     expect(names).toEqual(['realOne']);
+  });
+
+  it('prunes deleted rows after a truncated walk but preserves files past the cap', async () => {
+    const store = new Store(initializeDatabase(':memory:'));
+    writeFileSync(join(workDir, 'src', 'z.ts'), 'export const stillHere = 1;\n');
+    const deletedId = store.insertFile('src/deleted.ts', 'typescript', 'old', 10, null, null);
+    store.insertSymbol(deletedId, {
+      symbolId: 'src/deleted.ts::stale#function',
+      name: 'stale',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 5,
+      lineStart: 1,
+      lineEnd: 1,
+    });
+    store.insertFile('src/z.ts', 'typescript', 'old', 10, null, null);
+
+    await makePipeline(store, 1).indexAll();
+
+    const paths = store.getAllFiles().map((f) => f.path);
+    expect(paths).toContain('src/a.ts');
+    expect(paths).toContain('src/z.ts');
+    expect(paths).not.toContain('src/deleted.ts');
+    expect(store.getSymbolsByFile(deletedId)).toEqual([]);
   });
 
   it('deletes every indexed file beneath a deleted directory event', () => {
