@@ -42,6 +42,11 @@ export const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
   '.wasm',
   '.pyc',
   '.class',
+  '.bin',
+  '.pt',
+  '.pth',
+  '.safetensors',
+  '.onnx',
 ]);
 
 import path from 'node:path';
