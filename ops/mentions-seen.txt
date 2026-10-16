@@ -299,3 +299,8 @@ azhri1990/ACODE_ROUTE
 # docs/design/ledger.md cites trace-mcp and https://trace-mcp.com/decision-memory.html under Decision records:
 sayef/comind
 
+# ── Swept 2026-10-16 late night pass (TRA-2475) ──
+# Downstream user adoption via aitmpl.com (Claude Code Templates):
+# .mcp.json and COMPONENTS_INDEX.md configure trace-mcp (npx -y trace-mcp@latest):
+daniyal44/Zyphuel
+

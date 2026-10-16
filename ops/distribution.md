@@ -4760,3 +4760,67 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 
 
+### Late night pass, 2026-10-16 (TRA-2475): mention sweep (daniyal44/Zyphuel), open threads audit, competitor triage (DeusData packaging bypass / Java exclusion / C macro leak, GitNexus route fix & impact over-rating, CRG .cjs parser gap)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder sent 2026-09-26).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Discovered 1 new repository mentioning trace-mcp: `daniyal44/Zyphuel`.
+  - Audited read-only via raw content: `.mcp.json` and `COMPONENTS_INDEX.md` configure `trace-mcp` (`npx -y trace-mcp@latest`) with description "Framework-aware code intelligence — semantic navigation, impact analysis, and refactoring across 87 framework integrations and 80 languages...".
+  - Origin: downstream project adoption/mirror of the `aitmpl.com` (davila7/claude-code-templates) catalog. Classified and recorded in `ops/mentions-seen.txt`.
+
+**Ecosystem & useful repositories:**
+- `daniyal44/Zyphuel`: Demonstrates downstream real-world adoption of `trace-mcp` configured in project `.mcp.json` via the `aitmpl.com` marketplace templates.
+- `GuillaumeBarnes82/env-doctor`: Open-source environment and GPU/CUDA diagnostics utility pairing a CLI with an MCP server interface, highlighting the pattern of composing specialized environment diagnostic MCPs with structural code intelligence servers like trace-mcp in agent pipelines.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - Packaging bypass (PR #2664, merged 2026-10-16T16:16Z): Instead of addressing binary payload bloat (where Linux-amd64 binary reached 316.0 MB and crashed npm installs by exceeding `MAX_ARCHIVE_MEMBER_BYTES = 256 MiB`), maintainers removed the archive size cap entirely from npm, PyPI, and Go wrappers.
+  - Java package exclusion defect (Issue #2661, opened 2026-10-16T15:22Z): Blanket directory exclusion heuristics treat folder segments named `target`, `tmp`, `deploy`, or `vendor` as build output directories, silently causing valid Java source packages containing those path tokens (e.g. `com.company.deploy.service`) to be omitted from the index.
+  - Macro expansion identifier leakage (Issue #2666, opened 2026-10-16T16:11Z): Identifier tokens passed into C preprocessor macros erroneously generate false USAGE edges to unrelated struct fields sharing the same identifier name.
+  - Architectural contrast: trace-mcp relies on tree-sitter AST queries with zero multi-hundred-megabyte binary downloads, anchors project boundaries to project manifests rather than blanket segment exclusion, and maintains strict lexical AST scoping for identifier references.
+- abhigyanpatwari/GitNexus:
+  - Route extraction regression fix (PR #3603, merged 2026-10-16T17:25Z): Corrected router receiver and mount path resolution after PR #3561's blanket suppression of `app.use` inadvertently discarded nested Express sub-routers.
+  - Impact over-rating (Issue #3602, opened 2026-10-16T12:04Z): `impact` marks symbols HIGH/CRITICAL with `epistemic: exact` based on file-level module imports, treating all importers of a file as direct callers of internal unexported types.
+  - Architectural contrast: trace-mcp maps granular symbol call sites and reference edges rather than equating coarse module imports with symbol dependencies.
+- tirth8205/code-review-graph:
+  - Extension gap (Issue #1117 / PR #1118, 2026-10-16): `EXTENSION_TO_LANGUAGE` lacked `.cjs`, silently dropping CommonJS JavaScript files during indexing.
+  - Architectural contrast: trace-mcp supports all CommonJS and ESM file extensions natively across 81 languages.
+- colbymchenry/codegraph:
+  - Query timeout issue (Issue #2620 / PR #2621, 2026-10-16): Explore queries repeated redundant per-term traversals on large graphs, timing out prompt hooks in Claude.
+  - Architectural contrast: trace-mcp uses indexed SQLite lookups ensuring deterministic sub-millisecond retrieval.
+- jgravelle/jcodemunch-mcp:
+  - Release v1.108.372 (PR #1114 / #1115, merged 2026-10-16T15:59Z, LEDGER L-186): Fixed policy uninstallation to preserve user-custom sections rather than overwriting existing markdown files.
+
+**Competitor pulse (as of 2026-10-16 late night pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,867★ (=), 1,617 forks (=)
+- oraios/serena: 30,323★ (+7), 2,104 forks (+1)
+- DeusData/codebase-memory-mcp: 46,711★ (+11), 3,848 forks (+1)
+- tirth8205/code-review-graph: 32,195★ (+5), 2,968 forks (=)
+- colbymchenry/codegraph: 74,280★ (+11), 4,803 forks (=)
+- abhigyanpatwari/GitNexus: 47,915★ (+2), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,775★ (=), 375 forks (=)
+- continuedev/continue: 36,231★ (-1), 5,479 forks (=)
+- Aider-AI/aider: 49,583★ (-1), 5,064 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
