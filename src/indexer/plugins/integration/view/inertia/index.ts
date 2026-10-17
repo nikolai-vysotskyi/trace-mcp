@@ -13,6 +13,7 @@ import type {
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 
 interface InertiaRenderCall {
   pageName: string;
@@ -150,19 +151,29 @@ export class InertiaPlugin implements FrameworkPlugin {
     });
   }
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
-    for (const file of allFiles) {
-      if (file.language !== 'php') continue;
+    // TRA-2505 / TRA-2434: Scope-aware: narrow to changed PHP files during incremental runs.
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? allFiles.filter((f) => scope.changedFileIds.has(f.id) && f.language === 'php')
+        : allFiles.filter((f) => f.language === 'php');
 
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch {
-        continue;
-      }
+    if (targetFiles.length === 0) return ok([]);
+
+    const fileByPath = new Map<string, (typeof allFiles)[number]>();
+    for (const f of allFiles) {
+      fileByPath.set(f.path, f);
+    }
+
+    for (const [index, file] of targetFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
+
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       const renders = extractInertiaRenders(source);
       if (renders.length === 0) continue;
@@ -173,7 +184,7 @@ export class InertiaPlugin implements FrameworkPlugin {
 
       for (const render of renders) {
         const pagePath = resolvePagePath(render.pageName);
-        const pageFile = allFiles.find((f) => f.path === pagePath);
+        const pageFile = fileByPath.get(pagePath);
         if (!pageFile) continue;
 
         const pageSymbols = ctx.getSymbolsByFile(pageFile.id);

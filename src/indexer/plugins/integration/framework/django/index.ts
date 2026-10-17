@@ -196,15 +196,18 @@ export class DjangoPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
-    for (const file of files) {
-      if (file.language !== 'python') continue;
+    // TRA-2505 / TRA-2434: Scope-aware: narrow to changed Python files during incremental runs.
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? files.filter((f) => scope.changedFileIds.has(f.id) && f.language === 'python')
+        : files.filter((f) => f.language === 'python');
 
-      let source: string;
-      try {
-        source = fs.readFileSync(path.resolve(ctx.rootPath, file.path), 'utf-8');
-      } catch {
-        continue;
-      }
+    if (targetFiles.length === 0) return ok([]);
+
+    for (const file of targetFiles) {
+      const source = ctx.readFile(file.path);
+      if (!source) continue;
 
       // Resolve model relationship edges
       this.resolveModelEdges(source, file, ctx, edges);

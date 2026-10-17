@@ -338,6 +338,21 @@ export class NuxtPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
+    // TRA-2505 / TRA-2434: Scope-aware: fast-path when resolving incrementally.
+    // If no Vue, TS, or JS files changed, Nuxt cannot have changed components, composables, or imports.
+    const scope = ctx.changeScope;
+    const isIncremental = Boolean(scope && scope.changedFileIds && scope.changedFileIds.size > 0);
+    if (
+      isIncremental &&
+      !allFiles.some(
+        (f) =>
+          scope!.changedFileIds.has(f.id) &&
+          (f.language === 'vue' || f.language === 'typescript' || f.language === 'javascript'),
+      )
+    ) {
+      return ok([]);
+    }
+
     const srcDir = this.srcDir;
     const composablesPrefix = srcDir === '.' ? 'composables/' : `${srcDir}/composables/`;
     const componentsPrefix = srcDir === '.' ? 'components/' : `${srcDir}/components/`;
@@ -412,7 +427,10 @@ export class NuxtPlugin implements FrameworkPlugin {
 
     // For each Vue file, detect auto-imported composable, shared, and component usage
     const vueFiles = allFiles.filter((f) => f.path.endsWith('.vue'));
-    for (const file of vueFiles) {
+    const targetVueFiles = isIncremental
+      ? vueFiles.filter((f) => scope!.changedFileIds.has(f.id))
+      : vueFiles;
+    for (const file of targetVueFiles) {
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;

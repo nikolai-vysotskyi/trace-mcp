@@ -113,6 +113,14 @@ export class EdgeResolver {
     resolveContext: ResolveContext,
     _scope?: ChangeScope,
   ): Promise<void> {
+    const scope = _scope ?? resolveContext.changeScope;
+    let changedFilePaths: string[] | null = null;
+    if (scope?.changedFileIds && scope.changedFileIds.size > 0) {
+      const allFiles = resolveContext.getAllFiles();
+      const idSet = scope.changedFileIds;
+      changedFilePaths = allFiles.filter((f) => idSet.has(f.id)).map((f) => f.path);
+    }
+
     // Root-level plugins
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
     if (activeResult.isOk()) {
@@ -129,6 +137,14 @@ export class EdgeResolver {
     }
 
     for (const ws of this.state.workspaces) {
+      const wsPrefix = `${ws.path}/`;
+      // TRA-2505: when resolving incrementally, skip workspaces that contain
+      // no changed files. Scanning manifests, plugins, and files for uninvolved
+      // workspaces during small-batch reindexing starves the event loop.
+      if (changedFilePaths && !changedFilePaths.some((p) => p.startsWith(wsPrefix))) {
+        continue;
+      }
+
       // Per-project boundary: let pending I/O (/health, MCP requests) run
       // between workspaces rather than after all of them.
       await yieldToEventLoopFair();
@@ -151,7 +167,6 @@ export class EdgeResolver {
 
       // Create a scoped resolve context: paths are workspace-relative,
       // rootPath points to the workspace root.
-      const wsPrefix = `${ws.path}/`;
       const scopedCtx: ResolveContext = {
         rootPath: wsRoot,
         getAllFiles: () =>
