@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "corpus": "tests/sql-corpus/fixtures",
+  "trace_mcp_baseline_tag": "v3.34.6",
+  "fixtures": [
+    {
+      "id": "two_cte_join_sample",
+      "path": "etl/two_cte_join_sample.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "scoped", "line_start": 2 }, { "name": "emp_age", "line_start": 20 }],
+      "parameters": [":run_mode", ":id_list"],
+      "templates": ["{{SCHEMA_NAME}}"],
+      "regex_baseline_ctes": ["scoped"]
+    },
+    {
+      "id": "incremental_keys_sample",
+      "path": "etl/incremental_keys_sample.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [
+        { "name": "base", "line_start": 1 },
+        { "name": "touched_parents", "line_start": 4 },
+        { "name": "keys", "line_start": 7 }
+      ],
+      "cte_deps": {
+        "touched_parents": ["base"],
+        "keys": ["touched_parents"]
+      },
+      "templates": ["{{SCHEMA_NAME}}"],
+      "regex_baseline_ctes": ["base"]
+    },
+    {
+      "id": "payment_ledger",
+      "path": "ledger/payment_ledger.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [],
+      "parameters": [":extract_start_dt", ":extract_end_dt"],
+      "regex_baseline_ctes": []
+    },
+    {
+      "id": "ranked_window_sample",
+      "path": "referral/ranked_window_sample.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "touched", "line_start": 1 }, { "name": "ranked", "line_start": 4 }],
+      "regex_baseline_ctes": ["touched"]
+    },
+    {
+      "id": "distinct_on_sample",
+      "path": "etl/distinct_on_sample.sql",
+      "dialect": "postgresql",
+      "parse_expectation": "full",
+      "ctes": [{ "name": "pay", "line_start": 1 }],
+      "parameters": [":run_mode", ":id_list"],
+      "regex_baseline_ctes": ["pay"]
+    }
+  ]
+}
