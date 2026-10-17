@@ -4944,3 +4944,66 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+
+
+### Afternoon pass, 2026-10-17 (TRA-2493): mention sweep clean, open threads audit, competitor triage (codegraph sync import member retry PR #2630 & Windows libuv suspended child leak PR #2629, DeusData duplicate index worker CPU storm & DB corruption #2673, jcodemunch protective boolean env typo PR #1125 & git blame fallback PR #1128, GitNexus rebuild journal consolidation PR #3613 & directory symlink crawler PR #3616)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Ecosystem & useful repositories:**
+- Active architectural shift across agent code intelligence tools towards resilient background daemon management and atomic persistence.
+- Multi-client concurrency remains a significant pain point for competitors that lack unified single-instance daemon architectures, leading to SQLite contention and high CPU thrashing when multiple agent sessions connect to the same repository.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - Import member relinking on module change (PR #2630, merged 2026-10-17T07:56Z): Addressed failed references to members (`R.m`) accessed through imported module bindings when an edited or added module gains exports. Implemented SQLite expression index `idx_unresolved_failed_module_member` (schema v16) and prefix range lookups on `idx_unresolved_failed_module_name` to retry unresolved member calls without triggering full project re-indexes.
+  - Windows libuv suspended child leak on daemon respawn (PR #2629, merged 2026-10-17T05:14Z): Investigated libuv (v1.51.0 in Node 22) behavior on Windows where detached processes are spawned suspended and resumed only at `uv_spawn` completion. If an MCP launcher process was terminated during a daemon respawn attempt, the spawned daemon was left suspended and unrecorded, consuming 3.6 MB and holding open handles indefinitely without taking a lock. Hardened test teardown to close launcher stdin gracefully rather than killing parent processes synchronously during spawn loops.
+  - Architectural contrast: trace-mcp relies on semantic tree-sitter AST queries with deterministic symbol namespaces, avoiding complex unresolved reference expression parking in SQLite. trace-mcp's daemon lifecycle (hardened in TRA-2438 (#1631) and TRA-2443 (#1630)) correlates PIDs, verify timestamps, and aggregates aborted watcher reindex batches on clean shutdown without leaving unmanaged child processes.
+- DeusData/codebase-memory-mcp:
+  - macOS duplicate index worker CPU storm & database corruption (Issue #2673, opened 2026-10-17T05:08Z): On macOS Apple Silicon, running two concurrent MCP conversations against the same repository causes both servers to spawn duplicate full `index_repository` workers simultaneously (~400–450% CPU each, load average ~55, respawning every 1–8 minutes on file edits). Because staleness triggers a full re-extract rather than debounced incremental updates, and multi-process SQLite writers lack cross-server file locking, databases suffer recurring WAL starvation and corruption (9 quarantined `.db.corrupt` files, including a 669 MB database), forcing endless from-scratch rebuilds.
+  - Architectural contrast: trace-mcp utilizes a single background daemon per workspace with flock/PID synchronization, batch-debounced watcher reindexing, and sub-second incremental tree-sitter graph updates instead of launching multiple 400% CPU workers per client conversation or corrupting SQLite databases under concurrent agent sessions.
+- jgravelle/jcodemunch-mcp:
+  - Typo in boolean env vars silently disabling protections (PR #1125, opened 2026-10-17T05:30Z): In `config._parse_env_value`, any env value not strictly matching `("true", "1", "yes", "on")` evaluated to false. For protective settings enabled by default (`JCODEMUNCH_RESPECT_CACHEDIR_TAG`, `JCODEMUNCH_SKIP_VIRTUALENVS`, `JCODEMUNCH_RUNTIME_REDACT`, etc.), any typo silently switched off protections and PII redaction. Constrained to keep defaults on unrecognized values. Review also exposed that `install-pack` evaluates `JCODEMUNCH_SHARE_SAVINGS != "0"`, causing `false` or `off` to still transmit telemetry (logged as ledger L-212).
+  - Git blame silent failure under host contention (PR #1128, opened 2026-10-17T08:40Z): `GitBlameProvider.detect` probed git root using `git rev-parse --show-toplevel` with a 5s timeout in a bare `except: pass`, silently dropping blame annotations when git timed out on busy machines. Replaced with an in-process filesystem walk for `.git`.
+  - Release v1.108.374 (merged 2026-10-17T04:11Z): Automatically skips Python virtual environments regardless of folder name by inspecting PEP 405 `pyvenv.cfg`.
+  - Architectural contrast: trace-mcp uses strict schema validation for configuration and safe in-memory git metadata checks without brittle process timeouts that silently discard annotations.
+- abhigyanpatwari/GitNexus:
+  - Staged rebuild atomic swap & journal consolidation (PR #3613, opened 2026-10-17T07:56Z): Enforces a verified final checkpoint and consolidation of live journals before swapping the published database during staged full rebuilds, preventing missing or corrupted recovery files from breaking cold readers on interrupted writes.
+  - Directory symlink exclusion in crawler (PR #3616, opened 2026-10-17T08:12Z): Prevented directory symlinks returned by glob from causing repeated analyze/status content drift due to missing hash receipts, enforcing `stat` regular-file checks across traversal and include extractors.
+  - Architectural contrast: trace-mcp's file walker (`src/indexer/walker.ts`) natively differentiates regular files, directory symlinks, and circular links without drift, and uses atomic transactional updates to protect graph integrity.
+
+**Competitor pulse (as of 2026-10-17 afternoon pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,872★ (+3), 1,628 forks (+10)
+- oraios/serena: 30,339★ (+3), 2,138 forks (+24)
+- DeusData/codebase-memory-mcp: 46,739★ (+15), 3,850 forks (+1)
+- tirth8205/code-review-graph: 32,213★ (+10), 2,988 forks (+15)
+- colbymchenry/codegraph: 74,312★ (+12), 4,804 forks (=)
+- abhigyanpatwari/GitNexus: 47,919★ (=), 5,199 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,778★ (+1), 375 forks (=)
+- continuedev/continue: 36,234★ (=), 5,479 forks (-1)
+- Aider-AI/aider: 49,594★ (+6), 5,065 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
