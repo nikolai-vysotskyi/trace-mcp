@@ -46,6 +46,20 @@ export const PACKAGE_SCAN_SKIP_DIRS = new Set([
   'target',
   'bin',
   'obj',
+  // Browser runtime caches (TRA-2500)
+  'Cache_Data',
+  'Code Cache',
+  'GPUCache',
+  'GPUPersistentCache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'GraphiteDawnCache',
+  'ShaderCache',
+  'GrShaderCache',
+  'cache2',
+  'startupCache',
+  'jumpListCache',
+  'WebKitCache',
 ]);
 
 const packageEntriesCache = new Map<

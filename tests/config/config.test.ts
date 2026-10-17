@@ -154,6 +154,9 @@ describe('config', () => {
       '**/*.pth',
       '**/*.safetensors',
       '**/*.onnx',
+      '**/Cache_Data/**',
+      '**/Code Cache/**',
+      '**/GPUCache/**',
     ]) {
       expect(config.exclude).toContain(p);
     }

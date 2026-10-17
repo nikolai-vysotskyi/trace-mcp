@@ -1011,6 +1011,22 @@ export const TraceMcpConfigSchema = z.object({
     '**/*.safetensors',
     '**/*.onnx',
     '**/*.log',
+    // Browser runtime caches (TRA-2500: Chromium, Firefox, WebKit profile caches in project trees).
+    '**/Cache_Data/**',
+    '**/Code Cache/**',
+    '**/GPUCache/**',
+    '**/GPUPersistentCache/**',
+    '**/DawnGraphiteCache/**',
+    '**/DawnWebGPUCache/**',
+    '**/GraphiteDawnCache/**',
+    '**/ShaderCache/**',
+    '**/GrShaderCache/**',
+    '**/Service Worker/CacheStorage/**',
+    '**/Service Worker/ScriptCache/**',
+    '**/cache2/**',
+    '**/startupCache/**',
+    '**/jumpListCache/**',
+    '**/WebKitCache/**',
   ]),
   // Directory symlinks are not followed during indexing by default — a symlink
   // cycling back to an ancestor (e.g. Ansible Molecule's `roles/<role> -> ../../../`
@@ -1375,7 +1391,26 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     }
 
     // Normalize exclude patterns and ensure essential directories are always excluded.
-    const essentialExcludes = ['**/vendor/**', '**/node_modules/**', '**/.git/**'];
+    const essentialExcludes = [
+      '**/vendor/**',
+      '**/node_modules/**',
+      '**/.git/**',
+      '**/Cache_Data/**',
+      '**/Code Cache/**',
+      '**/GPUCache/**',
+      '**/GPUPersistentCache/**',
+      '**/DawnGraphiteCache/**',
+      '**/DawnWebGPUCache/**',
+      '**/GraphiteDawnCache/**',
+      '**/ShaderCache/**',
+      '**/GrShaderCache/**',
+      '**/Service Worker/CacheStorage/**',
+      '**/Service Worker/ScriptCache/**',
+      '**/cache2/**',
+      '**/startupCache/**',
+      '**/jumpListCache/**',
+      '**/WebKitCache/**',
+    ];
     const deepExcludeDirs = [
       'vendor',
       'node_modules',
@@ -1388,6 +1423,19 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
       '.nuxt',
       '.next',
       '.zig-cache',
+      'Cache_Data',
+      'Code Cache',
+      'GPUCache',
+      'GPUPersistentCache',
+      'DawnGraphiteCache',
+      'DawnWebGPUCache',
+      'GraphiteDawnCache',
+      'ShaderCache',
+      'GrShaderCache',
+      'cache2',
+      'startupCache',
+      'jumpListCache',
+      'WebKitCache',
     ];
     parsed.data.exclude = parsed.data.exclude.map((pattern) => {
       for (const dir of deepExcludeDirs) {
