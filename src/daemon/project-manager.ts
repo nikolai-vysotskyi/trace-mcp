@@ -60,6 +60,7 @@ import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { trailingDebounce } from '../util/debounce.js';
 import { selectEagerLoadRoots } from './eager-load.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 import { serializeError } from './log-error.js';
 import {
   removeProjectArtifacts,
@@ -523,6 +524,8 @@ export class ProjectManager {
       // machines unless the operator pinned `full`.
       memoryProfile: config.index_memory_profile ?? 'auto',
     } as const;
+    // TRA-2442: yield fairly so DB open / WAL replay doesn't starve pending /health
+    await yieldToEventLoopFair();
     let db: Database.Database;
     try {
       db = initializeDatabase(dbPath, dbOpenOpts);
@@ -2376,7 +2379,12 @@ export class ProjectManager {
     // produce a thundering herd of disk I/O at boot. Cap parallel setup at 2.
     const addLimit = pLimit(2);
     const results = await Promise.allSettled(
-      eager.map((entry) => addLimit(() => this.addProject(entry.root))),
+      eager.map((entry) =>
+        addLimit(async () => {
+          await yieldToEventLoopFair();
+          return this.addProject(entry.root);
+        }),
+      ),
     );
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {

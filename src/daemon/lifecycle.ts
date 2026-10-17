@@ -427,9 +427,12 @@ export function getLaunchdLastExit(): LaunchdLastExit | null {
   let out: string;
   try {
     // execFileSync, not a shell string — no interpolation into a command line.
+    // TRA-2442: bounded by 2_000ms so a wedged/transitioning launchd or slow XPC
+    // cannot hang daemon startup or event loop before/during httpServer.listen.
     out = execFileSync('launchctl', ['print', `${getLaunchdDomain()}/${PLIST_LABEL}`], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 2_000,
     });
   } catch {
     return null;
