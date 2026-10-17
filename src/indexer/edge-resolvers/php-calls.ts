@@ -18,7 +18,8 @@ import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
-import { commitInChunks } from '../resolver-budget.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
+import { IndexAbortedError, throwIfIndexAborted } from '../index-abort.js';
 
 interface PhpSymbol {
   id: number;
@@ -35,8 +36,11 @@ interface PhpSymbol {
 export async function resolvePhpCallEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store } = state;
+  throwIfIndexAborted(signal, state.rootPath);
+  if (!store.db.open) throw new IndexAbortedError(state.rootPath);
 
   // Scope-aware iteration: outgoing edges from re-extracted files were already
   // deleted, so we only need to re-resolve sources from changed files. The
@@ -229,175 +233,181 @@ export async function resolvePhpCallEdges(
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // the full-pass loop over every PHP symbol used to run as one synchronous
   // transaction, starving /health on the same thread.
-  await commitInChunks(store.db, allSymbols, (chunk) => {
-    for (const sym of chunk) {
-      // Scope-aware: skip symbols whose file was not re-extracted in this run.
-      // Their outgoing edges were not deleted, so don't recreate them.
-      if (scopedFileIds && !scopedFileIds.has(sym.file_id)) continue;
-      if (!sym.metadata) continue;
-      let meta: Record<string, unknown>;
-      try {
-        meta = JSON.parse(sym.metadata);
-      } catch {
-        continue;
-      }
+  await commitInChunks(
+    store.db,
+    allSymbols,
+    (chunk) => {
+      for (const sym of chunk) {
+        // Scope-aware: skip symbols whose file was not re-extracted in this run.
+        // Their outgoing edges were not deleted, so don't recreate them.
+        if (scopedFileIds && !scopedFileIds.has(sym.file_id)) continue;
+        if (!sym.metadata) continue;
+        let meta: Record<string, unknown>;
+        try {
+          meta = JSON.parse(sym.metadata);
+        } catch {
+          continue;
+        }
 
-      const sourceNodeId = symbolNodeMap.get(sym.id);
-      if (sourceNodeId == null) continue;
+        const sourceNodeId = symbolNodeMap.get(sym.id);
+        if (sourceNodeId == null) continue;
 
-      // Heritage edges: only on classes/interfaces.
-      //
-      // For each ref (extends/implements/uses trait), we first try to resolve
-      // against the indexed project. On miss (common case: the parent is a
-      // framework class in vendor/ — Migration, Model, Controller, Resource,
-      // ServiceProvider, etc.) we emit the edge to a phantom external node.
-      // This is what clusters all N Laravel migrations into one community,
-      // every Nova resource into another, and so on.
-      if (sym.kind === 'class' || sym.kind === 'interface' || sym.kind === 'trait') {
-        const emitHeritage = (
-          refs: string[] | undefined,
-          edgeTypeId: number,
-          phantomKind: 'class' | 'interface' | 'trait',
-          counter: () => void,
-        ): void => {
-          if (!Array.isArray(refs)) return;
-          for (const ref of refs) {
-            const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
-            if (target) {
-              const tNode = symbolNodeMap.get(target.id);
-              if (tNode == null || tNode === sourceNodeId) continue;
-              if (sym.workspace !== target.workspace) continue; // strict workspace isolation
-              if (tryInsertEdge(sourceNodeId, tNode, edgeTypeId, JSON.stringify({ ref }), 0)) {
+        // Heritage edges: only on classes/interfaces.
+        //
+        // For each ref (extends/implements/uses trait), we first try to resolve
+        // against the indexed project. On miss (common case: the parent is a
+        // framework class in vendor/ — Migration, Model, Controller, Resource,
+        // ServiceProvider, etc.) we emit the edge to a phantom external node.
+        // This is what clusters all N Laravel migrations into one community,
+        // every Nova resource into another, and so on.
+        if (sym.kind === 'class' || sym.kind === 'interface' || sym.kind === 'trait') {
+          const emitHeritage = (
+            refs: string[] | undefined,
+            edgeTypeId: number,
+            phantomKind: 'class' | 'interface' | 'trait',
+            counter: () => void,
+          ): void => {
+            if (!Array.isArray(refs)) return;
+            for (const ref of refs) {
+              const target = resolveClassRef(ref, sym, fileUseMap, fileNamespaceMap, byFqn, byName);
+              if (target) {
+                const tNode = symbolNodeMap.get(target.id);
+                if (tNode == null || tNode === sourceNodeId) continue;
+                if (sym.workspace !== target.workspace) continue; // strict workspace isolation
+                if (tryInsertEdge(sourceNodeId, tNode, edgeTypeId, JSON.stringify({ ref }), 0)) {
+                  counter();
+                }
+                continue;
+              }
+              // Phantom fallback — synthesize a node for the unresolved class
+              const phantomFqn = resolveFqnForRef(ref, sym, fileUseMap, fileNamespaceMap);
+              if (!phantomFqn) continue;
+              const before = phantoms.peek(phantomFqn, sym.workspace);
+              const phantom = phantoms.ensure(phantomFqn, sym.workspace, phantomKind);
+              if (!before) phantomNodesCreated++;
+              if (phantom.node_id === sourceNodeId) continue;
+              if (
+                tryInsertEdge(
+                  sourceNodeId,
+                  phantom.node_id,
+                  edgeTypeId,
+                  JSON.stringify({ ref, external: true }),
+                  0,
+                )
+              ) {
                 counter();
               }
-              continue;
             }
-            // Phantom fallback — synthesize a node for the unresolved class
-            const phantomFqn = resolveFqnForRef(ref, sym, fileUseMap, fileNamespaceMap);
-            if (!phantomFqn) continue;
-            const before = phantoms.peek(phantomFqn, sym.workspace);
-            const phantom = phantoms.ensure(phantomFqn, sym.workspace, phantomKind);
-            if (!before) phantomNodesCreated++;
-            if (phantom.node_id === sourceNodeId) continue;
+          };
+          emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => {
+            extendsEdges++;
+          });
+          emitHeritage(
+            meta.implements as string[] | undefined,
+            implementsType.id,
+            'interface',
+            () => {
+              implementsEdges++;
+            },
+          );
+          emitHeritage(meta.usesTraits as string[] | undefined, usesTraitType.id, 'trait', () => {
+            usesTraitEdges++;
+          });
+        }
+
+        // Type reference edges — connect symbols to classes used as type hints.
+        // This turns type-hint-only classes from disconnected into connected.
+        if (sym.kind === 'method' || sym.kind === 'function') {
+          // Parameter types
+          const paramTypes = meta.paramTypes as Record<string, string> | undefined;
+          if (paramTypes) {
+            for (const type of Object.values(paramTypes)) {
+              emitRef(sourceNodeId, sym, type, 'param_type');
+            }
+          }
+          // Return type
+          const retType = meta.returnType as string | undefined;
+          if (retType) emitRef(sourceNodeId, sym, retType, 'return_type');
+        }
+        if (sym.kind === 'property') {
+          const propType = meta.type as string | undefined;
+          if (propType) emitRef(sourceNodeId, sym, propType, 'property_type');
+        }
+
+        // Call/access edges: only on methods/functions
+        if ((sym.kind === 'method' || sym.kind === 'function') && Array.isArray(meta.callSites)) {
+          const callSites = meta.callSites as PhpCallSite[];
+          for (const cs of callSites) {
+            const target = resolveCallSite(
+              cs,
+              sym,
+              symbolById,
+              symbolsByFile,
+              fileUseMap,
+              fileNamespaceMap,
+              byFqn,
+              byName,
+            );
+            if (!target) continue;
+            const tNode = symbolNodeMap.get(target.id);
+            if (tNode == null || tNode === sourceNodeId) continue;
+            if (sym.workspace !== target.workspace) continue;
+
+            let edgeTypeId: number;
+            let incCounter: () => void;
+            switch (cs.type) {
+              case 'new':
+                edgeTypeId = instType.id;
+                incCounter = () => {
+                  instantiations++;
+                };
+                break;
+              case 'this_prop':
+              case 'member_prop':
+              case 'static_prop':
+              case 'relative_static_prop':
+                edgeTypeId = propType.id;
+                incCounter = () => {
+                  propAccesses++;
+                };
+                break;
+              case 'class_const':
+              case 'relative_const':
+                edgeTypeId = constType.id;
+                incCounter = () => {
+                  constAccesses++;
+                };
+                break;
+              case 'class_ref':
+                edgeTypeId = refType.id;
+                incCounter = () => {
+                  typeRefs++;
+                };
+                break;
+              default:
+                edgeTypeId = callsType.id;
+                incCounter = () => {
+                  calls++;
+                };
+            }
             if (
               tryInsertEdge(
                 sourceNodeId,
-                phantom.node_id,
+                tNode,
                 edgeTypeId,
-                JSON.stringify({ ref, external: true }),
+                JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }),
                 0,
               )
             ) {
-              counter();
+              incCounter();
             }
           }
-        };
-        emitHeritage(meta.extends as string[] | undefined, extendsType.id, 'class', () => {
-          extendsEdges++;
-        });
-        emitHeritage(
-          meta.implements as string[] | undefined,
-          implementsType.id,
-          'interface',
-          () => {
-            implementsEdges++;
-          },
-        );
-        emitHeritage(meta.usesTraits as string[] | undefined, usesTraitType.id, 'trait', () => {
-          usesTraitEdges++;
-        });
-      }
-
-      // Type reference edges — connect symbols to classes used as type hints.
-      // This turns type-hint-only classes from disconnected into connected.
-      if (sym.kind === 'method' || sym.kind === 'function') {
-        // Parameter types
-        const paramTypes = meta.paramTypes as Record<string, string> | undefined;
-        if (paramTypes) {
-          for (const type of Object.values(paramTypes)) {
-            emitRef(sourceNodeId, sym, type, 'param_type');
-          }
-        }
-        // Return type
-        const retType = meta.returnType as string | undefined;
-        if (retType) emitRef(sourceNodeId, sym, retType, 'return_type');
-      }
-      if (sym.kind === 'property') {
-        const propType = meta.type as string | undefined;
-        if (propType) emitRef(sourceNodeId, sym, propType, 'property_type');
-      }
-
-      // Call/access edges: only on methods/functions
-      if ((sym.kind === 'method' || sym.kind === 'function') && Array.isArray(meta.callSites)) {
-        const callSites = meta.callSites as PhpCallSite[];
-        for (const cs of callSites) {
-          const target = resolveCallSite(
-            cs,
-            sym,
-            symbolById,
-            symbolsByFile,
-            fileUseMap,
-            fileNamespaceMap,
-            byFqn,
-            byName,
-          );
-          if (!target) continue;
-          const tNode = symbolNodeMap.get(target.id);
-          if (tNode == null || tNode === sourceNodeId) continue;
-          if (sym.workspace !== target.workspace) continue;
-
-          let edgeTypeId: number;
-          let incCounter: () => void;
-          switch (cs.type) {
-            case 'new':
-              edgeTypeId = instType.id;
-              incCounter = () => {
-                instantiations++;
-              };
-              break;
-            case 'this_prop':
-            case 'member_prop':
-            case 'static_prop':
-            case 'relative_static_prop':
-              edgeTypeId = propType.id;
-              incCounter = () => {
-                propAccesses++;
-              };
-              break;
-            case 'class_const':
-            case 'relative_const':
-              edgeTypeId = constType.id;
-              incCounter = () => {
-                constAccesses++;
-              };
-              break;
-            case 'class_ref':
-              edgeTypeId = refType.id;
-              incCounter = () => {
-                typeRefs++;
-              };
-              break;
-            default:
-              edgeTypeId = callsType.id;
-              incCounter = () => {
-                calls++;
-              };
-          }
-          if (
-            tryInsertEdge(
-              sourceNodeId,
-              tNode,
-              edgeTypeId,
-              JSON.stringify({ callee: cs.callee, line: cs.line, kind: cs.type }),
-              0,
-            )
-          ) {
-            incCounter();
-          }
         }
       }
-    }
-  });
+    },
+    RESOLVER_WRITE_CHUNK,
+    signal,
+  );
 
   const total =
     calls +

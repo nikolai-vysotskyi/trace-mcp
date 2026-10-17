@@ -558,6 +558,8 @@ export class IndexingPipeline {
   private _isIncremental = false;
   /** Set by dispose(); pending deferred work must bail instead of touching a closed DB. */
   private _disposed = false;
+  /** TRA-2439: AbortController fired by dispose() to cancel in-flight edge resolvers and reconciles. */
+  private _disposeAbortController = new AbortController();
   private _extractPool: ExtractPool | undefined;
   /** True when this pipeline owns its pool (lazy, per-instance) and must
    *  terminate it on dispose(). False when the pool came in via DI from the
@@ -1871,7 +1873,7 @@ export class IndexingPipeline {
         throwIfIndexAborted(signal, this.rootPath);
         if (this._postprocessLevel !== 'none') {
           await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
-            runResolveAllEdges: () => this.resolveAllEdges(),
+            runResolveAllEdges: (sig?: AbortSignal) => this.resolveAllEdges(sig),
           });
           // TRA-1017: resolution completed — the graph is whole again. A
           // scoped run only repairs its own scope, so it clears a previous
@@ -2017,7 +2019,7 @@ export class IndexingPipeline {
   }
 
   /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */
-  private async resolveAllEdges(): Promise<void> {
+  private async resolveAllEdges(signal?: AbortSignal): Promise<void> {
     const scope = this.buildChangeScope();
 
     // Short-circuit: incremental run with no actual content change (hash-gate
@@ -2032,7 +2034,7 @@ export class IndexingPipeline {
       return;
     }
 
-    await this.runEdgeResolvers(scope);
+    await this.runEdgeResolvers(scope, signal);
 
     // Symbol-name churn (add / delete / rename) means references in UNTOUCHED
     // files may need rebinding — a brand-new symbol can satisfy a previously
@@ -2060,7 +2062,18 @@ export class IndexingPipeline {
    * requests) a turn while preserving stage ORDER (fastapi-mounts needs
    * python imports; file-projection must run last).
    */
-  private async runEdgeResolvers(scope: ChangeScope | undefined): Promise<void> {
+  private async runEdgeResolvers(
+    scope: ChangeScope | undefined,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const activeSignal =
+      signal ??
+      (this._disposeAbortController.signal.aborted
+        ? this._disposeAbortController.signal
+        : undefined);
+    if (activeSignal?.aborted) throw new IndexAbortedError('runEdgeResolvers aborted');
+    if (!this.store.db.open) throw new IndexAbortedError('Database is closed');
+
     if (scope === undefined) this._lastFullResolveMs = Date.now();
     const edgeResolver = new EdgeResolver(this.getPipelineState());
     // #237: the postprocess (edge-resolution) phase runs right after extraction
@@ -2072,10 +2085,14 @@ export class IndexingPipeline {
     // EdgeResolver.resolveEdges (TRA-922), so this pre-yield only covers the
     // boundary before it starts.
     await yieldToEventLoopFair();
+    if (activeSignal?.aborted) throw new IndexAbortedError('runEdgeResolvers aborted');
+    if (!this.store.db.open) throw new IndexAbortedError('Database is closed');
+
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
       this.buildResolveContext(scope),
       scope,
+      activeSignal,
     );
     // TRA-1764: the heaviest stages (esm-imports, the three call resolvers,
     // test_covers, file-projection) are async — they commit in chunks with a
@@ -2089,7 +2106,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolveElectronRemovalEdges(scope),
       () => edgeResolver.resolveOrmAssociationEdges(scope),
       () => edgeResolver.resolveTypeScriptHeritageEdges(scope),
-      () => edgeResolver.resolveEsmImportEdges(scope),
+      () => edgeResolver.resolveEsmImportEdges(scope, activeSignal),
       () => edgeResolver.resolvePythonImportEdges(scope),
       () => edgeResolver.resolvePhpImportEdges(scope),
       () => edgeResolver.resolveGoImportEdges(scope),
@@ -2101,18 +2118,18 @@ export class IndexingPipeline {
       () => edgeResolver.resolveKotlinImportEdges(scope),
       () => edgeResolver.resolveElixirImportEdges(scope),
       () => edgeResolver.resolveLuaImportEdges(scope),
-      () => edgeResolver.resolvePhpCallEdges(scope),
-      () => edgeResolver.resolveTypeScriptCallEdges(scope),
+      () => edgeResolver.resolvePhpCallEdges(scope, activeSignal),
+      () => edgeResolver.resolveTypeScriptCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),
       () => edgeResolver.resolveMemberOfEdges(scope),
       () => edgeResolver.resolvePythonHeritageEdges(scope),
-      () => edgeResolver.resolvePythonCallEdges(scope),
+      () => edgeResolver.resolvePythonCallEdges(scope, activeSignal),
       // After Python imports + calls: turn type annotations into `references`
       // edges. Runs before file projection so they reach the file-level graph too.
       () => edgeResolver.resolvePythonTypeEdges(scope),
       // Cross-file FastAPI mount prefixes — needs resolved Python imports above.
       () => edgeResolver.resolveFastapiRouterMounts(scope),
-      () => edgeResolver.resolveTestCoversEdges(scope),
+      () => edgeResolver.resolveTestCoversEdges(scope, activeSignal),
       () => edgeResolver.resolveMarkdownWikilinkEdges(scope),
       () => edgeResolver.resolveMarkdownTagEdges(scope),
       // Kustomize/compose path-string imports → actual manifest / Dockerfile
@@ -2121,9 +2138,11 @@ export class IndexingPipeline {
       () => edgeResolver.resolveIacImportEdges(scope),
       // Must run last — projects cross-file symbol edges to file-level `imports`
       // edges so the file dependency graph is as rich as the symbol graph.
-      () => edgeResolver.resolveFileProjectionEdges(scope),
+      () => edgeResolver.resolveFileProjectionEdges(scope, activeSignal),
     ];
     for (const stage of stages) {
+      if (activeSignal?.aborted) throw new IndexAbortedError('runEdgeResolvers aborted');
+      if (!this.store.db.open) throw new IndexAbortedError('Database is closed');
       await runInOwnTurn(stage);
     }
   }
@@ -2198,7 +2217,7 @@ export class IndexingPipeline {
     // settle; early returns (disposed, superseded) release the same way.
     const endReindex = beginReindex(this.rootPath);
     const run = this._lock.then(async () => {
-      if (this._disposed) return;
+      if (this._disposed || this._disposeAbortController.signal.aborted) return;
       // A full pass already ran after this was scheduled (forced reindex,
       // large-batch fallback) — the graph is already reconciled.
       if (this._lastFullResolveMs >= scheduledAt) return;
@@ -2233,7 +2252,7 @@ export class IndexingPipeline {
             repairPaths,
             false,
             repairResult,
-            undefined,
+            this._disposeAbortController.signal,
             new Set(repairPaths),
           );
           repairErrors = repairResult.errors;
@@ -2253,7 +2272,7 @@ export class IndexingPipeline {
             'TRA-1017 deferred repair extraction done',
           );
         }
-        await this.runEdgeResolvers(undefined);
+        await this.runEdgeResolvers(undefined, this._disposeAbortController.signal);
         // The mark clears only after a repair whose extraction reported no
         // errors: a file that failed to re-extract still misses its edges,
         // and successful resolver completion must not be equated with
@@ -2276,7 +2295,11 @@ export class IndexingPipeline {
       }
     });
     this._lock = run.catch((e) => {
-      logger.warn({ error: e }, 'Deferred edge reconcile failed');
+      if (e instanceof IndexAbortedError || (e as Error)?.name === 'IndexAbortedError') {
+        logger.warn('Deferred edge reconcile aborted');
+      } else {
+        logger.warn({ error: e }, 'Deferred edge reconcile failed');
+      }
     });
     void run.then(endReindex, endReindex);
   }
@@ -2849,6 +2872,7 @@ export class IndexingPipeline {
         'pipeline.dispose: drain timed out — continuing teardown with indexing work still in flight',
       );
     }
+    this._disposeAbortController.abort();
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }

@@ -3,7 +3,8 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
-import { commitInChunks } from '../resolver-budget.js';
+import { IndexAbortedError } from '../index-abort.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
 
 // JS/TS: *.test.ts, *.spec.ts, __tests__/
 // Python: test_*.py, *_test.py, conftest.py, tests/test_*.py
@@ -13,8 +14,11 @@ const TEST_PATH_RE =
 export async function resolveTestCoversEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) throw new IndexAbortedError('resolveTestCoversEdges aborted');
   const { store } = state;
+  if (!store.db.open) throw new IndexAbortedError('Database is closed');
   let allFiles: import('../../db/types.js').FileRow[];
   if (scope) {
     if (scope.changedFileIds.size === 0) return;
@@ -81,45 +85,51 @@ export async function resolveTestCoversEdges(
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // a full-pass storm used to hold the event loop (and /health with it) for
   // the whole 5k+ edge loop in a single synchronous transaction.
-  await commitInChunks(store.db, allEdges, (chunk) => {
-    for (const edge of chunk) {
-      if (edge.edge_type_name !== 'imports') continue;
-      if (!testNodeToFile.has(edge.source_node_id)) continue;
+  await commitInChunks(
+    store.db,
+    allEdges,
+    (chunk) => {
+      for (const edge of chunk) {
+        if (edge.edge_type_name !== 'imports') continue;
+        if (!testNodeToFile.has(edge.source_node_id)) continue;
 
-      const targetRef = targetRefs.get(edge.target_node_id);
-      if (!targetRef) continue;
+        const targetRef = targetRefs.get(edge.target_node_id);
+        if (!targetRef) continue;
 
-      const testFile = testNodeToFile.get(edge.source_node_id)!;
+        const testFile = testNodeToFile.get(edge.source_node_id)!;
 
-      if (targetRef.nodeType === 'file') {
-        const targetFile = targetFileMap.get(targetRef.refId);
-        if (!targetFile) continue;
-        if (TEST_PATH_RE.test(targetFile.path)) continue;
+        if (targetRef.nodeType === 'file') {
+          const targetFile = targetFileMap.get(targetRef.refId);
+          if (!targetFile) continue;
+          if (TEST_PATH_RE.test(targetFile.path)) continue;
 
-        insertStmt.run(
-          edge.source_node_id,
-          edge.target_node_id,
-          testCoversType.id,
-          JSON.stringify({ test_file: testFile.path }),
-        );
-        created++;
-      } else if (targetRef.nodeType === 'symbol') {
-        // Create test_covers edge to the imported symbol as well
-        const targetSymbol = targetSymbolMap.get(targetRef.refId);
-        if (!targetSymbol) continue;
-        const parentFile = symbolFileMap.get(targetSymbol.file_id);
-        if (!parentFile || TEST_PATH_RE.test(parentFile.path)) continue;
+          insertStmt.run(
+            edge.source_node_id,
+            edge.target_node_id,
+            testCoversType.id,
+            JSON.stringify({ test_file: testFile.path }),
+          );
+          created++;
+        } else if (targetRef.nodeType === 'symbol') {
+          // Create test_covers edge to the imported symbol as well
+          const targetSymbol = targetSymbolMap.get(targetRef.refId);
+          if (!targetSymbol) continue;
+          const parentFile = symbolFileMap.get(targetSymbol.file_id);
+          if (!parentFile || TEST_PATH_RE.test(parentFile.path)) continue;
 
-        insertStmt.run(
-          edge.source_node_id,
-          edge.target_node_id,
-          testCoversType.id,
-          JSON.stringify({ test_file: testFile.path, target_symbol: targetSymbol.symbol_id }),
-        );
-        created++;
+          insertStmt.run(
+            edge.source_node_id,
+            edge.target_node_id,
+            testCoversType.id,
+            JSON.stringify({ test_file: testFile.path, target_symbol: targetSymbol.symbol_id }),
+          );
+          created++;
+        }
       }
-    }
-  });
+    },
+    RESOLVER_WRITE_CHUNK,
+    signal,
+  );
 
   if (created > 0) {
     logger.info({ edges: created }, 'test_covers edges resolved');

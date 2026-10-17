@@ -46,9 +46,10 @@ import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.
 import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import type { PipelineState } from './pipeline-state.js';
+import { IndexAbortedError } from './index-abort.js';
 import { buildProjectContext } from './project-context.js';
 import { runInOwnTurn, yieldToEventLoopFair } from '../utils/event-loop.js';
-import { commitInChunks } from './resolver-budget.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from './resolver-budget.js';
 
 /**
  * Edge types whose targets live in metadata and are resolved later by a
@@ -112,12 +113,17 @@ export class EdgeResolver {
     projectContext: ProjectContext,
     resolveContext: ResolveContext,
     _scope?: ChangeScope,
+    signal?: AbortSignal,
   ): Promise<void> {
+    if (signal?.aborted) throw new IndexAbortedError('resolveEdges aborted');
+    if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
     // Root-level plugins
     const activeResult = this.state.registry.getActiveFrameworkPlugins(projectContext);
     if (activeResult.isOk()) {
       for (const plugin of activeResult.value) {
-        await this.resolvePluginEdges(plugin, resolveContext);
+        if (signal?.aborted) throw new IndexAbortedError('resolveEdges aborted');
+        if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
+        await this.resolvePluginEdges(plugin, resolveContext, signal);
       }
     }
 
@@ -129,9 +135,13 @@ export class EdgeResolver {
     }
 
     for (const ws of this.state.workspaces) {
+      if (signal?.aborted) throw new IndexAbortedError('resolveEdges aborted');
+      if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
       // Per-project boundary: let pending I/O (/health, MCP requests) run
       // between workspaces rather than after all of them.
       await yieldToEventLoopFair();
+      if (signal?.aborted) throw new IndexAbortedError('resolveEdges aborted');
+      if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
       const wsRoot = path.join(this.state.rootPath, ws.path);
       // TRA-1543: reuse the pipeline's per-run detection when available (the
       // pipeline already detected these for edge-type registration — detecting
@@ -168,7 +178,9 @@ export class EdgeResolver {
       };
 
       for (const plugin of wsPlugins) {
-        await this.resolvePluginEdges(plugin, scopedCtx);
+        if (signal?.aborted) throw new IndexAbortedError('resolveEdges aborted');
+        if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
+        await this.resolvePluginEdges(plugin, scopedCtx, signal);
       }
     }
   }
@@ -180,11 +192,19 @@ export class EdgeResolver {
    * pass (resolve + SQLite store) completes inside the one turn, and the
    * next plugin cannot start until this one finished — order preserved.
    */
-  private async resolvePluginEdges(plugin: FrameworkPlugin, ctx: ResolveContext): Promise<void> {
+  private async resolvePluginEdges(
+    plugin: FrameworkPlugin,
+    ctx: ResolveContext,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (signal?.aborted) throw new IndexAbortedError('resolvePluginEdges aborted');
+    if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
     await runInOwnTurn(async () => {
+      if (signal?.aborted) throw new IndexAbortedError('resolvePluginEdges aborted');
+      if (!this.state.store.db.open) throw new IndexAbortedError('Database is closed');
       const result = await executeFrameworkResolveEdges(plugin, ctx);
       if (result.isErr()) return;
-      await this.storeRawEdgesAsync(result.value);
+      await this.storeRawEdgesAsync(result.value, signal);
     });
   }
 
@@ -212,8 +232,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2d: ES module import edges. */
-  resolveEsmImportEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('esm-imports', () => _resolveImports(this.state, scope));
+  resolveEsmImportEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('esm-imports', () => _resolveImports(this.state, scope, signal));
   }
 
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
@@ -277,8 +297,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2g: Python call edges (function/method calls → definitions). */
-  resolvePythonCallEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('py-calls', () => _resolvePyCalls(this.state, scope));
+  resolvePythonCallEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('py-calls', () => _resolvePyCalls(this.state, scope, signal));
   }
 
   /** Pass 2g1b: Python type-reference edges (param/return/attribute annotations → class symbols). */
@@ -294,13 +314,13 @@ export class EdgeResolver {
   }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
-  resolvePhpCallEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('php-calls', () => _resolvePhpCalls(this.state, scope));
+  resolvePhpCallEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('php-calls', () => _resolvePhpCalls(this.state, scope, signal));
   }
 
   /** Pass 2g3: TypeScript/JavaScript call edges (function/method calls → definitions). */
-  resolveTypeScriptCallEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('ts-calls', () => _resolveTsCalls(this.state, scope));
+  resolveTypeScriptCallEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('ts-calls', () => _resolveTsCalls(this.state, scope, signal));
   }
 
   /** Pass 2g4: TypeScript/JavaScript type-reference edges (types used in annotations). */
@@ -314,13 +334,13 @@ export class EdgeResolver {
   }
 
   /** Pass 2h: test_covers edges. */
-  resolveTestCoversEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('tests', () => _resolveTests(this.state, scope));
+  resolveTestCoversEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('tests', () => _resolveTests(this.state, scope, signal));
   }
 
   /** Pass 2j: file-level projection of cross-file symbol edges. */
-  resolveFileProjectionEdges(scope?: ChangeScope): Promise<void> {
-    return timedAsync('file-projection', () => _resolveFileProjection(this.state, scope));
+  resolveFileProjectionEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('file-projection', () => _resolveFileProjection(this.state, scope, signal));
   }
 
   /**
@@ -357,8 +377,8 @@ export class EdgeResolver {
    * pre-loads and commits edge insertions in chunked transactions via `commitInChunks`,
    * preventing tens of thousands of framework plugin edges from starving /health.
    */
-  async storeRawEdgesAsync(edges: RawEdge[]): Promise<void> {
-    await this._storeRawEdgesInternal(edges, true);
+  async storeRawEdgesAsync(edges: RawEdge[], signal?: AbortSignal): Promise<void> {
+    await this._storeRawEdgesInternal(edges, true, signal);
   }
 
   /** Store raw edges synchronously into the graph. */
@@ -366,9 +386,15 @@ export class EdgeResolver {
     void this._storeRawEdgesInternal(edges, false);
   }
 
-  private async _storeRawEdgesInternal(edges: RawEdge[], chunked: boolean): Promise<void> {
+  private async _storeRawEdgesInternal(
+    edges: RawEdge[],
+    chunked: boolean,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (edges.length === 0) return;
+    if (signal?.aborted) throw new IndexAbortedError('storeRawEdges aborted');
     const { store } = this.state;
+    if (!store.db.open) throw new IndexAbortedError('Database is closed');
 
     // 1. symbolIdStr → nodeId
     const symbolIdStrs = new Set<string>();
@@ -385,7 +411,13 @@ export class EdgeResolver {
       const arr = Array.from(symbolIdStrs);
       const CHUNK = 900;
       for (let i = 0; i < arr.length; i += CHUNK) {
-        if (chunked && i > 0) await yieldToEventLoopFair();
+        if (chunked && i > 0) {
+          if (signal?.aborted) throw new IndexAbortedError('storeRawEdges aborted');
+          if (!store.db.open) throw new IndexAbortedError('Database is closed');
+          await yieldToEventLoopFair();
+        }
+        if (signal?.aborted) throw new IndexAbortedError('storeRawEdges aborted');
+        if (!store.db.open) throw new IndexAbortedError('Database is closed');
         const chunk = arr.slice(i, i + CHUNK);
         const placeholders = chunk.map(() => '?').join(',');
         const rows = store.db
@@ -487,7 +519,13 @@ export class EdgeResolver {
       const nodeIdArr = Array.from(allNodeIds);
       const CHUNK = 900;
       for (let i = 0; i < nodeIdArr.length; i += CHUNK) {
-        if (chunked && i > 0) await yieldToEventLoopFair();
+        if (chunked && i > 0) {
+          if (signal?.aborted) throw new IndexAbortedError('storeRawEdges aborted');
+          if (!store.db.open) throw new IndexAbortedError('Database is closed');
+          await yieldToEventLoopFair();
+        }
+        if (signal?.aborted) throw new IndexAbortedError('storeRawEdges aborted');
+        if (!store.db.open) throw new IndexAbortedError('Database is closed');
         const chunk = nodeIdArr.slice(i, i + CHUNK);
         const ph = chunk.map(() => '?').join(',');
         const rows = store.db
@@ -557,14 +595,30 @@ export class EdgeResolver {
     };
 
     if (chunked) {
-      await commitInChunks(store.db, resolved, (chunk) => {
-        for (const item of chunk) runInsert(item);
-      });
+      await commitInChunks(
+        store.db,
+        resolved,
+        (chunk) => {
+          for (const item of chunk) runInsert(item);
+        },
+        RESOLVER_WRITE_CHUNK,
+        signal,
+      );
     } else {
-      const insertBatch = store.db.transaction(() => {
-        for (const item of resolved) runInsert(item);
-      });
-      insertBatch();
+      try {
+        const insertBatch = store.db.transaction(() => {
+          for (const item of resolved) runInsert(item);
+        });
+        insertBatch();
+      } catch (err) {
+        if (
+          !store.db.open ||
+          (err instanceof TypeError && err.message.includes('database connection is not open'))
+        ) {
+          throw new IndexAbortedError('storeRawEdges aborted (db closed)');
+        }
+        throw err;
+      }
     }
 
     if (droppedCrossWs > 0) {

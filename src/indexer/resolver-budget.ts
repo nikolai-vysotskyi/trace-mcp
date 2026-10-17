@@ -25,6 +25,7 @@
  * PROJECTION_ID_CHUNK.
  */
 import type Database from 'better-sqlite3';
+import { IndexAbortedError } from './index-abort.js';
 import { logger } from '../logger.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
@@ -45,21 +46,42 @@ export const SLOW_RESOLVER_CHUNK_MS = 2000;
  * own transaction, yielding to the event loop between slices. No-op (no
  * transaction, no yield) for an empty list; a single slice behaves exactly
  * like the old whole-pass transaction.
+ *
+ * TRA-2439: honours `signal` between chunks and guards against closed DB
+ * connections during shutdown/teardown.
  */
 export async function commitInChunks<T>(
   db: Database.Database,
   items: readonly T[],
   runChunk: (chunk: T[]) => void,
   chunkSize: number = RESOLVER_WRITE_CHUNK,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (items.length === 0) return;
+  if (signal?.aborted) throw new IndexAbortedError();
+  if (!db.open) throw new IndexAbortedError('Database connection closed during commitInChunks');
+
   const run = db.transaction((chunk: T[]) => runChunk(chunk));
   const chunkCount = Math.ceil(items.length / chunkSize);
   for (let i = 0; i < items.length; i += chunkSize) {
     if (i > 0) await yieldToEventLoopFair();
+    if (signal?.aborted) throw new IndexAbortedError();
+    if (!db.open) throw new IndexAbortedError('Database connection closed during commitInChunks');
     // TRA-1957: never go quiet on a slow chunk — the 3.33.0 wedge was a
     // single synchronous span with no log line for 14+ min.
     const chunkStart = Date.now();
-    run(items.slice(i, i + chunkSize));
+    try {
+      run(items.slice(i, i + chunkSize));
+    } catch (err) {
+      if (
+        !db.open ||
+        (err instanceof TypeError &&
+          (err as TypeError).message.includes('database connection is not open'))
+      ) {
+        throw new IndexAbortedError('Database connection closed during commitInChunks');
+      }
+      throw err;
+    }
     const chunkMs = Date.now() - chunkStart;
     if (chunkMs >= SLOW_RESOLVER_CHUNK_MS) {
       logger.warn(
