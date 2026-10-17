@@ -83,9 +83,10 @@ describe('FileWatcher.stop() with an in-flight change handler', () => {
     expect(finished).toBe(true);
   });
 
-  it('downgrades IndexAbortedError from onChanges to warn during teardown (TRA-1903)', async () => {
+  it('downgrades IndexAbortedError from onChanges to debug during teardown (TRA-1903, TRA-2438)', async () => {
     const { logger } = await import('../../logger.js');
     const { IndexAbortedError } = await import('../index-abort.js');
+    const debugSpy = vi.spyOn(logger, 'debug').mockImplementation(() => logger);
     const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
     const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
 
@@ -107,11 +108,13 @@ describe('FileWatcher.stop() with an in-flight change handler', () => {
       await watcher.stop();
 
       expect(errorSpy).not.toHaveBeenCalledWith(expect.anything(), 'File change handler failed');
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.anything(), 'File change handler aborted');
+      expect(debugSpy).toHaveBeenCalledWith(
         expect.objectContaining({ error: expect.any(IndexAbortedError) }),
         'File change handler aborted',
       );
     } finally {
+      debugSpy.mockRestore();
       warnSpy.mockRestore();
       errorSpy.mockRestore();
     }

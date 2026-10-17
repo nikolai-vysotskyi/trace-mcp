@@ -30,6 +30,7 @@ const mode = vi.hoisted(() => ({ current: 'abort' as 'abort' | 'error' }));
 
 /** Watcher paths-callback captured from FileWatcher.start. */
 const captured = vi.hoisted((): { cb?: (paths: string[]) => Promise<void> } => ({}));
+const drainHook = vi.hoisted((): { fn?: () => Promise<void> } => ({}));
 
 vi.mock('../../logger.js', () => ({
   logger: loggerMocks,
@@ -59,7 +60,9 @@ vi.mock('../../indexer/watcher.js', () => {
     async restartWithExcludes() {}
     async stop() {}
     async unsubscribe() {}
-    async drain() {}
+    async drain() {
+      if (drainHook.fn) await drainHook.fn();
+    }
   }
   return { FileWatcher: FakeWatcher };
 });
@@ -80,6 +83,7 @@ let tmpHome: string;
 beforeEach(() => {
   mode.current = 'abort';
   captured.cb = undefined;
+  drainHook.fn = undefined;
   tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-watcher-abort-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
   vi.resetModules();
@@ -144,5 +148,53 @@ describe('ProjectManager watcher batch abort telemetry (TRA-2095)', () => {
     expect(loggerMocks.error).toHaveBeenCalledTimes(3);
     expect(loggerMocks.warn).not.toHaveBeenCalled();
     expect(getReindexStats().summarize().errors - before.errors).toBe(3);
+  }, 60_000);
+
+  it('aggregates aborted watcher batches into one summary on stop/shutdown (TRA-2438)', async () => {
+    mode.current = 'abort';
+    const { ProjectManager } = await import('../project-manager.js');
+    const root = join(tmpHome, 'proj-agg');
+    mkdirSync(root, { recursive: true });
+    const files = ['a.ts', 'b.ts', 'c.ts'].map((f) => {
+      const abs = join(root, f);
+      writeFileSync(abs, 'export const x = 1;\n');
+      return abs;
+    });
+
+    const pm = new ProjectManager();
+    await pm.addProject(root);
+    expect(captured.cb).toBeDefined();
+
+    // Simulate 5 batches in the watcher queue settling with IndexAbortedError
+    // during watcher drain (exactly what happens during daemon shutdown / project stop).
+    drainHook.fn = async () => {
+      for (let i = 0; i < 5; i++) {
+        const batchFiles = [`${i}_a.ts`, `${i}_b.ts`, `${i}_c.ts`].map((f) => {
+          const abs = join(root, f);
+          writeFileSync(abs, 'export const x = 1;\n');
+          return abs;
+        });
+        await captured.cb!(batchFiles).catch(() => {});
+      }
+    };
+
+    vi.clearAllMocks();
+    await pm.shutdown();
+
+    // Zero error lines for expected aborts
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+
+    // Exactly ONE warn summary line for all 5 aborted batches (instead of 5 individual warns)
+    const abortWarns = loggerMocks.warn.mock.calls.filter(
+      ([payload, msg]) =>
+        String(msg).includes('reindex-file watcher queue aborted on shutdown') ||
+        String(msg).includes('reindex-file batch aborted'),
+    );
+    expect(abortWarns).toHaveLength(1);
+    const [payload] = abortWarns[0] as [Record<string, unknown>, string];
+    expect(payload.event).toBe('reindex-file');
+    expect(payload.project).toBe(root);
+    expect(payload.abortedBatches).toBe(5);
+    expect(payload.fileCount).toBe(15);
   }, 60_000);
 });
