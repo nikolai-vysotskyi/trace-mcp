@@ -123,6 +123,7 @@ Rules for keeping it honest:
 | [wkoch/goCraft](https://github.com/wkoch/goCraft) | **Yes — third-party user adoption, we did not submit it** (active 2026-10-12) | Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations | Independent practitioner usage in the wild. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
 | [azhri1990/ACODE_ROUTE](https://github.com/azhri1990/ACODE_ROUTE) | **Yes — third-party curated personal collection, we did not submit it** (0★, 0 forks, created 2026-10-14) | `CATALOG.md` ("My AI Box", 1,107 items collected) lists `- nikolai-vysotskyi/trace-mcp — https://github.com/nikolai-vysotskyi/trace-mcp` under curated developer tools | Curated personal AI reference directory. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-14 | 2026-10-14 |
 | [sayef/comind](https://github.com/sayef/comind) | **Yes — third-party architectural citation & prior art reference, we did not submit it** (0★, active 2026-10-16) | Architecture design document `docs/design/ledger.md` ("Comind Ledger — design plan") surveying agent memory and decision record systems. Under "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html` | Architectural design reference and citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-16 | 2026-10-16 |
+| [wkoch/legacy](https://github.com/wkoch/legacy) | **Yes — third-party architectural study & adapter evaluation, we did not submit it** (0★, active 2026-10-16) | Architecture planning documents `docs/automacao-rede-e-inteligencia.md` and `docs/decisoes.md` evaluating code intelligence architectures for decentralized AI agents. Evaluates `trace-mcp` (citing https://trace-mcp.com/code-graph-mcp.html for incremental local graphs and framework-specific relationships) alongside Graft as potential adapters for logical code mapping. Recommends starting with pilot language adapters | Independent architectural evaluation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-17 | 2026-10-17 |
 
 
 
@@ -4877,6 +4878,69 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - jgravelle/jcodemunch-mcp: 2,776★ (+1), 375 forks (=)
 - continuedev/continue: 36,233★ (+2), 5,479 forks (=)
 - Aider-AI/aider: 49,584★ (+1), 5,063 forks (-1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
+
+
+
+
+### Morning pass, 2026-10-17 (TRA-2490): mention sweep (wkoch/legacy), open threads audit, competitor triage (codegraph C++ chained & inherited member resolution PR #2627/#2628, DeusData symlink install crash #2671 & Lens local model endpoint #2670, jcodemunch PEP 405 venv prune PR #1122)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - Dokploy/mcp#81: OPEN (community implementation progressing with contributor moataz-hjaiji advancing dokploy-loadTools meta-tool PR).
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Discovered 1 genuine third-party evaluation surface outside the seen list:
+  - `wkoch/legacy` (0★, active 2026-10-16): Architecture planning documents `docs/automacao-rede-e-inteligencia.md` and `docs/decisoes.md` evaluating code intelligence architectures for decentralized AI agents. Evaluates `trace-mcp` (citing https://trace-mcp.com/code-graph-mcp.html for incremental local graphs and framework-specific relationships) alongside Graft as potential adapters for logical code mapping. Recommends starting with pilot language adapters. Added to Surfaces table and `ops/mentions-seen.txt`.
+- No outreach / do not ping: purely an independent architectural evaluation, thread untouched per rules.
+
+**Ecosystem & useful repositories:**
+- `wkoch/legacy`: Decentralized agent architecture study. Notable for framing code intelligence as a reconstructible revision-associated cache with origin tracking, contrasting Graft (Tree-sitter extraction + LSP) and trace-mcp (incremental local graph + framework semantics) as adapters rather than hard dependencies.
+- Continues the broader architectural pattern of agent builders recognizing the value of precomputed, lightweight local code maps over raw file reads and unstructured context dumps.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - Chained C++ member call linking to project classes (PR #2627, merged 2026-10-16T23:13Z): Step 2 of fixing C++ member-chain calls (`thread->rand.Next()` on `Random64`). Previously bare-name lookup fell back to whatever class declared a method named `Next` (or an implicit `this` call on the calling method's class). Implemented project class resolution via `matchCppMemberChainCall`.
+  - Inherited C++ member calls through chains (PR #2628, merged 2026-10-17T02:05Z): Step 3 of member-chain calls. Resolves calls on inherited members like `options.statistics->getTickerCount(…)` on RocksDB's `Options` by walking base class hierarchy up to depth 4 (`cppInheritedDataMember`) because `Options` inherits `statistics` from `DBOptions`.
+  - Architectural contrast: trace-mcp relies on semantic tree-sitter AST queries with scoped symbol namespaces, receiver type inference, and qualified member path validation, preventing standard library member method calls from polluting project symbol call graphs and avoiding speculative bare-name matching.
+- DeusData/codebase-memory-mcp:
+  - Symlink agent config installer crash (Issue #2671, opened 2026-10-17T04:00Z): `install.sh` downloads and verifies v0.12.1 binary, but crashes during agent configuration when any harness config file (e.g. `/Users/.../Library/Application Support/Zed/settings.json`) is a symlink (common dotfiles pattern). The single failure halts the entire installer, leaving 15+ agent configs in a partially modified state and failing to clean up.
+  - Self-hosted model gap in Lens chat (Issue #2670, opened 2026-10-17T02:41Z): Users request an OpenAI-compatible endpoint setting (Ollama / vLLM / llama.cpp) because CBM Lens enforces downloading small 0.5B-2B in-browser ONNX models per device via WebGPU or binds to a hardcoded `127.0.0.1:4141` loopback sidecar.
+  - Architectural contrast: trace-mcp follows a non-invasive, zero-side-effect architecture. It never silently rewrites 15 different agent config files or breaks on symlinked dotfiles, and requires no heavy multi-gigabyte browser models or native Go/C binaries.
+- jgravelle/jcodemunch-mcp:
+  - Virtualenv pruning by PEP 405 pyvenv.cfg (PR #1122, merged 2026-10-17T02:52Z): Prunes directories whose `pyvenv.cfg` carries a `home` key during indexing walks and watcher paths. Required multiple review rounds to ensure only `site-packages` is pruned rather than project root layout directories (`bin/`, `lib/`), preserving hand-written files.
+  - Test harness and Python 3.14 gaps (PR #1121, merged 2026-10-17T02:16Z): Addressed Python 3.14 `Optional[str]` string formatting divergence (`str | None`) and git blame timeouts under load.
+  - Architectural contrast: trace-mcp's walker (`src/indexer/walker.ts`) uses well-defined ignore patterns and project boundary definitions, preventing accidental exclusion of valid project source files.
+- abhigyanpatwari/GitNexus:
+  - Cache identity derivation (PR #3606, opened 2026-10-16T21:01Z): Automatic derivation of parser and PDG cache identities from executed artifacts.
+
+**Competitor pulse (as of 2026-10-17 morning pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,869★ (-1), 1,618 forks (=)
+- oraios/serena: 30,336★ (+7), 2,114 forks (=)
+- DeusData/codebase-memory-mcp: 46,724★ (+7), 3,849 forks (-1)
+- tirth8205/code-review-graph: 32,203★ (+8), 2,973 forks (=)
+- colbymchenry/codegraph: 74,300★ (+17), 4,804 forks (+1)
+- abhigyanpatwari/GitNexus: 47,919★ (+1), 5,200 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,777★ (+1), 375 forks (=)
+- continuedev/continue: 36,234★ (+1), 5,480 forks (+1)
+- Aider-AI/aider: 49,588★ (+4), 5,064 forks (+1)
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.

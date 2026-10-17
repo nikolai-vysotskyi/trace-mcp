@@ -304,3 +304,8 @@ sayef/comind
 # .mcp.json and COMPONENTS_INDEX.md configure trace-mcp (npx -y trace-mcp@latest):
 daniyal44/Zyphuel
 
+# ── Swept 2026-10-17 morning pass (TRA-2490) ──
+# Genuine third-party architectural study & adapter evaluation:
+# docs/automacao-rede-e-inteligencia.md and docs/decisoes.md evaluate trace-mcp (https://trace-mcp.com/code-graph-mcp.html)
+# alongside Graft for incremental code mapping & framework relationships in decentralized agent collaboration:
+wkoch/legacy
