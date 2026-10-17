@@ -29,6 +29,22 @@ export const BASE_EXCLUDE = [
   '**/venv/**',
   '**/site-packages/**',
   '**/__pycache__/**',
+  // Browser runtime caches (TRA-2500)
+  '**/Cache_Data/**',
+  '**/Code Cache/**',
+  '**/GPUCache/**',
+  '**/GPUPersistentCache/**',
+  '**/DawnGraphiteCache/**',
+  '**/DawnWebGPUCache/**',
+  '**/GraphiteDawnCache/**',
+  '**/ShaderCache/**',
+  '**/GrShaderCache/**',
+  '**/Service Worker/CacheStorage/**',
+  '**/Service Worker/ScriptCache/**',
+  '**/cache2/**',
+  '**/startupCache/**',
+  '**/jumpListCache/**',
+  '**/WebKitCache/**',
 ];
 
 /** Framework-specific presets. Keys match plugin manifest names. */

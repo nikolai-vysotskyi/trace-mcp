@@ -171,6 +171,20 @@ export const WORKSPACE_SKIP_DIRS = new Set([
   // the host app, never a separate workspace. (Real apps register them as
   // composer path repositories, which the explicit detector handles first.)
   'nova-components',
+  // Browser runtime caches (TRA-2500)
+  'Cache_Data',
+  'Code Cache',
+  'GPUCache',
+  'GPUPersistentCache',
+  'DawnGraphiteCache',
+  'DawnWebGPUCache',
+  'GraphiteDawnCache',
+  'ShaderCache',
+  'GrShaderCache',
+  'cache2',
+  'startupCache',
+  'jumpListCache',
+  'WebKitCache',
 ]);
 
 /**
