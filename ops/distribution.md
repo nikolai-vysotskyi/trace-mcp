@@ -5071,3 +5071,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+### Late night pass, 2026-10-17 (TRA-2498): mention sweep clean, open threads audit, competitor triage (codegraph Vue module path resolution PR #2633, jcodemunch text-search zero-savings model L-180 PR #1135 & v1.108.376, GitNexus directory symlink convergence PR #3616 & RC v1.6.13-rc.117)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Ecosystem & useful repositories:**
+- Coding-agent tooling ecosystem continues rapid diversification across framework-specific import aliases and bundler conventions (Vue CLI `@/` and `~/` module resolution), token-savings measurement integrity, and filesystem-level symlink edge cases.
+- Contrast across code-intelligence tools is increasingly defined by deterministic parsing and indexing vs heuristic regex/string fallbacks and ad-hoc multiplier credits.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - Vue module path import resolution (PR #2633, opened 2026-10-17T15:51Z by colbymchenry): Fixed flaw where Vue `@/...` and `~/...` module imports bypassed standard import resolution and returned `getNodesInFile(path)[0]` with 0.9 confidence, which bound imports to arbitrary first-stored constant or component nodes instead of the file node. This broke reference traversal during incremental sync (`reopenReferencesThroughAddedFiles`/`reopenReferencesThroughBarrels`), making graph syncs miss dependent importers in Vue/Nuxt projects. Fixed by delegating module path resolution to the import resolver first (respecting tsconfig paths and workspace packages), and only falling back to Vue CLI extension resolution (`.vue`, `/index.vue`) for SFCs and Vue CLI aliases before hitting virtual-module sinks.
+  - Architectural contrast: trace-mcp relies on `oxc-resolver` and Tree-sitter AST queries for deterministic symbol extraction and module resolution. File node identity and AST symbol declarations are strictly separated by architecture; import links are never bound to arbitrary node array offsets (`getNodesInFile()[0]`), ensuring rock-solid consistency across fresh indexes and incremental syncs.
+- jgravelle/jcodemunch-mcp:
+  - Text search zero-savings model (PR #1135, opened 2026-10-17T16:16Z by jgravelle; ledger L-180): Major correction to token-savings accounting. Previously, `search_text` and `check_references` were given inflated multiplier credits (12.0x and 15.0x) against a symbol-retrieval benchmark that never measured text search, resulting in larger search results claiming higher token savings. Empirical testing showed grep returns the exact same matching lines at a fraction of the token cost (grep tokens were 0.36 of `search_text` and 0.69 of `check_references` tokens). Removed multipliers from `_TOOL_MULTIPLIERS`, renamed metric to `Modeled gross savings`, and priced text-search actions at zero counterfactual savings credit.
+  - Release v1.108.376 (published 2026-10-17T17:50Z): "install-pack honours every savings opt-out".
+  - Batch ledger fixes (PR #1137, opened 2026-10-17T17:58Z): Consolidated fixes for ledgers L-209, L-142, L-144, L-149, L-180.
+  - Architectural contrast: trace-mcp measures token reduction directly against real-world PR review tasks across 60+ external repositories (`70.5% - 72.7%` median reduction in input tokens to achieve comprehension parity) rather than relying on synthetic per-tool multiplier heuristics over grep-like matching lines.
+- abhigyanpatwari/GitNexus:
+  - Directory symlink convergence during indexing (PR #3616, updated 2026-10-17T16:36Z by magyargergo): Fixed issue where repository directory symlinks caused repeated analyze/status runs to fail to converge because the walker returned directory symlinks that never received file hashes, leaving repository freshness permanently stale at the same commit. Fix filters directory symlinks using stat checks to retain only regular-file symlink targets.
+  - Release Candidate v1.6.13-rc.117 (published 2026-10-17T16:25Z).
+  - Architectural contrast: trace-mcp's indexer natively bounds directory traversal using git-ignore and realpath resolution, preventing symlink loops and stale hashes without requiring special-cased stat patches in the walker.
+
+**Competitor pulse (as of 2026-10-17 late night pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,876★ (+3), 1,630 forks (=)
+- oraios/serena: 30,344★ (+1), 2,148 forks (=)
+- DeusData/codebase-memory-mcp: 46,757★ (+13), 3,857 forks (+3)
+- tirth8205/code-review-graph: 32,219★ (+5), 2,997 forks (-1)
+- colbymchenry/codegraph: 74,329★ (+8), 4,806 forks (+2)
+- abhigyanpatwari/GitNexus: 47,925★ (+5), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,780★ (+1), 376 forks (=)
+- continuedev/continue: 36,234★ (+1), 5,483 forks (+2)
+- Aider-AI/aider: 49,594★ (=), 5,067 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
