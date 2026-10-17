@@ -24,6 +24,7 @@ import { installDaemonExitBreadcrumb, noteDaemonShutdownReason } from './daemon/
 import {
   logUncleanStopDiagnosis,
   readRecentOomCrashes,
+  readRecentOomCrashesWithDiagnostics,
   readRecentStallAlerts,
   STALL_ALERTS_FILENAME,
   summarizeStallAlerts,
@@ -4242,7 +4243,7 @@ program
       // exactly the situation this counter exists to measure.
       const wasUncleanStart = recordDaemonStart();
       if (wasUncleanStart) {
-        // TRA-2037: the previous run died without running a shutdown handler
+        // TRA-2037, TRA-2443: the previous run died without running a shutdown handler
         // (SIGKILL, native crash, power loss), so daemon.log holds no reason —
         // only the vitals trajectory before the gap. Log one warn carrying
         // everything knowable post-mortem: counters, launchd's record, and the
@@ -4250,14 +4251,24 @@ program
         // that won the bind race gets here, so a bind-race loser never logs
         // a diagnosis for a death it did not inherit.
         const counters = readDaemonReliabilityCounters();
+        const stallSummary = summarizeStallAlerts(readRecentStallAlerts());
+        const previousPid = counters.previousPid ?? stallSummary.unrecoveredFatal?.pid;
+        const previousStartedAt = counters.previousStartedAt;
+        // TRA-2443: correlate OOM crash reports with target PID and daemon start time
+        // so stale reports from days ago or other processes are rejected.
+        const oomCrashes = readRecentOomCrashesWithDiagnostics({
+          targetPid: previousPid,
+          sinceMs: previousStartedAt,
+        });
         logUncleanStopDiagnosis({
           daemonStarts: counters.starts,
           daemonUncleanStops: counters.uncleanStops,
           launchdExit: getLaunchdLastExit(),
-          stallSummary: summarizeStallAlerts(readRecentStallAlerts()),
-          // TRA-2056: a V8 heap OOM aborts via SIGABRT with no JS handler —
-          // the .ips crash report is the only post-mortem besides vitals.
-          oomCrash: readRecentOomCrashes()[0] ?? null,
+          stallSummary,
+          oomCrash: oomCrashes.matched[0] ?? null,
+          staleOomCrash: oomCrashes.rejected[0] ?? null,
+          targetPid: previousPid,
+          previousStartedAt,
         });
       }
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead

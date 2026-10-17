@@ -153,36 +153,127 @@ export interface OomCrashReport {
   pid?: number;
 }
 
+export interface ReadOomCrashesOptions {
+  /** Directory containing .ips crash reports (defaults to DiagnosticReports). */
+  dirOverride?: string;
+  /** Max reports to return. Default 3. */
+  maxReports?: number;
+  /**
+   * Expected crashed process PID (TRA-2443).
+   * Reports containing a parsed "pid" that differs from targetPid are rejected.
+   */
+  targetPid?: number;
+  /**
+   * Minimum timestamp in epoch ms (TRA-2443).
+   * Reports modified earlier than this are rejected as stale.
+   */
+  sinceMs?: number;
+  /**
+   * Max age in ms relative to now (TRA-2443).
+   * Reports older than maxAgeMs are rejected as stale.
+   */
+  maxAgeMs?: number;
+  /** Injectable current time for testing. */
+  nowMs?: number;
+}
+
+export interface OomCrashEvaluation {
+  fresh: boolean;
+  reason: string;
+}
+
 /**
- * Best-effort scan for a V8 heap-OOM crash report from the previous daemon
- * run (TRA-2056).
+ * Verify if an OOM crash report is fresh and correlates with the failed daemon run (TRA-2443).
  *
- * A V8 OOM aborts via `V8::FatalProcessOutOfMemory` → SIGABRT — no JS
- * shutdown handler runs, so daemon.log holds only the vitals trajectory
- * before the gap. macOS writes a `node-*.ips` report whose faulting stack
- * names `FatalProcessOutOfMemory`/`OOMErrorHandler` under the daemon's
- * coalition (`com.trace-mcp.server`). Returns matches newest-first, capped
- * at `maxReports`; [] when the dir is absent, unreadable, or holds nothing
- * matching (including all non-darwin platforms).
- *
- * Reads are capped (`MAX_IPS_BYTES`) and never throw: attribution must not
- * break boot. `dirOverride` exists for tests.
+ * A crash report from days ago or with a different PID must never be attributed as
+ * the cause of an unclean stop.
  */
-export function readRecentOomCrashes(dirOverride?: string, maxReports = 3): OomCrashReport[] {
+export function evaluateOomCrashFreshness(
+  report: OomCrashReport,
+  options: {
+    targetPid?: number;
+    sinceMs?: number;
+    maxAgeMs?: number;
+    nowMs?: number;
+  } = {},
+): OomCrashEvaluation {
+  const now = options.nowMs ?? Date.now();
+  if (
+    options.targetPid !== undefined &&
+    report.pid !== undefined &&
+    report.pid !== options.targetPid
+  ) {
+    return {
+      fresh: false,
+      reason: `PID mismatch (report pid ${report.pid} != target pid ${options.targetPid})`,
+    };
+  }
+  if (options.sinceMs !== undefined && report.mtimeMs < options.sinceMs) {
+    const diffSec = Math.round((options.sinceMs - report.mtimeMs) / 1000);
+    return {
+      fresh: false,
+      reason: `stale: report mtime predates daemon run start by ${diffSec}s`,
+    };
+  }
+  const maxAge =
+    options.maxAgeMs ??
+    (options.sinceMs !== undefined || options.targetPid !== undefined
+      ? undefined
+      : 24 * 60 * 60 * 1000);
+  if (maxAge !== undefined && now - report.mtimeMs > maxAge) {
+    const ageHours = Math.round((now - report.mtimeMs) / (3600 * 1000));
+    return {
+      fresh: false,
+      reason: `stale: report is ${ageHours}h old (exceeds max age of ${Math.round(maxAge / 3600000)}h)`,
+    };
+  }
+  return { fresh: true, reason: 'matched target PID and recent time window' };
+}
+
+export interface OomCrashesWithDiagnostics {
+  matched: OomCrashReport[];
+  rejected: Array<{ report: OomCrashReport; reason: string }>;
+}
+
+/**
+ * Scan for V8 heap-OOM crash reports with full match diagnostics (TRA-2443).
+ */
+export function readRecentOomCrashesWithDiagnostics(
+  dirOverrideOrOptions?: string | ReadOomCrashesOptions,
+  legacyMaxReports = 3,
+): OomCrashesWithDiagnostics {
+  let dirOverride: string | undefined;
+  let maxReports = legacyMaxReports;
+  let targetPid: number | undefined;
+  let sinceMs: number | undefined;
+  let maxAgeMs: number | undefined;
+  let nowMs: number | undefined;
+
+  if (typeof dirOverrideOrOptions === 'string') {
+    dirOverride = dirOverrideOrOptions;
+  } else if (dirOverrideOrOptions && typeof dirOverrideOrOptions === 'object') {
+    dirOverride = dirOverrideOrOptions.dirOverride;
+    maxReports = dirOverrideOrOptions.maxReports ?? legacyMaxReports;
+    targetPid = dirOverrideOrOptions.targetPid;
+    sinceMs = dirOverrideOrOptions.sinceMs;
+    maxAgeMs = dirOverrideOrOptions.maxAgeMs;
+    nowMs = dirOverrideOrOptions.nowMs;
+  }
+
   let dir: string | null = null;
   try {
     dir = dirOverride ?? getOomCrashReportDir();
   } catch {
-    return [];
+    return { matched: [], rejected: [] };
   }
-  if (!dir) return [];
+  if (!dir) return { matched: [], rejected: [] };
   let names: string[];
   try {
     names = fs.readdirSync(dir).filter((n) => n.startsWith('node-') && n.endsWith('.ips'));
   } catch {
-    return [];
+    return { matched: [], rejected: [] };
   }
-  if (names.length === 0) return [];
+  if (names.length === 0) return { matched: [], rejected: [] };
   const MAX_IPS_BYTES = 512 * 1024;
   const withMtime: Array<{ name: string; mtimeMs: number }> = [];
   for (const name of names) {
@@ -194,9 +285,11 @@ export function readRecentOomCrashes(dirOverride?: string, maxReports = 3): OomC
     }
   }
   withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  const out: OomCrashReport[] = [];
+  const matched: OomCrashReport[] = [];
+  const rejected: Array<{ report: OomCrashReport; reason: string }> = [];
+
   for (const { name, mtimeMs } of withMtime.slice(0, 20)) {
-    if (out.length >= Math.max(1, maxReports)) break;
+    if (matched.length >= Math.max(1, maxReports)) break;
     const full = path.join(dir, name);
     let text: string;
     try {
@@ -221,9 +314,44 @@ export function readRecentOomCrashes(dirOverride?: string, maxReports = 3): OomC
       const pid = Number.parseInt(pidMatch[1], 10);
       if (Number.isFinite(pid)) report.pid = pid;
     }
-    out.push(report);
+
+    const evaluation = evaluateOomCrashFreshness(report, {
+      targetPid,
+      sinceMs,
+      maxAgeMs,
+      nowMs,
+    });
+    if (evaluation.fresh) {
+      matched.push(report);
+    } else {
+      rejected.push({ report, reason: evaluation.reason });
+    }
   }
-  return out;
+  return { matched, rejected };
+}
+
+/**
+ * Best-effort scan for a V8 heap-OOM crash report from the previous daemon
+ * run (TRA-2056, TRA-2443).
+ *
+ * A V8 OOM aborts via `V8::FatalProcessOutOfMemory` → SIGABRT — no JS
+ * shutdown handler runs, so daemon.log holds only the vitals trajectory
+ * before the gap. macOS writes a `node-*.ips` report whose faulting stack
+ * names `FatalProcessOutOfMemory`/`OOMErrorHandler` under the daemon's
+ * coalition (`com.trace-mcp.server`).
+ *
+ * TRA-2443: Stale reports or reports for different PIDs are rejected rather
+ * than falsely diagnosed as the cause of this stop.
+ *
+ * Returns matches newest-first, capped at `maxReports`; [] when the dir is
+ * absent, unreadable, or holds nothing matching (including all non-darwin
+ * platforms). Reads are capped (`MAX_IPS_BYTES`) and never throw.
+ */
+export function readRecentOomCrashes(
+  dirOverrideOrOptions?: string | ReadOomCrashesOptions,
+  maxReports = 3,
+): OomCrashReport[] {
+  return readRecentOomCrashesWithDiagnostics(dirOverrideOrOptions, maxReports).matched;
 }
 
 /**
@@ -247,6 +375,9 @@ export interface UncleanStopDiagnosis {
   launchdExit: LaunchdLastExit | null;
   stallSummary: StallAlertSummary;
   oomCrash?: OomCrashReport | null;
+  staleOomCrash?: { report: OomCrashReport; reason: string } | null;
+  targetPid?: number;
+  previousStartedAt?: number;
 }
 
 /**
@@ -256,29 +387,52 @@ export interface UncleanStopDiagnosis {
  */
 export function logUncleanStopDiagnosis(diagnosis: UncleanStopDiagnosis): void {
   try {
-    const { daemonStarts, daemonUncleanStops, launchdExit, stallSummary, oomCrash } = diagnosis;
+    const {
+      daemonStarts,
+      daemonUncleanStops,
+      launchdExit,
+      stallSummary,
+      oomCrash,
+      staleOomCrash,
+      targetPid,
+      previousStartedAt,
+    } = diagnosis;
     const fields: Record<string, unknown> = {
       daemonStarts,
       daemonUncleanStops,
       stallAlertFile: getStallAlertsPath(),
       stallAlertsSeen: stallSummary.count,
     };
+    if (targetPid !== undefined) fields.targetPid = targetPid;
+    if (previousStartedAt !== undefined) fields.previousStartedAt = previousStartedAt;
     if (oomCrash) {
       fields.oomCrashReport = oomCrash.path;
       if (oomCrash.pid !== undefined) fields.oomCrashPid = oomCrash.pid;
+    }
+    if (staleOomCrash) {
+      fields.unmatchedOomReport = staleOomCrash.report.path;
+      fields.unmatchedOomReason = staleOomCrash.reason;
     }
     if (launchdExit) {
       if (launchdExit.exitCode !== undefined) fields.launchdLastExit = launchdExit.exitCode;
       if (launchdExit.reason !== undefined) fields.launchdLastExitReason = launchdExit.reason;
       if (launchdExit.runs !== undefined) fields.launchdRuns = launchdExit.runs;
     }
-    if (oomCrash) {
+    // TRA-2443: stallSummary.unrecoveredFatal is direct, definitive evidence
+    // from the stall watchdog worker thread that it sent SIGKILL to this process.
+    // It must take precedence over circumstantial filesystem scans, and old
+    // OOM reports must never override an unrecovered watchdog kill or be attributed
+    // without matching PID/time.
+    if (stallSummary.unrecoveredFatal) {
+      fields.watchdogFatal = stallSummary.unrecoveredFatal;
+      fields.likelyCause = 'stall-watchdog SIGKILL after fatalAfterMs without an event-loop beat';
+      if (oomCrash) {
+        fields.correlatedOomCrash = oomCrash.path;
+      }
+    } else if (oomCrash) {
       fields.likelyCause =
         'V8 JavaScript heap OOM (FatalProcessOutOfMemory in the crash report; ' +
         'see daemon.log Daemon vitals heap_used_mb trajectory before the gap)';
-    } else if (stallSummary.unrecoveredFatal) {
-      fields.watchdogFatal = stallSummary.unrecoveredFatal;
-      fields.likelyCause = 'stall-watchdog SIGKILL after fatalAfterMs without an event-loop beat';
     } else {
       if (stallSummary.lastFatal) fields.lastFatalStall = stallSummary.lastFatal;
       if (stallSummary.lastStalled) fields.lastStall = stallSummary.lastStalled;

@@ -77,6 +77,14 @@ interface TelemetryState {
    * sees the sentence once and never again (TRA-887).
    */
   noticeShown?: boolean;
+  /** PID of the running daemon (TRA-2443). */
+  daemonPid?: number;
+  /** Start time of the running daemon in epoch ms (TRA-2443). */
+  daemonStartedAt?: number;
+  /** PID of previous daemon if it exited uncleanly (TRA-2443). */
+  previousDaemonPid?: number;
+  /** Start time of previous daemon if it exited uncleanly (TRA-2443). */
+  previousDaemonStartedAt?: number;
 }
 
 /**
@@ -231,16 +239,26 @@ export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = pro
  * start follows an unclean death (SIGKILL, native crash, power loss). The
  * daemon logs its last-will diagnosis off this (TRA-2037).
  */
-export function recordDaemonStart(env: NodeJS.ProcessEnv = process.env): boolean {
+export function recordDaemonStart(
+  env: NodeJS.ProcessEnv = process.env,
+  pid: number = process.pid,
+  nowMs: number = Date.now(),
+): boolean {
   if (isDisabled(env)) return false;
   try {
     const state = loadOrCreateState();
     const wasUnclean = state.daemonRunning === true;
+    const previousPid = wasUnclean ? state.daemonPid : undefined;
+    const previousStartedAt = wasUnclean ? state.daemonStartedAt : undefined;
     saveState({
       ...state,
       daemonStarts: (state.daemonStarts ?? 0) + 1,
       daemonUncleanStops: (state.daemonUncleanStops ?? 0) + (wasUnclean ? 1 : 0),
       daemonRunning: true,
+      daemonPid: pid,
+      daemonStartedAt: nowMs,
+      previousDaemonPid: previousPid,
+      previousDaemonStartedAt: previousStartedAt,
     });
     return wasUnclean;
   } catch (err) {
@@ -256,6 +274,8 @@ export function recordDaemonStart(env: NodeJS.ProcessEnv = process.env): boolean
 export function readDaemonReliabilityCounters(env: NodeJS.ProcessEnv = process.env): {
   starts: number;
   uncleanStops: number;
+  previousPid?: number;
+  previousStartedAt?: number;
 } {
   try {
     if (isDisabled(env)) return { starts: 0, uncleanStops: 0 };
@@ -263,6 +283,8 @@ export function readDaemonReliabilityCounters(env: NodeJS.ProcessEnv = process.e
     return {
       starts: state.daemonStarts ?? 0,
       uncleanStops: state.daemonUncleanStops ?? 0,
+      previousPid: state.previousDaemonPid,
+      previousStartedAt: state.previousDaemonStartedAt,
     };
   } catch {
     return { starts: 0, uncleanStops: 0 };
@@ -279,7 +301,14 @@ export function recordDaemonCleanStop(env: NodeJS.ProcessEnv = process.env): voi
   try {
     const state = loadOrCreateState();
     if (!state.daemonRunning) return;
-    saveState({ ...state, daemonRunning: false });
+    saveState({
+      ...state,
+      daemonRunning: false,
+      daemonPid: undefined,
+      daemonStartedAt: undefined,
+      previousDaemonPid: undefined,
+      previousDaemonStartedAt: undefined,
+    });
   } catch (err) {
     logger.debug({ err }, 'telemetry.daemon_stop_record_failed');
   }

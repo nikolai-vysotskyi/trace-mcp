@@ -9,11 +9,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  evaluateOomCrashFreshness,
   formatOomCrashes,
   formatStallAlerts,
   getStallAlertsPath,
   logUncleanStopDiagnosis,
   readRecentOomCrashes,
+  readRecentOomCrashesWithDiagnostics,
   readRecentStallAlerts,
   summarizeStallAlerts,
 } from '../unclean-stop.js';
@@ -192,11 +194,107 @@ describe('logUncleanStopDiagnosis', () => {
     expect(String(fields.likelyCause)).toContain('OOM');
     expect(fields.oomCrashPid).toBe(41711);
   });
+
+  it('prioritizes unrecovered watchdog fatal over an OOM crash report (TRA-2443)', () => {
+    vi.mocked(logger.warn).mockClear();
+    logUncleanStopDiagnosis({
+      daemonStarts: 10,
+      daemonUncleanStops: 2,
+      launchdExit: { exitCode: 9 },
+      stallSummary: summarizeStallAlerts([STALLED_74842, FATAL_74842]),
+      oomCrash: {
+        path: '/tmp/DiagnosticReports/node-2026-10-10-041741.ips',
+        mtimeMs: Date.now() - 5000,
+        pid: 74842,
+      },
+    });
+    const [fields] = vi.mocked(logger.warn).mock.calls[0] as [Record<string, unknown>, string];
+    expect(String(fields.likelyCause)).toContain('stall-watchdog SIGKILL');
+    expect(fields.watchdogFatal).toEqual(FATAL_74842);
+    expect(fields.correlatedOomCrash).toBe('/tmp/DiagnosticReports/node-2026-10-10-041741.ips');
+  });
+
+  it('records unmatched/stale OOM report without diagnosing V8 OOM (TRA-2443)', () => {
+    vi.mocked(logger.warn).mockClear();
+    logUncleanStopDiagnosis({
+      daemonStarts: 10,
+      daemonUncleanStops: 2,
+      launchdExit: { exitCode: 9 },
+      stallSummary: summarizeStallAlerts([]),
+      oomCrash: null,
+      staleOomCrash: {
+        report: {
+          path: '/tmp/DiagnosticReports/node-2026-10-10-041741.ips',
+          mtimeMs: 1728533861000,
+          pid: 41711,
+        },
+        reason: 'PID mismatch (report pid 41711 != target pid 8045)',
+      },
+      targetPid: 8045,
+    });
+    const [fields] = vi.mocked(logger.warn).mock.calls[0] as [Record<string, unknown>, string];
+    expect(String(fields.likelyCause)).not.toContain('V8');
+    expect(fields.unmatchedOomReport).toBe('/tmp/DiagnosticReports/node-2026-10-10-041741.ips');
+    expect(String(fields.unmatchedOomReason)).toContain('PID mismatch');
+  });
 });
 
-describe('readRecentOomCrashes (TRA-2056)', () => {
-  function writeIps(dir: string, name: string, body: string): void {
-    fs.writeFileSync(path.join(dir, name), body, 'utf-8');
+describe('evaluateOomCrashFreshness (TRA-2443)', () => {
+  const baseReport = {
+    path: '/path/node.ips',
+    mtimeMs: 1_000_000,
+    pid: 1234,
+  };
+
+  it('rejects report when targetPid does not match report pid', () => {
+    const verdict = evaluateOomCrashFreshness(baseReport, { targetPid: 5678, nowMs: 1_000_100 });
+    expect(verdict.fresh).toBe(false);
+    expect(verdict.reason).toContain('PID mismatch');
+  });
+
+  it('accepts report when targetPid matches', () => {
+    const verdict = evaluateOomCrashFreshness(baseReport, { targetPid: 1234, nowMs: 1_000_100 });
+    expect(verdict.fresh).toBe(true);
+  });
+
+  it('rejects report when mtime predates sinceMs', () => {
+    const verdict = evaluateOomCrashFreshness(baseReport, {
+      targetPid: 1234,
+      sinceMs: 1_005_000,
+      nowMs: 1_010_000,
+    });
+    expect(verdict.fresh).toBe(false);
+    expect(verdict.reason).toContain('predates daemon run start');
+  });
+
+  it('accepts report when mtime is after sinceMs', () => {
+    const verdict = evaluateOomCrashFreshness(baseReport, {
+      targetPid: 1234,
+      sinceMs: 995_000,
+      nowMs: 1_005_000,
+    });
+    expect(verdict.fresh).toBe(true);
+  });
+
+  it('rejects report when older than maxAgeMs', () => {
+    const verdict = evaluateOomCrashFreshness(baseReport, {
+      maxAgeMs: 5_000,
+      nowMs: 1_010_000,
+    });
+    expect(verdict.fresh).toBe(false);
+    expect(verdict.reason).toContain('exceeds max age');
+  });
+});
+
+describe('readRecentOomCrashes (TRA-2056, TRA-2443)', () => {
+  function writeIps(dir: string, name: string, body: string, mtimeMs?: number): string {
+    const full = path.join(dir, name);
+    fs.writeFileSync(full, body, 'utf-8');
+    if (mtimeMs !== undefined) {
+      const timeSec = mtimeMs / 1000;
+      fs.utimesSync(full, timeSec, timeSec);
+    }
+    return full;
   }
 
   it('returns [] for a missing dir instead of throwing', () => {
@@ -220,6 +318,54 @@ describe('readRecentOomCrashes (TRA-2056)', () => {
     expect(formatOomCrashes(found)).toHaveLength(1);
     expect(formatOomCrashes(found)[0]).toContain('OOM');
     expect(formatOomCrashes([])).toEqual([]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('filters out stale reports and PID mismatches (TRA-2443)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-oom-tra2443-'));
+    const now = 1_700_000_000_000;
+    // Ancient report from 5 days ago with same PID (e.g. from a past incarnation)
+    writeIps(
+      dir,
+      'node-2026-10-10-041741.ips',
+      '{"coalitionName" : "com.trace-mcp.server", "pid" : 8045}\n' +
+        'v8::internal::Heap::FatalProcessOutOfMemory node::OOMErrorHandler abort',
+      now - 5 * 24 * 3600 * 1000,
+    );
+    // Unrelated PID report (like node-2026-10-15-043157.ips with PID 69245)
+    writeIps(
+      dir,
+      'node-2026-10-15-043157.ips',
+      '{"coalitionName" : "com.trace-mcp.server", "pid" : 69245}\n' +
+        'v8::internal::Heap::FatalProcessOutOfMemory node::OOMErrorHandler abort',
+      now - 60_000,
+    );
+    // Real fresh report matching our PID 8045
+    writeIps(
+      dir,
+      'node-2026-10-15-041355.ips',
+      '{"coalitionName" : "com.trace-mcp.server", "pid" : 8045}\n' +
+        'v8::internal::Heap::FatalProcessOutOfMemory node::OOMErrorHandler abort',
+      now - 30_000,
+    );
+
+    const result = readRecentOomCrashesWithDiagnostics({
+      dirOverride: dir,
+      targetPid: 8045,
+      sinceMs: now - 300_000,
+      nowMs: now,
+    });
+
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0].pid).toBe(8045);
+    expect(result.matched[0].path).toContain('node-2026-10-15-041355.ips');
+
+    expect(result.rejected).toHaveLength(2);
+    const pidMismatch = result.rejected.find((r) => r.report.pid === 69245);
+    expect(pidMismatch?.reason).toContain('PID mismatch');
+    const staleReport = result.rejected.find((r) => r.report.path.includes('node-2026-10-10'));
+    expect(staleReport?.reason).toContain('stale');
+
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
