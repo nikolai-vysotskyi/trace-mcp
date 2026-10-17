@@ -31,6 +31,7 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import type { PipelineState } from '../../src/indexer/pipeline-state.js';
 import { _resetYieldCountForTests, getYieldCount } from '../../src/utils/event-loop.js';
 import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../../src/indexer/resolver-budget.js';
+import { IndexAbortedError } from '../../src/indexer/index-abort.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -131,6 +132,61 @@ describe('commitInChunks', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('aborts mid-pass on AbortSignal during multi-chunk commitInChunks (TRA-2439)', async () => {
+    const db = initializeDatabase(':memory:');
+    try {
+      db.exec('CREATE TABLE t (v INTEGER)');
+      const insert = db.prepare('INSERT INTO t (v) VALUES (?)');
+      const items = Array.from({ length: 500 }, (_, i) => i);
+      const ac = new AbortController();
+      let chunkCount = 0;
+      await expect(
+        commitInChunks(
+          db,
+          items,
+          (chunk) => {
+            chunkCount++;
+            for (const v of chunk) insert.run(v);
+            if (chunkCount === 1) {
+              ac.abort();
+            }
+          },
+          100,
+          ac.signal,
+        ),
+      ).rejects.toThrow(IndexAbortedError);
+      // Chunk 1 committed, subsequent chunks aborted
+      expect(chunkCount).toBe(1);
+      expect((db.prepare('SELECT COUNT(*) AS c FROM t').get() as { c: number }).c).toBe(100);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('converts SQLite closure during multi-chunk commitInChunks into IndexAbortedError (TRA-2439)', async () => {
+    const db = initializeDatabase(':memory:');
+    db.exec('CREATE TABLE t (v INTEGER)');
+    const insert = db.prepare('INSERT INTO t (v) VALUES (?)');
+    const items = Array.from({ length: 500 }, (_, i) => i);
+    let chunkCount = 0;
+    await expect(
+      commitInChunks(
+        db,
+        items,
+        (chunk) => {
+          chunkCount++;
+          for (const v of chunk) insert.run(v);
+          if (chunkCount === 1) {
+            // Simulate shutdown closing the database while in-flight
+            db.close();
+          }
+        },
+        100,
+      ),
+    ).rejects.toThrow(IndexAbortedError);
+    expect(chunkCount).toBe(1);
   });
 });
 
