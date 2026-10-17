@@ -5007,3 +5007,67 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+
+
+### Evening pass, 2026-10-17 (TRA-2496): mention sweep clean, open threads audit, competitor triage (codegraph Python builtin member resolution PR #2632 & Rust Cargo workspace path resolution PR #2631, jcodemunch v1.108.375 & install-pack telemetry opt-out PR #1130, DeusData v0.12.1 release sync PR #2674 & musl libc build fix PR #2675, GitNexus OpenCode plugin hooks PR #3619 & semantic rename reviewed edit plan PR #3617)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Ecosystem & useful repositories:**
+- Coding-agent tooling ecosystem continues rapid diversification across client-specific hooks (e.g. OpenCode plugin architecture) and multi-package workspace cross-reference extraction.
+- Edge cases in language-specific symbol resolution (Python absolute import member shadowing, Cargo cross-crate workspace paths) and telemetry compliance under configuration opt-outs remain central areas of ongoing maintenance for rival indexers.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - Python builtin-named member resolution on absolute imports (PR #2632, opened 2026-10-17T12:48Z by BGamboa13): Fixed project functions named like built-in methods (`get`, `write`, `update`, `items`, `find`, `read`) being dropped as standard dictionary/list/file methods when imported by absolute module path in src-layout projects (`from app import db; db.get(...)`). Added `findPythonModuleFile` fallback and local scope rebinding guards (parameters, `with ... as`, `for`, assignments, walrus operator, `del`, nested defs) to prevent false positives when receivers are rebound.
+  - Cargo workspace cross-crate path resolution (PR #2631, opened 2026-10-17T12:48Z by BGamboa13): Resolves paths into other crates of a Cargo workspace (`sim::items::ItemPool::for_def(...)`) by walking the module tree from anchor (`crate`, `self`, `super`, crate name, or file `use` binding) following `pub use` and glob re-exports; separated Rust path logic into dedicated `rust-paths.ts`.
+  - Architectural contrast: trace-mcp leverages Tree-sitter AST queries with deterministic symbol namespaces and lexical scoping, extracting symbol definitions and references directly without fragile naming heuristics or special-cased built-in method exclusion filters.
+- jgravelle/jcodemunch-mcp:
+  - Release v1.108.375 (published 2026-10-17T13:05Z): Enforces that unrecognized environment variable values for six default-on protective boolean settings (`JCODEMUNCH_RESPECT_CACHEDIR_TAG`, `JCODEMUNCH_SKIP_MSBUILD_OUTPUT`, `JCODEMUNCH_SKIP_NUGET_PACKAGES`, `JCODEMUNCH_SKIP_VIRTUALENVS`, `JCODEMUNCH_TRUSTED_FOLDERS_WHITELIST_MODE`, `JCODEMUNCH_RUNTIME_REDACT`) keep protections active and log warnings, preventing parser typos from silently disabling security and privacy settings.
+  - Starter pack telemetry honors all opt-outs (PR #1130, merged 2026-10-17T14:03Z, ledger L-212): Fixed `install-pack` telemetry sending events unless `JCODEMUNCH_SHARE_SAVINGS` was exactly `0`, ignoring `false`, `off`, `no`, or config `share_savings: false`.
+  - Architectural contrast: trace-mcp operates strictly on opt-in, zero-telemetry by default, conducts no background network telemetry calls in MCP runtime tool paths, and uses strict type-safe schema validation.
+- DeusData/codebase-memory-mcp:
+  - Packaging metadata sync for v0.12.1 (PR #2674, merged 2026-10-17T12:40Z): Synchronized post-release packaging manifests across Chocolatey, Scoop, Homebrew, Go installer, Nix flake, npm, and PyPI with VirusTotal candidate provenance artifacts.
+  - musl libc build fix (PR #2675, opened 2026-10-17T13:16Z by attilaolah): Resolved undefined behavior in `%s` format strings under musl-gcc when `phase` and `log` pointers are null, and enabled `$LD` environment variable override for linker toolchains.
+  - Architectural contrast: trace-mcp is distributed as a pure TypeScript/Node.js package with precompiled native tree-sitter bindings and an Electron desktop bundle, avoiding complex C/musl toolchain build matrices and gigabyte-sized dependencies.
+- abhigyanpatwari/GitNexus:
+  - OpenCode auto-loaded global plugin hooks (PR #3619, opened 2026-10-17T13:02Z by rgb-vgx): Added OpenCode integration parity via a self-contained ESM plugin (`~/.config/opencode/plugins/gitnexus.js`) implementing OpenCode's `tool.execute.after` hook for automatic graph-context augmentation after searches and stale-index hints after git mutations.
+  - Exact reviewed edit plan enforcement for semantic rename (PR #3617, opened 2026-10-17T09:56Z): Hardened semantic rename workflow to enforce verified token and edit plan application with atomic per-file writes, dirty-worktree graph refresh, and strict rollback reporting.
+  - Architectural contrast: trace-mcp exposes standard MCP protocol tools directly, providing clean, predictable context without mutating user global configuration directories or injecting background hook scripts into third-party agent directories.
+
+**Competitor pulse (as of 2026-10-17 evening pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,873★ (+1), 1,630 forks (+2)
+- oraios/serena: 30,343★ (+4), 2,148 forks (+10)
+- DeusData/codebase-memory-mcp: 46,744★ (+5), 3,854 forks (+4)
+- tirth8205/code-review-graph: 32,214★ (+1), 2,998 forks (+10)
+- colbymchenry/codegraph: 74,321★ (+9), 4,804 forks (=)
+- abhigyanpatwari/GitNexus: 47,920★ (+1), 5,198 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,779★ (+1), 376 forks (+1)
+- continuedev/continue: 36,233★ (-1), 5,481 forks (+2)
+- Aider-AI/aider: 49,594★ (=), 5,066 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
