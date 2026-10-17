@@ -5127,3 +5127,62 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+
+### Morning pass, 2026-10-18 (TRA-2502): mention sweep clean, open threads audit, competitor triage (DeusData cross-file method linking in sequential pipeline PR #2678, jcodemunch licence lookup auto-config bug L-215 PR #1138, GitNexus rename preview plan-token binding PR #3617)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream self-additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Ecosystem & useful repositories:**
+- The coding-agent ecosystem is grappling with cross-file symbol resolution nondeterminism, tool configuration side-effects, and atomic refactoring plan guarantees.
+- Tools operating with complex pipelines (separate sequential vs parallel indexing paths, heuristic config file writers, separate preview/apply steps) increasingly surface bugs where AST/graph state diverges across runtime modes.
+- trace-mcp's architectural simplicity (single-pass deterministic AST indexing into SQLite, declarative MCP tool surface with no runtime configuration mutations, and stateless symbol search) avoids these failure modes by design.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - Sequential vs parallel pipeline method linking (PR #2678, opened 2026-10-17T21:35:26Z by DeusData): Fixed critical graph discrepancy between sequential (`CBM_WORKERS=1` or repos <= 50 files) and parallel indexing. In sequential mode, `DEFINES_METHOD` edges were linked during file registration rather than after all definitions exist. When `readdir` returned a file defining a method before the file declaring its parent type (e.g. Go multi-file packages or C++ out-of-line `.cpp` before `.h`), the parent definition was missing, causing silent drops of `DEFINES_METHOD`, `IMPLEMENTS`, and `OVERRIDE` edges (lost 236 `DEFINES_METHOD`, 22 `IMPLEMENTS`, 11 `OVERRIDE` on helm/helm). Fixed by deferring edge linking to a post-Phase 1 pass.
+  - Architectural contrast: trace-mcp uses two-phase indexing where symbol definitions and AST declarations are indexed into SQLite, and references/type relationships are resolved workspace-wide using `oxc-resolver` across the complete indexed repository manifest. Edge relationships never depend on directory walk order or worker count.
+  - DevOps/deployment expansion (PR #2677, opened 2026-10-17T19:14:50Z by DeusData): Added rendering for Helm images, default-valued image markers, CRDs and werf charts.
+  - Test impact optimization (PR #2676, merged 2026-10-17T21:56:50Z): Tightened PR test selection harness.
+- jgravelle/jcodemunch-mcp:
+  - Unsolicited config file generation in license lookup (PR #1138, opened 2026-10-17T21:15:15Z by jgravelle; ledger L-215): Fixed flaw where `install_pack.resolve_effective_license_key` called `load_config(create_missing=True)` before pack installations lacking `--license`. This unexpectedly generated a bare `config.jsonc` file on disk. Lacking a `tool_surface` key, this auto-generated file inadvertently locked first-time users into the bloated 91-tool `full` surface instead of the default lean surface, polluting Claude Code's prompt with unneeded tools.
+  - Architectural contrast: trace-mcp has zero global configuration side-effects on first run or on server invocation. Its MCP surface is intentionally lean and predictable (compact core tools like `get_symbol`, `search`, `get_task_context`, `get_outline`), never writes unsolicited configuration files or secretly toggles agent tool surface settings, and requires zero license checks or pack management.
+- abhigyanpatwari/GitNexus:
+  - Rename preview plan token binding (PR #3617, merged 2026-10-17T18:38:01Z by magyargergo): Introduced an opaque `plan_token` to bind rename preview to rename apply. Prevents `apply` from computing a divergent edit set when files on disk change between preview and execution.
+  - Directory symlink indexing convergence (PR #3616, merged 2026-10-17T18:37:46Z): Resolved infinite loops/non-convergence caused by directory symlinks lacking hashes.
+  - OpenCode integration (PR #3619, opened 2026-10-17T12:05:16Z by rgb-vgx): Shipping hooks as an auto-loaded global plugin for full OpenCode support.
+
+**Competitor pulse (as of 2026-10-18 morning pass):**
+- nikolai-vysotskyi/trace-mcp: 194★ (=), 24 forks (=)
+- yamadashy/repomix: 28,877★ (+1), 1,639 forks (+9)
+- oraios/serena: 30,347★ (+3), 2,164 forks (+16)
+- DeusData/codebase-memory-mcp: 46,774★ (+17), 3,859 forks (+2)
+- tirth8205/code-review-graph: 32,222★ (+3), 3,012 forks (+15)
+- colbymchenry/codegraph: 74,333★ (+4), 4,806 forks (=)
+- abhigyanpatwari/GitNexus: 47,926★ (+1), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,780★ (=), 376 forks (=)
+- continuedev/continue: 36,235★ (+1), 5,482 forks (-1)
+- Aider-AI/aider: 49,599★ (+5), 5,068 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
