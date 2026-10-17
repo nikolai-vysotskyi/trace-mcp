@@ -353,3 +353,18 @@ at 889–947 MB RSS and 342–348 MB heap used, versus the 475 MB target. These
 samples were between the periodic reindexes, not during them. `/health`
 returned HTTP 200 in 0.6 ms when probed outside a stall. TRA-2061 continues
 to own memory attribution; these data do not identify retained objects.
+
+---
+
+## 2026-10-18 — idle RSS remains high on v3.37.8
+
+Read-only observation of the installed v3.37.8 daemon (PID 19856). Four
+consecutive one-minute vitals at 2026-10-17 21:55:58–21:58:58 UTC reported
+`projects_loaded: 3`, `projects_indexing: 0`, and RSS 903–913 MB (heap used
+389–399 MB). That is at least 428 MB above the `250 + 75 × 3 = 475 MB` idle
+target. The next vitals sample at 21:59:59 had `projects_indexing: 1`, so it
+is excluded from the idle window. The daemon was reachable at `/health` during
+this run; no restart or configuration change was made. This confirms that the
+field ceiling is still unmet after the v3.37.8 release, without identifying
+the retained objects. TRA-2061 and TRA-2459 continue to own attribution and
+remediation.
