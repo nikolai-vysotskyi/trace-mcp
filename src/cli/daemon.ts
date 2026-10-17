@@ -36,6 +36,7 @@ import {
   renderHookStats,
   renderSessionFallbacks,
 } from './daemon-stats.js';
+import { findProcessDaemonLog } from './daemon-log-path.js';
 
 const PLIST_LABEL = 'com.trace-mcp.server';
 
@@ -266,11 +267,34 @@ daemonCommand
   .description('Tail the daemon log file')
   .option('-n, --lines <n>', 'Number of lines to show', '50')
   .option('-f, --follow', 'Follow log output')
-  .action((opts: { lines: string; follow?: boolean }) => {
-    const logPath = DAEMON_LOG_PATH;
+  .option('-p, --port <port>', 'Daemon port to check', String(DEFAULT_DAEMON_PORT))
+  .option('--local', 'Read the current profile log even if another daemon is running')
+  .action(async (opts: { lines: string; follow?: boolean; port: string; local?: boolean }) => {
+    const port = parseInt(opts.port, 10);
+    const health = opts.local ? null : await getDaemonHealth(port);
+    let logPath = DAEMON_LOG_PATH;
+    if (health) {
+      const daemonLog = health.pid == null ? null : findProcessDaemonLog(health.pid);
+      if (!daemonLog) {
+        console.error(
+          `Daemon is running on port ${port}, but its log path could not be determined` +
+            `${health.pid == null ? '' : ` (PID ${health.pid})`}.`,
+        );
+        console.error(`Current profile log: ${DAEMON_LOG_PATH} (not shown).`);
+        console.error('Use --local to read that file explicitly.');
+        process.exitCode = 1;
+        return;
+      }
+      logPath = daemonLog;
+      if (logPath !== DAEMON_LOG_PATH) {
+        console.error(`Running daemon uses a different profile. Reading ${logPath}`);
+        console.error(`Current profile log: ${DAEMON_LOG_PATH}`);
+      }
+    }
     if (!fs.existsSync(logPath)) {
       console.log(`No log file found at ${logPath}`);
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
     const args = ['-n', opts.lines];
