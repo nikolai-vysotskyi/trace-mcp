@@ -212,7 +212,7 @@ import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFilesUnderHome } from './utils/atomic-write.js';
 import { sweepOrphanDbSidecars } from './utils/db-family.js';
-import { EventLoopLagMonitor } from './utils/event-loop.js';
+import { EventLoopLagMonitor, yieldToEventLoopFair } from './utils/event-loop.js';
 import { StallWatchdog } from './utils/stall-watchdog.js';
 import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
@@ -4394,8 +4394,13 @@ program
           startupComplete = true;
         },
       });
+      // TRA-2442: Defer registered-project loading to the next macrotask turn
+      // so httpServer finishes binding, accepts incoming connections, and answers
+      // /health (status: "starting", HTTP 200) without event-loop starvation during
+      // cold start.
       void (async () => {
         try {
+          await yieldToEventLoopFair();
           await projectManager.loadAllRegistered();
         } catch (err) {
           logger.error({ err }, 'loadAllRegistered failed during cold-start');

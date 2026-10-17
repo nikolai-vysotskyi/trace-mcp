@@ -705,6 +705,7 @@ export class IndexingPipeline {
         const fast = await this.tryIncrementalDiscovery(start, opts.signal);
         if (fast) return fast;
       }
+      await yieldToEventLoopFair();
       const collected = await this.collectFiles();
       // TRA-1017: bail before touching the index when a stop arrived during
       // the walk — reconcileScope below deletes rows, so aborting after it
@@ -728,6 +729,7 @@ export class IndexingPipeline {
       // the intended outcome here, not the parser regression `checkShrink`
       // hunts for. Repairing an index that was 93% stale would otherwise raise
       // a shrink warning on the very run that fixed it.
+      await yieldToEventLoopFair();
       await this.reconcileScope(filePaths, collected.truncated);
       const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       // Bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for genuine
