@@ -31,6 +31,7 @@ import { BackgroundLspEnricher } from '../lsp/background-enricher.js';
 import { getReindexStats } from './reindex-stats.js';
 import {
   clearProjectStopping,
+  isProjectStopping,
   markProjectStopping,
   REINDEX_DRAIN_TIMEOUT_MS,
   waitForReindexDrain,
@@ -256,6 +257,13 @@ export interface ManagedProject {
    * directory cleanup, and the daemon-wide forced exit remains the backstop.
    */
   initialIndexPromise?: Promise<void>;
+  /**
+   * TRA-2438: count of watcher reindex batches aborted during teardown /
+   * shutdown. Aggregated so an in-flight queue of N aborted batches emits
+   * exactly one summary line instead of 2N L40 warnings.
+   */
+  abortedWatcherBatches?: number;
+  abortedWatcherFiles?: number;
 }
 
 /**
@@ -1035,18 +1043,28 @@ export class ProjectManager {
             const batchAborted =
               watchErr !== undefined && watchErr !== null && watchErr instanceof IndexAbortedError;
             if (batchAborted) {
-              logger.warn(
-                {
-                  event: 'reindex-file',
-                  project: projectRoot,
-                  pathSource: 'watcher',
-                  fileCount: toIndex.length,
-                  indexed: 0,
-                  elapsedMs,
-                  err: String(watchErr),
-                },
-                'reindex-file batch aborted (non-fatal — root stopped or vanished mid-batch)',
-              );
+              // TRA-2438: during project stop / shutdown, do not emit one L40 line
+              // per aborted batch (field case: 582 batches → 1164 L40 lines). Aggregate
+              // aborted batches on the managed project and log a single summary upon drain;
+              // mid-flight aborts when not stopping still log the single warn summary.
+              const isStopping = isProjectStopping(projectRoot);
+              if (isStopping) {
+                managed.abortedWatcherBatches = (managed.abortedWatcherBatches ?? 0) + 1;
+                managed.abortedWatcherFiles = (managed.abortedWatcherFiles ?? 0) + toIndex.length;
+              } else {
+                logger.warn(
+                  {
+                    event: 'reindex-file',
+                    project: projectRoot,
+                    pathSource: 'watcher',
+                    fileCount: toIndex.length,
+                    indexed: 0,
+                    elapsedMs,
+                    err: String(watchErr),
+                  },
+                  'reindex-file batch aborted (non-fatal — root stopped or vanished mid-batch)',
+                );
+              }
             }
             for (const p of toIndex) {
               const relPosix = toRel(p);
@@ -1792,6 +1810,20 @@ export class ProjectManager {
           'stopProject: index/watcher drain still running after abort — continuing teardown without it',
         );
       }
+    }
+    // TRA-2438: aggregated summary of all watcher batches aborted during teardown.
+    // Replaces N per-batch warn lines with a single L40 summary line.
+    if (managed.abortedWatcherBatches && managed.abortedWatcherBatches > 0) {
+      logger.warn(
+        {
+          event: 'reindex-file',
+          project: root,
+          pathSource: 'watcher',
+          abortedBatches: managed.abortedWatcherBatches,
+          fileCount: managed.abortedWatcherFiles ?? 0,
+        },
+        'reindex-file watcher queue aborted on shutdown (non-fatal — root stopped)',
+      );
     }
     // A drained handler ends by re-arming debouncedSummarize/debouncedEmbed and
     // scheduling LSP enrichment (see the onChanges tail in addProject), and

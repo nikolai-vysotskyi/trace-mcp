@@ -492,7 +492,10 @@ export class FileWatcher {
                 await onChanges(paths);
               } catch (e) {
                 if (e instanceof IndexAbortedError) {
-                  logger.warn({ error: e }, 'File change handler aborted');
+                  // TRA-2438: debug level, not warn — project-manager already logs
+                  // reindex telemetry for the batch (or aggregates it on shutdown);
+                  // logging warn here duplicated every abort into two L40 lines.
+                  logger.debug({ error: e }, 'File change handler aborted');
                   return;
                 }
                 logger.error({ error: e }, 'File change handler failed');
