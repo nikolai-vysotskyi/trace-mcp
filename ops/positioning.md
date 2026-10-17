@@ -48,8 +48,8 @@ agent's context budget end to end.
 
 **Neither, as stated.** (a) understates what ships. (b) overstates what anyone
 can do — see the boundary below — and would be the same class of claim TRA-880
-already cost us. The answer is a third thing, and it is not new: it is the line
-already sitting above the homepage headline.
+already cost us. The answer is a third thing, and it is not new: it was the line
+that sat above the homepage headline when this position was written.
 
 ## The position
 
@@ -83,9 +83,10 @@ the public copy ever has to choose between the two, the *move* is the claim and
 "indexes" is the illustration — do not let the illustration narrow the claim back
 to the graph, which is how the surfaces got here in the first place.
 
-The site's own eyebrow already says exactly this: **Recomputation → Reuse**. The
-repositioning is not inventing a category. It is promoting a line that has been
-on the page all along over a headline that describes one of its five instances.
+The site's former eyebrow said exactly this: **Recomputation → Reuse**. The
+repositioning did not invent a category. The compact homepage hero later dropped
+the eyebrow and, after Nikolai rejected two abstract text-led versions in
+TRA-2265, made the code graph the concrete entry point into the broader product.
 
 ### The finding that matters more than the category noun
 
@@ -252,10 +253,12 @@ is the whole answer to TRA-906's question 3.
   as an information-architecture one: a user who installs us as "an MCP server"
   never learns half of what they installed.
 
-**Site IA:** hero carries the sentence; two second-level entries under it, one
-per door. Two pages, not four feature pages — the mechanisms are instances of
-one claim and splitting them per-mechanism re-creates the "two products in one
-binary" reading this pass exists to avoid.
+**Site IA:** the hero now names the code graph as the entry point; the canonical
+position sentence stays in the README, generated banner and site metadata. Two
+second-level entries below the hero explain the tool and init doors. Two pages,
+not four feature pages — the mechanisms are instances of one claim and splitting
+them per-mechanism re-creates the "two products in one binary" reading this pass
+exists to avoid.
 
 **`server.json` — do not rewrite it to the new sentence.** Its `description` is
 now the storefront for every downstream registry (mcp.so, smithery, goose,
@@ -318,7 +321,7 @@ ordinary issue, not part of this pass. Ordered by how much a reader sees it.
 
 | Surface | Change | Note |
 |---|---|---|
-| `docs/index.html` hero + metrics | **Updated after Nikolai's TRA-2265 feedback.** Short H1, verbatim position sentence as the one supporting line, then installer and app screenshot; benchmark figure, quality comparison and boundary are together below the screenshot | The long sentence remains readable and crawlable without occupying the display headline. Category term stays on the `<title>` and the Product View heading |
+| `docs/index.html` hero + metrics | **Revised with SEO Agent before the third TRA-2265 PR.** `Code graph for coding agents` is the sole H1, followed by installer and app screenshot; benchmark figure, quality comparison and boundary remain together below the screenshot | The concrete graph is the entry point, not an exhaustive product label. The broader position remains in README, banner and site metadata. No abstract second sentence in the first screen |
 | `README.md` first screen + banner PNGs | **Done (TRA-918).** Same sentence, verbatim, plus the boundary line | Banner regenerated from `scripts/gen-readme-banner.mjs` — the tagline lives in that script, not in the PNG |
 | `docs/_config.yml` `description` | **Done (TRA-918).** Sentence first, then the category term; no hand-typed number | Feeds meta description on every page, so it is cut to 155 characters |
 | Site IA | Two second-level entries, one per door; door 2 has no page today | The real gap; see Doors |
@@ -342,13 +345,17 @@ because there was no category phrase on the page to match instead.
 
 So the two requirements are real and they are not the same requirement:
 
-- The **hero sentence** answers "what is this", to a reader who is already here.
+- The **hero H1** now answers "what is this" with a concrete entry point, to a
+  reader who is already here. The broader position remains in other surfaces.
 - The **`<title>`, meta description and section headings** answer "is this the
   kind of thing I typed", to a reader who is not here yet.
 
-The resolution, and the precedent to follow next time they collide: **the title
-carries the measured category term, the hero carries the position.** The home
-page title is now `trace-mcp — code graph MCP server for AI coding agents`.
+The original resolution was **the title carries the measured category term, the
+hero carries the position.** Nikolai's TRA-2265 feedback showed that this left
+the visible first screen abstract and hard to parse. The current compact hero
+also names the graph in its H1, while the title remains
+`trace-mcp — code graph MCP server for AI coding agents`. That is a page-specific
+entry door, not a reversal of the broader product position.
 
 That is the same carve-out this file already makes for `server.json` under
 Doors, for the same reason — a channel that can only deliver door 1 gets
