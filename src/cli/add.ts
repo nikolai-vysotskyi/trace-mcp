@@ -357,9 +357,9 @@ export const addCommand = new Command('add')
         return;
       }
 
-      // Guard: registering this root would create a new container/nested overlap
-      // with an already-registered project — same accidental double-indexing
-      // `doctor` detects after the fact (TRA-24), caught here before it happens.
+      // Guard: an overlapping registration is a meaningful routing/coverage
+      // choice even though registered descendants are excluded from the
+      // ancestor's future index and watcher passes.
       if (!opts.allowOverlap) {
         const overlap = findOverlapForNewRoot(projectRoot);
         if (overlap) {
@@ -375,7 +375,7 @@ export const addCommand = new Command('add')
                 : `This would register a container over already-registered ` +
                   `"${overlapping.name}" (${shortPath(overlapping.root)}).`;
             p.note(
-              `${detail}\nOverlapping roots index and watch the same files twice — every change costs double CPU.`,
+              `${detail}\nRegistered descendants are excluded from ancestor indexing and watching. Existing ancestor index rows may need a forced reindex to remove old duplicates.`,
               'Overlapping roots',
             );
             p.outro(
