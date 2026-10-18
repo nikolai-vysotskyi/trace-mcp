@@ -1028,9 +1028,10 @@ function printRegistryReport(r: RegistryHealthReport): void {
   }
   if (r.overlaps.length > 0) {
     console.log(
-      '  Overlapping roots index and watch the same files twice — every change costs ' +
-        'double CPU. Keep the per-project registrations and remove the container: ' +
-        '`trace-mcp remove <container-path>`.',
+      '  Registered descendants are excluded from ancestor indexing and watching. ' +
+        'Keep the container if it covers other nested repos. If the ancestor was indexed ' +
+        'before the descendants were registered, run `trace-mcp index <container-path> --force` ' +
+        'to remove stale duplicate rows.',
     );
   }
   for (const nr of r.unregisteredNestedRepos) {
