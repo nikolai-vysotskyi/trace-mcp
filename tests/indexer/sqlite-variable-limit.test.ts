@@ -79,7 +79,7 @@ describe('SQLite variable / V8 spread limits (TRA-1005)', () => {
     expect(() => resolveTypeScriptCallEdges(stateFor(store), scopeWith([fileId]))).not.toThrow();
   });
 
-  it('resolveMemberOfEdges survives a 35 000-file scope and still links members', () => {
+  it('resolveMemberOfEdges survives a 35 000-file scope and still links members', async () => {
     const store = testStore();
     const memberOfId = edgeTypeId(store, 'member_of');
 
@@ -89,7 +89,7 @@ describe('SQLite variable / V8 spread limits (TRA-1005)', () => {
       { name: 'm', kind: 'method', symbolId: 't1005::m#method', parentSymbolId: 't1005::C#class' },
     ]);
 
-    expect(() => resolveMemberOfEdges(stateFor(store), scopeWith([fileId]))).not.toThrow();
+    await expect(resolveMemberOfEdges(stateFor(store), scopeWith([fileId]))).resolves.not.toThrow();
 
     const n = (
       store.db

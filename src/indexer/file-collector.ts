@@ -8,6 +8,7 @@ import { isHotChurnPath } from '../utils/hot-churn.js';
 import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { TraceignoreMatcher } from '../utils/traceignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 /** Inputs `collectFiles` needs, extracted out of `IndexingPipeline` so the
  *  glob+filter logic can be unit tested and read without the surrounding
@@ -90,15 +91,24 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
   // tree, so only re-anchor the directory-rooted ones.
   if (workspaces.length > 0 && rootedPatterns.length > 0) {
     const wsPatterns = workspaces.flatMap((ws) => rootedPatterns.map((p) => `${ws.path}/${p}`));
-    const wsEntries = await fg(wsPatterns, {
-      cwd: rootPath,
-      ignore,
-      dot: false,
-      absolute: false,
-      onlyFiles: true,
-      suppressErrors: true,
-      followSymbolicLinks: config.follow_symlinks,
-    });
+    // TRA-2524: On 100+ workspaces, thousands of glob patterns in a single batch
+    // hold the event loop for seconds. Chunk patterns into slices of 128 with fair yields.
+    const CHUNK_PATTERNS = 128;
+    const wsEntries: string[] = [];
+    for (let i = 0; i < wsPatterns.length; i += CHUNK_PATTERNS) {
+      if (i > 0) await yieldToEventLoopFair();
+      const chunk = wsPatterns.slice(i, i + CHUNK_PATTERNS);
+      const batch = await fg(chunk, {
+        cwd: rootPath,
+        ignore,
+        dot: false,
+        absolute: false,
+        onlyFiles: true,
+        suppressErrors: true,
+        followSymbolicLinks: config.follow_symlinks,
+      });
+      wsEntries.push(...batch);
+    }
     if (wsEntries.length > 0) {
       const merged = new Set(entries);
       for (const e of wsEntries) merged.add(e);
@@ -142,6 +152,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<Collect
 
       for await (const entry of deepStream) {
         deepFound++;
+        if (deepFound % 256 === 0) await yieldToEventLoopFair();
         if (deepEntries.length < maxFiles) {
           deepEntries.push(entry as string);
         } else {

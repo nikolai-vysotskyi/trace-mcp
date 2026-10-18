@@ -1,11 +1,14 @@
-/** Pass 2c: Resolve TypeScript extends/implements into graph edges. */
-
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
+import { yieldToEventLoopFair } from '../../utils/event-loop.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
 
-export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolveTypeScriptHeritageEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
   const changedFileIds = scope
     ? Array.from(scope.changedFileIds)
@@ -25,6 +28,7 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: Cha
     const ids = Array.from(fileIds);
     const CHUNK = 500;
     for (let i = 0; i < ids.length; i += CHUNK) {
+      if (i > 0) await yieldToEventLoopFair();
       const chunk = ids.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
       const rows = store.db
@@ -66,6 +70,7 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: Cha
     const CHUNK = 500;
     const nameArr = Array.from(neededNames);
     for (let i = 0; i < nameArr.length; i += CHUNK) {
+      if (i > 0) await yieldToEventLoopFair();
       const chunk = nameArr.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
       const rows = store.db
@@ -94,6 +99,7 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: Cha
   const symbolNodeMap = new Map<number, number>();
   const CHUNK = 500;
   for (let i = 0; i < allNeededIds.length; i += CHUNK) {
+    if (i > 0) await yieldToEventLoopFair();
     for (const [k, v] of store.getNodeIdsBatch('symbol', allNeededIds.slice(i, i + CHUNK))) {
       symbolNodeMap.set(k, v);
     }
@@ -113,80 +119,85 @@ export function resolveTypeScriptHeritageEdges(state: PipelineState, scope?: Cha
      VALUES (?, ?, ?, 1, NULL, 0)`,
   );
 
-  store.db.transaction(() => {
-    for (const sym of symbolsWithHeritage) {
-      let meta: Record<string, unknown> = {};
-      try {
-        if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      const sourceNodeId = symbolNodeMap.get(sym.id);
-      if (sourceNodeId == null) continue;
-
-      const sourceWs = fileWorkspaceMap.get(sym.file_id) ?? null;
-
-      const emitPhantomEdge = (
-        targetName: string,
-        edgeTypeId: number,
-        phantomKind: 'class' | 'interface',
-      ): void => {
-        const before = phantoms.peek(targetName, sourceWs);
-        const phantom = phantoms.ensure(targetName, sourceWs, phantomKind);
-        if (!before) phantomNodesCreated++;
-        if (phantom.node_id === sourceNodeId) return;
-        insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId);
-        created++;
-      };
-
-      // Strict workspace isolation: a candidate only matches if it shares
-      // the source's workspace. Falling back to phantom externals keeps the
-      // graph dense without smearing edges across independent projects.
-      const pickSameWs = (
-        candidates: { id: number; kind: string; workspace: string | null }[] | undefined,
-      ) => {
-        if (!candidates || candidates.length === 0) return null;
-        return candidates.filter((c) => c.workspace === sourceWs);
-      };
-
-      const ext = meta.extends;
-      const extNames = Array.isArray(ext)
-        ? (ext as string[])
-        : typeof ext === 'string'
-          ? [ext]
-          : [];
-      for (const targetName of extNames) {
-        if (typeof targetName !== 'string' || !targetName) continue;
-        const sameWsTargets = pickSameWs(nameIndex.get(targetName));
-        if (sameWsTargets && sameWsTargets.length > 0) {
-          const targetNodeId = symbolNodeMap.get(sameWsTargets[0].id);
-          if (targetNodeId == null) continue;
-          insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
-          created++;
+  await commitInChunks(
+    store.db,
+    symbolsWithHeritage,
+    (chunk) => {
+      for (const sym of chunk) {
+        let meta: Record<string, unknown> = {};
+        try {
+          if (sym.metadata) meta = JSON.parse(sym.metadata) as Record<string, unknown>;
+        } catch {
           continue;
         }
-        // Phantom fallback — external class (React.Component, Error, EventEmitter, etc.)
-        emitPhantomEdge(targetName, tsExtendsType.id, 'class');
-      }
+        const sourceNodeId = symbolNodeMap.get(sym.id);
+        if (sourceNodeId == null) continue;
 
-      const impl = meta.implements;
-      if (Array.isArray(impl)) {
-        for (const targetName of impl as string[]) {
+        const sourceWs = fileWorkspaceMap.get(sym.file_id) ?? null;
+
+        const emitPhantomEdge = (
+          targetName: string,
+          edgeTypeId: number,
+          phantomKind: 'class' | 'interface',
+        ): void => {
+          const before = phantoms.peek(targetName, sourceWs);
+          const phantom = phantoms.ensure(targetName, sourceWs, phantomKind);
+          if (!before) phantomNodesCreated++;
+          if (phantom.node_id === sourceNodeId) return;
+          insertStmt.run(sourceNodeId, phantom.node_id, edgeTypeId);
+          created++;
+        };
+
+        // Strict workspace isolation: a candidate only matches if it shares
+        // the source's workspace. Falling back to phantom externals keeps the
+        // graph dense without smearing edges across independent projects.
+        const pickSameWs = (
+          candidates: { id: number; kind: string; workspace: string | null }[] | undefined,
+        ) => {
+          if (!candidates || candidates.length === 0) return null;
+          return candidates.filter((c) => c.workspace === sourceWs);
+        };
+
+        const ext = meta.extends;
+        const extNames = Array.isArray(ext)
+          ? (ext as string[])
+          : typeof ext === 'string'
+            ? [ext]
+            : [];
+        for (const targetName of extNames) {
           if (typeof targetName !== 'string' || !targetName) continue;
           const sameWsTargets = pickSameWs(nameIndex.get(targetName));
           if (sameWsTargets && sameWsTargets.length > 0) {
-            const target = sameWsTargets.find((t) => t.kind === 'interface') ?? sameWsTargets[0];
-            const targetNodeId = symbolNodeMap.get(target.id);
+            const targetNodeId = symbolNodeMap.get(sameWsTargets[0].id);
             if (targetNodeId == null) continue;
-            insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
+            insertStmt.run(sourceNodeId, targetNodeId, tsExtendsType.id);
             created++;
             continue;
           }
-          emitPhantomEdge(targetName, tsImplementsType.id, 'interface');
+          // Phantom fallback — external class (React.Component, Error, EventEmitter, etc.)
+          emitPhantomEdge(targetName, tsExtendsType.id, 'class');
+        }
+
+        const impl = meta.implements;
+        if (Array.isArray(impl)) {
+          for (const targetName of impl as string[]) {
+            if (typeof targetName !== 'string' || !targetName) continue;
+            const sameWsTargets = pickSameWs(nameIndex.get(targetName));
+            if (sameWsTargets && sameWsTargets.length > 0) {
+              const target = sameWsTargets.find((t) => t.kind === 'interface') ?? sameWsTargets[0];
+              const targetNodeId = symbolNodeMap.get(target.id);
+              if (targetNodeId == null) continue;
+              insertStmt.run(sourceNodeId, targetNodeId, tsImplementsType.id);
+              created++;
+              continue;
+            }
+            emitPhantomEdge(targetName, tsImplementsType.id, 'interface');
+          }
         }
       }
-    }
-  })();
+    },
+    RESOLVER_WRITE_CHUNK,
+  );
 
   if (created > 0) {
     logger.info({ edges: created, phantomNodesCreated }, 'TypeScript heritage edges resolved');

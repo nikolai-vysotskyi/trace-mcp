@@ -42,6 +42,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -409,7 +410,7 @@ export class TailwindPlugin implements FrameworkPlugin {
 
   // ── resolveEdges ───────────────────────────────────────────
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
@@ -427,7 +428,8 @@ export class TailwindPlugin implements FrameworkPlugin {
       ? path.relative(ctx.rootPath, this.configFilePath)
       : 'tailwind.config.js';
 
-    for (const file of targetFiles) {
+    for (const [index, file] of targetFiles.entries()) {
+      if (index > 0 && index % 64 === 0) await yieldToEventLoopFair();
       // TRA-1602: language gate before the read — only CSS-like and
       // template-like files can yield a cssSource below, so reading anything
       // else is pure waste (this loop runs over the whole corpus on every

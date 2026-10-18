@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { FileRow } from '../db/types.js';
 import { logger } from '../logger.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 import { hashContent } from '../utils/hasher.js';
 
 /** Minimal Store surface `detectRenames` needs — kept narrow so this module
@@ -55,6 +56,11 @@ export function detectRenames(
   const hasNewFiles = relPaths.some((p) => !existingFiles.has(p));
   if (!hasNewFiles) return { renamed: 0, pairs: [] };
 
+  // Fast path: if the store has no files at all (initial indexing),
+  // there are no existing rows to rename.
+  const allStored = store.getAllFiles();
+  if (allStored.length === 0) return { renamed: 0, pairs: [] };
+
   // Read and hash only new candidate paths on disk first (TRA-2380).
   // Without this, every incremental creation (e.g. 1 new file in a 15k-file repo)
   // ran fs.existsSync across every non-batch file in the database synchronously,
@@ -80,7 +86,7 @@ export function detectRenames(
 
   // Filter DB rows by hash match FIRST before any fs.existsSync stat calls.
   const onDiskSet = new Set(relPaths);
-  const orphans = store.getAllFiles().filter((f) => {
+  const orphans = allStored.filter((f) => {
     if (!f.content_hash || !targetHashes.has(f.content_hash)) return false;
     if (onDiskSet.has(f.path)) return false;
     // Defensive: only consider rows whose old path actually no longer exists
@@ -109,6 +115,81 @@ export function detectRenames(
     // Carry the existing row over to the new path. All FK references
     // (symbols, edges, nodes) keep their connection because the row id
     // does not change.
+    store.updateFilePath(orphan.id, relPath);
+    existingFiles.set(relPath, { ...orphan, path: relPath });
+    renamed++;
+    pairs.push({ from: orphan.path, to: relPath });
+    logger.debug(
+      { from: orphan.path, to: relPath, hash: hash.slice(0, 8) },
+      'Detected rename — reused existing symbols',
+    );
+  }
+  return { renamed, pairs };
+}
+
+/**
+ * TRA-2524: Asynchronous variant of `detectRenames` that yields to the
+ * event loop periodically while reading and hashing new candidate files.
+ */
+export async function detectRenamesAsync(
+  store: RenameDetectorStore,
+  rootPath: string,
+  relPaths: string[],
+  existingFiles: Map<string, FileRow>,
+): Promise<DetectRenamesResult> {
+  const hasNewFiles = relPaths.some((p) => !existingFiles.has(p));
+  if (!hasNewFiles) return { renamed: 0, pairs: [] };
+
+  const allStored = store.getAllFiles();
+  if (allStored.length === 0) return { renamed: 0, pairs: [] };
+
+  const newCandidates: Array<{ relPath: string; hash: string }> = [];
+  const targetHashes = new Set<string>();
+  let hashedCount = 0;
+  for (const relPath of relPaths) {
+    if (existingFiles.has(relPath)) continue;
+    if (hashedCount > 0 && hashedCount % 32 === 0) {
+      await yieldToEventLoopFair();
+    }
+    const abs = path.resolve(rootPath, relPath);
+    let buf: Buffer;
+    try {
+      buf = fs.readFileSync(abs);
+    } catch {
+      continue;
+    }
+    hashedCount++;
+    const hash = hashContent(buf);
+    newCandidates.push({ relPath, hash });
+    targetHashes.add(hash);
+  }
+  if (newCandidates.length === 0 || targetHashes.size === 0) {
+    return { renamed: 0, pairs: [] };
+  }
+
+  const onDiskSet = new Set(relPaths);
+  const orphans = allStored.filter((f) => {
+    if (!f.content_hash || !targetHashes.has(f.content_hash)) return false;
+    if (onDiskSet.has(f.path)) return false;
+    const abs = path.resolve(rootPath, f.path);
+    return !fs.existsSync(abs);
+  });
+  if (orphans.length === 0) return { renamed: 0, pairs: [] };
+
+  const orphansByHash = new Map<string, FileRow[]>();
+  for (const o of orphans) {
+    const arr = orphansByHash.get(o.content_hash!) ?? [];
+    arr.push(o);
+    orphansByHash.set(o.content_hash!, arr);
+  }
+
+  let renamed = 0;
+  const pairs: DetectedRename[] = [];
+  for (const { relPath, hash } of newCandidates) {
+    const candidates = orphansByHash.get(hash);
+    if (!candidates || candidates.length === 0) continue;
+
+    const orphan = candidates.shift()!;
     store.updateFilePath(orphan.id, relPath);
     existingFiles.set(relPath, { ...orphan, path: relPath });
     renamed++;
