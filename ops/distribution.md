@@ -5414,3 +5414,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Pass 2026-10-19 (TRA-2525): mention sweep clean, ecosystem findings (Ariadne, codegraph-go, Vex, Patchloom), competitor triage (DeusData Claude Code tool deferral PR #2698 & Python C3 MRO PR #2696, GitNexus routes PR #3629, jcodemunch CI tokens PR #1143)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder budget spent).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- CRJFisher/ariadne: TypeScript/Node code intelligence engine and MCP server (`@ariadnejs/mcp`) using tree-sitter. Exposes entry-point discovery (`list_entrypoints`) and neighborhood traversal (`show_call_graph_neighborhood`), filtering framework-invoked routes and test functions. Supports 4 languages (JS, TS, Python, Rust).
+  - Architectural contrast: trace-mcp indexes true AST call-graph edges and module dependencies into a persistent SQLite database across 16 languages (vs 4 in Ariadne), provides an integrated Electron desktop UI, and persistent decision/state tracking (`decisions.db`, `state.db`) alongside AST navigation tools (`get_symbol`, `get_outline`, `get_task_context`, `trace blast`, `trace impact`).
+- isink17/codegraph: Go-based single-binary local code context engine and MCP server (29 tools) under FSL-1.1-MIT. Indexes source code into a persistent SQLite graph to serve symbol lookups, call graphs, impact analysis, and task context (`context_for_task`, `agentic_query`) across 12 languages.
+  - Architectural contrast: trace-mcp is fully permissive open-source (MIT), supports 16 languages, integrates with an Electron desktop application, executes via zero-daemon stdio, and separates static AST indexing from runtime memory/telemetry stores without embedding model dependencies.
+- tenatarika/vex: Rust-based hybrid structural and semantic code search CLI/MCP (32 commands) combining FST, BM25, and local HNSW vector index across 20 languages. Features persistent call graphs (`vex callers`, `vex callees`) and AST pattern matching (`vex pattern`).
+  - Architectural contrast: trace-mcp focuses on 100% offline static AST analysis with SQLite without the overhead, memory footprint, or Hugging Face model downloads required by local HNSW vector embeddings.
+- patchloom/patchloom: Rust single-binary structured file editor for AI agents (JSON/YAML/TOML, AST, multi-file batch/tx with undo, MCP server). Focuses on atomic write operations and syntax-preserving config mutations.
+  - Architectural contrast: Patchloom specializes in structured mutation/writing, whereas trace-mcp specializes in static read/navigation/token-reduction intelligence. They occupy complementary roles in an agent workspace.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - Claude Code MCP tool deferral upfront loading (PR #2698, opened 2026-10-18T21:46:17Z by Martin Vogel): Tackles Claude Code tool deferral where tools are omitted from upfront system prompt unless tagged. Adds `_meta["anthropic/alwaysLoad"]: true` to structural tools (`search_graph`, `trace_path`, `get_code_snippet`), keeping the remaining 14 tools deferred. Re-engineers server instructions (from 309 to 999 chars) to declare which structural questions the graph answers vs where grep fits better.
+  - Python C3 linearization for super() calls (PR #2696, opened 2026-10-18T21:17:28Z by Martin Vogel): Resolves `super()` calls through Python's C3 method resolution order instead of walking inheritance bases sequentially, preventing incorrect shared-base binding on mixin hierarchies (e.g. in scikit-learn, sqlalchemy, home-assistant).
+- abhigyanpatwari/GitNexus:
+  - Route linking via Express helper parameters (PR #3629, opened 2026-10-18T17:21:20Z by abhigyanpatwari): Follows router registrations passed through helper parameters.
+  - Base-URL fetch wrapper linking for route extraction (PR #3628, opened 2026-10-18T17:20:13Z by abhigyanpatwari): Traces AST wrapper chains (`fetchWithTimeout` -> `resilientFetch` -> `fetch`) and strips `${base}` templates to bind client calls to server endpoints.
+  - Architectural contrast: trace-mcp provides deterministic AST code navigation, definition/reference lookup, and lexical scope analysis without ad-hoc heuristic HTTP route matching.
+- jgravelle/jcodemunch-mcp:
+  - GitHub App token scoping and rerun reason guard (PR #1143, opened 2026-10-18T18:00:23Z by jgravelle): Scopes GitHub App tokens per release job and validates rerun reasons against strict regex to prevent GITHUB_OUTPUT injection.
+  - Defect ledger L-218 and fast-path cache race (PR #1144).
+
+**Competitor pulse (as of 2026-10-19 02:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,896★ (+1), 1,677 forks (+12)
+- oraios/serena: 30,368★ (+3), 2,216 forks (+21)
+- DeusData/codebase-memory-mcp: 46,857★ (+15), 3,870 forks (+6)
+- tirth8205/code-review-graph: 32,245★ (+7), 3,043 forks (+10)
+- colbymchenry/codegraph: 74,386★ (+15), 4,808 forks (=)
+- abhigyanpatwari/GitNexus: 47,936★ (+4), 5,197 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,782★ (+1), 375 forks (-1)
+- continuedev/continue: 36,248★ (+5), 5,491 forks (+1)
+- Aider-AI/aider: 49,617★ (+3), 5,074 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
