@@ -5245,3 +5245,57 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+
+### Pass 2026-10-18 (TRA-2514): mention sweep clean, competitor triage (DeusData package-relative dot import resolution PR #2680, jcodemunch CLI deny_guard fail-closed hardening PR #1141, GitNexus LadybugDB WAL checkpoint accounting test PR #3624)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: UNKNOWN/CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- ashlrai/phantom-secrets: Local secret masking proxy and value-blind MCP server (v0.7.9, 18★, Rust 1.95) replacing real credentials with scoped `phm_` tokens for Claude Code, Cursor, Windsurf, and Codex. Complements the local privacy and token-boundary ecosystem alongside trace-mcp's redacted `get_env_vars` contract (TRA-1882/1884).
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - Python package-relative dot import path extraction & caller/callee resolution (PR #2680, opened 2026-10-18T04:12:16Z by Martin Vogel / DeusData): Fixed an extractor bug where package-relative from-imports with modules composed solely of dots (`from . import x`, `from .. import x`, `from . import x as y`) joined the module to the imported name with an extra separator (`..x` instead of `.x`), causing relative imports to misidentify as parent package bindings. The import resolver then missed the real binding and silently fell back to lexicographically earliest global name guessing, cross-binding thousands of unrelated functions across different integrations (e.g. 7,175 caller/callee pairs in Home Assistant binding webhook handlers to AccuWeather functions). Fixed by joining without an extra separator when the module already ends with `.`.
+  - Architectural contrast: trace-mcp resolves relative imports deterministically against the indexed repository file hierarchy and AST import nodes without synthetic dot-string concatenation heuristics or fallback global name guessing.
+- jgravelle/jcodemunch-mcp:
+  - CLI agent deny_guard fail-closed hardening against irreversible API actions (PR #1141, opened 2026-10-18T04:16:35Z by jgravelle / Claude Opus 5.5): Hardens the Claude Code shell guard against command-line evasion techniques that bypass PR merge/delete blocks, such as flag equality spellings (`gh api --method=PUT`), `-X=PUT`, quoted methods (`--method 'PUT'`), clustered flags (`-iXPUT`), GraphQL mutation queries loaded from files (`-F query=@file`), shell alias bypasses (`gh alias set m`), and implicit POSTs from parameter flags (`-f ref=...`). Additionally changed failure exit code from 1 to 2 because Claude Code treated non-zero exit code 1 as non-blocking and proceeded to execute blocked commands.
+  - Architectural contrast: trace-mcp avoids brittle command-line string-matching heuristics by exposing structured, read-only analysis tools (`search`, `get_symbol`, `get_outline`, `get_task_context`, `trace blast`, `trace impact`) and enforcing strict read/write boundaries with explicit multi-file confirmation semantics within the MCP protocol itself.
+- abhigyanpatwari/GitNexus:
+  - Native LadybugDB WAL checkpoint file handle leak and max DB size accounting guard (PR #3624, opened 2026-10-18T09:22:24Z by rgb-vgx): Adds an integration regression test guarding against engine-level memory leaks during repeated WAL checkpoints. In engine pin `0.18.3`, `ShadowFile::reset()` orphaned `FileHandle` instances on each checkpoint, leaking 4 MiB VMRegion frame groups against `max_db_size` until reaching memory ceilings (256 MiB / 2^38) during heavy embedding writeback passes and failing with transient "Maximum database size ... has been reached" errors.
+  - Architectural contrast: trace-mcp uses standard embedded SQLite in WAL mode with fixed page caches and bounded memory usage, eliminating native engine VMRegion handle leaks during large-scale incremental repository indexing.
+
+**Competitor pulse (as of 2026-10-18 pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,881★ (+1), 1,654 forks (+10)
+- oraios/serena: 30,351★ (-1), 2,188 forks (+18)
+- DeusData/codebase-memory-mcp: 46,807★ (+19), 3,862 forks (+2)
+- tirth8205/code-review-graph: 32,230★ (+5), 3,029 forks (+13)
+- colbymchenry/codegraph: 74,352★ (+10), 4,805 forks (-1)
+- abhigyanpatwari/GitNexus: 47,930★ (+1), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,779★ (=), 376 forks (=)
+- continuedev/continue: 36,240★ (+3), 5,487 forks (+3)
+- Aider-AI/aider: 49,606★ (+3), 5,070 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+
