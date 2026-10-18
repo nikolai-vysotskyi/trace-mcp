@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.8...v3.37.9) (2026-10-18)
+
+
+### Bug Fixes
+
+* **indexer:** prevent event-loop stalls during incremental postprocessing (TRA-2505) ([#1640](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1640)) ([d5929cd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5929cd2474e8f0bbe67a5a5b6fed503453786db))
+
+
+### Documentation
+
+* **ops:** morning pass 2026-10-18, mention sweep clean, competitor triage (TRA-2502) ([#1636](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1636)) ([f498395](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f498395db8ae0b9c516e7a5a70acdf12530e4b31))
+* record v3.37.8 daemon idle memory observation ([#1637](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1637)) ([169f899](https://github.com/nikolai-vysotskyi/trace-mcp/commit/169f899d9186398998f3a98a8fe56863036bfccf))
+
 ## [3.37.8](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.7...v3.37.8) (2026-10-17)
 
 
