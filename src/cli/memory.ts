@@ -577,7 +577,7 @@ memoryCommand
             );
           }
           console.log(
-            '\n  Dry-run only — re-run with `trace-mcp memory prune --apply` to delete.\n',
+            `\n  Dry-run only — re-run with \`trace-mcp memory prune${opts.expired ? ' --expired' : ''} --apply\` to delete.\n`,
           );
         } else {
           const result = store.pruneStale({

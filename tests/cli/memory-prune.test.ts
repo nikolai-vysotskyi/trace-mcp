@@ -74,6 +74,7 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
     const script = `
       const { memoryCommand } = await import('./src/cli/memory.ts');
       await memoryCommand.parseAsync(['prune', '--expired', '--json'], { from: 'user' });
+      await memoryCommand.parseAsync(['prune', '--expired'], { from: 'user' });
       await memoryCommand.parseAsync(['prune', '--expired', '--apply', '--json'], { from: 'user' });
     `;
     const output = execFileSync(
@@ -86,6 +87,7 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
       },
     );
     expect(output).toContain('"expiredDecisions": 1');
+    expect(output).toContain('memory prune --expired --apply');
     const check = new DecisionStore(dbPath);
     expect(check.getDecision(row.id)).toBeUndefined();
     check.close();
