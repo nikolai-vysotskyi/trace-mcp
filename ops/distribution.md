@@ -5354,3 +5354,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Pass 2026-10-18 (TRA-2518): mention sweep clean, ecosystem findings (Hivora, graphmaster, repomap, neat), competitor triage (GitNexus fetch-wrapper PR #3628, DeusData Rust generic impl PR #2685 & Python nested defs PR #2686, jcodemunch ledger PR #1144)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder budget spent).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- Enard52/Hivora: Open-source multi-agent orchestrator for Claude Code, Cursor, Copilot & Cline featuring symbol-level locking and git worktree isolation. Dependency detection (`packages/orchestrator/src/deps/dependents.ts`) uses synchronous recursive directory traversal (`walkCodeFiles`) and raw regex word-boundary scanning (`\b<symbol>\b`) across up to 2,000 files to infer dependent callers before locking.
+  - Architectural contrast: trace-mcp indexes true AST call-graph edges and module dependencies into SQLite via tree-sitter, providing instant, sub-millisecond call-path analysis (`trace blast`, `trace impact`, `get_symbol`) without regex false positives (variable names in comments/strings) or disk I/O thrashing.
+- pragmataW/graphmaster: Go-based local code graph engine serving 13 MCP tools (`callers`, `impact`, `find_symbol`, `search`, `inheritance`) over stdio with tree-sitter + SQLite. Implements token budgeting (`max_tokens`), edge confidence scoring (1-100), and a PreToolUse hook for Claude Code to steer Grep/Glob calls toward symbol queries.
+  - Architectural contrast: trace-mcp provides broader multi-language support (16 languages vs Go/TS/Python subset), an integrated Electron desktop UI, and persistent decision/state tracking (`decisions.db`, `state.db`) in addition to AST code navigation.
+- SylphxAI/repomap: Rust-based code mapping tool (unifying Spine, Locus, and CodeRAG) offering call trees, impact analysis, and hybrid search (BM25 + local embeddings downloaded from Hugging Face). Includes an opt-in Claude Code search-steering hook.
+  - Architectural contrast: trace-mcp operates with zero network dependencies or background model downloads (100% offline local static analysis via tree-sitter), eliminating model download overhead and Hugging Face API availability risks.
+- neat-technologies/neat: Graph engine fusing tree-sitter static analysis with OpenTelemetry runtime trace data, exposed over MCP (24 tools) and packaged as a Claude Code plugin with a `PreToolUse` search-nudge hook and web dashboard.
+  - Architectural contrast: trace-mcp provides lightweight, zero-daemon stdio execution tailored for resource-constrained local workflows without requiring OpenTelemetry collectors or external runtime telemetry infrastructure.
+
+**Competitor intelligence & architectural observations:**
+- abhigyanpatwari/GitNexus:
+  - Base-URL fetch wrapper linking for route extraction (PR #3628, opened 2026-10-18T17:20:13Z by abhigyanpatwari): Introduces AST walking for fetch wrapper chains (`fetchWithTimeout` -> `resilientFetch` -> `fetch`) and strips leading `${base}` templates to map frontend API calls to backend route definitions. Requires complex heuristic filters to prevent false positive bindings from string literals (`'Failed to fetch'`) or parameter sibling collisions (`/api/analyze/${id}`).
+  - Express router registration via helper parameters (PR #3629, opened 2026-10-18T17:21:20Z by abhigyanpatwari): Follows router registrations passed through helper parameters.
+  - Architectural contrast: trace-mcp focuses on semantic code intelligence, symbol definitions, references, import/export dependency graphs, and AST-level symbol outline/context (`get_symbol`, `get_outline`, `get_task_context`, `trace blast`, `trace impact`). It intentionally avoids brittle ad-hoc HTTP string-matching heuristics to simulate client-server RPCs.
+- DeusData/codebase-memory-mcp:
+  - Generic impl call scoping in Rust (PR #2685, opened 2026-10-18T15:26:04Z by Martin Vogel): Resolves issue #763 where calls inside methods of generic Rust impl blocks (`impl<T> Gen<T>`) kept type parameters in their caller qualified name (`Gen<T>.in_generic`), conflicting with the stripped definition qualified name (`Gen.in_generic`). Across 9 pinned Rust repositories (diesel, tokio, tauri, etc.), this mismatch had caused 22,287 method calls to collapse onto the root File node instead of the calling method node (−93% drop to 1,572 File-scoped calls upon stripping generic parameters).
+  - Lexical scoping and extraction for Python nested definitions (PR #2686, opened 2026-10-18T15:26:47Z by Martin Vogel): Extracts nested functions and classes (closures, app-factory routes, test helpers) with qualified names `<enclosing>.<name>` and resolves bare local calls lexically before global registry fallback. Previously, nested definitions were ignored, causing calls to collapse to File nodes and bare calls to erroneously bind to unrelated global definitions via loose name heuristics (`suffix_match`).
+  - Architectural contrast: trace-mcp's tree-sitter queries extract full lexical symbol hierarchies natively across all supported languages, correctly retaining parent-child scopes in symbol trees (`get_symbol`, `get_outline`) without collapsing nested definitions to file containers.
+- jgravelle/jcodemunch-mcp:
+  - Defect ledger and release governance updates (PR #1144, opened 2026-10-18T14:15:55Z by jgravelle): Documents ledger entry L-218 regarding a race in `open_selective` returning cached full index during fast-path test execution, registry publish verification timeout (C-27), and pre-PR branch validation hook across git worktrees (W-58).
+
+**Competitor pulse (as of 2026-10-18 18:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,895★ (+6), 1,665 forks (+10)
+- oraios/serena: 30,365★ (+5), 2,195 forks (+6)
+- DeusData/codebase-memory-mcp: 46,842★ (+18), 3,864 forks (=)
+- tirth8205/code-review-graph: 32,238★ (+3), 3,033 forks (+4)
+- colbymchenry/codegraph: 74,371★ (+10), 4,808 forks (+1)
+- abhigyanpatwari/GitNexus: 47,932★ (+1), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,781★ (=), 376 forks (=)
+- continuedev/continue: 36,243★ (+3), 5,490 forks (+1)
+- Aider-AI/aider: 49,614★ (+4), 5,072 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
