@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.37.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.9...v3.37.10) (2026-10-18)
+
+
+### Bug Fixes
+
+* **memory:** prune expired decisions and deduplicate mined entries (TRA-2521) ([#1647](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1647)) ([9bf98e6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9bf98e6393fcb0340fe56740c488d77d3161c8bb))
+* **registry:** describe excluded descendant roots accurately (TRA-2522) ([#1646](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1646)) ([54bb591](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54bb591833e54866e23ebd6266c971b657397808))
+
+
+### Documentation
+
+* **ops:** pass 2026-10-18, mention sweep clean, competitor triage (TRA-2511) ([#1641](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1641)) ([020ad9d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/020ad9d6acd80a5f3ff5badccb8c1889920052c3))
+* **ops:** pass 2026-10-18, mention sweep clean, competitor triage (TRA-2514) ([#1643](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1643)) ([fa8dcd0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fa8dcd0c163913fa2b18c78936b8e77c21365fa3))
+* **ops:** pass 2026-10-18, mention sweep clean, competitor triage (TRA-2516) ([#1644](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1644)) ([30f1d59](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30f1d59dd6bc1136329eba0a13ce578c4d4c6071))
+* **ops:** pass 2026-10-18, mention sweep clean, competitor triage (TRA-2518) ([#1645](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1645)) ([81b6d89](https://github.com/nikolai-vysotskyi/trace-mcp/commit/81b6d89492440408c3c4e9168bacd500c9697e2a))
+
 ## [3.37.9](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.8...v3.37.9) (2026-10-18)
 
 
