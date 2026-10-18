@@ -368,3 +368,26 @@ this run; no restart or configuration change was made. This confirms that the
 field ceiling is still unmet after the v3.37.8 release, without identifying
 the retained objects. TRA-2061 and TRA-2459 continue to own attribution and
 remediation.
+
+---
+
+## 2026-10-19 — v3.37.10 field daemon remains above the idle target
+
+Read-only observation of the installed v3.37.10 daemon (PID 41509). At
+2026-10-18 21:56:32 UTC, the project sweeper logged five `Unloading idle
+project` events. Vitals changed from eight loaded projects and 754 MB RSS
+one minute earlier to three loaded projects and 737 MB RSS. Four consecutive
+one-minute samples through 21:59:32 held at 737 MB RSS, 191–193 MB heap used,
+`projects_loaded: 3`, and `projects_indexing: 0`. The three-project target is
+`250 + 75 × 3 = 475 MB`, so the post-unload plateau exceeds it by 262 MB.
+The log contains no full index in that interval. Its periodic `reindex-file`
+records indexed zero files. These checks mean it is not the isolated 0% CPU
+setup used to establish the target.
+
+At 22:00 UTC, project loads and a dropped-event reconcile triggered full
+indexing. The next vitals sample rose to 897 MB RSS / 327 MB
+heap used; it is excluded from the quiet-window comparison. `/health` later
+returned `ok` and version 3.37.10. The field gap predates that indexing burst.
+TRA-2061 owns attribution; these observations do not isolate the retained
+memory or demonstrate a new regression from v3.37.8. It does show that
+unloading five idle projects released only 17 MB of RSS within four minutes.
