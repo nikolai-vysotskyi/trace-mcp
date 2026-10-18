@@ -5299,3 +5299,58 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Touch budget:** 0 of 5 used.
 
 
+
+
+### Pass 2026-10-18 (TRA-2516): mention sweep clean, ecosystem findings (spine-bank, rootpath, purser), competitor triage (GitNexus section filtering PR #3621 & eval PR #3622, jcodemunch config side-effect PR #1142 & release dispatch PR #1143, codegraph Vue resolver PR #2633)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder budget spent).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: UNKNOWN/CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- romannekrasovaillm/spine-bank: Deterministic architectural gate and offline validation harness with an MCP server for CLI coding agents (Claude Code, GigaCode, Kimi Code, Qwen Code, OpenClaw). Features offline rule evaluation, verification memory, and rule enforcement without external LLM API calls.
+- IWhitebird/rootpath: Incident resolution agent running over a FalkorDB service/deployment/dependency graph. Connects as an MCP host and Claude Code plugin to trace production failures from alert triggers to root cause code locations.
+- neurot1ca/purser-claude-orchestrator: Claude Code orchestration plugin that delegates implementation tasks to Codex in parallel git worktrees while retaining Claude for planning and code review, reducing primary token expenditure.
+
+**Competitor intelligence & architectural observations:**
+- abhigyanpatwari/GitNexus:
+  - Agent section filtering in MCP graph responses (PR #3621, opened 2026-10-18T07:02:15Z by magyargergo): Implements explicit section and relationship-category filter arguments for graph queries, enabling agents to request targeted sub-graphs rather than consuming broad graph edge dumps that bloat context and trigger repeated model re-reading.
+  - PR cost evaluation benchmarking by label (PR #3622, opened 2026-10-18T08:14:29Z by magyargergo): Adds `run-cost-evaluation` PR label workflow executing 12 MCP test sessions comparing billed costs and task solve rates against latest main release benchmarks.
+  - Architectural contrast: trace-mcp avoids complex response-masking parameters by design; its atomic MCP tools (`get_symbol`, `get_outline`, `get_task_context`, `search`) return lean, pre-compacted code intelligence structures by default.
+- jgravelle/jcodemunch-mcp:
+  - CLI install-pack configuration side-effect elimination (PR #1142 / v1.108.378, opened 2026-10-18T13:46:31Z by jgravelle): Fixed a bug where running `install-pack <id>` without `--license` wrote a default `config.jsonc` file to disk during license checks if none existed. Because the generated default lacked the `tool_surface` key, it inadvertently pinned users to the `full` tool surface mode.
+  - CI release dispatch governance & token scoping (PR #1143, opened 2026-10-18T13:55:47Z by jgravelle): Hardened workflow triggers so `release.yml` executes only when initiated directly by maintainer `jgravelle`, while restricting GitHub App tokens to per-job minimal scopes after granting Actions write permissions for automated competitive evaluation dispatch.
+  - Architectural contrast: trace-mcp has zero license key lookup workflows, never mutates workspace config files during tool invocation, and isolates state within dedicated profile locations.
+- colbymchenry/codegraph:
+  - Vue import path resolution (@/ and ~/ aliases) fix (PR #2633, opened 2026-10-17T15:51:05Z by colbymchenry): Fixed an issue where `vueResolver.resolve` ran before the general import resolver on projects with Vue/Nuxt dependencies, naively rewriting `@/` and `~/` paths to `src/` and returning `getNodesInFile(path)[0]` at 0.9 confidence (whichever AST node was declared first in the file rather than the module itself).
+  - Architectural contrast: trace-mcp relies on `oxc-resolver` and tree-sitter AST symbol resolution honoring project path alias configurations (`tsconfig.json`/`jsconfig.json`) instead of path-string rewriting heuristics and arbitrary node-order fallbacks.
+
+**Competitor pulse (as of 2026-10-18 14:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,889★ (+8), 1,655 forks (+1)
+- oraios/serena: 30,360★ (+9), 2,189 forks (+1)
+- DeusData/codebase-memory-mcp: 46,824★ (+17), 3,864 forks (+2)
+- tirth8205/code-review-graph: 32,235★ (+5), 3,029 forks (=)
+- colbymchenry/codegraph: 74,361★ (+9), 4,807 forks (+2)
+- abhigyanpatwari/GitNexus: 47,931★ (+1), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,781★ (+2), 376 forks (=)
+- continuedev/continue: 36,240★ (=), 5,489 forks (+2)
+- Aider-AI/aider: 49,610★ (+4), 5,072 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
