@@ -154,4 +154,32 @@ describe('DecisionStore stale pruning (TRA-595)', () => {
     expect(res.memos).toBe(0);
     expect(res.schedulerStates).toBe(0);
   });
+
+  it('prunes expired decisions in a live project only when requested and removes FTS entries', () => {
+    const root = path.join(tmpDir, 'live');
+    fs.mkdirSync(root);
+    const expired = store.addDecision({
+      title: 'Expired marker',
+      content: 'expired searchable text',
+      type: 'convention',
+      project_root: root,
+    });
+    const current = store.addDecision({
+      title: 'Current marker',
+      content: 'current searchable text',
+      type: 'convention',
+      project_root: root,
+    });
+    store.invalidateDecision(expired.id, '2020-01-01T00:00:00.000Z');
+    store.invalidateDecision(current.id, '2999-01-01T00:00:00.000Z');
+
+    expect(store.countExpiredDecisions()).toBe(1);
+    expect(store.pruneStale().decisions).toBe(0);
+    expect(store.pruneStale({ includeExpired: true }).expiredDecisions).toBe(1);
+    expect(store.getDecision(expired.id)).toBeUndefined();
+    expect(store.getDecision(current.id)).toBeDefined();
+    expect(
+      store.queryDecisions({ project_root: root, search: 'expired', include_invalidated: true }),
+    ).toHaveLength(0);
+  });
 });

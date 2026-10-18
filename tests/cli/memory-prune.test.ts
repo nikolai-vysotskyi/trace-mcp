@@ -54,6 +54,43 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
     checkStore.close();
   });
 
+  it('reports expired decisions before deleting them with --expired --apply', () => {
+    const projDir = path.join(tmpHome, 'live-project');
+    fs.mkdirSync(projDir);
+    const seed = new DecisionStore(dbPath);
+    const row = seed.addDecision({
+      title: 'Expired choice',
+      content: 'Old searchable choice',
+      type: 'tech_choice',
+      project_root: projDir,
+    });
+    seed.invalidateDecision(row.id, '2020-01-01T00:00:00.000Z');
+    seed.close();
+
+    const repoRoot = path.join(__dirname, '..', '..');
+    const tsxLoader = pathToFileURL(
+      path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+    ).href;
+    const script = `
+      const { memoryCommand } = await import('./src/cli/memory.ts');
+      await memoryCommand.parseAsync(['prune', '--expired', '--json'], { from: 'user' });
+      await memoryCommand.parseAsync(['prune', '--expired', '--apply', '--json'], { from: 'user' });
+    `;
+    const output = execFileSync(
+      process.execPath,
+      ['--import', tsxLoader, '--input-type=module', '-e', script],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, TRACE_MCP_DATA_DIR: tmpHome, NODE_OPTIONS: '' },
+        encoding: 'utf-8',
+      },
+    );
+    expect(output).toContain('"expiredDecisions": 1');
+    const check = new DecisionStore(dbPath);
+    expect(check.getDecision(row.id)).toBeUndefined();
+    check.close();
+  });
+
   describe('prune --low-quality (TRA-1619B)', () => {
     // The CLI resolves its database path at import time, so (like
     // env-overrides.test.ts) we drive it from a subprocess with a hermetic

@@ -54,6 +54,26 @@ describe('DecisionStore', () => {
       const decision = store.addDecision(baseInput);
       expect(JSON.parse(decision.tags!)).toEqual(['database', 'auth']);
     });
+
+    it('refreshes repeated unanchored mined decisions without merging distinct decisions', () => {
+      const mined = { ...baseInput, source: 'mined' as const };
+      const first = store.addDecision(mined);
+      const repeated = store.addDecision({ ...mined, content: 'New observation' });
+      expect(repeated.id).toBe(first.id);
+      expect(repeated.updated_at).toBeGreaterThanOrEqual(first.updated_at!);
+      expect(store.queryDecisions({ project_root: baseInput.project_root })).toHaveLength(1);
+      expect(store.addDecision({ ...mined, title: 'Another choice' }).id).not.toBe(first.id);
+      expect(store.addDecision({ ...mined, type: 'convention' }).id).not.toBe(first.id);
+      expect(store.addDecision({ ...mined, file_path: 'src/auth.ts' }).id).not.toBe(first.id);
+      expect(store.addDecision(baseInput).id).not.toBe(first.id);
+    });
+
+    it('finds only exact-title unanchored supersession candidates', () => {
+      const first = store.addDecision(baseInput);
+      store.addDecision({ ...baseInput, title: 'Another choice' });
+      store.addDecision({ ...baseInput, file_path: 'src/auth.ts' });
+      expect(store.addDecisionWithSupersession(baseInput).superseded).toEqual([first.id]);
+    });
   });
 
   describe('addDecisions (batch)', () => {

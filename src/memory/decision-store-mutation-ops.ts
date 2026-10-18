@@ -123,7 +123,7 @@ export class MutationOperations {
    *   - same `type`
    *   - same code anchor: `symbol_id` when the new row has one (file-only rows
    *     never collide with symbol-anchored rows), else `file_path`.
-   * Rows with no anchor at all never supersede anything (no state key).
+   * Rows with no anchor match only the same exact title.
    *
    * For the caller-facing variant that also returns the superseded ids, use
    * `addDecisionWithSupersession`.
@@ -139,6 +139,25 @@ export class MutationOperations {
     const canonFilePath = input.project_root
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
+    if (input.source === 'mined' && !input.symbol_id && !canonFilePath) {
+      const existing = this.db
+        .prepare(`
+        SELECT id FROM decisions
+        WHERE project_root = ? AND type = ? AND title = ?
+          AND symbol_id IS NULL AND file_path IS NULL
+          AND source = 'mined' AND valid_until IS NULL
+        ORDER BY id LIMIT 1
+      `)
+        .get(input.project_root, input.type, input.title) as { id: number } | undefined;
+      if (existing) {
+        this.db
+          .prepare("UPDATE decisions SET updated_at = strftime('%s','now')*1000 WHERE id = ?")
+          .run(existing.id);
+        const row = this.getDecision(existing.id)!;
+        this.auditEmit('update', row.id, { title: row.title, type: row.type });
+        return row;
+      }
+    }
     const stmt = this.db.prepare(`
       INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, git_branch, review_status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
@@ -209,9 +228,6 @@ export class MutationOperations {
     const canonFilePath = input.project_root
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
-    // No anchor → no state key → never supersedes.
-    if (!symbolId && !canonFilePath) return [];
-
     const conditions: string[] = ['project_root = ?', 'type = ?', 'valid_until IS NULL'];
     const params: unknown[] = [input.project_root, input.type];
     if (symbolId) {
@@ -219,12 +235,15 @@ export class MutationOperations {
       // (symbol_id IS NULL) must NOT collide with a symbol-anchored insert.
       conditions.push('symbol_id = ?');
       params.push(symbolId);
-    } else {
+    } else if (canonFilePath) {
       // File-anchored state key: only rows that are ALSO file-only (no
       // symbol) on the same file. Keeps the heuristic conservative.
       conditions.push('symbol_id IS NULL');
       conditions.push('file_path = ?');
       params.push(canonFilePath);
+    } else {
+      conditions.push('symbol_id IS NULL', 'file_path IS NULL', 'title = ?');
+      params.push(input.title);
     }
     const rows = this.db
       .prepare(`SELECT id FROM decisions WHERE ${conditions.join(' AND ')}`)

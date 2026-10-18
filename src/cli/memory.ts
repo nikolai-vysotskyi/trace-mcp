@@ -485,6 +485,7 @@ memoryCommand
   )
   .option('--apply', 'Actually delete orphaned decisions and session data')
   .option('--include-sessions', 'Also prune mined session log references for deleted files')
+  .option('--expired', 'Also delete decisions whose validity period has ended')
   .option(
     '--low-quality',
     'Also sweep active mined decisions through the quality gate and invalidate fragment/narration rows (dry-run unless --apply)',
@@ -494,6 +495,7 @@ memoryCommand
     (opts: {
       apply?: boolean;
       includeSessions?: boolean;
+      expired?: boolean;
       lowQuality?: boolean;
       json?: boolean;
     }) => {
@@ -501,13 +503,17 @@ memoryCommand
       try {
         const stale = store.findStale();
         const apply = !!opts.apply;
+        const expiredDecisions = opts.expired ? store.countExpiredDecisions() : 0;
         // TRA-1619B one-shot sweep for pre-gate mined fragments. Dry-run
         // unless --apply — same safety posture as the stale-root prune.
         const lq = opts.lowQuality ? store.purgeLowQualityDecisions({ dry_run: !apply }) : null;
 
         if (opts.json) {
           if (apply) {
-            const result = store.pruneStale({ includeMinedSessions: opts.includeSessions });
+            const result = store.pruneStale({
+              includeMinedSessions: opts.includeSessions,
+              includeExpired: opts.expired,
+            });
             console.log(
               JSON.stringify(
                 { apply: true, ...result, ...(lq ? { low_quality: lq } : {}) },
@@ -518,7 +524,12 @@ memoryCommand
           } else {
             console.log(
               JSON.stringify(
-                { apply: false, ...stale, ...(lq ? { low_quality: lq } : {}) },
+                {
+                  apply: false,
+                  ...stale,
+                  ...(opts.expired ? { expiredDecisions } : {}),
+                  ...(lq ? { low_quality: lq } : {}),
+                },
                 null,
                 2,
               ),
@@ -530,6 +541,7 @@ memoryCommand
         console.log('Decision Store Hygiene Check:\n');
         if (
           stale.staleRoots.length === 0 &&
+          expiredDecisions === 0 &&
           (!opts.includeSessions || stale.staleMinedSessionsCount === 0) &&
           (!lq || lq.rows.length === 0)
         ) {
@@ -541,6 +553,7 @@ memoryCommand
         }
 
         if (!apply) {
+          if (opts.expired) console.log(`  Found ${expiredDecisions} expired decision(s).`);
           console.log(
             `  Found ${stale.decisionsCount} decision(s) across ${stale.staleRoots.length} deleted project root(s):`,
           );
@@ -567,7 +580,11 @@ memoryCommand
             '\n  Dry-run only — re-run with `trace-mcp memory prune --apply` to delete.\n',
           );
         } else {
-          const result = store.pruneStale({ includeMinedSessions: opts.includeSessions });
+          const result = store.pruneStale({
+            includeMinedSessions: opts.includeSessions,
+            includeExpired: opts.expired,
+          });
+          if (opts.expired) console.log(`  Pruned ${result.expiredDecisions} expired decision(s).`);
           console.log(
             `  Pruned ${result.decisions} decision(s) across ${result.staleRoots.length} deleted project root(s):`,
           );

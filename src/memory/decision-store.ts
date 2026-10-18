@@ -1375,18 +1375,27 @@ export class DecisionStore {
     };
   }
 
-  /**
-   * Prune decisions and associated data for project roots that no longer exist on disk.
-   * Runs in a single transaction.
-   */
+  /** Count decisions whose validity ended before the current UTC second. */
+  countExpiredDecisions(): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM decisions WHERE valid_until IS NOT NULL AND datetime(valid_until) < datetime('now')",
+      )
+      .get() as { count: number };
+    return row.count;
+  }
+
+  /** Prune stale roots and, when requested, expired decisions in one transaction. */
   pruneStale(opts?: {
     staleRoots?: string[];
     includeMinedSessions?: boolean;
+    includeExpired?: boolean;
   }): PruneDecisionsResult {
     const staleRoots = opts?.staleRoots ?? this.findStaleRoots();
     const result: PruneDecisionsResult = {
       staleRoots,
       decisions: 0,
+      expiredDecisions: 0,
       chunks: 0,
       clusters: 0,
       memos: 0,
@@ -1395,6 +1404,13 @@ export class DecisionStore {
     };
 
     this.db.transaction(() => {
+      if (opts?.includeExpired) {
+        result.expiredDecisions = this.db
+          .prepare(
+            "DELETE FROM decisions WHERE valid_until IS NOT NULL AND datetime(valid_until) < datetime('now')",
+          )
+          .run().changes;
+      }
       if (staleRoots.length > 0) {
         const placeholders = staleRoots.map(() => '?').join(',');
 

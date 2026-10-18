@@ -83,10 +83,14 @@ describe('purgeLowQualityDecisions (TRA-1619B)', () => {
       project_root: PROJECT,
       source: 'manual',
     }).id;
-    approvedJunkId = store.addDecision(mined('our changes', { review_status: 'approved' })).id;
-    pendingJunkId = store.addDecision(mined('my changes', { review_status: 'pending' })).id;
+    approvedJunkId = store.addDecision(
+      mined('our changes', { type: 'convention', review_status: 'approved' }),
+    ).id;
+    pendingJunkId = store.addDecision(
+      mined('my changes', { type: 'architecture_decision', review_status: 'pending' }),
+    ).id;
     // Already-invalidated junk is out of scope for the sweep.
-    deadJunkId = store.addDecision(mined('my changes')).id;
+    deadJunkId = store.addDecision(mined('my changes', { type: 'bug_root_cause' })).id;
     store.invalidateDecision(deadJunkId);
     // Other-project junk — only swept unscoped or with a matching scope.
     otherProjectJunkId = store.addDecision(mined('my changes', { project_root: OTHER_PROJECT })).id;
