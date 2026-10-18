@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ok, type TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -334,7 +335,7 @@ export class NuxtPlugin implements FrameworkPlugin {
     return ok(result);
   }
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
@@ -364,7 +365,8 @@ export class NuxtPlugin implements FrameworkPlugin {
 
     // Map composable name -> symbol
     const composableMap = new Map<string, { id: number; symbolId: string }>();
-    for (const file of composableFiles) {
+    for (const [index, file] of composableFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       for (const sym of symbols) {
         if (sym.kind === 'function' && sym.name.startsWith('use')) {
@@ -382,7 +384,8 @@ export class NuxtPlugin implements FrameworkPlugin {
 
     // Map shared export name -> symbol
     const sharedMap = new Map<string, { id: number; symbolId: string }>();
-    for (const file of sharedFiles) {
+    for (const [index, file] of sharedFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       for (const sym of symbols) {
         if (
@@ -401,7 +404,8 @@ export class NuxtPlugin implements FrameworkPlugin {
     // directories (e.g., `app/icons/` when path is set via nuxt.config).
     const componentMap = new Map<string, { id: number; symbolId: string }>();
     const allVueFiles = allFiles.filter((f) => f.path.endsWith('.vue'));
-    for (const file of allVueFiles) {
+    for (const [index, file] of allVueFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSym = symbols.find((s) => s.kind === 'class');
       if (!compSym) continue;
@@ -430,7 +434,8 @@ export class NuxtPlugin implements FrameworkPlugin {
     const targetVueFiles = isIncremental
       ? vueFiles.filter((f) => scope!.changedFileIds.has(f.id))
       : vueFiles;
-    for (const file of targetVueFiles) {
+    for (const [index, file] of targetVueFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;
@@ -570,7 +575,8 @@ export class NuxtPlugin implements FrameworkPlugin {
     const MIDDLEWARE_BLOCK_RE =
       /definePageMeta\s*\(\s*\{[\s\S]*?\bmiddleware\s*:\s*(\[[^\]]*\]|['"][^'"]+['"])/;
     const LAYOUT_BLOCK_RE = /definePageMeta\s*\(\s*\{[\s\S]*?\blayout\s*:\s*(['"][^'"]+['"]|false)/;
-    for (const page of pageFiles) {
+    for (const [index, page] of pageFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       let source: string | undefined;
       try {
         source = ctx.readFile(page.path);
@@ -631,7 +637,8 @@ export class NuxtPlugin implements FrameworkPlugin {
     // Only emit if the default layout exists.
     const defaultLayout = layoutByName.get('default');
     if (defaultLayout) {
-      for (const page of pageFiles) {
+      for (const [index, page] of pageFiles.entries()) {
+        if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
         let source: string | undefined;
         try {
           source = ctx.readFile(page.path);
@@ -722,7 +729,8 @@ export class NuxtPlugin implements FrameworkPlugin {
       // Stage 1: scan client files for fetch-like calls
       const FETCH_CALL_RE =
         /\b(?:\$fetch|useFetch|useLazyFetch|useAsyncData|\$api)\s*[<(]?\s*[^,)]*?['"`]([^'"`]+)['"`]/g;
-      for (const file of allFiles) {
+      for (const [index, file] of allFiles.entries()) {
+        if (index > 0 && index % 64 === 0) await yieldToEventLoopFair();
         if (!/\.(ts|tsx|js|jsx|vue)$/.test(file.path)) continue;
         if (file.path.includes('/server/')) continue;
         let src: string | undefined;

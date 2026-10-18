@@ -255,7 +255,7 @@ describe('TRA-2505: event loop stall prevention during incremental reindexing on
       expect(readFileSpy).not.toHaveBeenCalled();
     });
 
-    it('TailwindPlugin skips file reading when changed files contain no CSS/templates', () => {
+    it('TailwindPlugin skips file reading when changed files contain no CSS/templates', async () => {
       const plugin = new TailwindPlugin();
       const readFileSpy = vi.fn();
       const ctx: ResolveContext = {
@@ -269,7 +269,7 @@ describe('TRA-2505: event loop stall prevention during incremental reindexing on
         changeScope: nonTargetScope,
       };
 
-      const res = plugin.resolveEdges(ctx);
+      const res = await plugin.resolveEdges(ctx);
       expect(res.isOk()).toBe(true);
       expect(res._unsafeUnwrap()).toEqual([]);
       expect(readFileSpy).not.toHaveBeenCalled();
@@ -295,7 +295,7 @@ describe('TRA-2505: event loop stall prevention during incremental reindexing on
       expect(readFileSpy).not.toHaveBeenCalled();
     });
 
-    it('NuxtPlugin skips file reading when changed files contain no Vue/TS/JS', () => {
+    it('NuxtPlugin skips file reading when changed files contain no Vue/TS/JS', async () => {
       const plugin = new NuxtPlugin();
       const readFileSpy = vi.fn();
       const ctx: ResolveContext = {
@@ -309,13 +309,13 @@ describe('TRA-2505: event loop stall prevention during incremental reindexing on
         changeScope: nonTargetScope,
       };
 
-      const res = plugin.resolveEdges(ctx);
+      const res = await plugin.resolveEdges(ctx);
       expect(res.isOk()).toBe(true);
       expect(res._unsafeUnwrap()).toEqual([]);
       expect(readFileSpy).not.toHaveBeenCalled();
     });
 
-    it('ShadcnPlugin skips file reading when changed files contain no consumer files', () => {
+    it('ShadcnPlugin skips file reading when changed files contain no consumer files', async () => {
       const plugin = new ShadcnPlugin();
       const readFileSpy = vi.fn();
       const ctx: ResolveContext = {
@@ -329,7 +329,7 @@ describe('TRA-2505: event loop stall prevention during incremental reindexing on
         changeScope: nonTargetScope,
       };
 
-      const res = plugin.resolveEdges(ctx);
+      const res = await plugin.resolveEdges(ctx);
       expect(res.isOk()).toBe(true);
       expect(res._unsafeUnwrap()).toEqual([]);
       expect(readFileSpy).not.toHaveBeenCalled();

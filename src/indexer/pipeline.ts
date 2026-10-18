@@ -2477,7 +2477,7 @@ export class IndexingPipeline {
     if (activeResult.isOk()) registerSchema(activeResult.value);
 
     // Workspace-level plugins (may detect frameworks not visible at root)
-    const wsPluginsByPath = this.getWorkspaceFrameworkPlugins();
+    const wsPluginsByPath = await this.ensureWorkspaceFrameworkPlugins();
     for (const ws of this.workspaces) {
       registerSchema(wsPluginsByPath.get(ws.path) ?? []);
     }
@@ -2494,6 +2494,45 @@ export class IndexingPipeline {
         for (const et of pending) insert.run(et.name, et.category, et.description);
       })
       .immediate();
+  }
+
+  /**
+   * TRA-2524: Async workspace framework plugin detection that yields periodically
+   * (every 16 workspaces) so monorepos with 100+ workspaces do not block the event
+   * loop during startup or reindexing.
+   */
+  private async ensureWorkspaceFrameworkPlugins(): Promise<Map<string, FrameworkPlugin[]>> {
+    const sig = this.workspaceSignature();
+    if (this._wsFrameworkPlugins && this._wsFrameworkPluginsKey === sig) {
+      return this._wsFrameworkPlugins;
+    }
+    if (!this._wsPluginsForceRedetect) {
+      const persisted = this.loadPersistedWorkspacePlugins(sig);
+      if (persisted) {
+        this._wsFrameworkPlugins = persisted;
+        this._wsFrameworkPluginsKey = sig;
+        return persisted;
+      }
+    }
+    this._wsPluginsForceRedetect = false;
+    const m = new Map<string, FrameworkPlugin[]>();
+    const allPlugins = this.registry.getAllFrameworkPlugins();
+    for (let i = 0; i < this.workspaces.length; i++) {
+      if (i > 0 && i % 16 === 0) {
+        await yieldToEventLoopFair();
+      }
+      const ws = this.workspaces[i];
+      const wsRoot = path.join(this.rootPath, ws.path);
+      const wsCtx = buildProjectContext(wsRoot);
+      m.set(
+        ws.path,
+        allPlugins.filter((p) => p.detect(wsCtx)),
+      );
+    }
+    this._wsFrameworkPlugins = m;
+    this._wsFrameworkPluginsKey = sig;
+    this.persistWorkspacePlugins(m);
+    return m;
   }
 
   /**

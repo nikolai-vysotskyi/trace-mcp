@@ -17,7 +17,7 @@ import { logFrameworkExtractStats, resetFrameworkExtractStats } from '../plugin-
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_MAX_FILE_SIZE } from '../utils/security.js';
-import { selectChangedFiles } from './change-prefilter.js';
+import { selectChangedFiles, selectChangedFilesAsync } from './change-prefilter.js';
 import {
   clearPackageEntriesCache,
   findPackageJsonEntriesAsync,
@@ -26,7 +26,7 @@ import {
 import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
 import type { WorkspaceInfo } from './monorepo.js';
-import { detectRenames } from './rename-detector.js';
+import { detectRenames, detectRenamesAsync } from './rename-detector.js';
 import { renameTreeCacheFile } from '../parser/tree-cache.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 
@@ -145,7 +145,12 @@ export async function extractAndPersist(
   // moves N files to new paths re-extracts every byte, even though the
   // content is identical to known DB rows. graphify v0.7.0 fixed the same
   // wasted work by keying its cache on content alone.
-  const { renamed, pairs: renamePairs } = detectRenames(store, rootPath, relPaths, existingFiles);
+  const { renamed, pairs: renamePairs } = await detectRenamesAsync(
+    store,
+    rootPath,
+    relPaths,
+    existingFiles,
+  );
   if (renamed > 0) {
     // Renamed paths are now keyed under their new path in the DB; refresh
     // the lookup map so the extractor sees them as "existing".
@@ -167,7 +172,7 @@ export async function extractAndPersist(
   // same question for every file whose mtime floor and byte size both
   // match; only the remainder reaches the extract loop below (which keeps
   // its own read+hash gate for mtime-drifted-but-identical content).
-  const { candidates, skipped: prefiltered } = selectChangedFiles(
+  const { candidates, skipped: prefiltered } = await selectChangedFilesAsync(
     rootPath,
     relPaths,
     existingFiles,

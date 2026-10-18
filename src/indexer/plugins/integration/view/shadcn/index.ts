@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
+import { yieldToEventLoopFair } from '../../../../../utils/event-loop.js';
 import type {
   FileParseResult,
   FrameworkPlugin,
@@ -983,7 +984,7 @@ export class ShadcnPlugin implements FrameworkPlugin {
 
   // ── Cross-file resolution (Pass 2) ─────────────────────────────────────
 
-  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+  async resolveEdges(ctx: ResolveContext): Promise<TraceMcpResult<RawEdge[]>> {
     const edges: RawEdge[] = [];
     const allFiles = ctx.getAllFiles();
 
@@ -1019,7 +1020,8 @@ export class ShadcnPlugin implements FrameworkPlugin {
 
     if (targetConsumerFiles.length === 0) return ok([]);
 
-    for (const file of targetConsumerFiles) {
+    for (const [index, file] of targetConsumerFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const source = ctx.readFile(file.path);
       if (!source) continue;
 

@@ -35,6 +35,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FileRow } from '../db/types.js';
+import { yieldToEventLoopFair } from '../utils/event-loop.js';
 
 export interface ChangePrefilterResult {
   /** Files that may have changed — the only ones `extract()` must see. */
@@ -66,6 +67,38 @@ export function selectChangedFiles(
   const candidates: string[] = [];
   let skipped = 0;
   for (const relPath of relPaths) {
+    if (
+      !forcePaths?.has(relPath) &&
+      isUnchangedByStat(rootPath, relPath, existingFiles.get(relPath))
+    ) {
+      skipped++;
+    } else {
+      candidates.push(relPath);
+    }
+  }
+  return { candidates, skipped };
+}
+
+/**
+ * TRA-2524: Asynchronous variant of `selectChangedFiles` that yields to the
+ * event loop periodically (every 256 files) so 10k+ file scans do not block
+ * health checks or incoming MCP requests.
+ */
+export async function selectChangedFilesAsync(
+  rootPath: string,
+  relPaths: string[],
+  existingFiles: Map<string, FileRow>,
+  force: boolean,
+  forcePaths?: Set<string>,
+): Promise<ChangePrefilterResult> {
+  if (force) return { candidates: relPaths.slice(), skipped: 0 };
+  const candidates: string[] = [];
+  let skipped = 0;
+  for (let i = 0; i < relPaths.length; i++) {
+    if (i > 0 && i % 256 === 0) {
+      await yieldToEventLoopFair();
+    }
+    const relPath = relPaths[i];
     if (
       !forcePaths?.has(relPath) &&
       isUnchangedByStat(rootPath, relPath, existingFiles.get(relPath))

@@ -366,7 +366,8 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     const componentNameToSymbolId = new Map<string, string>();
     const componentNameToFilePath = new Map<string, string>();
 
-    for (const file of vueFiles) {
+    for (const [index, file] of vueFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
       if (!compSymbol) continue;
@@ -383,7 +384,8 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
 
     // Map composable function name -> symbolId
     const composableNameToSymbolId = new Map<string, string>();
-    for (const file of composableFiles) {
+    for (const [index, file] of composableFiles.entries()) {
+      if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       for (const sym of symbols) {
         if (sym.kind === 'function' && sym.name.startsWith('use')) {

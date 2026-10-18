@@ -15,8 +15,13 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { yieldToEventLoopFair } from '../../utils/event-loop.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
 
-export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope): void {
+export async function resolveMemberOfEdges(
+  state: PipelineState,
+  scope?: ChangeScope,
+): Promise<void> {
   const { store } = state;
 
   const memberOfType = store.db
@@ -39,6 +44,7 @@ export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope):
     rows = [];
     const CHUNK = 900;
     for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      if (i > 0) await yieldToEventLoopFair();
       const chunk = scopedIds.slice(i, i + CHUNK);
       const ph = chunk.map(() => '?').join(',');
       const chunkRows = store.db
@@ -75,6 +81,7 @@ export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope):
   const nodeMap = new Map<number, number>();
   const CHUNK = 500;
   for (let i = 0; i < idList.length; i += CHUNK) {
+    if (i > 0) await yieldToEventLoopFair();
     for (const [k, v] of store.getNodeIdsBatch('symbol', idList.slice(i, i + CHUNK))) {
       nodeMap.set(k, v);
     }
@@ -86,15 +93,20 @@ export function resolveMemberOfEdges(state: PipelineState, scope?: ChangeScope):
   );
 
   let created = 0;
-  store.db.transaction(() => {
-    for (const r of rows) {
-      const src = nodeMap.get(r.member_id);
-      const tgt = nodeMap.get(r.parent_id);
-      if (src == null || tgt == null || src === tgt) continue;
-      insertStmt.run(src, tgt, memberOfType.id);
-      created++;
-    }
-  })();
+  await commitInChunks(
+    store.db,
+    rows,
+    (chunk) => {
+      for (const r of chunk) {
+        const src = nodeMap.get(r.member_id);
+        const tgt = nodeMap.get(r.parent_id);
+        if (src == null || tgt == null || src === tgt) continue;
+        insertStmt.run(src, tgt, memberOfType.id);
+        created++;
+      }
+    },
+    RESOLVER_WRITE_CHUNK,
+  );
 
   if (created > 0) {
     logger.info({ edges: created }, 'member_of edges resolved');
