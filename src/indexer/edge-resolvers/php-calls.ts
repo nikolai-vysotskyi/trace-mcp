@@ -19,6 +19,7 @@ import type { PipelineState } from '../pipeline-state.js';
 import type { PhpCallSite } from '../plugins/language/php/helpers.js';
 import { PhantomSymbolFactory } from './phantom-externals.js';
 import { commitInChunks } from '../resolver-budget.js';
+import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 
 interface PhpSymbol {
   id: number;
@@ -44,6 +45,27 @@ export async function resolvePhpCallEdges(
   // load every PHP symbol because cross-file resolution needs them.
   const scopedFileIds = scope ? scope.changedFileIds : null;
   if (scopedFileIds && scopedFileIds.size === 0) return;
+
+  // TRA-2505: fast-path pre-check when resolving incrementally — if none of the
+  // changed files are PHP, no PHP symbols could have changed. Loading all 66k+
+  // PHP symbols and running 100+ batch node queries starves the event loop.
+  if (scopedFileIds && scopedFileIds.size > 0) {
+    const scopedIds = Array.from(scopedFileIds);
+    let hasPhpFiles = false;
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const row = store.db
+        .prepare(`SELECT 1 FROM files WHERE language = 'php' AND id IN (${ph}) LIMIT 1`)
+        .get(...chunk);
+      if (row) {
+        hasPhpFiles = true;
+        break;
+      }
+    }
+    if (!hasPhpFiles) return;
+  }
 
   // Resolve edge type IDs
   const callsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
@@ -135,6 +157,7 @@ export async function resolvePhpCallEdges(
   const CHUNK = 500;
   const allIds = allSymbols.map((s) => s.id);
   for (let i = 0; i < allIds.length; i += CHUNK) {
+    if (i > 0 && (i / CHUNK) % 10 === 0) await yieldToEventLoopFair();
     for (const [k, v] of store.getNodeIdsBatch('symbol', allIds.slice(i, i + CHUNK))) {
       symbolNodeMap.set(k, v);
     }
@@ -226,14 +249,18 @@ export async function resolvePhpCallEdges(
     }
   }
 
+  // TRA-2505: narrow symbols to process when resolving incrementally so we don't
+  // wrap 60k+ unchanged symbols into dozens of chunked transactions.
+  const symbolsToProcess = scopedFileIds
+    ? allSymbols.filter((s) => scopedFileIds.has(s.file_id))
+    : allSymbols;
+  if (symbolsToProcess.length === 0) return;
+
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // the full-pass loop over every PHP symbol used to run as one synchronous
   // transaction, starving /health on the same thread.
-  await commitInChunks(store.db, allSymbols, (chunk) => {
+  await commitInChunks(store.db, symbolsToProcess, (chunk) => {
     for (const sym of chunk) {
-      // Scope-aware: skip symbols whose file was not re-extracted in this run.
-      // Their outgoing edges were not deleted, so don't recreate them.
-      if (scopedFileIds && !scopedFileIds.has(sym.file_id)) continue;
       if (!sym.metadata) continue;
       let meta: Record<string, unknown>;
       try {

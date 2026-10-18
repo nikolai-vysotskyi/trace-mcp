@@ -413,12 +413,21 @@ export class TailwindPlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const files = ctx.getAllFiles();
 
+    // TRA-2505 / TRA-2434: Scope-aware: narrow to changed files during incremental runs.
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? files.filter((f) => scope.changedFileIds.has(f.id))
+        : files;
+
+    if (targetFiles.length === 0) return ok([]);
+
     // Link CSS entry points that use @tailwind directives → config file
     const configRel = this.configFilePath
       ? path.relative(ctx.rootPath, this.configFilePath)
       : 'tailwind.config.js';
 
-    for (const file of files) {
+    for (const file of targetFiles) {
       // TRA-1602: language gate before the read — only CSS-like and
       // template-like files can yield a cssSource below, so reading anything
       // else is pure waste (this loop runs over the whole corpus on every

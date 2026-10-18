@@ -193,6 +193,15 @@ export class FastAPIPlugin implements FrameworkPlugin {
     const pyFiles = ctx.getAllFiles().filter((f) => f.language === 'python');
     if (pyFiles.length === 0) return ok(edges);
 
+    // TRA-2505 / TRA-2434: Scope-aware: fast-path when resolving incrementally.
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? pyFiles.filter((f) => scope.changedFileIds.has(f.id))
+        : pyFiles;
+
+    if (targetFiles.length === 0) return ok(edges);
+
     // Index top-level functions/classes by name for dependency resolution.
     type Sym = { id: number; symbolId: string; name: string; kind: string };
     const byName = new Map<string, Sym[]>();
@@ -210,7 +219,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
       }
     }
 
-    for (const f of pyFiles) {
+    for (const f of targetFiles) {
       const source = ctx.readFile(f.path);
       if (!source || (!source.includes('Depends') && !source.includes('depends'))) continue;
       const fileSyms = symsByFile.get(f.id) ?? [];

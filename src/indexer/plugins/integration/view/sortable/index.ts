@@ -250,7 +250,22 @@ export class SortablePlugin implements FrameworkPlugin {
     const edges: RawEdge[] = [];
     const groupParticipants = new Map<string, string[]>();
 
-    for (const file of ctx.getAllFiles()) {
+    const allFiles = ctx.getAllFiles();
+
+    // TRA-2505: fast-path for incremental runs: if no TS, JS, or Vue files changed,
+    // Sortable cannot have any modified group participants or handlers.
+    const scope = ctx.changeScope;
+    if (scope && scope.changedFileIds && scope.changedFileIds.size > 0) {
+      const relevantChanged = allFiles.some(
+        (f) =>
+          scope.changedFileIds.has(f.id) &&
+          f.language &&
+          ['typescript', 'javascript', 'vue'].includes(f.language),
+      );
+      if (!relevantChanged) return ok([]);
+    }
+
+    for (const file of allFiles) {
       if (!file.language) continue;
       if (!['typescript', 'javascript', 'vue'].includes(file.language)) continue;
       const source = ctx.readFile(file.path);

@@ -53,9 +53,32 @@ function normalizeRel(p: string): string {
 }
 
 export function resolveIacImportEdges(state: PipelineState, _scope?: ChangeScope): void {
-  // Resolution is cheap (a handful of IaC files); full pass is fine.
-  void _scope;
+  const scopedFileIds = _scope ? _scope.changedFileIds : null;
+  if (scopedFileIds && scopedFileIds.size === 0) return;
+
   const { store } = state;
+
+  // TRA-2505: fast-path for incremental runs: if no YAML, Terraform, or Dockerfile
+  // files were modified, no IaC import self-loops were emitted.
+  if (scopedFileIds && scopedFileIds.size > 0) {
+    const scopedIds = Array.from(scopedFileIds);
+    let hasIacFiles = false;
+    const CHUNK = 900;
+    for (let i = 0; i < scopedIds.length; i += CHUNK) {
+      const chunk = scopedIds.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const row = store.db
+        .prepare(
+          `SELECT 1 FROM files WHERE (language IN ('yaml', 'terraform', 'dockerfile') OR path LIKE '%.yaml' OR path LIKE '%.yml' OR path LIKE '%Dockerfile%' OR path LIKE '%.tf') AND id IN (${ph}) LIMIT 1`,
+        )
+        .get(...chunk);
+      if (row) {
+        hasIacFiles = true;
+        break;
+      }
+    }
+    if (!hasIacFiles) return;
+  }
 
   const importsEdgeType = store.db
     .prepare('SELECT id FROM edge_types WHERE name = ?')

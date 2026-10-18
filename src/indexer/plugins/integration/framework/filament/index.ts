@@ -610,9 +610,15 @@ export class FilamentPlugin implements FrameworkPlugin {
    */
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
     const edges: RawEdge[] = [];
+    const scope = ctx.changeScope;
+    const targetFiles =
+      scope && scope.changedFileIds && scope.changedFileIds.size > 0
+        ? ctx.getAllFiles().filter((f) => scope.changedFileIds.has(f.id) && f.language === 'php')
+        : ctx.getAllFiles().filter((f) => f.language === 'php');
 
-    for (const file of ctx.getAllFiles()) {
-      if (file.language !== 'php') continue;
+    if (targetFiles.length === 0) return ok([]);
+
+    for (const file of targetFiles) {
       const source = ctx.readFile(file.path);
       if (!source || !isFilamentFile(source)) continue;
 
