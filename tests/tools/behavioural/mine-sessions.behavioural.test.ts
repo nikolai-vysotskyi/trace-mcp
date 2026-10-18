@@ -191,13 +191,12 @@ describe('mine_sessions — behavioural contract', () => {
     expect(forced.sessions_mined).toBeGreaterThanOrEqual(1);
     expect(forced.decisions_extracted).toBeGreaterThan(0);
 
-    // force re-mines → rows duplicate. Exact count depends on extraction,
-    // so just assert the store grew rather than pin a magic number.
+    // Re-mining refreshes identical unanchored decisions without growing the store.
     const afterRows = store.queryDecisions({
       project_root: projectRoot,
       include_pending: true,
     }).length;
-    expect(afterRows).toBeGreaterThan(baselineRows);
+    expect(afterRows).toBe(baselineRows);
   });
 
   it('reject_threshold drops decisions below the floor (no rows persisted)', async () => {

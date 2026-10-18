@@ -341,6 +341,7 @@ export interface StaleDecisionReport {
 export interface PruneDecisionsResult {
   staleRoots: string[];
   decisions: number;
+  expiredDecisions: number;
   chunks: number;
   clusters: number;
   memos: number;
