@@ -320,7 +320,16 @@ export function normalizeToProjectRelative(filePath: string, rootPath: string): 
     const base = path.basename(absRoot);
     const forward = filePath.split(/[\\/]+/).join('/');
     if (base && forward.startsWith(`${base}/`)) {
-      targetPath = forward.slice(base.length + 1);
+      const stripped = forward.slice(base.length + 1);
+      const originalCand = path.resolve(absRoot, filePath);
+      const strippedCand = path.resolve(absRoot, stripped);
+      try {
+        if (!fs.existsSync(originalCand) && fs.existsSync(strippedCand)) {
+          targetPath = stripped;
+        }
+      } catch {
+        /* best-effort existence check */
+      }
     }
   }
   const rel = path.relative(absRoot, path.resolve(absRoot, targetPath));
