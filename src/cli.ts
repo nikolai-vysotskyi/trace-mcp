@@ -3788,6 +3788,7 @@ program
     // re-triggers a restart mid-drain.
     let stopHeapGuard: (() => void) | null = null;
     let memoryScheduler: MemoryScheduler | null = null;
+    let memorySchedulerInitPromise: Promise<void> | null = null;
     let activityPoker: NodeJS.Timeout | undefined;
     let stalenessTimer: NodeJS.Timeout | undefined;
     let updateWatchdog: NodeJS.Timeout | undefined;
@@ -3922,8 +3923,12 @@ program
       idleMonitor.stop();
       // Drain scheduler stages while every DB is still open (stages read
       // per-project stores and the shared scheduler state).
+      if (memorySchedulerInitPromise) {
+        await memorySchedulerInitPromise.catch(() => {});
+      }
       if (memoryScheduler) {
         await memoryScheduler.stop();
+        memoryScheduler = null;
       }
       if (activityPoker) clearInterval(activityPoker);
       if (stalenessTimer) clearInterval(stalenessTimer);
@@ -4201,6 +4206,7 @@ program
 
       projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
         maxLoaded: configuredMaxLoadedProjects,
+        evictDeleted: true,
         onUnloaded: (roots) => {
           for (const root of roots) {
             teardownProjectBookkeeping(root);
@@ -4208,13 +4214,43 @@ program
           }
         },
       });
+      // Vitals breadcrumb (TRA-267): an OS-level kill or native crash runs no JS
+      // handler, so the safety net logs nothing and daemon.log's last line is an
+      // ordinary indexing message. A periodic memory/project line makes the
+      // trajectory before such a gap readable after the fact.
       startVitalsLog({
         getCounts: () => {
           const loaded = projectManager.listProjects();
+          // TRA-1843: one warn per stall episode (latched inside) so a project
+          // wedged in indexing names itself instead of sitting silent in the
+          // vitals line at `sweep_busy` forever.
+          projectManager.warnOnIndexingStalls();
           return {
             loaded: loaded.length,
-            indexing: loaded.filter((p) => p.status === 'indexing' || p.status === 'starting')
-              .length,
+            // TRA-1125: initial-load status alone under-reports. Incremental
+            // reindex runs with the project still marked `ready`, so a busy
+            // daemon logged itself idle — see countReindexingProjects().
+            // TRA-1763: the pipeline now marks its own runs too (indexAll /
+            // indexFiles / deferred reconciles), so a project in initial load
+            // is in BOTH sets — exclude marked roots from the status term so
+            // one busy project counts once, not twice.
+            indexing:
+              loaded.filter(
+                (p) =>
+                  (p.status === 'indexing' || p.status === 'starting') && !isReindexing(p.root),
+              ).length + countReindexingProjects(),
+            // TRA-1625: sweep skip reasons, so a daemon holding far more than
+            // maxLoaded while unloading nothing is diagnosable from the log.
+            // TRA-1738: pass the ceiling too — without it `evictable` counts
+            // only TTL victims and hides LRU-ceiling victims the sweep would
+            // actually evict on this tick.
+            sweep: projectManager.sweepEligibility(
+              configuredIdleUnloadMinutes * 60_000,
+              configuredMaxLoadedProjects,
+            ),
+            // TRA-1665: dropped-event / reconcile tally, so a per-minute
+            // full-walk storm on a churn-heavy root is visible in the vitals.
+            reconcile: getDroppedEventStats(),
           };
         },
       });
@@ -4248,23 +4284,32 @@ program
       // self-throttles via a global serial queue (concurrency=1) so it cannot
       // race LLM calls or SQLite writes against itself.
       // Initialized in the background so loadConfig does not delay listening.
-      void (async () => {
+      // Guarded against shutdown race (TRA-2531): if shutdown begins while
+      // loadConfig is awaiting, do not construct or start the scheduler.
+      memorySchedulerInitPromise = (async () => {
         try {
           const schedulerConfigResult = await loadConfig(process.cwd()).catch(() => null);
+          if (daemonShuttingDown) return;
           const schedulerConfigFallback =
             schedulerConfigResult && schedulerConfigResult.isOk()
               ? schedulerConfigResult.value
               : (await loadConfig().catch(() => null))?.unwrapOr(undefined as never);
+          if (daemonShuttingDown) return;
           if (!schedulerConfigFallback) {
             logger.warn('Could not load any config for memory scheduler; skipping start');
           }
-          memoryScheduler = new MemoryScheduler({
+          if (daemonShuttingDown) return;
+          const scheduler = new MemoryScheduler({
             projectManager,
             config: schedulerConfigFallback ?? ({} as never),
           });
-          memoryScheduler.start();
+          if (daemonShuttingDown) return;
+          memoryScheduler = scheduler;
+          scheduler.start();
         } catch (err) {
-          logger.warn({ err }, 'Failed to start memory scheduler');
+          if (!daemonShuttingDown) {
+            logger.warn({ err }, 'Failed to start memory scheduler');
+          }
         }
       })();
 
