@@ -109,7 +109,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 | **Auto-import resolution** | Locate composable definitions | Auto-imports mapped to definitions |
 | **Data fetching paths** | Match URL literals to server routes | Direct edge from literal string paths to `/api/*` |
 | **File-based routing** | Manual path reconstruction | Complete URI route table extracted |
-| **Nuxt 4 app/ layout** | Confused by multi-directory roots | Detects Nuxt 4 compatibility layout |
+| **Nuxt 4 app/ layout** | Inspect files across split app/ and root directories | Detects Nuxt 4 compatibility layout |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
 
 ---
