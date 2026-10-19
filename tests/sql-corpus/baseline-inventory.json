@@ -1,0 +1,9 @@
+{
+  "trace_mcp_version": "3.34.6",
+  "extractor": "regex-sql-plugin",
+  "corpus_root": "tests/sql-corpus/fixtures",
+  "files": 8,
+  "files_with_first_cte_match": 5,
+  "first_cte_symbol_count": 5,
+  "note": "Public fixture pack only. Regenerate with npm run sql-corpus:inventory against TRACE_SQL_CORPUS_ROOT for external corpora."
+}

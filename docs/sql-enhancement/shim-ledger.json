@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "description": "Parse-only preprocessor and shim experiments. Do not re-enable without corpus spike proof.",
+  "accepted_in_pipeline": [
+    "template_mustache",
+    "python_format_braces",
+    "bind_param",
+    "pg_distinct_on_join",
+    "pg_materialized_cte",
+    "pg_ilike_to_like",
+    "pg_at_time_zone_fold"
+  ],
+  "rejected_global": [
+    {
+      "id": "pg_double_colon_cast",
+      "reason": "ok 196→185, partial 54→65 on 250-file corpus (historical); current corpus 249 files / 53 partial",
+      "helper": "normalizePgDoubleColonCast",
+      "phase3_use": "optional per-file retry after failed/partial, not default L1"
+    }
+  ],
+  "experiment_zero_lift": [
+    "materialized_cte",
+    "ilike_to_like",
+    "filter_where_strip",
+    "jsonb_cast_text",
+    "jsonb_operators",
+    "pg_cast_to_text",
+    "interval_simplify"
+  ],
+  "script": "scripts/shim-lift-experiment.ts"
+}
