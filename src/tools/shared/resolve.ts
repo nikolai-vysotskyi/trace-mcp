@@ -102,6 +102,26 @@ export function resolveSymbolFlexible(
         candidates: matches.slice(0, MAX_CANDIDATES).map((m) => m.symbol_id),
       };
     }
+    if (input.includes('.')) {
+      const lastDot = input.lastIndexOf('.');
+      const methodName = input.slice(lastDot + 1);
+      const subMatches = store.findSymbolsByName(methodName, MAX_CANDIDATES + 1);
+      const filtered = subMatches.filter(
+        (m) =>
+          m.fqn === input ||
+          (m.fqn && input.endsWith(`.${m.fqn}`)) ||
+          m.symbol_id.includes(`::${input.replaceAll('.', '::')}`),
+      );
+      if (filtered.length === 1) {
+        const hit = withFile(store, filtered[0]);
+        if (hit) return { status: 'found', symbol: hit.sym, file: hit.file, resolvedVia: 'fqn' };
+      } else if (filtered.length > 1) {
+        return {
+          status: 'ambiguous',
+          candidates: filtered.slice(0, MAX_CANDIDATES).map((m) => m.symbol_id),
+        };
+      }
+    }
     return { status: 'miss' };
   }
 
@@ -110,34 +130,41 @@ export function resolveSymbolFlexible(
   const rawFilePart = input.slice(0, sep);
   const rest = input.slice(sep + 2);
   let filePart = rawFilePart;
-  if (projectRoot && isAbsolutePathLike(rawFilePart)) {
+  if (projectRoot) {
     const folded = normalizeToProjectRelative(rawFilePart, projectRoot);
     if (folded !== rawFilePart) filePart = folded;
   }
 
   // 3a. Full id with `#kind`: retry the exact id against the folded / suffix-resolved file.
   if (rest.includes('#')) {
-    if (filePart !== rawFilePart) {
-      const folded = withFile(store, store.getSymbolBySymbolId(`${filePart}::${rest}`));
-      if (folded) {
-        return {
-          status: 'found',
-          symbol: folded.sym,
-          file: folded.file,
-          resolvedVia: 'symbol_id_path_normalized',
-        };
-      }
+    const [namePart, kindPart] = rest.split('#');
+    const nameVariants = [namePart];
+    if (namePart.includes('.')) {
+      nameVariants.push(namePart.replaceAll('.', '::'));
     }
-    const fileRow = store.resolveFile(filePart);
-    if (fileRow && fileRow.path !== filePart) {
-      const viaSuffix = withFile(store, store.getSymbolBySymbolId(`${fileRow.path}::${rest}`));
-      if (viaSuffix) {
-        return {
-          status: 'found',
-          symbol: viaSuffix.sym,
-          file: viaSuffix.file,
-          resolvedVia: 'symbol_id_path_normalized',
-        };
+
+    const testFiles = [filePart];
+    if (filePart !== rawFilePart) {
+      testFiles.push(rawFilePart);
+    }
+    const fileRow =
+      store.resolveFile(filePart) ??
+      (filePart !== rawFilePart ? store.resolveFile(rawFilePart) : undefined);
+    if (fileRow && !testFiles.includes(fileRow.path)) {
+      testFiles.push(fileRow.path);
+    }
+
+    for (const f of testFiles) {
+      for (const n of nameVariants) {
+        const hit = withFile(store, store.getSymbolBySymbolId(`${f}::${n}#${kindPart}`));
+        if (hit) {
+          return {
+            status: 'found',
+            symbol: hit.sym,
+            file: hit.file,
+            resolvedVia: 'symbol_id_path_normalized',
+          };
+        }
       }
     }
     return { status: 'miss' };
@@ -146,29 +173,36 @@ export function resolveSymbolFlexible(
   // 3b. Kind-less `file::Name`: candidates share the `file::Name#` prefix.
   // Prefer the canonical stored path so a cwd-relative or absolute file part
   // still matches the indexed spelling.
-  const fileRow = store.resolveFile(filePart);
+  const fileRow =
+    store.resolveFile(filePart) ??
+    (filePart !== rawFilePart ? store.resolveFile(rawFilePart) : undefined);
   const effectiveFile = fileRow?.path ?? filePart;
-  const candidates = store.findSymbolsBySymbolIdPrefix(
-    `${effectiveFile}::${rest}`,
-    MAX_CANDIDATES + 1,
-  );
-  if (candidates.length === 1) {
-    const hit = withFile(store, candidates[0]);
-    if (hit) {
+  const restVariants = [rest];
+  if (rest.includes('.')) {
+    restVariants.push(rest.replaceAll('.', '::'));
+  }
+
+  for (const r of restVariants) {
+    const candidates = store.findSymbolsBySymbolIdPrefix(
+      `${effectiveFile}::${r}`,
+      MAX_CANDIDATES + 1,
+    );
+    if (candidates.length === 1) {
+      const hit = withFile(store, candidates[0]);
+      if (hit) {
+        return {
+          status: 'found',
+          symbol: hit.sym,
+          file: hit.file,
+          resolvedVia: 'symbol_id_kind_inferred',
+        };
+      }
+    } else if (candidates.length > 1) {
       return {
-        status: 'found',
-        symbol: hit.sym,
-        file: hit.file,
-        resolvedVia: 'symbol_id_kind_inferred',
+        status: 'ambiguous',
+        candidates: candidates.slice(0, MAX_CANDIDATES).map((c) => c.symbol_id),
       };
     }
-    return { status: 'miss' };
-  }
-  if (candidates.length > 1) {
-    return {
-      status: 'ambiguous',
-      candidates: candidates.slice(0, MAX_CANDIDATES).map((c) => c.symbol_id),
-    };
   }
   return { status: 'miss' };
 }
