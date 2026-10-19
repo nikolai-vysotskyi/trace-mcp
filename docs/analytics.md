@@ -243,7 +243,7 @@ Daily token usage trends over time.
 get_usage_trends({ days?: number })
 ```
 
-Returns daily breakdown: sessions, tokens, estimated cost, tool calls. Good for spotting cost spikes and tracking optimization progress.
+Returns daily breakdown: sessions, tokens, estimated cost, tool calls, prompt-cache hit rate (`cache_hit_rate` blended, `cache_hit_rate_by_provider` by provider family). Good for spotting cost spikes and tracking optimization progress.
 
 ### `get_session_stats`
 
