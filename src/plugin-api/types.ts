@@ -309,6 +309,11 @@ export interface ResolveContext {
    * backward-compatible.
    */
   changeScope?: ChangeScope;
+  /**
+   * Cancellation signal passed to plugin resolveEdges (TRA-2530).
+   * Checked cooperatively to abort work when resolution times out or is cancelled.
+   */
+  signal?: AbortSignal;
 }
 
 /**

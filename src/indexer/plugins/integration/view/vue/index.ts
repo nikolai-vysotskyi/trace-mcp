@@ -367,6 +367,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     const componentNameToFilePath = new Map<string, string>();
 
     for (const [index, file] of vueFiles.entries()) {
+      if (ctx.signal?.aborted) return ok([]);
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
@@ -385,6 +386,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     // Map composable function name -> symbolId
     const composableNameToSymbolId = new Map<string, string>();
     for (const [index, file] of composableFiles.entries()) {
+      if (ctx.signal?.aborted) return ok([]);
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       for (const sym of symbols) {
@@ -407,6 +409,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
       : vueFiles;
 
     for (const [index, file] of targetVueFiles.entries()) {
+      if (ctx.signal?.aborted) return ok([]);
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
       const symbols = ctx.getSymbolsByFile(file.id);
       const compSymbol = symbols.find((s) => s.kind === 'class');
@@ -522,6 +525,7 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     componentNameToSymbolId: Map<string, string>,
     edges: RawEdge[],
   ): Promise<void> {
+    if (ctx.signal?.aborted) return;
     // Only consider distinctive component names.
     const names = [...componentNameToSymbolId.keys()].filter(isDistinctiveComponentName);
     if (names.length === 0) return;
@@ -552,10 +556,15 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
     );
 
     for (const [index, file] of relevantFiles.entries()) {
+      if (ctx.signal?.aborted) break;
       if (index > 0 && index % 32 === 0) await yieldToEventLoopFair();
 
       const source = ctx.readFile(file.path);
       if (!source) continue;
+
+      // TRA-2530: Skip files with no uppercase letters (distinctive component names are PascalCase)
+      // and skip oversized files (>300KB) to prevent regex stalls on large bundles/data.
+      if (source.length > 300_000 || !/[A-Z]/.test(source)) continue;
 
       const found = new Set<string>();
       re.lastIndex = 0;
