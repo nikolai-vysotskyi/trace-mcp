@@ -775,15 +775,14 @@ This section is the landing-page counterpart to §2. The first screen answers tw
 questions in order: what trace-mcp does for an agent, then how to install it.
 The visual proof is an actual app screenshot, immediately below the action.
 
-**One short headline, one precise sentence, one primary action.** The H1 is
-`Read once. Reuse the answer.` It is short enough to read as a single thought
-at desktop width. The line below it carries the position sentence verbatim:
-`trace-mcp indexes what your agent keeps re-reading, and serves the answer
-instead.` That sentence also appears in the README, generated banner and site
-description; edit those surfaces together if the position changes. Do not
-stretch it back into a three-line display headline. TRA-2265 showed that moving
-the benchmark paragraphs below the fold did not fix the wall of text while the
-H1 itself still occupied three lines.
+**One concrete headline, one primary action.** The H1 is `Code graph for coding
+agents` with no subtitle. The shorter phrase names the visible graph and its
+audience; the broader position sentence still lives in README, the generated
+banner and site metadata. In TRA-2265 Nikolai rejected two text-led hero
+revisions, including `Read once. Reuse the answer.` SEO Agent's independent
+copy review found that headline ambiguous and its subtitle repetitive. A longer
+category-and-benefit proposal recreated five lines of copy on mobile. Keep the
+first screen to the entry category and show the product immediately after it.
 
 **The cobalt download button is the only primary action.** Without JavaScript
 it links to `/releases/latest`; with JavaScript it resolves a direct macOS arm64,
@@ -808,12 +807,11 @@ facts lower on the page. Both made the screen busy without helping the install
 decision. Space belongs to the headline, action and graph screenshot. Avoid
 adding another pill, badge, animation or abstract diagram above the screenshot.
 
-**Measure the full composition.** TRA-2265's second local headless preview,
-with Jekyll front matter stripped, placed the desktop CTA at y=252 and the app
-view at y=428 on 1440×900; the benchmark strip began below the fold at y=1049.
-At 390×844 the CTA was at y=236 and the app view at y=426, with no horizontal
-overflow. These are preview coordinates, not the published-page baseline; measure
-the live page after release. Check both themes and both viewport sizes whenever
+**Measure the full composition.** A headless preview of the third TRA-2265
+proposal, changing only the live DOM copy, placed the desktop CTA at y=201 and
+the app view at y=377 on 1440×900. At 390×844 the CTA was at y=170 and the app
+view at y=359. These are preview coordinates, not the published-page baseline;
+measure the live page after release. Check both themes and both viewport sizes whenever
 headline copy, hero spacing, the utility row or screenshot crop changes. Keep
 focus visible on download, npm copy and other downloads, and retain reduced
 motion support.
