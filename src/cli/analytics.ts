@@ -12,6 +12,7 @@ import {
   runBenchmark,
 } from '../analytics/benchmark.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
+import { classifyCacheProviderFamily, isCacheRegression } from '../analytics/cache-hit-rate.js';
 import { getOptimizationReport, getSessionAnalytics } from '../analytics/session-analytics.js';
 import { syncAnalytics, syncProjectAnalytics } from '../analytics/sync.js';
 import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
@@ -150,10 +151,10 @@ analyticsCommand
       console.log(`Cache read: ${result.totals.cacheReadTokens.toLocaleString()}`);
       console.log(`Estimated cost: $${result.totals.estimatedCostUsd.toFixed(2)}`);
 
-      if (result.cache_hit_rate) {
-        const chr = result.cache_hit_rate;
+      if (result.cacheHitRate) {
+        const chr = result.cacheHitRate;
         const blendedPct = `${(chr.blended * 100).toFixed(1)}%`;
-        const providers = Object.entries(chr.by_provider);
+        const providers = Object.entries(chr.byProvider);
         if (providers.length > 0) {
           const split = providers
             .map(([prov, rate]) => `${prov}: ${(rate * 100).toFixed(1)}%`)
@@ -162,11 +163,19 @@ analyticsCommand
         } else {
           console.log(`Prompt-cache hit rate (blended): ${blendedPct}`);
         }
-        const models = Object.entries(chr.by_model);
+        const models = Object.entries(chr.byModel);
         if (models.length > 1) {
           console.log(`  Split by model:`);
           for (const [m, rate] of models) {
-            console.log(`    ${m}: ${(rate * 100).toFixed(1)}%`);
+            const flag = isCacheRegression(m, rate) ? ' ⚠️ regression' : '';
+            console.log(`    ${m}: ${(rate * 100).toFixed(1)}%${flag}`);
+          }
+        } else if (models.length === 1) {
+          const [m, rate] = models[0];
+          if (isCacheRegression(m, rate)) {
+            console.log(
+              `  ⚠️ regression: ${m} cache hit rate ${(rate * 100).toFixed(1)}% below ${classifyCacheProviderFamily(m)} baseline`,
+            );
           }
         }
         if (providers.length > 1) {

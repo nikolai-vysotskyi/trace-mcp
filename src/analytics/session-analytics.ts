@@ -13,6 +13,12 @@ import {
 export type { OptimizationReport } from './rules.js';
 export type { CacheHitRateBreakdown } from './cache-hit-rate.js';
 
+export interface SessionCacheHitRate {
+  blended: number;
+  byModel: Record<string, number>;
+  byProvider: Record<string, number>;
+}
+
 interface AnalyticsOptions {
   period?: 'today' | 'week' | 'month' | 'all';
   sessionId?: string;
@@ -30,7 +36,7 @@ interface SessionAnalytics {
     estimatedCostUsd: number;
     toolCalls: number;
   };
-  cache_hit_rate: CacheHitRateBreakdown;
+  cacheHitRate: SessionCacheHitRate;
   byToolServer: Record<string, { calls: number; outputTokensEst: number; pct: number }>;
   topTools: { name: string; calls: number; outputTokensEst: number }[];
   topFiles: { path: string; reads: number; tokensEst: number }[];
@@ -67,7 +73,11 @@ export function getSessionAnalytics(
       estimatedCostUsd: result.totals.estimated_cost_usd,
       toolCalls: result.totals.tool_calls,
     },
-    cache_hit_rate: result.cache_hit_rate,
+    cacheHitRate: {
+      blended: result.cache_hit_rate.blended,
+      byModel: result.cache_hit_rate.by_model,
+      byProvider: result.cache_hit_rate.by_provider,
+    },
     byToolServer: Object.fromEntries(
       Object.entries(result.by_tool_server).map(([k, v]) => [
         k,

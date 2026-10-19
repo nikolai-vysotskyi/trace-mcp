@@ -66,12 +66,18 @@ export function classifyCacheProviderFamily(model: string | null | undefined): C
 /**
  * Scoped cache hit-rate regression guard.
  * Compares rate against family-specific baseline with tolerance.
+ * Accepts either a provider family ('anthropic' | 'local' | 'other')
+ * or a model name string (which is automatically classified into its family).
  */
 export function isCacheRegression(
-  family: CacheProviderFamily | string,
+  modelOrFamily: CacheProviderFamily | string,
   rate: number,
   tolerance = 0.05,
 ): boolean {
+  const family =
+    modelOrFamily === 'anthropic' || modelOrFamily === 'local' || modelOrFamily === 'other'
+      ? (modelOrFamily as CacheProviderFamily)
+      : classifyCacheProviderFamily(modelOrFamily);
   if (family === 'anthropic') {
     return rate < CLAUDE_CACHE_HIT_BASELINE - tolerance;
   }
