@@ -1,7 +1,7 @@
 ---
 title: "Session Analytics & Coverage Intelligence — token savings, wasteful patterns"
 description: "trace-mcp's built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage."
-updated: 2026-09-09
+updated: 2026-10-19
 ---
 
 # Session Analytics & Coverage Intelligence
@@ -106,7 +106,7 @@ Token usage, cost breakdown by tool/server, top files, models used. Auto-syncs l
 get_session_analytics({ period?: "today" | "week" | "month" | "all" })
 ```
 
-Returns: session count, total tokens (input/output/cache), estimated cost, breakdown by tool server (builtin, trace-mcp, jcodemunch, phpstorm, ...), top tools by token output, top files by read tokens, models used.
+Returns: session count, total tokens (input/output/cache), prompt-cache hit rate (blended and split by provider/model; measure per-model, blended lies when local sessions are in the mix), estimated cost, breakdown by tool server (builtin, trace-mcp, jcodemunch, phpstorm, ...), top tools by token output, top files by read tokens, models used.
 
 ### `get_optimization_report`
 
@@ -242,7 +242,7 @@ Daily token usage trends over time.
 get_usage_trends({ days?: number })
 ```
 
-Returns daily breakdown: sessions, tokens, estimated cost, tool calls. Good for spotting cost spikes and tracking optimization progress.
+Returns daily breakdown: sessions, tokens, estimated cost, tool calls, prompt-cache hit rate (`cache_hit_rate` blended, `cache_hit_rate_by_provider` by provider family). Good for spotting cost spikes and tracking optimization progress.
 
 ### `get_session_stats`
 

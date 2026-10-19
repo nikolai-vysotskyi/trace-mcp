@@ -177,7 +177,7 @@ which excludes the framework-specific rows.
 | `get_screen_context` | Get full context for a React Native screen: navigator, navigation edges, deep link, platform variants, native modules. | framework |
 | `get_service_deps` | Get external service dependencies: which services this one calls (outgoing) and which call it (incoming). | opt-in |
 | `get_service_map` | Get map of all services, their APIs, and inter-service dependencies. | opt-in |
-| `get_session_analytics` | Analyze AI agent session logs: token usage, cost breakdown by tool/server, top files, models used. | always |
+| `get_session_analytics` | Analyze AI agent session logs: token usage, prompt-cache hit rate (blended and split by provider/model), cost breakdown by tool/server, top files, models used. | always |
 | `get_session_journal` | Session history: all tool calls made, files read, zero-result searches, and duplicate queries. | always |
 | `get_session_snapshot` | Compact session snapshot (~200 tokens) for context recovery after compaction. | always |
 | `get_session_stats` | Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/e… | always |
@@ -196,7 +196,7 @@ which excludes the framework-specific rows.
 | `get_tests_for` | Find test files/functions covering a given symbol or file. | always |
 | `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors (what it extends/implements) and descendants (what extends/implements it). | always |
 | `get_untested_symbols` | Find symbols lacking test coverage. | always |
-| `get_usage_trends` | Daily token usage time-series: sessions, tokens, estimated cost, tool calls per day. | always |
+| `get_usage_trends` | Daily token usage time-series: sessions, tokens, estimated cost, tool calls, prompt-cache hit rate per day. | always |
 | `get_wake_up` | Compact orientation context (~300 tokens) for session start. | always |
 | `get_workspace_map` | List all detected monorepo workspaces with file counts, symbol counts, and languages. | always |
 | `graph_query` | Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. | always |
