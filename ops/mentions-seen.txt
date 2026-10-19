@@ -309,3 +309,8 @@ daniyal44/Zyphuel
 # docs/automacao-rede-e-inteligencia.md and docs/decisoes.md evaluate trace-mcp (https://trace-mcp.com/code-graph-mcp.html)
 # alongside Graft for incremental code mapping & framework relationships in decentralized agent collaboration:
 wkoch/legacy
+
+# ── Swept 2026-10-20 early morning pass (TRA-2559) ──
+# Genuine third-party architectural citation & prior art reference (successor / rename of sayef/comind):
+# docs/design/ledger.md cites trace-mcp and https://trace-mcp.com/decision-memory.html under Decision records:
+sayef/comindly

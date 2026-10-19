@@ -123,6 +123,7 @@ Rules for keeping it honest:
 | [wkoch/goCraft](https://github.com/wkoch/goCraft) | **Yes — third-party user adoption, we did not submit it** (active 2026-10-12) | Desktop agent development & commit logs (`docs/conversas/2026-10-11.md`). In commit session rules, explicitly preserves `.trace-mcp/install-date` and `.trace-mcp/guard-mode` as local installation state across commit iterations | Independent practitioner usage in the wild. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-13 | 2026-10-13 |
 | [azhri1990/ACODE_ROUTE](https://github.com/azhri1990/ACODE_ROUTE) | **Yes — third-party curated personal collection, we did not submit it** (0★, 0 forks, created 2026-10-14) | `CATALOG.md` ("My AI Box", 1,107 items collected) lists `- nikolai-vysotskyi/trace-mcp — https://github.com/nikolai-vysotskyi/trace-mcp` under curated developer tools | Curated personal AI reference directory. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-14 | 2026-10-14 |
 | [sayef/comind](https://github.com/sayef/comind) | **Yes — third-party architectural citation & prior art reference, we did not submit it** (0★, active 2026-10-16) | Architecture design document `docs/design/ledger.md` ("Comind Ledger — design plan") surveying agent memory and decision record systems. Under "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html` | Architectural design reference and citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-16 | 2026-10-16 |
+| [sayef/comindly](https://github.com/sayef/comindly) | **Yes — third-party architectural citation & prior art reference, we did not submit it** (0★, active 2026-10-19/20) | Successor / rename of `sayef/comind`. Architecture design document `docs/design/ledger.md` ("Comind Ledger — design plan") surveying agent memory and decision record systems. Under "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html` | Architectural design reference and citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-20 | 2026-10-20 |
 | [wkoch/legacy](https://github.com/wkoch/legacy) | **Yes — third-party architectural study & adapter evaluation, we did not submit it** (0★, active 2026-10-16) | Architecture planning documents `docs/automacao-rede-e-inteligencia.md` and `docs/decisoes.md` evaluating code intelligence architectures for decentralized AI agents. Evaluates `trace-mcp` (citing https://trace-mcp.com/code-graph-mcp.html for incremental local graphs and framework-specific relationships) alongside Graft as potential adapters for logical code mapping. Recommends starting with pilot language adapters | Independent architectural evaluation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-17 | 2026-10-17 |
 | [ProSkillsMD/proskills](https://github.com/ProSkillsMD/proskills) | **Yes — third-party catalog, auto-scouted 2026-10-10** (18★, active daily) | Automated scout filed and listed candidates for all 3 repository skills in OpenClaw skill listings: `skills/trace-mcp/SKILL.md` ([issue #8193](https://github.com/ProSkillsMD/proskills/issues/8193), status `groot:published`, verdict `review:pass`), `skills/trace-mcp-codemod/SKILL.md` ([issue #8194](https://github.com/ProSkillsMD/proskills/issues/8194)), and `skills/trace-mcp-pre-commit/SKILL.md` ([issue #8195](https://github.com/ProSkillsMD/proskills/issues/8195)). License MIT pass, static scan passed with no findings. Found via `github_topic:claude-skills` | Nothing to submit — automated deterministic scout updates on new commits to skill directories. Do not ping, no action needed. Discovered via issue audit | 2026-10-18 |
 
@@ -5664,6 +5665,65 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - jgravelle/jcodemunch-mcp: 2,785★ (=), 374 forks (-1)
 - continuedev/continue: 36,262★ (+4), 5,494 forks (=)
 - Aider-AI/aider: 49,640★ (+3), 5,082 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+### Early morning pass, 2026-10-20 (TRA-2559): mention sweep (sayef/comindly), open threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, maintained by author's daily self-adds, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 1 new repo outside the seen list (`sayef/comindly`).
+- Evaluated matched file `docs/design/ledger.md` via read-only raw fetch: confirmed continuation/rename of `sayef/comind` (independent deterministic code intelligence engine project for coding agents). Under §1 "Why this, why now" / "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, referencing `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html`. Recorded as a genuine architectural citation in the surfaces table and silenced in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- sayef/comindly: Continuation of sayef/comind (0★, active 2026-10-19/20). SCIP-based code intelligence engine for agents, evaluating agent memory and decision records in `docs/design/ledger.md`, explicitly citing `trace-mcp` and its decision memory architecture.
+- bgts-ai-org/bgts-context-engine: Deterministic code-graph context engine for AI coding agents (75★, MIT, PyPI `bgts-context-engine`). Backed by PostgreSQL + Apache AGE + pgvector over MCP and REST, targeting structural context delivery (e.g. call hierarchies and write locations) without an LLM in the loop. Claims -82% tokens, -63% cost, -89% tool calls across 6 languages.
+  - Architectural contrast: trace-mcp requires zero external database servers or Docker containers (embedded SQLite + sqlite-vec directly inside Node/npx with zero external database dependencies vs requiring a full PostgreSQL + Apache AGE setup), while delivering comparable or superior token compression (70.5%–72.7% median reduction) across 81 languages (vs BCE's 6 languages).
+- alexsoft-hq/Cascade: Code-to-column change-impact knowledge graph for AI coding agents (8★, Apache-2.0). Provides stored project structure queryable over MCP, CLI and local web viewer (`session_briefing`, `architecture`, `code_search`, `file_outline`, `code_trace`, `code_snippet`, `changed_impact`, `flow`) across Java, TypeScript and frontend inputs.
+  - Architectural contrast: trace-mcp covers 81 languages (16 deep AST, 88 frameworks) vs Cascade's Java/TS/frontend, features non-invasive CLI tools and compact TOON budgeting, and provides an integrated Electron desktop client without background daemon synchronization locks.
+- Novaya-AI/novgraph: Python-based CLI/MCP client for Novaya's hosted code knowledge graph (10★, Apache-2.0). Claims 96% to 99.8% smaller context than full file reads, but delegates indexing and storage to proprietary cloud servers (`trynovaya.com`).
+  - Architectural contrast: trace-mcp is 100% local, zero-telemetry / zero-cloud, open source (MIT), requires no API key or remote server, and indexes code deterministically on the user's machine.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PR #2714 (`feat(hooks): name the graph follow-up tools in every search augmentation`, opened 2026-10-19T21:52:30Z): In Claude Code PreToolUse hooks, whenever grep/glob/bash matches a symbol, appends a dedicated prompt line explicitly directing the agent to graph tools (`trace_path` for callers/callees, `get_code_snippet` for source, `search_graph` for related symbols).
+  - PR #2713 (`fix(python): a top-level call of a harmless same-module function keeps the package namespace`, opened 2026-10-19T20:57:57Z): In Python package namespace extraction, previously any top-level call caused cbm to withdraw all published re-exports. Stacked on #2712, adds an allowlist for provably harmless top-level calls (e.g. SQLAlchemy's `__go(locals())`), preventing 55 wrong name guesses for `sql.and_`, `sql.select`, and `sql.cast`.
+  - PR #2710 (`fix(php): drop the name guess when the receiver's class is not indexed`, opened 2026-10-19T21:57:21Z by wazum): In PHP call extraction, when the receiver class is known to the LSP but not indexed (vendor classes), drops heuristic fallback edges (`unique_name`/`suffix_match`), removing 25 incorrect cross-class call linkages (e.g. `$file->getUid()` falsely linking to `App\Item::getUid`).
+- colbymchenry/codegraph:
+  - PR #2683 (`fix(swift): a call written after try! links what it calls on Windows`, merged 2026-10-19T21:49:18Z by colbymchenry): Fixed 32-bit `unsigned long` overflow (`1UL << 31`) in MSVC Windows tree-sitter-swift scanner where `try!` misparsed as logical NOT `!`, causing callee names and receivers to be corrupted (e.g. `! Message2`, `! Repository`). Backported upstream 0.7.4 fix into vendored grammar.
+  - PR #2682 (`fix(go): variables declared in a var ( … ) block are indexed`, merged 2026-10-19T21:23:08Z by colbymchenry): Fixed Go variable extraction ignoring variables declared inside grouped `var ( ... )` blocks (wrapped in `var_spec_list`), which previously caused struct references, composite literals, and typed calls through package-level variables in etcd/prometheus/gin to remain unindexed.
+  - PR #2681 (`fix(extraction): a build folder inside src/ is indexed for its TypeScript, JSX, Vue, Svelte and Astro files`, merged 2026-10-19T21:10:40Z by colbymchenry).
+  - PR #2679 & #2678: Go doc comment extraction fixes (excluding `//go:embed` directives and comments separated by blank lines from declaration docs).
+- jgravelle/jcodemunch-mcp:
+  - PR #1165 / Release v1.108.383 (`fix: refreshing summaries no longer erases complexity and the call graph (#1161)`, merged 2026-10-19T21:43:29Z by jgravelle): Fixed critical data-loss defect where `summarize_repo(force=true)` reconstructed symbols via incomplete dictionaries and rewrote entire SQLite rows, setting `cyclomatic`, `max_nesting`, `param_count`, and `call_references` to NULL and zeroing repo health/complexity metrics. Switched to column-targeted summary updates.
+- oraios/serena:
+  - PR #2182 (`Make language-server file synchronization configurable`, opened 2026-10-19T21:06:24Z by AhmedDusuki): Added configurable `full` vs `none` strategies for language-server file synchronization to let users disable heavy filesystem baseline and rescans in large projects.
+  - Architectural contrast: trace-mcp uses native file watcher diffing with hash-gated stat checks and git fast paths, delivering sub-second incremental index updates without requiring users to disable file synchronization.
+
+**Competitor pulse (as of 2026-10-20 02:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,914★ (+2), 1,705 forks (+12)
+- oraios/serena: 30,401★ (+5), 2,264 forks (+22)
+- DeusData/codebase-memory-mcp: 46,945★ (+12), 3,884 forks (+3)
+- tirth8205/code-review-graph: 32,265★ (+2), 3,078 forks (+13)
+- colbymchenry/codegraph: 74,460★ (+12), 4,818 forks (=)
+- abhigyanpatwari/GitNexus: 47,952★ (+1), 5,199 forks (=)
+- jgravelle/jcodemunch-mcp: 2,787★ (+2), 374 forks (=)
+- continuedev/continue: 36,267★ (+5), 5,498 forks (+4)
+- Aider-AI/aider: 49,644★ (+4), 5,084 forks (+2)
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
