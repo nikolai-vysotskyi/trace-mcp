@@ -128,7 +128,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                     const relayedId = rest ? `${descendantRelPath}::${rest}` : descendantRelPath;
                     const relayed = await handler({
                       symbol_id: symbol_id ? relayedId : undefined,
-                      fqn,
+                      fqn: fqn ? relayedId : undefined,
                       max_lines,
                       verify_against_git,
                     });
@@ -165,7 +165,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
                     const relayedId = rest ? `${resolved.relPath}::${rest}` : resolved.relPath;
                     const relayed = await handler({
                       symbol_id: symbol_id ? relayedId : undefined,
-                      fqn,
+                      fqn: fqn ? relayedId : undefined,
                       max_lines,
                       verify_against_git,
                     });

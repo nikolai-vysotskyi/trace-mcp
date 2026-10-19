@@ -131,6 +131,27 @@ describe('normalizeToProjectRelative', () => {
     expect(normalizeToProjectRelative('/other/src/auth.ts', '/proj')).toBe('/other/src/auth.ts');
     expect(normalizeToProjectRelative('../evil.ts', '/proj')).toBe('../evil.ts');
   });
+
+  it('strips project basename prefix only when stripped path exists and prefixed path does not (TRA-2535)', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'norm-test-'));
+    tmpDirs.push(tmp);
+    const projDir = path.join(tmp, 'backend');
+    fs.mkdirSync(path.join(projDir, 'backend'), { recursive: true });
+    fs.mkdirSync(path.join(projDir, 'src'), { recursive: true });
+
+    // 1. Genuinely nested directory with same name: /repos/backend/backend/migrate.sql
+    fs.writeFileSync(path.join(projDir, 'backend', 'migrate.sql'), 'SELECT 1;');
+    expect(normalizeToProjectRelative('backend/migrate.sql', projDir)).toBe('backend/migrate.sql');
+
+    // 2. Caller passed project-basename prefix for a file that only exists at root: /repos/backend/src/auth.ts
+    fs.writeFileSync(path.join(projDir, 'src', 'auth.ts'), 'export const a = 1;');
+    expect(normalizeToProjectRelative('backend/src/auth.ts', projDir)).toBe('src/auth.ts');
+
+    // 3. File doesn't exist at all on disk: keep unchanged
+    expect(normalizeToProjectRelative('backend/nonexistent.ts', projDir)).toBe(
+      'backend/nonexistent.ts',
+    );
+  });
 });
 
 // ─── getSymbol ──────────────────────────────────────────────────────────────
