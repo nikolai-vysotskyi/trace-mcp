@@ -1,6 +1,7 @@
 # Footer "See also" nav, rendered by _layouts/default.html.
-# Keep in sync with docs/sitemap.xml — tests/docs/internal-links.test.ts fails
-# if a sitemap page is missing here.
+# Covered pages are in this nav OR in docs/articles.md catalogue (TRA-1952).
+- title: Articles
+  url: /articles.html
 - title: Code graph MCP
   url: /code-graph-mcp.html
 - title: Tools reference
@@ -11,46 +12,14 @@
   url: /what-trace-init-installs.html
 - title: Comparisons
   url: /comparisons.html
+- title: All comparisons
+  url: /articles.html#vs-comparisons
 - title: vs Repomix
   url: /vs/repomix.html
 - title: vs Serena
   url: /vs/serena.html
-- title: vs codebase-memory-mcp
-  url: /vs/codebase-memory-mcp.html
 - title: vs codegraph
   url: /vs/codegraph.html
-- title: vs CodeGraphContext
-  url: /vs/codegraphcontext.html
-- title: vs SocratiCode
-  url: /vs/socraticode.html
-- title: vs jCodeMunch
-  url: /vs/jcodemunch.html
-- title: vs TokenSave
-  url: /vs/tokensave.html
-- title: vs Narsil-MCP
-  url: /vs/narsil-mcp.html
-- title: vs GitNexus
-  url: /vs/gitnexus.html
-- title: vs Graft
-  url: /vs/graft.html
-- title: vs Context Mode
-  url: /vs/context-mode.html
-- title: vs code-review-graph
-  url: /vs/code-review-graph.html
-- title: Repomix vs codegraph
-  url: /vs/repomix-vs-codegraph.html
-- title: vs ast-grep
-  url: /vs/ast-grep.html
-- title: vs Continue
-  url: /vs/continue.html
-- title: vs Aider
-  url: /vs/aider.html
-- title: vs Cody
-  url: /vs/cody.html
-- title: vs ripwire
-  url: /vs/ripwire.html
-- title: vs IDE context
-  url: /vs/ide-context.html
 - title: PR review context benchmark
   url: /pr-context-benchmark.html
 - title: Cut Claude Code token usage

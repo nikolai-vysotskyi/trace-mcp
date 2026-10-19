@@ -1,7 +1,8 @@
 ---
 title: "MCP Tools Reference — code-intelligence tools by task and framework"
 description: "The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries."
-updated: 2026-09-08
+category: reference
+updated: 2026-10-19
 ---
 
 # Tools reference

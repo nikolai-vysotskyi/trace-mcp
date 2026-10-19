@@ -1,7 +1,8 @@
 ---
 title: "Aider Alternative: trace-mcp vs Aider for AI pair programming"
 description: "Aider pair-programs in your terminal with a repo map; trace-mcp serves a persistent code graph over MCP. Map vs graph, git loop, memory compared."
-updated: 2026-09-26
+category: vs-comparisons
+updated: 2026-10-19
 ---
 
 # Aider alternative: trace-mcp vs Aider

@@ -213,6 +213,13 @@
         </nav>
         {{ content }}
 
+        {%- if page.category and page.url != '/articles.html' %}
+        <p class="article-spoke-backlink">
+          <span class="backlink-label">Catalogue:</span>
+          <a href="{{ '/articles.html#' | append: page.category | relative_url }}">Articles / {{ page.category }}</a>
+        </p>
+        {%- endif %}
+
         {%- comment -%}
           Every page that outranks us for these queries shows a reader-visible
           date; ours only had one inside the TechArticle JSON-LD, which a reader

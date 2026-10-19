@@ -2,7 +2,8 @@
 layout: default
 title: "Privacy — what trace-mcp sends, and how to turn it off"
 description: "Everything trace-mcp sends off your machine: one anonymous daily ping, its complete field list, both opt-outs, and how to delete the local state it keeps."
-updated: 2026-09-06
+category: concepts
+updated: 2026-10-19
 ---
 
 # Privacy

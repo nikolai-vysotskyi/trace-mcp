@@ -1,7 +1,8 @@
 ---
 title: "TokenSave Alternative: trace-mcp vs TokenSave for AI agents"
 description: "TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 88 framework integrations, AST refactoring, and OWASP taint analysis."
-updated: 2026-09-25
+category: vs-comparisons
+updated: 2026-10-19
 ---
 
 # TokenSave alternative: trace-mcp vs TokenSave

@@ -1,7 +1,8 @@
 ---
 title: "Cody Alternative: trace-mcp vs Sourcegraph Cody for code context"
 description: "Cody is enterprise-only cloud search plus assistant. trace-mcp is the local-first graph alternative — no key, no cloud, framework edges compared."
-updated: 2026-09-26
+category: vs-comparisons
+updated: 2026-10-19
 ---
 
 # Cody alternative: trace-mcp vs Sourcegraph Cody
