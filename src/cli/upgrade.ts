@@ -11,6 +11,7 @@ import { updateClaudeMd } from '../init/claude-md.js';
 import { detectGuardHook } from '../init/detector.js';
 import { installGuardHook, installWorktreeHook, isHookOutdated } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
+import { refreshStampAfterHookRefresh } from '../init/version-stamp.js';
 
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
@@ -193,6 +194,12 @@ export const upgradeCommand = new Command('upgrade')
       if (!opts.skipClaudeMd) {
         globalSteps.push(updateClaudeMd(process.cwd(), { dryRun: opts.dryRun, scope: 'global' }));
       }
+
+      // Refresh version stamp after hook/launcher upgrade so session start doesn't emit false version drift warning
+      refreshStampAfterHookRefresh(PKG_VERSION, {
+        dryRun: opts.dryRun,
+        skipHooks: opts.skipHooks,
+      });
 
       // Report
       const header = opts.dryRun ? 'trace-mcp upgrade (dry run)' : 'trace-mcp upgrade';

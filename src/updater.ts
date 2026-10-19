@@ -677,12 +677,14 @@ export async function runPostUpdateMigrations(): Promise<void> {
     },
     { updateClaudeMd },
     { listProjects, markAllProjectsPendingReindex },
+    { refreshStampAfterHookRefresh },
   ] = await Promise.all([
     import('./config-jsonc.js'),
     import('./init/detector.js'),
     import('./init/hooks.js'),
     import('./init/claude-md.js'),
     import('./registry.js'),
+    import('./init/version-stamp.js'),
   ]);
 
   // 1. Migrate global config
@@ -761,6 +763,14 @@ export async function runPostUpdateMigrations(): Promise<void> {
       { count: projects.length, marked, version: CURRENT_VERSION },
       'Post-update: marked projects for lazy reindex (deferred to ProjectManager.addProject)',
     );
+  }
+
+  // 5. Refresh version stamp so subsequent sessions don't report false drift
+  try {
+    refreshStampAfterHookRefresh(CURRENT_VERSION);
+    logger.info({ version: CURRENT_VERSION }, 'Post-update: version stamp refreshed');
+  } catch (err) {
+    logger.warn({ error: err }, 'Post-update: version stamp refresh failed (non-fatal)');
   }
 
   logger.info({ version: CURRENT_VERSION }, 'Post-update: migrations complete');

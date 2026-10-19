@@ -306,6 +306,37 @@ describe('runPostUpdateMigrations', () => {
     const written = getWrittenCache();
     expect(written!.installedVersion).toBe('2.0.0');
   });
+
+  it('writes version stamp when version changes', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.0.0' });
+    await runPostUpdateMigrations();
+
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeDefined();
+    expect(String(stampCall![1])).toBe('2.0.0\n');
+  });
+
+  it('does not touch version stamp when version did not change', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '2.0.0' });
+    await runPostUpdateMigrations();
+
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeUndefined();
+  });
+
+  it('does not touch version stamp when cache does not exist', async () => {
+    setupCache(null);
+    await runPostUpdateMigrations();
+
+    const stampCall = mockFs.writeFileSync.mock.calls.find(
+      (call) => String(call[0]) === path.join('/tmp/test-trace-mcp', 'last_init_version.txt'),
+    );
+    expect(stampCall).toBeUndefined();
+  });
 });
 
 describe('checkAndInstallUpdate', () => {
