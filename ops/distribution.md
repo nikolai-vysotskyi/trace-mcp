@@ -5539,3 +5539,68 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Pass 2026-10-19 14:00 UTC (TRA-2540): mention sweep clean, ecosystem findings (mini-consumes-tokens, codeindex, smarter-faster-better-mcp, opencrayast), competitor triage (colbymchenry TS dollar method calls PR #2662 & injected receivers PR #2661, DeusData PHP unindexed vendor receiver PR #2710 & tool search profiles PR #2708, jcodemunch PreCompact landmarks budget PR #1150 & release v1.108.380, Serena TypeScript 7 native LSP PR #2178, GitNexus lexical bindings PR #3632)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder budget spent).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- Zubiarka8/mini-consumes-tokens: Rust-based MCP server & CLI (`mct-cli` and `mct-mcp-server`) indexing repos into an AST/tree-sitter SQLite symbol graph across 17 languages. Notably adopted trace-mcp's TOON (Token-Optimized Object Notation) format as its default output representation (`format: toon`). Features 23 tools with progressive tool discovery (`select_tools`, `discover_tool_categories`, `get_tool_schema`, `MCT_TOOL_ATTENTION=1`), multi-hop call graph exploration (`find_references`, `find_calls`, `find_callers`, `impact_analysis` with `depth`), query batching (up to 25 queries in a single request), and `build_context_pack` returning symbol definition, docstrings, and callers/callees in one call.
+  - Architectural contrast: trace-mcp provides broader language and framework support (81 languages, 16 deep AST, 88 frameworks vs 17 in mct), zero-daemon stdio native binary / node distribution, persistent architectural decision tracking and state ledger (`decisions.db`, `state.db`), integrated Electron desktop application, and specialized token-reduction commands (`trace blast`, `trace impact`, `get_task_context`).
+- maxgfr/codeindex: Zero-dependency repo-indexing engine and MCP server (40 tools) designed for downstream agent skills and CLIs to vendor as a single self-contained `engine.mjs` file. Features deterministic repo walking (.gitignore, symlink cycle protection, size cap), tree-sitter AST with regex fallback, typed cross-file link-graph, and SCIP export. Accompanied by a detailed benchmark suite against universal-ctags, Serena, and Graphify across 75 compiler-graded questions.
+  - Architectural contrast: trace-mcp provides persistent cross-session SQLite caching, token-budgeted output formats (TOON), active workspace watch daemon, native pre-compiled binaries, and deep framework semantic modeling across 88 frameworks, whereas codeindex focuses on a vendorable single-file script without native binaries.
+- iHaiduk/smarter-faster-better-mcp (MCP Scout): Ultra-lightweight MCP server for AST-based code intelligence and semantic discovery powered by Bun and `oxc-parser` (zero native build dependencies for JS/TS) with web-tree-sitter fallback for polyglot repos. Employs code collapsing (`summaryOnly` collapses function/class bodies into stubs, retaining context while saving up to 90% tokens) and sub-second triage. Exposes `find_code`, `trace_symbol`, and `get_file_context`.
+  - Architectural contrast: trace-mcp covers full multi-language AST graphs across 81 languages and 88 frameworks, multi-file blast radius calculation, cross-file call hierarchies, and persistent architecture memory without being limited to oxc/JS-focused parsing.
+- amgio38/opencrayast: Rust-based MCP server & CLI for structural code reading and safe structural editing for AI coding agents. Works on syntax trees (outline, shape search, preview-then-apply plans with journaled undo; write operations off by default and path-contained).
+  - Architectural contrast: opencrayast specializes in structural modification and safe AST writes/plans, whereas trace-mcp specializes in comprehensive static read/navigation/token-reduction intelligence across whole repositories.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - TypeScript dollar method call resolution (PR #2662, merged 2026-10-19T11:44:17Z by colbymchenry): Expanded method call regex from `^([\w.]+)\.(\w+)$` to `^([\w.]+)\.([\w$]+)$` for the JS/TS family to handle dollar-bearing method names (Bitwarden's RxJS observables like `organizations$(userId)`, VS Code's RPC proxies like `_proxy.$acceptModelChanged`, Qwik's `$name$` methods). Gained 1,514 linked call sites in VS Code and 2,116 in Bitwarden with zero removals. Kept receiver side unchanged to prevent handing RxJS `next`/`pipe` to name guessing.
+  - Dependency injection receiver type recovery (PR #2661, merged 2026-10-19T11:12:50Z by colbymchenry): Extracted concrete classes from Angular `inject(X)` / `inject<T>(TOKEN)` and VS Code `createInstance(X)` patterns; handles aliased re-exports (`import { Engine as FileSearchEngine }`). Gained 594 links in VS Code and 1,835 in Bitwarden.
+  - Go import and interface linkage (PR #2660, PR #2659, PR #2658, all merged 2026-10-19 10:10–11:00 UTC): Fixed precedence for explicitly named Go imports over unaliased path stems, interface method type signatures, and local variable shadowing over package declarations.
+- DeusData/codebase-memory-mcp:
+  - PHP unindexed vendor receiver false-positive suppression (PR #2710, opened 2026-10-19T08:57:39Z by DeusData): When PHP LSP detects a receiver type that belongs to an unindexed vendor class (`php_method_typed_unindexed`), suppresses weak unique_name / suffix_match fallback to prevent false linkage to local methods with the same name. Tested on TYPO3, eliminating 25 false call edges.
+  - Structural question declarations for tool search (PR #2708, opened 2026-10-19T05:46:00Z by Martin Vogel): Updated server instructions in scout and analysis profiles to explicitly state keywords and structural questions answered (symbol definition, callers, callees, data flow, impact), optimizing dynamic tool discovery for Claude Code's tool search capability.
+  - Traited receiver methods and boundary scoping (PR #2706, PR #2707, PR #2705 merged).
+- jgravelle/jcodemunch-mcp:
+  - PreCompact hook landmarks time and size budgeting (PR #1150 / release v1.108.380 in PR #1152, merged 2026-10-19 11:00–12:32 UTC by jgravelle): Fixes defect L-219 where the PreCompact hook hydrated and PageRanked every touched repository without a time cap or size ceiling. Added `HYDRATE_MAX_SYMBOLS` and `BUDGET_SECONDS` deadline checks before loading repositories.
+  - Defect ledger tracking (PR #1154): Documented L-221 (tool counters lose a batch at process exit) and C-27 repeat occurrence.
+- oraios/serena:
+  - Native TypeScript 7 LSP integration (PR #2178, merged 2026-10-19T11:33:58Z): Added `typescript_tsgo` language server support running `tsc --lsp --stdio` from the TypeScript 7.0.2 npm package, handling incremental sync and non-blocking initialization.
+- abhigyanpatwari/GitNexus:
+  - Lexical binding ownership in HTTP wrapper detection (PR #3632, updated 2026-10-19T11:02:03Z by abhigyanpatwari): Preserves lexical declaration ownership and scope-aware fetch-wrapper analysis for TS/JS/Vue with an $O(V+E)$ reverse work queue.
+
+**Competitor pulse (as of 2026-10-19 14:30 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,912★ (+12), 1,686 forks (+9)
+- oraios/serena: 30,389★ (+19), 2,232 forks (+16)
+- DeusData/codebase-memory-mcp: 46,915★ (+41), 3,880 forks (+6)
+- tirth8205/code-review-graph: 32,260★ (+9), 3,057 forks (+13)
+- colbymchenry/codegraph: 74,433★ (+31), 4,816 forks (+4)
+- abhigyanpatwari/GitNexus: 47,949★ (+11), 5,198 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,785★ (+2), 375 forks (=)
+- continuedev/continue: 36,258★ (+5), 5,494 forks (+1)
+- Aider-AI/aider: 49,637★ (+8), 5,082 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
