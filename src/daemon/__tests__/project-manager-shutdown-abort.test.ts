@@ -68,7 +68,7 @@ vi.mock('../../indexer/pipeline.js', () => {
       events.push('dispose');
     }
   }
-  return { IndexingPipeline: FakeIndexingPipeline };
+  return { IndexingPipeline: FakeIndexingPipeline, IndexAbortedError };
 });
 
 vi.mock('../../indexer/watcher.js', () => {
