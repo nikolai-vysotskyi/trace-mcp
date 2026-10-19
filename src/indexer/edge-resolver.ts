@@ -320,8 +320,8 @@ export class EdgeResolver {
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */
-  resolvePhpImportEdges(scope?: ChangeScope): void {
-    timed('php-imports', () => _resolvePhpImports(this.state, scope));
+  resolvePhpImportEdges(scope?: ChangeScope, signal?: AbortSignal): Promise<void> {
+    return timedAsync('php-imports', () => _resolvePhpImports(this.state, scope, signal));
   }
 
   /** Pass 2f: Python heritage edges (class inheritance). */

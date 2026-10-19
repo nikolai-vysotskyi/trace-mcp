@@ -11,8 +11,10 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { isSqliteBusyError } from '../../db/repair.js';
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
+import { IndexAbortedError } from '../index-abort.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { Psr4Resolver } from '../resolvers/psr4.js';
 import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js';
@@ -22,11 +24,17 @@ import { PhantomPackageFactory, packageBucketFor } from './phantom-externals.js'
  * Workspace-aware: only creates edges within the same workspace to prevent
  * false connections between independent projects under a common root.
  */
-export function resolvePhpImportEdges(state: PipelineState, _scope?: ChangeScope): void {
+export async function resolvePhpImportEdges(
+  state: PipelineState,
+  _scope?: ChangeScope,
+  signal?: AbortSignal,
+): Promise<void> {
   // WHY: driven by `state.pendingImports`, already scoped to re-extracted files.
   void _scope;
   const { store } = state;
   if (state.pendingImports.size === 0) return;
+  if (signal?.aborted) throw new IndexAbortedError('resolvePhpImportEdges aborted');
+  if (!store.db.open) throw new IndexAbortedError('Database is closed');
 
   // Collect all indexed PHP files with their workspace
   const allPhpFiles = store.db
@@ -125,7 +133,7 @@ export function resolvePhpImportEdges(state: PipelineState, _scope?: ChangeScope
   const phantomPackages = new PhantomPackageFactory(state, 'php');
   const phantomEdgesSeen = new Set<string>(); // dedupe per source+bucket
 
-  store.db.transaction(() => {
+  const runPass = () => {
     for (const [fileId, imports] of state.pendingImports) {
       const file = fileMap.get(fileId);
       if (!file || file.language !== 'php') continue;
@@ -192,7 +200,45 @@ export function resolvePhpImportEdges(state: PipelineState, _scope?: ChangeScope
         phantomEdges++;
       }
     }
-  })();
+  };
+
+  // TRA-2552: execute as BEGIN IMMEDIATE so SQLite acquires a RESERVED lock up front
+  // rather than attempting an upgrade from SHARED to RESERVED mid-transaction upon
+  // insertStmt.run (which fails immediately with SQLITE_BUSY if another connection
+  // holds a lock, bypassing busy_timeout). Bounded retry with backoff handles transient
+  // locks without dropping edges or failing watcher reindex.
+  const writeTx = store.db.transaction(runPass).immediate;
+
+  let attempts = 0;
+  while (true) {
+    if (signal?.aborted) throw new IndexAbortedError('resolvePhpImportEdges aborted');
+    if (!store.db.open) throw new IndexAbortedError('Database is closed');
+    try {
+      writeTx();
+      break;
+    } catch (err) {
+      if (
+        !store.db.open ||
+        (err instanceof TypeError &&
+          (err as TypeError).message.includes('database connection is not open'))
+      ) {
+        throw new IndexAbortedError('Database is closed');
+      }
+      if (isSqliteBusyError(err) && ++attempts <= 5) {
+        created = 0;
+        phantomEdges = 0;
+        phantomEdgesSeen.clear();
+        phantomPackages.clear();
+        logger.warn(
+          { attempt: attempts, err },
+          'PHP import edge resolution hit database lock (SQLITE_BUSY) — retrying with backoff',
+        );
+        await new Promise((r) => setTimeout(r, 50 * attempts));
+        continue;
+      }
+      throw err;
+    }
+  }
 
   if (created > 0 || phantomEdges > 0) {
     logger.info({ edges: created, phantomEdges }, 'PHP import edges resolved');
