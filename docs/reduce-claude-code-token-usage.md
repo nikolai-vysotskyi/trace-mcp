@@ -1,7 +1,8 @@
 ---
 title: "How to Reduce Claude Code Token Usage — 7 measured tactics"
 description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the output format."
-updated: 2026-09-11
+category: guides
+updated: 2026-10-19
 ---
 
 # How to reduce Claude Code token usage

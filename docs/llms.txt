@@ -9,6 +9,7 @@ layout: null
 
 ## Docs
 
+- [Articles & Guides Catalogue](https://trace-mcp.com/articles.html): Complete catalogue of trace-mcp articles, framework guides, architecture concepts, benchmarks, tools reference, and comparisons.
 - [Code graph MCP server](https://trace-mcp.com/code-graph-mcp.html): What a code graph MCP server is, how persistent symbol, call and framework relationships reduce agent prompt bloat, and how trace-mcp compares to alternatives.
 - [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the {{ site.data.counts.tools }} MCP tools and {{ site.data.counts.resources }} resources trace-mcp exposes, registered dynamically per detected framework.
 - [Tool index](https://trace-mcp.com/tools-index.html): Alphabetical index of every MCP tool with its one-line description, generated from the server's own registrations.

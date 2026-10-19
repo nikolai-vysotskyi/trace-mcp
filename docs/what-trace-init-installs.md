@@ -1,7 +1,8 @@
 ---
 title: "What trace init installs — guard hooks, Read/Bash mirrors and client config"
 description: "What trace init writes to your machine and how to audit it: guard hooks, opt-in Read/Bash mirrors, the routing block, client config, tweakcc tiers."
-updated: 2026-09-11
+category: guides
+updated: 2026-10-19
 ---
 
 # What `trace init` installs

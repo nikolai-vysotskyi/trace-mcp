@@ -206,6 +206,7 @@ export function renderMatrix(): string {
 layout: default
 title: "Language capability matrix: what ${counts.total} languages extract"
 description: "What each of the ${counts.total} languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language."
+category: frameworks
 updated: ${currentUpdatedDate()}
 ---
 
