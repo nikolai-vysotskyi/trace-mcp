@@ -217,6 +217,8 @@ import { EventLoopLagMonitor, yieldToEventLoopFair } from './utils/event-loop.js
 import { StallWatchdog } from './utils/stall-watchdog.js';
 import { sweepSessionFiles } from './session/sweeper.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
+import { ProjectResourcePool } from './daemon/resource-pool.js';
+import { ActivityStore } from './session/activity-store.js';
 
 /**
  * Auto-discover subprojects: after indexing, detect services within the project
@@ -1108,7 +1110,6 @@ program
     }
 
     // Shared project-level resources (TopologyStore, DecisionStore) — avoids per-session SQLite overhead
-    const { ProjectResourcePool } = await import('./daemon/resource-pool.js');
     const resourcePool = new ProjectResourcePool();
     // Wire the pool into ProjectManager so stopProject/removeProject force-
     // disposes the project's pool entry (two SQLite handles otherwise leak per
@@ -1153,14 +1154,13 @@ program
     // is a client that disconnects — so the Activity tab read zero on every
     // window regardless of how busy the project was (TRA-1071). Entries are
     // appended here as they are broadcast and read back per time window.
-    let activityStore: import('./session/activity-store.js').ActivityStore | null = null;
+    let activityStore: ActivityStore | null = null;
     let stopActivityWatchdog: (() => void) | null = null;
     // Last time a journal broadcast actually reached the store. Distinct from
     // the store's own flush health: this answers "is anything emitting",
     // the watchdog answers "is the store writing what it receives".
     let lastJournalEmitAt = 0;
     try {
-      const { ActivityStore } = await import('./session/activity-store.js');
       activityStore = new ActivityStore();
       stopActivityWatchdog = activityStore.startWatchdog();
     } catch (e) {
@@ -3787,6 +3787,10 @@ program
     // TRA-2056: heap-pressure guard timer — stopped here so shutdown never
     // re-triggers a restart mid-drain.
     let stopHeapGuard: (() => void) | null = null;
+    let memoryScheduler: MemoryScheduler | null = null;
+    let activityPoker: NodeJS.Timeout | undefined;
+    let stalenessTimer: NodeJS.Timeout | undefined;
+    let updateWatchdog: NodeJS.Timeout | undefined;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -3918,8 +3922,12 @@ program
       idleMonitor.stop();
       // Drain scheduler stages while every DB is still open (stages read
       // per-project stores and the shared scheduler state).
-      await memoryScheduler.stop();
-      clearInterval(activityPoker);
+      if (memoryScheduler) {
+        await memoryScheduler.stop();
+      }
+      if (activityPoker) clearInterval(activityPoker);
+      if (stalenessTimer) clearInterval(stalenessTimer);
+      if (updateWatchdog) clearInterval(updateWatchdog);
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
       clearInterval(journalSilenceCheck);
@@ -4023,126 +4031,6 @@ program
       },
     });
 
-    // ── Per-project idle-unload sweep ───────────────────────────
-    // Distinct from the whole-daemon idle-exit monitor above: this unloads
-    // individual cold projects (in-memory DB/pipeline/watcher/server) while
-    // the daemon keeps serving everything else, reclaiming per-connection
-    // SQLite cache/mmap for projects nobody has touched recently. Stays
-    // registered — reloads lazily on the next request (see the /mcp
-    // auto-register path and /api/projects/reindex-file). 0 disables.
-    // The same sweep also enforces `daemon_eager_load_projects` as a steady-state
-    // LRU ceiling, not just a startup budget: lazy loads (auto-register,
-    // reindex-file) used to walk past it unchecked — TRA-422 measured an
-    // eager-8 daemon holding 11 projects within three minutes of boot, ~100 MB
-    // resident each. See docs/daemon-memory.md for the attribution.
-    const configuredIdleUnloadMinutes =
-      typeof globalRaw.project_idle_unload_minutes === 'number'
-        ? globalRaw.project_idle_unload_minutes
-        : 30;
-    const configuredMaxLoadedProjects =
-      typeof globalRaw.daemon_eager_load_projects === 'number'
-        ? globalRaw.daemon_eager_load_projects
-        : 8;
-    projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
-      maxLoaded: configuredMaxLoadedProjects,
-      evictDeleted: true,
-      onUnloaded: (roots) => {
-        for (const root of roots) {
-          // Same cleanup as the DELETE endpoint: without it the progress
-          // listener closure pins the unloaded project's ProgressState for
-          // the daemon's lifetime. Sessions are already gone (the sweep
-          // skips refCount > 0 projects) so this is mostly the listener +
-          // throttle-key teardown.
-          teardownProjectBookkeeping(root);
-          broadcastEvent({ type: 'project_status', project: root, status: 'unloaded' });
-        }
-      },
-    });
-    // Vitals breadcrumb (TRA-267): an OS-level kill or native crash runs no JS
-    // handler, so the safety net logs nothing and daemon.log's last line is an
-    // ordinary indexing message. A periodic memory/project line makes the
-    // trajectory before such a gap readable after the fact.
-    startVitalsLog({
-      getCounts: () => {
-        const loaded = projectManager.listProjects();
-        // TRA-1843: one warn per stall episode (latched inside) so a project
-        // wedged in indexing names itself instead of sitting silent in the
-        // vitals line at `sweep_busy` forever.
-        projectManager.warnOnIndexingStalls();
-        return {
-          loaded: loaded.length,
-          // TRA-1125: initial-load status alone under-reports. Incremental
-          // reindex runs with the project still marked `ready`, so a busy
-          // daemon logged itself idle — see countReindexingProjects().
-          // TRA-1763: the pipeline now marks its own runs too (indexAll /
-          // indexFiles / deferred reconciles), so a project in initial load
-          // is in BOTH sets — exclude marked roots from the status term so
-          // one busy project counts once, not twice.
-          indexing:
-            loaded.filter(
-              (p) => (p.status === 'indexing' || p.status === 'starting') && !isReindexing(p.root),
-            ).length + countReindexingProjects(),
-          // TRA-1625: sweep skip reasons, so a daemon holding far more than
-          // maxLoaded while unloading nothing is diagnosable from the log.
-          // TRA-1738: pass the ceiling too — without it `evictable` counts
-          // only TTL victims and hides LRU-ceiling victims the sweep would
-          // actually evict on this tick.
-          sweep: projectManager.sweepEligibility(
-            configuredIdleUnloadMinutes * 60_000,
-            configuredMaxLoadedProjects,
-          ),
-          // TRA-1665: dropped-event / reconcile tally, so a per-minute
-          // full-walk storm on a churn-heavy root is visible in the vitals.
-          reconcile: getDroppedEventStats(),
-        };
-      },
-    });
-    // Heap-pressure guard (TRA-2056): a V8 OOM aborts mid-request with no JS
-    // handler, so warn early and restart gracefully (drain via shutdown(),
-    // letting launchd respawn) instead of dying by SIGABRT at the ceiling.
-    // Disabled with TRACE_MCP_HEAP_GUARD=0.
-    if (process.env.TRACE_MCP_HEAP_GUARD !== '0') {
-      stopHeapGuard = startHeapGuard({
-        getContext: () => ({
-          projectsLoaded: projectManager.listProjects().length,
-          reindexInFlight: countReindexingProjects(),
-        }),
-        onRestart: () => {
-          void shutdown('heap-pressure');
-        },
-      });
-    }
-    // Track activity: wrap the client/session/SSE mutation points in-place via
-    // a ticker that re-evaluates on every /health check (cheap, idempotent).
-    // Plus explicit hook below on key mutations.
-    const activityPoker = setInterval(() => idleMonitor.onActivity(), 10_000);
-    activityPoker.unref();
-    // Arm once on startup — daemon starts idle until the first client connects.
-    idleMonitor.onActivity();
-
-    // ── Memory background scheduler ─────────────────────────────
-    // Long-lived background loop that periodically advances each registered
-    // project's memory pyramid (mine → cluster → memo). Off by default —
-    // opt-in via `config.memory.background.enabled = true`. The scheduler
-    // self-throttles via a global serial queue (concurrency=1) so it cannot
-    // race LLM calls or SQLite writes against itself.
-    // Load a TraceMcpConfig for the scheduler. We're inside `serve-http`
-    // which has no project-rooted config — fall back to cwd; if that fails
-    // (running outside a project), use the no-arg form to get fully-defaulted
-    // settings. Per-project overrides flow through ManagedProject.config later.
-    const schedulerConfigResult = await loadConfig(process.cwd()).catch(() => null);
-    const schedulerConfigFallback =
-      schedulerConfigResult && schedulerConfigResult.isOk()
-        ? schedulerConfigResult.value
-        : (await loadConfig().catch(() => null))?.unwrapOr(undefined as never);
-    if (!schedulerConfigFallback) {
-      logger.warn('Could not load any config for memory scheduler; skipping start');
-    }
-    const memoryScheduler = new MemoryScheduler({
-      projectManager,
-      config: schedulerConfigFallback ?? ({} as never),
-    });
-    memoryScheduler.start();
     /**
      * Single activity hook surface. Bumps the idle monitor AND the memory
      * scheduler. `projectRoot` is optional — when provided the scheduler
@@ -4152,73 +4040,21 @@ program
      */
     const pokeActivity = (projectRoot?: string): void => {
       idleMonitor.onActivity();
-      memoryScheduler.notifyActivity(projectRoot);
+      memoryScheduler?.notifyActivity(projectRoot);
       // Resets the per-project idle-unload clock (project_idle_unload_minutes).
       // No-op for the coarse (no-projectRoot) callers and for projects not
       // currently loaded.
       if (projectRoot) projectManager.touchActivity(projectRoot);
     };
 
-    // ── Self-staleness detection ─────────────────────────────────
-    // A long-running daemon would otherwise stay on the version it booted with
-    // until someone manually kills it. checkAndInstallUpdate only runs at
-    // startup. To catch external upgrades (stdio session's npm install -g,
-    // postinstall hook, or Electron tab), periodically compare our bundled
-    // version with the installed package.json on disk. On mismatch we shut
-    // down and let the supervisor (launchd KeepAlive / tray watchdog) respawn
-    // with the fresh binary. Cheap (one fs read every 10 min, sync but tiny).
-    if (PKG_VERSION !== '0.0.0-dev') {
-      let pkgPath: string | null = null;
-      try {
-        pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
-      } catch {
-        /* unresolvable (e.g. bundled into a single file) — skip */
-      }
-      if (pkgPath) {
-        const stalenessTimer = setInterval(() => {
-          try {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath!, 'utf-8')) as { version?: string };
-            if (pkg.version && pkg.version !== PKG_VERSION) {
-              logger.info(
-                { running: PKG_VERSION, installed: pkg.version },
-                'Installed version changed — shutting down so supervisor respawns with fresh binary',
-              );
-              void shutdown('version-staleness');
-            }
-          } catch {
-            /* transient read error — try again next tick */
-          }
-        }, 10 * 60_000);
-        stalenessTimer.unref();
-      }
-    }
-
-    // ── Registry auto-update watchdog (TRA-180) ──────────────────
-    // checkAndInstallUpdate otherwise runs once, shortly after startup. A daemon kept
-    // alive for weeks by launchd/tray or a long-lived stdio client that never
-    // reconnects therefore never re-hits the npm registry, so it can silently
-    // sit on a stale version indefinitely (unlike the local-staleness check
-    // above, which only catches upgrades installed by some *other* process).
-    // Poll on the same cadence as the configured check interval — the cache
-    // inside checkAndInstallUpdate makes this a cheap no-op between real
-    // registry checks.
-    if (PKG_VERSION !== '0.0.0-dev' && globalRaw.auto_update !== false) {
-      const intervalHours =
-        typeof globalRaw.auto_update_check_interval_hours === 'number'
-          ? globalRaw.auto_update_check_interval_hours
-          : 12;
-      const updateWatchdog = setInterval(() => {
-        void checkAndInstallUpdate({ checkIntervalHours: intervalHours }).then((updated) => {
-          if (updated) {
-            logger.info(
-              'Auto-update: new version installed — shutting down so supervisor respawns',
-            );
-            void shutdown('auto-update');
-          }
-        });
-      }, intervalHours * 3_600_000);
-      updateWatchdog.unref();
-    }
+    const configuredIdleUnloadMinutes =
+      typeof globalRaw.project_idle_unload_minutes === 'number'
+        ? globalRaw.project_idle_unload_minutes
+        : 30;
+    const configuredMaxLoadedProjects =
+      typeof globalRaw.daemon_eager_load_projects === 'number'
+        ? globalRaw.daemon_eager_load_projects
+        : 8;
 
     // TRA-1017, cause B: track live sockets for the shutdown instrumentation
     // above. Attached before listen(), so no connection can arrive untracked.
@@ -4362,6 +4198,136 @@ program
         'Project model: per-session project selection (?project= / X-Trace-Project / _meta). ' +
           'One project per session; not cross-repo within a session.',
       );
+
+      projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
+        maxLoaded: configuredMaxLoadedProjects,
+        onUnloaded: (roots) => {
+          for (const root of roots) {
+            teardownProjectBookkeeping(root);
+            broadcastEvent({ type: 'project_status', project: root, status: 'unloaded' });
+          }
+        },
+      });
+      startVitalsLog({
+        getCounts: () => {
+          const loaded = projectManager.listProjects();
+          return {
+            loaded: loaded.length,
+            indexing: loaded.filter((p) => p.status === 'indexing' || p.status === 'starting')
+              .length,
+          };
+        },
+      });
+      // Heap-pressure guard (TRA-2056): a V8 OOM aborts mid-request with no JS
+      // handler, so warn early and restart gracefully (drain via shutdown(),
+      // letting launchd respawn) instead of dying by SIGABRT at the ceiling.
+      // Disabled with TRACE_MCP_HEAP_GUARD=0.
+      if (process.env.TRACE_MCP_HEAP_GUARD !== '0') {
+        stopHeapGuard = startHeapGuard({
+          getContext: () => ({
+            projectsLoaded: projectManager.listProjects().length,
+            reindexInFlight: countReindexingProjects(),
+          }),
+          onRestart: () => {
+            void shutdown('heap-pressure');
+          },
+        });
+      }
+      // Track activity: wrap the client/session/SSE mutation points in-place via
+      // a ticker that re-evaluates on every /health check (cheap, idempotent).
+      // Plus explicit hook below on key mutations.
+      activityPoker = setInterval(() => idleMonitor.onActivity(), 10_000);
+      activityPoker.unref();
+      // Arm once on startup — daemon starts idle until the first client connects.
+      idleMonitor.onActivity();
+
+      // ── Memory background scheduler ─────────────────────────────
+      // Long-lived background loop that periodically advances each registered
+      // project's memory pyramid (mine → cluster → memo). Off by default —
+      // opt-in via `config.memory.background.enabled = true`. The scheduler
+      // self-throttles via a global serial queue (concurrency=1) so it cannot
+      // race LLM calls or SQLite writes against itself.
+      // Initialized in the background so loadConfig does not delay listening.
+      void (async () => {
+        try {
+          const schedulerConfigResult = await loadConfig(process.cwd()).catch(() => null);
+          const schedulerConfigFallback =
+            schedulerConfigResult && schedulerConfigResult.isOk()
+              ? schedulerConfigResult.value
+              : (await loadConfig().catch(() => null))?.unwrapOr(undefined as never);
+          if (!schedulerConfigFallback) {
+            logger.warn('Could not load any config for memory scheduler; skipping start');
+          }
+          memoryScheduler = new MemoryScheduler({
+            projectManager,
+            config: schedulerConfigFallback ?? ({} as never),
+          });
+          memoryScheduler.start();
+        } catch (err) {
+          logger.warn({ err }, 'Failed to start memory scheduler');
+        }
+      })();
+
+      // ── Self-staleness detection ─────────────────────────────────
+      // A long-running daemon would otherwise stay on the version it booted with
+      // until someone manually kills it. checkAndInstallUpdate only runs at
+      // startup. To catch external upgrades (stdio session's npm install -g,
+      // postinstall hook, or Electron tab), periodically compare our bundled
+      // version with the installed package.json on disk. On mismatch we shut
+      // down and let the supervisor (launchd KeepAlive / tray watchdog) respawn
+      // with the fresh binary. Cheap (one fs read every 10 min, sync but tiny).
+      if (PKG_VERSION !== '0.0.0-dev') {
+        let pkgPath: string | null = null;
+        try {
+          pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+        } catch {
+          /* unresolvable (e.g. bundled into a single file) — skip */
+        }
+        if (pkgPath) {
+          stalenessTimer = setInterval(() => {
+            try {
+              const pkg = JSON.parse(fs.readFileSync(pkgPath!, 'utf-8')) as { version?: string };
+              if (pkg.version && pkg.version !== PKG_VERSION) {
+                logger.info(
+                  { running: PKG_VERSION, installed: pkg.version },
+                  'Installed version changed — shutting down so supervisor respawns with fresh binary',
+                );
+                void shutdown('version-staleness');
+              }
+            } catch {
+              /* transient read error — try again next tick */
+            }
+          }, 10 * 60_000);
+          stalenessTimer.unref();
+        }
+      }
+
+      // ── Registry auto-update watchdog (TRA-180) ──────────────────
+      // checkAndInstallUpdate otherwise runs once, shortly after startup. A daemon kept
+      // alive for weeks by launchd/tray or a long-lived stdio client that never
+      // reconnects therefore never re-hits the npm registry, so it can silently
+      // sit on a stale version indefinitely (unlike the local-staleness check
+      // above, which only catches upgrades installed by some *other* process).
+      // Poll on the same cadence as the configured check interval — the cache
+      // inside checkAndInstallUpdate makes this a cheap no-op between real
+      // registry checks.
+      if (PKG_VERSION !== '0.0.0-dev' && globalRaw.auto_update !== false) {
+        const intervalHours =
+          typeof globalRaw.auto_update_check_interval_hours === 'number'
+            ? globalRaw.auto_update_check_interval_hours
+            : 12;
+        updateWatchdog = setInterval(() => {
+          void checkAndInstallUpdate({ checkIntervalHours: intervalHours }).then((updated) => {
+            if (updated) {
+              logger.info(
+                'Auto-update: new version installed — shutting down so supervisor respawns',
+              );
+              void shutdown('auto-update');
+            }
+          });
+        }, intervalHours * 3_600_000);
+        updateWatchdog.unref();
+      }
 
       // Phase 5.2: warm tree-sitter init eagerly so the first parse doesn't
       // pay the WASM cold-start tax. Best-effort, fire-and-forget.
