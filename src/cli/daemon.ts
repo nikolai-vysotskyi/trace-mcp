@@ -14,6 +14,7 @@ import {
   stopDaemon,
   waitForDaemonUp,
 } from '../daemon/lifecycle.js';
+import { DAEMON_SHUTDOWN_DEADLINE_MS } from '../server/bounded-shutdown.js';
 import {
   DAEMON_DISABLED_PATH,
   DAEMON_LOG_PATH,
@@ -153,8 +154,11 @@ daemonCommand
     // Same single-instance lock as `start` (TRA-1607): a restart kills the
     // running daemon first, so a concurrent starter racing it would spawn
     // into the gap and either double-serve or lose the bind race. Serialize.
+    // Allow up to DAEMON_SHUTDOWN_DEADLINE_MS (20s) for a running daemon's
+    // shutdown drain plus startup time for the replacement (TRA-2531).
+    const restartWaitMs = DAEMON_SHUTDOWN_DEADLINE_MS + 10_000;
     if (!acquireSpawnLock()) {
-      const up = await waitForDaemonUp(port, 10_000);
+      const up = await waitForDaemonUp(port, restartWaitMs);
       if (up) {
         console.log(
           `Another process is (re)starting the daemon — it is now responding on port ${port}.`,
@@ -177,10 +181,10 @@ daemonCommand
     // Block until /health responds — callers (the menu bar app's "Restart
     // Daemon" button, scripts, humans) need to know the daemon is actually
     // reachable, not just that launchd accepted the kickstart.
-    const up = await waitForDaemonUp(port, 10_000);
+    const up = await waitForDaemonUp(port, restartWaitMs);
     if (!up) {
       console.error(
-        `Daemon restart issued but /health did not respond on port ${port} within 10s.`,
+        `Daemon restart issued but /health did not respond on port ${port} within ${Math.round(restartWaitMs / 1000)}s.`,
       );
       console.error(`Check logs: trace-mcp daemon logs`);
       process.exit(1);
