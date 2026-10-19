@@ -210,6 +210,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       if (stats.totalFiles === 0) {
         try {
           const fbResult = fallbackOutline(projectRoot, normalizedPath);
+          markToolConsultation(projectRoot, 'get_outline', { path: normalizedPath });
           return {
             content: [
               {
