@@ -37,7 +37,7 @@ const DEFAULT_TWEAKCC_DIR = path.join(os.homedir(), '.tweakcc');
  * `tests/ci/supply-chain-pins.test.ts` keeps manifest and constant in sync and
  * fails on any unpinned `npx` in `src/`.
  */
-export const TWEAKCC_VERSION = '4.3.3';
+export const TWEAKCC_VERSION = '4.4.0';
 export const TWEAKCC_SPEC = `tweakcc@${TWEAKCC_VERSION}`;
 
 function getTweakccConfigDir(): string | null {
