@@ -385,12 +385,15 @@ export async function extractAndPersist(
         // yield between chunks (see PERSIST_WRITE_CHUNK) and takes its own
         // first turn internally — no runInOwnTurn wrapper needed here. Awaiting
         // the full batch: churn maps are only valid once every chunk landed.
-        await persister.persistBatch(extractions);
-        result.indexed += extractions.length;
+        const { persistedCount, persistedPaths } = await persister.persistBatch(extractions);
+        result.indexed += persistedCount;
+        if (persistedCount < extractions.length) {
+          result.skipped += extractions.length - persistedCount;
+        }
         // TRA-1017: record exactly what this transaction rewrote, durably and
         // now — an abort at the next boundary must still know this batch's
         // files were persisted without resolution.
-        params.onPersisted?.(extractions.map((ext) => ext.relPath));
+        params.onPersisted?.(persistedPaths);
       } else {
         // Nothing to persist, but the batch still did work — keep the
         // once-per-batch boundary the old unconditional yield gave.

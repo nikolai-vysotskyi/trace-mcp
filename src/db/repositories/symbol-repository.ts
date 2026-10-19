@@ -101,7 +101,7 @@ export class SymbolRepository {
     parentIdOverride: number | null | undefined,
     createNode: (nodeType: string, refId: number) => number,
   ): number {
-    const parentId =
+    const rawParentId =
       parentIdOverride !== undefined
         ? parentIdOverride
         : sym.parentSymbolId
@@ -111,6 +111,16 @@ export class SymbolRepository {
                 .get(sym.parentSymbolId) as { id: number } | undefined
             )?.id ?? null)
           : null;
+
+    // TRA-2551: ensure parentId still exists in symbols to prevent FK violation
+    // when parent symbols vanish or are deleted mid-pass.
+    let parentId = rawParentId;
+    if (parentId != null) {
+      const parentRow = this._stmts.getSymbolById.get(parentId);
+      if (!parentRow) {
+        parentId = null;
+      }
+    }
 
     const cyclomatic =
       ((sym.metadata as Record<string, unknown> | undefined)?.cyclomatic as number | undefined) ??
