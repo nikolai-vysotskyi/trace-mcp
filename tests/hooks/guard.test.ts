@@ -11,6 +11,7 @@ import { initializeDatabase } from '../../src/db/schema.js';
 import { Store } from '../../src/db/store.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { ProgressState } from '../../src/progress.js';
+import { __resetConsultationMarkersForTests } from '../../src/server/consultation-markers.js';
 import { createServer } from '../../src/server/server.js';
 
 const HOOK_SCRIPT = path.resolve('hooks/trace-mcp-guard.sh');
@@ -232,6 +233,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
   let heartbeatFile: string;
 
   beforeEach(() => {
+    __resetConsultationMarkersForTests();
     fs.mkdirSync(projectDir, { recursive: true });
     sessionId = `vitest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     // By default each test runs as if trace-mcp is alive — strict mode.
@@ -335,6 +337,45 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     // Agent calls get_outline; server writes the marker.
     writeConsultationMarker(projectDir, 'baz.ts');
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+  });
+
+  it('allows Read after direct get_outline returns fallback symbols from an empty index (TRA-2495)', async () => {
+    const git = spawnSync('git', ['init', '-q', projectDir], { encoding: 'utf-8' });
+    expect(git.status).toBe(0);
+    const rel = 'fallback.ts';
+    const file = path.join(projectDir, rel);
+    fs.writeFileSync(
+      file,
+      Array.from({ length: 11 }, (_, i) => `export function symbol${i}() { return ${i}; }`).join(
+        '\n',
+      ),
+    );
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+    const server = createServer(
+      store,
+      PluginRegistry.createWithDefaults(),
+      TraceMcpConfigSchema.parse({ tools: { preset: 'full' } }),
+      projectDir,
+      new ProgressState(db),
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'guard-fallback-test', version: '1.0.0' });
+    try {
+      await Promise.all([server.server.connect(serverTransport), client.connect(clientTransport)]);
+      expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+      const result = await client.callTool({ name: 'get_outline', arguments: { path: rel } });
+      expect(result.isError).not.toBe(true);
+      const body = JSON.parse((result.content[0] as { text: string }).text);
+      expect(body.fallback).toBe(true);
+      expect(body.symbols).toHaveLength(11);
+      expect(body.error).toBeUndefined();
+      expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+    } finally {
+      await client.close().catch(() => {});
+      server.dispose();
+      db.close();
+    }
   });
 
   it('allows Read after get_outline runs directly or as a batch sub-call', async () => {
