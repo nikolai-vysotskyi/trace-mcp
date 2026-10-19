@@ -1204,6 +1204,109 @@ function classifyCommandInjection(line: string): 'open' | 'which' | 'taskkill' |
 }
 
 /**
+ * In PHP, backticks `` `...` `` outside strings are the execution operator (shell_exec).
+ * Inside single or double quotes, backticks are literal characters, commonly used
+ * for MySQL identifier quoting (e.g. `DB::raw("`{$col}` + 1")`,
+ * `"UPDATE \`media\` SET ... WHERE \`id\` IN ({$ids})"`).
+ *
+ * This function tracks quote and comment state from the start of the file to determine
+ * whether a backtick at (targetLine, targetCol) is inside a string literal.
+ */
+function isPhpBacktickInString(content: string, targetLine: number, targetCol: number): boolean {
+  let line = 0;
+  let targetOffset = -1;
+  let lineStart = 0;
+  for (let i = 0; i < content.length; i++) {
+    if (line === targetLine) {
+      targetOffset = lineStart + targetCol;
+      break;
+    }
+    if (content[i] === '\n') {
+      line++;
+      lineStart = i + 1;
+    }
+  }
+  if (targetOffset === -1 && line === targetLine) {
+    targetOffset = lineStart + targetCol;
+  }
+  if (targetOffset < 0 || targetOffset >= content.length) {
+    return false;
+  }
+
+  let inString: "'" | '"' | null = null;
+  let inBacktick = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < targetOffset; i++) {
+    const ch = content[i];
+    const next = content[i + 1];
+
+    if (inLineComment) {
+      if (ch === '\n') {
+        inLineComment = false;
+      }
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inString !== null) {
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === inString) {
+        inString = null;
+      }
+      continue;
+    }
+
+    if (inBacktick) {
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === '`') {
+        inBacktick = false;
+      }
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+    if (ch === '#') {
+      inLineComment = true;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      inString = ch;
+      continue;
+    }
+    if (ch === '`') {
+      inBacktick = true;
+      continue;
+    }
+  }
+
+  return inString !== null;
+}
+
+/**
  * Lower severity by one step.
  */
 function downgradeSeverity(s: Severity): Severity {
@@ -1344,8 +1447,19 @@ export function scanSecurity(
             // Skip lines blanked by comment stripping (all-whitespace).
             if (line.trim() === '') continue;
             re.lastIndex = 0;
-            const match = re.exec(line);
+            let match = re.exec(line);
             if (!match) continue;
+
+            if (
+              rule.key === 'command_injection' &&
+              file.language === 'php' &&
+              pattern.regex.source.includes('`')
+            ) {
+              while (match && isPhpBacktickInString(content, lineIdx, match.index)) {
+                match = re.exec(line);
+              }
+              if (!match) continue;
+            }
 
             const snippet = (rawLines[lineIdx] ?? line).trim();
 
@@ -1498,6 +1612,11 @@ export function scanSecurity(
                 fixOverride =
                   '`ps -p X` argument bound to a known numeric PID; verify the source of the PID.';
               }
+            }
+
+            if (rule.key === 'command_injection' && file.language === 'php') {
+              fixOverride =
+                'Escape shell arguments with escapeshellarg()/escapeshellcmd(), or avoid the shell entirely.';
             }
 
             // Apply confidence policy: critical/high require medium+ confidence.
