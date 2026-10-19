@@ -41,7 +41,7 @@ category: frameworks
           "name": "Does trace-mcp support both Java and Kotlin Spring Boot applications?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. The Spring plugin inspects annotations, beans, controllers, and JPA repositories across both Java and Kotlin source files in your repository."
+            "text": "Yes. The Spring plugin indexes routes, annotations, and JPA entity definitions across Java and Kotlin source files. For dependency injection, Java field and constructor injection patterns are fully indexed; Kotlin DI supports explicit @Autowired annotations while Kotlin primary constructor parameters are not yet extracted."
           }
         },
         {
@@ -66,7 +66,7 @@ category: frameworks
 }
 </script>
 
-**TL;DR.** Spring Boot enterprise codebases are rich with annotations, interfaces, dependency injection wires, and JPA entity hierarchies. Dumping whole Java/Kotlin files quickly overflows AI token budgets. trace-mcp maps Spring beans, REST controllers, and entity relationships into a fast local graph that AI agents can query precisely.
+**TL;DR.** Which `@Service` beans and JPA repositories are touched by a Spring Boot REST endpoint change? trace-mcp indexes your existing Spring Boot repository into a local static code graph. AI coding agents query `@RequestMapping` endpoints, `@Autowired` bean dependencies, and JPA entity relationships through MCP instead of searching through verbose class files.
 
 ---
 
@@ -75,10 +75,10 @@ category: frameworks
 The `spring` plugin indexes Spring MVC and Spring Boot applications across Java and Kotlin:
 
 - **REST & MVC Routes:** `@RestController`, `@Controller`, `@RequestMapping`, `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping` (`spring_route`).
-- **Dependency Injection:** `@Service`, `@Repository`, `@Component`, `@Configuration`, `@Autowired`, `@Inject`, and constructor injection (`spring_injects`).
+- **Dependency Injection:** `@Service`, `@Repository`, `@Component`, `@Configuration`, `@Autowired`, and constructor injection (`spring_injects`).
 - **JPA Entity Relationships:** `@Entity` declarations and relational mappings (`@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne`) (`spring_entity_relation`).
-- **Configuration & Values:** `@Value` property injection keys (`spring_config_value`) and component scan directives (`spring_component_scan`).
-- **Multi-Language Support:** First-class parsing for both Java and Kotlin codebases using Maven (`pom.xml`) or Gradle (`build.gradle`).
+- **Configuration & Values:** `@Value` property injection keys (`spring_config_value`).
+- **Multi-Language Support:** Route and entity parsing across Java and Kotlin codebases using Maven (`pom.xml`) or Gradle (`build.gradle`), with Java-focused constructor DI analysis.
 
 ---
 
@@ -105,7 +105,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 | Capability | Without graph | With trace-mcp |
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
-| **Dependency injection** | Cannot resolve `@Autowired` targets | Direct `spring_injects` edges |
+| **Dependency injection** | Inspect injection sites and bean declarations | Direct `spring_injects` edges |
 | **Route mapping** | Must search annotations across files | Fast URI endpoint index |
 | **JPA entity associations** | Parses complex Java class files | Relational entity graph |
 | **Java & Kotlin mixing** | Inconsistent symbol tracking | Unified multi-language graph |
@@ -116,7 +116,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 ## Frequently asked questions
 
 ### Does trace-mcp support both Java and Kotlin Spring Boot applications?
-Yes. The Spring plugin inspects annotations, beans, controllers, and JPA repositories across both Java and Kotlin source files in your repository.
+Yes. The Spring plugin indexes routes, annotations, and JPA entity definitions across Java and Kotlin source files. For dependency injection, Java field and constructor injection patterns are fully indexed; Kotlin DI supports explicit `@Autowired` annotations while Kotlin primary constructor parameters are not yet extracted.
 
 ### How does trace-mcp resolve Spring dependency injection?
 It indexes `@Service`, `@Repository`, `@Component`, and `@Configuration` beans, building `spring_injects` edges between injection targets (`@Autowired`, constructor injection) and bean declarations.

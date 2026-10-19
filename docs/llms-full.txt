@@ -9445,7 +9445,7 @@ Source: https://trace-mcp.com/laravel-mcp.html
 
 
 
-**TL;DR.** LLMs writing Laravel code often hallucinate Eloquent method names, miss FormRequest validation bindings, and overlook route-to-controller mapping. trace-mcp indexes the entire Laravel topology into a local SQLite graph so Claude Code, Cursor, and other AI agents query exact architecture edges instead of dumping thousands of lines into the prompt.
+**TL;DR.** When an AI agent needs to modify a Laravel controller or service, which models, FormRequests, and migrations are affected? trace-mcp indexes your existing Laravel repository into a local static code graph. AI coding agents query route-to-controller bindings, Eloquent model associations, and validation rules through MCP without dumping entire directories into the prompt.
 
 ---
 
@@ -9475,7 +9475,7 @@ npm i -g trace-mcp && trace init && trace add
 
 > "Which Eloquent models, migrations, and FormRequests are affected if I modify the payment transaction status transitions, and what controllers route to it?"
 
-The agent calls `trace-mcp` tools like `get_symbol`, `get_callers`, or `find_impact` to inspect the exact subgraph without reading irrelevant controllers or models.
+The agent calls `trace-mcp` tools like `get_symbol`, `get_call_graph`, or `get_change_impact` to inspect the exact subgraph without reading irrelevant controllers or models.
 
 ---
 
@@ -9519,7 +9519,7 @@ Source: https://trace-mcp.com/vue-mcp.html
 
 
 
-**TL;DR.** AI coding agents working on Vue projects frequently lose track of component hierarchies, prop types across parent-child templates, and custom emit events. trace-mcp indexes Vue SFCs into a structural dependency graph, allowing AI agents to navigate render trees, script setup bindings, and composables with minimal token consumption.
+**TL;DR.** Which parent views render a specific Vue component, and what props or emits link them? trace-mcp indexes your existing Vue.js repository into a local static code graph. AI coding agents navigate Single File Component (SFC) render trees, `<script setup>` bindings, and composables through MCP without loading unrelated components into context.
 
 ---
 
@@ -9560,7 +9560,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
 | **Component hierarchy** | Must read every parent SFC | Direct parent-child render tree edges |
-| **Props & Emits validation** | Hallucinates prop types | Typed symbol signatures from AST |
+| **Props & Emits validation** | Read prop declarations | Typed symbol signatures from AST |
 | **Tag casing resolution** | Misses kebab-case matches | Automatic kebab ↔ PascalCase resolution |
 | **Composable dependency** | Greps for function names | Graph edges from composable to consumer |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
@@ -9592,7 +9592,7 @@ Source: https://trace-mcp.com/nuxt-mcp.html
 
 
 
-**TL;DR.** Nuxt relies extensively on conventions and auto-imports: composables, utilities, and components are used without explicit `import` statements, leaving AI agents guessing where functions are defined. trace-mcp indexes Nuxt conventions, resolving auto-imports, file-based routes, and Nitro API calls into an explicit, queryable graph.
+**TL;DR.** Which Nitro server API routes and shared composables does a Nuxt page depend on? trace-mcp indexes your existing Nuxt 3/4 repository into a local static code graph. AI coding agents resolve un-imported composables, file-based `pages/` routes, and string-literal `useFetch` targets through MCP instead of manually reconstructing framework conventions.
 
 ---
 
@@ -9603,7 +9603,7 @@ Nuxt projects combine Vue frontend architecture with Nitro server routes. The `n
 - **File-Based Routing:** Full route tree extraction from `pages/` (and Nuxt 4 `app/pages/`), handling dynamic parameters (`[id]`), catch-alls (`[...slug]`), and nested routes.
 - **Nitro Server API Routes:** Endpoint mapping from `server/api/` (e.g., `server/api/users.get.ts` → `GET /api/users`), middleware, and server utilities.
 - **Auto-Imports:** Resolution of implicit globals in `composables/`, `utils/`, and `server/utils/` without requiring explicit import statements in `.vue` files.
-- **Data Fetching Connections:** Extraction of `useFetch` and `useAsyncData` call targets, linking frontend pages to their server API route handlers.
+- **Data Fetching Connections:** Extraction of static URL string literals in `useFetch` and `useAsyncData` calls, linking frontend pages to matching server API route handlers.
 - **Layouts & Middleware:** Mapping between page front-matter / `definePageMeta` declarations and files in `layouts/` and `middleware/`.
 - **Nuxt 3 & Nuxt 4 Compatibility:** Full detection of Nuxt 4 compatibility mode, `app/` folder hierarchies, and configuration settings.
 
@@ -9632,8 +9632,8 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 | Capability | Without graph | With trace-mcp |
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
-| **Auto-import resolution** | AI fails to locate un-imported symbols | Auto-imports mapped to definitions |
-| **Data fetching paths** | Blind to `useFetch` targets | Direct edge from `useFetch` to `/api/*` |
+| **Auto-import resolution** | Locate composable definitions | Auto-imports mapped to definitions |
+| **Data fetching paths** | Match URL literals to server routes | Direct edge from literal string paths to `/api/*` |
 | **File-based routing** | Manual path reconstruction | Complete URI route table extracted |
 | **Nuxt 4 app/ layout** | Confused by multi-directory roots | Detects Nuxt 4 compatibility layout |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
@@ -9646,7 +9646,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 trace-mcp indexes symbols in `composables/`, `utils/`, and `server/utils/`, automatically linking un-imported functions in Vue components and pages to their definitions.
 
 ### Does trace-mcp connect `useFetch` calls to Nitro server API routes?
-Yes. The Nuxt plugin extracts URL path literals from `useFetch` and `useAsyncData` calls, connecting frontend data fetching directly to `server/api/` endpoint handlers in the graph.
+Yes. The Nuxt plugin extracts string literal URL paths from `useFetch` and `useAsyncData` calls, connecting frontend data fetching to matching `server/api/` endpoint handlers in the graph.
 
 ### Does trace-mcp support Nuxt 4 `app/` directory structures?
 Yes. trace-mcp recognizes Nuxt 4 compatibility mode, indexing pages, layouts, and components located under `app/pages/` as well as classic root `pages/`.
@@ -9665,7 +9665,7 @@ Source: https://trace-mcp.com/django-mcp.html
 
 
 
-**TL;DR.** In Django projects, dependencies flow through dynamic signals, reverse ORM descriptors, URL `include()` trees, and admin registrations. Standard grep and file dumps miss these connections. trace-mcp extracts Django models, view routes, signal connections, and forms into a persistent code graph that AI coding agents can query instantly.
+**TL;DR.** Which views, admin registrations, and signal receivers depend on a modified Django model? trace-mcp indexes your existing Django repository into a local static code graph. AI coding agents query URL patterns, CBV/FBV definitions, model relationships, and `@receiver` signal bindings directly through MCP instead of running broad text searches across apps.
 
 ---
 
@@ -9673,7 +9673,7 @@ Source: https://trace-mcp.com/django-mcp.html
 
 The `django` plugin indexes Django 2.x through 5.x applications:
 
-- **Models & Relationships:** Subclasses of `models.Model`, `ForeignKey`, `ManyToManyField`, `OneToOneField`, and `related_name` reverse relation edges.
+- **Models & Relationships:** Subclasses of `models.Model`, `ForeignKey`, `ManyToManyField`, and `OneToOneField` mapping model associations across apps.
 - **URL Routing & Patterns:** Root `urlpatterns`, `path()`, `re_path()`, `include()` modules, and Django REST Framework routers.
 - **Views (CBV & FBV):** Class-based views (`ListView`, `DetailView`, `CreateView`, `ViewSet`) and function-based views, extracting model and template bindings (`django_view_uses_model`, `django_view_template`).
 - **Signal Graph:** `@receiver` decorators and `signal.connect()` calls, mapping sender models to receiver callbacks (`django_signal_receiver`).
@@ -9694,7 +9694,7 @@ npm i -g trace-mcp && trace init && trace add
 
 > "Which views, admin classes, and signal receivers depend on the `Invoice` model in this Django repository?"
 
-The AI agent invokes `trace-mcp` tools to query reverse relationships, signals, and view bindings directly without searching hundreds of Python files.
+The AI agent invokes `trace-mcp` tools to query relationships, signals, and view bindings directly without searching hundreds of Python files.
 
 ---
 
@@ -9706,7 +9706,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
 | **Signal listener discovery** | Hidden in disconnected files | Explicit `django_signal_receiver` edges |
-| **Reverse ORM relations** | Grep misses dynamic `_set` fields | Graph tracks reverse model associations |
+| **Model relationships** | Search foreign keys with grep | Explicit model relation graph edges |
 | **URL pattern nesting** | Traverses nested `include()` manually | Flattened URL route-to-view graph |
 | **Admin & Form binding** | Must read admin.py and forms.py | Direct edges from model to admin/forms |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
@@ -9719,7 +9719,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 trace-mcp parses `@receiver` decorators and `signal.connect()` calls, creating explicit graph edges that connect signal senders to receiver functions even when defined in separate apps.
 
 ### Does trace-mcp support Django REST Framework (DRF)?
-Yes. It extracts DRF routers, ViewSets, APIView endpoints, and serializer model bindings, linking API routes to underlying Django models.
+Yes. It indexes DRF DefaultRouter and SimpleRouter registrations, linking registered routes to ViewSet classes, and connects views to explicit model or queryset definitions.
 
 ### Does trace-mcp connect Django admin registrations to models?
 Yes. It indexes `@admin.register()` decorators and `admin.site.register()` calls, building `django_admin_registers` edges between ModelAdmin classes and models.
@@ -9738,7 +9738,7 @@ Source: https://trace-mcp.com/spring-mcp.html
 
 
 
-**TL;DR.** Spring Boot enterprise codebases are rich with annotations, interfaces, dependency injection wires, and JPA entity hierarchies. Dumping whole Java/Kotlin files quickly overflows AI token budgets. trace-mcp maps Spring beans, REST controllers, and entity relationships into a fast local graph that AI agents can query precisely.
+**TL;DR.** Which `@Service` beans and JPA repositories are touched by a Spring Boot REST endpoint change? trace-mcp indexes your existing Spring Boot repository into a local static code graph. AI coding agents query `@RequestMapping` endpoints, `@Autowired` bean dependencies, and JPA entity relationships through MCP instead of searching through verbose class files.
 
 ---
 
@@ -9747,10 +9747,10 @@ Source: https://trace-mcp.com/spring-mcp.html
 The `spring` plugin indexes Spring MVC and Spring Boot applications across Java and Kotlin:
 
 - **REST & MVC Routes:** `@RestController`, `@Controller`, `@RequestMapping`, `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping` (`spring_route`).
-- **Dependency Injection:** `@Service`, `@Repository`, `@Component`, `@Configuration`, `@Autowired`, `@Inject`, and constructor injection (`spring_injects`).
+- **Dependency Injection:** `@Service`, `@Repository`, `@Component`, `@Configuration`, `@Autowired`, and constructor injection (`spring_injects`).
 - **JPA Entity Relationships:** `@Entity` declarations and relational mappings (`@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne`) (`spring_entity_relation`).
-- **Configuration & Values:** `@Value` property injection keys (`spring_config_value`) and component scan directives (`spring_component_scan`).
-- **Multi-Language Support:** First-class parsing for both Java and Kotlin codebases using Maven (`pom.xml`) or Gradle (`build.gradle`).
+- **Configuration & Values:** `@Value` property injection keys (`spring_config_value`).
+- **Multi-Language Support:** Route and entity parsing across Java and Kotlin codebases using Maven (`pom.xml`) or Gradle (`build.gradle`), with Java-focused constructor DI analysis.
 
 ---
 
@@ -9777,7 +9777,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 | Capability | Without graph | With trace-mcp |
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
-| **Dependency injection** | Cannot resolve `@Autowired` targets | Direct `spring_injects` edges |
+| **Dependency injection** | Inspect injection sites and bean declarations | Direct `spring_injects` edges |
 | **Route mapping** | Must search annotations across files | Fast URI endpoint index |
 | **JPA entity associations** | Parses complex Java class files | Relational entity graph |
 | **Java & Kotlin mixing** | Inconsistent symbol tracking | Unified multi-language graph |
@@ -9788,7 +9788,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 ## Frequently asked questions
 
 ### Does trace-mcp support both Java and Kotlin Spring Boot applications?
-Yes. The Spring plugin inspects annotations, beans, controllers, and JPA repositories across both Java and Kotlin source files in your repository.
+Yes. The Spring plugin indexes routes, annotations, and JPA entity definitions across Java and Kotlin source files. For dependency injection, Java field and constructor injection patterns are fully indexed; Kotlin DI supports explicit `@Autowired` annotations while Kotlin primary constructor parameters are not yet extracted.
 
 ### How does trace-mcp resolve Spring dependency injection?
 It indexes `@Service`, `@Repository`, `@Component`, and `@Configuration` beans, building `spring_injects` edges between injection targets (`@Autowired`, constructor injection) and bean declarations.

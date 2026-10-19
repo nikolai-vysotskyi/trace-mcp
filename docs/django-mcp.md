@@ -49,7 +49,7 @@ category: frameworks
           "name": "Does trace-mcp support Django REST Framework (DRF)?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. It extracts DRF routers, ViewSets, APIView endpoints, and serializer model bindings, linking API routes to underlying Django models."
+            "text": "Yes. It indexes DRF DefaultRouter and SimpleRouter registrations, linking registered routes to ViewSet classes, and connects views to explicit model or queryset definitions."
           }
         },
         {
@@ -66,7 +66,7 @@ category: frameworks
 }
 </script>
 
-**TL;DR.** In Django projects, dependencies flow through dynamic signals, reverse ORM descriptors, URL `include()` trees, and admin registrations. Standard grep and file dumps miss these connections. trace-mcp extracts Django models, view routes, signal connections, and forms into a persistent code graph that AI coding agents can query instantly.
+**TL;DR.** Which views, admin registrations, and signal receivers depend on a modified Django model? trace-mcp indexes your existing Django repository into a local static code graph. AI coding agents query URL patterns, CBV/FBV definitions, model relationships, and `@receiver` signal bindings directly through MCP instead of running broad text searches across apps.
 
 ---
 
@@ -74,7 +74,7 @@ category: frameworks
 
 The `django` plugin indexes Django 2.x through 5.x applications:
 
-- **Models & Relationships:** Subclasses of `models.Model`, `ForeignKey`, `ManyToManyField`, `OneToOneField`, and `related_name` reverse relation edges.
+- **Models & Relationships:** Subclasses of `models.Model`, `ForeignKey`, `ManyToManyField`, and `OneToOneField` mapping model associations across apps.
 - **URL Routing & Patterns:** Root `urlpatterns`, `path()`, `re_path()`, `include()` modules, and Django REST Framework routers.
 - **Views (CBV & FBV):** Class-based views (`ListView`, `DetailView`, `CreateView`, `ViewSet`) and function-based views, extracting model and template bindings (`django_view_uses_model`, `django_view_template`).
 - **Signal Graph:** `@receiver` decorators and `signal.connect()` calls, mapping sender models to receiver callbacks (`django_signal_receiver`).
@@ -95,7 +95,7 @@ npm i -g trace-mcp && trace init && trace add
 
 > "Which views, admin classes, and signal receivers depend on the `Invoice` model in this Django repository?"
 
-The AI agent invokes `trace-mcp` tools to query reverse relationships, signals, and view bindings directly without searching hundreds of Python files.
+The AI agent invokes `trace-mcp` tools to query relationships, signals, and view bindings directly without searching hundreds of Python files.
 
 ---
 
@@ -107,7 +107,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
 | **Signal listener discovery** | Hidden in disconnected files | Explicit `django_signal_receiver` edges |
-| **Reverse ORM relations** | Grep misses dynamic `_set` fields | Graph tracks reverse model associations |
+| **Model relationships** | Search foreign keys with grep | Explicit model relation graph edges |
 | **URL pattern nesting** | Traverses nested `include()` manually | Flattened URL route-to-view graph |
 | **Admin & Form binding** | Must read admin.py and forms.py | Direct edges from model to admin/forms |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
@@ -120,7 +120,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 trace-mcp parses `@receiver` decorators and `signal.connect()` calls, creating explicit graph edges that connect signal senders to receiver functions even when defined in separate apps.
 
 ### Does trace-mcp support Django REST Framework (DRF)?
-Yes. It extracts DRF routers, ViewSets, APIView endpoints, and serializer model bindings, linking API routes to underlying Django models.
+Yes. It indexes DRF DefaultRouter and SimpleRouter registrations, linking registered routes to ViewSet classes, and connects views to explicit model or queryset definitions.
 
 ### Does trace-mcp connect Django admin registrations to models?
 Yes. It indexes `@admin.register()` decorators and `admin.site.register()` calls, building `django_admin_registers` edges between ModelAdmin classes and models.

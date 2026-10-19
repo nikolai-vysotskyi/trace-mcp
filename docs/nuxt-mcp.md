@@ -49,7 +49,7 @@ category: frameworks
           "name": "Does trace-mcp connect useFetch calls to Nitro server API routes?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. The Nuxt plugin extracts URL path literals from useFetch and useAsyncData calls, connecting frontend data fetching directly to server/api/ endpoint handlers in the graph."
+            "text": "Yes. The Nuxt plugin extracts string literal URL paths from useFetch and useAsyncData calls, connecting frontend data fetching to matching server/api/ endpoint handlers in the graph."
           }
         },
         {
@@ -66,7 +66,7 @@ category: frameworks
 }
 </script>
 
-**TL;DR.** Nuxt relies extensively on conventions and auto-imports: composables, utilities, and components are used without explicit `import` statements, leaving AI agents guessing where functions are defined. trace-mcp indexes Nuxt conventions, resolving auto-imports, file-based routes, and Nitro API calls into an explicit, queryable graph.
+**TL;DR.** Which Nitro server API routes and shared composables does a Nuxt page depend on? trace-mcp indexes your existing Nuxt 3/4 repository into a local static code graph. AI coding agents resolve un-imported composables, file-based `pages/` routes, and string-literal `useFetch` targets through MCP instead of manually reconstructing framework conventions.
 
 ---
 
@@ -77,7 +77,7 @@ Nuxt projects combine Vue frontend architecture with Nitro server routes. The `n
 - **File-Based Routing:** Full route tree extraction from `pages/` (and Nuxt 4 `app/pages/`), handling dynamic parameters (`[id]`), catch-alls (`[...slug]`), and nested routes.
 - **Nitro Server API Routes:** Endpoint mapping from `server/api/` (e.g., `server/api/users.get.ts` → `GET /api/users`), middleware, and server utilities.
 - **Auto-Imports:** Resolution of implicit globals in `composables/`, `utils/`, and `server/utils/` without requiring explicit import statements in `.vue` files.
-- **Data Fetching Connections:** Extraction of `useFetch` and `useAsyncData` call targets, linking frontend pages to their server API route handlers.
+- **Data Fetching Connections:** Extraction of static URL string literals in `useFetch` and `useAsyncData` calls, linking frontend pages to matching server API route handlers.
 - **Layouts & Middleware:** Mapping between page front-matter / `definePageMeta` declarations and files in `layouts/` and `middleware/`.
 - **Nuxt 3 & Nuxt 4 Compatibility:** Full detection of Nuxt 4 compatibility mode, `app/` folder hierarchies, and configuration settings.
 
@@ -106,8 +106,8 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 | Capability | Without graph | With trace-mcp |
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
-| **Auto-import resolution** | AI fails to locate un-imported symbols | Auto-imports mapped to definitions |
-| **Data fetching paths** | Blind to `useFetch` targets | Direct edge from `useFetch` to `/api/*` |
+| **Auto-import resolution** | Locate composable definitions | Auto-imports mapped to definitions |
+| **Data fetching paths** | Match URL literals to server routes | Direct edge from literal string paths to `/api/*` |
 | **File-based routing** | Manual path reconstruction | Complete URI route table extracted |
 | **Nuxt 4 app/ layout** | Confused by multi-directory roots | Detects Nuxt 4 compatibility layout |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |
@@ -120,7 +120,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 trace-mcp indexes symbols in `composables/`, `utils/`, and `server/utils/`, automatically linking un-imported functions in Vue components and pages to their definitions.
 
 ### Does trace-mcp connect `useFetch` calls to Nitro server API routes?
-Yes. The Nuxt plugin extracts URL path literals from `useFetch` and `useAsyncData` calls, connecting frontend data fetching directly to `server/api/` endpoint handlers in the graph.
+Yes. The Nuxt plugin extracts string literal URL paths from `useFetch` and `useAsyncData` calls, connecting frontend data fetching to matching `server/api/` endpoint handlers in the graph.
 
 ### Does trace-mcp support Nuxt 4 `app/` directory structures?
 Yes. trace-mcp recognizes Nuxt 4 compatibility mode, indexing pages, layouts, and components located under `app/pages/` as well as classic root `pages/`.

@@ -66,7 +66,7 @@ category: frameworks
 }
 </script>
 
-**TL;DR.** AI coding agents working on Vue projects frequently lose track of component hierarchies, prop types across parent-child templates, and custom emit events. trace-mcp indexes Vue SFCs into a structural dependency graph, allowing AI agents to navigate render trees, script setup bindings, and composables with minimal token consumption.
+**TL;DR.** Which parent views render a specific Vue component, and what props or emits link them? trace-mcp indexes your existing Vue.js repository into a local static code graph. AI coding agents navigate Single File Component (SFC) render trees, `<script setup>` bindings, and composables through MCP without loading unrelated components into context.
 
 ---
 
@@ -107,7 +107,7 @@ Measurements below reflect corpus-level benchmarks from our [PR review context b
 |---|---|---|
 | **Median input tokens** | ~{{ site.data.pr_context_bench.baseline_median_tokens }} tokens | ~{{ site.data.pr_context_bench.trace_median_tokens }} tokens (-{{ site.data.pr_context_bench.median_savings_pct }}%) |
 | **Component hierarchy** | Must read every parent SFC | Direct parent-child render tree edges |
-| **Props & Emits validation** | Hallucinates prop types | Typed symbol signatures from AST |
+| **Props & Emits validation** | Read prop declarations | Typed symbol signatures from AST |
 | **Tag casing resolution** | Misses kebab-case matches | Automatic kebab ↔ PascalCase resolution |
 | **Composable dependency** | Greps for function names | Graph edges from composable to consumer |
 | **Tools exposed** | None (reads full files) | {{ site.data.counts.tools }} specialized MCP tools |

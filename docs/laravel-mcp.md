@@ -66,7 +66,7 @@ category: frameworks
 }
 </script>
 
-**TL;DR.** LLMs writing Laravel code often hallucinate Eloquent method names, miss FormRequest validation bindings, and overlook route-to-controller mapping. trace-mcp indexes the entire Laravel topology into a local SQLite graph so Claude Code, Cursor, and other AI agents query exact architecture edges instead of dumping thousands of lines into the prompt.
+**TL;DR.** When an AI agent needs to modify a Laravel controller or service, which models, FormRequests, and migrations are affected? trace-mcp indexes your existing Laravel repository into a local static code graph. AI coding agents query route-to-controller bindings, Eloquent model associations, and validation rules through MCP without dumping entire directories into the prompt.
 
 ---
 
@@ -96,7 +96,7 @@ npm i -g trace-mcp && trace init && trace add
 
 > "Which Eloquent models, migrations, and FormRequests are affected if I modify the payment transaction status transitions, and what controllers route to it?"
 
-The agent calls `trace-mcp` tools like `get_symbol`, `get_callers`, or `find_impact` to inspect the exact subgraph without reading irrelevant controllers or models.
+The agent calls `trace-mcp` tools like `get_symbol`, `get_call_graph`, or `get_change_impact` to inspect the exact subgraph without reading irrelevant controllers or models.
 
 ---
 
