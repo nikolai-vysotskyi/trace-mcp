@@ -486,6 +486,7 @@ memoryCommand
   .option('--apply', 'Actually delete orphaned decisions and session data')
   .option('--include-sessions', 'Also prune mined session log references for deleted files')
   .option('--expired', 'Also delete decisions whose validity period has ended')
+  .option('--dedup', 'Also report or invalidate older active duplicate decisions')
   .option(
     '--low-quality',
     'Also sweep active mined decisions through the quality gate and invalidate fragment/narration rows (dry-run unless --apply)',
@@ -496,6 +497,7 @@ memoryCommand
       apply?: boolean;
       includeSessions?: boolean;
       expired?: boolean;
+      dedup?: boolean;
       lowQuality?: boolean;
       json?: boolean;
     }) => {
@@ -504,19 +506,27 @@ memoryCommand
         const stale = store.findStale();
         const apply = !!opts.apply;
         const expiredDecisions = opts.expired ? store.countExpiredDecisions() : 0;
+        const duplicateGroups = opts.dedup ? store.findDuplicateDecisions() : [];
+        const duplicateDecisions = duplicateGroups.reduce((n, g) => n + g.duplicateIds.length, 0);
         // TRA-1619B one-shot sweep for pre-gate mined fragments. Dry-run
         // unless --apply — same safety posture as the stale-root prune.
         const lq = opts.lowQuality ? store.purgeLowQualityDecisions({ dry_run: !apply }) : null;
 
         if (opts.json) {
           if (apply) {
+            const deduplicatedDecisions = opts.dedup ? store.pruneDuplicateDecisions() : 0;
             const result = store.pruneStale({
               includeMinedSessions: opts.includeSessions,
               includeExpired: opts.expired,
             });
             console.log(
               JSON.stringify(
-                { apply: true, ...result, ...(lq ? { low_quality: lq } : {}) },
+                {
+                  apply: true,
+                  ...result,
+                  ...(opts.dedup ? { duplicateGroups, deduplicatedDecisions } : {}),
+                  ...(lq ? { low_quality: lq } : {}),
+                },
                 null,
                 2,
               ),
@@ -528,6 +538,7 @@ memoryCommand
                   apply: false,
                   ...stale,
                   ...(opts.expired ? { expiredDecisions } : {}),
+                  ...(opts.dedup ? { duplicateGroups, duplicateDecisions } : {}),
                   ...(lq ? { low_quality: lq } : {}),
                 },
                 null,
@@ -542,6 +553,7 @@ memoryCommand
         if (
           stale.staleRoots.length === 0 &&
           expiredDecisions === 0 &&
+          duplicateDecisions === 0 &&
           (!opts.includeSessions || stale.staleMinedSessionsCount === 0) &&
           (!lq || lq.rows.length === 0)
         ) {
@@ -554,6 +566,18 @@ memoryCommand
 
         if (!apply) {
           if (opts.expired) console.log(`  Found ${expiredDecisions} expired decision(s).`);
+          if (opts.dedup) {
+            console.log(
+              `  Found ${duplicateDecisions} duplicate decision(s) in ${duplicateGroups.length} group(s).`,
+            );
+            for (const group of duplicateGroups.slice(0, 20)) {
+              console.log(
+                `    - ${group.project_root}: ${group.title} (keep #${group.keepId}; invalidate #${group.duplicateIds.join(', #')})`,
+              );
+            }
+            if (duplicateGroups.length > 20)
+              console.log(`    …and ${duplicateGroups.length - 20} more group(s).`);
+          }
           console.log(
             `  Found ${stale.decisionsCount} decision(s) across ${stale.staleRoots.length} deleted project root(s):`,
           );
@@ -577,14 +601,17 @@ memoryCommand
             );
           }
           console.log(
-            `\n  Dry-run only — re-run with \`trace-mcp memory prune${opts.expired ? ' --expired' : ''} --apply\` to delete.\n`,
+            `\n  Dry-run only — re-run with \`trace-mcp memory prune${opts.expired ? ' --expired' : ''}${opts.dedup ? ' --dedup' : ''} --apply\` to apply.\n`,
           );
         } else {
+          const deduplicatedDecisions = opts.dedup ? store.pruneDuplicateDecisions() : 0;
           const result = store.pruneStale({
             includeMinedSessions: opts.includeSessions,
             includeExpired: opts.expired,
           });
           if (opts.expired) console.log(`  Pruned ${result.expiredDecisions} expired decision(s).`);
+          if (opts.dedup)
+            console.log(`  Invalidated ${deduplicatedDecisions} duplicate decision(s).`);
           console.log(
             `  Pruned ${result.decisions} decision(s) across ${result.staleRoots.length} deleted project root(s):`,
           );

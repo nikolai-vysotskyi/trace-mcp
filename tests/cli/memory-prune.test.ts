@@ -93,6 +93,46 @@ describe('trace-mcp memory prune CLI (TRA-595)', () => {
     check.close();
   });
 
+  it('reports duplicate groups and invalidates older rows with --dedup --apply', () => {
+    const projDir = path.join(tmpHome, 'live-project');
+    fs.mkdirSync(projDir);
+    const seed = new DecisionStore(dbPath);
+    const input = {
+      title: 'Shared convention',
+      content: 'Use one convention',
+      type: 'convention' as const,
+      project_root: projDir,
+    };
+    const first = seed.addDecision(input);
+    const second = seed.addDecision(input);
+    seed.close();
+
+    const repoRoot = path.join(__dirname, '..', '..');
+    const tsxLoader = pathToFileURL(
+      path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'esm', 'index.mjs'),
+    ).href;
+    const script = `
+      const { memoryCommand } = await import('./src/cli/memory.ts');
+      await memoryCommand.parseAsync(['prune', '--dedup', '--json'], { from: 'user' });
+      await memoryCommand.parseAsync(['prune', '--dedup', '--apply', '--json'], { from: 'user' });
+    `;
+    const output = execFileSync(
+      process.execPath,
+      ['--import', tsxLoader, '--input-type=module', '-e', script],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, TRACE_MCP_DATA_DIR: tmpHome, NODE_OPTIONS: '' },
+        encoding: 'utf-8',
+      },
+    );
+    expect(output).toContain('"duplicateDecisions": 1');
+    expect(output).toContain('"deduplicatedDecisions": 1');
+    const check = new DecisionStore(dbPath);
+    expect(check.getDecision(first.id)?.valid_until).not.toBeNull();
+    expect(check.getDecision(second.id)?.valid_until).toBeNull();
+    check.close();
+  });
+
   describe('prune --low-quality (TRA-1619B)', () => {
     // The CLI resolves its database path at import time, so (like
     // env-overrides.test.ts) we drive it from a subprocess with a hermetic
