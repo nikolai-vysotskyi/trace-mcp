@@ -3,10 +3,13 @@
  * Handles writing FileExtraction results to the database.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import type { RawEdge } from '../plugin-api/types.js';
 import type { FileExtraction, PipelineState } from './pipeline-state.js';
 import { yieldToEventLoopFair } from '../utils/event-loop.js';
 import { isSqliteBusyError } from '../db/repair.js';
+import { logger } from '../logger.js';
 
 /**
  * Files committed per transaction by `persistBatch` (TRA-1828).
@@ -63,10 +66,13 @@ export class FilePersister {
    * chunks (TRA-1828) — callers must await the full batch before reading
    * `newSymbolNames` / `deletedSymbolNames`.
    */
-  async persistBatch(extractions: FileExtraction[]): Promise<void> {
+  async persistBatch(
+    extractions: FileExtraction[],
+  ): Promise<{ persistedCount: number; persistedPaths: string[] }> {
     this.newSymbolNames.clear();
     this.deletedSymbolNames.clear();
     this._pendingOldNames.clear();
+    const persistedPaths: string[] = [];
     // Own turn first: the pre-yield must come immediately before the sync
     // work (see `runInOwnTurn`) so concurrent indexers cannot stack their
     // first chunks into a single turn.
@@ -80,16 +86,21 @@ export class FilePersister {
       // SQLITE_BUSY_SNAPSHOT (database is locked) without waiting for busy_timeout.
       // Immediate mode acquires the RESERVED lock up front and honors busy_timeout.
       // Additionally, wrap with bounded backoff retry for transient locks.
+      const chunkPersisted: string[] = [];
       const writeTx = this.state.store.db.transaction(() => {
         for (const ext of chunk) {
-          this.persistExtraction(ext);
+          if (this.persistExtraction(ext)) {
+            chunkPersisted.push(ext.relPath);
+          }
         }
       }).immediate;
 
       let attempts = 0;
       while (true) {
         try {
+          chunkPersisted.length = 0;
           writeTx();
+          persistedPaths.push(...chunkPersisted);
           break;
         } catch (err) {
           if (isSqliteBusyError(err) && ++attempts <= 3) {
@@ -100,6 +111,7 @@ export class FilePersister {
         }
       }
     }
+    return { persistedCount: persistedPaths.length, persistedPaths };
   }
 
   /**
@@ -152,14 +164,25 @@ export class FilePersister {
     s.add(id);
   }
 
-  /** Write a single file extraction to DB (must be called inside a transaction). */
-  persistExtraction(ext: FileExtraction): void {
+  /**
+   * Write a single file extraction to DB (must be called inside a transaction).
+   * Returns true if persisted, false if skipped (e.g. deleted mid-pass).
+   */
+  persistExtraction(ext: FileExtraction): boolean {
     const store = this.state.store;
 
-    // Upsert file record
+    // Upsert file record: verify if file row actually exists in DB
     let fileId: number;
-    if (ext.existingId != null) {
-      fileId = ext.existingId;
+    let existingFile = ext.existingId != null ? store.getFileById(ext.existingId) : undefined;
+    if (existingFile && existingFile.path !== ext.relPath) {
+      existingFile = undefined;
+    }
+    if (!existingFile) {
+      existingFile = store.getFile(ext.relPath);
+    }
+
+    if (existingFile) {
+      fileId = existingFile.id;
 
       // Fast path: if symbols are structurally identical (same symbolIds, names,
       // kinds, signatures), only update byte positions + complexity metrics.
@@ -191,7 +214,7 @@ export class FilePersister {
         if (ext.importEdges.length > 0) {
           this.state.pendingImports.set(fileId, ext.importEdges);
         }
-        return;
+        return true;
       }
 
       // Full reindex path — capture pre-delete names so we can diff against
@@ -217,6 +240,26 @@ export class FilePersister {
       store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
       if (ext.workspace) store.updateFileWorkspace(fileId, ext.workspace);
     } else {
+      // TRA-2551: The file was missing from DB (brand-new file, or deleted mid-extraction
+      // by a watcher delete or drop reconcile). Check if the file still exists on disk.
+      // If deleted from disk as well, do not resurrect a ghost row in the DB.
+      let existsOnDisk = true;
+      if (this.state.rootPath) {
+        const absPath = path.resolve(this.state.rootPath, ext.relPath);
+        try {
+          existsOnDisk = fs.existsSync(absPath);
+        } catch {
+          existsOnDisk = false;
+        }
+      }
+      if (!existsOnDisk) {
+        logger.debug(
+          { file: ext.relPath, root: this.state.rootPath },
+          'Skipping persistence for file deleted mid-pass',
+        );
+        return false;
+      }
+
       fileId = store.insertFile(
         ext.relPath,
         ext.language,
@@ -226,6 +269,14 @@ export class FilePersister {
         ext.mtimeMs,
       );
       this.state.changedFileIds.add(fileId);
+      // Ensure any existing symbols/edges are cleaned up if insertFile conflicted
+      store.deleteSymbolsByFile(fileId);
+      store.deleteEntitiesByFile(fileId);
+      if (this.state.isIncremental) {
+        store.deleteOutgoingEdgesForFileNodes(fileId);
+      } else {
+        store.deleteEdgesForFileNodes(fileId);
+      }
       if (ext.status !== 'ok' || ext.frameworkRole) {
         store.updateFileStatus(fileId, ext.status, ext.frameworkRole);
       }
@@ -259,6 +310,7 @@ export class FilePersister {
         store.updateFileStatus(fileId, fwResult.status, fwResult.frameworkRole);
       }
     }
+    return true;
   }
 
   /** Insert symbols+trigrams, edges, and entities (routes/components/migrations/ORM/screens). */

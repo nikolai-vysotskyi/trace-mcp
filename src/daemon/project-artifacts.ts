@@ -109,9 +109,12 @@ function dropTopologyRows(
   try {
     // Lazy import to avoid pulling better-sqlite3 unless a topology DB exists.
     // The store opens with a single writer connection — safe to close immediately.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TopologyStore } =
-      require('../topology/topology-db.js') as typeof import('../topology/topology-db.js');
+    // createRequire, not a bare `require`: the ESM bundle rewrites a bare
+    // `require` to an undefined variable in Node 22 ESM mode (TRA-2384).
+    const requireFn = createRequire(import.meta.url);
+    const { TopologyStore } = requireFn(
+      '../topology/topology-db.js',
+    ) as typeof import('../topology/topology-db.js');
     const store = new TopologyStore(TOPOLOGY_DB_PATH);
     try {
       return store.removeByRepoRoot(root);
