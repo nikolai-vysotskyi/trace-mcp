@@ -133,6 +133,18 @@ export function snapshotPathForDb(dbPath: string): string {
   return `${dbPath}.watcher-snapshot`;
 }
 
+/** Cap on pending deletes recorded to the sidecar during shutdown (TRA-1998). */
+export const PENDING_DELETES_MAX = 10_000;
+
+/**
+ * Sidecar recording deleteFiles calls that landed after DB close during
+ * shutdown (TRA-1998). Co-located with the DB, survives daemon restarts,
+ * consumed at the head of the next indexAll before discovery.
+ */
+export function pendingDeletesPathForDb(dbPath: string): string {
+  return `${dbPath}.pending-deletes.json`;
+}
+
 /** Absolute → repo-relative posix; null when outside the root. */
 export function toRelPosix(rootPath: string, absPath: string): string | null {
   const rel = path.isAbsolute(absPath) ? path.relative(rootPath, absPath) : absPath;
