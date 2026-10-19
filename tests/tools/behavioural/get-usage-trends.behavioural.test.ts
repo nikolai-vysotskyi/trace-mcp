@@ -101,6 +101,8 @@ describe('get_usage_trends — AnalyticsStore.getUsageTrends() behavioural contr
       expect(typeof day.tokens).toBe('number');
       expect(typeof day.cost_usd).toBe('number');
       expect(typeof day.tool_calls).toBe('number');
+      expect(typeof day.cache_hit_rate).toBe('number');
+      expect(typeof day.cache_hit_rate_by_provider).toBe('object');
     }
   });
 

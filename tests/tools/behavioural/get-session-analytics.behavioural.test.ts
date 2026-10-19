@@ -144,6 +144,7 @@ describe('getSessionAnalytics() — behavioural contract', () => {
       [
         '_ingestion',
         'byToolServer',
+        'cache_hit_rate',
         'modelsUsed',
         'period',
         'sessionsCount',
@@ -152,6 +153,10 @@ describe('getSessionAnalytics() — behavioural contract', () => {
         'totals',
       ].sort(),
     );
+    expect(result.cache_hit_rate).toBeDefined();
+    expect(typeof result.cache_hit_rate.blended).toBe('number');
+    expect(result.cache_hit_rate.by_model).toBeDefined();
+    expect(result.cache_hit_rate.by_provider).toBeDefined();
     expect(result.period).toBe('week');
     expect(result.sessionsCount).toBe(1);
     expect(result.totals.inputTokens).toBe(2000);

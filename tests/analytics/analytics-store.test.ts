@@ -109,6 +109,9 @@ describe('AnalyticsStore', () => {
     expect(result.totals.input_tokens).toBe(1000);
     expect(result.totals.output_tokens).toBe(200);
     expect(result.totals.tool_calls).toBe(3);
+    expect(result.cache_hit_rate.blended).toBe(0.3125);
+    expect(result.cache_hit_rate.by_provider.anthropic).toBe(0.3125);
+    expect(result.cache_hit_rate.by_model['claude-sonnet-4-6']).toBe(0.3125);
   });
 
   it('getSessionAnalytics shows tool server breakdown', () => {
