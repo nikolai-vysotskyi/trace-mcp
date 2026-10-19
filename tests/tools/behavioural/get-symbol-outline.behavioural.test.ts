@@ -201,6 +201,7 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
         isError: false,
       };
 
+      const mockChildGetSymbol = vi.fn(async () => mockRelayedSymbol);
       const mockRelay = {
         listRelayTargets: () => [parentDir, childDir],
         openProject: vi.fn(async (targetRoot: string) => {
@@ -208,7 +209,7 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
             return {
               toolHandlers: new Map([
                 ['get_outline', vi.fn(async () => mockRelayedOutline)],
-                ['get_symbol', vi.fn(async () => mockRelayedSymbol)],
+                ['get_symbol', mockChildGetSymbol],
               ]),
             };
           }
@@ -243,7 +244,7 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
       const outlineRes = await outlineHandler({ path: 'packages/child/child.ts' });
       expect(outlineRes.isError).toBeFalsy();
 
-      // 2. get_symbol should also relay to childDir
+      // 2. get_symbol should also relay to childDir with symbol_id
       const symbolRes = await symbolHandler({
         symbol_id: 'packages/child/child.ts::childFunc#function',
       });
@@ -251,6 +252,25 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
       const symbolBody = JSON.parse(symbolRes.content[0].text);
       expect(symbolBody.name).toBe('childFunc');
       expect(mockRelay.openProject).toHaveBeenCalledWith(childDir);
+      expect(mockChildGetSymbol).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol_id: 'child.ts::childFunc#function',
+          fqn: undefined,
+        }),
+      );
+
+      // 3. get_symbol with fqn should also relay to childDir with relocated fqn
+      mockChildGetSymbol.mockClear();
+      const symbolFqnRes = await symbolHandler({
+        fqn: 'packages/child/child.ts::childFunc#function',
+      });
+      expect(symbolFqnRes.isError).toBeFalsy();
+      expect(mockChildGetSymbol).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol_id: undefined,
+          fqn: 'child.ts::childFunc#function',
+        }),
+      );
     } finally {
       unregisterProject(childDir);
       unregisterProject(parentDir);
@@ -278,12 +298,13 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
         isError: false,
       };
 
+      const mockProjectGetSymbol = vi.fn(async () => mockRelayedSymbol);
       const mockRelay = {
         listRelayTargets: () => [projDir],
         openProject: vi.fn(async (targetRoot: string) => {
           if (targetRoot === projDir) {
             return {
-              toolHandlers: new Map([['get_symbol', vi.fn(async () => mockRelayedSymbol)]]),
+              toolHandlers: new Map([['get_symbol', mockProjectGetSymbol]]),
             };
           }
           return null;
@@ -310,7 +331,7 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
       registerLookupTools(server as never, ctx);
       const symbolHandler = captured.find((t) => t.name === 'get_symbol')!.handler;
 
-      // get_symbol on root session with project-prefixed path
+      // get_symbol on root session with project-prefixed path using symbol_id
       const symbolRes = await symbolHandler({
         symbol_id: 'thewed-ai-detector/detector.py::detect#function',
       });
@@ -318,6 +339,25 @@ describe('get_outline → get_symbol workflow (TRA-2535)', () => {
       const symbolBody = JSON.parse(symbolRes.content[0].text);
       expect(symbolBody.name).toBe('detect');
       expect(mockRelay.openProject).toHaveBeenCalledWith(projDir);
+      expect(mockProjectGetSymbol).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol_id: 'detector.py::detect#function',
+          fqn: undefined,
+        }),
+      );
+
+      // get_symbol on root session with project-prefixed path using fqn
+      mockProjectGetSymbol.mockClear();
+      const symbolFqnRes = await symbolHandler({
+        fqn: 'thewed-ai-detector/detector.py::detect#function',
+      });
+      expect(symbolFqnRes.isError).toBeFalsy();
+      expect(mockProjectGetSymbol).toHaveBeenCalledWith(
+        expect.objectContaining({
+          symbol_id: undefined,
+          fqn: 'detector.py::detect#function',
+        }),
+      );
     } finally {
       unregisterProject(projDir);
     }
