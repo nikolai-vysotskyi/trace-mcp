@@ -24,6 +24,7 @@ import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import { yieldToEventLoopFair } from '../../utils/event-loop.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { IndexAbortedError } from '../index-abort.js';
 import { PROJECTION_ID_CHUNK } from '../resolver-budget.js';
 
 /** Slow-chunk tripwire: a single projection range taking longer logs loudly. */
@@ -177,7 +178,11 @@ export function fileSymInsertSql(filePh: string | null, excludedPh: string): str
 export async function resolveFileProjectionEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) throw new IndexAbortedError('resolveFileProjectionEdges aborted');
+  const { store } = state;
+  if (!store.db.open) throw new IndexAbortedError('Database is closed');
   // WHY (TRA-1729): projection is INSERT-only and idempotent, so it only needs
   // to see edges that could be NEW in this run. Every resolver running before
   // this pass inserts edges with at least one endpoint in a changed file:
@@ -191,7 +196,6 @@ export async function resolveFileProjectionEdges(
   // reconcile) keeps the full pass.
   const scopedIds =
     scope && scope.changedFileIds.size > 0 ? Array.from(scope.changedFileIds) : null;
-  const { store } = state;
 
   const importsType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('imports') as
     | { id: number }
@@ -284,17 +288,33 @@ export async function resolveFileProjectionEdges(
     const CHUNK = 300;
     let first = true;
     for (let i = 0; i < scopedIds.length; i += CHUNK) {
-      if (!first) await yieldToEventLoopFair();
+      if (!first) {
+        if (signal?.aborted) throw new IndexAbortedError('resolveFileProjectionEdges aborted');
+        if (!store.db.open) throw new IndexAbortedError('Database is closed');
+        await yieldToEventLoopFair();
+      }
       first = false;
+      if (signal?.aborted) throw new IndexAbortedError('resolveFileProjectionEdges aborted');
+      if (!store.db.open) throw new IndexAbortedError('Database is closed');
       const chunk = scopedIds.slice(i, i + CHUNK);
       const filePh = chunk.map(() => '?').join(',');
       const branchParams = [...chunk, ...excludedSet];
       const symSym = buildSymSymStmt(filePh);
       const fileSym = buildFileSymStmt(filePh);
-      store.db.transaction(() => {
-        symSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
-        fileSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
-      })();
+      try {
+        store.db.transaction(() => {
+          symSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
+          fileSym.run(importsType.id, ...branchParams, importsType.id, ...branchParams);
+        })();
+      } catch (err) {
+        if (
+          !store.db.open ||
+          (err instanceof TypeError && err.message.includes('database connection is not open'))
+        ) {
+          throw new IndexAbortedError('resolveFileProjectionEdges aborted (db closed)');
+        }
+        throw err;
+      }
     }
   } else {
     // Unscoped full pass: one transaction per id range with a fair yield
@@ -318,13 +338,29 @@ export async function resolveFileProjectionEdges(
       );
       let first = true;
       for (let lo = bounds.lo; lo <= bounds.hi; lo += PROJECTION_ID_CHUNK) {
-        if (!first) await yieldToEventLoopFair();
+        if (!first) {
+          if (signal?.aborted) throw new IndexAbortedError('resolveFileProjectionEdges aborted');
+          if (!store.db.open) throw new IndexAbortedError('Database is closed');
+          await yieldToEventLoopFair();
+        }
         first = false;
+        if (signal?.aborted) throw new IndexAbortedError('resolveFileProjectionEdges aborted');
+        if (!store.db.open) throw new IndexAbortedError('Database is closed');
         // TRA-1957: a single range must never go quiet — time every chunk
         // and warn loudly past the tripwire so daemon.log always shows where
         // a slow pass is stuck (the 3.33.0 wedge was silent for 14+ min).
         const chunkStart = Date.now();
-        runRange(lo, lo + PROJECTION_ID_CHUNK);
+        try {
+          runRange(lo, lo + PROJECTION_ID_CHUNK);
+        } catch (err) {
+          if (
+            !store.db.open ||
+            (err instanceof TypeError && err.message.includes('database connection is not open'))
+          ) {
+            throw new IndexAbortedError('resolveFileProjectionEdges aborted (db closed)');
+          }
+          throw err;
+        }
         const chunkMs = Date.now() - chunkStart;
         if (chunkMs >= SLOW_PROJECTION_CHUNK_MS) {
           logger.warn(
@@ -334,6 +370,9 @@ export async function resolveFileProjectionEdges(
         }
       }
     }
+  }
+  if (signal?.aborted || !store.db.open) {
+    throw new IndexAbortedError('resolveFileProjectionEdges aborted');
   }
   const after = (
     store.db

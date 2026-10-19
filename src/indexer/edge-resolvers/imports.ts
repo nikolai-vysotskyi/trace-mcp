@@ -4,10 +4,11 @@ import path from 'node:path';
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
+import { IndexAbortedError } from '../index-abort.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
 import { ESM_IMPORT_LANGUAGES } from './import-capable-languages.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
-import { commitInChunks } from '../resolver-budget.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
 
 /**
  * Derive a package-bucket name from an npm specifier. Scoped packages
@@ -31,12 +32,15 @@ function npmBucketFor(specifier: string): string | null {
 export async function resolveEsmImportEdges(
   state: PipelineState,
   _scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) throw new IndexAbortedError('resolveEsmImportEdges aborted');
+  const { store } = state;
+  if (!store.db.open) throw new IndexAbortedError('Database is closed');
   // WHY: ESM imports are driven entirely by `state.pendingImports`, which is
   // already populated only for re-extracted files. Scope is accepted for API
   // symmetry but adds nothing.
   void _scope;
-  const { store } = state;
   if (state.pendingImports.size === 0) return;
 
   let resolver: EsModuleResolver;
@@ -134,99 +138,105 @@ export async function resolveEsmImportEdges(
   // bulk watcher batches (2713+ files) used to resolve 6k+ import edges in a
   // single synchronous transaction, starving /health on the same thread.
   const pendingEntries = Array.from(state.pendingImports);
-  await commitInChunks(store.db, pendingEntries, (chunk) => {
-    for (const [fileId, imports] of chunk) {
-      const file = fileMap.get(fileId);
-      if (!file) continue;
-      // Skip non-JS/TS files — PHP/Python imports are handled by their own
-      // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
-      // `App\Actions\Foo`) get run through npm bucketing and pollute the
-      // phantom graph.
-      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) continue;
+  await commitInChunks(
+    store.db,
+    pendingEntries,
+    (chunk) => {
+      for (const [fileId, imports] of chunk) {
+        const file = fileMap.get(fileId);
+        if (!file) continue;
+        // Skip non-JS/TS files — PHP/Python imports are handled by their own
+        // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
+        // `App\Actions\Foo`) get run through npm bucketing and pollute the
+        // phantom graph.
+        if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) continue;
 
-      const absSource = path.resolve(state.rootPath, file.path);
-      const sourceNodeId = fileNodeMap.get(fileId);
-      if (sourceNodeId == null) continue;
+        const absSource = path.resolve(state.rootPath, file.path);
+        const sourceNodeId = fileNodeMap.get(fileId);
+        if (sourceNodeId == null) continue;
 
-      const consolidated = new Map<string, string[]>();
-      for (const { from, specifiers } of imports) {
-        const existing = consolidated.get(from);
-        if (existing) {
-          existing.push(...specifiers);
-        } else {
-          consolidated.set(from, [...specifiers]);
-        }
-      }
-
-      const sourceWs = fileWorkspace.get(fileId) ?? null;
-
-      for (const [from, specifiers] of consolidated) {
-        if (!from) continue; // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
-        if (
-          from.startsWith('http://') ||
-          from.startsWith('https://') ||
-          from.startsWith('//') ||
-          from.startsWith('data:')
-        )
-          continue;
-        const isRelative =
-          from.startsWith('.') ||
-          from.startsWith('/') ||
-          from.startsWith('@/') ||
-          from.startsWith('~');
-
-        // Always try the path resolver first. Bare specifiers may still be
-        // local — tsconfig/jsconfig `baseUrl` or `paths` can turn something
-        // like `static/svg/Logo.svg` into a file inside the repo. Only fall
-        // back to npm phantom when resolution lands outside the project root.
-        const resolved = resolver.resolve(from, absSource);
-        if (resolved) {
-          const relTarget = toInRootRel(resolved);
-          // `path.relative` returns something starting with `..` when the
-          // target is outside rootPath — those are real npm deps under
-          // node_modules, handled by the bucket fallback below.
-          if (relTarget !== null) {
-            const target = resolveTargetFile(relTarget);
-            if (target) {
-              insertStmt.run(
-                sourceNodeId,
-                target.nodeId,
-                importsEdgeType.id,
-                JSON.stringify({ from, specifiers }),
-              );
-              created++;
-              continue;
-            }
+        const consolidated = new Map<string, string[]>();
+        for (const { from, specifiers } of imports) {
+          const existing = consolidated.get(from);
+          if (existing) {
+            existing.push(...specifiers);
+          } else {
+            consolidated.set(from, [...specifiers]);
           }
         }
 
-        if (isRelative) {
-          // Unresolved relative import — likely points outside the indexed
-          // source tree or into a generated file. Skip rather than phantom
-          // (would pollute the bucket view with per-file noise).
-          continue;
+        const sourceWs = fileWorkspace.get(fileId) ?? null;
+
+        for (const [from, specifiers] of consolidated) {
+          if (!from) continue; // External URL (HTML/CSS href to CDN) — not a file nor an npm package.
+          if (
+            from.startsWith('http://') ||
+            from.startsWith('https://') ||
+            from.startsWith('//') ||
+            from.startsWith('data:')
+          )
+            continue;
+          const isRelative =
+            from.startsWith('.') ||
+            from.startsWith('/') ||
+            from.startsWith('@/') ||
+            from.startsWith('~');
+
+          // Always try the path resolver first. Bare specifiers may still be
+          // local — tsconfig/jsconfig `baseUrl` or `paths` can turn something
+          // like `static/svg/Logo.svg` into a file inside the repo. Only fall
+          // back to npm phantom when resolution lands outside the project root.
+          const resolved = resolver.resolve(from, absSource);
+          if (resolved) {
+            const relTarget = toInRootRel(resolved);
+            // `path.relative` returns something starting with `..` when the
+            // target is outside rootPath — those are real npm deps under
+            // node_modules, handled by the bucket fallback below.
+            if (relTarget !== null) {
+              const target = resolveTargetFile(relTarget);
+              if (target) {
+                insertStmt.run(
+                  sourceNodeId,
+                  target.nodeId,
+                  importsEdgeType.id,
+                  JSON.stringify({ from, specifiers }),
+                );
+                created++;
+                continue;
+              }
+            }
+          }
+
+          if (isRelative) {
+            // Unresolved relative import — likely points outside the indexed
+            // source tree or into a generated file. Skip rather than phantom
+            // (would pollute the bucket view with per-file noise).
+            continue;
+          }
+
+          // Bare specifier — npm package, node: builtin, etc. Anchor to a
+          // phantom package bucket so consumers of the same library cluster.
+          const bucket = npmBucketFor(from);
+          if (!bucket) continue;
+          const dedupKey = `${sourceNodeId}\0${sourceWs ?? ''}\0${bucket}`;
+          if (phantomEdgesSeen.has(dedupKey)) continue;
+          phantomEdgesSeen.add(dedupKey);
+
+          const pkg = phantomPackages.ensure(bucket, sourceWs);
+          if (pkg.node_id === sourceNodeId) continue;
+          insertStmt.run(
+            sourceNodeId,
+            pkg.node_id,
+            importsEdgeType.id,
+            JSON.stringify({ from, specifiers, external: true, bucket }),
+          );
+          phantomEdges++;
         }
-
-        // Bare specifier — npm package, node: builtin, etc. Anchor to a
-        // phantom package bucket so consumers of the same library cluster.
-        const bucket = npmBucketFor(from);
-        if (!bucket) continue;
-        const dedupKey = `${sourceNodeId}\0${sourceWs ?? ''}\0${bucket}`;
-        if (phantomEdgesSeen.has(dedupKey)) continue;
-        phantomEdgesSeen.add(dedupKey);
-
-        const pkg = phantomPackages.ensure(bucket, sourceWs);
-        if (pkg.node_id === sourceNodeId) continue;
-        insertStmt.run(
-          sourceNodeId,
-          pkg.node_id,
-          importsEdgeType.id,
-          JSON.stringify({ from, specifiers, external: true, bucket }),
-        );
-        phantomEdges++;
       }
-    }
-  });
+    },
+    RESOLVER_WRITE_CHUNK,
+    signal,
+  );
 
   if (created > 0 || phantomEdges > 0) {
     logger.info({ edges: created, phantomEdges }, 'ES module import edges resolved');

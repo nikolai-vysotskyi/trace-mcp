@@ -29,7 +29,7 @@ export interface ResolveEdgesTaskInput {
    * pipeline instance) keeps the Task layer ignorant of pipeline private
    * state and makes the wrapper trivially testable with a stub.
    */
-  runResolveAllEdges: () => Promise<void>;
+  runResolveAllEdges: (signal?: AbortSignal) => Promise<void>;
 }
 
 /** Output is `void` — the side-effect is on the store, not the return value. */
@@ -52,8 +52,8 @@ export const RESOLVE_EDGES_TASK_NAME = 'resolve-edges';
 export function createResolveEdgesTask(): Task<ResolveEdgesTaskInput, ResolveEdgesTaskOutput> {
   return defineTask<ResolveEdgesTaskInput, ResolveEdgesTaskOutput>({
     name: RESOLVE_EDGES_TASK_NAME,
-    run: async ({ runResolveAllEdges }) => {
-      await runResolveAllEdges();
+    run: async ({ runResolveAllEdges }, signal) => {
+      await runResolveAllEdges(signal);
     },
   });
 }

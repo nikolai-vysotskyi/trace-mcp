@@ -13,7 +13,8 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
-import { commitInChunks } from '../resolver-budget.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
+import { IndexAbortedError, throwIfIndexAborted } from '../index-abort.js';
 
 interface CallSiteRow {
   calleeName: string;
@@ -38,8 +39,11 @@ interface SymbolRow {
 export async function resolvePythonCallEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store } = state;
+  throwIfIndexAborted(signal, state.rootPath);
+  if (!store.db.open) throw new IndexAbortedError(state.rootPath);
 
   // 1. Get the 'calls' edge type
   const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
@@ -177,81 +181,87 @@ export async function resolvePythonCallEdges(
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // the full-pass loop over every symbol with call sites used to run as one
   // synchronous transaction, starving /health on the same thread.
-  await commitInChunks(store.db, symbolsWithCalls, (chunk) => {
-    for (const sym of chunk) {
-      let callSites: CallSiteRow[];
-      try {
-        const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
-        callSites = meta.callSites as CallSiteRow[];
-        if (!Array.isArray(callSites)) continue;
-      } catch {
-        continue;
-      }
+  await commitInChunks(
+    store.db,
+    symbolsWithCalls,
+    (chunk) => {
+      for (const sym of chunk) {
+        let callSites: CallSiteRow[];
+        try {
+          const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
+          callSites = meta.callSites as CallSiteRow[];
+          if (!Array.isArray(callSites)) continue;
+        } catch {
+          continue;
+        }
 
-      const sourceNodeId = symbolNodeMap.get(sym.id);
-      if (sourceNodeId == null) continue;
+        const sourceNodeId = symbolNodeMap.get(sym.id);
+        if (sourceNodeId == null) continue;
 
-      // Get the class this method belongs to (if any)
-      const parentClassId = sym.parent_symbol_id;
-      const fileSymbols = symbolsByFile.get(sym.file_id) ?? [];
-      const fileImports = fileImportMap.get(sym.file_id);
+        // Get the class this method belongs to (if any)
+        const parentClassId = sym.parent_symbol_id;
+        const fileSymbols = symbolsByFile.get(sym.file_id) ?? [];
+        const fileImports = fileImportMap.get(sym.file_id);
 
-      for (const call of callSites) {
-        // Pattern-based calls (f-string getattr) → multiple targets
-        if (call.metadata?.pattern && call.metadata.prefix && call.receiver) {
-          const prefix = call.metadata.prefix;
-          const targets = resolvePrefixPattern(
-            prefix,
-            call.receiver,
-            call.isSelfCall ? parentClassId : null,
+        for (const call of callSites) {
+          // Pattern-based calls (f-string getattr) → multiple targets
+          if (call.metadata?.pattern && call.metadata.prefix && call.receiver) {
+            const prefix = call.metadata.prefix;
+            const targets = resolvePrefixPattern(
+              prefix,
+              call.receiver,
+              call.isSelfCall ? parentClassId : null,
+              fileSymbols,
+              fileImports,
+              nameIndex,
+              symbolsByFile,
+            );
+            for (const target of targets) {
+              const targetNodeId = symbolNodeMap.get(target.id);
+              if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
+              insertStmt.run(
+                sourceNodeId,
+                targetNodeId,
+                callsEdgeType.id,
+                JSON.stringify({ callee: target.name, line: call.line, pattern: prefix }),
+              );
+              created++;
+            }
+            continue;
+          }
+
+          const targetSymbol = resolveCallSite(
+            call,
+            sym,
+            parentClassId,
             fileSymbols,
             fileImports,
             nameIndex,
             symbolsByFile,
+            symbolById,
+            returnTypeIndex,
+            callSites,
           );
-          for (const target of targets) {
-            const targetNodeId = symbolNodeMap.get(target.id);
-            if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-            insertStmt.run(
-              sourceNodeId,
-              targetNodeId,
-              callsEdgeType.id,
-              JSON.stringify({ callee: target.name, line: call.line, pattern: prefix }),
-            );
-            created++;
+          if (!targetSymbol) continue;
+
+          const targetNodeId = symbolNodeMap.get(targetSymbol.id);
+          if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
+
+          const edgeMeta: Record<string, unknown> = { callee: call.calleeName, line: call.line };
+          // Store receiver type for CHA-based polymorphic resolution
+          if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
+          else if (call.receiverAssignedFrom) {
+            const inferredType = returnTypeIndex.get(call.receiverAssignedFrom);
+            if (inferredType) edgeMeta.receiver_type = inferredType;
           }
-          continue;
+          insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
+          created++;
         }
-
-        const targetSymbol = resolveCallSite(
-          call,
-          sym,
-          parentClassId,
-          fileSymbols,
-          fileImports,
-          nameIndex,
-          symbolsByFile,
-          symbolById,
-          returnTypeIndex,
-          callSites,
-        );
-        if (!targetSymbol) continue;
-
-        const targetNodeId = symbolNodeMap.get(targetSymbol.id);
-        if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-
-        const edgeMeta: Record<string, unknown> = { callee: call.calleeName, line: call.line };
-        // Store receiver type for CHA-based polymorphic resolution
-        if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
-        else if (call.receiverAssignedFrom) {
-          const inferredType = returnTypeIndex.get(call.receiverAssignedFrom);
-          if (inferredType) edgeMeta.receiver_type = inferredType;
-        }
-        insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
-        created++;
       }
-    }
-  });
+    },
+    RESOLVER_WRITE_CHUNK,
+    signal,
+  );
 
   if (created > 0) {
     logger.info({ edges: created }, 'Python call edges resolved');

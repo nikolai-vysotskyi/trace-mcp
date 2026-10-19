@@ -16,7 +16,8 @@
 import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
-import { commitInChunks } from '../resolver-budget.js';
+import { commitInChunks, RESOLVER_WRITE_CHUNK } from '../resolver-budget.js';
+import { IndexAbortedError, throwIfIndexAborted } from '../index-abort.js';
 
 interface TsCallSite {
   calleeName: string;
@@ -60,8 +61,11 @@ const TS_JS_LANGS = "('typescript','javascript','tsx','jsx','vue')";
 export async function resolveTypeScriptCallEdges(
   state: PipelineState,
   scope?: ChangeScope,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { store } = state;
+  throwIfIndexAborted(signal, state.rootPath);
+  if (!store.db.open) throw new IndexAbortedError(state.rootPath);
 
   const callsEdgeType = store.db.prepare(`SELECT id FROM edge_types WHERE name = ?`).get('calls') as
     | { id: number }
@@ -225,65 +229,71 @@ export async function resolveTypeScriptCallEdges(
   // TRA-1764: one transaction per chunk with a fair yield between chunks —
   // the full-pass loop over every symbol with call sites used to run as one
   // synchronous transaction, starving /health on the same thread.
-  await commitInChunks(store.db, symbolsWithCalls, (chunk) => {
-    for (const sym of chunk) {
-      let callSites: TsCallSite[];
-      let localTypes: LocalTypes = {};
-      try {
-        const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
-        const cs = meta.callSites;
-        if (!Array.isArray(cs)) continue;
-        callSites = cs as TsCallSite[];
-        if (meta.localTypes && typeof meta.localTypes === 'object') {
-          localTypes = meta.localTypes as LocalTypes;
-        }
-      } catch {
-        continue;
-      }
-
-      const sourceNodeId = symbolNodeMap.get(sym.id);
-      if (sourceNodeId == null) continue;
-
-      const parentClassId = sym.parent_symbol_id;
-      const fileSymbols = symbolsByFile.get(sym.file_id) ?? [];
-      const fileImports = fileImportMap.get(sym.file_id);
-      const sourceWorkspace = sym.workspace;
-
-      for (const call of callSites) {
-        const target = resolveCall(
-          call,
-          parentClassId,
-          fileSymbols,
-          fileImports,
-          nameIndex,
-          symbolsByFile,
-          symbolById,
-          classExtends,
-          returnTypeIndex,
-          localTypes,
-          sourceWorkspace,
-        );
-        if (!target) continue;
-
-        const targetNodeId = symbolNodeMap.get(target.id);
-        if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
-
-        const edgeMeta: Record<string, unknown> = { callee: call.calleeName, line: call.line };
-        if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
-        if (call.isNew) edgeMeta.new = true;
-
+  await commitInChunks(
+    store.db,
+    symbolsWithCalls,
+    (chunk) => {
+      for (const sym of chunk) {
+        let callSites: TsCallSite[];
+        let localTypes: LocalTypes = {};
         try {
-          insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
-          created++;
-        } catch (e) {
-          // TRA-1902: endpoint node deleted after the snapshot — the edge is
-          // stale, not the pass. Anything else is a real bug: rethrow.
-          if (!isForeignKeyViolation(e)) throw e;
-          skippedStale++;
+          const meta = JSON.parse(sym.metadata!) as Record<string, unknown>;
+          const cs = meta.callSites;
+          if (!Array.isArray(cs)) continue;
+          callSites = cs as TsCallSite[];
+          if (meta.localTypes && typeof meta.localTypes === 'object') {
+            localTypes = meta.localTypes as LocalTypes;
+          }
+        } catch {
+          continue;
+        }
+
+        const sourceNodeId = symbolNodeMap.get(sym.id);
+        if (sourceNodeId == null) continue;
+
+        const parentClassId = sym.parent_symbol_id;
+        const fileSymbols = symbolsByFile.get(sym.file_id) ?? [];
+        const fileImports = fileImportMap.get(sym.file_id);
+        const sourceWorkspace = sym.workspace;
+
+        for (const call of callSites) {
+          const target = resolveCall(
+            call,
+            parentClassId,
+            fileSymbols,
+            fileImports,
+            nameIndex,
+            symbolsByFile,
+            symbolById,
+            classExtends,
+            returnTypeIndex,
+            localTypes,
+            sourceWorkspace,
+          );
+          if (!target) continue;
+
+          const targetNodeId = symbolNodeMap.get(target.id);
+          if (targetNodeId == null || targetNodeId === sourceNodeId) continue;
+
+          const edgeMeta: Record<string, unknown> = { callee: call.calleeName, line: call.line };
+          if (call.receiverType) edgeMeta.receiver_type = call.receiverType;
+          if (call.isNew) edgeMeta.new = true;
+
+          try {
+            insertStmt.run(sourceNodeId, targetNodeId, callsEdgeType.id, JSON.stringify(edgeMeta));
+            created++;
+          } catch (e) {
+            // TRA-1902: endpoint node deleted after the snapshot — the edge is
+            // stale, not the pass. Anything else is a real bug: rethrow.
+            if (!isForeignKeyViolation(e)) throw e;
+            skippedStale++;
+          }
         }
       }
-    }
-  });
+    },
+    RESOLVER_WRITE_CHUNK,
+    signal,
+  );
 
   if (created > 0) {
     logger.info({ edges: created }, 'TypeScript/JavaScript call edges resolved');
