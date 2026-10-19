@@ -2126,6 +2126,9 @@ export class IndexingPipeline {
       () => edgeResolver.resolveTypeScriptCallEdges(scope, activeSignal),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),
       () => edgeResolver.resolveMemberOfEdges(scope),
+      () => edgeResolver.resolveSqlCteRefEdges(scope),
+      () => edgeResolver.resolveSqlReadEdges(scope),
+      () => edgeResolver.resolveLoadsSqlEdges(scope),
       () => edgeResolver.resolvePythonHeritageEdges(scope),
       () => edgeResolver.resolvePythonCallEdges(scope, activeSignal),
       // After Python imports + calls: turn type annotations into `references`

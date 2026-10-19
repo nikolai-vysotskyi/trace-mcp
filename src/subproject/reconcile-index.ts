@@ -24,7 +24,11 @@ export function reconcileSubprojectIndex(root: string, dbPath: string | null): n
         let count = 0;
         for (const file of store.getAllFiles()) {
           // These rows represent external dependencies, not physical sources.
-          if (file.content_hash === '__phantom__' || file.content_hash === '__phantom_pkg__') {
+          if (
+            file.content_hash === '__phantom__' ||
+            file.content_hash === '__phantom_pkg__' ||
+            file.content_hash === '__phantom_sql_relation__'
+          ) {
             continue;
           }
           const absolute = path.resolve(root, file.path);

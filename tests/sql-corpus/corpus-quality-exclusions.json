@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "description": "Corpus files excluded from strict parse-quality gates (documented junk or placeholders).",
+  "paths": []
+}

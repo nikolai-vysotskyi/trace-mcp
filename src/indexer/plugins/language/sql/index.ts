@@ -1,93 +1,90 @@
 /**
- * SQL Language Plugin -- regex-based symbol extraction.
- *
- * Extracts: CREATE TABLE/VIEW/FUNCTION/PROCEDURE/INDEX/SCHEMA/TRIGGER/TYPE,
- * CTEs (WITH ... AS), with support for OR REPLACE, IF NOT EXISTS, and
- * schema-qualified names.
+ * SQL Language Plugin — tree-sitter-sql AST for CTEs (Phase 3) with regex fallback.
  */
 
-import type { LanguagePlugin } from '../../../../plugin-api/types.js';
-import { createRegexLanguagePlugin } from '../regex-base.js';
+import { ok } from 'neverthrow';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  PluginManifest,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
+import {
+  annotateSymbolsWithFileMeta,
+  buildCteSymbolsFromSpike,
+  buildSqlFileUnitSymbolFromSpike,
+} from './build-ast-symbols.js';
+import { extractSqlDdlSymbolsRegex, extractSqlSymbolsRegex } from './sql-regex-config.js';
+import { spikeParseSqlSource } from './spike-parse.js';
 
-const _plugin = createRegexLanguagePlugin({
-  name: 'sql',
-  language: 'sql',
-  extensions: ['.sql'],
-  symbolPatterns: [
-    // CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [schema.]name
-    {
-      kind: 'class',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'table' },
-    },
-    // CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [schema.]name
-    {
-      kind: 'class',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'view' },
-    },
-    // CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] [schema.]name
-    {
-      kind: 'function',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'function' },
-    },
-    // CREATE [OR REPLACE] PROCEDURE [IF NOT EXISTS] [schema.]name
-    {
-      kind: 'function',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'procedure' },
-    },
-    // CREATE [UNIQUE] INDEX [IF NOT EXISTS] name
-    {
-      kind: 'variable',
-      pattern:
-        /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:CONCURRENTLY\s+)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'index' },
-    },
-    // CREATE SCHEMA [IF NOT EXISTS] name
-    {
-      kind: 'namespace',
-      pattern: /^\s*CREATE\s+SCHEMA\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'schema' },
-    },
-    // CREATE [OR REPLACE] TRIGGER name
-    {
-      kind: 'function',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'trigger' },
-    },
-    // CREATE [OR REPLACE] TYPE [schema.]name
-    {
-      kind: 'type',
-      pattern:
-        /^\s*CREATE\s+(?:OR\s+REPLACE\s+)?TYPE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'type' },
-    },
-    // CTE: WITH [RECURSIVE] name AS (
-    {
-      kind: 'variable',
-      pattern: /\bWITH\s+(?:RECURSIVE\s+)?([a-zA-Z_]\w*)\s+AS\s*\(/gim,
-      meta: { sqlKind: 'cte' },
-    },
-    // CREATE [TEMPORARY|TEMP] TABLE
-    {
-      kind: 'class',
-      pattern:
-        /^\s*CREATE\s+(?:TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[a-zA-Z_]\w*\.)?([a-zA-Z_]\w*)/gim,
-      meta: { sqlKind: 'temp_table' },
-    },
-  ],
-});
+const manifest: PluginManifest = {
+  name: 'sql-language',
+  version: '2.0.0',
+  priority: 6,
+};
+
+function parseFileStatus(spikeStatus: 'ok' | 'partial' | 'failed'): 'ok' | 'partial' | 'error' {
+  if (spikeStatus === 'failed') return 'error';
+  if (spikeStatus === 'partial') return 'partial';
+  return 'ok';
+}
 
 export const SqlLanguagePlugin = class implements LanguagePlugin {
-  manifest = _plugin.manifest;
-  supportedExtensions = _plugin.supportedExtensions;
-  supportedVersions = _plugin.supportedVersions;
-  extractSymbols = _plugin.extractSymbols;
+  manifest = manifest;
+  supportedExtensions = ['.sql'];
+  supportedVersions = undefined;
+
+  async extractSymbols(filePath: string, content: Buffer) {
+    const source = content.toString('utf-8');
+    const useAst = process.env.TRACE_SQL_AST !== '0';
+
+    if (!useAst) {
+      return extractSqlSymbolsRegex(filePath, content);
+    }
+
+    const spike = await spikeParseSqlSource(source);
+
+    if (spike.status === 'failed') {
+      const fallback = extractSqlSymbolsRegex(filePath, content);
+      if (fallback.isErr()) return fallback;
+      const symbols = annotateSymbolsWithFileMeta(
+        fallback.value.symbols ?? [],
+        spike,
+        'regex-fallback',
+        spike.error ?? 'ast_parse_failed',
+      );
+      const body: FileParseResult = {
+        ...fallback.value,
+        status: 'partial',
+        symbols,
+        warnings: [...(fallback.value.warnings ?? []), 'sql: ast parse failed; regex fallback'],
+      };
+      return ok(body);
+    }
+
+    const merged: RawSymbol[] = [];
+    const ddlResult = extractSqlDdlSymbolsRegex(filePath, content);
+    if (ddlResult.isOk() && ddlResult.value.symbols?.length) {
+      merged.push(
+        ...annotateSymbolsWithFileMeta(ddlResult.value.symbols, spike, 'tree-sitter-sql'),
+      );
+    }
+    merged.push(...buildCteSymbolsFromSpike(filePath, spike));
+    const fileUnit = buildSqlFileUnitSymbolFromSpike(filePath, source, spike);
+    if (fileUnit) merged.push(fileUnit);
+
+    const seen = new Set<string>();
+    const symbols = merged.filter((s) => {
+      const id = s.symbolId;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    return ok({
+      language: 'sql',
+      status: parseFileStatus(spike.status),
+      symbols,
+    });
+  }
 };

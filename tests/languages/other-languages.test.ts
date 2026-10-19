@@ -377,27 +377,35 @@ describe('Nix', () => {
 // ==============================
 describe('SQL', () => {
   const plugin = new SqlLanguagePlugin();
-  const p = (s: string) => parse(plugin, s, 'schema.sql');
+  async function parseSql(s: string) {
+    const result = await plugin.extractSymbols('schema.sql', Buffer.from(s));
+    expect(result.isOk()).toBe(true);
+    return result._unsafeUnwrap();
+  }
 
-  it('extracts CREATE TABLE', () => {
-    const r = p('CREATE TABLE users (\n  id INT PRIMARY KEY\n);');
+  it('extracts CREATE TABLE', async () => {
+    const r = await parseSql('CREATE TABLE users (\n  id INT PRIMARY KEY\n);');
     expect(r.symbols.some((s: any) => s.name === 'users' && s.kind === 'class')).toBe(true);
   });
 
-  it('extracts CREATE FUNCTION', () => {
-    const r = p('CREATE FUNCTION get_user(uid INT) RETURNS TABLE AS $$\nBEGIN\nEND;\n$$;');
+  it('extracts CREATE FUNCTION', async () => {
+    const r = await parseSql(
+      'CREATE FUNCTION get_user(uid INT) RETURNS TABLE AS $$\nBEGIN\nEND;\n$$;',
+    );
     expect(r.symbols.some((s: any) => s.name === 'get_user' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts WITH cte AS', () => {
-    const r = p('WITH active_users AS (\n  SELECT * FROM users\n)\nSELECT * FROM active_users;');
+  it('extracts WITH cte AS', async () => {
+    const r = await parseSql(
+      'WITH active_users AS (\n  SELECT * FROM users\n)\nSELECT * FROM active_users;',
+    );
     expect(r.symbols.some((s: any) => s.name === 'active_users' && s.kind === 'variable')).toBe(
       true,
     );
   });
 
-  it('extracts CREATE VIEW', () => {
-    const r = p('CREATE VIEW user_summary AS\nSELECT id, name FROM users;');
+  it('extracts CREATE VIEW', async () => {
+    const r = await parseSql('CREATE VIEW user_summary AS\nSELECT id, name FROM users;');
     expect(r.symbols.some((s: any) => s.name === 'user_summary' && s.kind === 'class')).toBe(true);
   });
 });

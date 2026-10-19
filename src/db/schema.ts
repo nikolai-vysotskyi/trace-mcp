@@ -1265,6 +1265,22 @@ const SEED_EDGE_TYPES = [
     category: 'runtime',
     description: 'Runtime message consumption from queue/topic',
   },
+  // Standalone SQL query files (PostgreSQL corpus)
+  {
+    name: 'sql_cte_ref',
+    category: 'sql',
+    description: 'CTE references another CTE in the same file',
+  },
+  {
+    name: 'sql_reads',
+    category: 'sql',
+    description: 'Query or CTE reads a database relation (table/view)',
+  },
+  {
+    name: 'loads_sql',
+    category: 'python',
+    description: 'Python loader references a .sql file path',
+  },
 ];
 
 /**

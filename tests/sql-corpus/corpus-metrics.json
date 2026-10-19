@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "description": "Public fixture pack under tests/sql-corpus/fixtures (CI). Large corpora: set TRACE_SQL_CORPUS_ROOT locally.",
+  "corpus_root": "tests/sql-corpus/fixtures",
+  "files": 8,
+  "parse_status": { "ok": 8, "partial": 0, "failed": 0 },
+  "cte_count_ast": 15,
+  "cte_count_regex_first_only": 5
+}
