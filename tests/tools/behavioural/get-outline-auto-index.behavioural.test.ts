@@ -7,6 +7,7 @@
  * `reason` + `hint` error for a path that genuinely doesn't exist.
  */
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,6 +42,38 @@ function makeCapturingServer(): { server: unknown; captured: CapturedTool[] } {
   };
   return { server, captured };
 }
+
+it('records a consultation when the empty-index fallback returns symbols (TRA-2495)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-fallback-marker-'));
+  const rel = 'fixture.ts';
+  fs.writeFileSync(path.join(root, rel), 'export function fixture() { return 1; }\n');
+  const markerDir = path.join(
+    os.tmpdir(),
+    `trace-mcp-consulted-${crypto.createHash('sha256').update(root).digest('hex').slice(0, 12)}`,
+  );
+  const marker = path.join(markerDir, crypto.createHash('sha256').update(rel).digest('hex'));
+  const store = createTestStore();
+  const ctx = {
+    store,
+    projectRoot: root,
+    guardPath: () => null,
+    j: (v: unknown) => JSON.stringify(v),
+    jh: (_tool: string, v: unknown) => JSON.stringify(v),
+  } as unknown as ServerContext;
+  const { server, captured } = makeCapturingServer();
+  registerLookupTools(server as never, ctx);
+  try {
+    const result = await captured.find((t) => t.name === 'get_outline')!.handler({ path: rel });
+    const body = JSON.parse(result.content[0].text);
+    expect(body.fallback).toBe(true);
+    expect(body.symbols).toHaveLength(1);
+    expect(fs.existsSync(marker)).toBe(true);
+  } finally {
+    store.db.close();
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(markerDir, { recursive: true, force: true });
+  }
+});
 
 describe('get_outline — auto-index on NOT_FOUND (TRA-4)', () => {
   let tmpDir: string;
