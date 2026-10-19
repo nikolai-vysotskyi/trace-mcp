@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.38.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.10...v3.38.0) (2026-10-19)
+
+
+### Features
+
+* **sql:** PostgreSQL CTE indexing and SQL graph edges (TRA-2253) ([#1482](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1482)) ([5ff5145](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5ff5145cf7247e8332ac2d0649417f7d5298a22f))
+
+
+### Bug Fixes
+
+* **daemon:** immediate port bind and restart timeout under indexing load (TRA-2531) ([#1654](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1654)) ([ac4f02d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac4f02d50aa508b739611568764089ff2f768c95))
+* **guard:** mark empty-index outline fallback as consulted (TRA-2495) ([#1664](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1664)) ([3803355](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3803355f6fcb14c578953dc9ce6ca79b5c5cad3e))
+* **indexer:** optimize laravel and vue resolveEdges and handle timeout cancellation (TRA-2530) ([#1653](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1653)) ([d675f67](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d675f67caabe1542a6430d96a31b36f3c8d69098))
+* **indexer:** prevent event-loop stalls during bulk indexing and concurrent reindexing (TRA-2524) ([#1648](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1648)) ([2d3717d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2d3717d4185a00308813afdac9bc89f57ba46095))
+* **indexer:** prevent sqlite closure during in-flight edge tasks (TRA-2439) ([#1627](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1627)) ([3bbd131](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3bbd131f5831c640e05807098f4e4de6be25e67a))
+* **navigation:** guard project-basename stripping and forward relocated fqn in get_symbol relay (TRA-2535) ([#1669](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1669)) ([d9059cb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d9059cb0a619245fc77294ab2a6ead3de60caf03))
+* **navigation:** resolve cross-project relay, dotted symbols, and auto-indexing for get_symbol (TRA-2535) ([#1655](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1655)) ([ad1ba1b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad1ba1b285ab0eaa8af5d3b62d0612ef2fa8f579))
+
+
+### Documentation
+
+* **ops:** pass 2026-10-19 08:00 UTC, mention sweep clean, competitor triage (TRA-2537) ([#1656](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1656)) ([4e3e967](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e3e9672ce56ab2d4b80f2cfd148fc4fc2253ddf))
+* **ops:** pass 2026-10-19 14:00 UTC, mention sweep clean, competitor triage (TRA-2540) ([#1663](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1663)) ([1f5aa17](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1f5aa172fdf102fd89d8e3a88276fc3329ec3f27))
+* **ops:** pass 2026-10-19 18:00 UTC, mention sweep clean, competitor triage (TRA-2547) ([#1667](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1667)) ([28d3969](https://github.com/nikolai-vysotskyi/trace-mcp/commit/28d3969ad4664fdda60e7989c53bf9e43f2c6290))
+* **ops:** pass 2026-10-19, mention sweep clean, competitor triage (TRA-2525) ([#1651](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1651)) ([7544e24](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7544e24a15deb8cad3a15e249928d8c8fbb9ce7f))
+* **ops:** record verified dead end for ai-boost/awesome-harness-engineering PR [#240](https://github.com/nikolai-vysotskyi/trace-mcp/issues/240) in distribution ledger ([#1670](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1670)) ([aa2d53d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa2d53dfa1c526636b13de6036e6ac46f43f9420))
+* **perf:** mark response_tokens as historical for 3.38.0 (TRA-2550) ([#1668](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1668)) ([d5ceda8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5ceda82b798e3f33c7caed64892678b3fd802df))
+* **perf:** record v3.37.10 daemon RSS after idle project unload (TRA-2526) ([#1650](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1650)) ([515cab1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/515cab1952f6373613141cb1fdf2f5d4a2c720a4))
+* **site:** refresh sitemap lastmod and index updated date (TRA-2546) ([#1666](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1666)) ([55e7f6d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/55e7f6d67539c8b63bf24d161cb6fb3b42a03179))
+* **site:** use concrete category hero copy (TRA-2265) ([#1506](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1506)) ([c4d1d01](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c4d1d01c2b12e17eae13daf8ad369da78fc1797b))
+
+
+### Chores
+
+* **app-deps-dev:** bump the development-minor-patch group ([#1658](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1658)) ([4cadfdb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4cadfdba87d5e24dc33e35cc413278ec3931fbf2))
+* **app-deps:** bump i18next ([#1657](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1657)) ([fe0dfdd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fe0dfddcfd7bc86768ba1973602a0385f8efc2cd))
+* **app-deps:** bump source-map-js to patched version (TRA-2527) ([#1652](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1652)) ([0735e6b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0735e6be8399ede1d3592a5889f0f0b36866028e))
+* **ci:** bump the github-actions-minor-patch group with 7 updates ([#1662](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1662)) ([0a5c985](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a5c985c6e11234ad6ce5cc4beb365c56066a809))
+* **deps-dev:** update development dependencies (TRA-2544) ([#1665](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1665)) ([579054e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/579054ef4cce141ae154fac4906763f8faaafc82))
+* **deps:** bump the production-minor-patch group with 5 updates ([#1659](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1659)) ([327a7ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/327a7bad1d8c61469d93fbb24e1b72d7d965b040))
+* **deps:** bump tree-sitter-wasm from 2.0.2 to 2.0.4 ([#1661](https://github.com/nikolai-vysotskyi/trace-mcp/issues/1661)) ([f63b420](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f63b420c9658fdd3a1cad279ab9262bda42f6aac))
+
 ## [3.37.10](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.37.9...v3.37.10) (2026-10-18)
 
 
