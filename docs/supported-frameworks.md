@@ -137,17 +137,29 @@ reference](tools-reference.md).
 
 ---
 
+## Framework guides
+
+Dedicated architectural deep-dives for specific framework ecosystems:
+
+- [Laravel MCP](laravel-mcp.md) &mdash; Routes, Eloquent models, FormRequests, Livewire, and Filament.
+- [Vue MCP](vue-mcp.md) &mdash; Single File Components, `<script setup>`, template render trees, and composables.
+- [Nuxt MCP](nuxt-mcp.md) &mdash; File-based routing, Nitro API endpoints, auto-imports, and `useFetch` bindings.
+- [Django MCP](django-mcp.md) &mdash; Models, URL patterns, class-based views, admin registrations, and signals.
+- [Spring MCP](spring-mcp.md) &mdash; REST controllers, dependency injection beans, and JPA entity relationships.
+
+---
+
 ## Backend frameworks
 
 | Framework | What's extracted |
 |---|---|
-| **Laravel** | Routes, controllers, Eloquent relations, migrations, FormRequests, events/listeners, middleware, broadcasting |
+| [**Laravel**](laravel-mcp.md) | Routes, controllers, Eloquent relations, migrations, FormRequests, events/listeners, middleware, broadcasting |
 | **Laravel Livewire** | Components, properties, actions, events, views, child components |
 | **Laravel Nova** | Resources, fields, actions, filters, lenses, metrics |
 | **Filament** | Resources, relation managers, panels, widgets |
 | **Spatie Laravel Data** | Data objects, transformations |
 | **Laravel Pennant** | Feature flag definitions |
-| **Django** | Models, URL patterns, views (CBV + FBV), admin registrations, signals, forms |
+| [**Django**](django-mcp.md) | Models, URL patterns, views (CBV + FBV), admin registrations, signals, forms |
 | **Django REST Framework** | Serializers, ViewSets, API endpoints |
 | **FastAPI** | Route definitions, path/query parameters, request models |
 | **Flask** | Routes, blueprints, request handlers |
@@ -157,7 +169,7 @@ reference](tools-reference.md).
 | **Hono** | Routes, middleware |
 | **Next.js** | API routes, pages, `getServerSideProps`, `getStaticProps` |
 | **Rails** | Routes, controllers, models, migrations, associations |
-| **Spring** | Beans, controllers, services, JPA entities |
+| [**Spring**](spring-mcp.md) | Beans, controllers, services, JPA entities |
 | **tRPC** | Routers, procedures, type definitions |
 
 ---
@@ -166,8 +178,8 @@ reference](tools-reference.md).
 
 | Framework | What's extracted |
 |---|---|
-| **Vue** | Components (Options + Composition API), `defineProps`, `defineEmits`, composables, render trees |
-| **Nuxt** | File-based routing, auto-imports, `useFetch` / `useAsyncData`, server API routes, layouts, middleware |
+| [**Vue**](vue-mcp.md) | Components (Options + Composition API), `defineProps`, `defineEmits`, composables, render trees |
+| [**Nuxt**](nuxt-mcp.md) | File-based routing, auto-imports, `useFetch` / `useAsyncData`, server API routes, layouts, middleware |
 | **React** | Components (functional + class), hooks, props |
 | **React Native** | Native components, navigation patterns, screens, deep links, platform variants |
 | **Blade** | `@extends`, `@include`, `@component`, `<x-*>` directives, template inheritance |
