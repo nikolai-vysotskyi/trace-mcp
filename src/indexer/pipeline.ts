@@ -2112,7 +2112,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolveTypeScriptHeritageEdges(scope),
       () => edgeResolver.resolveEsmImportEdges(scope, activeSignal),
       () => edgeResolver.resolvePythonImportEdges(scope),
-      () => edgeResolver.resolvePhpImportEdges(scope),
+      () => edgeResolver.resolvePhpImportEdges(scope, activeSignal),
       () => edgeResolver.resolveGoImportEdges(scope),
       () => edgeResolver.resolveJavaImportEdges(scope),
       () => edgeResolver.resolveRustImportEdges(scope),
