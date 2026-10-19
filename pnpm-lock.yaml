@@ -78,8 +78,8 @@ importers:
         specifier: ^10.3.1
         version: 10.4.0
       tree-sitter-wasm:
-        specifier: 2.0.2
-        version: 2.0.2
+        specifier: 2.0.4
+        version: 2.0.4
       web-tree-sitter:
         specifier: ^0.27.0
         version: 0.27.1
@@ -2725,8 +2725,8 @@ packages:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
 
-  tree-sitter-wasm@2.0.2:
-    resolution: {integrity: sha512-zxC/EcugWmdytml6hZoU7vn1olencvNDSluO3BOyYsPWPXkBfbjmvNriJCHght+vXMYsLJZhK9v9e+YBggV4kQ==}
+  tree-sitter-wasm@2.0.4:
+    resolution: {integrity: sha512-U83TRmp3oC3DtFA7bMka+o9jtOjZDZpW5/Y5oLzVtSzkcBllQWaYwtQIeTh14aRzZ7feTweBMSFk8NAqwQWmkg==}
 
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
@@ -5201,7 +5201,7 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
-  tree-sitter-wasm@2.0.2: {}
+  tree-sitter-wasm@2.0.4: {}
 
   ts-interface-checker@0.1.13: {}
 
