@@ -1,7 +1,7 @@
 ---
 title: "System Prompt Routing via tweakcc — pairing trace-mcp with Claude Code"
 description: "How to pair trace-mcp with tweakcc to patch Claude Code's system prompts and route tool selection toward trace-mcp instead of native file reads."
-updated: 2026-09-21
+updated: 2026-10-19
 ---
 
 # System Prompt Routing via tweakcc
@@ -37,7 +37,7 @@ updated: 2026-09-21
 > picking **Max** in `trace init` runs it for you when the pairing can run:
 > `init` writes the 8 prompt files below into your tweakcc system-prompts
 > directory (default `~/.tweakcc/system-prompts/`; an existing alternate config
-> directory is respected) and then runs `npx -y tweakcc@4.3.3 --apply` itself.
+> directory is respected) and then runs `npx -y tweakcc@4.4.0 --apply` itself.
 > If no tweakcc config exists yet and no tweakcc executable is on `PATH`, it
 > writes nothing and runs nothing, and tells you how to set it up manually.
 > Non-interactive `init` against a Claude-Code-family client defaults to

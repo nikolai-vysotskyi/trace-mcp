@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import ts from 'typescript';
@@ -391,6 +392,13 @@ describe('tweakcc pin is declared in package.json', () => {
   // trace-mcp over a package trace-mcp does not require at runtime.
   it('pins tweakcc in devDependencies at the version init executes', () => {
     expect(pkg.devDependencies?.tweakcc).toBe(TWEAKCC_VERSION);
+  });
+
+  it('can launch the pinned tweakcc CLI with the installed dependency graph', () => {
+    const bin = join(ROOT, 'node_modules/tweakcc/dist/index.mjs');
+    expect(execFileSync(process.execPath, [bin, '--version'], { encoding: 'utf8' }).trim()).toBe(
+      TWEAKCC_VERSION,
+    );
   });
 
   it('does not constrain consumers with it', () => {
