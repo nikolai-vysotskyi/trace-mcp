@@ -38,6 +38,8 @@ import {
   type DiscoveryResult,
   META_LAST_FULL_MS,
   META_RUNS_SINCE_FULL,
+  PENDING_DELETES_MAX,
+  pendingDeletesPathForDb,
   type QueryGitStatusFn,
   discoverIncrementalFiles,
   queryGitStatus,
@@ -45,6 +47,7 @@ import {
   snapshotPathForDb,
   writeWatcherSnapshot,
 } from './incremental-discovery.js';
+
 import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
@@ -469,6 +472,8 @@ export interface IndexingPipelineDeps {
      * tests inject fakes or null to disable.
      */
     queryGit?: QueryGitStatusFn | null;
+    /** TRA-1998: pending-deletes sidecar override (defaults to `<db>.pending-deletes.json`). */
+    pendingDeletesPath?: string | null;
   } | null;
 }
 
@@ -681,6 +686,9 @@ export class IndexingPipeline {
           logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Detected workspaces');
         }
       }
+      // TRA-1998: replay pending deletes from previous shutdown before discovery
+      // so zero-change fast path drops phantom rows.
+      this.replayPendingDeletes();
       // Read BEFORE reconcileScope: an index whose every row went out of scope
       // is still a live DB other connections may be reading, not a fresh one.
       const isFromScratch = (() => {
@@ -1041,6 +1049,20 @@ export class IndexingPipeline {
     }
   }
 
+  /** Pending-deletes sidecar path, or null for `:memory:` DBs (TRA-1998). */
+  defaultPendingDeletesPath(): string | null {
+    if (this._incrementalDiscovery?.pendingDeletesPath !== undefined) {
+      return this._incrementalDiscovery.pendingDeletesPath;
+    }
+    try {
+      const name = (this.store.db as unknown as { name?: unknown }).name;
+      if (typeof name !== 'string' || name === '' || name === ':memory:') return null;
+      return pendingDeletesPathForDb(name);
+    } catch {
+      return null;
+    }
+  }
+
   /** Native-layer ignore list, mirroring `watcher.subscribe`'s. */
   private nativeWatcherIgnore(): string[] {
     const traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
@@ -1346,6 +1368,7 @@ export class IndexingPipeline {
         { root: this.rootPath, files: filePaths.length },
         'deleteFiles skipped — database already closed',
       );
+      this.recordPendingDeletesOnClosedDb(filePaths);
       return;
     }
     const filesToDelete = new Map<number, { id: number; path: string }>();
@@ -1401,6 +1424,117 @@ export class IndexingPipeline {
       invalidateSearchCache(this.store.db);
       logger.info({ count: filesToDelete.size }, 'Deleted files from index');
     }
+  }
+
+  private recordPendingDeletesOnClosedDb(filePaths: string[]): void {
+    const relPaths: string[] = [];
+    for (const fp of filePaths) {
+      const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
+      const relPath = rel.split(path.sep).join('/');
+      if (validatePath(relPath, this.rootPath).isErr() || relPath === '.') continue;
+      // Invalidate tree-cache in-memory so a re-created file won't stand on stale incremental base
+      invalidateTreeCacheFile(this.rootPath, relPath);
+      if (relPath === 'package.json' || relPath.endsWith('/package.json')) {
+        clearPackageEntriesCache(this.rootPath);
+      }
+      clearPackageEntriesCacheForDeletedPath(this.rootPath, relPath);
+      relPaths.push(relPath);
+    }
+    const sidecarPath = this.defaultPendingDeletesPath();
+    if (!sidecarPath || relPaths.length === 0) return;
+    try {
+      let existing: string[] = [];
+      if (fs.existsSync(sidecarPath)) {
+        try {
+          const raw = fs.readFileSync(sidecarPath, 'utf-8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            existing = parsed.filter((p): p is string => typeof p === 'string');
+          }
+        } catch {
+          /* ignore corrupted existing sidecar */
+        }
+      }
+      const merged = Array.from(new Set([...existing, ...relPaths]));
+      const capped = merged.slice(0, PENDING_DELETES_MAX);
+      fs.mkdirSync(path.dirname(sidecarPath), { recursive: true });
+      fs.writeFileSync(sidecarPath, JSON.stringify(capped));
+    } catch (err) {
+      logger.debug({ err, sidecarPath }, 'Failed to record pending deletes sidecar (non-fatal)');
+    }
+  }
+
+  /**
+   * Replay deleteFiles calls that landed on a closed DB during previous shutdown (TRA-1998).
+   * Runs at the head of indexAll before discovery so that even zero-change incremental fast paths
+   * drop phantom rows without needing a full walk.
+   */
+  replayPendingDeletes(): void {
+    const sidecarPath = this.defaultPendingDeletesPath();
+    if (!sidecarPath || !fs.existsSync(sidecarPath)) return;
+
+    let pending: string[];
+    try {
+      const raw = fs.readFileSync(sidecarPath, 'utf-8');
+      try {
+        fs.unlinkSync(sidecarPath);
+      } catch {
+        /* best-effort unlink */
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      pending = parsed.filter((p): p is string => typeof p === 'string');
+    } catch (err) {
+      try {
+        if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+      } catch {}
+      logger.debug({ err, sidecarPath }, 'Corrupted pending deletes sidecar dropped (non-fatal)');
+      return;
+    }
+
+    if (pending.length === 0 || !this.store.db.open) return;
+
+    const filesToDelete = new Map<number, { id: number; path: string }>();
+    for (const relPath of pending) {
+      if (validatePath(relPath, this.rootPath).isErr() || relPath === '.') continue;
+      const absPath = path.resolve(this.rootPath, relPath);
+      if (fs.existsSync(absPath)) {
+        // File still on disk: leave it alone
+        continue;
+      }
+      invalidateTreeCacheFile(this.rootPath, relPath);
+      if (relPath === 'package.json' || relPath.endsWith('/package.json')) {
+        clearPackageEntriesCache(this.rootPath);
+      }
+      clearPackageEntriesCacheForDeletedPath(this.rootPath, relPath);
+
+      const exact = this.store.getFile(relPath);
+      if (exact) filesToDelete.set(exact.id, exact);
+      for (const file of this.store.getFilesUnderPath(relPath)) {
+        filesToDelete.set(file.id, file);
+      }
+    }
+
+    if (filesToDelete.size === 0) return;
+
+    for (const file of filesToDelete.values()) {
+      invalidateTreeCacheFile(this.rootPath, file.path);
+      if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
+        clearPackageEntriesCache(this.rootPath);
+      }
+    }
+
+    this.store.db
+      .transaction(() => {
+        for (const file of filesToDelete.values()) {
+          this.store.deleteFile(file.id);
+        }
+      })
+      .immediate();
+
+    invalidatePageRankCache();
+    invalidateSearchCache(this.store.db);
+    logger.info({ count: filesToDelete.size }, 'Replayed pending deletes from sidecar');
   }
 
   /**
