@@ -12,7 +12,7 @@
  * All operations use an isolated data directory in /tmp and an isolated port
  * (never touches live 3741 or user registry).
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -55,6 +55,19 @@ function spawnDaemon(): ChildProcess {
   return child;
 }
 
+function stopChild(child: ChildProcess): void {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } catch {
+      child.kill('SIGKILL');
+    }
+  } else {
+    child.kill('SIGTERM');
+  }
+}
+
 function readRegistration(): { pid: number | null; alive: boolean } {
   let pid: number;
   try {
@@ -87,12 +100,24 @@ async function waitForHealth(timeoutMs: number): Promise<{ pid?: number; status?
   return null;
 }
 
-function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | null> {
+interface ExitResult {
+  exited: boolean;
+  code: number | null;
+  signal: NodeJS.Signals | string | null;
+}
+
+function waitForExit(child: ChildProcess, timeoutMs: number): Promise<ExitResult> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    child.once('exit', (code) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve({ exited: true, code: child.exitCode, signal: child.signalCode });
+      return;
+    }
+    const timer = setTimeout(() => {
+      resolve({ exited: false, code: child.exitCode, signal: child.signalCode });
+    }, timeoutMs);
+    child.once('exit', (code, signal) => {
       clearTimeout(timer);
-      resolve(code);
+      resolve({ exited: true, code, signal });
     });
   });
 }
@@ -111,11 +136,19 @@ beforeAll(() => {
 
 afterAll(async () => {
   for (const child of children) {
-    if (child.exitCode === null && !child.killed) child.kill('SIGTERM');
+    stopChild(child);
   }
   await Promise.all(children.map((c) => waitForExit(c, 25_000)));
   for (const child of children) {
-    if (child.exitCode === null) child.kill('SIGKILL');
+    if (child.exitCode === null && child.signalCode === null) {
+      if (process.platform === 'win32') {
+        try {
+          execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+        } catch {}
+      } else {
+        child.kill('SIGKILL');
+      }
+    }
   }
   try {
     fs.rmSync(TMP_HOME, { recursive: true, force: true });
@@ -139,12 +172,15 @@ describe.skipIf(!BUILD_CURRENT)('TRA-2531: daemon restart and health recovery un
     });
     expect(addRes.status).toBe(201);
 
-    // 3. Initiate bounded restart by sending SIGTERM to daemon 1
-    daemon1.kill('SIGTERM');
+    // 3. Initiate bounded restart by stopping daemon 1
+    stopChild(daemon1);
 
     // 4. Daemon 1 must exit within bounded deadline
     const exit1 = await waitForExit(daemon1, DAEMON_SHUTDOWN_DEADLINE_MS + 5_000);
-    expect(exit1, 'Daemon 1 must exit cleanly within shutdown deadline').not.toBeNull();
+    expect(exit1.exited, 'Daemon 1 must exit cleanly within shutdown deadline').toBe(true);
+    if (process.platform !== 'win32') {
+      expect(exit1.code).toBe(0);
+    }
 
     // 5. Spawn daemon 2 (replacement daemon)
     const daemon2 = spawnDaemon();
@@ -160,8 +196,8 @@ describe.skipIf(!BUILD_CURRENT)('TRA-2531: daemon restart and health recovery un
     expect(reg2.pid).toBe(daemon2.pid);
 
     // Daemon 1 is dead, daemon 2 is alive — no hung unlistening process
-    expect(daemon1.exitCode).not.toBeNull();
-    expect(daemon2.exitCode).toBeNull();
+    expect(daemon1.exitCode !== null || daemon1.signalCode !== null).toBe(true);
+    expect(daemon2.exitCode === null && daemon2.signalCode === null).toBe(true);
 
     // 7. Cleanup: DELETE registered project and verify clean state
     const deleteRes = await fetch(
@@ -175,8 +211,11 @@ describe.skipIf(!BUILD_CURRENT)('TRA-2531: daemon restart and health recovery un
     expect(healthAfterDelete).not.toBeNull();
 
     // Shutdown daemon 2 cleanly
-    daemon2.kill('SIGTERM');
+    stopChild(daemon2);
     const exit2 = await waitForExit(daemon2, DAEMON_SHUTDOWN_DEADLINE_MS + 5_000);
-    expect(exit2, 'Daemon 2 must exit cleanly within shutdown deadline').not.toBeNull();
+    expect(exit2.exited, 'Daemon 2 must exit cleanly within shutdown deadline').toBe(true);
+    if (process.platform !== 'win32') {
+      expect(exit2.code).toBe(0);
+    }
   }, 90_000);
 });

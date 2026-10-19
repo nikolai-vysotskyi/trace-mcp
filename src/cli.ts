@@ -4071,6 +4071,14 @@ program
     });
 
     httpServer.listen(port, host, () => {
+      // Guard against shutdown race: if shutdown began before listen callback fired,
+      // skip startup sequence so we do not claim daemon.pid or leak background timers.
+      if (daemonShuttingDown) {
+        logger.info(
+          'Daemon shutdown began before httpServer.listen completed — skipping startup sequence',
+        );
+        return;
+      }
       // TRA-525: we own the port — only now are we provably "the daemon". A
       // process that loses the bind race exits via the EADDRINUSE handler above
       // without ever having touched daemon.pid, so a failed spawn can no longer
