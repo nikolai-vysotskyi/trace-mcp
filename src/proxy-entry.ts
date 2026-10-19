@@ -14,10 +14,163 @@
 // to the heavy dependency tree, and it is bounded by whatever forced the
 // daemon out of the picture, not by anything reachable from this file's
 // static imports.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
 
-hardenStdio();
+declare const PKG_VERSION_INJECTED: string;
+export const PKG_VERSION =
+  typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
+export const PROXY_USAGE = `Usage: trace-mcp-proxy [options] [command]
+
+Thin stdio proxy to the trace-mcp daemon.
+
+Options:
+  -v, --version    output the version number
+  -h, --help       display help for command
+
+Commands:
+  serve [options]  Run stdio MCP proxy session
+  help [command]   display help for command`;
+
+export function isMainEntry(
+  metaUrl: string = import.meta.url,
+  argv1: string | undefined = process.argv[1],
+): boolean {
+  if (!argv1) return false;
+  try {
+    const resolvedArgv = path.resolve(argv1);
+    const resolvedMeta = fileURLToPath(metaUrl);
+    if (resolvedArgv === resolvedMeta) return true;
+    return fs.realpathSync(resolvedArgv) === fs.realpathSync(resolvedMeta);
+  } catch {
+    return false;
+  }
+}
+
+export type ProxyArgAction = 'help' | 'version' | 'error' | 'serve';
+
+export interface ProxyArgClassification {
+  action: ProxyArgAction;
+  type: ProxyArgAction;
+  exitCode: number;
+  output?: string;
+  error?: string;
+}
+
+export function classifyProxyArgs(argv: string[]): ProxyArgClassification {
+  const args =
+    argv.length >= 2 &&
+    (argv[0] === 'node' ||
+      argv[0].endsWith('/node') ||
+      argv[0].endsWith('\\node') ||
+      argv[0] === 'tsx' ||
+      argv[0].endsWith('/tsx')) &&
+    !argv[1].startsWith('-')
+      ? argv.slice(2)
+      : argv;
+
+  if (args.includes('-h') || args.includes('--help')) {
+    return {
+      action: 'help',
+      type: 'help',
+      exitCode: 0,
+      output: PROXY_USAGE,
+    };
+  }
+
+  if (args.includes('-v') || args.includes('-V') || args.includes('--version')) {
+    return {
+      action: 'version',
+      type: 'version',
+      exitCode: 0,
+      output: PKG_VERSION,
+    };
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === 'serve') {
+      continue;
+    }
+    if (arg === '--preset') {
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        i++;
+        continue;
+      }
+      const nextArg = args[i + 1];
+      const errorMsg =
+        nextArg && nextArg.startsWith('-')
+          ? `error: unknown option '${nextArg}'`
+          : "error: option '--preset <name>' argument missing";
+      return {
+        action: 'error',
+        type: 'error',
+        exitCode: 1,
+        error: errorMsg,
+        output: `${errorMsg}\n\n${PROXY_USAGE}`,
+      };
+    }
+    if (arg.startsWith('--preset=')) {
+      const val = arg.slice('--preset='.length);
+      if (val.length > 0 && !val.startsWith('-')) {
+        continue;
+      }
+      const errorMsg = "error: option '--preset <name>' argument missing";
+      return {
+        action: 'error',
+        type: 'error',
+        exitCode: 1,
+        error: errorMsg,
+        output: `${errorMsg}\n\n${PROXY_USAGE}`,
+      };
+    }
+    if (arg.startsWith('-')) {
+      const errorMsg = `error: unknown option '${arg}'`;
+      return {
+        action: 'error',
+        type: 'error',
+        exitCode: 1,
+        error: errorMsg,
+        output: `${errorMsg}\n\n${PROXY_USAGE}`,
+      };
+    }
+    const errorMsg = `error: unknown command '${arg}'`;
+    return {
+      action: 'error',
+      type: 'error',
+      exitCode: 1,
+      error: errorMsg,
+      output: `${errorMsg}\n\n${PROXY_USAGE}`,
+    };
+  }
+
+  return {
+    action: 'serve',
+    type: 'serve',
+    exitCode: 0,
+  };
+}
+
+export function handleProxyEarlyExit(argv: string[] = process.argv): boolean {
+  const result = classifyProxyArgs(argv);
+  if (result.action === 'help') {
+    process.stdout.write(`${result.output}\n`);
+    process.exit(0);
+  }
+  if (result.action === 'version') {
+    process.stdout.write(`${result.output}\n`);
+    process.exit(0);
+  }
+  if (result.action === 'error') {
+    process.stderr.write(`${result.output}\n`);
+    process.exit(1);
+  }
+  return false;
+}
 
 import { loadConfig } from './config.js';
 import { runStdioSession, StdioSession } from './daemon/router/session.js';
@@ -101,7 +254,11 @@ async function main(): Promise<void> {
   await runStdioSession(session);
 }
 
-main().catch((err) => {
-  logger.error({ err: String(err) }, 'trace-mcp proxy: fatal error');
-  process.exit(1);
-});
+if (isMainEntry(import.meta.url, process.argv[1])) {
+  handleProxyEarlyExit(process.argv);
+  hardenStdio();
+  main().catch((err) => {
+    logger.error({ err: String(err) }, 'trace-mcp proxy: fatal error');
+    process.exit(1);
+  });
+}
