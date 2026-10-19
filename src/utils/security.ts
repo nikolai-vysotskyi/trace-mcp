@@ -314,8 +314,17 @@ export function isAbsolutePathLike(p: string): boolean {
  */
 export function normalizeToProjectRelative(filePath: string, rootPath: string): string {
   if (!filePath || !rootPath) return filePath;
-  const rel = path.relative(path.resolve(rootPath), path.resolve(rootPath, filePath));
-  if (!rel) return filePath;
+  const absRoot = path.resolve(rootPath);
+  let targetPath = filePath;
+  if (!isAbsolutePathLike(filePath)) {
+    const base = path.basename(absRoot);
+    const forward = filePath.split(/[\\/]+/).join('/');
+    if (base && forward.startsWith(`${base}/`)) {
+      targetPath = forward.slice(base.length + 1);
+    }
+  }
+  const rel = path.relative(absRoot, path.resolve(absRoot, targetPath));
+  if (!rel) return targetPath;
   // Outside the root (`..` or `..\...`) — leave untouched; validatePath
   // rejects it downstream exactly as before.
   if (rel === '..' || rel.startsWith(`..${path.sep}`)) return filePath;

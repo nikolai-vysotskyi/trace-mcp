@@ -93,13 +93,170 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         ),
     },
     async ({ symbol_id, fqn, max_lines, verify_against_git }) => {
-      const result = getSymbol(store, projectRoot, {
+      let result = getSymbol(store, projectRoot, {
         symbolId: symbol_id,
         fqn,
         maxLines: max_lines,
         verifyAgainstGit: verify_against_git,
       });
+
       if (result.isErr()) {
+        const input = symbol_id ?? fqn;
+        if (input) {
+          const sep = input.indexOf('::');
+          const rawFile =
+            sep >= 0
+              ? input.slice(0, sep)
+              : input.includes('/') || input.includes('\\')
+                ? input
+                : null;
+          const rest = sep >= 0 ? input.slice(sep + 2) : null;
+
+          // 1. Check if file belongs to a registered descendant project
+          if (rawFile) {
+            const absPath = path.isAbsolute(rawFile)
+              ? path.resolve(rawFile)
+              : path.resolve(projectRoot, rawFile);
+            const descendant = resolveRegisteredAncestor(absPath);
+            if (descendant && path.resolve(descendant.root) !== path.resolve(projectRoot)) {
+              const descendantRelPath = path.relative(descendant.root, absPath);
+              if (ctx.projectRelay) {
+                try {
+                  const targetServer = await ctx.projectRelay.openProject(descendant.root);
+                  const handler = targetServer?.toolHandlers?.get('get_symbol');
+                  if (handler) {
+                    const relayedId = rest ? `${descendantRelPath}::${rest}` : descendantRelPath;
+                    const relayed = await handler({
+                      symbol_id: symbol_id ? relayedId : undefined,
+                      fqn,
+                      max_lines,
+                      verify_against_git,
+                    });
+                    if (relayed && !relayed.isError) {
+                      markToolConsultation(descendant.root, 'get_symbol', {
+                        path: descendantRelPath,
+                        symbol_id: relayedId,
+                      });
+                      return relayed;
+                    }
+                  }
+                } catch {
+                  /* best-effort relay */
+                }
+              }
+            }
+          }
+
+          // 2. Root session or empty store: try candidate registered projects where file exists
+          const stats = store.getStats();
+          const isRootSession = projectRoot === '/' || isDangerousProjectRoot(projectRoot) !== null;
+          if (isRootSession || stats.totalFiles === 0) {
+            if (rawFile) {
+              const candidate = resolveFileInRegisteredProjects(rawFile, projectRoot);
+              const resolved =
+                candidate && validatePath(candidate.relPath, candidate.projectRoot).isOk()
+                  ? candidate
+                  : null;
+              if (resolved && ctx.projectRelay) {
+                try {
+                  const targetServer = await ctx.projectRelay.openProject(resolved.projectRoot);
+                  const handler = targetServer?.toolHandlers?.get('get_symbol');
+                  if (handler) {
+                    const relayedId = rest ? `${resolved.relPath}::${rest}` : resolved.relPath;
+                    const relayed = await handler({
+                      symbol_id: symbol_id ? relayedId : undefined,
+                      fqn,
+                      max_lines,
+                      verify_against_git,
+                    });
+                    if (relayed && !relayed.isError) {
+                      markToolConsultation(resolved.projectRoot, 'get_symbol', {
+                        path: resolved.relPath,
+                        symbol_id: relayedId,
+                      });
+                      return relayed;
+                    }
+                  }
+                } catch {
+                  /* best-effort relay */
+                }
+              }
+            } else if (ctx.projectRelay) {
+              // Dotted path like 'thewed-ai-detector.build_pangram_dataset.pangram' or repo-prefixed bare names
+              for (const proj of listProjects()) {
+                const base = path.basename(proj.root);
+                let subInput: string | undefined;
+                if (input.startsWith(`${base}.`) || input.startsWith(`${base}/`)) {
+                  subInput = input.slice(base.length + 1);
+                }
+                if (subInput) {
+                  try {
+                    const targetServer = await ctx.projectRelay.openProject(proj.root);
+                    const handler = targetServer?.toolHandlers?.get('get_symbol');
+                    if (handler) {
+                      const relayed = await handler({
+                        symbol_id: symbol_id ? subInput : undefined,
+                        fqn: fqn ? subInput : undefined,
+                        max_lines,
+                        verify_against_git,
+                      });
+                      if (relayed && !relayed.isError) {
+                        markToolConsultation(proj.root, 'get_symbol', {
+                          symbol_id: subInput,
+                        });
+                        return relayed;
+                      }
+                    }
+                  } catch {
+                    /* best-effort relay */
+                  }
+                }
+              }
+            }
+          }
+
+          // 3. Auto-index on demand if the file exists on disk locally but isn't indexed
+          if (rawFile) {
+            const normalizedPath = normalizeToProjectRelative(rawFile, projectRoot);
+            const exists = await autoIndexOnDemand(ctx, normalizedPath);
+            if (exists) {
+              result = getSymbol(store, projectRoot, {
+                symbolId: symbol_id,
+                fqn,
+                maxLines: max_lines,
+                verifyAgainstGit: verify_against_git,
+              });
+            }
+          }
+        }
+      }
+
+      if (result.isErr()) {
+        const stats = store.getStats();
+        const isRootSession = projectRoot === '/' || isDangerousProjectRoot(projectRoot) !== null;
+        if (isRootSession && stats.totalFiles === 0) {
+          const registered = listProjects().map((p) => p.root);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  error: 'Symbol not found (session root has empty index)',
+                  symbol_id,
+                  fqn,
+                  projectRoot,
+                  indexFiles: 0,
+                  reason: 'filesystem_root_session',
+                  message: `Session is running at filesystem root ('${projectRoot}'). Relative paths cannot be resolved because no repository is bound to this session.`,
+                  registeredProjects: registered,
+                  help: 'Use call_project_tool(project=..., tool="get_symbol", args={ symbol_id: ... }), or configure your client with a project directory.',
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const error =
           result.error.code === 'NOT_FOUND' && !result.error.reason
             ? notFound(result.error.id, result.error.candidates, 'unknown_symbol')
