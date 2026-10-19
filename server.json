@@ -7,13 +7,13 @@
     "url": "https://github.com/nikolai-vysotskyi/trace-mcp",
     "source": "github"
   },
-  "version": "3.37.10",
+  "version": "3.38.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "trace-mcp",
-      "version": "3.37.10",
+      "version": "3.38.0",
       "transport": {
         "type": "stdio"
       }
