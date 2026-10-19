@@ -617,6 +617,12 @@ export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
  */
 export const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
 
+/**
+ * Marker file recording the last daemon restart timestamp (TRA-1954).
+ * Used by restartDaemon to throttle rapid consecutive restarts.
+ */
+export const RESTART_MARKER_PATH = path.join(TRACE_MCP_HOME, 'daemon-restart.marker');
+
 /** launchd plist path for auto-start on macOS. */
 export const LAUNCHD_PLIST_PATH = path.join(
   os.homedir(),
