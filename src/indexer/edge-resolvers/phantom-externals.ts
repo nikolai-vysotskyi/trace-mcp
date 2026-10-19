@@ -172,6 +172,12 @@ export class PhantomSymbolFactory {
     this.cache.set(k, phantom);
     return phantom;
   }
+
+  /** Clear in-memory caches (e.g. after a transaction rollback or retry). */
+  clear(): void {
+    this.cache.clear();
+    this.filesByKey.clear();
+  }
 }
 
 export interface PhantomPackageFile {
@@ -224,5 +230,10 @@ export class PhantomPackageFactory {
     const entry: PhantomPackageFile = { id: fileId, path, node_id: nodeId, workspace, bucket };
     this.cache.set(k, entry);
     return entry;
+  }
+
+  /** Clear in-memory cache (e.g. after a transaction rollback or retry). */
+  clear(): void {
+    this.cache.clear();
   }
 }
