@@ -5604,3 +5604,66 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Pass 2026-10-19 18:00 UTC (TRA-2547): mention sweep clean, ecosystem findings (tokensave, Graphicle, ctxfw, TokenForge), competitor triage (codegraph PR #2666–#2670, jcodemunch v1.108.381 PR #1155–#1156, serena PR #2180, GitNexus PR #3632 & #3635)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- aovestdipaperino/tokensave: Rust-based semantic code intelligence MCP server and CLI (Rust port of CodeGraph TypeScript with 37-80+ tools across 30+ languages, bundled tree-sitter grammars into a single 25MB binary). Features official MCP registry manifest (`server.json` schema 2025-12-11 with `mcpb` bundle distribution). Exposes multi-branch indexing, per-call token tracking, on-demand staleness checks on every MCP tool call, porting tools (`port_status`, `port_order`), and Claude Code hooks / prompt rules.
+  - Architectural contrast: trace-mcp provides broader language & framework coverage (81 languages, 16 deep AST, 88 frameworks), zero-daemon stdio native binary + npm distribution, persistent architecture decisions and state ledger (`decisions.db`, `state.db`), integrated Electron desktop UI, and compact TOON token budgeting.
+- Graphicle-AI/graphicle: Rust-based code graph and memory MCP server & CLI for coding agents (Claude Code, Codex, Cursor, VS Code). Combines code graph AST navigation with project memory (document indexes, architectural decisions, past agent session replay) with token-budgeted cited excerpts (`graphicle ask "query"` -> 4 cited excerpts, 598 of 3,000 tokens). Uses `AGENTS.md` 2-line steering section and automated git hooks for continuous index synchronization.
+  - Architectural contrast: trace-mcp similarly pairs AST code intelligence with persistent architectural memory (`decisions.db`, `state.db`) and token budgeting (`trace blast`, `get_task_context`), while delivering deep semantic framework graphs (88 frameworks) and a standalone Electron desktop experience without requiring background daemon setup.
+- heuristicolab/ctxfw (Context Firewall): High-assurance in-memory AST context firewall and Model Context Protocol gatekeeper for coding agents (-72.4% token reduction). Prunes peripheral module code based on graph distance: $D_0$ target (100% full implementation), $D_1$ direct imports (replaces function/method bodies with interface signatures and type definitions), $D_{2+}$ transitive imports (collapses to minimal stubs, saving up to 91.9% tokens). Enforces axiomatic integrity sieves (rejecting ungrounded prompts) and zero network telemetry egress.
+  - Architectural contrast: trace-mcp operates a deterministic whole-repo symbol index and graph-driven blast radius navigation (`trace blast`, `trace impact`, TOON representation), avoiding runtime prompt rejections while providing accurate cross-file call hierarchies and jump-to-definition.
+- speedydivid/TokenForge: Context window optimization layer for AI coding agents (Claude Code, Gemini CLI, OpenCode, Codex). Sandboxes massive tool outputs (compressing up to 98% verbose tool output before it reaches the LLM context), persists session memory via SQLite + FTS5, and routes tool interactions across 17 platforms via MCP + hooks.
+  - Architectural contrast: trace-mcp prevents bloated context at the source by pre-calculating token-budgeted code maps and targeted symbol extraction rather than relying solely on post-hoc tool output filtering/compression.
+
+**Competitor intelligence & architectural observations:**
+- colbymchenry/codegraph:
+  - React Router `<Outlet />` empty route rendering (PR #2670, merged 2026-10-19T17:59:29Z by colbymchenry): Route objects with `element: <Outlet />` or `Component: Outlet` previously registered `Outlet` as the route page and layout of every nested child route, generating orphaned non-linking `layout:Outlet` references. Now recognized as rendering nothing of their own, eliminating bogus layout edges.
+  - Upward folder import index linkage (PR #2669, merged 2026-10-19T17:37:06Z by colbymchenry): Incremental sync previously only tracked `.`, `./`, `..`, and `../` in `getFailedFolderImports`. Imports referencing folders two or more levels up (`../../`) remained unlinked when the folder's `index` file appeared. Added general relative path traversal to retry failed folder imports.
+  - Function-returned React Router table extraction (PR #2668, merged 2026-10-19T17:22:57Z by colbymchenry): Handles router table factories (e.g. Medusa admin dashboard's `const routes = getRouteMap(...); createBrowserRouter(routes)`), evaluating literal route tables returned across module boundaries.
+  - Go package-level variable type linkage (PR #2667, merged 2026-10-19T16:46:08Z by colbymchenry): Top-level Go `var` and `const` declarations are now parsed to retain their declared type, resolving method calls through variables (e.g. `var lg *zap.Logger` -> `lg.Panic(...)`) to the concrete type instead of falling back to loose name guessing.
+  - Popular import name stem collision filtering (PR #2666, merged 2026-10-19T16:58:57Z by colbymchenry): When an added file shares a stem with widespread library imports (e.g. `utils` in `jotai/utils`), sync ignores keys shared by >500 failed imports to avoid retry stalls.
+- jgravelle/jcodemunch-mcp:
+  - Cross-repository index collision fix & Release v1.108.381 (PR #1155 & PR #1156, merged 2026-10-19 15:36–17:36 UTC by jgravelle): Fixed a critical storage collision defect where SQLite index files named `<owner>-<name>` collided for repositories with hyphens in owner vs repo (e.g., `foo-bar/baz` vs `foo/bar-baz`). Indexing one repository would silently overwrite the other, serving wrong codebase answers. Added recorded repository validation before reusing storage slots.
+- oraios/serena:
+  - Claude Desktop chat mode `session_id` compatibility (PR #2180, merged 2026-10-19T15:51:34Z): Fixed Claude Desktop chat mode filtering out MCP tool parameters named `session_id` by renaming the parameter to `session`.
+  - Dashboard welcome pane automatic opening behaviour (PR #2181, merged 2026-10-19T17:12:10Z).
+- abhigyanpatwari/GitNexus:
+  - 1-based line numbers in cross-function explain (PR #3635, opened 2026-10-19T15:37:36Z by abhigyanpatwari): Fixed interprocedural analysis returning 0-based raw tree-sitter line rows for `source.line`, `sink.line`, and `hops[].line`, aligning with standard 1-based editor coordinates.
+  - Lexical binding ownership in HTTP wrapper detection (PR #3632, updated 2026-10-19 17:45 UTC).
+  - MiniMax M3.1 Flash presets and saved model persistence (PR #3636).
+
+**Competitor pulse (as of 2026-10-19 18:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,912★ (=), 1,693 forks (+7)
+- oraios/serena: 30,396★ (+7), 2,242 forks (+10)
+- DeusData/codebase-memory-mcp: 46,933★ (+18), 3,881 forks (+1)
+- tirth8205/code-review-graph: 32,263★ (+3), 3,065 forks (+8)
+- colbymchenry/codegraph: 74,448★ (+15), 4,818 forks (+2)
+- abhigyanpatwari/GitNexus: 47,951★ (+2), 5,199 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,785★ (=), 374 forks (-1)
+- continuedev/continue: 36,262★ (+4), 5,494 forks (=)
+- Aider-AI/aider: 49,640★ (+3), 5,082 forks (=)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
