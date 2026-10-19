@@ -53,17 +53,19 @@ function inTextInternalLinks(markdown: string): string[] {
     .replace(/<script[\s\S]*?<\/script>/g, '')
     .replace(/^```[\s\S]*?^```/gm, '')
     .replace(/`[^`\n]*`/g, '');
-  return [...body.matchAll(/\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)]
-    .map(([, href]) => href)
-    .filter(
-      (href) =>
-        // `//host/page.md` is protocol-relative — it leaves the site, so it is
-        // external however much it looks like a sibling path.
-        !href.startsWith('//') &&
-        // Internal = a rooted path or a sibling .md/.html page. A bare fragment
-        // is same-page, so it does not connect anything.
-        (/^\/[^/]/.test(href) || /^[\w./-]+\.(md|html)(#|$)/.test(href)),
-    );
+  const markdownLinks = [...body.matchAll(/\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)].map(
+    ([, href]) => href,
+  );
+  const htmlLinks = [...body.matchAll(/<a\s+href="([^"]+)"/g)].map(([, href]) => href);
+  return [...markdownLinks, ...htmlLinks].filter(
+    (href) =>
+      // `//host/page.md` is protocol-relative — it leaves the site, so it is
+      // external however much it looks like a sibling path.
+      !href.startsWith('//') &&
+      // Internal = a rooted path or a sibling .md/.html page. A bare fragment
+      // is same-page, so it does not connect anything.
+      (/^\/[^/]/.test(href) || /^[\w./-]+\.(md|html)(#|$)/.test(href)),
+  );
 }
 
 describe('docs footer nav and catalogue cover every indexed page', () => {

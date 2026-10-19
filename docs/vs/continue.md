@@ -2,7 +2,7 @@
 title: "Continue Alternative: trace-mcp vs Continue for AI coding agents"
 description: "Continue is an open-source coding agent for VS Code, JetBrains and terminal. trace-mcp is the persistent code graph any agent queries. Compared."
 category: vs-comparisons
-updated: 2026-09-26
+updated: 2026-10-19
 ---
 
 # Continue alternative: trace-mcp vs Continue

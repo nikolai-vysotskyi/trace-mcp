@@ -47,6 +47,19 @@ export interface ArticleItem {
   updated: string;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[char];
+  });
+}
+
 function parseFrontMatter(content: string): Record<string, string> {
   const m = content.match(/^---\n([\s\S]*?)\n---\n/);
   if (!m) return {};
@@ -158,13 +171,13 @@ export function renderArticles(): string {
 
     const cardsHtml = catItems
       .map((item) => {
-        return `<div class="article-card" markdown="1">
+        return `<div class="article-card">
 <div class="article-card-meta">
-<span class="article-card-category">${item.category.toUpperCase()}</span>
-<time class="article-card-date">${item.updated}</time>
+<span class="article-card-category">${escapeHtml(item.category.toUpperCase())}</span>
+<time class="article-card-date">${escapeHtml(item.updated)}</time>
 </div>
-<h3 class="article-card-title">[${item.title}](${item.url})</h3>
-<p class="article-card-desc">${item.description}</p>
+<h3 class="article-card-title"><a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a></h3>
+<p class="article-card-desc">${escapeHtml(item.description)}</p>
 </div>`;
       })
       .join('\n\n');

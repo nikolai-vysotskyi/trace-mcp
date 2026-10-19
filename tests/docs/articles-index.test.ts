@@ -31,9 +31,11 @@ describe('docs/articles.md catalogue (TRA-1952)', () => {
 
   it('covers every indexed doc page from sitemap.xml', () => {
     const content = readFileSync(ARTICLES_MD, 'utf-8');
-    const missing = sitemapPaths().filter(
-      (p) => !content.includes(`(${p})`) && !content.includes(`"${p}"`),
-    );
+    const cardLinks = [
+      ...content.matchAll(/<h3 class="article-card-title"><a href="([^"]+)">/g),
+    ].map((match) => match[1]);
+    const missing = sitemapPaths().filter((path) => !cardLinks.includes(path));
+    expect(cardLinks).toHaveLength(sitemapPaths().length);
     expect(missing, `sitemap URLs missing from articles catalogue: ${missing.join(', ')}`).toEqual(
       [],
     );

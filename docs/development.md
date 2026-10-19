@@ -2,7 +2,7 @@
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
 category: guides
-updated: 2026-09-09
+updated: 2026-10-19
 ---
 
 # Development

@@ -2,7 +2,7 @@
 title: "ripwire Alternative: trace-mcp vs ripwire for agent code maps"
 description: "ripwire is the zero-dependency CLI map for agents with published evals; trace-mcp is the persistent MCP graph. Map vs graph, honesty, memory compared."
 category: vs-comparisons
-updated: 2026-09-26
+updated: 2026-10-19
 ---
 
 # ripwire alternative: trace-mcp vs ripwire

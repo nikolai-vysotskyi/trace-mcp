@@ -2,7 +2,7 @@
 title: "ast-grep Alternative: trace-mcp vs ast-grep for AI code context"
 description: "ast-grep finds code by AST pattern; trace-mcp indexes it into a queryable graph. Search, rewriting, impact analysis, MCP use compared."
 category: vs-comparisons
-updated: 2026-09-26
+updated: 2026-10-19
 ---
 
 # ast-grep alternative: trace-mcp vs ast-grep
