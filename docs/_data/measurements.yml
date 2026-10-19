@@ -25,7 +25,7 @@ response_tokens:
   data: docs/_data/response_tokens.json
   prereg: docs/perf/prereg-response-tokens.md
   page: /perf/response-tokens/
-  historical: false # re-measured at 3.31.0 (TRA-1774)
+  historical: true # measured at 3.31.0 (TRA-1774) — re-measure to clear
 
 benchmark_lab:
   title: Benchmark Lab arms
