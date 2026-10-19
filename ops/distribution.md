@@ -5474,3 +5474,68 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Pass 2026-10-19 08:00 UTC (TRA-2537): mention sweep clean, ecosystem findings (FastGraph-mcp, Synapse, Batas, cfgaudit), competitor triage (DeusData PHP imports PR #2705 & Python re-exports PR #2704, colbymchenry Claude desktop context PR #2642 & TS call links PR #2641, jcodemunch SubagentStart PR #1147)
+
+Audited read-only via GitHub API, nothing written outside this repository.
+
+**Open threads audit (via GitHub API read-only):**
+- Tracked external threads audit:
+  - MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+  - GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, standing no-ping rule holds.
+  - 0xNyk/awesome-hermes-agent#395: OPEN issue, standing no-ping rule holds.
+  - tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, standing no-ping rule holds (reminder budget spent).
+  - ai-boost/awesome-harness-engineering#240: OPEN (mergeable: CONFLICTING due to upstream additions; left alone per wontfix-spend / standing no-ping rule: rebase only close to a merge signal).
+  - natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+  - hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+  - hesreallyhim/awesome-claude-code#2871: CLOSED (closed 2026-10-15T06:38Z by maintainer hesreallyhim with state_reason: not_planned; standing no-ping rule holds, no follow-up).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 new repos outside the seen list. Sweep verified clean across all search facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- ouli-1242/FastGraph-mcp: Python-based lightweight code intelligence MCP server (`fastgraph-mcp`) using tree-sitter, SQLite, and FTS5 trigram indexing for CJK docstrings. Positioned strictly as a code navigation layer across 9 languages (Python, TS/TSX, JS, Vue, Svelte, Go, Rust, Java, C/C++). Employs 20-second indexing budget slices to prevent blocking large repository cold-starts, writes index chunks in batches of 128 files, and explicitly distinguishes verified edges from guesses via `via: resolved|text`, `evidence: same_file|imported|name_only`, and `unresolved_incoming|unresolved_outgoing`.
+  - Architectural contrast: trace-mcp provides broader language coverage (81 languages, 16 deep AST, 88 frameworks), zero-daemon stdio native binary / node distribution, cross-file framework-aware AST analysis, integrated Electron desktop application, persistent decision & state tracking (`decisions.db`, `state.db`), and token-budgeted output formatting (`get_task_context`, `trace blast`, `trace impact`).
+- Locker-Room-Tools/synapse: Python-based local-first AST code context engine for AI agents (`synapse-mcp`) featuring a dual-profile tool design. Default profile exposes exactly 2 navigation tools (`synapse_orient` and `synapse_inspect`) to minimize static `tools/list` schema token footprint (~700 tokens total), while `--profile full` exposes 19 tools. Addresses symbols via deterministic compact handles (`s_` + 22 base64url characters) and distinguishes `payload_complete` from evidence coverage with an 800-token default response bound.
+  - Architectural contrast: trace-mcp provides rich AST querying (`get_symbol`, `get_outline`, `get_task_context`, `search`, `trace blast`, `trace impact`) with natural symbol signatures, human-readable identifier navigation, multi-file blast radius calculations, comprehensive multi-language support (81 languages, 16 deep AST, 88 frameworks), zero-daemon stdio CLI execution, and Electron desktop integration without requiring python package installation or a local daemon.
+- Antheurus/batas: Local guardrail and memory layer for Claude Code integrating PreToolUse, PostToolUse, and UserPromptSubmit hooks to inject markdown rules, incident references, and user memory when relevant code or bash triggers fire. Explicitly notes architectural division with code graph tools: "GitNexus tells the agent what the code does. batas tells it what has gone wrong before and what the user wants."
+  - Architectural contrast: trace-mcp combines AST code intelligence with persistent architectural decisions and state tracking natively in SQLite (`decisions.db`, `state.db`) without requiring external hook orchestrators or ad-hoc prompt-injection wrappers.
+- cfgaudit/cfgaudit: Go-based static security auditor for AI agent configurations (Claude Code, MCP servers, Cursor, Codex, Copilot, Gemini CLI) providing 109 rules mapped to OWASP LLM Top 10 and OWASP MCP Top 10 (MCP01 Token Mismanagement, MCP02 Privilege Escalation, MCP04 Software Supply Chain, MCP05 Command Injection, MCP07 Insufficient Auth, MCP09 Shadow MCP).
+  - Architectural contrast: trace-mcp aligns with least-privilege MCP design principles out of the box — zero remote network calls during indexing, value-blind redacted environment inspection (`get_env_vars` contract, TRA-1882/1884), read-only structural inspection by default, and zero prompt-injection surface.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PHP unaliased global class absence proof (PR #2705, opened 2026-10-19T03:57:29Z by DeusData): PHP files marked import evidence complete (`php_imports_complete`) only when every `use` resolved or was proven absent. Unaliased global-namespace imports (`use Exception;`, `use stdClass;`) had no absence proof, blocking bindings across almost every PHP project until this fix added explicit global-namespace absence recognition.
+  - Python re-exported package names (PR #2704, opened 2026-10-19T02:14:29Z by DeusData): Resolves names re-exported through package `__init__.py` files (both explicit imports and star imports like `from django.db.models.fields import *`), allowing downstream consumers importing from the package namespace to bind directly to definitions in submodules.
+  - Python C3 MRO attribute lookup (PR #2697, closed 2026-10-19T03:06:01Z): Aligns attribute lookup with C3 method resolution order rather than sequential base walking.
+  - ASP.NET Core attribute routing extraction (PR #2688, updated 2026-10-19T03:54:41Z): Adds extraction for `[HttpGet]`, `[HttpPost]`, `[Route]` attributes on controllers and actions.
+- colbymchenry/codegraph:
+  - Claude Code Desktop system context filtering (PR #2642, opened 2026-10-19T02:45:42Z by yang0228): Filters out `<system-reminder>` blocks injected by Claude Code Desktop into `UserPromptSubmit` payloads, preventing short agent replies (e.g. `yes`) from erroneously triggering graph search queries on injected desktop system reminders.
+  - TypeScript typed call class linkage (PR #2641, closed 2026-10-19T01:32:49Z by colbymchenry): Disambiguates typed calls (`store: DisposableStore`, `new Store()`) against the specific class imported by the file rather than globally sharing names.
+- jgravelle/jcodemunch-mcp:
+  - Bounded SubagentStart briefing startup latency (PR #1147 / release v1.108.379 in PR #1149, closed 2026-10-19T03:48:30Z by jgravelle): Fixes issue #1139 where the `SubagentStart` hook injected a full repository briefing into every spawned Claude Code subagent, causing subagents to wait minutes during startup. Bounds briefing generation cost and adds benchmark tracking (PR #1148).
+- abhigyanpatwari/GitNexus:
+  - Python prefixed literals and f-string URL routing (PR #3626, updated 2026-10-19T01:51:36Z by abhigyanpatwari): Parses raw, bytes, unicode, and f-string URL prefixes (`r`, `b`, `u`, `fr`) in Python HTTP consumer calls to form contract IDs.
+- oraios/serena:
+  - Vue LS initialization ordering (PR #2177, opened 2026-10-19T02:07:31Z by karajanchang): Fixes dependency resolution order in `VueLanguageServer` so `ls_path` and `ls_base_cmd` are honored before base class initialization.
+
+**Competitor pulse (as of 2026-10-19 08:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,900★ (+4), 1,677 forks (=)
+- oraios/serena: 30,370★ (+2), 2,216 forks (=)
+- DeusData/codebase-memory-mcp: 46,874★ (+17), 3,874 forks (+4)
+- tirth8205/code-review-graph: 32,251★ (+6), 3,044 forks (+1)
+- colbymchenry/codegraph: 74,402★ (+16), 4,812 forks (+4)
+- abhigyanpatwari/GitNexus: 47,938★ (+2), 5,197 forks (=)
+- jgravelle/jcodemunch-mcp: 2,783★ (+1), 375 forks (=)
+- continuedev/continue: 36,253★ (+5), 5,493 forks (+2)
+- Aider-AI/aider: 49,629★ (+12), 5,080 forks (+6)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
