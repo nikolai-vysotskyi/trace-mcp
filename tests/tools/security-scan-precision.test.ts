@@ -1235,6 +1235,128 @@ function move(params) {
     expect(all.findings[0].confidence).toBe('low');
     expect(all.suppressed_low_confidence).toBe(0);
   });
+
+  // -------------------------------------------------------------------
+  // 7. PHP backtick operator vs MySQL identifier quotes (TRA-1667)
+  // -------------------------------------------------------------------
+
+  test('drops MySQL backtick identifier quotes inside PHP string literals (TRA-1667)', () => {
+    writeFile(
+      store,
+      'app/Services/PersonalStatistic.php',
+      `<?php
+class PersonalStatistic {
+  public function increment($column) {
+    return DB::raw("\`{$column}\` + 1");
+  }
+}
+`,
+      'php',
+    );
+    writeFile(
+      store,
+      'app/Services/MediaOrderService.php',
+      `<?php
+class MediaOrderService {
+  public function updateBatch($idsPlaceholders) {
+    return "UPDATE \`media\` SET \`position\` = 1 WHERE \`id\` IN ({$idsPlaceholders}) AND \`status\` = 1";
+  }
+}
+`,
+      'php',
+    );
+    writeFile(
+      store,
+      'database/migrations/rebrand_top15_in_news_meta.php',
+      `<?php
+class RebrandMigration {
+  public function up($column) {
+    $sql = "REGEXP_REPLACE(\`{$column}\`, 'pattern', 'replacement')";
+    return $sql;
+  }
+}
+`,
+      'php',
+    );
+    writeFile(
+      store,
+      'app/Services/MultilineQuery.php',
+      `<?php
+function getQuery($idsPlaceholders) {
+  return "UPDATE \`media\`
+          SET \`position\` = 1
+          WHERE \`id\` IN ({$idsPlaceholders})
+          AND \`status\` = 1";
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(0);
+  });
+
+  test('still detects real PHP shell backtick operator (TRA-1667 recall)', () => {
+    writeFile(
+      store,
+      'app/Services/ShellRunner.php',
+      `<?php
+class ShellRunner {
+  public function run($dir) {
+    return \`ls $dir\`;
+  }
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-78');
+    expect(result.findings[0].severity).toBe('critical');
+    expect(result.findings[0].fix).toBe(
+      'Escape shell arguments with escapeshellarg()/escapeshellcmd(), or avoid the shell entirely.',
+    );
+  });
+
+  test('still detects real PHP shell backtick with quotes inside (TRA-1667 recall)', () => {
+    writeFile(
+      store,
+      'app/Services/QuotedShell.php',
+      `<?php
+class QuotedShell {
+  public function run($dir) {
+    return \`ls "$dir"\`;
+  }
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-78');
+    expect(result.findings[0].severity).toBe('critical');
+  });
+
+  test('detects real backtick injection on a line that also contains a string (TRA-1667 recall)', () => {
+    writeFile(
+      store,
+      'app/Services/MixedLine.php',
+      `<?php
+function mixed($col, $dir) {
+  $sql = "\`{$col}\`"; $res = \`ls $dir\`;
+  return $res;
+}
+`,
+      'php',
+    );
+
+    const result = scan(['command_injection']);
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].rule_id).toBe('CWE-78');
+    expect(result.findings[0].severity).toBe('critical');
+  });
 });
 
 // ---------------------------------------------------------------------------
