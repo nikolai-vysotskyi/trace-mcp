@@ -107,7 +107,7 @@ Token usage, cost breakdown by tool/server, top files, models used. Auto-syncs l
 get_session_analytics({ period?: "today" | "week" | "month" | "all" })
 ```
 
-Returns: session count, total tokens (input/output/cache), estimated cost, breakdown by tool server (builtin, trace-mcp, jcodemunch, phpstorm, ...), top tools by token output, top files by read tokens, models used.
+Returns: session count, total tokens (input/output/cache), prompt-cache hit rate (blended and split by provider/model; measure per-model, blended lies when local sessions are in the mix), estimated cost, breakdown by tool server (builtin, trace-mcp, jcodemunch, phpstorm, ...), top tools by token output, top files by read tokens, models used.
 
 ### `get_optimization_report`
 

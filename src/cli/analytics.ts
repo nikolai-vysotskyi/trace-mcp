@@ -150,6 +150,32 @@ analyticsCommand
       console.log(`Cache read: ${result.totals.cacheReadTokens.toLocaleString()}`);
       console.log(`Estimated cost: $${result.totals.estimatedCostUsd.toFixed(2)}`);
 
+      if (result.cache_hit_rate) {
+        const chr = result.cache_hit_rate;
+        const blendedPct = `${(chr.blended * 100).toFixed(1)}%`;
+        const providers = Object.entries(chr.by_provider);
+        if (providers.length > 0) {
+          const split = providers
+            .map(([prov, rate]) => `${prov}: ${(rate * 100).toFixed(1)}%`)
+            .join(', ');
+          console.log(`Prompt-cache hit rate (blended): ${blendedPct} [${split}]`);
+        } else {
+          console.log(`Prompt-cache hit rate (blended): ${blendedPct}`);
+        }
+        const models = Object.entries(chr.by_model);
+        if (models.length > 1) {
+          console.log(`  Split by model:`);
+          for (const [m, rate] of models) {
+            console.log(`    ${m}: ${(rate * 100).toFixed(1)}%`);
+          }
+        }
+        if (providers.length > 1) {
+          console.log(
+            `  (Note: measure per-model, blended lies when local sessions are in the mix)`,
+          );
+        }
+      }
+
       if (result.topTools.length > 0) {
         console.log(`\nTop tools:`);
         for (const t of result.topTools.slice(0, 10)) {
@@ -523,15 +549,28 @@ analyticsCommand
       }
 
       console.log(`\n📈 Usage Trends (last ${days} days)\n`);
-      console.log('Date         Sessions  Tokens       Cost     Tool Calls');
-      console.log('─'.repeat(60));
+      console.log(
+        'Date         Sessions  Tokens       Cost     Tool Calls  Cache Hit (blended / by provider)',
+      );
+      console.log('─'.repeat(90));
       for (const d of trends) {
         const date = d.date.padEnd(12);
         const sessions = String(d.sessions).padStart(4);
         const tokens = (d.tokens ?? 0).toLocaleString().padStart(12);
         const cost = `$${(d.cost_usd ?? 0).toFixed(2)}`.padStart(8);
         const calls = String(d.tool_calls ?? 0).padStart(10);
-        console.log(`${date} ${sessions}  ${tokens}  ${cost}  ${calls}`);
+        let cacheCol = '—';
+        if (typeof d.cache_hit_rate === 'number') {
+          const blendedPct = `${(d.cache_hit_rate * 100).toFixed(1)}%`;
+          const provs = Object.entries(d.cache_hit_rate_by_provider ?? {});
+          if (provs.length > 0) {
+            const provStr = provs.map(([p, r]) => `${p}: ${(r * 100).toFixed(1)}%`).join(', ');
+            cacheCol = `${blendedPct} (blended) [${provStr}]`;
+          } else {
+            cacheCol = `${blendedPct} (blended)`;
+          }
+        }
+        console.log(`${date} ${sessions}  ${tokens}  ${cost}  ${calls}  ${cacheCol}`);
       }
 
       const total = trends.reduce(
@@ -543,7 +582,7 @@ analyticsCommand
         }),
         { sessions: 0, tokens: 0, cost: 0, calls: 0 },
       );
-      console.log('─'.repeat(60));
+      console.log('─'.repeat(90));
       console.log(
         `Total        ${String(total.sessions).padStart(4)}  ${total.tokens.toLocaleString().padStart(12)}  $${total.cost.toFixed(2).padStart(7)}  ${String(total.calls).padStart(10)}`,
       );
