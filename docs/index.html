@@ -650,14 +650,6 @@ updated: 2026-10-08
       margin: 0 auto;
       overflow-wrap: break-word;
     }
-    .hero-desc {
-      max-width: 680px;
-      margin: 24px auto 0;
-      font-family: var(--font-body);
-      font-size: 18px;
-      line-height: 1.45;
-      color: var(--text-secondary);
-    }
     .hero-utility {
       display: flex;
       align-items: center;
@@ -718,7 +710,6 @@ updated: 2026-10-08
     @media (max-width: 700px) {
       .hero { padding: 64px 0 40px; }
       .hero-headline { font-size: clamp(36px, 8vw, 48px); max-width: 100%; }
-      .hero-desc { margin-top: 20px; font-size: 16px; }
       /* Full width, one button: on a phone the download is a target, not a pill
          floating in the middle of a 390px row. */
       .hero-cta { margin-top: 28px; }
@@ -2272,11 +2263,8 @@ updated: 2026-10-08
     <div class="container">
 
       <h1 class="hero-headline">
-        Read once. Reuse the answer.
+        Code graph for coding agents
       </h1>
-      <!-- Keep the position sentence verbatim here and in README, the banner and
-           the page description. The short headline gives it room to be read. -->
-      <p class="hero-desc">trace-mcp indexes what your agent keeps re-reading, and serves the answer instead.</p>
 
       <div class="hero-cta">
         <!-- Rendered for everyone and pointed at the releases page, not hidden behind
