@@ -169,6 +169,7 @@ export function renderIndex(): string {
 layout: default
 title: "Tool index — every MCP tool the server registers"
 description: "Alphabetical index of every trace-mcp MCP tool, generated from the server's own registrations: what each one does and when it is available."
+category: reference
 updated: ${currentUpdated()}
 ---
 

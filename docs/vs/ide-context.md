@@ -1,6 +1,7 @@
 ---
 title: "IDE Context Alternative: trace-mcp vs Cursor rules, Copilot setup"
 description: "Cursor rules and Copilot instructions steer one IDE session; trace-mcp is the persistent graph every agent queries. Session context vs stored edges."
+category: vs-comparisons
 updated: 2026-09-26
 ---
 

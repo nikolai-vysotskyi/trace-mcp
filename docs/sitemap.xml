@@ -31,6 +31,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://trace-mcp.com/articles.html</loc>
+    <lastmod>2026-10-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://trace-mcp.com/comparisons.html</loc>
     <lastmod>2026-09-26</lastmod>
     <changefreq>monthly</changefreq>

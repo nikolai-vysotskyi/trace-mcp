@@ -3,6 +3,7 @@ layout: default
 title: Tool response token cost
 permalink: /perf/response-tokens/
 description: What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the ones that cost more than the reads they replace.
+category: benchmarks
 updated: 2026-09-20
 ---
 

@@ -2,6 +2,7 @@
 layout: default
 title: "Config index — every key trace-mcp accepts"
 description: "Complete index of every trace-mcp configuration key, generated from the schema itself: type, allowed values and the real default."
+category: reference
 updated: 2026-10-13
 ---
 

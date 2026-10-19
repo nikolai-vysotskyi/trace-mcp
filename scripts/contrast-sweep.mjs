@@ -217,8 +217,20 @@ function buildDocHtml(mdFilePath) {
     .replace(
       /\{%-?\s*for item in site\.data\.docs_nav\s*-?%\}[\s\S]*?\{%-?\s*endfor\s*-?%\}/g,
       navHtml,
-    )
-    .replace(/\{%-?[\s\S]*?-?%\}/g, '');
+    );
+
+  const categoryMatch = mdContent.match(/^category:\s*([^\n]+)/m);
+  const category = categoryMatch ? categoryMatch[1].trim() : null;
+  if (category) {
+    html = html.replace(
+      /\{%-?\s*if page\.category[\s\S]*?\{%-?\s*endif\s*-?%\}/g,
+      `<p class="article-spoke-backlink"><span class="backlink-label">Catalogue:</span> <a href="/articles.html#${category}">Articles / ${category}</a></p>`,
+    );
+  } else {
+    html = html.replace(/\{%-?\s*if page\.category[\s\S]*?\{%-?\s*endif\s*-?%\}/g, '');
+  }
+
+  html = html.replace(/\{%-?[\s\S]*?-?%\}/g, '');
 
   return html;
 }

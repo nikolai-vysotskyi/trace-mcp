@@ -1,6 +1,7 @@
 ---
 title: "Quality Gates — configure trace-mcp's thresholds"
 description: "The eight quality_gates.rules keys trace-mcp checks, which three run by default, and how this project calibrated its own thresholds as a worked example."
+category: reference
 updated: 2026-09-09
 ---
 

@@ -2,6 +2,7 @@
 layout: default
 title: "Language capability matrix: what 81 languages extract"
 description: "What each of the 81 languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language."
+category: frameworks
 updated: 2026-09-15
 ---
 

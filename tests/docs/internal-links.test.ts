@@ -66,17 +66,25 @@ function inTextInternalLinks(markdown: string): string[] {
     );
 }
 
-describe('docs footer nav covers every indexed page', () => {
-  it('every sitemap URL appears in _data/docs_nav.yml', () => {
-    const missing = sitemapPaths().filter((p) => !navPaths().includes(p));
+describe('docs footer nav and catalogue cover every indexed page', () => {
+  it('every sitemap URL appears in _data/docs_nav.yml or docs/articles.md', () => {
+    const articlesMd = readFileSync(join(DOCS, 'articles.md'), 'utf-8');
+    const missing = sitemapPaths().filter(
+      (p) =>
+        !navPaths().includes(p) &&
+        !articlesMd.includes(`(${p})`) &&
+        !articlesMd.includes(`https://trace-mcp.com${p}`),
+    );
     expect(
       missing,
-      `pages in sitemap.xml but not in the footer nav: ${missing.join(', ')}`,
+      `pages in sitemap.xml but neither in the footer nav nor in the articles catalogue: ${missing.join(', ')}`,
     ).toEqual([]);
   });
 
   it('every nav entry is a page that is actually indexed', () => {
-    const stale = navPaths().filter((p) => !sitemapPaths().includes(p));
+    const stale = navPaths()
+      .map((p) => p.replace(/#.*$/, ''))
+      .filter((p) => !sitemapPaths().includes(p));
     expect(stale, `footer nav links pages absent from sitemap.xml: ${stale.join(', ')}`).toEqual(
       [],
     );
@@ -395,12 +403,16 @@ describe('docs footer nav covers every indexed page', () => {
    * cannot emit it — headline and datePublished are per-page and are not in
    * front matter — so a guard is what keeps a new page from skipping it.
    */
-  it('every indexed docs page carries TechArticle schema', async () => {
+  it('every indexed docs page carries TechArticle or CollectionPage schema', async () => {
     const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
-    const missing = sitemapPaths().filter(
-      (path) => !readFileSync(join(DOCS, sourceFor(path)), 'utf-8').includes('"TechArticle"'),
-    );
-    expect(missing, `indexed pages without TechArticle JSON-LD: ${missing.join(', ')}`).toEqual([]);
+    const missing = sitemapPaths().filter((path) => {
+      const content = readFileSync(join(DOCS, sourceFor(path)), 'utf-8');
+      return !content.includes('"TechArticle"') && !content.includes('"CollectionPage"');
+    });
+    expect(
+      missing,
+      `indexed pages without TechArticle or CollectionPage JSON-LD: ${missing.join(', ')}`,
+    ).toEqual([]);
   });
 
   /**

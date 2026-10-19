@@ -1,6 +1,7 @@
 ---
 title: "jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents"
 description: "Looking for a jCodeMunch alternative you can use commercially? Honest trace-mcp vs jCodeMunch comparison: license, framework edges, refactoring."
+category: vs-comparisons
 updated: 2026-09-20
 ---
 

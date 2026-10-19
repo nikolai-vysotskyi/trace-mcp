@@ -876,6 +876,429 @@ and local storage policies, see [configuration](configuration.md), the
 
 ---
 
+# Articles & Guides
+
+Source: https://trace-mcp.com/articles.html
+
+
+
+The complete index of trace-mcp documentation, architectural deep dives, benchmarks,
+and head-to-head comparisons against other tools in the code-intelligence ecosystem.
+
+<nav class="articles-nav" aria-label="Article categories">
+  <span class="articles-nav-label">Sections:</span>
+  <a href="#vs-comparisons">VS Comparisons (21)</a>
+  <a href="#benchmarks">Benchmarks (3)</a>
+  <a href="#guides">Guides (5)</a>
+  <a href="#frameworks">Frameworks (2)</a>
+  <a href="#reference">Reference (4)</a>
+  <a href="#concepts">Concepts (7)</a>
+</nav>
+
+## VS Comparisons {#vs-comparisons}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[MCP Code-Graph Tools Compared: Serena, Repomix + 20 More](/comparisons.html)</h3>
+<p class="article-card-desc">Compare 20+ MCP code-graph tools head-to-head: token costs, 81 languages, 88 frameworks, GitHub stars. Pick the one that fits your stack.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-20</time>
+</div>
+<h3 class="article-card-title">[Repomix Alternative: trace-mcp vs Repomix for AI code context](/vs/repomix.html)</h3>
+<p class="article-card-desc">Repomix packs your repository into one prompt; trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, refactoring.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[Serena MCP Alternative: trace-mcp vs Serena for agent code navigation](/vs/serena.html)</h3>
+<p class="article-card-desc">Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, memory.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[codebase-memory-mcp Alternative: trace-mcp vs codebase-memory-mcp](/vs/codebase-memory-mcp.html)</h3>
+<p class="article-card-desc">Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, tool cost, framework awareness, refactoring and security.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[CodeGraphContext Alternative: trace-mcp vs CodeGraphContext for AI agents](/vs/codegraphcontext.html)</h3>
+<p class="article-card-desc">CodeGraphContext drives 11 SCIP indexers into a graph database you choose. trace-mcp ships one embedded store, framework edges and a write path.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[SocratiCode Alternative: trace-mcp vs SocratiCode for AI agents](/vs/socraticode.html)</h3>
+<p class="article-card-desc">SocratiCode pairs Qdrant vector search with ast-grep in Docker. trace-mcp runs locally with SQLite, 81 languages, framework edges, and refactoring.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-20</time>
+</div>
+<h3 class="article-card-title">[jCodeMunch Alternative: trace-mcp vs jCodeMunch for AI agents](/vs/jcodemunch.html)</h3>
+<p class="article-card-desc">Looking for a jCodeMunch alternative you can use commercially? Honest trace-mcp vs jCodeMunch comparison: license, framework edges, refactoring.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-25</time>
+</div>
+<h3 class="article-card-title">[TokenSave Alternative: trace-mcp vs TokenSave for AI agents](/vs/tokensave.html)</h3>
+<p class="article-card-desc">TokenSave offers 86 MCP tools in Rust under MIT. trace-mcp adds 88 framework integrations, AST refactoring, and OWASP taint analysis.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[GitNexus Alternative: trace-mcp vs GitNexus for AI agents](/vs/gitnexus.html)</h3>
+<p class="article-card-desc">GitNexus couples LadybugDB with in-memory Leiden clustering under a non-commercial license. trace-mcp adds 88 frameworks, typed tools, and AST refactoring.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[Graft Alternative: trace-mcp vs Graft for AI agents](/vs/graft.html)</h3>
+<p class="article-card-desc">Graft builds a markdown cache with paid LLM APIs. trace-mcp indexes code locally with zero token bills, typed tools, 88 frameworks, and AST refactoring.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[Narsil-MCP Alternative: trace-mcp vs Narsil-MCP for AI agents](/vs/narsil-mcp.html)</h3>
+<p class="article-card-desc">Narsil-MCP offers 90 MCP tools and SPARQL RDF in Rust. trace-mcp adds 88 framework integrations, AST refactoring write tools, and OWASP taint analysis.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[CodeGraph MCP Alternative: trace-mcp vs codegraph for AI coding agents](/vs/codegraph.html)</h3>
+<p class="article-card-desc">codegraph ships one orientation tool; trace-mcp ships a broad graph with refactoring, security and memory. Head-to-head on tools, coverage, benchmarks.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[Context Mode alternative? trace-mcp vs Context Mode for AI coding agents](/vs/context-mode.html)</h3>
+<p class="article-card-desc">Context Mode keeps raw tool output out of the context window; trace-mcp makes questions about your code cheap to ask. Head-to-head — and why run both.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[code-review-graph Alternative: trace-mcp vs code-review-graph](/vs/code-review-graph.html)</h3>
+<p class="article-card-desc">code-review-graph builds an incremental SQLite graph; trace-mcp adds framework awareness, refactoring, security and memory. Head-to-head comparison.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-16</time>
+</div>
+<h3 class="article-card-title">[Repomix vs codegraph: packing a repo vs indexing it for AI agents](/vs/repomix-vs-codegraph.html)</h3>
+<p class="article-card-desc">Repomix packs a repo into one file an agent reads; codegraph indexes it into a graph an agent queries. Head-to-head on cost, freshness and benchmarks.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[ast-grep Alternative: trace-mcp vs ast-grep for AI code context](/vs/ast-grep.html)</h3>
+<p class="article-card-desc">ast-grep finds code by AST pattern; trace-mcp indexes it into a queryable graph. Search, rewriting, impact analysis, MCP use compared.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[Continue Alternative: trace-mcp vs Continue for AI coding agents](/vs/continue.html)</h3>
+<p class="article-card-desc">Continue is an open-source coding agent for VS Code, JetBrains and terminal. trace-mcp is the persistent code graph any agent queries. Compared.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[Aider Alternative: trace-mcp vs Aider for AI pair programming](/vs/aider.html)</h3>
+<p class="article-card-desc">Aider pair-programs in your terminal with a repo map; trace-mcp serves a persistent code graph over MCP. Map vs graph, git loop, memory compared.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[Cody Alternative: trace-mcp vs Sourcegraph Cody for code context](/vs/cody.html)</h3>
+<p class="article-card-desc">Cody is enterprise-only cloud search plus assistant. trace-mcp is the local-first graph alternative — no key, no cloud, framework edges compared.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[ripwire Alternative: trace-mcp vs ripwire for agent code maps](/vs/ripwire.html)</h3>
+<p class="article-card-desc">ripwire is the zero-dependency CLI map for agents with published evals; trace-mcp is the persistent MCP graph. Map vs graph, honesty, memory compared.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">VS-COMPARISONS</span>
+<time class="article-card-date">2026-09-26</time>
+</div>
+<h3 class="article-card-title">[IDE Context Alternative: trace-mcp vs Cursor rules, Copilot setup](/vs/ide-context.html)</h3>
+<p class="article-card-desc">Cursor rules and Copilot instructions steer one IDE session; trace-mcp is the persistent graph every agent queries. Session context vs stored edges.</p>
+</div>
+</div>
+
+## Benchmarks {#benchmarks}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">BENCHMARKS</span>
+<time class="article-card-date">2026-09-07</time>
+</div>
+<h3 class="article-card-title">[PR Review Context Benchmark — Measured Input-Token Cost on Real Pull Requests](/pr-context-benchmark.html)</h3>
+<p class="article-card-desc">Reproducible measurement of the input tokens trace-mcp context saves over naive file loading when reviewing real merged pull requests in open-source repos.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">BENCHMARKS</span>
+<time class="article-card-date">2026-09-04</time>
+</div>
+<h3 class="article-card-title">[TOON Output Format — Measured Token Savings on Real Tool Calls](/toon-savings.html)</h3>
+<p class="article-card-desc">Real-world token measurements for trace-mcp's TOON (Token-Oriented Object Notation) output format across tabular MCP tool responses.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">BENCHMARKS</span>
+<time class="article-card-date">2026-09-20</time>
+</div>
+<h3 class="article-card-title">[Tool response token cost](/perf/response-tokens/)</h3>
+<p class="article-card-desc">What trace-mcp tool responses cost in tokens, per tool, weighted by real call volume — including the ones that cost more than the reads they replace.</p>
+</div>
+</div>
+
+## Guides {#guides}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">GUIDES</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[What trace init installs — guard hooks, Read/Bash mirrors and client config](/what-trace-init-installs.html)</h3>
+<p class="article-card-desc">What trace init writes to your machine and how to audit it: guard hooks, opt-in Read/Bash mirrors, the routing block, client config, tweakcc tiers.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">GUIDES</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[How to Reduce Claude Code Token Usage — 7 measured tactics](/reduce-claude-code-token-usage.html)</h3>
+<p class="article-card-desc">Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the output format.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">GUIDES</span>
+<time class="article-card-date">2026-10-13</time>
+</div>
+<h3 class="article-card-title">[trace-mcp Configuration Guide — .trace.json Reference](/configuration.html)</h3>
+<p class="article-card-desc">Configure trace-mcp in .trace.json: indexing, presets for 10 workflows, LSP servers, quality gates. Copy a working example — every key stays optional.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">GUIDES</span>
+<time class="article-card-date">2026-10-19</time>
+</div>
+<h3 class="article-card-title">[System Prompt Routing via tweakcc — pairing trace-mcp with Claude Code](/tweakcc.html)</h3>
+<p class="article-card-desc">How to pair trace-mcp with tweakcc to patch Claude Code's system prompts and route tool selection toward trace-mcp instead of native file reads.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">GUIDES</span>
+<time class="article-card-date">2026-09-09</time>
+</div>
+<h3 class="article-card-title">[Contributing to trace-mcp — local setup, build, and test](/development.html)</h3>
+<p class="article-card-desc">How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR.</p>
+</div>
+</div>
+
+## Frameworks {#frameworks}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-09-09</time>
+</div>
+<h3 class="article-card-title">[Supported Languages & Frameworks — 81 languages, 88 framework integrations](/supported-frameworks.html)</h3>
+<p class="article-card-desc">Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">FRAMEWORKS</span>
+<time class="article-card-date">2026-09-15</time>
+</div>
+<h3 class="article-card-title">[Language capability matrix: what 81 languages extract](/language-matrix.html)</h3>
+<p class="article-card-desc">What each of the 81 languages trace-mcp supports actually extracts — parser, edge kinds resolved and test coverage, one row per language.</p>
+</div>
+</div>
+
+## Reference {#reference}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">REFERENCE</span>
+<time class="article-card-date">2026-09-08</time>
+</div>
+<h3 class="article-card-title">[MCP Tools Reference — code-intelligence tools by task and framework](/tools-reference.html)</h3>
+<p class="article-card-desc">The trace-mcp MCP tools you reach for most, grouped by task: navigation, refactoring, impact analysis, security and framework-aware queries.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">REFERENCE</span>
+<time class="article-card-date">2026-09-23</time>
+</div>
+<h3 class="article-card-title">[Tool index — every MCP tool the server registers](/tools-index.html)</h3>
+<p class="article-card-desc">Alphabetical index of every trace-mcp MCP tool, generated from the server's own registrations: what each one does and when it is available.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">REFERENCE</span>
+<time class="article-card-date">2026-10-13</time>
+</div>
+<h3 class="article-card-title">[Config index — every key trace-mcp accepts](/config-index.html)</h3>
+<p class="article-card-desc">Complete index of every trace-mcp configuration key, generated from the schema itself: type, allowed values and the real default.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">REFERENCE</span>
+<time class="article-card-date">2026-09-09</time>
+</div>
+<h3 class="article-card-title">[Quality Gates — configure trace-mcp's thresholds](/quality-gates.html)</h3>
+<p class="article-card-desc">The eight quality_gates.rules keys trace-mcp checks, which three run by default, and how this project calibrated its own thresholds as a worked example.</p>
+</div>
+</div>
+
+## Concepts {#concepts}
+
+<div class="articles-grid">
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[Code Graph MCP Server for AI Coding Agents](/code-graph-mcp.html)</h3>
+<p class="article-card-desc">How a code graph MCP server gives AI coding agents persistent symbol, call, and framework relationships without re-reading whole repositories.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[Architecture — indexing pipeline, storage, and MCP server internals](/architecture.html)</h3>
+<p class="article-card-desc">How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server on top.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-09</time>
+</div>
+<h3 class="article-card-title">[Session Analytics & Coverage Intelligence — token savings, wasteful patterns](/analytics.html)</h3>
+<p class="article-card-desc">trace-mcp's built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-04</time>
+</div>
+<h3 class="article-card-title">[Decision Memory — a persistent knowledge graph for architectural decisions](/decision-memory.html)</h3>
+<p class="article-card-desc">trace-mcp's decision graph captures architectural decisions, tech choices, bug root causes and conventions — each linked to the code it is about.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-04</time>
+</div>
+<h3 class="article-card-title">[Daemon memory: what it costs and what caps it](/daemon-memory.html)</h3>
+<p class="article-card-desc">Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-11</time>
+</div>
+<h3 class="article-card-title">[MCP Tracing — OpenTelemetry spans for every MCP tool call](/telemetry.html)</h3>
+<p class="article-card-desc">How to trace MCP tool calls: trace-mcp emits OpenTelemetry spans for every MCP tool invocation and AI provider call, exported to Jaeger or Langfuse.</p>
+</div>
+
+<div class="article-card" markdown="1">
+<div class="article-card-meta">
+<span class="article-card-category">CONCEPTS</span>
+<time class="article-card-date">2026-09-06</time>
+</div>
+<h3 class="article-card-title">[Privacy — what trace-mcp sends, and how to turn it off](/privacy.html)</h3>
+<p class="article-card-desc">Everything trace-mcp sends off your machine: one anonymous daily ping, its complete field list, both opt-outs, and how to delete the local state it keeps.</p>
+</div>
+</div>
+
+---
+
 # Serena, Repomix and 20+ code graph MCP servers compared
 
 Source: https://trace-mcp.com/comparisons.html

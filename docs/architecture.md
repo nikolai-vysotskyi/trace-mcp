@@ -1,6 +1,7 @@
 ---
 title: "Architecture — indexing pipeline, storage, and MCP server internals"
 description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server on top."
+category: concepts
 updated: 2026-09-11
 ---
 
