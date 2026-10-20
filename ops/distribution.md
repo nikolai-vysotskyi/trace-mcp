@@ -5847,3 +5847,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Evening pass, 2026-10-20 (TRA-2574): mention sweep clean, external threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **0 new repos outside the seen list**. Sweep verified clean across all facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **drknowhow/code-context-control** (C3): Local MCP server (v2.93.x on PyPI) exposing 21 tools addressing the token-waste failure mode of LLM coding agents ("they read too much"). Features AST compression (`c3_compress`), surgical symbol reads (`c3_read`), access/mask guards, edit ledgers, agent locks, and PM integrations.
+  - *Architectural contrast with trace-mcp*:
+    - *Tool schema footprint*: Exposing 21 distinct tools clutters the agent context with massive JSON schemas on every prompt turn; trace-mcp keeps a lean, focused tool interface for code navigation (`explore_node`, `query_subgraph`, `trace_path`, etc.).
+    - *Surface sprawl & security surface*: C3 bundles shell execution (`c3_shell`), local CI container runners (`c3_ci`), and credential vaulting (`c3_credentials`). trace-mcp strictly maintains a zero-network indexing model and read-only structural inspection by default, keeping agent blast radius minimal.
+    - *Language breadth*: C3 relies on dynamic runtime typecheckers (pyright/tsc/ruff) for AST maps across limited languages, whereas trace-mcp embeds native tree-sitter grammars and symbol graph resolution across 81 languages with zero per-file process spawning.
+- **subodhkc/mcp-tenant-isolation**: Deterministic static analysis scanner and MCP server (57 rules) checking multi-tenant SaaS and MCP server code for cross-tenant data leaks (RLS, Prisma/Drizzle filtering, tenant-scoped tool visibility).
+- **agent-gigmole/awesome-ai-agent-tools**: Auto-generated mirror of agentoolrank.com (613 tools ranked by stars). Audited and skipped per our catalog quality criteria: automated affiliate/leadgen mirror with 0 stars and no human maintainer review.
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - PR #2705 (`fix(java,ts): a parameterized supertype names its type, so implements Store<String> links the interface`, opened 2026-10-20T11:18:02Z): In Java and TypeScript, `generic_type` AST nodes previously caused the entire parameterized string (`Store<String>`) to be recorded as the supertype name, preventing interface-implementation resolution. The fix strips type arguments from the first child identifier, unblocking interface-to-implementation edges for generic supertypes.
+  - PR #2704 (`fix(resolution): an interface overload links the implementation overload with its parameters (#2663)`, opened 2026-10-20T10:14:39Z): Fixed combinatorial blowup in interface-impl synthesizer where overloads previously linked all-to-all across same-named methods. In Java, Kotlin, C#, Scala, it now matches implementation overloads by arity and parameter types.
+- **jgravelle/jcodemunch-mcp**:
+  - PR #1181 (`fix: Flask route methods= are read (#1177); summary Context: order is stable (#1178)`, opened 2026-10-20T12:51:15Z): Parses Flask `methods=` parameter via AST to extract HTTP verbs instead of defaulting every route to GET; fixes unstable hash seed order in `Context:` summary prompts by preserving first-seen insertion order.
+  - PR #1180 (`fix(hooks): pre_pr reads the tree gh pr create runs in`, opened 2026-10-20T10:57:54Z): Hardens git workflow hooks against command-chaining and path-manipulation evasion when running `gh pr create`.
+- **Graphify-Labs/graphify**:
+  - PR #4587 (`fix(swift): model a macro declaration and its freestanding call (#4551)`, opened 2026-10-20T12:36:37Z): Adds Swift 5.9 `macro_declaration` to `function_types` and `macro_invocation` to `call_types` with sibling token handling.
+  - PR #4586 (`fix(cpp): blank Metal and CUDA qualifiers tree sitter cpp cannot parse (#4550)`, opened 2026-10-20T12:27:30Z): Byte-preserving normalization that blanks GPU qualifiers (`kernel`, `device`, `constant`, `__global__`, `__device__`) in `.metal` and `.cu` files before tree-sitter C++ parsing, preventing qualifiers from polluting the AST as sourceless type identifiers.
+  - PR #4585 (`fix(csharp): model a delegate declaration as a node, not a sourceless stub (#4552)`, opened 2026-10-20T12:18:08Z): Adds `delegate_declaration` to C# class types so delegate references resolve to real in-file nodes instead of minting synthetic sourceless stubs.
+  - PR #4583 (`fix(kotlin): model a type alias as a node, not a sourceless stub (#4553)`, opened 2026-10-20T12:10:52Z): Emits sourced nodes for Kotlin `type_alias` declarations, eliminating spurious cross-file hub stubs.
+
+**Competitor pulse (as of 2026-10-20 14:04 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,930★ (+5), 1,721 forks (=)
+- oraios/serena: 30,453★ (+31), 2,309 forks (+1)
+- DeusData/codebase-memory-mcp: 47,011★ (+18), 3,890 forks (=)
+- tirth8205/code-review-graph: 32,282★ (+7), 3,098 forks (=)
+- colbymchenry/codegraph: 74,510★ (+12), 4,823 forks (+3)
+- abhigyanpatwari/GitNexus: 47,970★ (+3), 5,197 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,788★ (-1), 374 forks (=)
+- continuedev/continue: 36,273★ (=), 5,501 forks (=)
+- Aider-AI/aider: 49,662★ (+9), 5,086 forks (-1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
