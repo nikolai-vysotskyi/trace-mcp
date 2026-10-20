@@ -5787,3 +5787,63 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Afternoon pass, 2026-10-20 (TRA-2571): mention sweep clean, open threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **0 new repos outside the seen list**. Sweep verified clean across all facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **jalil-dini/plainlook**: Python standard-library offline scanner (30 checks) for agent skill files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`) and MCP server code. Highlights transparent empirical base rates across 576 public MCP servers and 300 skill packs, reports false-positive conditions ("fires on something fine when..."), and explicitly lists unexamined surfaces (NOT COVERED). Demonstrates rising developer expectation for static capability auditing and least-privilege MCP compliance.
+  - *Architectural contrast*: trace-mcp adheres to least privilege by design — zero network calls during local indexing, value-blind redacted environment variables (`get_env_vars` contract), read-only structural queries by default, and isolated SQLite storage (`decisions.db`, `state.db`).
+- **mlgxiii/contextrie-mcp**: TypeScript MCP server (`contextrie-mcp`) exposing `select_context` tool that uses remote LLM calls (`gpt-4.1-mini`/`claude-haiku-5-5`) to summarize files into `.contextrie/sources.json` and score file summaries against user tasks.
+  - *Architectural contrast*: trace-mcp is fully local, instant, and token-free for indexing, using tree-sitter AST and cross-file symbol call graphs across 81 languages without remote API keys, privacy leakage, or per-query model billing.
+- **sajjadGG/Ghostlab**: Agent evaluation lab sandboxed in NVIDIA OpenShell for multi-turn role-playing and scoring of Claude Code, Codex, and Copilot CLI workflows across MCP tools and skills.
+- **numikel/kprun**: Rust CLI for injecting KeePass secrets into ephemeral MCP server and coding agent child processes, avoiding token persistence in `mcp.json`.
+
+**Competitor intelligence & architectural observations:**
+- **DeusData/codebase-memory-mcp**:
+  - PR #2720 (`fix(discover): a symlink must not abort a bounded count (carries #1803, fixes #2701)`, opened 2026-10-20T04:36:09Z): `safe_stat()` flags symlinks as unsafe/not-found by policy; in the auto-index admission count phase (`count_only`), encountering any symlink aborted the whole walk. Fixed by skipping symlinks cleanly during bounded counts.
+  - PR #2721 (`docs: propose phased TypeScript reference improvements (#2709)`, opened 2026-10-20T06:26:22Z): Phased design RFC for TypeScript reference resolution and type-hierarchy caching.
+- **colbymchenry/codegraph**:
+  - PR #2703 (`fix(objc): a message to an ivar or a property reaches the class it is declared as`, opened 2026-10-20T06:27:54Z): Binds Objective-C ivar and property method calls to their declared class interfaces instead of treating them as untyped receiver expressions.
+  - PR #2702 (`fix(rust): a name a use brings in is the item of the module its path walks`, opened 2026-10-20T06:18:39Z): Fixed cross-module name collisions in Rust `use` imports where imports like `use crate::sync::watch::Receiver;` erroneously bound to other in-scope modules defining `Receiver`.
+  - PR #2701 (`fix(rust): a call through a Pin, Rc or Box self reaches the method Rust picks, inherent first`, opened 2026-10-20T06:03:03Z): Resolves wrapped receiver calls (`self: Pin<&mut Self>`, `Rc`, `Box`) to the inner type's inherent/trait methods instead of the outer smart pointer wrapper.
+- **jgravelle/jcodemunch-mcp**:
+  - PR #1179 (`Opt-in summarizer_body_chars: send each symbol's body + decorators to the AI summariser`, opened 2026-10-20T08:05:54Z): Implements `summarizer_body_chars` config parameter (default 0) to feed symbol body spans up to N chars and decorators to the summarizer, addressing shallow summary degradation.
+- **Graphify-Labs/graphify**:
+  - PRs #4578, #4579, #4580, #4581, #4582 (opened 2026-10-20 08:05–08:08Z): Coordinated 5-language sprint extracting explicit `type` aliases and `typedef`s as dedicated type nodes across Python, Go, C++, Rust, and Dart, preventing them from falling back to sourceless stubs or untyped variable bindings.
+- **tirth8205/code-review-graph**:
+  - PR #1125 (`feat(install): keep the graph in sync after checkout, merge and rebase`, opened 2026-10-20T08:35:42Z): Installs `post-checkout`, `post-merge`, and `post-rewrite` git hooks alongside `pre-commit` to prevent graph staleness during branch switches and rebases without daemon watchers.
+- **oraios/serena**:
+  - PR #2184 (`fix(memory): bound cyclic source scans and stalled logging backlog`, opened 2026-10-20T06:37:25Z): Tracks traversal ancestry to prevent directory cycles and bounds asynchronous logging queue to mitigate memory spikes.
+  - PR #2185 (`Fix: expand leading ~ in path-valued configuration settings`, opened 2026-10-20T09:38:22Z): Expands leading `~` in path configuration settings.
+
+**Competitor pulse (as of 2026-10-20 10:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,925★ (+12), 1,721 forks (+16)
+- oraios/serena: 30,422★ (+17), 2,308 forks (+43)
+- DeusData/codebase-memory-mcp: 46,993★ (+30), 3,890 forks (+4)
+- tirth8205/code-review-graph: 32,275★ (+7), 3,098 forks (+20)
+- colbymchenry/codegraph: 74,498★ (+22), 4,820 forks (-1)
+- abhigyanpatwari/GitNexus: 47,967★ (+8), 5,198 forks (-2)
+- jgravelle/jcodemunch-mcp: 2,789★ (+1), 374 forks (=)
+- continuedev/continue: 36,273★ (+6), 5,501 forks (+3)
+- Aider-AI/aider: 49,653★ (+5), 5,087 forks (+4)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
