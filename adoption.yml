@@ -19,15 +19,15 @@
 # month` only says the older period's users are a subset of this week's, which a
 # mature property whose audience all returned would satisfy too, and one
 # non-returning user makes `month > week` on a ten-day-old property.
-updated: "2026-10-19T06:54:52.244Z"
+updated: "2026-10-20T06:41:54.322Z"
 active_users:
-  day: 16
-  week: 155
-  month: 320
+  day: 58
+  week: 165
+  month: 332
   first_ping_date: "2026-08-29"
-  days_observed: 52
+  days_observed: 53
   month_window_full: true
-events_28d: 2397
+events_28d: 2435
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2026-09-05 — the day
@@ -50,15 +50,15 @@ events_28d: 2397
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 147770386
-  tokens_saved_raw: 175572787
-  usd_saved: 147.77
+  tokens_saved: 151774370
+  tokens_saved_raw: 179683215
+  usd_saved: 151.77
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2026-09-05"
-  days: 44
+  days: 45
   capped_days: 2
-  raw_ratio: 1.19
+  raw_ratio: 1.18
   inflation_suspected: false
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
@@ -85,10 +85,10 @@ savings:
 # counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 231
+  new_installs_28d: 243
   activated_pct: null
   used_pct: null
-  retention_dau_mau_pct: 5
+  retention_dau_mau_pct: 17
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -163,38 +163,38 @@ acquisition:
   referrers_uniques_14d:
     {}
 installs_28d:
-  "active": 1283
-  "upgrade": 762
-  "new": 231
-  "downgrade": 60
-  "(not set)": 58
+  "active": 1300
+  "upgrade": 770
+  "new": 243
+  "downgrade": 62
+  "(not set)": 59
   "unknown": 1
 by_version:
   "3.34.6": 87
   "3.31.3": 49
   "3.32.0": 49
-  "3.31.2": 47
   "3.34.4": 47
   "3.34.8": 46
   "3.36.7": 45
   "3.34.7": 42
   "3.37.0": 42
+  "3.31.2": 38
+  "3.37.10": 35
   "3.34.1": 32
   "3.34.3": 32
-  "3.37.6": 30
+  "3.37.6": 32
   "3.31.5": 28
+  "3.37.7": 28
   "3.33.0": 26
   "3.37.4": 26
-  "3.31.1": 24
   "3.36.3": 23
   "3.36.6": 23
   "3.36.0": 22
-  "3.37.7": 22
   "3.36.5": 21
+  "3.37.9": 21
   "3.31.4": 17
   "3.34.2": 15
-  "3.37.3": 12
-  "3.29.0": 11
+  "3.37.3": 13
 
 # Whether `by_client` below — and `by_client_used_pct` above — can be read at
 # all yet (TRA-748). Derived from `by_version`, not sent by the client.
@@ -212,7 +212,7 @@ by_version:
 #               old install, so kept out of `pct` entirely.
 client_reporting:
   fix_version: "3.12.0"
-  at_or_above: 818
+  at_or_above: 839
   below: 0
   unknown: 0
   pct: 100
@@ -258,18 +258,18 @@ daemon:
   unclean_pct: null
   active_users_28d: 0
 by_country:
-  "United Arab Emirates": 108
-  "(not set)": 52
-  "United States": 26
+  "United Arab Emirates": 122
+  "(not set)": 50
+  "United States": 25
   "Russia": 20
   "China": 11
   "Thailand": 10
   "Brazil": 8
+  "France": 6
   "Germany": 6
+  "Poland": 6
   "Chile": 5
-  "France": 5
   "Indonesia": 5
-  "Poland": 5
   "South Korea": 5
   "Canada": 4
   "Egypt": 3
@@ -283,12 +283,12 @@ by_country:
   "Romania": 2
   "Singapore": 2
 by_client:
-  "unknown": 216
+  "unknown": 226
   "claude-code": 79
-  "codex-mcp-client": 42
+  "codex-mcp-client": 41
   "antigravity-client": 20
-  "mcp": 16
-  "opencode": 15
+  "opencode": 16
+  "mcp": 14
   "cursor-vscode": 6
   "grok-shell-trace-mcp": 4
   "Cursor": 3
@@ -297,14 +297,14 @@ by_client:
   "claude-ai": 3
   "cli": 3
   "grok-shell-trace": 3
+  "local-agent-mode-trace": 3
   "rmcp": 3
   "copilot-cli": 2
   "kimi-code": 2
-  "local-agent-mode-trace": 2
   "local-agent-mode-trace-mcp": 2
+  "pi-mcp-trace-mcp": 2
   "(not set)": 1
   "Cline": 1
   "count-advertised-tools": 1
   "dev.warp.Warp-Stable": 1
   "dsh-mcp-client": 1
-  "dsh-probe": 1
