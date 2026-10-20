@@ -5903,3 +5903,56 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Late evening pass, 2026-10-20 (TRA-2576): mention sweep clean, external threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **0 new repos outside the seen list**. Sweep verified clean across all facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **jalil-dini/plainlook**: Offline static analysis scanner (30 checks, zero network, zero dependencies) for agent skill files (`SKILL.md`, `AGENTS.md`, `CLAUDE.md`) and MCP server implementations. Checks for credential leaks, `curl | sh`, path traversal, unpinned binaries, and supply-chain vectors. Aligns with our defensive sandboxing model.
+- **mlgxiii/contextrie-mcp**: Context selector MCP server wrapping Contextrie with a `select_context(task)` tool ranking relevant files for a task. Requires Anthropic/OpenAI API keys in environment.
+  - *Architectural contrast with trace-mcp*: Relies on remote LLM API calls and token burn upfront just to identify which files to read; trace-mcp indexes AST structures and resolves symbol reference subgraphs entirely offline with sub-second queries and zero token cost.
+- **numikel/kprun**: CLI utility (Rust) storing API keys and tokens in an encrypted KeePass vault and injecting them directly into spawned child processes (MCP servers, Claude Code, AGY) without leaking secrets into shell profiles or `mcp.json`.
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - PR #2711 (`fix(rust): a name written through a path is what the path names, not a same-file namesake`, merged 2026-10-20T17:38:36Z): Fixed Rust path resolution in `isRustNameInScope`. Previously accepted any candidate sharing the current file regardless of path prefix, falsely linking `std::ffi::OsStr` or `mio::Interest` to local structs/enums of the same name. Removed the same-file shortcut, added std/core/alloc filtering, and enforced inline `mod` / crate-reach validation.
+  - PR #2710 (`fix(rust): a call on what as_mut() hands back reaches the receiver's declared type`, merged 2026-10-20T17:32:30Z): Propagates the underlying receiver's declared type when method chaining through Rust `as_mut()`.
+  - PR #2709 (`fix(c): a macro alone below an #include <…> no longer hides the next declaration`, merged 2026-10-20T17:23:23Z): Fixed tree-sitter C grammar failures where lone macros under `#include` headers (e.g. `G_BEGIN_DECLS` in GLib or `NS_ASSUME_NONNULL_BEGIN`) caused subsequent declarations to be parsed as junk functions or hidden. Blanking directives up to newline or non-escaped line endings unblocked clean parsing for 242 C/C++ headers.
+  - PR #2708 (`fix(cpp): a bare call on a parameter, local lambda or functor links nothing, not a function elsewhere of its name`, merged 2026-10-20T17:14:28Z): Suppresses spurious cross-file links from local parameter/lambda/functor invocations to unrelated global functions sharing the identifier.
+- **jgravelle/jcodemunch-mcp**:
+  - PR #1182 (`fix: a deferred AI summary writes the summary and nothing else (L-227)`, merged 2026-10-20T15:07:28Z): The background thread for deferred AI summaries on watched edits previously used `incremental_save(new_symbols=...)`, inadvertently overwriting symbol complexity, call graphs, and advancing `indexed_at`. Switched to `update_symbol_summaries` (single-column UPDATE with `content_hash` guard) and in-memory cache patching under index-write lock.
+  - PR #1183 (`release: v1.108.386`, merged 2026-10-20T16:05:51Z): Shipped v1.108.386 with opt-in `summarizer_body_chars` (transmitting symbol body + decorators to AI summarizer), Flask route verb extraction, and deterministic hash seed ordering in summary prompts (#1178).
+- **Graphify-Labs/graphify**:
+  - PR #4591 (`fix(csharp): give each method overload its own node and bind calls by argument count`, opened 2026-10-20T17:24:10Z): Resolves #4584 where C# method overloads shared a single node ID, causing all calls to collapse onto the first declared method. Added signature-salted IDs and arity matching across in-file walks, member resolution, and interface dispatch.
+  - PR #4590 (`Feat/persistent project graph 4063`, opened 2026-10-20T17:22:22Z): Adds `GRAPHIFY_HOME` to persist graphs and caches outside git worktrees, preventing data loss on `git clean -fdx` while keying storage by resolved worktree path.
+
+**Competitor pulse (as of 2026-10-20 18:00 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,932★ (+2), 1,676 forks (-45)
+- oraios/serena: 30,478★ (+25), 2,224 forks (-85)
+- DeusData/codebase-memory-mcp: 47,021★ (+10), 3,881 forks (-9)
+- tirth8205/code-review-graph: 32,285★ (+3), 3,040 forks (-58)
+- colbymchenry/codegraph: 74,521★ (+11), 4,822 forks (-1)
+- abhigyanpatwari/GitNexus: 47,972★ (+2), 5,197 forks (=)
+- jgravelle/jcodemunch-mcp: 2,788★ (=), 373 forks (-1)
+- continuedev/continue: 36,272★ (-1), 5,502 forks (+1)
+- Aider-AI/aider: 49,664★ (+2), 5,087 forks (+1)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
