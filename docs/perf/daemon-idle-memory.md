@@ -391,3 +391,31 @@ returned `ok` and version 3.37.10. The field gap predates that indexing burst.
 TRA-2061 owns attribution; these observations do not isolate the retained
 memory or demonstrate a new regression from v3.37.8. It does show that
 unloading five idle projects released only 17 MB of RSS within four minutes.
+
+---
+
+## 2026-10-20 — session pins explain a higher project count, not the heap growth
+
+Read-only observation of the installed v3.37.10 daemon (PID 58174) on
+2026-10-19 21:46–22:03 UTC. The log's one-minute vitals rose from 13 loaded
+projects / 3,479 MB RSS to 17 loaded / 3,960 MB RSS. In the final sample,
+`projects_indexing: 1`, `sweep_pinned: 17`, and `sweep_evictable: 0`.
+Several earlier samples had `projects_indexing: 0`, 15 loaded projects and
+3,593 MB RSS. `GET /health` still returned `ok`. The 8-project setting is
+a **soft eviction target**: `unloadIdleProjects` preserves projects with
+live session references. A count above eight is therefore not, by itself,
+proof that the sweep stopped working.
+
+At 22:03 UTC, `GET /debug/memory` reported 17 resident projects, 74 MCP
+session handles, 3,982 MB RSS and 2,313 MB main-thread heap used (V8 heap
+used ratio 0.558). Its session-journal compact buffers totaled only 35 KB,
+and the tree cache about 6.1 MB. Those two bounded caches cannot account
+for the observed heap. The endpoint currently reports only aggregate session
+and resource-pool counts, so this sample cannot establish which projects
+were legitimately active or whether any session reference was leaked.
+TRA-2061 remains the owner of heap attribution; use per-project refcounts
+and session ages before treating the pins as a regression of TRA-1738.
+
+These samples are **not an idle-memory baseline**: connected sessions pin
+projects even while `projects_indexing` and instantaneous CPU are zero. Do
+not apply the isolated `250 + 75 × projects_loaded` target to this window.
