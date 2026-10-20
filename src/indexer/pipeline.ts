@@ -1417,6 +1417,82 @@ export class IndexingPipeline {
   }
 
   /**
+   * Delete all indexed files under `relPrefix` (or matching it exactly), cascading
+   * through symbols, graph edges, and associated caches (TRA-2558).
+   *
+   * Used when a nested project is registered under an already-managed ancestor
+   * so the descendant's subtree stops being double-indexed in the ancestor's DB.
+   * Serialized onto `_lock` so concurrent indexing cannot interleave or re-insert
+   * deleted files.
+   */
+  deleteFilesByPrefix(relPrefix: string): Promise<number> {
+    const run = this._lock.then(async () => {
+      if (!this.store.db.open) {
+        logger.warn(
+          { root: this.rootPath, prefix: relPrefix },
+          'deleteFilesByPrefix skipped — database already closed',
+        );
+        return 0;
+      }
+      const rel = path.isAbsolute(relPrefix) ? path.relative(this.rootPath, relPrefix) : relPrefix;
+      const cleanPrefix = rel.split(path.sep).join('/').replace(/^\/+/, '').replace(/\/+$/, '');
+
+      if (
+        !cleanPrefix ||
+        cleanPrefix === '.' ||
+        cleanPrefix.startsWith('..') ||
+        validatePath(cleanPrefix, this.rootPath).isErr()
+      ) {
+        logger.warn(
+          { root: this.rootPath, prefix: relPrefix, cleanPrefix },
+          'deleteFilesByPrefix skipped — invalid prefix',
+        );
+        return 0;
+      }
+
+      const filesToDelete = new Map<number, { id: number; path: string }>();
+      const exact = this.store.getFile(cleanPrefix);
+      if (exact) filesToDelete.set(exact.id, exact);
+
+      for (const file of this.store.getFilesUnderPath(cleanPrefix)) {
+        filesToDelete.set(file.id, file);
+      }
+
+      if (filesToDelete.size === 0) {
+        clearPackageEntriesCacheForDeletedPath(this.rootPath, cleanPrefix);
+        return 0;
+      }
+
+      for (const file of filesToDelete.values()) {
+        invalidateTreeCacheFile(this.rootPath, file.path);
+        if (file.path === 'package.json' || file.path.endsWith('/package.json')) {
+          clearPackageEntriesCache(this.rootPath);
+        }
+        clearPackageEntriesCacheForDeletedPath(this.rootPath, file.path);
+      }
+      clearPackageEntriesCacheForDeletedPath(this.rootPath, cleanPrefix);
+
+      this.store.db
+        .transaction(() => {
+          for (const file of filesToDelete.values()) {
+            this.store.deleteFile(file.id);
+          }
+        })
+        .immediate();
+
+      invalidatePageRankCache();
+      invalidateSearchCache(this.store.db);
+      logger.info(
+        { root: this.rootPath, prefix: cleanPrefix, count: filesToDelete.size },
+        'Deleted files by prefix from index',
+      );
+      return filesToDelete.size;
+    });
+    this._lock = run.catch(() => {});
+    return run;
+  }
+
+  /**
    * Drop the paths an incremental run must not touch: traversal attempts,
    * `config.exclude` matches, subtrees owned by a more-specific registered
    * project, and git-ignored files. Mirrors the gates `collectFiles()`
@@ -1622,6 +1698,36 @@ export class IndexingPipeline {
       // TRA-1017: a watcher batch queued before the stop must not start
       // persisting after it — the abort is observed here, at lock entry.
       throwIfIndexAborted(opts.signal, this.rootPath);
+
+      // TRA-2558: re-check descendant exclusions in case a descendant registered
+      // while we waited for _lock.
+      const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+      let activeRelPaths = relPaths;
+      let lateSkippedDescendant = 0;
+      if (descendantGlobs.length > 0) {
+        const ownedByDescendant = picomatch(descendantGlobs, { dot: true });
+        activeRelPaths = relPaths.filter((p) => {
+          if (ownedByDescendant(p)) {
+            lateSkippedDescendant++;
+            return false;
+          }
+          return true;
+        });
+      }
+      if (activeRelPaths.length === 0) {
+        return {
+          totalFiles: skippedUnindexable + lateSkippedDescendant,
+          indexed: 0,
+          skipped: skippedUnindexable + lateSkippedDescendant,
+          ...(skippedBinary > 0 ? { skippedBinary } : {}),
+          ...(skippedOversize > 0 ? { skippedOversize } : {}),
+          errors: 0,
+          durationMs: Date.now() - enqueuedAt,
+          incremental: true,
+          postprocess: opts.postprocess ?? 'minimal',
+        };
+      }
+
       this._isIncremental = true;
       // Incremental runs never reconcile scope; clear the flag a prior
       // indexAll left behind so it can't force a postprocess here.
@@ -1637,12 +1743,16 @@ export class IndexingPipeline {
       // wall-clock to get the queue time instead of reporting the two summed
       // as reindex latency.
       const start = Date.now();
-      const scopedPaths = await this.resolveDeepFallback(relPaths, deepCandidates, traceignore);
+      const scopedPaths = await this.resolveDeepFallback(
+        activeRelPaths,
+        deepCandidates,
+        traceignore,
+      );
       if (scopedPaths.length === 0) {
         return {
-          totalFiles: skippedUnindexable,
+          totalFiles: skippedUnindexable + lateSkippedDescendant,
           indexed: 0,
-          skipped: skippedUnindexable,
+          skipped: skippedUnindexable + lateSkippedDescendant,
           ...(skippedBinary > 0 ? { skippedBinary } : {}),
           ...(skippedOversize > 0 ? { skippedOversize } : {}),
           errors: 0,
@@ -1652,9 +1762,9 @@ export class IndexingPipeline {
         };
       }
       const r = await this.runPipeline(scopedPaths, false, start, opts.signal);
-      if (skippedUnindexable > 0) {
-        r.totalFiles += skippedUnindexable;
-        r.skipped += skippedUnindexable;
+      if (skippedUnindexable + lateSkippedDescendant > 0) {
+        r.totalFiles += skippedUnindexable + lateSkippedDescendant;
+        r.skipped += skippedUnindexable + lateSkippedDescendant;
         if (skippedBinary > 0) {
           r.skippedBinary = (r.skippedBinary ?? 0) + skippedBinary;
         }
@@ -2462,11 +2572,27 @@ export class IndexingPipeline {
   private _coverageDebounceMs: number = IndexingPipeline.COVERAGE_RECONCILE_DEBOUNCE_MS;
   private _coverageTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastCoverageReconcileMs = 0;
+  private _coverageReconcileForced = false;
+
+  /**
+   * Request a coverage reconcile on this pipeline (TRA-2558).
+   *
+   * Called when a previously-registered nested descendant project is removed,
+   * so this ancestor resumes indexing the now-unorphaned subtree.
+   */
+  requestCoverageReconcile(options?: { force?: boolean }): void {
+    if (this._disposed) return;
+    const force = options?.force ?? true;
+    if (force) {
+      this._lastCoverageReconcileMs = 0;
+    }
+    this.scheduleCoverageReconcile(force);
+  }
 
   /**
    * Schedule a coalesced coverage check. Registration indexes the tree once;
    * everything after that arrives as watcher-driven `indexFiles()` calls, so a
-   * project whose on-disk shape changes drastically (a repo cloned into an
+   * project whose on-disk shape changed drastically (a repo cloned into an
    * already-registered workdir) settles at whatever fraction of the tree the
    * watcher managed to report — TRA-231. The check walks the include globs and
    * compares the candidate count to the indexed file count; a real gap kicks a
@@ -2474,10 +2600,13 @@ export class IndexingPipeline {
    * needed for. Coalesced onto a single trailing timer so an edit storm costs
    * one walk, not N.
    */
-  private scheduleCoverageReconcile(): void {
+  private scheduleCoverageReconcile(force = false): void {
     // TRA-1752: same guard as scheduleEdgeReconcile — a run draining through
     // dispose() must not arm a timer that fires against the closed DB.
     if (this._disposed) return;
+    if (force) {
+      this._coverageReconcileForced = true;
+    }
     if (this._coverageTimer) clearTimeout(this._coverageTimer);
     this._coverageTimer = setTimeout(() => this.fireCoverageReconcile(), this._coverageDebounceMs);
     // Never keep the process alive just for a pending coverage check.
@@ -2487,11 +2616,29 @@ export class IndexingPipeline {
   /** Timer body — walks the tree and reindexes only when coverage actually drifted. */
   private fireCoverageReconcile(): void {
     this._coverageTimer = null;
+    const force = this._coverageReconcileForced;
+    this._coverageReconcileForced = false;
+
     // TRA-1763: same mark as the edge reconcile — the drift walk and the
     // `indexAll` it can trigger both run at `status: ready`.
     const endReindex = beginReindex(this.rootPath);
     const run = (async () => {
       if (this._disposed) return;
+
+      // TRA-2558: When force is true (e.g. descendant unregistration or explicit request),
+      // bypass cooldown and counter-drift checks because the aggregate file count
+      // might happen to match even though file composition changed or contains
+      // non-code / external records.
+      if (force) {
+        this._lastCoverageReconcileMs = Date.now();
+        logger.info(
+          { root: this.rootPath },
+          'Forced coverage reconcile requested — running a full hash-gated reindex',
+        );
+        await this.indexAll(false, { discovery: 'full-walk' });
+        return;
+      }
+
       if (
         Date.now() - this._lastCoverageReconcileMs <
         IndexingPipeline.COVERAGE_RECONCILE_COOLDOWN_MS
@@ -2515,7 +2662,7 @@ export class IndexingPipeline {
         { root: this.rootPath, onDisk, indexed, gap },
         'Coverage drift detected — running a full hash-gated reindex',
       );
-      await this.indexAll();
+      await this.indexAll(false, { discovery: 'full-walk' });
     })();
     void run.catch((e) => {
       logger.warn({ error: e }, 'Deferred coverage reconcile failed');
