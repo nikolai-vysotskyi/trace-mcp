@@ -5956,3 +5956,55 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Night pass, 2026-10-21 (TRA-2579): mention sweep clean, external threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **0 new repos outside the seen list**. Sweep verified clean across all facets.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **Gentleman-Programming/gentle-ai** (7,881★): Multi-agent coding harness managing configuration across Claude Code, Cursor, OpenCode, Codex, and Pi. Injects managed MCP configurations for documentation (`@upstash/context7-mcp`) and memory (`engram`). Has an active approved proposal for Serena as an optional Community Tool (#4793) alongside CodeGraph, handling per-agent native configuration formats (`.mcp.json`, `~/.claude.json`, `mcp_config.json`, `opencode.json`) with rollback and idempotency guarantees. Noted for strict contribution policy (unapproved PRs rejected).
+- **diegosouzapw/OmniRoute** (78,945★): MIT AI gateway for Claude Code, Codex, Cursor, and OpenCode with model failover and an integrated MCP server (`omniroute --mcp`, 110 tools) focusing on routing, proxying, and RTK/Caveman token compression (15-95% claimed reduction).
+- **nuetzliches/devstack**: Git-worktree orchestrator and multi-agent development environment with a native MCP server for running agents against live development lanes on Windows and Linux.
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - PR #2718 (`fix(js,ts): an import of a package the repository declares itself links to that declaration`, merged 2026-10-20T21:35:03Z): Resolves package imports matching ambient `declare module '<name>' { ... }` blocks in `.d.ts` declaration files before resolving to paths/dependencies. Added ambient bodiless function extraction (`isAmbientFunctionSignature`), handling ambient-first imports, and distinguishing module augments from script declarations.
+  - PR #2717 (`fix(rust): a for-loop variable or a tuple pattern's name has the type it is bound from`, merged 2026-10-20T20:33:37Z): Propagates bound types to for-loop pattern variables and tuple bindings in Rust AST extraction.
+  - PR #2716 (`fix(rust): a local holding a method call's value has the type the method returns`, merged 2026-10-20T19:41:16Z): In Rust, binds a local variable's inferred type to the return type of the method invocation initializing it.
+  - PR #2715 (`fix(rust): a call on a local reaches the method of the type it is declared with`, merged 2026-10-20T18:55:07Z): Resolves method calls on local variables to the corresponding type's declared method implementations.
+  - PR #2714 (`fix(rust): a name a glob use brings in is an item the globbed module passes on`, merged 2026-10-20T18:33:43Z): Resolves glob imports (`use foo::*`) in Rust by propagating items exported by the targeted module.
+- **Graphify-Labs/graphify**:
+  - PR #4605 (`fix(js): never bind a nameless member-call receiver to a same-named method in the file`, opened 2026-10-20T20:19:43Z, fixes #4598): In JS/TS, member calls `receiver.name(...)` previously fell back to the per-file bare-name symbol map when receiver was not `this`/`self`, causing false self-loops in wrapper functions (e.g. `history.appendFrame` calling itself) or binding to unrelated file functions. Now defers to the cross-file member resolver or fails closed.
+  - PR #4606 (`fix(dedup): merge a concept re-mentioned with a trailing qualifier`, opened 2026-10-20T20:40:06Z): De-duplicates concept nodes when re-encountered with trailing qualifiers.
+  - PR #4607 (`fix(extractors): make the in flight scan root thread local`, opened 2026-10-20T20:40:18Z): Eliminates race conditions in concurrent multi-threaded extraction scans by isolating the scan root to thread-local storage.
+  - PR #4608 (`fix(tests): stop install and wheel tests from sharing mutable state across runs`, opened 2026-10-20T20:48:42Z): Test harness isolation preventing cross-suite mutable state leakage.
+
+**Competitor pulse (as of 2026-10-20 22:00 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,936★ (+4), 1,618 forks (-58)
+- oraios/serena: 30,494★ (+16), 2,112 forks (-112)
+- DeusData/codebase-memory-mcp: 47,027★ (+6), 3,859 forks (-22)
+- tirth8205/code-review-graph: 32,285★ (=), 2,974 forks (-66)
+- colbymchenry/codegraph: 74,536★ (+15), 4,825 forks (+3)
+- abhigyanpatwari/GitNexus: 47,973★ (+1), 5,198 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,789★ (+1), 373 forks (=)
+- continuedev/continue: 36,273★ (+1), 5,501 forks (-1)
+- Aider-AI/aider: 49,667★ (+3), 5,089 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
