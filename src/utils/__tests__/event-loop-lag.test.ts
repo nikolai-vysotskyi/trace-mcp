@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventLoopLagMonitor } from '../event-loop.js';
 
 // TRA-1828: the daemon needs its own stall counter — bulk reindex passes
@@ -6,6 +6,81 @@ import { EventLoopLagMonitor } from '../event-loop.js';
 // "clients dropped" apart from "daemon busy".
 
 describe('EventLoopLagMonitor', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('ignores a wall-clock jump and an OS-confirmed sleep, then counts a real stall', () => {
+    vi.useFakeTimers();
+    let activeMs = 0;
+    let wallMs = 1_000_000;
+    let sleep: { startMs: number; endMs: number } | null = null;
+    const stalled: number[] = [];
+    const monitor = new EventLoopLagMonitor({
+      intervalMs: 1000,
+      thresholdMs: 2000,
+      now: () => activeMs,
+      wallNow: () => wallMs,
+      sleepInterval: () => sleep,
+      onStall: (lagMs) => stalled.push(lagMs),
+    });
+    monitor.start();
+
+    wallMs += 600_000;
+    activeMs += 1000;
+    vi.advanceTimersByTime(1000);
+    expect(monitor.getStats()).toEqual({ stallCount: 0, maxLagMs: 0 });
+
+    sleep = { startMs: wallMs + 1000, endMs: wallMs + 601_000 };
+    wallMs += 601_000;
+    activeMs += 601_000;
+    vi.advanceTimersByTime(1000);
+    expect(monitor.getStats()).toEqual({ stallCount: 0, maxLagMs: 0 });
+
+    activeMs += 5000;
+    wallMs += 5000;
+    vi.advanceTimersByTime(1000);
+    monitor.stop();
+    expect(monitor.getStats()).toEqual({ stallCount: 1, maxLagMs: 4000 });
+    expect(stalled).toEqual([4000]);
+  });
+
+  it('counts a long low-CPU delay when the OS has no new sleep signal', () => {
+    vi.useFakeTimers();
+    let activeMs = 0;
+    let wallMs = 1_000_000;
+    const monitor = new EventLoopLagMonitor({
+      intervalMs: 1000,
+      thresholdMs: 2000,
+      now: () => activeMs,
+      wallNow: () => wallMs,
+      sleepInterval: () => null,
+    });
+    monitor.start();
+    activeMs += 600_000;
+    wallMs += 600_000;
+    vi.advanceTimersByTime(1000);
+    monitor.stop();
+    expect(monitor.getStats()).toEqual({ stallCount: 1, maxLagMs: 599_000 });
+  });
+
+  it('keeps the active stall around a confirmed sleep', () => {
+    vi.useFakeTimers();
+    let activeMs = 0;
+    let wallMs = 1_000_000;
+    const monitor = new EventLoopLagMonitor({
+      intervalMs: 1000,
+      thresholdMs: 2000,
+      now: () => activeMs,
+      wallNow: () => wallMs,
+      sleepInterval: () => ({ startMs: 1_001_000, endMs: 1_601_000 }),
+    });
+    monitor.start();
+    activeMs += 605_000;
+    wallMs += 605_000;
+    vi.advanceTimersByTime(1000);
+    monitor.stop();
+    expect(monitor.getStats()).toEqual({ stallCount: 1, maxLagMs: 4000 });
+  });
+
   it('starts with zero stalls and zero max lag', () => {
     const monitor = new EventLoopLagMonitor({ intervalMs: 20, thresholdMs: 5000 });
     expect(monitor.getStats()).toEqual({ stallCount: 0, maxLagMs: 0 });
