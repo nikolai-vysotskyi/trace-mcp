@@ -314,3 +314,8 @@ wkoch/legacy
 # Genuine third-party architectural citation & prior art reference (successor / rename of sayef/comind):
 # docs/design/ledger.md cites trace-mcp and https://trace-mcp.com/decision-memory.html under Decision records:
 sayef/comindly
+
+# ── Swept 2026-10-20 morning pass (TRA-2568) ──
+# Genuine third-party automated passport & signature catalog:
+# data/fingerprints/nikolai-vysotskyi_trace-mcp.json auto-indexes trace-mcp in 5,058+ passport knowledge base:
+JMartynov/mcp-fingerprints

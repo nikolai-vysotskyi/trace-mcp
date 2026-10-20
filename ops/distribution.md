@@ -126,6 +126,7 @@ Rules for keeping it honest:
 | [sayef/comindly](https://github.com/sayef/comindly) | **Yes — third-party architectural citation & prior art reference, we did not submit it** (0★, active 2026-10-19/20) | Successor / rename of `sayef/comind`. Architecture design document `docs/design/ledger.md` ("Comind Ledger — design plan") surveying agent memory and decision record systems. Under "Decision records", cites `trace-mcp` alongside ADR/MADR and Lore trailers, and references `trace-mcp decision memory: https://trace-mcp.com/decision-memory.html` | Architectural design reference and citation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-20 | 2026-10-20 |
 | [wkoch/legacy](https://github.com/wkoch/legacy) | **Yes — third-party architectural study & adapter evaluation, we did not submit it** (0★, active 2026-10-16) | Architecture planning documents `docs/automacao-rede-e-inteligencia.md` and `docs/decisoes.md` evaluating code intelligence architectures for decentralized AI agents. Evaluates `trace-mcp` (citing https://trace-mcp.com/code-graph-mcp.html for incremental local graphs and framework-specific relationships) alongside Graft as potential adapters for logical code mapping. Recommends starting with pilot language adapters | Independent architectural evaluation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-17 | 2026-10-17 |
 | [ProSkillsMD/proskills](https://github.com/ProSkillsMD/proskills) | **Yes — third-party catalog, auto-scouted 2026-10-10** (18★, active daily) | Automated scout filed and listed candidates for all 3 repository skills in OpenClaw skill listings: `skills/trace-mcp/SKILL.md` ([issue #8193](https://github.com/ProSkillsMD/proskills/issues/8193), status `groot:published`, verdict `review:pass`), `skills/trace-mcp-codemod/SKILL.md` ([issue #8194](https://github.com/ProSkillsMD/proskills/issues/8194)), and `skills/trace-mcp-pre-commit/SKILL.md` ([issue #8195](https://github.com/ProSkillsMD/proskills/issues/8195)). License MIT pass, static scan passed with no findings. Found via `github_topic:claude-skills` | Nothing to submit — automated deterministic scout updates on new commits to skill directories. Do not ping, no action needed. Discovered via issue audit | 2026-10-18 |
+| [JMartynov/mcp-fingerprints](https://github.com/JMartynov/mcp-fingerprints) + [its Web Directory](https://jmartynov.github.io/mcp-fingerprints/) | **Yes — third-party automated passport & signature catalog, we did not submit it** (0★, active daily) | Auto-indexed server passport `data/fingerprints/nikolai-vysotskyi_trace-mcp.json` (schema 1.1.0, official_registry source) describing `trace-mcp` ("Framework-aware code intelligence: 81 languages, 58 framework integrations, 138 tools, up to 99% token reduction"). Part of open-source knowledge base with 5,058+ indexed MCP server passports | Automated deterministic sync. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-20 | 2026-10-20 |
 
 
 
@@ -5724,6 +5725,65 @@ Audited read-only via GitHub API, nothing written outside this repository.
 - jgravelle/jcodemunch-mcp: 2,787★ (+2), 374 forks (=)
 - continuedev/continue: 36,267★ (+5), 5,498 forks (+4)
 - Aider-AI/aider: 49,644★ (+4), 5,084 forks (+2)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
+### Morning pass, 2026-10-20 (TRA-2568): mention sweep (JMartynov/mcp-fingerprints), open threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (verified 2026-10-20, TRA-926 / commit aa2d53df: 0 external PRs merged since July, maintained by author's daily self-adds, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 1 new repo outside the seen list (`JMartynov/mcp-fingerprints`).
+- Evaluated matched surface via GitHub API (read-only): confirmed genuine open-source MCP server passport & tool signature knowledge base (5,058+ indexed passports, web directory at `jmartynov.github.io/mcp-fingerprints`). Auto-indexed `data/fingerprints/nikolai-vysotskyi_trace-mcp.json` from `official_registry` stream. Recorded in the third-party directory table and silenced in `ops/mentions-seen.txt`.
+- Second verification run: clean (`No repos outside the seen list. Nothing to read.`).
+- External touches: 0.
+
+**Competitor intelligence & architectural observations:**
+- DeusData/codebase-memory-mcp:
+  - PR #2719 (`feat(cli): give Codex shell searches graph context through a PreToolUse hook`, opened 2026-10-20T02:08:24Z): Expands PreToolUse search hooks beyond Claude Code to Codex shell CLI searches, injecting graph context when search commands run.
+  - PR #2716 (`feat(plugin): Claude Code plugin marketplace, discovery slice (#1188 slice 1)`, opened 2026-10-19T23:45:01Z): Adds an in-repo discovery marketplace slice for Claude Code plugins.
+  - PR #2715 (`feat(watcher): add the Subversion working-copy observation core`, opened 2026-10-19T23:44:26Z): Adds SVN working-copy observation core to support enterprise subversion repositories.
+  - PR #2714 (`feat(hooks): name the graph follow-up tools in every search augmentation`, merged 2026-10-20T01:28:57Z): In Claude Code PreToolUse hooks, whenever grep/glob/bash matches a symbol, explicitly prompts the model to call graph follow-up tools (`trace_path`, `get_code_snippet`, `search_graph`).
+- colbymchenry/codegraph:
+  - PR #2700 (`fix(rust): a Self:: call is the function of the type whose impl it is in`, merged 2026-10-20T02:08:19Z by colbymchenry): Fixed call target resolution for `Self::` method calls inside trait/struct impl blocks.
+  - PR #2699 (`fix(objc): a file-scope constant or global is indexed, in an @implementation too`, merged 2026-10-20T01:43:15Z by colbymchenry): Extracted static globals inside Objective-C implementation blocks.
+  - PR #2698 (`fix(cpp): every name a declaration lists has its type, like strings_found in ByteBuffer symbols_found, strings_found;`, merged 2026-10-20T01:52:08Z by colbymchenry): Resolved multi-variable declaration type propagation in C++.
+  - PR #2697 (`fix(rust): a call reaches a project impl on a std type only as Rust would pick it`, merged 2026-10-20T01:37:17Z by colbymchenry): Disambiguated project impls extending standard library types in Rust.
+  - PR #2696 (`fix(objc): a doc comment inside an @implementation documents the method below it`, merged 2026-10-20T01:16:24Z by colbymchenry): Doc-comment attachment for Objective-C methods inside `@implementation`.
+- jgravelle/jcodemunch-mcp:
+  - PR #1174 / Release v1.108.385 (`release: v1.108.385 - a summary written by another process reaches this one's searches`, opened 2026-10-20T03:10:44Z by jgravelle): Multi-process cross-instance search synchronization for external summary caches (stacked on PR #1171).
+  - PR #1173 (`fix: an index read back in the process that saved it keeps ecosystem_context (L-224)`, merged 2026-10-20T02:44:39Z by jgravelle): Preserving ecosystem metadata on in-process index reload.
+  - PR #1172 (`docs: README and server.json name the benchmark behind the token figure`, merged 2026-10-20T02:10:18Z by jgravelle): Token reduction benchmark source attribution in documentation and server manifest.
+- Graphify-Labs/graphify:
+  - PR #4576 (`fix: render node rationale in query, get_node and explain output (#2821)`, opened 2026-10-20T01:10:17Z): Adds node rationale rendering to query, get_node, and explain tool responses.
+  - PR #4573 (`fix(vbnet): resolve cross-file calls to Module members, typed locals and C# statics (#4570)`, opened 2026-10-19T23:02:06Z): Cross-file call resolution across VB.NET and C# statics.
+  - PR #4572 (`fix(json_config): link a package.json dependency's manifest entry to its ref node (#4569)`, opened 2026-10-19T21:13:27Z): Structural linking of package.json manifest dependencies to AST ref nodes.
+- tirth8205/code-review-graph:
+  - PR #1124 (`Add MCP readOnlyHint annotations to tools`, opened 2026-10-19): Adding MCP standard `readOnlyHint` protocol annotations across tool definitions.
+  - PR #1122 (`fix(postprocess): match repo-relative changed files in incremental flow pass`, opened 2026-10-19): Fixing path normalization in incremental flow calculation.
+
+**Competitor pulse (as of 2026-10-20 04:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,913★ (-1), 1,705 forks (=)
+- oraios/serena: 30,405★ (+4), 2,265 forks (+1)
+- DeusData/codebase-memory-mcp: 46,963★ (+18), 3,886 forks (+2)
+- tirth8205/code-review-graph: 32,268★ (+3), 3,078 forks (=)
+- colbymchenry/codegraph: 74,476★ (+16), 4,821 forks (+3)
+- abhigyanpatwari/GitNexus: 47,959★ (+7), 5,200 forks (+1)
+- jgravelle/jcodemunch-mcp: 2,788★ (+1), 374 forks (=)
+- continuedev/continue: 36,267★ (=), 5,498 forks (=)
+- Aider-AI/aider: 49,648★ (+4), 5,083 forks (-1)
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
