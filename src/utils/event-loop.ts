@@ -16,6 +16,7 @@
  * inside the loop and yield only every `every` iterations to keep overhead
  * negligible.
  */
+import { execFileSync } from 'node:child_process';
 
 let yieldCount = 0;
 
@@ -126,6 +127,30 @@ export interface EventLoopLagMonitorOptions {
    * stall watchdog beats its heartbeat here — one call per event-loop turn.
    */
   onTick?: () => void;
+  /** Monotonic clock, injectable for deterministic timer tests. */
+  now?: () => number;
+  /** Wall clock, injectable for deterministic timer tests. */
+  wallNow?: () => number;
+  /** Last OS-confirmed sleep interval; null means no trustworthy signal. */
+  sleepInterval?: () => { startMs: number; endMs: number } | null;
+}
+
+function macLastSleepInterval(): { startMs: number; endMs: number } | null {
+  if (process.platform !== 'darwin') return null;
+  try {
+    const output = execFileSync('/usr/sbin/sysctl', ['-n', 'kern.sleeptime', 'kern.waketime'], {
+      encoding: 'utf8',
+      timeout: 1000,
+      maxBuffer: 1024,
+    });
+    const times = [...output.matchAll(/\{ sec = (\d+), usec = (\d+) \}/g)].map(
+      ([, seconds, microseconds]) => Number(seconds) * 1000 + Number(microseconds) / 1000,
+    );
+    if (times.length !== 2 || times[1]! <= times[0]!) return null;
+    return { startMs: times[0]!, endMs: times[1]! };
+  } catch {
+    return null;
+  }
 }
 
 export interface EventLoopLagStats {
@@ -138,8 +163,12 @@ export class EventLoopLagMonitor {
   private readonly thresholdMs: number;
   private readonly onStall?: (lagMs: number, maxLagMs: number, stallCount: number) => void;
   private readonly onTick?: () => void;
+  private readonly now: () => number;
+  private readonly wallNow: () => number;
+  private readonly sleepInterval: () => { startMs: number; endMs: number } | null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastTick = 0;
+  private lastWallTick = 0;
   private stalls = 0;
   private maxLag = 0;
 
@@ -148,21 +177,45 @@ export class EventLoopLagMonitor {
     this.thresholdMs = opts.thresholdMs ?? 1000;
     this.onStall = opts.onStall;
     this.onTick = opts.onTick;
+    this.now = opts.now ?? (() => performance.now());
+    this.wallNow = opts.wallNow ?? (() => Date.now());
+    this.sleepInterval = opts.sleepInterval ?? macLastSleepInterval;
   }
 
   start(): void {
     if (this.timer) return;
-    this.lastTick = Date.now();
+    this.lastTick = this.now();
+    this.lastWallTick = this.wallNow();
     this.timer = setInterval(() => {
-      const now = Date.now();
-      const lag = now - this.lastTick - this.intervalMs;
+      const now = this.now();
+      const wallNow = this.wallNow();
+      let lag = now - this.lastTick - this.intervalMs;
       this.lastTick = now;
+      const previousWallTick = this.lastWallTick;
+      this.lastWallTick = wallNow;
       try {
         this.onTick?.();
       } catch {
         /* observing must never break the loop it watches */
       }
       if (lag >= this.thresholdMs) {
+        // libuv uses mach_continuous_time on macOS, which includes suspend.
+        // Subtract only the overlap with the OS-confirmed sleep interval;
+        // synchronous work on either side remains a real /health stall.
+        const sleep = this.sleepInterval();
+        if (
+          sleep &&
+          sleep.startMs >= previousWallTick - 2000 &&
+          sleep.startMs <= wallNow + 2000 &&
+          sleep.endMs <= wallNow + 2000
+        ) {
+          const overlapMs = Math.max(
+            0,
+            Math.min(wallNow, sleep.endMs) - Math.max(previousWallTick, sleep.startMs),
+          );
+          lag = Math.max(0, lag - overlapMs);
+        }
+        if (lag < this.thresholdMs) return;
         this.stalls++;
         if (lag > this.maxLag) this.maxLag = lag;
         try {
