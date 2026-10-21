@@ -139,13 +139,17 @@ export class MutationOperations {
     const canonFilePath = input.project_root
       ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
       : (input.file_path ?? null);
-    if (input.source === 'mined' && !input.symbol_id && !canonFilePath) {
+    if (
+      (input.source === 'mined' || input.source === 'auto') &&
+      !input.symbol_id &&
+      !canonFilePath
+    ) {
       const existing = this.db
         .prepare(`
         SELECT id FROM decisions
         WHERE project_root = ? AND type = ? AND title = ?
           AND symbol_id IS NULL AND file_path IS NULL
-          AND source = 'mined' AND valid_until IS NULL
+          AND source IN ('mined', 'auto') AND valid_until IS NULL
         ORDER BY id LIMIT 1
       `)
         .get(input.project_root, input.type, input.title) as { id: number } | undefined;

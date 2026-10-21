@@ -1385,6 +1385,83 @@ export class DecisionStore {
     return row.count;
   }
 
+  /** Active decisions with identical identity keys; keep the newest update, then highest id. */
+  findDuplicateDecisions(): Array<{
+    project_root: string;
+    type: string;
+    title: string;
+    symbol_id: string | null;
+    file_path: string | null;
+    keepId: number;
+    duplicateIds: number[];
+  }> {
+    const rows = this.db
+      .prepare(`
+      SELECT * FROM (
+        SELECT id, project_root, type, title, symbol_id, file_path,
+          FIRST_VALUE(id) OVER decision_group AS keepId,
+          ROW_NUMBER() OVER decision_group AS rank
+        FROM decisions WHERE valid_until IS NULL
+        WINDOW decision_group AS (
+          PARTITION BY project_root, type, title, symbol_id, file_path
+          ORDER BY COALESCE(updated_at, 0) DESC, id DESC
+        )
+      ) WHERE rank > 1
+    `)
+      .all() as Array<{
+      id: number;
+      project_root: string;
+      type: string;
+      title: string;
+      symbol_id: string | null;
+      file_path: string | null;
+      keepId: number;
+      rank: number;
+    }>;
+    const groups = new Map<
+      number,
+      {
+        project_root: string;
+        type: string;
+        title: string;
+        symbol_id: string | null;
+        file_path: string | null;
+        keepId: number;
+        duplicateIds: number[];
+      }
+    >();
+    for (const row of rows) {
+      let group = groups.get(row.keepId);
+      if (!group) {
+        group = {
+          project_root: row.project_root,
+          type: row.type,
+          title: row.title,
+          symbol_id: row.symbol_id,
+          file_path: row.file_path,
+          keepId: row.keepId,
+          duplicateIds: [],
+        };
+        groups.set(row.keepId, group);
+      }
+      group.duplicateIds.push(row.id);
+    }
+    return [...groups.values()].sort((a, b) => a.keepId - b.keepId);
+  }
+
+  /** Invalidate older duplicates atomically, preserving their history and FTS rows. */
+  pruneDuplicateDecisions(): number {
+    return this.db.transaction(() => {
+      let count = 0;
+      for (const group of this.findDuplicateDecisions()) {
+        for (const id of group.duplicateIds) {
+          if (this.invalidateDecision(id)) count++;
+        }
+      }
+      return count;
+    })();
+  }
+
   /** Prune stale roots and, when requested, expired decisions in one transaction. */
   pruneStale(opts?: {
     staleRoots?: string[];
