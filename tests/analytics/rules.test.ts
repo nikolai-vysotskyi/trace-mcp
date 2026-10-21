@@ -509,4 +509,159 @@ describe('rules / analyzeOptimizations', () => {
       expect(hit).toBeUndefined();
     });
   });
+
+  describe('identical-error-retry rule', () => {
+    it('detects 6 identical error calls while ignoring 1 successful call (occurrences=6)', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'Bash',
+          tool_short_name: 'Bash',
+          input_snippet: 'php -l app/Nova/Dashboards/Main.php',
+          is_error: 0,
+          output_tokens_estimate: 50,
+        }),
+        ...Array.from({ length: 6 }, () =>
+          makeToolCall({
+            tool_name: 'Bash',
+            tool_short_name: 'Bash',
+            input_snippet: 'php -l app/Nova/Dashboards/Main.php',
+            is_error: 1,
+            output_tokens_estimate: 100,
+          }),
+        ),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeDefined();
+      expect(hit!.severity).toBe('medium');
+      expect(hit!.occurrences).toBe(6);
+      expect(hit!.currentTokens).toBe(600);
+      expect(hit!.potentialTokens).toBe(100);
+      expect(hit!.details[0]).toContain(
+        'Bash "php -l app/Nova/Dashboards/Main.php" (6x failed, ~600 tokens)',
+      );
+      expect(hit!.recommendation).toContain('repeating failing commands');
+    });
+
+    it('does not trigger when errors have different input snippets', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({ tool_short_name: 'Bash', input_snippet: 'php -l file1.php', is_error: 1 }),
+        makeToolCall({ tool_short_name: 'Bash', input_snippet: 'php -l file2.php', is_error: 1 }),
+        makeToolCall({ tool_short_name: 'Bash', input_snippet: 'php -l file3.php', is_error: 1 }),
+        makeToolCall({ tool_short_name: 'Bash', input_snippet: 'php -l file4.php', is_error: 1 }),
+        makeToolCall({ tool_short_name: 'Bash', input_snippet: 'php -l file5.php', is_error: 1 }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not trigger for 4 identical error calls (threshold is 5)', () => {
+      const calls: ToolCallRow[] = Array.from({ length: 4 }, () =>
+        makeToolCall({
+          tool_short_name: 'Bash',
+          input_snippet: 'php artisan tinker',
+          is_error: 1,
+        }),
+      );
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeUndefined();
+    });
+
+    it('triggers high severity when occurrences reaches 50', () => {
+      const calls: ToolCallRow[] = Array.from({ length: 50 }, () =>
+        makeToolCall({
+          tool_short_name: 'Bash',
+          input_snippet: 'php artisan tinker --execute "test()"',
+          is_error: 1,
+          output_tokens_estimate: 10,
+        }),
+      );
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeDefined();
+      expect(hit!.severity).toBe('high');
+      expect(hit!.occurrences).toBe(50);
+      expect(hit!.currentTokens).toBe(500);
+      expect(hit!.potentialTokens).toBe(10);
+    });
+
+    it('does not trigger when input_snippet is missing or whitespace only', () => {
+      const calls: ToolCallRow[] = [
+        ...Array.from({ length: 5 }, () =>
+          makeToolCall({ tool_short_name: 'Bash', input_snippet: null, is_error: 1 }),
+        ),
+        ...Array.from({ length: 5 }, () =>
+          makeToolCall({ tool_short_name: 'Bash', input_snippet: '   ', is_error: 1 }),
+        ),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not aggregate identical calls across different sessions below threshold', () => {
+      const calls: ToolCallRow[] = [
+        ...Array.from({ length: 3 }, () =>
+          makeToolCall({
+            session_id: 'sess-A',
+            tool_short_name: 'Bash',
+            input_snippet: 'npm test',
+            is_error: 1,
+          }),
+        ),
+        ...Array.from({ length: 3 }, () =>
+          makeToolCall({
+            session_id: 'sess-B',
+            tool_short_name: 'Bash',
+            input_snippet: 'npm test',
+            is_error: 1,
+          }),
+        ),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeUndefined();
+    });
+
+    it('correctly models TRA-1808 multi-session retry storms at scale (325x + 499x)', () => {
+      const sess1Calls = Array.from({ length: 325 }, () =>
+        makeToolCall({
+          session_id: 'b04468dd-32d8-4d22-a940-75da74e2d5ff',
+          tool_short_name: 'Bash',
+          input_snippet: 'php -l app/Nova/Dashboards/Main.php && php -l ...',
+          is_error: 1,
+          output_tokens_estimate: 20,
+        }),
+      );
+      const sess2Calls = Array.from({ length: 499 }, () =>
+        makeToolCall({
+          session_id: '173cb6db-538d-40c9-ac75-9e8d56e9cb60',
+          tool_short_name: 'Bash',
+          input_snippet: "php artisan tinker --execute '...'",
+          is_error: 1,
+          output_tokens_estimate: 15,
+        }),
+      );
+
+      const report = analyzeOptimizations([...sess1Calls, ...sess2Calls], 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'identical-error-retry');
+      expect(hit).toBeDefined();
+      expect(hit!.severity).toBe('high');
+      expect(hit!.occurrences).toBe(824); // 325 + 499
+      expect(hit!.currentTokens).toBe(325 * 20 + 499 * 15); // 6500 + 7485 = 13985
+      // 1 legitimate first attempt per session group (20 + 15 = 35)
+      expect(hit!.potentialTokens).toBe(20 + 15);
+      // Saved tokens equals all wasteful retries (324 * 20 + 498 * 15 = 6480 + 7470 = 13950)
+      expect(hit!.currentTokens - hit!.potentialTokens).toBe(324 * 20 + 498 * 15);
+      expect(report.totalPotentialSavings.pct).toBeLessThanOrEqual(100);
+    });
+  });
 });
