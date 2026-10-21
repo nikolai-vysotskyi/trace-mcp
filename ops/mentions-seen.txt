@@ -319,3 +319,8 @@ sayef/comindly
 # Genuine third-party automated passport & signature catalog:
 # data/fingerprints/nikolai-vysotskyi_trace-mcp.json auto-indexes trace-mcp in 5,058+ passport knowledge base:
 JMartynov/mcp-fingerprints
+
+# ── Swept 2026-10-21 morning pass (TRA-2590) ──
+# Genuine third-party automated capability & security dossier catalog (tashan.sh by SeroLabs):
+# web/capability/pkg-trace-mcp.html auto-indexes trace-mcp (score 71/100, rank 95%) from npm and official registry:
+FlyingWHR/tashan
