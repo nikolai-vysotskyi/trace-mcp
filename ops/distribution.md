@@ -6221,3 +6221,59 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+
+
+### Night pass, 2026-10-21 (TRA-2597): mention sweep clean, competitor surge & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: 0 repos outside seen list (`ops/mentions-seen.txt`). Sweep is clean. External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **Graphify-Labs/graphify security & AST extraction sprint**:
+  - Open PRs #4645, #4644, #4643 introduce strict URL ingestion safety gates, rejecting userinfo, invalid port ranges, and hostless URLs in repository clone targets.
+  - Open PR #4646 adds proactive detection warnings when more than half of an indexed corpus lacks AST extractors.
+  - Open PRs #4638–#4642 address fine-grained type extraction and performance: linear-time Kotlin/Swift/Scala/C++ type-parameter scoping (#4640), Swift file-scope typealias nodes (#4639), and variadic parameter type references across 5 languages (#4638).
+- **colbymchenry/codegraph Go edge semantics & explore resolution**:
+  - Merged PR #2757 (`fix(go)`): unreadable file method edge attribution isolation (methods declared on types in unreadable files do not leak to embedded types).
+  - Merged PR #2755 (`fix(go)`): resolves method invocations on indexed composite elements to their underlying element type's method.
+  - Merged PR #2752, #2751, #2750, #2749, #2748: fine-grained dynamic dispatch and explore ordering, default import synchronization across file edits, and package-qualified symbol resolution.
+  - Open PR #2754 & #2753: parameter default call linking and multi-module re-export chain tracing.
+
+**Competitor intelligence & architectural observations:**
+- **DeusData/codebase-memory-mcp**:
+  - PR #2753 (`fix(ui)`): suppresses stale graph focus warnings during layout re-arrangements.
+  - PR #2752 (`fix(routes)`): Go 1.22 ServeMux HTTP grammar parsing remains in review.
+- **abhigyanpatwari/GitNexus**:
+  - PR #3669 (`fix(docker)`): merged FTS artifact verification into Docker packaging pipeline.
+  - PR #3667: open expansion of receiver-chain syntax patterns for multi-language ingestion benchmarks.
+
+**Competitor pulse (as of 2026-10-21 18:05 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,959★ (+5), 1,594 forks (=)
+- oraios/serena: 30,573★ (+8), 2,079 forks (+1)
+- DeusData/codebase-memory-mcp: 47,105★ (+15), 3,865 forks (+3)
+- tirth8205/code-review-graph: 32,306★ (+4), 2,953 forks (-1)
+- colbymchenry/codegraph: 74,608★ (+19), 4,830 forks (+1)
+- abhigyanpatwari/GitNexus: 47,996★ (+3), 5,197 forks (-1)
+- jgravelle/jcodemunch-mcp: 2,794★ (=), 372 forks (=)
+- continuedev/continue: 36,286★ (+5), 5,502 forks (-1)
+- Aider-AI/aider: 49,685★ (+2), 5,092 forks (=)
+- Graphify-Labs/graphify: 131,307★ (+262), 12,611 forks (+18)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
