@@ -127,6 +127,7 @@ Rules for keeping it honest:
 | [wkoch/legacy](https://github.com/wkoch/legacy) | **Yes — third-party architectural study & adapter evaluation, we did not submit it** (0★, active 2026-10-16) | Architecture planning documents `docs/automacao-rede-e-inteligencia.md` and `docs/decisoes.md` evaluating code intelligence architectures for decentralized AI agents. Evaluates `trace-mcp` (citing https://trace-mcp.com/code-graph-mcp.html for incremental local graphs and framework-specific relationships) alongside Graft as potential adapters for logical code mapping. Recommends starting with pilot language adapters | Independent architectural evaluation, nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-17 | 2026-10-17 |
 | [ProSkillsMD/proskills](https://github.com/ProSkillsMD/proskills) | **Yes — third-party catalog, auto-scouted 2026-10-10** (18★, active daily) | Automated scout filed and listed candidates for all 3 repository skills in OpenClaw skill listings: `skills/trace-mcp/SKILL.md` ([issue #8193](https://github.com/ProSkillsMD/proskills/issues/8193), status `groot:published`, verdict `review:pass`), `skills/trace-mcp-codemod/SKILL.md` ([issue #8194](https://github.com/ProSkillsMD/proskills/issues/8194)), and `skills/trace-mcp-pre-commit/SKILL.md` ([issue #8195](https://github.com/ProSkillsMD/proskills/issues/8195)). License MIT pass, static scan passed with no findings. Found via `github_topic:claude-skills` | Nothing to submit — automated deterministic scout updates on new commits to skill directories. Do not ping, no action needed. Discovered via issue audit | 2026-10-18 |
 | [JMartynov/mcp-fingerprints](https://github.com/JMartynov/mcp-fingerprints) + [its Web Directory](https://jmartynov.github.io/mcp-fingerprints/) | **Yes — third-party automated passport & signature catalog, we did not submit it** (0★, active daily) | Auto-indexed server passport `data/fingerprints/nikolai-vysotskyi_trace-mcp.json` (schema 1.1.0, official_registry source) describing `trace-mcp` ("Framework-aware code intelligence: 81 languages, 58 framework integrations, 138 tools, up to 99% token reduction"). Part of open-source knowledge base with 5,058+ indexed MCP server passports | Automated deterministic sync. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-20 | 2026-10-20 |
+| [FlyingWHR/tashan](https://github.com/FlyingWHR/tashan) + [tashan.sh](https://tashan.sh/capability/pkg-trace-mcp) | **Yes — third-party automated capability & security dossier catalog, we did not submit it** (0★, active daily) | Auto-indexed capability dossier `web/capability/pkg-trace-mcp.html` (score 71.0/100, rank 95th percentile) describing `trace-mcp` ("Code graph MCP: 81 languages, 88 frameworks, 72.7% fewer PR-review tokens, comprehension at parity"). Notes active vitality, OSV scan clean, install scripts, and declared permissions (`database`, `filesystem`). Ships live badge and install snippets for Claude Code and Cursor / Claude Desktop | Automated deterministic sync from npm and MCP registry. Nothing to submit and do not ping. Discovered by `scripts/mention-sweep.sh` 2026-10-21 | 2026-10-21 |
 
 
 
@@ -6008,3 +6009,64 @@ Audited read-only via GitHub API, nothing written outside this repository.
 
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
+
+### Morning pass, 2026-10-21 (TRA-2590): mention sweep (FlyingWHR/tashan), open threads audit, competitor & ecosystem triage
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (0 external PRs merged since July, maintained by author's daily self-adds, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **1 genuine third-party surface found: `FlyingWHR/tashan`** (`tashan.sh`).
+- Recorded in `ops/distribution.md` surfaces table and `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **FlyingWHR/tashan** (`tashan.sh` by SeroLabs): Automated capability registry and security scorecard for MCP servers.
+  - Auto-indexes `trace-mcp` with score 71.0/100 (rank 95th percentile) in `web/capability/pkg-trace-mcp.html`.
+  - Accurately captures our PR-benchmark headline ("Code graph MCP: 81 languages, 88 frameworks, 72.7% fewer PR-review tokens, comprehension at parity").
+  - Security dossier highlights active vitality, clean OSV scan, npm provenance, notes install scripts and declared permissions (`database`, `filesystem`), and points users to `claude mcp add trace -- npx -y trace-mcp`.
+- **okf-memory/okf-agent-memory** (826★): Git-native persistent project memory implementing Google Open Knowledge Format (OKF) v0.2 with sub-300µs BM25 search in Go. Proposes a Dual-Memory Agent Architecture (DMAA) separating normative working memory (push layer: AGENTS.md capped at 400 tokens) from semantic domain memory (pull layer: `knowledge/` bundle).
+- **graygnatconsole/mcp-audit-tool** (527★): Pure-Python security scanner for MCP server configs checking for unpinned packages (`npx -y`), tool poisoning, plaintext secrets, and broad filesystem permissions.
+- **justrach/devswarm** (67★): Zig-based parallel agent swarm orchestrator with 37 MCP tools for task pipelines and multi-step code work.
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - PR #2726 (`fix(ts): an interface links the interfaces it extends`, merged 2026-10-21T03:44:25Z): Links TypeScript interface definitions to their extended base interfaces in AST extraction.
+  - PR #2725 (`fix(cpp): a call through a written class template specialization, like formatter<int>::format(…), never reaches another specialization's member`, merged 2026-10-21T03:10:31Z): Prevents cross-talk between class template specializations in C++.
+  - PR #2724 (`fix(rust): a call through a trait-bounded generic, like Key::get(…) with Key: MapKey, reaches the bound trait's method`, merged 2026-10-21T02:25:32Z): Resolves calls on trait-bounded generic types in Rust to the trait's method signatures.
+  - PR #2723 (`fix(cpp,rust): a qualified call like Status::OK() links the class it names, not one whose name ends the same way`, merged 2026-10-21T01:53:52Z): Prevents suffix-matching false positives in qualified method/enum calls.
+  - PR #2722 (`fix(rust): a value's declared type is its binding's in scope at the call`, merged 2026-10-21T01:15:32Z): Resolves values to in-scope binding types.
+  - PR #2720 (`fix(rust): a turbofish call reaches the function the turbofish wraps`, merged 2026-10-21T00:54:31Z): Resolves Rust turbofish syntax (`func::<T>()`) to underlying function declaration.
+- **Graphify-Labs/graphify**:
+  - PR #4612 (`docs(skill): state the thin-community cutoff and offer .graphifyignore for large corpora`, opened 2026-10-20T23:01:20Z): Explains community detection cutoffs and `.graphifyignore` usage.
+  - PR #4611 (`docs(skill): tell Gemini free-tier runs which quota error to stop on`, opened 2026-10-20T23:01:17Z): Handles provider quota errors gracefully in agent skills.
+- **oraios/serena**:
+  - PR #2185 (`Fix: expand leading ~ in path-valued configuration settings`, updated 2026-10-20): Expands home directory `~` in path configuration.
+  - PR #2184 (`fix(memory): bound cyclic source scans and stalled logging backlog`, opened 2026-10-20): Bounds cyclic AST and memory graph scans.
+
+**Competitor pulse (as of 2026-10-21 04:02 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,941★ (+5), 1,618 forks (=)
+- oraios/serena: 30,524★ (+30), 2,111 forks (-1)
+- DeusData/codebase-memory-mcp: 47,053★ (+26), 3,864 forks (+5)
+- tirth8205/code-review-graph: 32,287★ (+2), 2,974 forks (=)
+- colbymchenry/codegraph: 74,549★ (+13), 4,827 forks (+2)
+- abhigyanpatwari/GitNexus: 47,977★ (+4), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,790★ (+1), 373 forks (=)
+- continuedev/continue: 36,275★ (+2), 5,503 forks (+2)
+- Aider-AI/aider: 49,672★ (+5), 5,090 forks (+1)
+- Graphify-Labs/graphify: 130,444★, 12,553 forks
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
+
