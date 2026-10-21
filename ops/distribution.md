@@ -6070,3 +6070,79 @@ Audited read-only via GitHub API, nothing written outside this repository.
 **Catalogs:** Moratorium holds.
 **Touch budget:** 0 of 5 used.
 
+
+
+### Afternoon pass, 2026-10-21 (TRA-2593): mention sweep clean, external threads audit, ecosystem & competitor deep dive
+
+**External threads audit (read-only via GitHub API):**
+- MiniMax-AI/MiniMax-Code-Plugins#54: OPEN (Round 4 review from hetaoBackend, dedicated lane for Nikolai; no new comments).
+- GetBindu/awesome-claude-code-and-skills#195: OPEN, mergeable, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- 0xNyk/awesome-hermes-agent#395: OPEN issue, reminder budget spent (2026-09-20); standing no-ping rule holds.
+- tolkonepiu/best-of-mcp-servers#384: OPEN, mergeable, reminder budget spent (2026-09-26); standing no-ping rule holds.
+- ai-boost/awesome-harness-engineering#240: CLOSED / dead end (0 external PRs merged since July, marked отброшено, standing no-ping rule holds).
+- natsukium/mcp-servers-nix#606: OPEN issue, standing no-ping rule holds.
+- hashgraph-online/awesome-ai-plugins#182: MERGED, listed in HOL Registry; claim declined and stays declined.
+- hesreallyhim/awesome-claude-code#2871: CLOSED (`state_reason: not_planned`); standing no-ping rule holds.
+- eltociear/awesome-AI-driven-development#119: MERGED (verified 2026-09-30, live in README & README_JA).
+- Touch budget: 0 of 5 used. No outgoing pings or unsolicited PRs opened.
+
+**Mention sweep (scripts/mention-sweep.sh):**
+- Ran both passes across all 9 search patterns (4 general/domain/npx queries, 5 paired competitor queries).
+- Result: **0 new repos outside the seen list**. All previous hits accounted for in `ops/mentions-seen.txt`.
+- External touches: 0.
+
+**Surfaces & Ecosystem findings:**
+- **aoci-spec/aoci-code** (1,672★, 200 forks, Go, FSL-1.1-MIT):
+  - Persistent, Git-versioned repository map written by the agent and governed by a local stdio MCP server (`aoci mcp`, 9 tools: `aoci_rules`, `aoci_overview`, `aoci_get_entries`, `aoci_search`, `aoci_maintain`, `aoci_update_entry`, `aoci_remove_entry`, `aoci_header`, `aoci_report`).
+  - Records single-line FRAS summaries per file: F (responsibility), R (read-along dependencies), A (callers depend on), S (safety invariants), tagged with `[CG9L]` (layer, domain, importance, size).
+  - Explicitly contrasts with CodeGraph: characterizes CodeGraph as precise task lookup via symbol/call graphs, while AOCI provides whole-system overview upfront. Recommends pairing both: overview for system boundaries, code graph for exact AST lookup.
+  - Features whole-index delivery with chunking (7,000–24,000 tokens) and attestation receipts to survive host context compaction events.
+- **Muvon/octocode** (513★, 59 forks, Rust, Apache-2.0):
+  - Single-binary code intelligence MCP server combining Tree-Sitter AST parsing, LanceDB vector storage, and optional LSP backends (`--with-lsp`).
+  - Serves 8 MCP tools: `semantic_search`, `view_signatures`, `graphrag` (always-on symbol graph), `structural_search` (AST patterns), and LSP tools (`lsp_goto_definition`, `lsp_find_references`, `lsp_hover`, `lsp_document_symbols`).
+  - Direct targeting of Claude Desktop, Cursor, and Windsurf workflows.
+- **MarcelRoozekrans/roslyn-codelens-mcp** (65★, C#/.NET):
+  - Roslyn compiler platform MCP server exposing 67 specialized tools for .NET (navigation, call graphs, safe refactorings, test intelligence, dependency injection graphs, IL inspection).
+
+**Competitor intelligence & architectural observations:**
+- **colbymchenry/codegraph**:
+  - Merged 13 PRs (#2727–#2739) on 2026-10-21:
+    - PR #2739 (`fix(ts)`): qualified type last name member resolution against qualifier target declaration.
+    - PR #2738 (`fix(react)`): wrapper component rendering wrapped component and owning styled calls.
+    - PR #2737 (`fix(react)`): type annotation in TSX disambiguated from same-named component.
+    - PR #2736 (`fix(ts)`): non-imported types isolation across modules.
+    - PR #2735 (`fix(cpp)`): `operator->` traversal for custom pointer types (e.g. RocksDB `FileSystemPtr`, `MultiGetContext::Range::Iterator`).
+    - PR #2734 (`test(python)`): cleanup temp dirs after indexing.
+    - PR #2733 (`fix(cpp)`): pimpl `Rep` definition in source matching header declaration.
+    - PR #2732 (`fix(ts)`): parameter call isolation.
+    - PR #2731 (`fix(cpp)`): anonymous union member resolution (e.g. protobuf `union { Impl_ _impl_; }`).
+    - PR #2730 (`fix(cpp)`): namespace call isolation from class method name.
+    - PR #2729 (`fix(cpp)`): unindexed external class call isolation.
+    - PR #2728 (`fix(ts)`): `declare module` block declaration reaching.
+    - PR #2727 (`fix(cpp)`): function declarator naming vs noexcept/throw/requires clause.
+- **DeusData/codebase-memory-mcp**:
+  - PR #2749 (`refactor(search)`): execute POSIX file searches as argv stages without shell execution to eliminate injection vectors and shell-spawning overhead.
+  - PR #2747 (`feat(extraction)`): AST routing for Next.js App Router route handlers.
+  - PR #2746 (`fix(ts-lsp)`): resolution of calls through renamed named imports (`import { foo as bar }`).
+  - PR #2744 (`fix(cypher)`): property-to-property comparisons in WHERE clauses.
+- **abhigyanpatwari/GitNexus**:
+  - PRs #3662 (`fix(php)`), #3660 (`fix(kotlin)`), #3657 (`fix(rust)`): typing local variables from qualified factory calls.
+  - PR #3659 (`fix(scope)`): same-package inheritance base binding when simple names clash.
+- **oraios/serena**:
+  - PR #2186 (`Fix dead Qt qmlls documentation link`).
+
+**Competitor pulse (as of 2026-10-21 10:06 UTC pass):**
+- nikolai-vysotskyi/trace-mcp: 193★ (=), 24 forks (=)
+- yamadashy/repomix: 28,946★ (+5), 1,618 forks (=)
+- oraios/serena: 30,549★ (+25), 2,079 forks (-32)
+- DeusData/codebase-memory-mcp: 47,075★ (+22), 3,865 forks (+1)
+- tirth8205/code-review-graph: 32,287★ (=), 2,974 forks (=)
+- colbymchenry/codegraph: 74,574★ (+25), 4,827 forks (=)
+- abhigyanpatwari/GitNexus: 47,985★ (+8), 5,198 forks (=)
+- jgravelle/jcodemunch-mcp: 2,794★ (+4), 372 forks (-1)
+- continuedev/continue: 36,280★ (+5), 5,504 forks (+1)
+- Aider-AI/aider: 49,678★ (+6), 5,091 forks (+1)
+- Graphify-Labs/graphify: 130,797★ (+353), 12,570 forks (+17)
+
+**Catalogs:** Moratorium holds.
+**Touch budget:** 0 of 5 used.
